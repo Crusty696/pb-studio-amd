@@ -1,0 +1,107 @@
+/* Main Window */
+QMainWindow {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+QWidget {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    font-family: "Segoe UI", "Roboto", sans-serif;
+    font-size: 14px;
+}
+
+/* Sidebar */
+#Sidebar {
+    background-color: #252526;
+    border-right: 1px solid #3e3e42;
+    min-width: 200px;
+}
+
+QPushButton#NavButton {
+    background-color: transparent;
+    color: #cccccc;
+    text-align: left;
+    padding: 12px 20px;
+    border: none;
+    font-size: 15px;
+}
+
+QPushButton#NavButton:hover {
+    background-color: #2a2d2e;
+    color: #ffffff;
+}
+
+QPushButton#NavButton:checked {
+    background-color: #37373d;
+    color: #ffffff;
+    border-left: 3px solid #007acc;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: #007acc;
+    color: #ffffff;
+    border-top: 1px solid #3e3e42;
+}
+
+QLabel#StatusLabel {
+    background-color: transparent;
+    color: #ffffff;
+    padding: 0 10px;
+}
+
+/* General Buttons */
+QPushButton {
+    background-color: #0e639c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+}
+
+QPushButton:hover {
+    background-color: #1177bb;
+}
+
+QPushButton:pressed {
+    background-color: #094770;
+}
+
+/* Tables / Lists */
+QTableWidget {
+    background-color: #252526;
+    gridline-color: #3e3e42;
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: #2d2d30;
+    padding: 5px;
+    border: none;
+    border-right: 1px solid #3e3e42;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QTableWidget::item:selected {
+    background-color: #094770;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    border: none;
+    background: #1e1e1e;
+    width: 12px;
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #424242;
+    min-height: 20px;
+    border-radius: 6px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}

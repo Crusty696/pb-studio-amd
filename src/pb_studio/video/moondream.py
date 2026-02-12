@@ -1,0 +1,738 @@
+"""
+Moondream Vision-Language Model - ONNX Implementation with DirectML.
+
+This module provides image captioning and analysis using the Moondream2 model
+exported to ONNX format. Optimized for AMD GPUs via DirectML.
+
+Architecture:
+- Vision Encoder: SigLIP-based image encoder
+- Text Decoder: Phi-based autoregressive decoder
+"""
+
+import logging
+import numpy as np
+import onnxruntime as ort
+from pathlib import Path
+from typing import Optional, Tuple, List, Dict, Any
+from PIL import Image
+
+logger = logging.getLogger(__name__)
+
+# Moondream2 preprocessing constants (SigLIP)
+SIGLIP_IMAGE_SIZE = 384
+SIGLIP_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+SIGLIP_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+
+# Generation defaults
+DEFAULT_MAX_TOKENS = 256
+DEFAULT_TEMPERATURE = 0.0  # Greedy decoding
+EOS_TOKEN_ID = 50256  # GPT2/Phi EOS token
+
+
+class MoondreamAnalyzer:
+    """
+    Moondream2 Vision-Language Model for image captioning and analysis.
+
+    Uses ONNX Runtime with DirectML for AMD GPU acceleration.
+    Falls back to CPU if DirectML is unavailable.
+
+    Model Structure (expected ONNX files):
+    - moondream_encoder.onnx: Vision encoder (SigLIP)
+    - moondream_decoder.onnx: Text decoder (Phi)
+    OR
+    - moondream.onnx: Combined model
+    """
+
+    def __init__(self, models_dir: Optional[str] = None, lazy_load: bool = False):
+        """
+        Initialize the Moondream analyzer.
+
+        Args:
+            models_dir: Directory containing ONNX model files.
+                       If None, uses ConfigManager default.
+            lazy_load: If True, defer model loading until first use.
+        """
+        # Import here to avoid circular imports
+        from src.pb_studio.config_manager import ConfigManager
+
+        self.config = ConfigManager()
+        self._models_dir = models_dir or self.config.get("paths", {}).get("models_dir", "./models")
+
+        # Session states
+        self.encoder_session: Optional[ort.InferenceSession] = None
+        self.decoder_session: Optional[ort.InferenceSession] = None
+        self.combined_session: Optional[ort.InferenceSession] = None
+
+        # Tokenizer
+        self.tokenizer = None
+
+        # Model metadata
+        self._is_combined_model = False
+        self._hybrid_mode = False
+        self._active_provider = "Unknown"
+        self._initialized = False
+        self._pytorch_fallback = None
+
+        if not lazy_load:
+            self._init_model()
+
+    def _create_session_options(self) -> ort.SessionOptions:
+        """Create optimized session options for DirectML compatibility."""
+        sess_options = ort.SessionOptions()
+
+        # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
+        sess_options.enable_mem_pattern = False
+
+        # Graph-Optimierungen aktivieren
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        # Weitere Performance-Optimierungen
+        sess_options.enable_cpu_mem_arena = True
+        sess_options.intra_op_num_threads = 0  # Auto
+        sess_options.inter_op_num_threads = 0  # Auto
+
+        return sess_options
+
+    def _get_providers(self) -> List[str]:
+        """Get available execution providers with DirectML priority."""
+        available = ort.get_available_providers()
+
+        # Prioritaet: DirectML > CPU (AMD-only Build, kein CUDA)
+        providers = []
+
+        if 'DmlExecutionProvider' in available:
+            providers.append('DmlExecutionProvider')
+            logger.info("DirectML provider available - using AMD GPU acceleration")
+
+        # CPU als Fallback immer hinzufuegen (KEIN CUDA - AMD-only build)
+        providers.append('CPUExecutionProvider')
+
+        return providers
+
+    def _init_tokenizer(self) -> bool:
+        """Initialize the tokenizer for text processing."""
+        try:
+            from transformers import CodeGenTokenizerFast
+
+            # Versuche lokalen Cache zuerst
+            local_tokenizer_path = Path(self._models_dir) / "moondream_tokenizer"
+
+            if local_tokenizer_path.exists():
+                self.tokenizer = CodeGenTokenizerFast.from_pretrained(str(local_tokenizer_path))
+                logger.info(f"Loaded tokenizer from local cache: {local_tokenizer_path}")
+            else:
+                # Versuche von HuggingFace Hub
+                try:
+                    self.tokenizer = CodeGenTokenizerFast.from_pretrained("vikhyat/moondream2")
+                    logger.info("Loaded tokenizer from HuggingFace Hub")
+
+                    # Speichere lokal fuer zukuenftige Verwendung
+                    try:
+                        local_tokenizer_path.mkdir(parents=True, exist_ok=True)
+                        self.tokenizer.save_pretrained(str(local_tokenizer_path))
+                        logger.info(f"Cached tokenizer to: {local_tokenizer_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not cache tokenizer: {e}")
+
+                except Exception as e:
+                    logger.warning(f"Could not load tokenizer from hub: {e}")
+                    return False
+
+            return True
+
+        except ImportError:
+            logger.error("transformers library not installed. Run: pip install transformers")
+            return False
+        except Exception as e:
+            logger.error(f"Tokenizer initialization failed: {e}")
+            return False
+
+    def _init_model(self) -> bool:
+        """
+        Initialize ONNX model sessions.
+
+        Supports two model architectures:
+        1. Split models: encoder.onnx + decoder.onnx
+        2. Combined model: moondream.onnx
+        3. PyTorch fallback if no ONNX models exist
+        """
+        if self._initialized:
+            return True
+
+        models_path = Path(self._models_dir)
+
+        # Pruefe ob ONNX-Modelle existieren (mehrere Dateinamen unterstuetzt)
+        encoder_candidates = [
+            models_path / "moondream_encoder.onnx",
+            models_path / "moondream_vision.onnx",
+        ]
+        decoder_path = models_path / "moondream_decoder.onnx"
+        combined_path = models_path / "moondream.onnx"
+
+        # Finde den ersten vorhandenen Encoder
+        encoder_path = None
+        for candidate in encoder_candidates:
+            if candidate.exists():
+                encoder_path = candidate
+                break
+
+        # Wenn keine ONNX-Modelle vorhanden, nutze PyTorch-Fallback
+        has_onnx_models = (
+            (encoder_path is not None and decoder_path.exists()) or
+            encoder_path is not None or
+            combined_path.exists()
+        )
+
+        if not has_onnx_models:
+            logger.warning("Moondream ONNX models not found - using PyTorch fallback")
+            try:
+                from src.pb_studio.ai.moondream_pytorch import MoondreamPyTorch
+                self._pytorch_fallback = MoondreamPyTorch()
+                if self._pytorch_fallback.load():
+                    self._initialized = True
+                    self._active_provider = "PyTorch (CPU)"
+                    logger.info("[OK] Moondream PyTorch fallback loaded")
+                    return True
+                else:
+                    logger.error("PyTorch fallback failed to load")
+                    return False
+            except ImportError as e:
+                logger.error(f"PyTorch fallback not available: {e}")
+                return False
+
+        # Initialize tokenizer first
+        if not self._init_tokenizer():
+            logger.warning("Tokenizer not available - text generation will be limited")
+
+        # Session options und providers
+        sess_options = self._create_session_options()
+        providers = self._get_providers()
+
+        try:
+            if encoder_path is not None and decoder_path.exists():
+                # Split Model Architecture (Encoder + Decoder ONNX)
+                logger.info(f"Loading split Moondream model from {models_path}")
+
+                self.encoder_session = ort.InferenceSession(
+                    str(encoder_path),
+                    sess_options,
+                    providers=providers
+                )
+                self.decoder_session = ort.InferenceSession(
+                    str(decoder_path),
+                    sess_options,
+                    providers=providers
+                )
+
+                self._is_combined_model = False
+                self._active_provider = self.encoder_session.get_providers()[0]
+
+                logger.info(f"Moondream encoder loaded. Provider: {self._active_provider}")
+                logger.info(f"Moondream decoder loaded. Provider: {self.decoder_session.get_providers()[0]}")
+
+            elif encoder_path is not None and not decoder_path.exists():
+                # Hybrid Mode: ONNX Vision Encoder (GPU) + PyTorch Text Decoder (CPU)
+                logger.info(f"Loading hybrid Moondream: ONNX encoder + PyTorch decoder")
+
+                self.encoder_session = ort.InferenceSession(
+                    str(encoder_path),
+                    sess_options,
+                    providers=providers
+                )
+
+                self._is_combined_model = False
+                self._active_provider = self.encoder_session.get_providers()[0]
+                self._hybrid_mode = True
+
+                # PyTorch Decoder laden fuer Text-Generierung
+                try:
+                    from src.pb_studio.ai.moondream_pytorch import MoondreamPyTorch
+                    self._pytorch_fallback = MoondreamPyTorch()
+                    if not self._pytorch_fallback.load():
+                        logger.warning("PyTorch decoder failed to load - disabling hybrid mode")
+                        self._pytorch_fallback = None
+                        self._hybrid_mode = False
+                    else:
+                        logger.info(f"Moondream encoder: {self._active_provider} (GPU)")
+                        logger.info("Moondream decoder: PyTorch (CPU)")
+                except ImportError:
+                    logger.warning("PyTorch decoder not available - using encoder-only mode")
+                    self._pytorch_fallback = None
+                    self._hybrid_mode = False
+
+            elif combined_path.exists():
+                # Combined Model Architecture
+                logger.info(f"Loading combined Moondream model from {combined_path}")
+
+                self.combined_session = ort.InferenceSession(
+                    str(combined_path),
+                    sess_options,
+                    providers=providers
+                )
+
+                self._is_combined_model = True
+                self._active_provider = self.combined_session.get_providers()[0]
+
+                logger.info(f"Moondream combined model loaded. Provider: {self._active_provider}")
+
+            else:
+                logger.warning(
+                    "Moondream ONNX model not found. Expected one of:\n"
+                    f"  - moondream_encoder.onnx or moondream_vision.onnx\n"
+                    f"  - {combined_path}\n"
+                    "Run: python download_models.py --moondream"
+                )
+                return False
+
+            self._initialized = True
+            self._log_model_info()
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Moondream model: {e}")
+            self.encoder_session = None
+            self.decoder_session = None
+            self.combined_session = None
+            return False
+
+    def _log_model_info(self):
+        """Log model input/output information for debugging."""
+        session = self.combined_session or self.encoder_session
+        if session:
+            logger.debug("Model Inputs:")
+            for inp in session.get_inputs():
+                logger.debug(f"  {inp.name}: {inp.shape} ({inp.type})")
+
+            logger.debug("Model Outputs:")
+            for out in session.get_outputs():
+                logger.debug(f"  {out.name}: {out.shape} ({out.type})")
+
+    def preprocess_image(self, image: Image.Image) -> np.ndarray:
+        """
+        Preprocess image for SigLIP vision encoder.
+
+        Steps:
+        1. Resize to 384x384 (bicubic interpolation)
+        2. Convert to float32 [0, 1]
+        3. Normalize with SigLIP mean/std
+        4. Transpose to NCHW format
+
+        Args:
+            image: PIL Image (RGB)
+
+        Returns:
+            Preprocessed image tensor [1, 3, 384, 384]
+        """
+        # Konvertiere zu RGB falls noetig
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        # Resize mit hochwertiger Interpolation
+        image = image.resize((SIGLIP_IMAGE_SIZE, SIGLIP_IMAGE_SIZE), Image.Resampling.BICUBIC)
+
+        # Zu numpy array konvertieren und normalisieren
+        img_array = np.array(image, dtype=np.float32) / 255.0
+
+        # SigLIP Normalisierung
+        img_array = (img_array - SIGLIP_MEAN) / SIGLIP_STD
+
+        # HWC -> NCHW
+        img_array = np.transpose(img_array, (2, 0, 1))  # CHW
+        img_array = np.expand_dims(img_array, axis=0)   # NCHW
+
+        return img_array.astype(np.float32)
+
+    def encode_image(self, image: Image.Image) -> Optional[np.ndarray]:
+        """
+        Encode image to vision embeddings.
+
+        Args:
+            image: PIL Image
+
+        Returns:
+            Image embeddings tensor or None on error
+        """
+        if not self._initialized:
+            if not self._init_model():
+                return None
+
+        try:
+            img_tensor = self.preprocess_image(image)
+
+            if self._is_combined_model:
+                # Combined model - encoder teil
+                # Typische Input-Namen: "pixel_values", "image"
+                input_name = self.combined_session.get_inputs()[0].name
+
+                # Nur encoder-output zurueckgeben (erster Output typisch)
+                outputs = self.combined_session.run(
+                    None,  # Alle outputs
+                    {input_name: img_tensor}
+                )
+                return outputs[0]
+            else:
+                # Split model - dedizierter encoder
+                input_name = self.encoder_session.get_inputs()[0].name
+
+                outputs = self.encoder_session.run(
+                    None,
+                    {input_name: img_tensor}
+                )
+                return outputs[0]
+
+        except Exception as e:
+            logger.error(f"Image encoding failed: {e}")
+            return None
+
+    def prepare_prompt(self, prompt: str, image_embeddings: np.ndarray) -> Dict[str, np.ndarray]:
+        """
+        Prepare inputs for text generation.
+
+        Args:
+            prompt: Text prompt for the model
+            image_embeddings: Encoded image features
+
+        Returns:
+            Dictionary of model inputs
+        """
+        if self.tokenizer is None:
+            raise RuntimeError("Tokenizer not initialized")
+
+        # Moondream2 Prompt-Format
+        # <image> token wird durch Bild-Embeddings ersetzt
+        formatted_prompt = f"<image>\n\nQuestion: {prompt}\n\nAnswer:"
+
+        # Tokenize
+        tokens = self.tokenizer.encode(formatted_prompt, return_tensors="np")
+
+        # Attention mask
+        attention_mask = np.ones_like(tokens, dtype=np.int64)
+
+        return {
+            "input_ids": tokens.astype(np.int64),
+            "attention_mask": attention_mask,
+            "image_embeddings": image_embeddings.astype(np.float32)
+        }
+
+    def generate_tokens(
+        self,
+        inputs: Dict[str, np.ndarray],
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE
+    ) -> List[int]:
+        """
+        Generate text tokens autoregressively.
+
+        Args:
+            inputs: Prepared model inputs
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0 = greedy)
+
+        Returns:
+            List of generated token IDs
+        """
+        session = self.decoder_session or self.combined_session
+        if session is None:
+            raise RuntimeError("Model not initialized")
+
+        generated_tokens = []
+        input_ids = inputs["input_ids"].copy()
+        attention_mask = inputs["attention_mask"].copy()
+        image_embeddings = inputs["image_embeddings"]
+
+        # Autoregressive Generation Loop
+        for _ in range(max_tokens):
+            try:
+                # Prepare decoder inputs
+                decoder_inputs = self._prepare_decoder_inputs(
+                    input_ids,
+                    attention_mask,
+                    image_embeddings
+                )
+
+                # Run decoder
+                outputs = session.run(None, decoder_inputs)
+
+                # Get logits for next token (last position)
+                logits = outputs[0]  # Shape: [batch, seq_len, vocab]
+                next_token_logits = logits[0, -1, :]  # Last token logits
+
+                # Sample next token
+                if temperature > 0:
+                    # Temperature sampling
+                    probs = self._softmax(next_token_logits / temperature)
+                    next_token = np.random.choice(len(probs), p=probs)
+                else:
+                    # Greedy decoding
+                    next_token = int(np.argmax(next_token_logits))
+
+                # Check for EOS
+                if next_token == EOS_TOKEN_ID:
+                    break
+
+                generated_tokens.append(next_token)
+
+                # Update inputs for next iteration
+                input_ids = np.concatenate([
+                    input_ids,
+                    np.array([[next_token]], dtype=np.int64)
+                ], axis=1)
+
+                attention_mask = np.concatenate([
+                    attention_mask,
+                    np.array([[1]], dtype=np.int64)
+                ], axis=1)
+
+            except Exception as e:
+                logger.error(f"Token generation error: {e}")
+                break
+
+        return generated_tokens
+
+    def _prepare_decoder_inputs(
+        self,
+        input_ids: np.ndarray,
+        attention_mask: np.ndarray,
+        image_embeddings: np.ndarray
+    ) -> Dict[str, np.ndarray]:
+        """Prepare inputs matching decoder's expected format."""
+        session = self.decoder_session or self.combined_session
+        input_names = [inp.name for inp in session.get_inputs()]
+
+        inputs = {}
+
+        # Mapping gaengiger Input-Namen
+        for name in input_names:
+            name_lower = name.lower()
+
+            if "input_id" in name_lower or name == "input_ids":
+                inputs[name] = input_ids
+            elif "attention" in name_lower or "mask" in name_lower:
+                inputs[name] = attention_mask
+            elif "image" in name_lower or "visual" in name_lower or "embed" in name_lower:
+                inputs[name] = image_embeddings
+            elif "position" in name_lower:
+                # Position IDs
+                seq_len = input_ids.shape[1]
+                inputs[name] = np.arange(seq_len, dtype=np.int64).reshape(1, -1)
+
+        return inputs
+
+    @staticmethod
+    def _softmax(x: np.ndarray) -> np.ndarray:
+        """Compute softmax values."""
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
+
+    def generate_caption(
+        self,
+        image: Image.Image,
+        prompt: str = "Describe this image in detail.",
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE
+    ) -> str:
+        """
+        Generate a caption or answer for an image.
+
+        This is the main high-level API for image analysis.
+
+        Args:
+            image: PIL Image to analyze
+            prompt: Question or instruction for the model
+            max_tokens: Maximum response length
+            temperature: Sampling temperature
+
+        Returns:
+            Generated text response
+        """
+        if not self._initialized:
+            if not self._init_model():
+                return "[Error: Model not initialized]"
+
+        # Hybrid Mode oder reiner PyTorch-Fallback
+        if self._pytorch_fallback is not None and (
+            self._hybrid_mode or
+            (self.encoder_session is None and self.combined_session is None)
+        ):
+            try:
+                return self._pytorch_fallback.answer_question(image, prompt)
+            except Exception as e:
+                logger.error(f"PyTorch caption generation failed: {e}")
+                return f"[Error: {str(e)}]"
+
+        if self.tokenizer is None:
+            return "[Error: Tokenizer not available]"
+
+        try:
+            # 1. Encode Image
+            logger.debug(f"Encoding image for prompt: {prompt[:50]}...")
+            image_embeddings = self.encode_image(image)
+
+            if image_embeddings is None:
+                return "[Error: Image encoding failed]"
+
+            # 2. Prepare Prompt
+            inputs = self.prepare_prompt(prompt, image_embeddings)
+
+            # 3. Generate Tokens
+            generated_tokens = self.generate_tokens(inputs, max_tokens, temperature)
+
+            if not generated_tokens:
+                return "[No response generated]"
+
+            # 4. Decode to Text
+            response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+
+            return response.strip()
+
+        except Exception as e:
+            logger.error(f"Caption generation failed: {e}")
+            return f"[Error: {str(e)}]"
+
+    def analyze_frame(
+        self,
+        frame_array: np.ndarray,
+        prompt: str = "Describe this video frame."
+    ) -> str:
+        """
+        Analyze a video frame (numpy array from OpenCV).
+
+        Convenience method for video processing pipelines.
+
+        Args:
+            frame_array: BGR numpy array from cv2.imread/VideoCapture
+            prompt: Analysis prompt
+
+        Returns:
+            Generated analysis text
+        """
+        try:
+            # OpenCV BGR -> PIL RGB
+            import cv2
+            rgb_array = cv2.cvtColor(frame_array, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(rgb_array)
+
+            return self.generate_caption(image, prompt)
+
+        except Exception as e:
+            logger.error(f"Frame analysis failed: {e}")
+            return f"[Error: {str(e)}]"
+
+    def batch_analyze(
+        self,
+        images: List[Image.Image],
+        prompt: str = "Describe this image.",
+        max_tokens: int = DEFAULT_MAX_TOKENS
+    ) -> List[str]:
+        """
+        Analyze multiple images.
+
+        Note: Currently processes sequentially. Batch processing
+        requires model changes for batched inference.
+
+        Args:
+            images: List of PIL Images
+            prompt: Common prompt for all images
+            max_tokens: Maximum tokens per response
+
+        Returns:
+            List of generated captions
+        """
+        results = []
+
+        for i, img in enumerate(images):
+            logger.debug(f"Analyzing image {i+1}/{len(images)}")
+            caption = self.generate_caption(img, prompt, max_tokens)
+            results.append(caption)
+
+        return results
+
+    def get_scene_description(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Get structured scene analysis.
+
+        Returns multiple aspects of the image in a dictionary.
+
+        Args:
+            image: PIL Image to analyze
+
+        Returns:
+            Dictionary with scene analysis results
+        """
+        prompts = {
+            "description": "Describe this image in one sentence.",
+            "objects": "List the main objects visible in this image.",
+            "mood": "What is the mood or atmosphere of this image?",
+            "action": "What action or activity is happening in this image?"
+        }
+
+        results = {}
+        for key, prompt in prompts.items():
+            results[key] = self.generate_caption(image, prompt, max_tokens=100)
+
+        return results
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if model is initialized and ready for inference."""
+        if not self._initialized:
+            return False
+
+        # Hybrid Mode: Encoder ONNX + PyTorch Decoder
+        if self._hybrid_mode and self.encoder_session is not None:
+            return True
+
+        # Reiner PyTorch-Fallback
+        if self._pytorch_fallback is not None and self.encoder_session is None:
+            return True
+
+        # Volle ONNX Pipeline
+        return (
+            self.combined_session is not None or
+            (self.encoder_session is not None and self.decoder_session is not None)
+        )
+
+    @property
+    def active_provider(self) -> str:
+        """Get the active execution provider name."""
+        return self._active_provider
+
+    def unload(self):
+        """Release model resources."""
+        self.encoder_session = None
+        self.decoder_session = None
+        self.combined_session = None
+        self._hybrid_mode = False
+        if self._pytorch_fallback is not None:
+            try:
+                self._pytorch_fallback.unload()
+            except Exception:
+                pass
+            self._pytorch_fallback = None
+        self._initialized = False
+
+        # DirectML gibt VRAM erst bei GC frei
+        import gc
+        gc.collect()
+
+        logger.info("Moondream model unloaded")
+
+
+# Convenience function for quick usage
+def analyze_image(
+    image_path: str,
+    prompt: str = "Describe this image."
+) -> str:
+    """
+    Quick image analysis function.
+
+    Args:
+        image_path: Path to image file
+        prompt: Analysis prompt
+
+    Returns:
+        Generated analysis text
+    """
+    analyzer = MoondreamAnalyzer()
+    image = Image.open(image_path)
+    return analyzer.generate_caption(image, prompt)

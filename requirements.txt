@@ -1,0 +1,30 @@
+# Core
+numpy==1.26.4
+PyQt6==6.8.0
+qt-material>=2.14
+psutil>=5.9.0
+
+# AI / ML (AMD / DirectML)
+onnxruntime-directml>=1.16.0
+torch>=2.0.0
+torchaudio>=2.0.0
+transformers>=4.48.0
+pillow>=10.0.0
+
+# Audio Processing
+BeatNet==1.1.1
+librosa>=0.10.1
+soundfile>=0.12.1
+pydub>=0.25.1
+demucs>=4.0.0
+
+# Utils
+colorlog>=6.8.0
+python-dotenv>=1.0.0
+scenedetect[opencv]>=0.6.3
+opencv-python==4.9.0.80
+pythonnet>=3.0.0
+audio-separator>=0.17.0
+scikit-learn>=1.3.0
+faiss-cpu>=1.7.0
+sentencepiece>=0.2.0
