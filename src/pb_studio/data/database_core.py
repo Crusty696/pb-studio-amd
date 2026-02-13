@@ -36,24 +36,27 @@ class DatabaseCore:
         # Ensure directory exists
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
+        init_conn = None
         try:
-            # Create initial connection nur für Schema-Setup
+            # Create initial connection nur fuer Schema-Setup
             init_conn = sqlite3.connect(str(self.db_path), check_same_thread=True)
             init_conn.row_factory = sqlite3.Row
-            
+
             # Enable WAL mode for better concurrency
             init_conn.execute("PRAGMA journal_mode=WAL;")
             init_conn.execute("PRAGMA foreign_keys=ON;")
-            
+
             self._create_schema(init_conn)
-            init_conn.close()
-            
+
             self._initialized = True
             logger.info(f"Database initialized at: {self.db_path}")
 
         except sqlite3.Error as e:
             logger.critical(f"Database initialization failed: {e}")
             raise
+        finally:
+            if init_conn is not None:
+                init_conn.close()
 
     def _create_schema(self, conn):
         cursor = conn.cursor()

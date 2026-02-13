@@ -73,7 +73,7 @@ class AudioAnalyzer:
                     # Check if failure is due to missing audio stream (Silent Video)
                     if "does not contain any stream" in err_output or "Output file does not contain any stream" in err_output:
                         logger.warning(f"No audio stream found in {Path(file_path).name}. Returning 0 BPM.")
-                        return {"bpm": 0, "beats": [], "count": 0, "warning": "No Audio Stream"}
+                        return {"bpm": 0, "beat_data": [], "count": 0, "warning": "No Audio Stream"}
                     else:
                         logger.warning(f"FFmpeg conversion failed (Code {result.returncode}). Stderr: {err_output[:200]}...")
                         # Fallback to original file implies hoping BeatNet can read it directly
@@ -89,15 +89,22 @@ class AudioAnalyzer:
             # BeatNet processing
             output = self.estimator.process(analyze_path)
             
-            # Clean up temp ONLY if we created it
-            if conversion_success and os.path.exists(temp_wav):
+            # Temp-Datei immer aufraeumen
+            if os.path.exists(temp_wav):
                 try:
                     os.remove(temp_wav)
                 except Exception as e:
                     logger.debug(f"Could not remove temp file: {e}")
-            
+
             if output is None or len(output) == 0:
                 logger.info("BeatNet returned empty results.")
+                return {"bpm": 0, "beat_data": [], "count": 0}
+
+            # BeatNet Output validieren (muss 2D array sein)
+            if not isinstance(output, np.ndarray):
+                output = np.array(output)
+            if output.ndim != 2 or output.shape[1] < 1:
+                logger.error(f"Invalid BeatNet output shape: {output.shape}")
                 return {"bpm": 0, "beat_data": [], "count": 0}
 
             # Calculate Average BPM

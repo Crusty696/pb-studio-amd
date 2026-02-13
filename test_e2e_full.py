@@ -226,16 +226,16 @@ def test_database_core():
   conn = db.get_connection()
   assert conn is not None, "Keine DB-Connection erhalten"
 
-  # Transaction
+  # Transaction (execute gibt Cursor zurueck, fetchone auf Cursor aufrufen)
   with db.transaction() as c:
-    c.execute("SELECT 1")
-    row = c.fetchone()
+    cursor = c.execute("SELECT 1")
+    row = cursor.fetchone()
     assert row[0] == 1, "SELECT 1 fehlgeschlagen"
 
   # Schema-Check
   with db.transaction() as c:
-    c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    tables = [r[0] for r in c.fetchall()]
+    cursor = c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [r[0] for r in cursor.fetchall()]
 
   expected = ["projects", "media", "vector_map"]
   missing = [t for t in expected if t not in tables]

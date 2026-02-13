@@ -6,6 +6,7 @@ Renders individual video segments using FFmpeg with AMD AMF hardware acceleratio
 
 import logging
 import os
+import random
 import subprocess
 import time
 from pathlib import Path
@@ -83,6 +84,9 @@ class RenderWorker(BaseWorker):
         self.output_fps = output_fps
         self.output_resolution = output_resolution
 
+        # Cache fuer Video-Dauern (vermeidet wiederholte FFprobe-Aufrufe)
+        self._duration_cache: dict[str, float] = {}
+
         # Validate inputs
         if not source_videos:
             raise ValueError("At least one source video is required")
@@ -122,8 +126,14 @@ class RenderWorker(BaseWorker):
             progress = int((i / total_cuts) * 100)
             self.emit_progress(progress, f"Rendering segment {i + 1}/{total_cuts}")
 
-            # Get source video for this cut
-            source_idx = min(cut.source_video_index, len(self.source_videos) - 1)
+            # Get source video for this cut (mit Validierung)
+            source_idx = cut.source_video_index
+            if source_idx < 0 or source_idx >= len(self.source_videos):
+                logger.warning(
+                    f"Invalid source_video_index {source_idx}, "
+                    f"clamping to valid range [0, {len(self.source_videos)-1}]"
+                )
+                source_idx = max(0, min(source_idx, len(self.source_videos) - 1))
             source_video = self.source_videos[source_idx]
 
             # Generate output path
@@ -176,11 +186,25 @@ class RenderWorker(BaseWorker):
         Returns:
             RenderSegment with render status
         """
+        # Quell-Video-Dauer ermitteln und Seek-Position berechnen
+        clip_dur = self._get_video_duration(source_video)
+        if clip_dur <= 0:
+            clip_dur = cut.duration + 1.0  # Fallback
+
+        # Segment-Dauer an Clip-Laenge anpassen
+        seg_dur = min(cut.duration, clip_dur - 0.05)
+        if seg_dur < 0.3:
+            seg_dur = min(1.0, clip_dur)
+
+        # Seek-Position INNERHALB des Quell-Clips (nicht Timeline-Position!)
+        max_seek = max(0, clip_dur - seg_dur - 0.05)
+        seek_pos = random.uniform(0, max_seek) if max_seek > 0 else 0
+
         segment = RenderSegment(
             segment_index=segment_index,
             source_video=source_video,
-            start_time=cut.time,
-            duration=cut.duration,
+            start_time=seek_pos,
+            duration=seg_dur,
             output_path=output_path,
             transition=cut.transition,
             render_status="rendering",
@@ -190,8 +214,8 @@ class RenderWorker(BaseWorker):
             # Build FFmpeg command
             cmd = self._build_ffmpeg_command(
                 source_video=source_video,
-                start_time=cut.time,
-                duration=cut.duration,
+                start_time=seek_pos,
+                duration=seg_dur,
                 output_path=output_path,
                 encoder_config=encoder_config,
             )
@@ -279,8 +303,8 @@ class RenderWorker(BaseWorker):
         encode_args = build_ffmpeg_encode_args(encoder_config)
         cmd.extend(encode_args)
 
-        # Audio settings (copy or re-encode)
-        cmd.extend(["-c:a", "aac", "-b:a", "192k"])
+        # Kein Audio in Segmenten (Audio kommt spaeter im Concat-Schritt)
+        cmd.append("-an")
 
         # Output format settings
         cmd.extend(["-movflags", "+faststart"])
@@ -289,3 +313,19 @@ class RenderWorker(BaseWorker):
         cmd.append(output_path)
 
         return cmd
+
+    def _get_video_duration(self, video_path: str) -> float:
+        """Ermittelt die Dauer eines Videos (mit Cache)."""
+        if video_path in self._duration_cache:
+            return self._duration_cache[video_path]
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+                 "-of", "csv=p=0", video_path],
+                capture_output=True, text=True, timeout=10
+            )
+            dur = float(result.stdout.strip())
+            self._duration_cache[video_path] = dur
+            return dur
+        except Exception:
+            return 0.0

@@ -322,18 +322,28 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Cleanup on application close."""
         logger.info("Shutting down application...")
-        
+
         # Stop monitoring timer
         if hasattr(self, 'monitor_timer'):
             self.monitor_timer.stop()
-        
+
+        # Dashboard-Timer stoppen
+        if hasattr(self, 'dashboard_page') and hasattr(self.dashboard_page, 'cleanup'):
+            self.dashboard_page.cleanup()
+
         # Close system monitor
         if hasattr(self, 'monitor') and self.monitor:
-            self.monitor.close()
-        
+            try:
+                self.monitor.close()
+            except Exception as e:
+                logger.error(f"Error closing system monitor: {e}")
+
         # Free SmartDirector VRAM
         if hasattr(self, 'generation_service'):
-            self.generation_service.unload_models()
+            try:
+                self.generation_service.unload_models()
+            except Exception as e:
+                logger.error(f"Error unloading models: {e}")
 
         # Shutdown database
         try:

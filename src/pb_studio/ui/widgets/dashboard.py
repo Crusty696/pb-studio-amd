@@ -225,7 +225,10 @@ class DashboardWidget(QWidget):
 
     def _update_live_data(self):
         """System Stats aktualisieren."""
-        stats = self.monitor.get_stats()
+        try:
+            stats = self.monitor.get_stats()
+        except Exception:
+            return
         
         cpu = int(stats.get('cpu_load', 0))
         gpu = int(stats.get('gpu_load', 0))
@@ -257,6 +260,23 @@ class DashboardWidget(QWidget):
                 self.projectCreated.emit(project_id, name)
             else:
                 logger.error(f"Failed to create project '{name}'")
+
+    def cleanup(self):
+        """Timer stoppen bei Widget-Zerstoerung."""
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+
+    def hideEvent(self, event):
+        """Timer stoppen wenn Dashboard nicht sichtbar."""
+        if hasattr(self, 'timer'):
+            self.timer.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        """Timer starten wenn Dashboard sichtbar."""
+        if hasattr(self, 'timer') and not self.timer.isActive():
+            self.timer.start(2000)
+        super().showEvent(event)
 
     def _on_open_project(self):
         """Zeigt vorhandene Projekte zum Auswählen."""

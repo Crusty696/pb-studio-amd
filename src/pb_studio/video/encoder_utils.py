@@ -63,10 +63,14 @@ def check_ffmpeg_available() -> bool:
 
 def check_amf_available() -> bool:
     """
-    Check if AMD AMF encoders are available in FFmpeg.
+    Check if AMD AMF encoders are available AND functional.
+
+    Prueft nicht nur ob h264_amf in FFmpeg gelistet ist,
+    sondern testet auch die tatsaechliche Encoding-Faehigkeit
+    (faengt Error 30 / CreateComponent-Fehler ab).
 
     Returns:
-        True if h264_amf encoder is available, False otherwise.
+        True if h264_amf encoder works, False otherwise.
     """
     global _amf_available
 
@@ -79,18 +83,39 @@ def check_amf_available() -> bool:
         return False
 
     try:
+        # Schritt 1: Pruefen ob Encoder gelistet ist
         result = subprocess.run(
             ["ffmpeg", "-encoders"],
             capture_output=True,
             text=True,
             timeout=10
         )
-        _amf_available = "h264_amf" in result.stdout
+        if "h264_amf" not in result.stdout:
+            logger.info("AMD AMF encoder not found in FFmpeg, using software fallback")
+            _amf_available = False
+            return False
 
-        if _amf_available:
-            logger.info("AMD AMF encoder available")
-        else:
-            logger.info("AMD AMF encoder not found, using software fallback")
+        # Schritt 2: Tatsaechliches Encoding testen (faengt Error 30 ab)
+        import tempfile, os
+        test_out = os.path.join(tempfile.gettempdir(), "pb_amf_test.mp4")
+        try:
+            probe = subprocess.run(
+                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                 "-f", "lavfi", "-i", "color=black:s=320x240:d=0.5",
+                 "-c:v", "h264_amf", "-quality", "speed", test_out],
+                capture_output=True, text=True, timeout=15
+            )
+            if probe.returncode == 0 and os.path.exists(test_out):
+                _amf_available = True
+                logger.info("AMD AMF encoder verfuegbar und funktional")
+            else:
+                _amf_available = False
+                logger.warning(
+                    f"AMF Encoder gelistet aber nicht funktional: {probe.stderr[:200]}"
+                )
+        finally:
+            if os.path.exists(test_out):
+                os.remove(test_out)
 
         return _amf_available
 

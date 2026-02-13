@@ -37,7 +37,12 @@ class VectorStore:
                         with open(self.meta_path, "r") as f:
                             raw_meta = json.load(f)
                             # JSON konvertiert int-Keys zu Strings - zurueck konvertieren
-                            self.metadata = {int(k): v for k, v in raw_meta.items()}
+                            self.metadata = {}
+                            for k, v in raw_meta.items():
+                                try:
+                                    self.metadata[int(k)] = v
+                                except (ValueError, TypeError):
+                                    logger.warning(f"Skipping invalid FAISS metadata key: {k}")
                     except json.JSONDecodeError:
                         logger.warning(f"Failed to load metadata from {self.meta_path}, starting fresh")
                         self.metadata = {}

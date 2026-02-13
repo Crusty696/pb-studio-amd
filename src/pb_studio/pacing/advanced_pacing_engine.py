@@ -222,8 +222,11 @@ class AdvancedPacingEngine:
             beat_strength = 0.0
 
             if beats and precision_factor > 0:
-                # Find nearest beat
-                nearest_beat = min(beats, key=lambda x: abs(x - proposed_end))
+                # Find nearest beat (nur innerhalb total_duration)
+                valid_snap_beats = [b for b in beats if b <= total_duration]
+                if not valid_snap_beats:
+                    valid_snap_beats = beats
+                nearest_beat = min(valid_snap_beats, key=lambda x: abs(x - proposed_end))
                 distance = abs(nearest_beat - proposed_end)
 
                 # Calculate snap window (higher precision = tighter snap)
@@ -326,8 +329,11 @@ class AdvancedPacingEngine:
 
             cuts.append(cut)
 
-            # Move to next beat
-            beat_idx = beats.index(end_time) if end_time in beats else beat_idx + 1
+            # Move to next beat (sicher ohne ValueError)
+            try:
+                beat_idx = beats.index(end_time)
+            except ValueError:
+                beat_idx += 1
 
         return cuts
 
@@ -465,9 +471,9 @@ class AdvancedPacingEngine:
         # Use beat strength from analysis if available
         beat_data = self.audio_analysis.get("beat_data", [])
 
-        if beat_data and len(beat_data[0]) >= 2:
+        if beat_data and all(len(b) >= 2 for b in beat_data[:10]):
             # BeatNet provides beat position (1, 2, 3, 4)
-            downbeats = [b[0] for b in beat_data if b[1] == 1]
+            downbeats = [b[0] for b in beat_data if len(b) >= 2 and b[1] == 1]
         else:
             # Fallback: Assume every 4th beat is a downbeat
             downbeats = [beats[i] for i in range(0, len(beats), 4)]

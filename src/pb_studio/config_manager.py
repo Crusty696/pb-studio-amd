@@ -79,7 +79,11 @@ class ConfigManager:
             logger.error(f"Failed to save config: {e}")
 
     def resolve_path(self, relative_path: str) -> Path:
-        """Resolve relative path to absolute based on project root."""
+        """Resolve relative path to absolute based on project root.
+        Absolute Pfade werden unveraendert zurueckgegeben."""
+        p = Path(relative_path)
+        if p.is_absolute():
+            return p.resolve()
         return (_PROJECT_ROOT / relative_path.lstrip("./")).resolve()
 
     def get(self, key: str, default=None):
