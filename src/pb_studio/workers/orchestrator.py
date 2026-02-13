@@ -61,6 +61,7 @@ class AudioPipelineResult:
     beat_times: list[float] = field(default_factory=list)
     downbeat_times: list[float] = field(default_factory=list)
     energy_curve: list[float] = field(default_factory=list)
+    energy_times: list[float] = field(default_factory=list)
     confidence: float = 0.0
 
     # Stem separation phase (optional)
@@ -305,6 +306,7 @@ class WorkerOrchestrator(QObject):
             result.beat_times = analysis_result.beat_times
             result.downbeat_times = analysis_result.downbeat_times
             result.energy_curve = analysis_result.energy_curve
+            result.energy_times = analysis_result.energy_times
             result.confidence = analysis_result.confidence
             result.phases_completed.append("analyze")
             self.phase_completed.emit("analyze")

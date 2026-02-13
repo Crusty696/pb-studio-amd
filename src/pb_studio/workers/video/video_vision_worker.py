@@ -97,12 +97,13 @@ class VideoVisionWorker(BaseWorker):
 
         self.emit_progress(15, f"Using Moondream ({model_type})...")
 
-        # Open video capture
-        cap = cv2.VideoCapture(self.file_path)
-        if not cap.isOpened():
-            raise RuntimeError(f"Could not open video: {self.file_path}")
-
+        cap = None
         try:
+            # Open video capture
+            cap = cv2.VideoCapture(self.file_path)
+            if not cap.isOpened():
+                raise RuntimeError(f"Could not open video: {self.file_path}")
+
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
             captions = {}
 
@@ -137,7 +138,8 @@ class VideoVisionWorker(BaseWorker):
             }
 
         finally:
-            cap.release()
+            if cap is not None:
+                cap.release()
             self._unload_model()
 
     def _init_vision_model(self) -> str:

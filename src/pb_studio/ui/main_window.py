@@ -331,6 +331,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'dashboard_page') and hasattr(self.dashboard_page, 'cleanup'):
             self.dashboard_page.cleanup()
 
+        # Editor-Prozess stoppen (Stem Separation)
+        if hasattr(self, 'editor_page') and hasattr(self.editor_page, 'cleanup'):
+            self.editor_page.cleanup()
+
         # Close system monitor
         if hasattr(self, 'monitor') and self.monitor:
             try:

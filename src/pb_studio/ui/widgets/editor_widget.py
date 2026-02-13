@@ -273,6 +273,12 @@ class EditorWidget(QWidget):
             
             self.info_details.setText(details)
 
+    def cleanup(self):
+        """Stem-Prozess beenden falls noch laufend."""
+        if self.stem_process is not None and self.stem_process.state() != QProcess.ProcessState.NotRunning:
+            self.stem_process.kill()
+            self.stem_process.waitForFinished(2000)
+
     def check_refresh(self, metadata: dict):
         """Refreshes editor if the analyzed file matches the current one."""
         if not self.current_file:

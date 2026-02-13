@@ -50,7 +50,7 @@ class RenderProgressWidget(QFrame):
         super().__init__(parent)
         self._current_step = RenderStep.IDLE
         self._start_time: Optional[float] = None
-        self._eta_timer = QTimer()
+        self._eta_timer = QTimer(self)
         self._eta_timer.timeout.connect(self._update_eta)
         self._total_frames = 0
         self._current_frame = 0

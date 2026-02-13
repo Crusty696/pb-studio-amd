@@ -97,9 +97,17 @@ class AudioAnalyzeWorker(BaseWorker):
         # Calculate confidence based on beat consistency
         confidence = self._calculate_confidence(bpm, beat_times)
 
-        # Generate placeholder energy curve (normalized 0-1)
-        # Full energy analysis would require additional processing
-        energy_curve = self._generate_energy_placeholder(len(beat_times))
+        # Echte RMS-Energie vom Analyzer verwenden (seit analyzer.py Update)
+        energy_curve = result.get("energy_curve", [])
+        energy_times = result.get("energy_times", [])
+
+        if not energy_curve:
+            # Fallback auf Placeholder nur wenn Analyzer keine Energie liefert
+            logger.warning("Analyzer lieferte keine Energie-Daten, verwende Placeholder")
+            energy_curve = self._generate_energy_placeholder(len(beat_times))
+            energy_times = []
+        else:
+            logger.info(f"RMS-Energie vom Analyzer: {len(energy_curve)} Frames")
 
         logger.info(f"Analysis complete: BPM={bpm:.1f}, Beats={beat_count}, Confidence={confidence:.2f}")
         self.emit_progress(100, "Analysis complete")
@@ -109,6 +117,7 @@ class AudioAnalyzeWorker(BaseWorker):
             beat_times=beat_times,
             downbeat_times=downbeat_times,
             energy_curve=energy_curve,
+            energy_times=energy_times,
             confidence=confidence
         )
 

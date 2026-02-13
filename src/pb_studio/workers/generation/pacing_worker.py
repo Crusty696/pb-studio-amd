@@ -205,18 +205,22 @@ class PacingWorker(BaseWorker):
         energy = self.audio_analysis.energy_curve
 
         if not energy:
-            # No energy data - create dummy
+            # Keine Energie-Daten - Dummy zurueckgeben
             return np.array([0.5]), np.array([0.0])
 
         rms = np.array(energy, dtype=np.float32)
 
-        # Generate time values (assume regular sampling)
-        if self.audio_analysis.beat_times:
-            total_time = max(self.audio_analysis.beat_times) + 2.0
+        # Echte Zeitachse vom Analyzer verwenden (wenn vorhanden)
+        real_times = self.audio_analysis.energy_times
+        if real_times and len(real_times) == len(rms):
+            times = np.array(real_times, dtype=np.float32)
         else:
-            total_time = 60.0
-
-        times = np.linspace(0, total_time, len(rms))
+            # Fallback: lineare Zeitachse generieren
+            if self.audio_analysis.beat_times:
+                total_time = max(self.audio_analysis.beat_times) + 2.0
+            else:
+                total_time = 60.0
+            times = np.linspace(0, total_time, len(rms))
 
         return rms, times
 

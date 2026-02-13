@@ -76,77 +76,80 @@ class AudioEmbeddingWorker(BaseWorker):
         if not self._clap.load():
             raise RuntimeError("Failed to load CLAP model. Check transformers installation.")
 
-        self.emit_progress(20, "Loading audio file...")
-        self._check_cancelled()
-
-        # Load full audio for chunking
         try:
-            import librosa
-            audio, sr = librosa.load(self.wav_path, sr=CLAP_SAMPLE_RATE, mono=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load audio: {e}")
-
-        audio_duration = len(audio) / sr
-        logger.info(f"Audio loaded: {audio_duration:.1f}s at {sr}Hz")
-
-        self.emit_progress(30, "Extracting embeddings...")
-        self._check_cancelled()
-
-        # Calculate chunk positions
-        chunk_positions = self._calculate_chunk_positions(audio_duration)
-        total_chunks = len(chunk_positions)
-
-        if total_chunks == 0:
-            # Audio too short for even one chunk - process entire file
-            logger.warning("Audio shorter than chunk duration, processing entire file")
-            chunk_positions = [0.0]
-            total_chunks = 1
-
-        # Extract embeddings for each chunk
-        embeddings: List[List[float]] = []
-        timestamps: List[float] = []
-
-        for i, start_time in enumerate(chunk_positions):
+            self.emit_progress(20, "Loading audio file...")
             self._check_cancelled()
 
-            # Update progress
-            progress = 30 + int(60 * (i + 1) / total_chunks)
-            self.emit_progress(progress, f"Processing chunk {i + 1}/{total_chunks}...")
+            # Load full audio for chunking
+            import librosa
+            audio, sr = librosa.load(self.wav_path, sr=CLAP_SAMPLE_RATE, mono=True)
 
-            # Extract chunk
-            start_sample = int(start_time * sr)
-            end_sample = int((start_time + self.chunk_duration) * sr)
-            end_sample = min(end_sample, len(audio))
+            audio_duration = len(audio) / sr
+            logger.info(f"Audio loaded: {audio_duration:.1f}s at {sr}Hz")
 
-            chunk = audio[start_sample:end_sample]
+            self.emit_progress(30, "Extracting embeddings...")
+            self._check_cancelled()
 
-            # Pad if necessary
-            target_length = int(CLAP_DURATION * CLAP_SAMPLE_RATE)
-            if len(chunk) < target_length:
-                chunk = np.pad(chunk, (0, target_length - len(chunk)), mode='constant')
+            # Calculate chunk positions
+            chunk_positions = self._calculate_chunk_positions(audio_duration)
+            total_chunks = len(chunk_positions)
 
-            # Get embedding for this chunk
-            embedding = self._get_chunk_embedding(chunk)
+            if total_chunks == 0:
+                # Audio too short for even one chunk - process entire file
+                logger.warning("Audio shorter than chunk duration, processing entire file")
+                chunk_positions = [0.0]
+                total_chunks = 1
 
-            if embedding is not None:
-                embeddings.append(embedding.tolist())
-                timestamps.append(start_time + self.chunk_duration / 2)  # Center timestamp
+            # Extract embeddings for each chunk
+            embeddings: List[List[float]] = []
+            timestamps: List[float] = []
 
-        self.emit_progress(95, "Finalizing results...")
-        self._check_cancelled()
+            for i, start_time in enumerate(chunk_positions):
+                self._check_cancelled()
 
-        # Cleanup CLAP model
-        self._clap.unload()
+                # Update progress
+                progress = 30 + int(60 * (i + 1) / total_chunks)
+                self.emit_progress(progress, f"Processing chunk {i + 1}/{total_chunks}...")
 
-        logger.info(f"Embedding extraction complete: {len(embeddings)} embeddings")
-        self.emit_progress(100, "Extraction complete")
+                # Extract chunk
+                start_sample = int(start_time * sr)
+                end_sample = int((start_time + self.chunk_duration) * sr)
+                end_sample = min(end_sample, len(audio))
 
-        return AudioEmbeddingResult(
-            embeddings=embeddings,
-            timestamps=timestamps,
-            model_name="clap-htsat-unfused",
-            embedding_dim=512 if embeddings else 0
-        )
+                chunk = audio[start_sample:end_sample]
+
+                # Pad if necessary
+                target_length = int(CLAP_DURATION * CLAP_SAMPLE_RATE)
+                if len(chunk) < target_length:
+                    chunk = np.pad(chunk, (0, target_length - len(chunk)), mode='constant')
+
+                # Get embedding for this chunk
+                embedding = self._get_chunk_embedding(chunk)
+
+                if embedding is not None:
+                    embeddings.append(embedding.tolist())
+                    timestamps.append(start_time + self.chunk_duration / 2)  # Center timestamp
+
+            self.emit_progress(95, "Finalizing results...")
+            self._check_cancelled()
+
+            logger.info(f"Embedding extraction complete: {len(embeddings)} embeddings")
+            self.emit_progress(100, "Extraction complete")
+
+            return AudioEmbeddingResult(
+                embeddings=embeddings,
+                timestamps=timestamps,
+                model_name="clap-htsat-unfused",
+                embedding_dim=512 if embeddings else 0
+            )
+
+        finally:
+            # CLAP immer freigeben (auch bei Fehler/Cancel)
+            if self._clap is not None:
+                try:
+                    self._clap.unload()
+                except Exception as e:
+                    logger.warning(f"CLAP unload error: {e}")
 
     def _calculate_chunk_positions(self, audio_duration: float) -> List[float]:
         """

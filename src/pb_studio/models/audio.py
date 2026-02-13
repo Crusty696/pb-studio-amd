@@ -70,7 +70,8 @@ class AudioAnalysisResult:
     beat_times: list[float]  # Timestamps of all beats in seconds
     downbeat_times: list[float]  # Timestamps of downbeats only
     energy_curve: list[float]  # Energy values over time (normalized 0-1)
-    confidence: float  # Confidence score of the analysis (0-1)
+    energy_times: list[float] = field(default_factory=list)  # Zeitachse fuer energy_curve
+    confidence: float = 0.0  # Confidence score of the analysis (0-1)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -79,6 +80,7 @@ class AudioAnalysisResult:
             "beat_times": self.beat_times,
             "downbeat_times": self.downbeat_times,
             "energy_curve": self.energy_curve,
+            "energy_times": self.energy_times,
             "confidence": self.confidence,
         }
 
@@ -90,6 +92,7 @@ class AudioAnalysisResult:
             beat_times=[float(t) for t in data.get("beat_times", [])],
             downbeat_times=[float(t) for t in data.get("downbeat_times", [])],
             energy_curve=[float(e) for e in data.get("energy_curve", [])],
+            energy_times=[float(t) for t in data.get("energy_times", [])],
             confidence=float(data.get("confidence", 0)),
         )
 
@@ -112,7 +115,8 @@ class AudioAnalysisResult:
             bpm=float(data.get("bpm", 0)),
             beat_times=beat_times,
             downbeat_times=downbeat_times,
-            energy_curve=[],
+            energy_curve=data.get("energy_curve", []),
+            energy_times=data.get("energy_times", []),
             confidence=1.0 if data.get("bpm", 0) > 0 else 0.0,
         )
 

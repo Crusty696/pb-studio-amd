@@ -239,6 +239,7 @@ class VideoImportWorker(BaseWorker):
 
         Uses OpenCV as backup to get basic info.
         """
+        cap = None
         try:
             import cv2
 
@@ -251,8 +252,6 @@ class VideoImportWorker(BaseWorker):
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             duration = frame_count / fps if fps > 0 else 0.0
-
-            cap.release()
 
             return VideoMetadata(
                 duration=duration,
@@ -276,3 +275,7 @@ class VideoImportWorker(BaseWorker):
                 has_audio=False,
                 bitrate=None,
             )
+
+        finally:
+            if cap is not None:
+                cap.release()

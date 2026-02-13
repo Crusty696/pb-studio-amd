@@ -83,24 +83,34 @@ class AudioStemWorker(BaseWorker):
         self.emit_progress(20, "Running stem separation...")
         self._check_cancelled()
 
-        # Run separation
-        result = self._separator.separate(self.file_path, self.model_name)
+        try:
+            # Run separation
+            result = self._separator.separate(self.file_path, self.model_name)
 
-        self.emit_progress(90, "Processing outputs...")
-        self._check_cancelled()
+            self.emit_progress(90, "Processing outputs...")
+            self._check_cancelled()
 
-        # Check for errors
-        if "error" in result:
-            raise RuntimeError(f"Separation failed: {result['error']}")
+            # Check for errors
+            if "error" in result:
+                raise RuntimeError(f"Separation failed: {result['error']}")
 
-        # Parse output files
-        stem_paths = result.get("stems", [])
-        stem_result = self._parse_stem_outputs(stem_paths)
+            # Parse output files
+            stem_paths = result.get("stems", [])
+            stem_result = self._parse_stem_outputs(stem_paths)
 
-        logger.info(f"Stem separation complete: {len(stem_paths)} files generated")
-        self.emit_progress(100, "Separation complete")
+            logger.info(f"Stem separation complete: {len(stem_paths)} files generated")
+            self.emit_progress(100, "Separation complete")
 
-        return stem_result
+            return stem_result
+
+        except Exception:
+            # ONNX-Session freigeben bei Fehler
+            if self._separator is not None and hasattr(self._separator, 'unload'):
+                try:
+                    self._separator.unload()
+                except Exception as e:
+                    logger.warning(f"Separator unload error: {e}")
+            raise
 
     def _parse_stem_outputs(self, stem_paths: list) -> StemResult:
         """

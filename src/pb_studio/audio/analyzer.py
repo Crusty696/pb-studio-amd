@@ -85,10 +85,34 @@ class AudioAnalyzer:
                 logger.debug(traceback.format_exc())
 
             logger.info(f"Running BeatNet on: {analyze_path}")
-            
+
             # BeatNet processing
             output = self.estimator.process(analyze_path)
-            
+
+            # RMS-Energie extrahieren (vor Temp-Cleanup!)
+            energy_curve = []
+            energy_times = []
+            try:
+                import librosa
+                wav_path = analyze_path  # Nutzt die bereits konvertierte 22kHz WAV
+                y, sr = librosa.load(wav_path, sr=22050, mono=True)
+                # RMS in Frames berechnen (hop_length=512 -> ~43 Werte/Sek)
+                hop = 512
+                rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
+                # Zeitachse
+                energy_times = librosa.frames_to_time(
+                    np.arange(len(rms)), sr=sr, hop_length=hop
+                ).tolist()
+                # Normalisieren auf 0-1
+                rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
+                if rms_max > 0:
+                    energy_curve = (rms / rms_max).tolist()
+                else:
+                    energy_curve = rms.tolist()
+                logger.info(f"RMS Energy extracted: {len(energy_curve)} frames")
+            except Exception as e:
+                logger.warning(f"RMS energy extraction failed: {e}")
+
             # Temp-Datei immer aufraeumen
             if os.path.exists(temp_wav):
                 try:
@@ -121,8 +145,10 @@ class AudioAnalyzer:
             
             return {
                 "bpm": round(bpm, 2),
-                "beat_data": output.tolist(), # Serialize for JSON
-                "count": len(output)
+                "beat_data": output.tolist(),
+                "count": len(output),
+                "energy_curve": energy_curve,
+                "energy_times": energy_times,
             }
             
         except Exception as e:
