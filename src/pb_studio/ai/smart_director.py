@@ -571,7 +571,7 @@ class SmartDirector:
                 "ffmpeg", "-y", "-i", audio_path,
                 "-ac", "1", "-ar", "22050", "-acodec", "pcm_s16le",
                 tmp_path
-            ], capture_output=True)
+            ], capture_output=True, timeout=120)
 
             # Read WAV
             with wave.open(tmp_path, 'rb') as wf:
@@ -635,9 +635,12 @@ class SmartDirector:
             result = subprocess.run([
                 "ffprobe", "-v", "quiet", "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1", audio_path
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, timeout=15)
 
-            return float(result.stdout.strip())
+            stdout = result.stdout.strip()
+            if not stdout or result.returncode != 0:
+                return 180.0
+            return float(stdout)
 
         except Exception as e:
             logger.warning("Could not determine audio duration: %s", e)
@@ -687,15 +690,17 @@ class SmartDirector:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = frame_count / fps
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        try:
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = frame_count / fps
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Sample frames for analysis
-        sample_frames = self._sample_frames(cap, num_samples=5)
-        cap.release()
+            # Sample frames for analysis
+            sample_frames = self._sample_frames(cap, num_samples=5)
+        finally:
+            cap.release()
 
         if not sample_frames:
             raise RuntimeError(f"No frames extracted from: {video_path}")
@@ -825,30 +830,31 @@ class SmartDirector:
             if not cap.isOpened():
                 return 0.5
 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            try:
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-            # Sample frame pairs for motion analysis
-            motion_scores = []
-            analyzer = FarnebackFlowAnalyzer()  # Use CPU fallback to save VRAM
+                # Sample frame pairs for motion analysis
+                motion_scores = []
+                analyzer = FarnebackFlowAnalyzer()  # Use CPU fallback to save VRAM
 
-            prev_frame = None
-            sample_interval = max(1, total_frames // 10)
+                prev_frame = None
+                sample_interval = max(1, total_frames // 10)
 
-            for i in range(0, total_frames, sample_interval):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                for i in range(0, total_frames, sample_interval):
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                if prev_frame is not None:
-                    motion = analyzer.get_motion_magnitude(prev_frame, frame)
-                    # Normalize motion score (typical range 0-100)
-                    normalized = min(1.0, motion / 50.0)
-                    motion_scores.append(normalized)
+                    if prev_frame is not None:
+                        motion = analyzer.get_motion_magnitude(prev_frame, frame)
+                        # Normalize motion score (typical range 0-100)
+                        normalized = min(1.0, motion / 50.0)
+                        motion_scores.append(normalized)
 
-                prev_frame = frame
-
-            cap.release()
+                    prev_frame = frame
+            finally:
+                cap.release()
 
             if motion_scores:
                 return float(np.mean(motion_scores))

@@ -121,50 +121,51 @@ class VideoSpecialist:
                 logger.error(f"Failed to open video: {video_path}")
                 return []
 
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            if fps <= 0:
-                logger.warning(f"Invalid FPS {fps}, using default 30")
-                fps = 30.0
+            try:
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps <= 0:
+                    logger.warning(f"Invalid FPS {fps}, using default 30")
+                    fps = 30.0
 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = total_frames / fps
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = total_frames / fps
 
-            # Calculate frame interval
-            frame_interval = int(interval * fps)
-            if frame_interval < 1:
-                frame_interval = 1
+                # Calculate frame interval
+                frame_interval = int(interval * fps)
+                if frame_interval < 1:
+                    frame_interval = 1
 
-            logger.info(
-                f"Extracting keyframes from {Path(video_path).name}: "
-                f"duration={duration:.2f}s, fps={fps:.2f}, interval={interval}s"
-            )
+                logger.info(
+                    f"Extracting keyframes from {Path(video_path).name}: "
+                    f"duration={duration:.2f}s, fps={fps:.2f}, interval={interval}s"
+                )
 
-            frames = []
-            frame_idx = 0
-            extracted_count = 0
+                frames = []
+                frame_idx = 0
+                extracted_count = 0
 
-            while True:
-                # Check max_frames limit
-                if max_frames and extracted_count >= max_frames:
-                    break
+                while True:
+                    # Check max_frames limit
+                    if max_frames and extracted_count >= max_frames:
+                        break
 
-                # Set frame position
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                    # Set frame position
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
 
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                frames.append(frame)
-                extracted_count += 1
+                    frames.append(frame)
+                    extracted_count += 1
 
-                # Next frame position
-                frame_idx += frame_interval
+                    # Next frame position
+                    frame_idx += frame_interval
 
-                if frame_idx >= total_frames:
-                    break
-
-            cap.release()
+                    if frame_idx >= total_frames:
+                        break
+            finally:
+                cap.release()
 
             logger.info(f"Extracted {len(frames)} keyframes from {Path(video_path).name}")
             return frames
@@ -336,25 +337,26 @@ class VideoSpecialist:
                 logger.error(f"Failed to open video: {clip.video_path}")
                 return None
 
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            if fps <= 0:
-                fps = 30.0
+            try:
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps <= 0:
+                    fps = 30.0
 
-            # Convert time to frame indices
-            start_frame = int(clip.start_time * fps)
-            end_frame = int(clip.end_time * fps)
+                # Convert time to frame indices
+                start_frame = int(clip.start_time * fps)
+                end_frame = int(clip.end_time * fps)
 
-            # Sample frames from clip (max 10 frames)
-            frame_indices = np.linspace(start_frame, end_frame, min(10, end_frame - start_frame), dtype=int)
+                # Sample frames from clip (max 10 frames)
+                frame_indices = np.linspace(start_frame, end_frame, min(10, end_frame - start_frame), dtype=int)
 
-            frames = []
-            for frame_idx in frame_indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                ret, frame = cap.read()
-                if ret:
-                    frames.append(frame)
-
-            cap.release()
+                frames = []
+                for frame_idx in frame_indices:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                    ret, frame = cap.read()
+                    if ret:
+                        frames.append(frame)
+            finally:
+                cap.release()
 
             if not frames:
                 logger.warning(f"No frames extracted from clip {clip.clip_id}")
@@ -532,6 +534,7 @@ class VideoSpecialist:
         Returns:
             Dictionary with video metadata
         """
+        cap = None
         try:
             cap = cv2.VideoCapture(video_path)
 
@@ -553,13 +556,14 @@ class VideoSpecialist:
             else:
                 metadata["duration"] = 0.0
 
-            cap.release()
-
             return metadata
 
         except Exception as e:
             logger.error(f"Failed to extract metadata: {e}")
             return {}
+        finally:
+            if cap is not None:
+                cap.release()
 
     @property
     def is_ready(self) -> bool:

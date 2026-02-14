@@ -62,7 +62,7 @@ class AudioAnalyzer:
                 ]
                 
                 # Run conversion
-                result = subprocess.run(command, capture_output=True, text=True)
+                result = subprocess.run(command, capture_output=True, text=True, timeout=120)
                 
                 if result.returncode == 0 and os.path.exists(temp_wav) and os.path.getsize(temp_wav) > 0:
                      logger.debug(f"Audio extraction success. Size: {os.path.getsize(temp_wav)} bytes")

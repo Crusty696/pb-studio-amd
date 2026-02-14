@@ -135,9 +135,12 @@ class VideoGenerator:
         while current_time < total_duration:
             # 1. Determine Target Duration
             # Get local energy
-            idx = int((current_time / total_duration) * len(rms))
-            idx = min(idx, len(rms)-1)
-            local_energy = rms[idx]
+            if len(rms) == 0:
+                local_energy = 0.5
+            else:
+                idx = int((current_time / total_duration) * len(rms))
+                idx = min(idx, len(rms) - 1)
+                local_energy = rms[idx]
 
             # Calculate target duration
             # High energy -> Shorter clips
@@ -236,8 +239,12 @@ class VideoGenerator:
     def _get_video_duration(self, path):
         try:
             cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            return float(result.stdout.strip())
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            stdout = result.stdout.strip()
+            if not stdout or result.returncode != 0:
+                logger.debug(f"FFprobe returned no duration for {path}")
+                return 60.0
+            return float(stdout)
         except Exception as e:
             logger.debug(f"Could not get duration for {path}: {e}")
             return 60.0 # Fallback
@@ -278,7 +285,7 @@ class VideoGenerator:
         cmd.extend(["-an", str(output_path)])
 
         # Run FFmpeg
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
 
         # If hardware encoding failed, try software fallback
         if result.returncode != 0 and encoder_config.is_hardware:
@@ -300,13 +307,16 @@ class VideoGenerator:
             cmd.extend(build_ffmpeg_encode_args(fallback_config))
             cmd.extend(["-an", str(output_path)])
 
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
 
     def _concat_segments(self, segments, audio_path, output_path):
         """
         Concatenates segments and adds master audio.
         Uses high-quality encoding for final output.
         """
+        if not segments:
+            raise ValueError("No segments to concatenate")
+
         # Create concat file
         list_path = segments[0].parent / "list.txt"
         with open(list_path, "w") as f:
@@ -352,7 +362,10 @@ class VideoGenerator:
         ])
 
         logger.info(f"Running Final Encode: {' '.join(cmd)}")
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=1800)
+        if result.returncode != 0:
+            logger.error(f"Final encode failed (code {result.returncode}): {result.stderr.decode()[:500] if result.stderr else 'no stderr'}")
+            raise RuntimeError(f"FFmpeg concat failed with code {result.returncode}")
 
     def generate_from_timeline(self, config: dict, timeline, callback=None):
         """Generate video from a SmartDirector Timeline.

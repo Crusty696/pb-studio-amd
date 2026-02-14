@@ -279,6 +279,7 @@ class ExportWorker(BaseWorker):
         num_videos = len(self.source_videos)
 
         for i, cut in enumerate(self._cut_plan.cuts):
+            self._check_cancelled()
             # Round-robin assignment
             cut.source_video_index = i % num_videos
 

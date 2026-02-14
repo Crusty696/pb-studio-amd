@@ -139,11 +139,12 @@ class VideoSceneWorker(BaseWorker):
             if not cap.isOpened():
                 return 0.0
 
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap.release()
-
-            return frame_count / fps if fps > 0 else 0.0
+            try:
+                fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                return frame_count / fps if fps > 0 else 0.0
+            finally:
+                cap.release()
 
         except Exception as e:
             logger.warning(f"Could not get video duration: {e}")

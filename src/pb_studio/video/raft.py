@@ -298,6 +298,9 @@ class MotionAnalyzer:
             # Skaliere Flow auf Original-Bildgroesse
             orig_h, orig_w = frame1.shape[:2]
             if flow_u.shape != (orig_h, orig_w):
+                if flow_u.shape[0] == 0 or flow_u.shape[1] == 0:
+                    logger.warning(f"RAFT returned zero-size flow: {flow_u.shape}")
+                    return np.zeros((orig_h, orig_w)), np.zeros((orig_h, orig_w))
                 scale_x = orig_w / flow_u.shape[1]
                 scale_y = orig_h / flow_u.shape[0]
 

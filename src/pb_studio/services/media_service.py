@@ -77,7 +77,13 @@ class MediaService:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
-            result = subprocess.run(cmd, capture_output=True, text=True, startupinfo=startupinfo)
+            result = subprocess.run(cmd, capture_output=True, text=True, startupinfo=startupinfo, timeout=30)
+            if result.returncode != 0:
+                logger.warning(f"FFprobe returned code {result.returncode}: {result.stderr[:200]}")
+                return {"duration": 0.0}
+            if not result.stdout.strip():
+                logger.warning(f"FFprobe returned empty output for {path}")
+                return {"duration": 0.0}
             data = json.loads(result.stdout)
             
             format_info = data.get("format", {})
