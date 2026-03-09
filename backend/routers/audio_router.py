@@ -58,22 +58,17 @@ async def import_audio(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio-Info nicht ermittelbar: {e}")
 
-    clip_id = state.next_audio_id()
-
-    clip = {
-        "id": clip_id,
+    clip = state.register_audio_clip({
         "name": audio_path.stem,
         "path": str(audio_path.absolute()),
         "duration_seconds": probe_info["duration"],
         "sample_rate": probe_info["sample_rate"],
         "channels": probe_info["channels"],
         "format": audio_path.suffix.lstrip("."),
-    }
-    state.audio_clips[clip_id] = clip
-    state.persist_audio_clip(clip)  # ADR-003: SQLite-Persistenz
+    })
 
-    logger.info(f"Audio importiert: {audio_path.name} (ID={clip_id}, {probe_info['duration']:.1f}s)")
-    await publish_event("import_progress", {"clip_id": clip_id, "percent": 100.0, "message": "Import abgeschlossen"})
+    logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
+    await publish_event("import_progress", {"clip_id": clip['id'], "percent": 100.0, "message": "Import abgeschlossen"})
     return AudioClipInfo(**clip)
 
 
@@ -382,14 +377,24 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
 
 
 def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
-    """Extrahiert 3-Band Waveform-Daten (low/mid/high), blockierend."""
+    """Extrahiert N-Band Waveform-Daten, blockierend.
+
+    bands=1: nur 'mid', bands=2: 'low'+'high', bands=3: 'low'+'mid'+'high'
+    bands>=4: alle 3 Bänder (max verfügbar)
+    """
     try:
         from pb_studio.audio.waveform_analyzer import WaveformAnalyzer
         result = WaveformAnalyzer().get_downsampled_waveform(
             audio_path, target_points=1000
         )
         # result: dict mit 'low', 'mid', 'high' als numpy arrays
-        band_keys = ["low", "mid", "high"]
+        all_keys = ["low", "mid", "high"]
+        if bands <= 1:
+            band_keys = ["mid"]
+        elif bands == 2:
+            band_keys = ["low", "high"]
+        else:
+            band_keys = all_keys
         output = []
         for k in band_keys:
             arr = result.get(k)

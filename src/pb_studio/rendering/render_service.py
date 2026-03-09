@@ -22,6 +22,11 @@ import time
 import queue
 from pathlib import Path
 from typing import List, Dict, Optional, Callable
+
+
+class RenderCancelledError(RuntimeError):
+    """Raised when a render operation is cancelled cooperatively."""
+    pass
 import logging
 
 logger = logging.getLogger(__name__)
@@ -105,6 +110,7 @@ class RenderService:
         preset: str = "balanced",
         progress_callback: Optional[Callable[[str, float], None]] = None,
         audio_offset: float = 0.0,
+        cancel_callback: Optional[Callable[[], bool]] = None,
     ) -> str:
         """Hauptfunktion für Timeline-Rendering."""
         final_output = self.output_dir / output_filename
@@ -116,7 +122,7 @@ class RenderService:
                 progress_callback("Prüfe Quellmaterial...", 10)
 
             normalized_clips = self._normalize_clips(
-                timeline, target_width, target_height, target_fps, progress_callback
+                timeline, target_width, target_height, target_fps, progress_callback, cancel_callback
             )
 
             if progress_callback:
@@ -129,7 +135,7 @@ class RenderService:
 
             self._run_ffmpeg_render(
                 concat_list_path, audio_path, final_output,
-                bitrate, preset, audio_offset, total_duration, progress_callback
+                bitrate, preset, audio_offset, total_duration, progress_callback, cancel_callback
             )
 
             if progress_callback:
@@ -153,13 +159,15 @@ class RenderService:
 
     def _normalize_clips(
         self, timeline: List[Dict], w: int, h: int, fps: float,
-        cb: Optional[Callable]
+        cb: Optional[Callable], cancel_callback: Optional[Callable[[], bool]] = None
     ) -> List[Dict]:
         """Prüft Clips und transkodiert bei Bedarf in einheitliches Format."""
         normalized = []
         total = len(timeline)
 
         for i, clip in enumerate(timeline):
+            if cancel_callback and cancel_callback():
+                raise RenderCancelledError("Rendering cancelled during clip normalization")
             path = _get_clip_path_str(clip)
             if not path:
                 logger.warning(f"Clip {i} hat keinen Pfad-Eintrag!")
@@ -173,7 +181,7 @@ class RenderService:
 
                 temp_name = f"norm_{i}_{int(time.time())}.mp4"
                 temp_path = self.temp_dir / temp_name
-                self._transcode_clip(path, temp_path, w, h, fps)
+                self._transcode_clip(path, temp_path, w, h, fps, cancel_callback)
 
                 new_clip = clip.copy()
                 new_clip["clip_path"] = str(temp_path)
@@ -209,7 +217,15 @@ class RenderService:
             logger.warning(f"FFprobe check failed: {e}")
             return True
 
-    def _transcode_clip(self, input_path: str, output_path: Path, w: int, h: int, fps: float):
+    def _transcode_clip(
+        self,
+        input_path: str,
+        output_path: Path,
+        w: int,
+        h: int,
+        fps: float,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
         encoder = RenderService._working_encoder or "libx264"
@@ -232,15 +248,44 @@ class RenderService:
             "-an", str(output_path)
         ]
 
+        process = None
         try:
-            result = subprocess.run(
-                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                timeout=3600, text=True
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                startupinfo=startupinfo,
+                bufsize=1,
             )
-            if result.returncode != 0:
-                raise subprocess.CalledProcessError(result.returncode, cmd, stderr=result.stderr)
+            stderr_lines: list[str] = []
+            while process.poll() is None:
+                if cancel_callback and cancel_callback():
+                    process.kill()
+                    process.wait(timeout=5)
+                    raise RenderCancelledError("Rendering cancelled during clip normalization")
+                if process.stderr is not None:
+                    line = process.stderr.readline()
+                    if line:
+                        stderr_lines.append(line)
+                        continue
+                time.sleep(0.1)
+
+            if process.stderr is not None:
+                stderr_lines.extend(process.stderr.readlines())
+            stderr_text = "".join(stderr_lines)
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, cmd, stderr=stderr_text)
             if not output_path.exists() or output_path.stat().st_size == 0:
                 raise RuntimeError(f"Encoder {encoder} hat leere Datei erstellt")
+        except RenderCancelledError:
+            try:
+                output_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.error(f"Transcode fehlgeschlagen mit {encoder}: {e}")
             try:
@@ -268,6 +313,7 @@ class RenderService:
         bitrate: str, preset: str, audio_offset: float,
         total_duration: float,
         progress_callback: Optional[Callable[[str, int], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
     ):
         """Finaler Render mit Echtzeit-Progress."""
         cmd = [
@@ -326,7 +372,7 @@ class RenderService:
         )
 
         try:
-            self._parse_ffmpeg_progress(process, total_duration, progress_callback)
+            self._parse_ffmpeg_progress(process, total_duration, progress_callback, cancel_callback)
         finally:
             if process.poll() is None:
                 try:
@@ -343,7 +389,8 @@ class RenderService:
 
     def _parse_ffmpeg_progress(
         self, process: subprocess.Popen, total_duration: float,
-        progress_callback: Optional[Callable]
+        progress_callback: Optional[Callable],
+        cancel_callback: Optional[Callable[[], bool]] = None,
     ):
         """Liest FFmpeg stderr und verfolgt Fortschritt."""
         stderr_queue: queue.Queue = queue.Queue()
@@ -368,6 +415,10 @@ class RenderService:
         last_progress = 60
 
         while process.poll() is None:
+            if cancel_callback and cancel_callback():
+                process.kill()
+                process.wait(timeout=5)
+                raise RenderCancelledError("Rendering cancelled during ffmpeg encode")
             try:
                 line = stderr_queue.get(timeout=1.0)
             except queue.Empty:

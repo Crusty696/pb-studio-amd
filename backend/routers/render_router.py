@@ -51,7 +51,7 @@ async def start_render(
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
     allowed_render = Path(config.project_dir).resolve()
-    if not str(output_p_check).startswith(str(allowed_render)):
+    if not output_p_check.is_relative_to(allowed_render):
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
 
     # Render-Task Cleanup: alte abgeschlossene Tasks entfernen (max 50)
@@ -254,7 +254,7 @@ def _execute_render(
     Prüft periodisch cancel_flags[task_id] und bricht bei Cancel ab.
     """
     from pathlib import Path as _Path
-    from pb_studio.rendering.render_service import RenderService
+    from pb_studio.rendering.render_service import RenderService, RenderCancelledError
 
     # BUG-025 Fix: Schema-Felder nutzen statt hardcodierter quality_map
     target_width = request.resolution_width
@@ -265,9 +265,12 @@ def _execute_render(
     output_p = _Path(request.output_path)
     service = RenderService(output_dir=str(output_p.parent))
 
+    def is_cancelled() -> bool:
+        return cancel_flags.get(task_id, False)
+
     def on_progress(message: str, percent: float) -> None:
         # Cancel-Check bei jedem Progress-Callback
-        if cancel_flags.get(task_id, False):
+        if is_cancelled():
             raise _RenderCancelled()
         render_tasks[task_id].update({
             "percent": percent,
@@ -300,13 +303,17 @@ def _execute_render(
         })
     timeline = render_timeline
 
-    return service.render_timeline(
-        timeline=timeline,
-        audio_path=audio_path,
-        output_filename=output_p.name,
-        target_width=target_width,
-        target_height=target_height,
-        target_fps=request.fps,   # BUG-006 Fix: fps aus Request übergeben
-        bitrate=bitrate,
-        progress_callback=on_progress,
-    )
+    try:
+        return service.render_timeline(
+            timeline=timeline,
+            audio_path=audio_path,
+            output_filename=output_p.name,
+            target_width=target_width,
+            target_height=target_height,
+            target_fps=request.fps,   # BUG-006 Fix: fps aus Request übergeben
+            bitrate=bitrate,
+            progress_callback=on_progress,
+            cancel_callback=is_cancelled,
+        )
+    except RenderCancelledError as exc:
+        raise _RenderCancelled() from exc

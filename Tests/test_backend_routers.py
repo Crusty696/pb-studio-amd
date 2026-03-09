@@ -76,6 +76,30 @@ class TestHealth:
 
 class TestAudioRouter:
 
+    def test_reimport_gleiche_datei_reused_clip_id(self, client, tmp_path, fresh_state):
+        audio_mod = _get_module("backend.routers.audio_router")
+        orig_probe = audio_mod._probe_audio_info
+        orig_pub = audio_mod.publish_event
+
+        async def fake_pub(*a, **kw): pass
+
+        audio_mod._probe_audio_info = lambda _: {"duration": 180.0, "sample_rate": 44100, "channels": 2}
+        audio_mod.publish_event = fake_pub
+
+        try:
+            audio = tmp_path / "musik.mp3"
+            audio.write_bytes(b"\xff\xfb" * 100)
+            r1 = client.post("/audio/import", json={"path": str(audio)})
+            r2 = client.post("/audio/import", json={"path": str(audio)})
+        finally:
+            audio_mod._probe_audio_info = orig_probe
+            audio_mod.publish_event = orig_pub
+
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        assert r1.json()["id"] == r2.json()["id"] == 1
+        assert list(fresh_state.audio_clips.keys()) == [1]
+
     def test_import_datei_nicht_gefunden_404(self, client):
         r = client.post("/audio/import", json={"path": "/nicht/vorhanden/audio.mp3"})
         assert r.status_code == 404
@@ -156,6 +180,32 @@ class TestAudioRouter:
 # ─────────────────────────────────────────────────────────────────
 
 class TestVideoRouter:
+    def test_reimport_gleiches_video_reused_clip_id(self, client, tmp_path, fresh_state):
+        video_mod = _get_module("backend.routers.video_router")
+        orig_info = video_mod._get_video_info
+        orig_pub = video_mod.publish_event
+
+        async def fake_pub(*a, **kw): pass
+
+        video_mod._get_video_info = lambda _: {
+            "duration": 10.0, "width": 1920, "height": 1080, "fps": 30.0, "codec": "h264"
+        }
+        video_mod.publish_event = fake_pub
+
+        try:
+            video = tmp_path / "clip.mp4"
+            video.write_bytes(b"\x00" * 100)
+            r1 = client.post("/video/import", json={"paths": [str(video)]})
+            r2 = client.post("/video/import", json={"paths": [str(video)]})
+        finally:
+            video_mod._get_video_info = orig_info
+            video_mod.publish_event = orig_pub
+
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        assert r1.json()[0]["id"] == r2.json()[0]["id"] == 1
+        assert list(fresh_state.video_clips.keys()) == [1]
+
     """
     Video-Router hat Skip-Semantik: ungültige Dateien werden ignoriert,
     kein Abbruch mit 404/400. Nur Thumbnail/Analyse-Endpoints geben 404.
@@ -206,6 +256,73 @@ class TestVideoRouter:
     def test_analyse_nicht_gefunden_404(self, client):
         r = client.post("/video/analyze", json={"clip_id": 999})
         assert r.status_code == 404
+
+    def test_analyse_liefert_motion_mit_clip_id(self, client, fresh_state):
+        video_mod = _get_module("backend.routers.video_router")
+        orig_run = video_mod._run_video_analysis
+
+        def fake_run(video_path, clip_id, request):
+            return {
+                "clip_id": clip_id,
+                "scene_count": 1,
+                "avg_motion": 12.5,
+                "scenes": [{
+                    "start_time": 0.0,
+                    "end_time": 1.0,
+                    "scene_type": "cut",
+                    "confidence": 0.9,
+                }],
+                "motion": {
+                    "clip_id": clip_id,
+                    "avg_motion": 12.5,
+                    "motion_curve": [10.0, 15.0],
+                    "peak_frames": [{"frame_index": 3, "confidence": 0.8}],
+                    "motion_category": "medium",
+                },
+            }
+
+        fresh_state.video_clips[1] = {
+            "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+            "duration_seconds": 10.0, "width": 1920, "height": 1080,
+            "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+        }
+
+        video_mod._run_video_analysis = fake_run
+        try:
+            r = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": True,
+                "analyze_motion": True,
+                "generate_embeddings": False,
+            })
+        finally:
+            video_mod._run_video_analysis = orig_run
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["clip_id"] == 1
+        assert body["motion"]["clip_id"] == 1
+        assert body["motion"]["avg_motion"] == 12.5
+
+    def test_motion_endpoint_akzeptiert_cache_mit_clip_id(self, client, fresh_state):
+        fresh_state.video_analysis_cache[1] = {
+            "clip_id": 1,
+            "motion": {
+                "clip_id": 1,
+                "avg_motion": 7.5,
+                "motion_curve": [7.5],
+                "peak_frames": [],
+                "motion_category": "low",
+            },
+        }
+
+        r = client.get("/video/motion/1")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["clip_id"] == 1
+        assert body["avg_motion"] == 7.5
+        assert body["motion_category"] == "low"
 
 
 # ─────────────────────────────────────────────────────────────────

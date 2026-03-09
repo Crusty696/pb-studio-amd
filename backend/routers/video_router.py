@@ -63,10 +63,7 @@ async def import_videos(
             logger.error(f"Video-Info fehlgeschlagen: {video_path.name}: {e}")
             continue
 
-        clip_id = state.next_video_id()
-
-        clip = {
-            "id": clip_id,
+        clip = state.register_video_clip({
             "name": video_path.stem,
             "path": str(video_path.absolute()),
             "duration_seconds": info.get("duration", 0.0),
@@ -76,13 +73,11 @@ async def import_videos(
             "codec": info.get("codec", ""),
             "thumbnail_available": False,
             "tags": [],
-        }
-        state.video_clips[clip_id] = clip
-        state.persist_video_clip(clip)  # ADR-003: SQLite-Persistenz
+        })
         imported.append(VideoClipInfo(**clip))
 
         await publish_event("import_progress", {
-            "clip_id": clip_id,
+            "clip_id": clip["id"],
             "percent": len(imported) / len(request.paths) * 100,
             "message": f"Importiert: {video_path.name}",
         })
@@ -207,7 +202,11 @@ async def get_motion(
     if clip_id not in state.video_analysis_cache:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
     motion = state.video_analysis_cache[clip_id].get("motion", {})
-    return MotionData(clip_id=clip_id, **motion) if motion else MotionData(clip_id=clip_id)
+    if not motion:
+        return MotionData(clip_id=clip_id)
+    if "clip_id" not in motion:
+        motion = {**motion, "clip_id": clip_id}
+    return MotionData(**motion)
 
 
 # --- Private Hilfsfunktionen ---
@@ -322,6 +321,7 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             if len(frames) >= 2:
                 motion_result = MotionAnalyzer().analyze_video_segment(frames, stride=1)
                 result["motion"] = {
+                    "clip_id": clip_id,
                     "avg_motion": float(motion_result.get("avg_motion", 0.0)),
                     "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
                     "peak_frames": motion_result.get("scene_changes", []),

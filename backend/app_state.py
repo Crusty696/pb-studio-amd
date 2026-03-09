@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from pb_studio.data.database_core import normalize_media_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -181,6 +183,97 @@ class AppState:
     # =========================================================================
     # ADR-003 Phase 2: SQLite-Persistenz
     # =========================================================================
+
+    def _find_audio_clip_by_path(self, file_path: str) -> Optional[dict]:
+        normalized = normalize_media_path(file_path)
+        with self._state_lock:
+            for clip in self.audio_clips.values():
+                if normalize_media_path(clip.get("path", "")) == normalized:
+                    return dict(clip)
+        return None
+
+    def _find_video_clip_by_path(self, file_path: str) -> Optional[dict]:
+        normalized = normalize_media_path(file_path)
+        with self._state_lock:
+            for clip in self.video_clips.values():
+                if normalize_media_path(clip.get("path", "")) == normalized:
+                    return dict(clip)
+        return None
+
+    def register_audio_clip(self, clip_data: dict) -> dict:
+        """Reuse an existing canonical audio clip for the same real file when possible."""
+        in_memory = self._find_audio_clip_by_path(clip_data["path"])
+        if in_memory:
+            return in_memory
+
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            row = repo.find_by_project_and_path(project_id=1, file_path=clip_data["path"])
+            if row:
+                meta = json.loads(row.get("metadata_json") or "{}")
+                if meta.get("clip_type") == "audio" and meta.get("clip_id") is not None:
+                    clip_id = int(meta["clip_id"])
+                    clip = {
+                        "id": clip_id,
+                        "name": meta.get("name", clip_data.get("name", "")),
+                        "path": row.get("file_path") or clip_data["path"],
+                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
+                        "sample_rate": meta.get("sample_rate", clip_data.get("sample_rate", 44100)),
+                        "channels": meta.get("channels", clip_data.get("channels", 2)),
+                        "format": meta.get("format", clip_data.get("format", "")),
+                    }
+                    self.set_audio_clip(clip_id, clip)
+                    with self._lock:
+                        self._audio_next_id = max(self._audio_next_id, clip_id + 1)
+                    return clip
+        except Exception as e:
+            logger.warning(f"Audio-Clip-Reuse aus DB fehlgeschlagen (Fallback auf neue ID): {e}")
+
+        clip = dict(clip_data)
+        clip["id"] = self.next_audio_id()
+        self.set_audio_clip(clip["id"], clip)
+        self.persist_audio_clip(clip)
+        return clip
+
+    def register_video_clip(self, clip_data: dict) -> dict:
+        """Reuse an existing canonical video clip for the same real file when possible."""
+        in_memory = self._find_video_clip_by_path(clip_data["path"])
+        if in_memory:
+            return in_memory
+
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            row = repo.find_by_project_and_path(project_id=1, file_path=clip_data["path"])
+            if row:
+                meta = json.loads(row.get("metadata_json") or "{}")
+                if meta.get("clip_type") == "video" and meta.get("clip_id") is not None:
+                    clip_id = int(meta["clip_id"])
+                    clip = {
+                        "id": clip_id,
+                        "name": meta.get("name", clip_data.get("name", "")),
+                        "path": row.get("file_path") or clip_data["path"],
+                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
+                        "width": meta.get("width", clip_data.get("width", 1920)),
+                        "height": meta.get("height", clip_data.get("height", 1080)),
+                        "fps": meta.get("fps", clip_data.get("fps", 30.0)),
+                        "codec": meta.get("codec", clip_data.get("codec", "")),
+                        "thumbnail_available": False,
+                        "tags": [],
+                    }
+                    self.set_video_clip(clip_id, clip)
+                    with self._lock:
+                        self._video_next_id = max(self._video_next_id, clip_id + 1)
+                    return clip
+        except Exception as e:
+            logger.warning(f"Video-Clip-Reuse aus DB fehlgeschlagen (Fallback auf neue ID): {e}")
+
+        clip = dict(clip_data)
+        clip["id"] = self.next_video_id()
+        self.set_video_clip(clip["id"], clip)
+        self.persist_video_clip(clip)
+        return clip
 
     def persist_audio_clip(self, clip: dict) -> None:
         """
