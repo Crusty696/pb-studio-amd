@@ -1,0 +1,19 @@
+Arbeite im Repo C:\Users\david\Dokumente\Pb_studio_AMD_version autonom weiter.
+
+Fokus jetzt auf den verbleibenden echten Modell-Blockern:
+1) Moondream numerische Instabilität (Fehler: probability tensor contains either inf, nan or element < 0) eingrenzen und wenn möglich sicher fixen.
+2) Stem-Separation-Environment prüfen und möglichst lauffähig machen, insbesondere fehlendes torchvision, aber ohne riskante Systemänderungen außerhalb des bestehenden Python-Env-Rahmens.
+3) Reale Retests mit vorhandenen echten Testartefakten/AV-Daten.
+4) Bugs direkt fixen, retesten, isoliert committen.
+
+Regeln:
+- Keine destruktiven Schritte.
+- Keine Mediendateien löschen.
+- Committe nur lokale, klar begrenzte Fixes mit präzisen Messages.
+- Nutze vorhandene echte Artefakte/AV-Daten für Retests.
+- Wenn Systemänderungen nötig wären, unterlasse sie und arbeite nur innerhalb des bestehenden Python-Env-/Repo-Rahmens.
+
+Am Ende liefere kurz:
+- was gefixt wurde
+- was real grün ist
+- was weiterhin echter Blocker bleibt
