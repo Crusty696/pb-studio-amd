@@ -135,6 +135,10 @@ async def cancel_render(
     if task is None:
         raise HTTPException(status_code=404, detail=f"Render-Task {task_id} nicht gefunden")
 
+    terminal_statuses = {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
+    if task.get("status") in terminal_statuses:
+        return {"cancelled": False, "task_id": task_id, "status": task.get("status")}
+
     state.set_cancel_flag(task_id, True)
     logger.info(f"Render-Task Cancel angefordert: {task_id}")
     return {"cancelled": True, "task_id": task_id}
@@ -304,7 +308,7 @@ def _execute_render(
     timeline = render_timeline
 
     try:
-        return service.render_timeline(
+        result_path = service.render_timeline(
             timeline=timeline,
             audio_path=audio_path,
             output_filename=output_p.name,
@@ -315,5 +319,16 @@ def _execute_render(
             progress_callback=on_progress,
             cancel_callback=is_cancelled,
         )
+        # Realtest-Härtung: Status direkt im synchronen Worker auf completed setzen,
+        # damit /render/status nicht auf "running" hängen bleibt, falls der Async-
+        # Wrapper den finalen State erst verzögert nachzieht.
+        render_tasks[task_id].update({
+            "status": TaskStatus.COMPLETED.value,
+            "percent": 100.0,
+            "eta_seconds": 0.0,
+            "output_path": str(output_p),
+            "error": None,
+        })
+        return {"output_path": result_path}
     except RenderCancelledError as exc:
         raise _RenderCancelled() from exc
