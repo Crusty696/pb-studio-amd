@@ -4,13 +4,96 @@ Stem Separator for AMD GPUs (DirectML Patched)
 The standard audio-separator library only auto-detects CUDA (NVIDIA) or MPS (Apple).
 This wrapper forces DirectML usage for ONNX Runtime, enabling AMD GPU acceleration.
 """
+import importlib.util
 import logging
 import os
-import onnxruntime as ort
+import sys
+import types
 from pathlib import Path
+
+import onnxruntime as ort
+import torch
+
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
+
+
+def _box_iou(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
+    """Compute IoU for NMS in the lightweight torchvision fallback."""
+    x1 = torch.maximum(box[0], boxes[:, 0])
+    y1 = torch.maximum(box[1], boxes[:, 1])
+    x2 = torch.minimum(box[2], boxes[:, 2])
+    y2 = torch.minimum(box[3], boxes[:, 3])
+
+    inter_w = torch.clamp(x2 - x1, min=0)
+    inter_h = torch.clamp(y2 - y1, min=0)
+    inter = inter_w * inter_h
+
+    area_box = torch.clamp(box[2] - box[0], min=0) * torch.clamp(box[3] - box[1], min=0)
+    area_boxes = torch.clamp(boxes[:, 2] - boxes[:, 0], min=0) * torch.clamp(boxes[:, 3] - boxes[:, 1], min=0)
+    union = area_box + area_boxes - inter
+
+    return torch.where(union > 0, inter / union, torch.zeros_like(union))
+
+
+def _ensure_torchvision_stub() -> bool:
+    """
+    Provide a tiny runtime stub for `torchvision.ops` when torchvision is absent.
+
+    audio-separator's ONNX->Torch path imports `onnx2torch`, which imports
+    `torchvision.ops` unconditionally even for MDX models that do not use these ops.
+    """
+    if importlib.util.find_spec("torchvision") is not None:
+        return False
+    if "torchvision" in sys.modules:
+        return False
+
+    ops_module = types.ModuleType("torchvision.ops")
+
+    def box_convert(boxes: torch.Tensor, in_fmt: str, out_fmt: str) -> torch.Tensor:
+        if in_fmt == out_fmt:
+            return boxes
+        if in_fmt == "cxcywh" and out_fmt == "xyxy":
+            cx, cy, w, h = boxes.unbind(dim=-1)
+            return torch.stack((cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), dim=-1)
+        if in_fmt == "xyxy" and out_fmt == "cxcywh":
+            x1, y1, x2, y2 = boxes.unbind(dim=-1)
+            return torch.stack(((x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1), dim=-1)
+        raise NotImplementedError(f"torchvision fallback does not support box_convert {in_fmt}->{out_fmt}")
+
+    def nms(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float) -> torch.Tensor:
+        if boxes.numel() == 0:
+            return torch.empty((0,), dtype=torch.long, device=boxes.device)
+
+        order = torch.argsort(scores, descending=True)
+        keep = []
+
+        while order.numel() > 0:
+            current = order[0]
+            keep.append(current)
+            if order.numel() == 1:
+                break
+            remaining = order[1:]
+            ious = _box_iou(boxes[current], boxes[remaining])
+            order = remaining[ious <= iou_threshold]
+
+        return torch.stack(keep) if keep else torch.empty((0,), dtype=torch.long, device=boxes.device)
+
+    def roi_align(*args, **kwargs):
+        raise NotImplementedError("torchvision fallback does not implement roi_align")
+
+    ops_module.box_convert = box_convert
+    ops_module.nms = nms
+    ops_module.roi_align = roi_align
+
+    tv_module = types.ModuleType("torchvision")
+    tv_module.ops = ops_module
+
+    sys.modules["torchvision"] = tv_module
+    sys.modules["torchvision.ops"] = ops_module
+    logger.warning("torchvision not installed; using minimal fallback for onnx2torch imports")
+    return True
 
 class StemSeparator:
     def __init__(self):
@@ -20,6 +103,7 @@ class StemSeparator:
 
     def _init_engine(self):
         try:
+            self._using_torchvision_stub = _ensure_torchvision_stub()
             from audio_separator.separator import Separator
             
             # Get config paths
