@@ -3,11 +3,22 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+def normalize_media_path(file_path: str | None) -> str:
+    if not file_path:
+        return ""
+    try:
+        resolved = Path(file_path).expanduser().resolve(strict=False)
+    except Exception:
+        resolved = Path(file_path).expanduser()
+    return os.path.normcase(os.path.normpath(str(resolved)))
 
 
 def nonempty_json(value: str | None) -> bool:
@@ -71,6 +82,7 @@ def main() -> int:
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.create_function("normalize_media_path", 1, normalize_media_path)
     cur = conn.cursor()
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA journal_mode=WAL")
@@ -97,10 +109,10 @@ def main() -> int:
         """
         SELECT *
         FROM media
-        WHERE (project_id, file_path) IN (
-            SELECT project_id, file_path
+        WHERE (project_id, normalize_media_path(file_path)) IN (
+            SELECT project_id, normalize_media_path(file_path)
             FROM media
-            GROUP BY project_id, file_path
+            GROUP BY project_id, normalize_media_path(file_path)
             HAVING COUNT(*) > 1
         )
         ORDER BY project_id, file_path, id
@@ -109,16 +121,17 @@ def main() -> int:
 
     groups: dict[tuple[Any, Any], list[sqlite3.Row]] = {}
     for row in dup_rows:
-        groups.setdefault((row["project_id"], row["file_path"]), []).append(row)
+        groups.setdefault((row["project_id"], normalize_media_path(row["file_path"])), []).append(row)
 
     actions: list[dict[str, Any]] = []
-    for (project_id, file_path), rows in groups.items():
+    for (project_id, normalized_file_path), rows in groups.items():
         ranked = sorted(rows, key=lambda row: winner_sort_key(row, vector_ref_map), reverse=True)
         winner = ranked[0]
         for loser in ranked[1:]:
             actions.append({
                 "project_id": project_id,
-                "file_path": file_path,
+                "normalized_file_path": normalized_file_path,
+                "sample_file_path": winner["file_path"],
                 "winner_id": winner["id"],
                 "loser_id": loser["id"],
                 "winner_status": winner["status"],
@@ -162,7 +175,7 @@ def main() -> int:
             FROM (
                 SELECT 1
                 FROM media
-                GROUP BY project_id, file_path
+                GROUP BY project_id, normalize_media_path(file_path)
                 HAVING COUNT(*) > 1
             )
             """
@@ -174,11 +187,11 @@ def main() -> int:
     remaining_dup_sample = [
         dict(row) for row in cur.execute(
             """
-            SELECT project_id, file_path, COUNT(*) AS cnt
+            SELECT project_id, normalize_media_path(file_path) AS normalized_file_path, COUNT(*) AS cnt
             FROM media
-            GROUP BY project_id, file_path
+            GROUP BY project_id, normalize_media_path(file_path)
             HAVING COUNT(*) > 1
-            ORDER BY cnt DESC, project_id, file_path
+            ORDER BY cnt DESC, project_id, normalized_file_path
             LIMIT 20
             """
         ).fetchall()
@@ -192,6 +205,10 @@ def main() -> int:
         "pre_counts": pre_counts,
         "post_counts": post_counts,
         "remaining_dup_sample": remaining_dup_sample,
+        "notes": [
+            "This script updates SQLite rows only. It does not delete media files from disk.",
+            "Duplicate grouping uses normalized paths so relative/case variants collapse to one import target.",
+        ],
     }
 
     (journal_dir / "media_dedup_apply_summary.json").write_text(json.dumps(journal, indent=2), encoding="utf-8")

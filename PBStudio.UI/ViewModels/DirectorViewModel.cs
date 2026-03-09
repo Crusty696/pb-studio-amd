@@ -12,10 +12,16 @@ public partial class DirectorViewModel : ObservableObject
     private readonly IApiClient _api;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
-    [ObservableProperty] private double _beatSensitivity = 0.7;
-    [ObservableProperty] private double _energyThreshold = 0.5;
-    [ObservableProperty] private double _onsetWeight = 0.3;
-    [ObservableProperty] private double _spectralWeight = 0.2;
+    [ObservableProperty] private double _beatWeight = 1.0;
+    [ObservableProperty] private double _onsetWeight = 0.5;
+    [ObservableProperty] private double _kickWeight = 1.2;
+    [ObservableProperty] private double _snareWeight = 1.0;
+    [ObservableProperty] private double _hihatWeight = 0.3;
+    [ObservableProperty] private double _energyWeight = 0.8;
+    [ObservableProperty] private double _energyThreshold = 0.6;
+    [ObservableProperty] private double _minClipLength = 1.0;
+    [ObservableProperty] private double _maxClipLength = 8.0;
+    [ObservableProperty] private double _onsetSensitivity = 0.5;
     [ObservableProperty] private double _minCutInterval = 0.5;
     [ObservableProperty] private bool _useMotionMatching;
     [ObservableProperty] private bool _useStructureAwareness;
@@ -133,10 +139,16 @@ public partial class DirectorViewModel : ObservableObject
             DurationLimit: DurationLimit,
             MinCutInterval: MinCutInterval,
             TriggerSettings: new TriggerSettings(
-                BeatSensitivity: BeatSensitivity,
-                EnergyThreshold: EnergyThreshold,
+                BeatWeight: BeatWeight,
                 OnsetWeight: OnsetWeight,
-                SpectralWeight: SpectralWeight
+                KickWeight: KickWeight,
+                SnareWeight: SnareWeight,
+                HihatWeight: HihatWeight,
+                EnergyWeight: EnergyWeight,
+                EnergyThreshold: EnergyThreshold,
+                MinClipLength: MinClipLength,
+                MaxClipLength: MaxClipLength,
+                OnsetSensitivity: OnsetSensitivity
             )
         );
 

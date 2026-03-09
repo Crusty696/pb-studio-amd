@@ -8,6 +8,8 @@ Tests:
 - Persistence (save/load)
 """
 
+import threading
+
 import pytest
 import numpy as np
 from pathlib import Path
@@ -33,6 +35,7 @@ class TestVectorStoreEmbeddings:
             store.dimension = 768
             store.index = mock_index
             store.metadata = {}
+            store._lock = threading.Lock()
 
             embedding = np.random.rand(768).astype(np.float32)
             meta = {"media_id": 1, "description": "Test"}
@@ -49,15 +52,16 @@ class TestVectorStoreEmbeddings:
         store = VectorStore.__new__(VectorStore)
         store.dimension = 768
         store.index = MagicMock()
+        store.index.ntotal = 1  # Non-empty index → raises ValueError
         store.metadata = {}
+        store._lock = threading.Lock()
 
         # Wrong dimension (512 instead of 768)
         embedding = np.random.rand(512).astype(np.float32)
         meta = {"media_id": 1}
 
-        result_id = store.add_embedding(embedding, meta)
-
-        assert result_id == -1
+        with pytest.raises(ValueError, match="dimension"):
+            store.add_embedding(embedding, meta)
 
 
 class TestVectorStoreSearch:
@@ -72,6 +76,7 @@ class TestVectorStoreSearch:
         store.index = MagicMock()
         store.index.ntotal = 0
         store.metadata = {}
+        store._lock = threading.Lock()
 
         query = np.random.rand(768).astype(np.float32)
         results = store.search(query, k=5)
@@ -85,6 +90,7 @@ class TestVectorStoreSearch:
 
             store = VectorStore.__new__(VectorStore)
             store.dimension = 768
+            store._lock = threading.Lock()
             mock_index = MagicMock()
             mock_index.ntotal = 3
             # Simulate search results: distances and indices

@@ -359,10 +359,26 @@ class StreamingAudioAnalyzer:
             try:
                 from .separator import StemSeparator
                 sep = StemSeparator()
-                stems = sep.separate(str(audio_path))
-                if stems:
-                    result.stems = stems
-                    logger.info(f"Stems: {list(stems.keys())}")
+                raw_stems = sep.separate(str(audio_path))
+                if raw_stems:
+                    # StemSeparator returns {"stems": [path1, path2, ...]}
+                    # Map to named stems by filename pattern
+                    stems_dict = {}
+                    stem_list = raw_stems.get("stems", []) if isinstance(raw_stems, dict) else []
+                    for sp in stem_list:
+                        sp_lower = str(sp).lower()
+                        if "drum" in sp_lower:
+                            stems_dict["drums"] = str(sp)
+                        elif "vocal" in sp_lower:
+                            stems_dict["vocals"] = str(sp)
+                        elif "bass" in sp_lower:
+                            stems_dict["bass"] = str(sp)
+                        elif "other" in sp_lower or "no_" in sp_lower:
+                            stems_dict["other"] = str(sp)
+                        else:
+                            stems_dict.setdefault("other", str(sp))
+                    result.stems = stems_dict if stems_dict else raw_stems
+                    logger.info(f"Stems: {list(result.stems.keys())}")
             except Exception as e:
                 logger.warning(f"Stem-Separation übersprungen: {e}")
             progress.last_completed_phase = AnalysisPhase.STEM_SEPARATION
@@ -445,6 +461,8 @@ class StreamingAudioAnalyzer:
             tempo = tempo[0]
         del y_init
         gc.collect()
+        if tempo <= 0:
+            tempo = 120.0
         beat_interval = 60.0 / tempo
         beat_times = np.arange(0, total_duration, beat_interval).tolist()
         logger.info(f"Librosa Beat-Interpolation: {len(beat_times)} Beats bei {tempo:.1f} BPM")

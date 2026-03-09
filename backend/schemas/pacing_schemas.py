@@ -5,11 +5,22 @@ from typing import Optional, Any
 
 
 class TriggerSettingsSchema(BaseModel):
-    """Trigger-Einstellungen für Pacing."""
-    beat_sensitivity: float = Field(0.7, ge=0.0, le=1.0)
-    energy_threshold: float = Field(0.5, ge=0.0, le=1.0)
-    onset_weight: float = Field(0.3, ge=0.0, le=1.0)
-    spectral_weight: float = Field(0.2, ge=0.0, le=1.0)
+    """Trigger-Einstellungen für Pacing.
+
+    Feldnamen muessen mit TriggerSettings-Dataclass uebereinstimmen
+    (src/pb_studio/pacing/pacing_models.py), sonst werden sie von
+    advanced_pacing_engine.py:150 per hasattr() stillschweigend ignoriert.
+    """
+    beat_weight: float = Field(1.0, ge=0.0, le=2.0)
+    onset_weight: float = Field(0.5, ge=0.0, le=2.0)
+    kick_weight: float = Field(1.2, ge=0.0, le=2.0)
+    snare_weight: float = Field(1.0, ge=0.0, le=2.0)
+    hihat_weight: float = Field(0.3, ge=0.0, le=2.0)
+    energy_weight: float = Field(0.8, ge=0.0, le=2.0)
+    energy_threshold: float = Field(0.6, ge=0.0, le=1.0)
+    min_clip_length: float = Field(1.0, ge=0.1)
+    max_clip_length: float = Field(8.0, ge=0.5)
+    onset_sensitivity: float = Field(0.5, ge=0.0, le=1.0)
 
 
 class PacingConfigSchema(BaseModel):

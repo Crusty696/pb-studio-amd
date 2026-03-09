@@ -48,12 +48,13 @@ class SpectralAnalyzer:
         self.hop_length = hop_length
         self.n_fft = n_fft
 
-    def analyze(self, audio_path: str | Path, duration: float | None = None) -> Dict[str, Any]:
+    def analyze(self, audio_path: str | Path, duration: float | None = None, offset: float = 0.0) -> Dict[str, Any]:
         """Führt vollständige 8-Band Spektral-Analyse durch.
 
         Args:
             audio_path: Pfad zur Audio-Datei
             duration: Maximale Dauer zum Laden (None = komplett)
+            offset: Start-Offset in Sekunden (Default 0.0)
 
         Returns:
             Dict mit band_energies, band_means, band_variances, events
@@ -61,7 +62,7 @@ class SpectralAnalyzer:
         audio_path = str(audio_path)
 
         try:
-            y, sr = librosa.load(audio_path, sr=self.sr, duration=duration)
+            y, sr = librosa.load(audio_path, sr=self.sr, offset=offset, duration=duration)
         except Exception as e:
             logger.error(f"Audio laden fehlgeschlagen: {e}")
             return self._empty_result()

@@ -70,7 +70,7 @@ class AnchorFeatureExtractor:
 
             # 1. Spektral-Features (8 means + 8 variances = 16 Features)
             spectral = self._get_spectral_analyzer()
-            spectral_result = spectral.analyze(audio_path, duration=duration)
+            spectral_result = spectral.analyze(audio_path, duration=duration, offset=offset)
 
             band_means = spectral.get_band_means(spectral_result)
             band_vars = spectral.get_band_variances(spectral_result)

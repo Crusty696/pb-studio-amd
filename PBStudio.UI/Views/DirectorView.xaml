@@ -192,18 +192,47 @@
                                  ToolTip="Erwartete Beats pro Minute – bestimmt das Grundtempo der Schnitte"
                                  Margin="0,0,0,8"/>
 
-                        <!-- Beat-Empfindlichkeit -->
+                        <!-- Beat-Gewichtung -->
                         <DockPanel Margin="0,0,0,0">
                             <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
-                                <Run Text="Beat-Empfindlichkeit:"/>
+                                <Run Text="Beat-Gewichtung:"/>
                             </TextBlock>
                             <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
                                        HorizontalAlignment="Right"
-                                       Text="{Binding BeatSensitivity, StringFormat={}{0:F2}}"/>
+                                       Text="{Binding BeatWeight, StringFormat={}{0:F1}}"/>
                         </DockPanel>
-                        <Slider Value="{Binding BeatSensitivity}"
+                        <Slider Value="{Binding BeatWeight}"
                                 Style="{StaticResource CompactSlider}"
-                                ToolTip="Wie stark Beats die Schnittplatzierung beeinflussen (0=ignorieren, 1=jeden Beat schneiden)"/>
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Beats bei der Schnittplatzierung (0=ignorieren, 2=stark)"/>
+
+                        <!-- Kick-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Kick-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding KickWeight, StringFormat={}{0:F1}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding KickWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Kick-Drums bei der Schnittplatzierung"/>
+
+                        <!-- Energie-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Energie-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding EnergyWeight, StringFormat={}{0:F1}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding EnergyWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Energie-Peaks bei der Schnittplatzierung"/>
 
                         <!-- Energie-Schwelle -->
                         <DockPanel Margin="0,0,0,0">
@@ -229,20 +258,8 @@
                         </DockPanel>
                         <Slider Value="{Binding OnsetWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
                                 ToolTip="Gewichtung von Audio-Onsets (Transienten) bei der Schnittplatzierung"/>
-
-                        <!-- Spektral-Gewichtung -->
-                        <DockPanel Margin="0,0,0,0">
-                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
-                                <Run Text="Spektral-Gewichtung:"/>
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
-                                       HorizontalAlignment="Right"
-                                       Text="{Binding SpectralWeight, StringFormat={}{0:F2}}"/>
-                        </DockPanel>
-                        <Slider Value="{Binding SpectralWeight}"
-                                Style="{StaticResource CompactSlider}"
-                                ToolTip="Gewichtung spektraler Veränderungen (Klangfarbe) bei der Schnittplatzierung"/>
 
                         <!-- Separator inside pacing -->
                         <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,4,0,6"/>

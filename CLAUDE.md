@@ -26,8 +26,8 @@ Read this file ENTIRELY before executing any tasks. Do not look for other .agent
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-03-09
 - **Phase:** Production / Verified
-- **Progress:** AMD Migration 100% + WPF Hybrid + Phase G-J + Bug-Detective-Run 2026-03-09 ERLEDIGT ✅
-- **Current Task:** ABGESCHLOSSEN — Bug-Detective-Run (2026-03-09). 140 passed, 8 skipped (Windows-only), 0 failures.
+- **Progress:** AMD Migration 100% + WPF Hybrid + Phase G-J + Deep-Audit 2026-03-09 (10 Bugs gefixt) ✅
+- **Current Task:** ABGESCHLOSSEN — Deep-Audit (2026-03-09). 5 CRITICAL + 4 HIGH + 1 Test-Fix. 163 passed, 9 skipped, 0 failures.
 - **Next Task:** End-to-End Test (WPF App starten + alle 9 Views testen).
 - **⚠️ WINDOWS-ONLY STEPS:**
   - `dotnet build PBStudio.UI\PBStudio.UI.csproj` in PowerShell ausführen
@@ -92,7 +92,18 @@ Read this file ENTIRELY before executing any tasks. Do not look for other .agent
   - *BUG-034:* Tests: `TestGenerationServiceRouting`: `@patch(Worker)` ergänzt — Worker=None auf Linux, sonst TypeError.
   - *BUG-035:* Tests: `test_generate_from_timeline_renders_all_clips` + `test_generate_from_timeline_cancel`: skipif für NTFS rmdir auf Linux.
   - *BUG-036:* `test_vector_store.py`: `pytest.importorskip("faiss")` — faiss nur in Windows-.venv.
-- **Tests:** 140 passed, 8 skipped (Windows-only), 0 failures (2026-03-09, ohne test_siglip_video.py wegen OOM).
+  - *Deep-Audit 2026-03-09:*
+  - *BUG-037 (CRITICAL):* `video_renderer.py`: `get_encoder_config().get("ffmpeg_path")` AttributeError. Fix: `_get_ffmpeg_path()`.
+  - *BUG-038 (CRITICAL):* `streaming_analyzer.py`: tempo=0 ZeroDivisionError. Fix: guard.
+  - *BUG-039 (CRITICAL):* `streaming_analyzer.py`: StemSeparator result parsing. Fix: filename mapping.
+  - *BUG-040 (CRITICAL):* `pacing_schemas.py`: TriggerSettingsSchema field mismatch. Fix: 10 fields aligned + C#.
+  - *BUG-041 (CRITICAL):* `engine.py`: parallel render temp_dir collision. Fix: UUID temp_dir.
+  - *BUG-042 (HIGH):* `spectral_analyzer.py`: missing offset param. Fix: added.
+  - *BUG-043 (HIGH):* `audio_router.py`: bands param ignored. Fix: band_keys filtering.
+  - *BUG-044 (HIGH):* `video_renderer.py`: thread-unsafe preview. Fix: new instance.
+  - *BUG-045 (HIGH/SEC):* Path-Traversal str().startswith() -> Path.is_relative_to().
+  - *BUG-046:* `test_vector_store.py`: missing _lock in __new__. Fix: threading.Lock().
+- **Tests:** 163 passed, 9 skipped, 0 failures (2026-03-09, Deep-Audit).
 - **Reparaturplan 2026-03-07:** 7 Phasen komplett. 6 Test-Fixes (ffmpeg_path, fake_run sig, clip-ID validation, patch paths, cancel_flag). torchaudio 2.4.1+cpu. madmom skip (librosa fallback).
 - **ACHTUNG pytest:** `testpaths = Tests` (Grossbuchstabe! Windows NTFS auf Linux-Mount).
 

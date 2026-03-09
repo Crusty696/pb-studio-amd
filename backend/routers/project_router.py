@@ -33,7 +33,7 @@ async def create_project(
     project_path = (Path(request.path) / request.name).resolve()
     # SEC-001: Path-Traversal-Schutz — nur innerhalb des konfigurierten Projektverzeichnisses erlaubt
     allowed_base = Path(config.project_dir).resolve()
-    if not str(project_path).startswith(str(allowed_base)):
+    if not project_path.is_relative_to(allowed_base):
         raise HTTPException(status_code=403, detail="Pfad außerhalb des erlaubten Projektverzeichnisses")
     try:
         project_path.mkdir(parents=True, exist_ok=True)

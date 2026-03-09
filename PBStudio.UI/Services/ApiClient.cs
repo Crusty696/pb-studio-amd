@@ -210,7 +210,7 @@ public record CutListEntry(string ClipId, double StartTime, double EndTime, Dict
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null);
 public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null);
-public record TriggerSettings(double BeatSensitivity = 0.7, double EnergyThreshold = 0.5, double OnsetWeight = 0.3, double SpectralWeight = 0.2);
+public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory);

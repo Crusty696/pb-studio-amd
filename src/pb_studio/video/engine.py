@@ -2,6 +2,7 @@ import logging
 import random
 import subprocess
 import json
+import uuid
 import numpy as np
 import shutil
 from pathlib import Path
@@ -54,7 +55,8 @@ class VideoGenerator:
         master_audio = config["master_audio"]
         source_videos = config["source_videos"]
         output_path = config["output_path"]
-        temp_dir = Path(config.get("temp_dir", "./data/temp_render"))
+        temp_base = Path(config.get("temp_dir", "./data/temp_render"))
+        temp_dir = temp_base / f"render_{uuid.uuid4().hex[:8]}"
 
         # Encoding settings
         self.use_hardware = config.get("use_hardware_encoding", True)
@@ -67,9 +69,7 @@ class VideoGenerator:
         if not source_videos:
             raise ValueError("No video sources selected.")
 
-        # Ensure temp dir
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
+        # Ensure temp dir (unique per render, safe for parallel execution)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -395,15 +395,14 @@ class VideoGenerator:
         """
         master_audio = config["master_audio"]
         output_path = config["output_path"]
-        temp_dir = Path(config.get("temp_dir", "./data/temp_render"))
+        temp_base = Path(config.get("temp_dir", "./data/temp_render"))
+        temp_dir = temp_base / f"render_{uuid.uuid4().hex[:8]}"
 
         # Encoding settings
         self.use_hardware = config.get("use_hardware_encoding", True)
         self.output_codec = config.get("output_codec", "h264")
         self.output_quality = config.get("output_quality", "balanced")
 
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
         try:

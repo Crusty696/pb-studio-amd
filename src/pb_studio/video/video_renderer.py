@@ -37,10 +37,9 @@ class VideoRenderer:
 
         # FFmpeg-Pfad aus encoder_utils
         try:
-            from .encoder_utils import get_encoder_config
-            config = get_encoder_config()
-            self._ffmpeg = config.get("ffmpeg_path", "ffmpeg")
-            self._ffprobe = config.get("ffprobe_path", "ffprobe")
+            from .encoder_utils import _get_ffmpeg_path, _get_ffprobe_path
+            self._ffmpeg = _get_ffmpeg_path()
+            self._ffprobe = _get_ffprobe_path()
         except Exception:
             self._ffmpeg = "ffmpeg"
             self._ffprobe = "ffprobe"
@@ -237,8 +236,8 @@ class VideoRenderer:
         ]
         if not preview_cuts:
             return None
-        orig_q = self.quality
-        self.quality = "fast"
-        result = self.render_video(preview_cuts, audio_path, output_path, progress_callback)
-        self.quality = orig_q
-        return result
+        # Thread-safe: eigene Instanz statt self.quality zu mutieren
+        preview_renderer = VideoRenderer(
+            codec=self.codec, quality="fast", temp_dir=self.temp_dir / "preview"
+        )
+        return preview_renderer.render_video(preview_cuts, audio_path, output_path, progress_callback)
