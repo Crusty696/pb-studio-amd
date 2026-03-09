@@ -1,8 +1,9 @@
 import logging
 import json
-from pathlib import Path
+import sqlite3
 from typing import List, Optional, Dict
-from pb_studio.data.database_core import DatabaseCore
+
+from pb_studio.data.database_core import DatabaseCore, normalize_media_path
 
 logger = logging.getLogger(__name__)
 
@@ -12,19 +13,27 @@ class MediaRepository:
 
     @staticmethod
     def _normalize_path(file_path: str) -> str:
-        return str(Path(file_path).expanduser().resolve())
+        return normalize_media_path(file_path)
+
+    @staticmethod
+    def _row_to_dict(row) -> Optional[Dict]:
+        return dict(row) if row else None
 
     def find_by_project_and_path(self, project_id: int, file_path: str) -> Optional[Dict]:
-        """Find media row by project and normalized absolute path."""
+        """Find the canonical media row by project and normalized path."""
         normalized_path = self._normalize_path(file_path)
         conn = self.db.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM media WHERE project_id = ? AND file_path = ? ORDER BY id DESC LIMIT 1",
+            """
+            SELECT m.*
+            FROM media_import_guard mig
+            JOIN media m ON m.id = mig.media_id
+            WHERE mig.project_id = ? AND mig.normalized_file_path = ?
+            """,
             (project_id, normalized_path),
         )
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(cursor.fetchone())
 
     def add_media(self, project_id: int, file_path: str, file_hash: str, duration: float, meta: Dict = None) -> int:
         """Add a media file to the database with idempotent project+path semantics."""
@@ -32,10 +41,15 @@ class MediaRepository:
         json_meta = json.dumps(meta) if meta else "{}"
 
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 cursor = conn.cursor()
                 existing = cursor.execute(
-                    "SELECT id FROM media WHERE project_id = ? AND file_path = ? ORDER BY id DESC LIMIT 1",
+                    """
+                    SELECT m.id
+                    FROM media_import_guard mig
+                    JOIN media m ON m.id = mig.media_id
+                    WHERE mig.project_id = ? AND mig.normalized_file_path = ?
+                    """,
                     (project_id, normalized_path),
                 ).fetchone()
                 if existing:
@@ -50,15 +64,25 @@ class MediaRepository:
                     logger.info(f"Reused existing media {existing[0]}: {normalized_path}")
                     return existing[0]
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO media (project_id, file_path, file_hash, duration_sec, metadata_json, status)
                     VALUES (?, ?, ?, ?, ?, 'pending')
-                """, (project_id, normalized_path, file_hash, duration, json_meta))
+                    """,
+                    (project_id, normalized_path, file_hash, duration, json_meta),
+                )
 
                 media_id = cursor.lastrowid
                 logger.info(f"Added media {media_id}: {normalized_path}")
                 return media_id
 
+        except sqlite3.IntegrityError:
+            existing = self.find_by_project_and_path(project_id, normalized_path)
+            if existing:
+                logger.info("Recovered canonical media after duplicate guard hit: %s", normalized_path)
+                return existing["id"]
+            logger.error("Duplicate guard fired but canonical media was not found: %s", normalized_path, exc_info=True)
+            raise
         except Exception as e:
             logger.error(f"Add Media failed: {e}", exc_info=True)
             raise RuntimeError(f"Media-Persistierung fehlgeschlagen: {e}") from e

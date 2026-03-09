@@ -3,10 +3,21 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+
+def normalize_media_path(file_path: str | None) -> str:
+    if not file_path:
+        return ""
+    try:
+        resolved = Path(file_path).expanduser().resolve(strict=False)
+    except Exception:
+        resolved = Path(file_path).expanduser()
+    return os.path.normcase(os.path.normpath(str(resolved)))
 
 
 def nonempty_json(value: str | None) -> bool:
@@ -52,6 +63,7 @@ def main() -> int:
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.create_function("normalize_media_path", 1, normalize_media_path)
     cur = conn.cursor()
 
     tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
@@ -76,10 +88,10 @@ def main() -> int:
         """
         SELECT *
         FROM media
-        WHERE (project_id, file_path) IN (
-            SELECT project_id, file_path
+        WHERE (project_id, normalize_media_path(file_path)) IN (
+            SELECT project_id, normalize_media_path(file_path)
             FROM media
-            GROUP BY project_id, file_path
+            GROUP BY project_id, normalize_media_path(file_path)
             HAVING COUNT(*) > 1
         )
         ORDER BY project_id, file_path, id
@@ -88,7 +100,7 @@ def main() -> int:
 
     groups: dict[tuple[Any, Any], list[sqlite3.Row]] = {}
     for row in dup_rows:
-        groups.setdefault((row["project_id"], row["file_path"]), []).append(row)
+        groups.setdefault((row["project_id"], normalize_media_path(row["file_path"])), []).append(row)
 
     group_rows: list[dict[str, Any]] = []
     loser_rows: list[dict[str, Any]] = []
@@ -97,7 +109,7 @@ def main() -> int:
     analyzed_winners = 0
     vector_moves_needed = 0
 
-    for (project_id, file_path), rows in groups.items():
+    for (project_id, normalized_file_path), rows in groups.items():
         ranked = sorted(rows, key=lambda row: winner_sort_key(row, vector_ref_map), reverse=True)
         winner = ranked[0]
         winner_id = winner["id"]
@@ -110,7 +122,8 @@ def main() -> int:
 
         group_rows.append({
             "project_id": project_id,
-            "file_path": file_path,
+            "normalized_file_path": normalized_file_path,
+            "sample_file_path": winner["file_path"],
             "group_size": len(rows),
             "winner_id": winner_id,
             "winner_status": winner["status"],
@@ -127,7 +140,8 @@ def main() -> int:
             vector_moves_needed += loser_vectors
             loser_rows.append({
                 "project_id": project_id,
-                "file_path": file_path,
+                "normalized_file_path": normalized_file_path,
+                "sample_file_path": winner["file_path"],
                 "winner_id": winner_id,
                 "loser_id": loser["id"],
                 "winner_status": winner["status"],
@@ -147,6 +161,7 @@ def main() -> int:
         "table_count": len(tables),
         "tables": tables,
         "media_reference_tables": ref_tables,
+        "guard_rows": cur.execute("SELECT COUNT(*) FROM media_import_guard").fetchone()[0] if "media_import_guard" in tables else 0,
         "duplicate_groups": len(groups),
         "duplicate_rows_total": sum(len(rows) for rows in groups.values()),
         "redundant_rows": redundant_rows,
@@ -155,6 +170,7 @@ def main() -> int:
         "status_mix": dict(status_mix),
         "notes": [
             "Dry-run only. No rows were updated or deleted.",
+            "The audit groups by normalized path so relative/case variants are treated as the same media import target.",
             "Winner preference: vector refs > analyzed/ready status > AI data > metadata > duration > file hash > stable lowest-id tie-break.",
         ],
     }
