@@ -152,6 +152,22 @@ class TestAudioRouter:
         r = client.get("/audio/spectral/999")
         assert r.status_code == 404
 
+    def test_spektral_cache_mit_clip_id_crasht_nicht(self, client, fresh_state):
+        fresh_state.audio_analysis_cache[1] = {
+            "spectral_data": {
+                "clip_id": 1,
+                "bands": {"bass": [0.1, 0.2]},
+                "frequency_ranges": {"bass": [20.0, 250.0]},
+            }
+        }
+
+        r = client.get("/audio/spectral/1")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["clip_id"] == 1
+        assert body["bands"]["bass"] == [0.1, 0.2]
+
     def test_clips_haben_aufsteigende_ids(self, client, tmp_path, fresh_state):
         audio_mod = _get_module("backend.routers.audio_router")
         orig_probe = audio_mod._probe_audio_info

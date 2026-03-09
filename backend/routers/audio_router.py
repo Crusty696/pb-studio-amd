@@ -242,8 +242,10 @@ async def get_spectral(
     """Gibt Spektral-Analyse Daten zurück."""
     if clip_id not in state.audio_analysis_cache:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    spectral = state.audio_analysis_cache[clip_id].get("spectral_data", {})
-    return SpectralData(clip_id=clip_id, **spectral) if spectral else SpectralData(clip_id=clip_id)
+    spectral = state.audio_analysis_cache[clip_id].get("spectral_data", {}) or {}
+    if spectral.get("clip_id") != clip_id:
+        spectral = {**spectral, "clip_id": clip_id}
+    return SpectralData(**spectral)
 
 
 # --- Private Hilfsfunktionen (blockierend, werden via to_thread aufgerufen) ---
