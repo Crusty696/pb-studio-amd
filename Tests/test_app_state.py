@@ -6,7 +6,9 @@ Testet:
 - Thread-sichere ID-Vergabe (next_audio_id / next_video_id)
 - reset() Methode
 - get_app_state() Singleton-Verhalten
+- DB-Restore filtert verwaiste Medien heraus
 """
+import json
 import threading
 import pytest
 from backend.app_state import AppState, get_app_state
@@ -150,6 +152,63 @@ class TestReset:
         for t in threads:
             t.join()
         # Kein Exception = Test bestanden
+
+
+class TestLoadFromDb:
+    """DB-Restore darf keine verwaisten Test-/Temp-Dateien laden."""
+
+    def test_verwaiste_media_eintraege_werden_uebersprungen_und_geloescht(self, tmp_path, monkeypatch):
+        existing_audio = tmp_path / "real.wav"
+        existing_audio.write_bytes(b"RIFF")
+        missing_audio = tmp_path / "missing.wav"
+
+        rows = [
+            {
+                "id": 10,
+                "file_path": str(missing_audio),
+                "duration_sec": 12.0,
+                "metadata_json": json.dumps({
+                    "clip_type": "audio",
+                    "clip_id": 7,
+                    "name": "missing",
+                    "sample_rate": 44100,
+                    "channels": 2,
+                    "format": "wav",
+                }),
+            },
+            {
+                "id": 11,
+                "file_path": str(existing_audio),
+                "duration_sec": 34.0,
+                "metadata_json": json.dumps({
+                    "clip_type": "audio",
+                    "clip_id": 8,
+                    "name": "real",
+                    "sample_rate": 48000,
+                    "channels": 1,
+                    "format": "wav",
+                }),
+            },
+        ]
+        deleted_ids = []
+
+        class FakeRepo:
+            def get_by_project(self, project_id):
+                assert project_id == 1
+                return rows
+
+            def delete_media(self, media_id):
+                deleted_ids.append(media_id)
+
+        monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
+
+        state = AppState()
+        state.load_from_db()
+
+        assert 7 not in state.audio_clips
+        assert state.audio_clips[8]["path"] == str(existing_audio)
+        assert deleted_ids == [10]
+        assert state._audio_next_id == 9
 
 
 class TestGetAppState:

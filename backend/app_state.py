@@ -18,6 +18,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -251,8 +252,23 @@ class AppState:
             max_video_id = 0
             audio_count = 0
             video_count = 0
+            stale_count = 0
 
             for row in rows:
+                file_path = row.get("file_path")
+                if not file_path or not Path(file_path).exists():
+                    stale_count += 1
+                    media_id = row.get("id")
+                    logger.warning(f"Überspringe verwaisten Media-DB-Eintrag {media_id}: {file_path}")
+                    if media_id is not None:
+                        try:
+                            repo.delete_media(media_id)
+                        except Exception as cleanup_error:
+                            logger.warning(
+                                f"Konnte verwaisten Media-DB-Eintrag {media_id} nicht löschen: {cleanup_error}"
+                            )
+                    continue
+
                 raw_meta = row.get("metadata_json") or "{}"
                 try:
                     meta = json.loads(raw_meta)
@@ -307,6 +323,7 @@ class AppState:
 
             logger.info(
                 f"DB-Load OK: {audio_count} Audio-Clips, {video_count} Video-Clips wiederhergestellt"
+                f" ({stale_count} verwaiste Einträge übersprungen)"
             )
 
         except Exception as e:

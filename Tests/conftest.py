@@ -15,6 +15,37 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
+@pytest.fixture(autouse=True)
+def isolated_test_database(tmp_path, monkeypatch):
+    """Jeder Test nutzt eine isolierte SQLite-Datei statt der produktiven DB."""
+    from pb_studio.config_manager import ConfigManager
+    from pb_studio.data.database_core import DatabaseCore
+
+    test_db_path = tmp_path / "test_pb_studio.db"
+
+    def _load_test_config(self):
+        self.config_file = tmp_path / "config.test.json"
+        self._config = ConfigManager._deep_merge(
+            ConfigManager.DEFAULTS,
+            {"paths": {"db_path": str(test_db_path)}},
+        )
+
+    # Singletons vor jedem Test hart zurücksetzen
+    if DatabaseCore._instance is not None:
+        DatabaseCore._instance.shutdown()
+    ConfigManager._instance = None
+    DatabaseCore._instance = None
+
+    monkeypatch.setattr(ConfigManager, "_load_config", _load_test_config)
+
+    yield test_db_path
+
+    if DatabaseCore._instance is not None:
+        DatabaseCore._instance.shutdown()
+    ConfigManager._instance = None
+    DatabaseCore._instance = None
+
+
 @pytest.fixture
 def test_assets_dir():
     """Returns path to test assets directory."""
