@@ -4,8 +4,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QGroupBox, QFileDialog)
 from PyQt6.QtCore import Qt
 
-from src.pb_studio.config_manager import ConfigManager
-from src.pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.config_manager import ConfigManager
+from pb_studio.core.system_monitor import SystemMonitor
 
 logger = logging.getLogger(__name__)
 

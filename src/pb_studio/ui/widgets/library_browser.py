@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
-from src.pb_studio.services.media_service import MediaService
+from pb_studio.services.media_service import MediaService
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +193,13 @@ class LibraryBrowserWidget(QWidget):
     def _import_files(self, file_paths: list):
         """Imports files via MediaService."""
         logger.info(f"Importing {len(file_paths)} files...")
-        results = self.media_service.import_files(self.project_id, file_paths)
-        logger.info(f"Import results: {results}")
-        self._load_data() # Refresh table
+        try:
+            results = self.media_service.import_files(self.project_id, file_paths)
+            logger.info(f"Import results: {results}")
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+        finally:
+            self._load_data()  # Refresh table auch bei Fehler
 
     # --- Drag and Drop ---
     def dragEnterEvent(self, event: QDragEnterEvent):

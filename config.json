@@ -1,0 +1,24 @@
+{
+    "app_name": "PB Studio (AMD Premium)",
+    "version": "1.0.0-amd",
+    "paths": {
+        "ffmpeg_bin": "./tools/ffmpeg/bin/ffmpeg.exe",
+        "lhm_lib": "./tools/LibreHardwareMonitor/LibreHardwareMonitorLib.dll",
+        "temp_dir": "./temp",
+        "db_path": "./data/pb_studio.db"
+    },
+    "hardware": {
+        "gpu_backend": "directml",
+        "vram_limit_mb": 0,
+        "enable_monitoring": true
+    },
+    "ai": {
+        "vision_model": "moondream2_fp16",
+        "audio_backend": "demucs_dml",
+        "parallel_tasks": false
+    },
+    "ui": {
+        "theme": "dark_red",
+        "scale_factor": 1.0
+    }
+}

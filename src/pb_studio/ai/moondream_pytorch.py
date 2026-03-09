@@ -8,6 +8,8 @@ Model: vikhyatk/moondream2
 """
 
 import logging
+import os
+import shutil
 import torch
 from PIL import Image
 from pathlib import Path
@@ -44,29 +46,149 @@ class MoondreamPyTorch:
 
         logger.info(f"MoondreamPyTorch initialized (device: {device})")
 
+    def _get_local_snapshot_dir(self) -> Optional[Path]:
+        """Return a local moondream snapshot if one is already cached."""
+        if Path(self.model_id).exists():
+            return Path(self.model_id)
+
+        snapshot_root = (
+            Path.home()
+            / ".cache"
+            / "huggingface"
+            / "hub"
+            / "models--vikhyatk--moondream2"
+            / "snapshots"
+        )
+        if not snapshot_root.exists():
+            return None
+
+        snapshots = sorted(p for p in snapshot_root.iterdir() if p.is_dir())
+        return snapshots[-1] if snapshots else None
+
+    def _prepare_offline_runtime(self, snapshot_dir: Optional[Path]) -> Optional[Path]:
+        """Configure local-only HuggingFace runtime and prewarm dynamic modules."""
+        try:
+            from pb_studio.config_manager import ConfigManager
+
+            temp_dir = Path(ConfigManager().get("paths", {}).get("temp_dir", "./temp"))
+        except Exception:
+            temp_dir = Path("./temp")
+
+        modules_root = temp_dir / "hf_modules"
+        modules_root.mkdir(parents=True, exist_ok=True)
+
+        os.environ["HF_MODULES_CACHE"] = str(modules_root.resolve())
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+        if snapshot_dir is None or not snapshot_dir.exists():
+            return snapshot_dir
+
+        cache_pkg_dir = modules_root / "transformers_modules" / f"_{snapshot_dir.name}"
+        cache_pkg_dir.mkdir(parents=True, exist_ok=True)
+
+        for py_file in snapshot_dir.glob("*.py"):
+            target = cache_pkg_dir / py_file.name
+            if not target.exists() or py_file.stat().st_mtime > target.stat().st_mtime:
+                shutil.copy2(py_file, target)
+
+        init_file = cache_pkg_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text("", encoding="ascii")
+
+        return snapshot_dir
+
+    def _install_safe_generation_patch(self):
+        """Force greedy decoding for moondream remote-code paths that sample unstable probabilities."""
+        if self.model is None or getattr(self.model, "_pbstudio_safe_generation", False):
+            return
+
+        model = self.model
+
+        def _safe_answer_question(
+            image_embeds,
+            question,
+            tokenizer=None,
+            chat_history="",
+            result_queue=None,
+            max_new_tokens=256,
+            **kwargs
+        ):
+            del tokenizer, chat_history
+            settings = kwargs.pop("settings", None) or {
+                "temperature": 0.0,
+                "top_p": 1.0,
+                "max_tokens": max_new_tokens,
+            }
+            answer = model.query(image_embeds, question, settings=settings)["answer"].strip()
+            if result_queue is not None:
+                result_queue.put(answer)
+            return answer
+
+        def _safe_batch_answer(images, prompts, tokenizer=None, **kwargs):
+            del tokenizer
+            answers = []
+            for image, prompt in zip(images, prompts):
+                answers.append(_safe_answer_question(image, prompt, **kwargs))
+            return answers
+
+        model.answer_question = _safe_answer_question
+        model.batch_answer = _safe_batch_answer
+        model._pbstudio_safe_generation = True
+
     def load(self) -> bool:
         """Load the Moondream model."""
         if self._loaded:
             return True
 
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+            snapshot_dir = self._prepare_offline_runtime(self._get_local_snapshot_dir())
+            model_source = str(snapshot_dir) if snapshot_dir is not None else self.model_id
 
-            logger.info(f"Loading Moondream model: {self.model_id}")
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from transformers.modeling_utils import PreTrainedModel
+            import inspect
+            import torch.nn.functional as F
+
+            logger.info(f"Loading Moondream model: {model_source}")
             logger.info("This may take a moment (model is ~2GB)...")
 
+            # transformers>=5 expects this attribute during finalize/tied-weight init,
+            # but current moondream remote-code builds may not define it.
+            if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
+                PreTrainedModel.all_tied_weights_keys = {}
+
+            # Some moondream remote-code revisions call scaled_dot_product_attention(..., enable_gqa=...)
+            # but our local torch build may not expose that kwarg yet. Patch it compatibly.
+            try:
+                sdpa_params = inspect.signature(F.scaled_dot_product_attention).parameters
+            except (TypeError, ValueError):
+                sdpa_params = {}
+
+            if "enable_gqa" not in sdpa_params:
+                original_sdpa = F.scaled_dot_product_attention
+
+                def _compat_sdpa(*args, **kwargs):
+                    kwargs.pop("enable_gqa", None)
+                    return original_sdpa(*args, **kwargs)
+
+                F.scaled_dot_product_attention = _compat_sdpa
+
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_id,
-                trust_remote_code=True
+                model_source,
+                trust_remote_code=True,
+                local_files_only=snapshot_dir is not None,
             )
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_id,
+                model_source,
                 trust_remote_code=True,
-                torch_dtype=torch.float32
+                torch_dtype=torch.float32,
+                local_files_only=snapshot_dir is not None,
             )
             self.model.to(self.device)
             self.model.eval()
+            self._install_safe_generation_patch()
 
             self._loaded = True
             logger.info("[OK] Moondream model loaded successfully")

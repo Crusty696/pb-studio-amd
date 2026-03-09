@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from src.pb_studio.services.analysis_service import AnalysisService
-from src.pb_studio.data.repositories.media_repository import MediaRepository
+from pb_studio.services.analysis_service import AnalysisService
+from pb_studio.data.repositories.media_repository import MediaRepository
 
 logger = logging.getLogger(__name__)
 

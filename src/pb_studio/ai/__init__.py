@@ -18,17 +18,32 @@ Smart Director Architecture:
     +-- Matcher --> Audio-Video Semantic Matching
 """
 
-from .clap_wrapper import CLAPAnalyzer
-from .siglip_wrapper import SigLIPWrapper
-from .video_specialist import VideoSpecialist, VideoClip
-from .smart_director import (
-    SmartDirector,
-    AudioAnalysis,
-    ClipAnalysis,
-    Timeline,
-    TimelineClip,
-    MoodCategory
-)
+try:
+    from .clap_wrapper import CLAPAnalyzer
+except ImportError:
+    pass
+
+try:
+    from .siglip_wrapper import SigLIPWrapper
+except ImportError:
+    pass
+
+try:
+    from .video_specialist import VideoSpecialist, VideoClip
+except ImportError:
+    pass
+
+try:
+    from .smart_director import (
+        SmartDirector,
+        AudioAnalysis,
+        ClipAnalysis,
+        Timeline,
+        TimelineClip,
+        MoodCategory
+    )
+except ImportError:
+    pass
 
 __all__ = [
     # Model Wrappers

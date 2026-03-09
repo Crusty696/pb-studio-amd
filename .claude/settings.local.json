@@ -1,0 +1,56 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__filesystem__create_directory",
+      "mcp__filesystem__write_file",
+      "Bash(dir:*)",
+      "Bash(where:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(python run_ui.py:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(python test_imports.py:*)",
+      "Bash(python check_status.py:*)",
+      "Bash(ls -d src/pb_studio/*/ backend/*/ PBStudio.UI/*/ Tests/)",
+      "mcp__filesystem__read_text_file"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": [],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"$content = $env:CLAUDE_TOOL_INPUT; $violations = @(); if ($content -cmatch '(?i)\\bcuda\\b|CUDAExecutionProvider|torch\\.cuda|from cuda|import cuda|\\.to\\(.cuda.\\)') { $violations += 'CUDA erkannt (IRON RULE 1: nur DirectML!)' }; if ($content -cmatch '(?i)\\brocm\\b|ROCmExecutionProvider|hip_runtime') { $violations += 'ROCm erkannt (IRON RULE 1: nur DirectML!)' }; if ($content -cmatch '(?i)\\bnvenc\\b|h264_nvenc|hevc_nvenc|av1_nvenc') { $violations += 'NVENC erkannt (IRON RULE 4: nur h264_amf/hevc_amf/av1_amf!)' }; if ($content -cmatch '(?i)\\bpynvml\\b|from pynvml|import pynvml') { $violations += 'pynvml erkannt (IRON RULE 5: nur LibreHardwareMonitor!)' }; if ($content -cmatch 'numpy>=2\\.|numpy==2\\.|numpy~=2\\.') { $violations += 'NumPy 2.x erkannt (IRON RULE 3: nur numpy<2.0 / 1.26.4!)' }; if ($violations.Count -gt 0) { Write-Error \\\"IRON RULE VERLETZUNG:`n$($violations -join \\\"`n\\\")\\\"; exit 1 }\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"[System.Media.SystemSounds]::Exclamation.Play()\""
+          }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"[System.Media.SystemSounds]::Asterisk.Play()\""
+          }
+        ]
+      }
+    ]
+  }
+}

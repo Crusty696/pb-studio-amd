@@ -118,7 +118,7 @@ class VRAMBudgetManager:
                 logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
             return
 
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self.monitor = monitor
@@ -240,7 +240,11 @@ class VRAMBudgetManager:
             logger.debug(f"AMD GPU detection failed: {e}")
 
         # 5. Fallback
-        logger.warning("Could not detect VRAM, assuming 8192MB")
+        logger.warning(
+            "VRAM-Erkennung fehlgeschlagen! Alle Methoden (Config, Monitor, WMI, GPU-Name) "
+            "konnten VRAM-Größe nicht bestimmen. Verwende konservativen Fallback von 8192MB. "
+            "Empfehlung: Setze 'vram_limit_mb' in config.yaml unter 'hardware' für korrekte Werte."
+        )
         return 8192
 
     @property
@@ -590,17 +594,25 @@ class VRAMBudgetManager:
             logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
 
             # Call unload callback
+            callback_failed = False
             if budget.unload_callback:
                 try:
                     budget.unload_callback()
                 except Exception as e:
                     logger.error(f"Unload callback failed for {budget.name}: {e}")
-                    continue
+                    callback_failed = True
 
-            # Release
+            # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
             self._committed_mb -= budget.estimated_vram_mb
             budget.is_loaded = False
             freed += budget.estimated_vram_mb
+
+            if callback_failed:
+                budget.metadata["eviction_error"] = True
+                logger.warning(
+                    f"Model {budget.name} marked as evicted_with_error — "
+                    f"VRAM budget freed but session may still be in memory"
+                )
 
         return freed
 

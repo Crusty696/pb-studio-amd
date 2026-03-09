@@ -29,6 +29,7 @@ Usage:
 """
 
 import logging
+import threading
 import numpy as np
 from dataclasses import dataclass, field
 from enum import Enum
@@ -151,6 +152,26 @@ class SmartDirector:
         is loaded at a time. CLAP and SigLIP share the same VRAM budget.
     """
 
+    # Singleton-Instanz (für ClipSelector.encode_text Zugriff)
+    _instance: Optional['SmartDirector'] = None
+    _instance_lock: threading.Lock = threading.Lock()
+
+    @classmethod
+    def get_instance(cls) -> 'SmartDirector':
+        """
+        Gibt die globale Singleton-Instanz zurück (lazy-init, thread-safe).
+
+        WARN-01 FIX: Double-Checked Locking verhindert Race Condition bei
+        parallelen SSE-Verbindungen oder gleichzeitigen FastAPI-Requests.
+        Ohne Lock könnten 2 Threads gleichzeitig 'cls._instance is None'
+        als True sehen → 2 Instanzen → 2× VRAM-Reservierung.
+        """
+        if cls._instance is None:
+            with cls._instance_lock:
+                if cls._instance is None:  # Zweite Prüfung innerhalb des Locks
+                    cls._instance = cls()
+        return cls._instance
+
     def __init__(
         self,
         clap_wrapper=None,
@@ -167,8 +188,8 @@ class SmartDirector:
             pacing_engine: AdvancedPacingEngine instance (optional, created if None)
             lazy_load: If True, defer model loading until first use
         """
-        from src.pb_studio.core import get_vram_manager, ModelPriority
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.core import get_vram_manager, ModelPriority
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self.vram_manager = get_vram_manager()
@@ -202,7 +223,7 @@ class SmartDirector:
 
     def _register_models_with_vram_manager(self):
         """Register SmartDirector models with the central VRAM manager."""
-        from src.pb_studio.core import ModelPriority
+        from pb_studio.core import ModelPriority
 
         # Register CLAP model
         self.vram_manager.register_model(
@@ -272,7 +293,7 @@ class SmartDirector:
                 return False
 
             # Import and create CLAP wrapper (PyTorch version - ONNX models not available)
-            from src.pb_studio.ai.clap_pytorch import CLAPPyTorch
+            from pb_studio.ai.clap_pytorch import CLAPPyTorch
 
             self._clap = CLAPPyTorch()
 
@@ -326,7 +347,7 @@ class SmartDirector:
                 return False
 
             # Import and create SigLIP wrapper
-            from src.pb_studio.ai.siglip_wrapper import SigLIPWrapper
+            from pb_studio.ai.siglip_wrapper import SigLIPWrapper
 
             self._siglip = SigLIPWrapper(lazy_load=False)
 
@@ -434,7 +455,7 @@ class SmartDirector:
     def _analyze_beats(self, audio_path: str) -> Dict[str, Any]:
         """Extract beat and rhythm information using BeatNet."""
         try:
-            from src.pb_studio.audio.analyzer import AudioAnalyzer
+            from pb_studio.audio.analyzer import AudioAnalyzer
 
             analyzer = AudioAnalyzer()
             result = analyzer.analyze_file(audio_path)
@@ -823,7 +844,7 @@ class SmartDirector:
     def _analyze_motion(self, video_path: str) -> float:
         """Analyze average motion intensity in clip."""
         try:
-            from src.pb_studio.video.raft import MotionAnalyzer, FarnebackFlowAnalyzer
+            from pb_studio.video.raft import MotionAnalyzer, FarnebackFlowAnalyzer
             import cv2
 
             cap = cv2.VideoCapture(video_path)
@@ -961,6 +982,10 @@ class SmartDirector:
         # Step 4: Optimize transitions
         timeline_clips = self._optimize_transitions(timeline_clips, audio)
 
+        # Step 5: Lücken füllen damit Video = Audio-Dauer (NV-kompatibel)
+        if timeline_clips and audio.duration_sec > 0:
+            timeline_clips = self._fill_timeline_gaps(timeline_clips, audio.duration_sec)
+
         # Calculate statistics
         total_clips = len(timeline_clips)
         avg_duration = np.mean([c.duration for c in timeline_clips]) if timeline_clips else 0
@@ -979,7 +1004,7 @@ class SmartDirector:
     def _init_pacing_engine(self):
         """Initialize the pacing engine."""
         try:
-            from src.pb_studio.pacing import AdvancedPacingEngine
+            from pb_studio.pacing import AdvancedPacingEngine
             self._pacing_engine = AdvancedPacingEngine()
         except ImportError:
             logger.warning("AdvancedPacingEngine not available")
@@ -1213,6 +1238,145 @@ class SmartDirector:
 
         return clips
 
+    def _fill_timeline_gaps(
+        self,
+        clips: List[TimelineClip],
+        audio_duration: float,
+        min_gap: float = 0.1
+    ) -> List[TimelineClip]:
+        """
+        Füllt Lücken in der Timeline durch Recycling vorhandener Clips.
+
+        Stellt sicher, dass die Video-Timeline lückenlos von 0 bis audio_duration reicht.
+        AMD-Adapter: arbeitet mit TimelineClip-Dataclasses statt Dicts (wie NV-Version).
+
+        Args:
+            clips: Bestehende TimelineClip-Liste
+            audio_duration: Ziel-Dauer (= Audio-Länge)
+            min_gap: Minimale Lücke die gefüllt wird (Sekunden)
+
+        Returns:
+            Erweiterte Timeline ohne Lücken
+        """
+        if not clips:
+            return clips
+
+        # Nach start_time sortieren
+        clips = sorted(clips, key=lambda c: c.start_time)
+
+        # Lücken identifizieren
+        gaps = []
+
+        # Lücke am Anfang
+        if clips[0].start_time > min_gap:
+            gaps.append((0.0, clips[0].start_time))
+
+        # Lücken zwischen Clips
+        for i in range(len(clips) - 1):
+            curr_end = clips[i].start_time + clips[i].duration
+            next_start = clips[i + 1].start_time
+            if next_start - curr_end > min_gap:
+                gaps.append((curr_end, next_start))
+
+        # Lücke am Ende
+        last_end = clips[-1].start_time + clips[-1].duration
+        if audio_duration - last_end > min_gap:
+            gaps.append((last_end, audio_duration))
+
+        if not gaps:
+            return clips
+
+        total_gap = sum(end - start for start, end in gaps)
+        logger.info("Gap-Filling: %d Lücken gefunden, gesamt %.1fs", len(gaps), total_gap)
+
+        # Füller-Clips per Round-Robin aus vorhandenen erzeugen
+        fill_index = 0
+        last_fill_path = None
+        for gap_start, gap_end in gaps:
+            pos = gap_start
+            while pos < gap_end - min_gap:
+                source = clips[fill_index % len(clips)]
+                fill_index += 1
+                # Direkte Wiederholung vermeiden (Variety)
+                if len(clips) > 1 and source.source_path == last_fill_path:
+                    source = clips[fill_index % len(clips)]
+                    fill_index += 1
+
+                remaining = gap_end - pos
+                fill_dur = min(
+                    source.source_end - source.source_start,
+                    remaining
+                )
+                if fill_dur <= 0:
+                    break
+
+                filler = TimelineClip(
+                    source_path=source.source_path,
+                    start_time=pos,
+                    duration=fill_dur,
+                    source_start=source.source_start,
+                    source_end=source.source_start + fill_dur,
+                    match_score=source.match_score,
+                    mood_alignment=source.mood_alignment,
+                    energy_alignment=source.energy_alignment,
+                    transition_in="cut",
+                    transition_out="cut",
+                    speed_factor=source.speed_factor,
+                )
+                clips.append(filler)
+                last_fill_path = filler.source_path
+                pos += fill_dur
+
+        # Neu sortieren
+        clips = sorted(clips, key=lambda c: c.start_time)
+        logger.info("Timeline nach Gap-Filling: %d Clips (lückenlos bis %.1fs)",
+                    len(clips), audio_duration)
+        return clips
+
+    def encode_text(self, text: str) -> Optional[np.ndarray]:
+        """
+        Kodiert einen Text-String mit SigLIP zu einem Embedding.
+
+        Wird von ClipSelector._get_text_embedding() genutzt.
+        Stellt sicher, dass SigLIP geladen ist (Staffellauf-Pattern).
+
+        Args:
+            text: Mood-Text oder Prompt-String
+
+        Returns:
+            numpy-Array (1152-dim) oder None bei Fehler
+        """
+        if not self._ensure_siglip_loaded():
+            logger.warning("encode_text: SigLIP nicht geladen, gebe None zurück")
+            return None
+
+        try:
+            embedding = self._siglip.encode_text(text)
+            if embedding is None:
+                return None
+
+            # PyTorch Tensor → numpy (HINT-02 FIX: korrekte Reihenfolge .detach()→.cpu()→.numpy())
+            # .detach() muss VOR .cpu() kommen, weil .numpy() bei requires_grad=True-Tensors
+            # sonst mit RuntimeError fehlschlägt.
+            if hasattr(embedding, "detach"):
+                embedding = embedding.detach()
+            if hasattr(embedding, "cpu"):
+                embedding = embedding.cpu()
+            if hasattr(embedding, "numpy"):
+                embedding = embedding.numpy()
+
+            embedding = np.array(embedding, dtype=np.float32)
+
+            # 2D → 1D
+            if len(embedding.shape) > 1:
+                embedding = embedding[0]
+
+            return embedding
+
+        except Exception as e:
+            logger.warning("encode_text fehlgeschlagen: %s", e)
+            return None
+
     # =========================================================================
     # Semantic Matching
     # =========================================================================
@@ -1352,3 +1516,14 @@ class SmartDirector:
         self._unload_clap()
         self._unload_siglip()
         logger.info("All SmartDirector models unloaded")
+
+    @classmethod
+    def reset_instance(cls):
+        """Reset the singleton instance so next get_instance() creates a fresh one.
+
+        Call this after unload_all() to ensure VRAM is fully freed
+        and models will be re-initialized on next access.
+        """
+        with cls._instance_lock:
+            cls._instance = None
+            logger.info("SmartDirector singleton instance reset")

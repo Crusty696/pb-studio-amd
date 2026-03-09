@@ -1,7 +1,9 @@
 import logging
 import json
+import sqlite3
 from typing import List, Optional, Dict
-from src.pb_studio.data.database_core import DatabaseCore
+
+from pb_studio.data.database_core import DatabaseCore, normalize_media_path
 
 logger = logging.getLogger(__name__)
 
@@ -9,25 +11,81 @@ class MediaRepository:
     def __init__(self):
         self.db = DatabaseCore()
 
+    @staticmethod
+    def _normalize_path(file_path: str) -> str:
+        return normalize_media_path(file_path)
+
+    @staticmethod
+    def _row_to_dict(row) -> Optional[Dict]:
+        return dict(row) if row else None
+
+    def find_by_project_and_path(self, project_id: int, file_path: str) -> Optional[Dict]:
+        """Find the canonical media row by project and normalized path."""
+        normalized_path = self._normalize_path(file_path)
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT m.*
+            FROM media_import_guard mig
+            JOIN media m ON m.id = mig.media_id
+            WHERE mig.project_id = ? AND mig.normalized_file_path = ?
+            """,
+            (project_id, normalized_path),
+        )
+        return self._row_to_dict(cursor.fetchone())
+
     def add_media(self, project_id: int, file_path: str, file_hash: str, duration: float, meta: Dict = None) -> int:
-        """Add a media file to the database with proper transaction handling."""
+        """Add a media file to the database with idempotent project+path semantics."""
+        normalized_path = self._normalize_path(file_path)
         json_meta = json.dumps(meta) if meta else "{}"
-        
+
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                existing = cursor.execute(
+                    """
+                    SELECT m.id
+                    FROM media_import_guard mig
+                    JOIN media m ON m.id = mig.media_id
+                    WHERE mig.project_id = ? AND mig.normalized_file_path = ?
+                    """,
+                    (project_id, normalized_path),
+                ).fetchone()
+                if existing:
+                    cursor.execute(
+                        """
+                        UPDATE media
+                        SET file_hash = ?, duration_sec = ?, metadata_json = ?, status = COALESCE(status, 'pending')
+                        WHERE id = ?
+                        """,
+                        (file_hash, duration, json_meta, existing[0]),
+                    )
+                    logger.info(f"Reused existing media {existing[0]}: {normalized_path}")
+                    return existing[0]
+
+                cursor.execute(
+                    """
                     INSERT INTO media (project_id, file_path, file_hash, duration_sec, metadata_json, status)
                     VALUES (?, ?, ?, ?, ?, 'pending')
-                """, (project_id, file_path, file_hash, duration, json_meta))
-                
+                    """,
+                    (project_id, normalized_path, file_hash, duration, json_meta),
+                )
+
                 media_id = cursor.lastrowid
-                logger.info(f"Added media {media_id}: {file_path}")
+                logger.info(f"Added media {media_id}: {normalized_path}")
                 return media_id
-                
+
+        except sqlite3.IntegrityError:
+            existing = self.find_by_project_and_path(project_id, normalized_path)
+            if existing:
+                logger.info("Recovered canonical media after duplicate guard hit: %s", normalized_path)
+                return existing["id"]
+            logger.error("Duplicate guard fired but canonical media was not found: %s", normalized_path, exc_info=True)
+            raise
         except Exception as e:
             logger.error(f"Add Media failed: {e}", exc_info=True)
-            return -1
+            raise RuntimeError(f"Media-Persistierung fehlgeschlagen: {e}") from e
 
     def get_by_project(self, project_id: int) -> List[Dict]:
         """Get all media files for a project."""

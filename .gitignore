@@ -53,3 +53,26 @@ LibreHardwareMonitorLib.dll
 *.db
 *.db-wal
 *.db-shm
+
+# Tools / Binaries (nicht auf GitHub)
+tools/
+*.exe
+*.dll
+
+# Modelle / Gewichte (zu groß für GitHub)
+models/
+*.safetensors
+
+# Mediendaten (keine Assets auf GitHub)
+data/
+media/
+assets/
+
+# Test-Temporärverzeichnisse
+.pytest_tmp/
+.pytest_tmp_local/
+
+# Sonstiges
+nul
+.openclaw_codex_prompt.txt
+LEAD_ANALYST_REPORT_*.md

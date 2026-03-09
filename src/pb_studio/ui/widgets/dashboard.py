@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QInputDialog, QDialog, QDialogButtonBox,
                              QListWidget, QListWidgetItem)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from src.pb_studio.services.media_service import MediaService
-from src.pb_studio.core.system_monitor import SystemMonitor
-from src.pb_studio.data.repositories.project_repository import ProjectRepository
+from pb_studio.services.media_service import MediaService
+from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.data.repositories.project_repository import ProjectRepository
 
 import logging
 

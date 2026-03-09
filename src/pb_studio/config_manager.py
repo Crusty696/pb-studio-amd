@@ -81,10 +81,16 @@ class ConfigManager:
     def resolve_path(self, relative_path: str) -> Path:
         """Resolve relative path to absolute based on project root.
         Absolute Pfade werden unveraendert zurueckgegeben."""
+        if not relative_path:
+            return _PROJECT_ROOT
         p = Path(relative_path)
         if p.is_absolute():
             return p.resolve()
-        return (_PROJECT_ROOT / relative_path.lstrip("./")).resolve()
+        # Entferne fuehrende ./ aber NICHT fuehrende /
+        cleaned = relative_path
+        while cleaned.startswith("./") or cleaned.startswith(".\\"):
+            cleaned = cleaned[2:]
+        return (_PROJECT_ROOT / cleaned).resolve()
 
     def get(self, key: str, default=None):
         return self._config.get(key, default)

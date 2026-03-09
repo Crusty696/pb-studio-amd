@@ -1,0 +1,237 @@
+"""
+Unit-Tests für backend/app_state.py
+
+Testet:
+- AppState Initialisierung
+- Thread-sichere ID-Vergabe (next_audio_id / next_video_id)
+- reset() Methode
+- get_app_state() Singleton-Verhalten
+- DB-Restore filtert verwaiste Medien heraus
+"""
+import json
+import threading
+import pytest
+from backend.app_state import AppState, get_app_state
+
+
+class TestAppStateInit:
+    """AppState Initialzustand prüfen."""
+
+    def test_leer_nach_init(self):
+        state = AppState()
+        assert state.audio_clips == {}
+        assert state.audio_analysis_cache == {}
+        assert state.video_clips == {}
+        assert state.video_analysis_cache == {}
+        assert state.current_timeline == []
+        assert state.current_audio_path is None
+        assert state.render_tasks == {}
+        assert state.cancel_flags == {}
+
+    def test_id_counter_startet_bei_1(self):
+        state = AppState()
+        assert state._audio_next_id == 1
+        assert state._video_next_id == 1
+
+
+class TestNextAudioId:
+    """Thread-sichere Audio-ID-Vergabe."""
+
+    def test_erste_id_ist_1(self):
+        state = AppState()
+        assert state.next_audio_id() == 1
+
+    def test_ids_sind_aufsteigend(self):
+        state = AppState()
+        ids = [state.next_audio_id() for _ in range(5)]
+        assert ids == [1, 2, 3, 4, 5]
+
+    def test_thread_sicherheit(self):
+        """500 parallele Threads dürfen keine doppelten IDs liefern."""
+        state = AppState()
+        results = []
+        lock = threading.Lock()
+
+        def worker():
+            clip_id = state.next_audio_id()
+            with lock:
+                results.append(clip_id)
+
+        threads = [threading.Thread(target=worker) for _ in range(500)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 500
+        assert len(set(results)) == 500, "Doppelte IDs gefunden!"
+        assert set(results) == set(range(1, 501))
+
+
+class TestNextVideoId:
+    """Thread-sichere Video-ID-Vergabe."""
+
+    def test_erste_id_ist_1(self):
+        state = AppState()
+        assert state.next_video_id() == 1
+
+    def test_ids_unabhaengig_von_audio(self):
+        """Audio- und Video-IDs sind voneinander unabhängig."""
+        state = AppState()
+        state.next_audio_id()  # Audio-Zähler auf 2
+        assert state.next_video_id() == 1  # Video-Zähler bleibt bei 1
+
+    def test_thread_sicherheit(self):
+        state = AppState()
+        results = []
+        lock = threading.Lock()
+
+        def worker():
+            clip_id = state.next_video_id()
+            with lock:
+                results.append(clip_id)
+
+        threads = [threading.Thread(target=worker) for _ in range(200)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(results)) == 200, "Doppelte Video-IDs!"
+
+
+class TestReset:
+    """reset() löscht vollständig den State."""
+
+    def test_reset_loescht_alle_daten(self):
+        state = AppState()
+        # State befüllen
+        state.audio_clips[1] = {"id": 1, "name": "test.mp3"}
+        state.video_clips[1] = {"id": 1, "name": "clip.mp4"}
+        state.current_timeline = [{"time": 0.0, "duration": 2.0}]
+        state.current_audio_path = "/pfad/zur/datei.mp3"
+        state.render_tasks["abc"] = {"status": "running"}
+        state.cancel_flags["abc"] = False
+        state.next_audio_id()  # Zähler auf 2
+        state.next_video_id()  # Zähler auf 2
+
+        state.reset()
+
+        assert state.audio_clips == {}
+        assert state.video_clips == {}
+        assert state.current_timeline == []
+        assert state.current_audio_path is None
+        assert state.render_tasks == {}
+        assert state.cancel_flags == {}
+
+    def test_reset_setzt_id_counter_zurueck(self):
+        state = AppState()
+        state.next_audio_id()
+        state.next_audio_id()
+        state.next_video_id()
+        state.reset()
+
+        assert state.next_audio_id() == 1
+        assert state.next_video_id() == 1
+
+    def test_reset_ist_thread_safe(self):
+        """reset() während paralleler ID-Vergabe darf nicht crashen."""
+        state = AppState()
+
+        def worker():
+            for _ in range(50):
+                state.next_audio_id()
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+
+        # Während Threads laufen: reset aufrufen
+        state.reset()
+
+        for t in threads:
+            t.join()
+        # Kein Exception = Test bestanden
+
+
+class TestLoadFromDb:
+    """DB-Restore darf keine verwaisten Test-/Temp-Dateien laden."""
+
+    def test_verwaiste_media_eintraege_werden_uebersprungen_und_geloescht(self, tmp_path, monkeypatch):
+        existing_audio = tmp_path / "real.wav"
+        existing_audio.write_bytes(b"RIFF")
+        missing_audio = tmp_path / "missing.wav"
+
+        rows = [
+            {
+                "id": 10,
+                "file_path": str(missing_audio),
+                "duration_sec": 12.0,
+                "metadata_json": json.dumps({
+                    "clip_type": "audio",
+                    "clip_id": 7,
+                    "name": "missing",
+                    "sample_rate": 44100,
+                    "channels": 2,
+                    "format": "wav",
+                }),
+            },
+            {
+                "id": 11,
+                "file_path": str(existing_audio),
+                "duration_sec": 34.0,
+                "metadata_json": json.dumps({
+                    "clip_type": "audio",
+                    "clip_id": 8,
+                    "name": "real",
+                    "sample_rate": 48000,
+                    "channels": 1,
+                    "format": "wav",
+                }),
+            },
+        ]
+        deleted_ids = []
+
+        class FakeRepo:
+            def get_by_project(self, project_id):
+                assert project_id == 1
+                return rows
+
+            def delete_media(self, media_id):
+                deleted_ids.append(media_id)
+
+        monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
+
+        state = AppState()
+        state.load_from_db()
+
+        assert 7 not in state.audio_clips
+        assert state.audio_clips[8]["path"] == str(existing_audio)
+        assert deleted_ids == [10]
+        assert state._audio_next_id == 9
+
+
+class TestGetAppState:
+    """get_app_state() Singleton-Verhalten."""
+
+    def test_gibt_immer_dasselbe_objekt_zurueck(self):
+        s1 = get_app_state()
+        s2 = get_app_state()
+        assert s1 is s2
+
+    def test_singleton_ist_appstate_instanz(self):
+        state = get_app_state()
+        assert isinstance(state, AppState)
+
+    def test_state_aenderungen_sind_persistent(self):
+        """Änderungen am Singleton sind in allen Referenzen sichtbar."""
+        s1 = get_app_state()
+        s2 = get_app_state()
+
+        test_key = 9999
+        s1.audio_clips[test_key] = {"id": test_key, "name": "singleton_test"}
+
+        assert test_key in s2.audio_clips
+
+        # Aufräumen
+        del s1.audio_clips[test_key]

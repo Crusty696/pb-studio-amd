@@ -12,16 +12,16 @@ Components:
 - ThreadPool: Worker thread management
 """
 
-from src.pb_studio.core.system_monitor import SystemMonitor
-from src.pb_studio.core.vram_arbiter import VRAMArbiter
-from src.pb_studio.core.vram_budget_manager import (
+from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.core.vram_arbiter import VRAMArbiter
+from pb_studio.core.vram_budget_manager import (
     VRAMBudgetManager,
     ModelPriority,
     VRAMContext,
     get_vram_manager,
     KNOWN_MODEL_BUDGETS
 )
-from src.pb_studio.core.model_loader import (
+from pb_studio.core.model_loader import (
     ModelLoader,
     ModelSpec,
     ModelType,
@@ -29,9 +29,12 @@ from src.pb_studio.core.model_loader import (
     load_model,
     unload_model
 )
-from src.pb_studio.core.task_queue import TaskQueue, TaskPriority, TaskItem
-from src.pb_studio.core.thread_pool import ThreadPoolManager, Worker
-from src.pb_studio.core.crash_handler import CrashHandler
+from pb_studio.core.task_queue import TaskQueue, TaskPriority, TaskItem
+try:
+    from pb_studio.core.thread_pool import ThreadPoolManager, Worker
+except ImportError:
+    pass  # PyQt6 nicht verfügbar (z.B. Linux CI ohne Windows-.venv)
+from pb_studio.core.crash_handler import CrashHandler
 
 __all__ = [
     # Monitoring

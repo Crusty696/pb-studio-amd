@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 from ..base_worker import BaseWorker
 from ...models.audio import AudioMetadata
+from ...video.encoder_utils import _get_ffmpeg_path, _get_ffprobe_path
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,10 @@ class AudioImportWorker(BaseWorker):
         self._check_cancelled()
 
         # Validate output
-        if not os.path.exists(self.temp_wav_path):
+        if not Path(self.temp_wav_path).exists():
             raise RuntimeError("WAV conversion failed: output file not created")
 
-        output_size = os.path.getsize(self.temp_wav_path)
+        output_size = Path(self.temp_wav_path).stat().st_size
         if output_size == 0:
             raise RuntimeError("WAV conversion failed: output file is empty")
 
@@ -110,7 +111,7 @@ class AudioImportWorker(BaseWorker):
         try:
             # FFprobe command for JSON output
             command = [
-                "ffprobe",
+                _get_ffprobe_path(),
                 "-v", "quiet",
                 "-print_format", "json",
                 "-show_streams",
@@ -174,11 +175,11 @@ class AudioImportWorker(BaseWorker):
         # Generate unique temp file path
         temp_dir = tempfile.gettempdir()
         unique_name = f"pb_studio_import_{uuid.uuid4().hex}.wav"
-        output_path = os.path.join(temp_dir, unique_name)
+        output_path = str(Path(temp_dir) / unique_name)
 
         # FFmpeg command: convert to 16-bit PCM WAV, 44.1kHz stereo
         command = [
-            "ffmpeg",
+            _get_ffmpeg_path(),
             "-y",  # Overwrite output
             "-i", self.file_path,
             "-vn",  # No video
@@ -209,7 +210,7 @@ class AudioImportWorker(BaseWorker):
 
         Call this after processing is complete to free disk space.
         """
-        if self.temp_wav_path and os.path.exists(self.temp_wav_path):
+        if self.temp_wav_path and Path(self.temp_wav_path).exists():
             try:
                 os.remove(self.temp_wav_path)
                 logger.debug(f"Cleaned up temp file: {self.temp_wav_path}")

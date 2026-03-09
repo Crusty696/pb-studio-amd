@@ -1,0 +1,470 @@
+<UserControl x:Class="PBStudio.UI.Views.DirectorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             mc:Ignorable="d"
+             d:DesignHeight="800" d:DesignWidth="1200"
+             Background="{StaticResource AbletonBg}">
+
+    <UserControl.Resources>
+        <!-- Compact slider style -->
+        <Style x:Key="CompactSlider" TargetType="Slider">
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="1"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Margin" Value="0,2,0,6"/>
+            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+            <Setter Property="TickFrequency" Value="0.01"/>
+            <Setter Property="IsSnapToTickEnabled" Value="True"/>
+        </Style>
+
+        <!-- Compact TextBox style -->
+        <Style x:Key="ParamTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+            <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="CaretBrush" Value="{StaticResource AbletonText}"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Flat tiny button -->
+        <Style x:Key="TinyFlatButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+            <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource AbletonBorder}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Checkbox style -->
+        <Style x:Key="AbletonCheckBox" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- Video clip item checkbox style -->
+        <Style x:Key="ClipCheckBox" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="1"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- LEFT PANEL: Settings & Controls             -->
+        <!-- ═══════════════════════════════════════════ -->
+        <ScrollViewer Grid.Column="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Background="{StaticResource AbletonPanel}">
+            <StackPanel Margin="10,10,10,10">
+
+                <!-- ─── AUDIO SOURCE ─── -->
+                <md:Card Style="{StaticResource AbletonCard}" Margin="0,0,0,6">
+                    <StackPanel Margin="10,8">
+                        <TextBlock Text="AUDIO-QUELLE" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+                        <ComboBox ItemsSource="{Binding AvailableAudioClips}"
+                                  SelectedItem="{Binding SelectedAudioClip}"
+                                  DisplayMemberPath="Name"
+                                  Background="{StaticResource AbletonSurface}"
+                                  Foreground="{StaticResource AbletonText}"
+                                  BorderBrush="{StaticResource AbletonBorder}"
+                                  FontSize="12"
+                                  Height="30"
+                                  ToolTip="Audio-Clip als Basis für Beat-Analyse und Pacing"/>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- ─── VIDEO CLIPS ─── -->
+                <md:Card Style="{StaticResource AbletonCard}" Margin="0,0,0,6"
+                         ToolTip="Video-Clips die für die Cut-Liste verwendet werden">
+                    <StackPanel Margin="10,8">
+                        <TextBlock Text="VIDEO-CLIPS" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+
+                        <!-- Alle/Keine + Count -->
+                        <DockPanel Margin="0,0,0,6">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                <Button Content="ALLE" Style="{StaticResource TinyFlatButton}"
+                                        Command="{Binding SelectAllVideoClipsCommand}" Margin="0,0,4,0"/>
+                                <Button Content="KEINE" Style="{StaticResource TinyFlatButton}"
+                                        Command="{Binding DeselectAllVideoClipsCommand}"/>
+                            </StackPanel>
+                            <TextBlock DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource AbletonTextDim}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0} ausgewählt">
+                                        <Binding Path="SelectedVideoClipCount"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </DockPanel>
+
+                        <!-- Video clip list with checkboxes -->
+                        <ListBox ItemsSource="{Binding AvailableVideoClips}"
+                                 SelectionChanged="VideoClips_SelectionChanged"
+                                 Background="{StaticResource AbletonSurface}"
+                                 BorderBrush="{StaticResource AbletonBorder}"
+                                 BorderThickness="1"
+                                 MaxHeight="150"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 Padding="2">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Style="{StaticResource ClipCheckBox}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource AbletonText}" FontSize="11"/>
+                                            <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource AbletonTextDim}"
+                                                       FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="4,1"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- Separator -->
+                <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,2,0,2"/>
+
+                <!-- ─── PACING ─── -->
+                <md:Card Style="{StaticResource AbletonCard}" Margin="0,0,0,6">
+                    <StackPanel Margin="10,8">
+                        <TextBlock Text="PACING" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+
+                        <!-- BPM -->
+                        <DockPanel Margin="0,0,0,2">
+                            <TextBlock Text="BPM" Style="{StaticResource ParamLabel}" DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBox Text="{Binding ExpectedBpm, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ParamTextBox}"
+                                 ToolTip="Erwartete Beats pro Minute – bestimmt das Grundtempo der Schnitte"
+                                 Margin="0,0,0,8"/>
+
+                        <!-- Beat-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Beat-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding BeatWeight, StringFormat={}{0:F1}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding BeatWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Beats bei der Schnittplatzierung (0=ignorieren, 2=stark)"/>
+
+                        <!-- Kick-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Kick-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding KickWeight, StringFormat={}{0:F1}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding KickWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Kick-Drums bei der Schnittplatzierung"/>
+
+                        <!-- Energie-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Energie-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding EnergyWeight, StringFormat={}{0:F1}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding EnergyWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Energie-Peaks bei der Schnittplatzierung"/>
+
+                        <!-- Energie-Schwelle -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Energie-Schwelle:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding EnergyThreshold, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding EnergyThreshold}"
+                                Style="{StaticResource CompactSlider}"
+                                ToolTip="Minimale Energie-Intensität für einen Schnitt-Trigger (höher = nur bei lauten Stellen)"/>
+
+                        <!-- Onset-Gewichtung -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Onset-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding OnsetWeight, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding OnsetWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Gewichtung von Audio-Onsets (Transienten) bei der Schnittplatzierung"/>
+
+                        <!-- Separator inside pacing -->
+                        <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,4,0,6"/>
+
+                        <!-- Min. Schnittabstand -->
+                        <DockPanel Margin="0,0,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Min. Schnittabstand:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding MinCutInterval, StringFormat={}{0:F1}s}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding MinCutInterval}"
+                                Minimum="0.1" Maximum="5.0"
+                                TickFrequency="0.1"
+                                IsSnapToTickEnabled="True"
+                                Height="20" Margin="0,2,0,6"
+                                Foreground="{StaticResource AbletonAccent}"
+                                ToolTip="Minimaler Abstand zwischen zwei Schnitten in Sekunden (verhindert zu schnelle Cuts)"/>
+
+                        <!-- Dauer-Limit -->
+                        <DockPanel Margin="0,0,0,2">
+                            <TextBlock Text="Dauer-Limit (Sek.)" Style="{StaticResource ParamLabel}" DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBox Text="{Binding DurationLimit, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                 Style="{StaticResource ParamTextBox}"
+                                 ToolTip="Maximale Gesamtdauer des Videos in Sekunden (leer = gesamte Audio-Länge)"
+                                 Margin="0,0,0,4"/>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- Separator -->
+                <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,2,0,2"/>
+
+                <!-- ─── OPTIONS ─── -->
+                <md:Card Style="{StaticResource AbletonCard}" Margin="0,0,0,6">
+                    <StackPanel Margin="10,8">
+                        <TextBlock Text="OPTIONEN" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+
+                        <CheckBox IsChecked="{Binding UseMotionMatching}"
+                                  Style="{StaticResource AbletonCheckBox}"
+                                  ToolTip="Bewegungsintensität der Video-Clips mit Audio-Energie synchronisieren">
+                            <TextBlock Text="Motion Matching" FontSize="12" Foreground="{StaticResource AbletonText}"/>
+                        </CheckBox>
+
+                        <CheckBox IsChecked="{Binding UseStructureAwareness}"
+                                  Style="{StaticResource AbletonCheckBox}"
+                                  ToolTip="Audio-Struktur (Verse, Chorus, Bridge) für Clip-Auswahl berücksichtigen">
+                            <TextBlock Text="Struktur-Erkennung" FontSize="12" Foreground="{StaticResource AbletonText}"/>
+                        </CheckBox>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- Separator -->
+                <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,2,0,2"/>
+
+                <!-- ─── GENERATE BUTTON ─── -->
+                <Button Command="{Binding GenerateCutListCommand}"
+                        IsEnabled="{Binding IsGenerating, Converter={StaticResource InverseBooleanConverter}}"
+                        Cursor="Hand"
+                        Height="40"
+                        Margin="0,4,0,4">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border"
+                                    Background="{StaticResource AbletonAccent}"
+                                    Padding="0">
+                                <TextBlock Text="CUT-LISTE GENERIEREN"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="13"
+                                           FontWeight="Bold"
+                                           Foreground="White"
+                                           />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Progress bar when generating -->
+                <ProgressBar IsIndeterminate="True"
+                             Height="3"
+                             Margin="0,0,0,4"
+                             Foreground="{StaticResource AbletonAccent}"
+                             Background="{StaticResource AbletonSurface}">
+                    <ProgressBar.Style>
+                        <Style TargetType="ProgressBar">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsGenerating}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ProgressBar.Style>
+                </ProgressBar>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Vertical separator -->
+        <Rectangle Grid.Column="1" Fill="{StaticResource AbletonBorder}"/>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- RIGHT PANEL: Cut-Liste Results              -->
+        <!-- ═══════════════════════════════════════════ -->
+        <Grid Grid.Column="2" Background="{StaticResource AbletonBg}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header bar -->
+            <Border Grid.Row="0" Background="{StaticResource AbletonPanel}"
+                    BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,0,0,1"
+                    Padding="14,10">
+                <DockPanel>
+                    <TextBlock Text="CUT-LISTE" Style="{StaticResource SectionHeader}"
+                               DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,14,0">
+                            <Run Text="Cuts: "/>
+                            <Run Text="{Binding CutCount, Mode=OneWay}" Foreground="{StaticResource AbletonText}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                            <Run Text="Dauer: "/>
+                            <Run Text="{Binding TotalDuration, Mode=OneWay}" Foreground="{StaticResource AbletonText}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Cut-List ListView -->
+            <ListView Grid.Row="1"
+                      ItemsSource="{Binding CutList}"
+                      Background="{StaticResource AbletonBg}"
+                      Foreground="{StaticResource AbletonText}"
+                      BorderThickness="0"
+                      FontSize="12"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListView.View>
+                    <GridView>
+                        <GridView.ColumnHeaderContainerStyle>
+                            <Style TargetType="GridViewColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Padding" Value="8,5"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                            </Style>
+                        </GridView.ColumnHeaderContainerStyle>
+
+                        <GridViewColumn Header="CLIP" Width="160"
+                                        DisplayMemberBinding="{Binding ClipId}"/>
+                        <GridViewColumn Header="ZEITRAUM" Width="180"
+                                        DisplayMemberBinding="{Binding TimeRangeText}"/>
+                        <GridViewColumn Header="DAUER" Width="80"
+                                        DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
+                        <GridViewColumn Header="TRIGGER" Width="120"
+                                        DisplayMemberBinding="{Binding TriggerType}"/>
+                    </GridView>
+                </ListView.View>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="4,3"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListView.ItemContainerStyle>
+            </ListView>
+
+            <!-- Status bar -->
+            <Border Grid.Row="2" Background="{StaticResource AbletonPanel}"
+                    BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0"
+                    Padding="14,6">
+                <TextBlock Text="{Binding StatusText}"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11"/>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

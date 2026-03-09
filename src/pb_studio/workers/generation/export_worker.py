@@ -8,10 +8,10 @@ This is the main entry point for video generation.
 """
 
 import logging
-import os
 import shutil
 import tempfile
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 from PyQt6.QtCore import QThreadPool
@@ -285,7 +285,7 @@ class ExportWorker(BaseWorker):
 
     def _cleanup_temp_dir(self) -> None:
         """Clean up temporary directory and files."""
-        if self._temp_dir and os.path.exists(self._temp_dir):
+        if self._temp_dir and Path(self._temp_dir).exists():
             try:
                 shutil.rmtree(self._temp_dir)
                 logger.debug(f"Cleaned up temp dir: {self._temp_dir}")

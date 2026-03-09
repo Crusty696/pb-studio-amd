@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import List, Optional, Dict
-from src.pb_studio.data.database_core import DatabaseCore
+from pb_studio.data.database_core import DatabaseCore
 
 logger = logging.getLogger(__name__)
 

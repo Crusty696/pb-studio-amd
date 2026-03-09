@@ -4,11 +4,25 @@ PB Studio AMD - Main UI Launcher
 Starts the PyQt6 GUI application with all workers registered.
 """
 
+import os
 import sys
 import logging
+from pathlib import Path
+
+# src/ zum Python-Pfad hinzufuegen (konsistent mit PYTHONPATH=src)
+_SRC_DIR = str(Path(__file__).parent / "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
 from PyQt6.QtWidgets import QApplication
-from src.pb_studio.ui.main_window import MainWindow
-from src.pb_studio.utils.logging_setup import setup_logging
+from pb_studio.ui.main_window import MainWindow
+from pb_studio.utils.logging_setup import setup_logging
+
+# FFmpeg zum PATH hinzufuegen (liegt unter tools/ffmpeg/bin/)
+_PROJECT_ROOT = Path(__file__).parent
+_FFMPEG_BIN = _PROJECT_ROOT / "tools" / "ffmpeg" / "bin"
+if _FFMPEG_BIN.exists() and str(_FFMPEG_BIN) not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = str(_FFMPEG_BIN) + os.pathsep + os.environ.get("PATH", "")
 
 
 def main():
@@ -28,7 +42,7 @@ def main():
 
     # Initialize Worker Registry
     try:
-        from src.pb_studio.workers import setup_worker_registry
+        from pb_studio.workers import setup_worker_registry
         registry = setup_worker_registry()
         logger.info(f"Worker registry initialized: {len(registry.list_workers())} workers registered")
     except Exception as e:
@@ -42,7 +56,7 @@ def main():
         from qt_material import apply_stylesheet
         # Options: dark_teal.xml, dark_cyan.xml, dark_red.xml, dark_pink.xml, dark_purple.xml
         # We start with 'dark_teal.xml' for that "Hacker/Pro" vibe
-        apply_stylesheet(app, theme='dark_teal.xml', css_file='src/pb_studio/ui/custom_overrides.css') 
+        apply_stylesheet(app, theme='dark_teal.xml', css_file=str(_PROJECT_ROOT / 'src' / 'pb_studio' / 'ui' / 'custom_overrides.css'))
         logger.info("Applied qt-material theme: dark_teal.xml")
     except Exception as e:
         logger.warning(f"Failed to apply qt-material theme: {e}. Falling back to Fusion.")

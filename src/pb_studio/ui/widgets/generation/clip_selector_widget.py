@@ -252,7 +252,7 @@ class ClipSelectorWidget(QFrame):
             thumb_path = Path(tempfile.gettempdir()) / f"pb_thumb_{hash(path)}.jpg"
 
             # Extract frame at 1 second
-            from src.pb_studio.config_manager import ConfigManager
+            from pb_studio.config_manager import ConfigManager
             ffmpeg_path = ConfigManager().ffmpeg_path
             cmd = [
                 ffmpeg_path, "-y",

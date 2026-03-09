@@ -19,8 +19,8 @@ The **Pacing Engine** provides intelligent, rhythm-synchronized video editing fo
 ### Basic Timeline Generation
 
 ```python
-from src.pb_studio.pacing import AdvancedPacingEngine, PacingConfig
-from src.pb_studio.audio.analyzer import AudioAnalyzer
+from pb_studio.pacing import AdvancedPacingEngine, PacingConfig
+from pb_studio.audio.analyzer import AudioAnalyzer
 import librosa
 
 # 1. Analyze audio
@@ -47,9 +47,9 @@ for cut in cuts:
 ### Intelligent Clip Selection
 
 ```python
-from src.pb_studio.pacing import ClipSelector
-from src.pb_studio.pacing.clip_selector import ClipMetadata
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.pacing import ClipSelector
+from pb_studio.pacing.clip_selector import ClipMetadata
+from pb_studio.data.vector_store import VectorStore
 
 # Initialize with vector store
 selector = ClipSelector(VectorStore())
@@ -98,7 +98,7 @@ matches = selector.select_by_similarity(query, k=5)
 Replace the `_plan_cuts` method in `video/engine.py`:
 
 ```python
-from src.pb_studio.pacing import AdvancedPacingEngine, PacingConfig
+from pb_studio.pacing import AdvancedPacingEngine, PacingConfig
 
 def _plan_cuts(self, config, analysis, rms, times, duration):
     # Create pacing config
