@@ -456,13 +456,23 @@ class MoondreamAnalyzer:
 
                 # Get logits for next token (last position)
                 logits = outputs[0]  # Shape: [batch, seq_len, vocab]
-                next_token_logits = logits[0, -1, :]  # Last token logits
+                next_token_logits = np.asarray(logits[0, -1, :], dtype=np.float32)
+                next_token_logits = np.nan_to_num(
+                    next_token_logits,
+                    nan=-1e9,
+                    posinf=1e9,
+                    neginf=-1e9,
+                )
 
                 # Sample next token
                 if temperature > 0:
                     # Temperature sampling
                     probs = self._softmax(next_token_logits / temperature)
-                    next_token = np.random.choice(len(probs), p=probs)
+                    if np.any(~np.isfinite(probs)) or np.any(probs < 0) or probs.sum() <= 0:
+                        logger.warning("Invalid Moondream probabilities detected; falling back to greedy decoding")
+                        next_token = int(np.argmax(next_token_logits))
+                    else:
+                        next_token = int(np.random.choice(len(probs), p=probs))
                 else:
                     # Greedy decoding
                     next_token = int(np.argmax(next_token_logits))
@@ -521,9 +531,18 @@ class MoondreamAnalyzer:
 
     @staticmethod
     def _softmax(x: np.ndarray) -> np.ndarray:
-        """Compute softmax values."""
-        e_x = np.exp(x - np.max(x))
-        return e_x / e_x.sum()
+        """Compute numerically stable softmax values."""
+        x = np.asarray(x, dtype=np.float32)
+        x = np.nan_to_num(x, nan=-1e9, posinf=1e9, neginf=-1e9)
+        x = x - np.max(x)
+        x = np.clip(x, -80.0, 80.0)
+        e_x = np.exp(x)
+        denom = float(np.sum(e_x))
+        if not np.isfinite(denom) or denom <= 0:
+            probs = np.zeros_like(x, dtype=np.float32)
+            probs[int(np.argmax(x))] = 1.0
+            return probs
+        return (e_x / denom).astype(np.float32)
 
     def generate_caption(
         self,
