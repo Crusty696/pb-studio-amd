@@ -51,9 +51,33 @@ class MoondreamPyTorch:
 
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
+            from transformers.modeling_utils import PreTrainedModel
+            import inspect
+            import torch.nn.functional as F
 
             logger.info(f"Loading Moondream model: {self.model_id}")
             logger.info("This may take a moment (model is ~2GB)...")
+
+            # transformers>=5 expects this attribute during finalize/tied-weight init,
+            # but current moondream remote-code builds may not define it.
+            if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
+                PreTrainedModel.all_tied_weights_keys = {}
+
+            # Some moondream remote-code revisions call scaled_dot_product_attention(..., enable_gqa=...)
+            # but our local torch build may not expose that kwarg yet. Patch it compatibly.
+            try:
+                sdpa_params = inspect.signature(F.scaled_dot_product_attention).parameters
+            except (TypeError, ValueError):
+                sdpa_params = {}
+
+            if "enable_gqa" not in sdpa_params:
+                original_sdpa = F.scaled_dot_product_attention
+
+                def _compat_sdpa(*args, **kwargs):
+                    kwargs.pop("enable_gqa", None)
+                    return original_sdpa(*args, **kwargs)
+
+                F.scaled_dot_product_attention = _compat_sdpa
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 self.model_id,
@@ -63,7 +87,7 @@ class MoondreamPyTorch:
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_id,
                 trust_remote_code=True,
-                torch_dtype=torch.float32
+                dtype=torch.float32
             )
             self.model.to(self.device)
             self.model.eval()
