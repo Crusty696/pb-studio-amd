@@ -95,7 +95,7 @@ class CLAPAnalyzer:
             lazy_load: If True, defer model loading until first use.
         """
         # Import here to avoid circular imports
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self._models_dir = models_dir or self.config.get("paths", {}).get("models_dir", "./models")
@@ -418,7 +418,7 @@ class CLAPAnalyzer:
 
                 logger.warning(
                     "ONNX text encoding not available - CLAP ONNX export does not support text encoder. "
-                    "Use CLAPPyTorch from src.pb_studio.ai.clap_pytorch instead for full functionality."
+                    "Use CLAPPyTorch from pb_studio.ai.clap_pytorch instead for full functionality."
                 )
                 return None
 

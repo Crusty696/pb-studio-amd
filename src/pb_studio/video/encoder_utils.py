@@ -11,10 +11,12 @@ Supported encoders:
 """
 
 import logging
+import os
 import subprocess
 import shutil
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -56,9 +58,41 @@ _amf_available: Optional[bool] = None
 _av1_amf_available: Optional[bool] = None
 
 
+def _get_ffmpeg_path() -> str:
+    """Absoluten FFmpeg-Pfad ermitteln (ConfigManager > PATH > shutil.which)."""
+    try:
+        from ..config_manager import ConfigManager
+        cfg = ConfigManager()
+        path = cfg.ffmpeg_path
+        if path and Path(path).is_file():
+            return path
+    except Exception as e:
+        logger.debug("ConfigManager FFmpeg lookup failed: %s", e)
+    # Fallback: shutil.which
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    # Letzter Fallback: Relativer Pfad vom Projekt-Root
+    # __file__ = src/pb_studio/video/encoder_utils.py → 4x parent = project root
+    project_root = Path(__file__).parent.parent.parent.parent
+    local_ff = project_root / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
+    if local_ff.is_file():
+        return str(local_ff)
+    return "ffmpeg"  # Hoffen dass es im PATH ist
+
+
+def _get_ffprobe_path() -> str:
+    """Absoluten FFprobe-Pfad ermitteln (neben ffmpeg.exe)."""
+    ff = _get_ffmpeg_path()
+    # Nur den Dateinamen ersetzen, nicht Ordnernamen
+    p = Path(ff)
+    return str(p.parent / p.name.replace("ffmpeg", "ffprobe"))
+
+
 def check_ffmpeg_available() -> bool:
     """Check if FFmpeg is installed and accessible."""
-    return shutil.which("ffmpeg") is not None
+    path = _get_ffmpeg_path()
+    return Path(path).is_file() if path != "ffmpeg" else shutil.which("ffmpeg") is not None
 
 
 def check_amf_available() -> bool:
@@ -83,9 +117,10 @@ def check_amf_available() -> bool:
         return False
 
     try:
+        ffmpeg = _get_ffmpeg_path()
         # Schritt 1: Pruefen ob Encoder gelistet ist
         result = subprocess.run(
-            ["ffmpeg", "-encoders"],
+            [ffmpeg, "-encoders"],
             capture_output=True,
             text=True,
             timeout=10
@@ -96,16 +131,16 @@ def check_amf_available() -> bool:
             return False
 
         # Schritt 2: Tatsaechliches Encoding testen (faengt Error 30 ab)
-        import tempfile, os
-        test_out = os.path.join(tempfile.gettempdir(), "pb_amf_test.mp4")
+        import tempfile
+        test_out = str(Path(tempfile.gettempdir()) / "pb_amf_test.mp4")
         try:
             probe = subprocess.run(
-                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
                  "-f", "lavfi", "-i", "color=black:s=320x240:d=0.5",
                  "-c:v", "h264_amf", "-quality", "speed", test_out],
                 capture_output=True, text=True, timeout=15
             )
-            if probe.returncode == 0 and os.path.exists(test_out):
+            if probe.returncode == 0 and Path(test_out).exists():
                 _amf_available = True
                 logger.info("AMD AMF encoder verfuegbar und funktional")
             else:
@@ -114,7 +149,7 @@ def check_amf_available() -> bool:
                     f"AMF Encoder gelistet aber nicht funktional: {probe.stderr[:200]}"
                 )
         finally:
-            if os.path.exists(test_out):
+            if Path(test_out).exists():
                 os.remove(test_out)
 
         return _amf_available
@@ -142,8 +177,9 @@ def check_av1_amf_available() -> bool:
         return False
 
     try:
+        ffmpeg = _get_ffmpeg_path()
         result = subprocess.run(
-            ["ffmpeg", "-encoders"],
+            [ffmpeg, "-encoders"],
             capture_output=True,
             text=True,
             timeout=10

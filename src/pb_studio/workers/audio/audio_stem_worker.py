@@ -6,7 +6,6 @@ VRAM Budget: 2000 MB (GPU-accelerated ONNX models)
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -63,7 +62,7 @@ class AudioStemWorker(BaseWorker):
         self._check_cancelled()
 
         # Validate input file
-        if not os.path.exists(self.file_path):
+        if not Path(self.file_path).exists():
             raise FileNotFoundError(f"Input file not found: {self.file_path}")
 
         # Initialize separator
@@ -77,7 +76,7 @@ class AudioStemWorker(BaseWorker):
 
         # Set custom output directory if specified
         if self.output_dir:
-            os.makedirs(self.output_dir, exist_ok=True)
+            Path(self.output_dir).mkdir(parents=True, exist_ok=True)
             self._separator.separator.output_dir = self.output_dir
 
         self.emit_progress(20, "Running stem separation...")
@@ -103,14 +102,15 @@ class AudioStemWorker(BaseWorker):
 
             return stem_result
 
-        except Exception:
-            # ONNX-Session freigeben bei Fehler
+        finally:
+            # VRAM IMMER freigeben - auch nach Erfolg (KRITISCH fuer lange Sessions)
             if self._separator is not None and hasattr(self._separator, 'unload'):
                 try:
                     self._separator.unload()
+                    logger.debug("Separator VRAM freigegeben")
                 except Exception as e:
                     logger.warning(f"Separator unload error: {e}")
-            raise
+                self._separator = None
 
     def _parse_stem_outputs(self, stem_paths: list) -> StemResult:
         """

@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool
 from PyQt6.QtGui import QIcon
 
-from src.pb_studio.core.worker_signals import WorkerSignals
+from pb_studio.core.worker_signals import WorkerSignals
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class AudioStemWorker(QRunnable):
             self.signals.status.emit("Initializing separator...")
 
             # Import here to avoid loading heavy dependencies at module load
-            from src.pb_studio.audio.separator import StemSeparator
+            from pb_studio.audio.separator import StemSeparator
 
             self.signals.status.emit("Loading model...")
             separator = StemSeparator()

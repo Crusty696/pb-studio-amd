@@ -1,0 +1,10 @@
+{
+  "testCommand": ".venv/Scripts/python.exe -m pytest test_e2e_full.py -v --tb=short",
+  "lintCommand": ".venv/Scripts/python.exe -m py_compile src/pb_studio/config_manager.py && .venv/Scripts/python.exe -m py_compile src/pb_studio/core/system_monitor.py && .venv/Scripts/python.exe -m py_compile src/pb_studio/ui/main_window.py",
+  "requireCoverage": false,
+  "minCoverage": 0,
+  "autoFix": true,
+  "maxAttempts": 50,
+  "stopOnMorning": true,
+  "morningHour": 7
+}

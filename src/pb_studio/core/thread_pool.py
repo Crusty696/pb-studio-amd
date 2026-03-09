@@ -2,7 +2,7 @@ import traceback
 import sys
 import logging
 from PyQt6.QtCore import QRunnable, QThreadPool, pyqtSlot, QObject
-from src.pb_studio.core.worker_signals import WorkerSignals
+from pb_studio.core.worker_signals import WorkerSignals
 
 logger = logging.getLogger(__name__)
 

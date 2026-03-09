@@ -3,7 +3,7 @@ import logging
 import threading
 from pathlib import Path
 from contextlib import contextmanager
-from src.pb_studio.config_manager import ConfigManager
+from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,15 @@ class DatabaseCore:
             with cls._lock:
                 # Double-check locking
                 if cls._instance is None:
-                    cls._instance = super(DatabaseCore, cls).__new__(cls)
-                    cls._instance._initialized = False
-                    cls._instance._init_db()  # Initialize immediately
+                    instance = super(DatabaseCore, cls).__new__(cls)
+                    instance._initialized = False
+                    try:
+                        instance._init_db()
+                    except Exception:
+                        # Init fehlgeschlagen - Instanz NICHT speichern
+                        # damit naechster Aufruf es erneut versucht
+                        raise
+                    cls._instance = instance  # Erst NACH erfolgreichem Init setzen
         return cls._instance
 
     def _init_db(self):
@@ -185,5 +191,7 @@ class DatabaseCore:
                 except Exception:
                     pass
             self._all_connections.clear()
-        self._initialized = False
-        logger.info("Database shutdown complete - all connections closed")
+        with DatabaseCore._lock:
+            self._initialized = False
+            DatabaseCore._instance = None
+            logger.info("DatabaseCore._instance zurückgesetzt — Neuinitialisierung möglich")

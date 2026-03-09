@@ -1,13 +1,14 @@
 import sys
 import os
+from pathlib import Path
 
 # Projektroot zu sys.path hinzufuegen (audio -> pb_studio -> src -> root)
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_project_root = str(Path(__file__).resolve().parents[3])
 sys.path.insert(0, _project_root)
 
 import logging
 import argparse
-from src.pb_studio.audio.separator import StemSeparator
+from pb_studio.audio.separator import StemSeparator
 
 # Setup basic logging to stderr so stdout is clean for progress
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)

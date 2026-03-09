@@ -5,7 +5,6 @@ Renders individual video segments using FFmpeg with AMD AMF hardware acceleratio
 """
 
 import logging
-import os
 import random
 import subprocess
 import time
@@ -18,6 +17,8 @@ from ...video.encoder_utils import (
     get_encoder_config,
     build_ffmpeg_encode_args,
     check_amf_available,
+    _get_ffmpeg_path,
+    _get_ffprobe_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class RenderWorker(BaseWorker):
         self.emit_progress(0, "Preparing render environment")
 
         # Ensure temp directory exists
-        os.makedirs(self.temp_dir, exist_ok=True)
+        Path(self.temp_dir).mkdir(parents=True, exist_ok=True)
 
         # Get encoder configuration
         encoder_config = get_encoder_config(
@@ -137,10 +138,7 @@ class RenderWorker(BaseWorker):
             source_video = self.source_videos[source_idx]
 
             # Generate output path
-            output_path = os.path.join(
-                self.temp_dir,
-                f"segment_{i:04d}.mp4"
-            )
+            output_path = str(Path(self.temp_dir) / f"segment_{i:04d}.mp4")
 
             # Render segment
             segment = self._render_segment(
@@ -278,7 +276,7 @@ class RenderWorker(BaseWorker):
         Returns:
             List of command arguments
         """
-        cmd = ["ffmpeg", "-y"]  # Overwrite output
+        cmd = [_get_ffmpeg_path(), "-y"]  # Overwrite output
 
         # Input seeking (fast seek before input)
         cmd.extend(["-ss", f"{start_time:.3f}"])
@@ -320,7 +318,7 @@ class RenderWorker(BaseWorker):
             return self._duration_cache[video_path]
         try:
             result = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+                [_get_ffprobe_path(), "-v", "quiet", "-show_entries", "format=duration",
                  "-of", "csv=p=0", video_path],
                 capture_output=True, text=True, timeout=10
             )

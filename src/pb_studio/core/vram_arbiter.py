@@ -10,8 +10,8 @@ This class is kept for compatibility with existing code.
 
 import logging
 from typing import Optional
-from src.pb_studio.core.system_monitor import SystemMonitor
-from src.pb_studio.config_manager import ConfigManager
+from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class VRAMArbiter:
     def budget_manager(self):
         """Lazy-load the budget manager to avoid circular imports."""
         if self._budget_manager is None:
-            from src.pb_studio.core.vram_budget_manager import get_vram_manager
+            from pb_studio.core.vram_budget_manager import get_vram_manager
             self._budget_manager = get_vram_manager(monitor=self.monitor)
         return self._budget_manager
 

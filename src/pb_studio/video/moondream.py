@@ -53,7 +53,7 @@ class MoondreamAnalyzer:
             lazy_load: If True, defer model loading until first use.
         """
         # Import here to avoid circular imports
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self._models_dir = models_dir or self.config.get("paths", {}).get("models_dir", "./models")
@@ -186,7 +186,7 @@ class MoondreamAnalyzer:
         if not has_onnx_models:
             logger.warning("Moondream ONNX models not found - using PyTorch fallback")
             try:
-                from src.pb_studio.ai.moondream_pytorch import MoondreamPyTorch
+                from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
                 self._pytorch_fallback = MoondreamPyTorch()
                 if self._pytorch_fallback.load():
                     self._initialized = True
@@ -246,7 +246,7 @@ class MoondreamAnalyzer:
 
                 # PyTorch Decoder laden fuer Text-Generierung
                 try:
-                    from src.pb_studio.ai.moondream_pytorch import MoondreamPyTorch
+                    from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
                     self._pytorch_fallback = MoondreamPyTorch()
                     if not self._pytorch_fallback.load():
                         logger.warning("PyTorch decoder failed to load - disabling hybrid mode")
@@ -293,6 +293,7 @@ class MoondreamAnalyzer:
             self.encoder_session = None
             self.decoder_session = None
             self.combined_session = None
+            self._initialized = False  # Flag zuruecksetzen bei Fehler
             return False
 
     def _log_model_info(self):

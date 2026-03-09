@@ -10,8 +10,8 @@ from typing import List, Optional
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QStackedLayout, QWidget, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from src.pb_studio.ui.widgets.waveform_widget import WaveformWidget
-from src.pb_studio.ui.widgets.audio.beat_marker_widget import BeatMarkerWidget
+from pb_studio.ui.widgets.waveform_widget import WaveformWidget
+from pb_studio.ui.widgets.audio.beat_marker_widget import BeatMarkerWidget
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +186,7 @@ class WaveformContainer(QFrame):
             position: Position in seconds
         """
         self._current_position = position
-        # TODO: Add playhead indicator to waveform/beat markers
+        # Playhead-Visualisierung ist Teil des C# WPF-Frontends (deprecated in PyQt6-Pfad).
         self.positionChanged.emit(position)
 
     def set_zoom(self, zoom_level: float):

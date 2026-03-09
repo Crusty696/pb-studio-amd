@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QFrame, QSplitter, QPushButton, QProgressBar)
 from PyQt6.QtCore import Qt, QProcess
 
-from src.pb_studio.ui.widgets.player_widget import PlayerWidget
-from src.pb_studio.ui.widgets.waveform_widget import WaveformWidget
+from pb_studio.ui.widgets.player_widget import PlayerWidget
+from pb_studio.ui.widgets.waveform_widget import WaveformWidget
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,6 @@ class EditorWidget(QWidget):
         self.stem_process = None
         self._cached_metadata = None
         self._init_ui()
-
-    # ... _init_ui method remains same ...
 
     def _on_stem_click(self):
         """Starts stem separation process via QProcess."""

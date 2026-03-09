@@ -8,7 +8,7 @@ class AudioAnalyzer:
     def __init__(self):
         # ffmpeg-Pfad aus Config (statt hartcodiert "ffmpeg")
         try:
-            from src.pb_studio.config_manager import ConfigManager
+            from pb_studio.config_manager import ConfigManager
             self.ffmpeg_path = ConfigManager().ffmpeg_path
         except Exception:
             self.ffmpeg_path = "ffmpeg"  # Fallback: System-PATH
@@ -45,7 +45,7 @@ class AudioAnalyzer:
             # Use system temp dir to avoid permission/path issues
             temp_dir = tempfile.gettempdir()
             unique_name = f"pb_studio_analyze_{uuid.uuid4().hex}.wav"
-            temp_wav = os.path.join(temp_dir, unique_name)
+            temp_wav = str(Path(temp_dir) / unique_name)
             
             analyze_path = file_path # Default fallback
             conversion_success = False
@@ -64,8 +64,8 @@ class AudioAnalyzer:
                 # Run conversion
                 result = subprocess.run(command, capture_output=True, text=True, timeout=120)
                 
-                if result.returncode == 0 and os.path.exists(temp_wav) and os.path.getsize(temp_wav) > 0:
-                     logger.debug(f"Audio extraction success. Size: {os.path.getsize(temp_wav)} bytes")
+                if result.returncode == 0 and Path(temp_wav).exists() and Path(temp_wav).stat().st_size > 0:
+                     logger.debug(f"Audio extraction success. Size: {Path(temp_wav).stat().st_size} bytes")
                      analyze_path = temp_wav
                      conversion_success = True
                 else:
@@ -114,7 +114,7 @@ class AudioAnalyzer:
                 logger.warning(f"RMS energy extraction failed: {e}")
 
             # Temp-Datei immer aufraeumen
-            if os.path.exists(temp_wav):
+            if Path(temp_wav).exists():
                 try:
                     os.remove(temp_wav)
                 except Exception as e:
@@ -157,7 +157,7 @@ class AudioAnalyzer:
             logger.error(traceback.format_exc())
             
             # Cleanup temp if error (best effort)
-            if 'temp_wav' in locals() and temp_wav and os.path.exists(temp_wav):
+            if 'temp_wav' in locals() and temp_wav and Path(temp_wav).exists():
                 try:
                     os.remove(temp_wav)
                 except Exception as cleanup_err:

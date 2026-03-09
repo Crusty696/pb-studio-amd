@@ -12,19 +12,20 @@ DirectML Considerations:
 """
 
 import logging
+import threading
 import onnxruntime as ort
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable, Type
 from dataclasses import dataclass
 from enum import Enum
 
-from src.pb_studio.core.vram_budget_manager import (
+from pb_studio.core.vram_budget_manager import (
     VRAMBudgetManager,
     ModelPriority,
     KNOWN_MODEL_BUDGETS,
     get_vram_manager
 )
-from src.pb_studio.config_manager import ConfigManager
+from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ class ModelLoader:
 
         # Model storage
         self._sessions: Dict[str, Any] = {}
+        self._session_lock = threading.Lock()
         self._specs: Dict[str, ModelSpec] = MODEL_SPECS.copy()
 
         # Paths
@@ -194,7 +196,7 @@ class ModelLoader:
         priority: Optional[ModelPriority] = None
     ) -> Optional[Any]:
         """
-        Load a model with VRAM management.
+        Load a model with VRAM management (thread-safe).
 
         Args:
             model_id: Model identifier
@@ -204,57 +206,58 @@ class ModelLoader:
         Returns:
             ONNX InferenceSession or dict of sessions for split models
         """
-        if model_id not in self._specs:
-            logger.error(f"Unknown model: {model_id}")
-            return None
-
-        # Already loaded?
-        if model_id in self._sessions:
-            self.vram_manager.touch_model(model_id)
-            return self._sessions[model_id]
-
-        spec = self._specs[model_id]
-
-        # Register with VRAM manager
-        self.vram_manager.register_model(
-            model_id=spec.model_id,
-            name=spec.name,
-            estimated_vram_mb=spec.vram_mb,
-            priority=priority or spec.priority,
-            unload_callback=lambda mid=model_id: self._do_unload(mid)
-        )
-
-        # Reserve VRAM
-        if not self.vram_manager.reserve(model_id, force=force):
-            logger.error(f"Cannot reserve VRAM for {spec.name}")
-            return None
-
-        try:
-            # Load based on type
-            if spec.model_type == ModelType.ONNX:
-                session = self._load_onnx(spec)
-            elif spec.model_type == ModelType.ONNX_SPLIT:
-                session = self._load_onnx_split(spec)
-            else:
-                logger.error(f"Unsupported model type: {spec.model_type}")
-                self.vram_manager.cancel_reservation(model_id)
+        with self._session_lock:
+            if model_id not in self._specs:
+                logger.error(f"Unknown model: {model_id}")
                 return None
 
-            if session is None:
-                self.vram_manager.cancel_reservation(model_id)
+            # Already loaded? (check-and-load atomar unter Lock)
+            if model_id in self._sessions:
+                self.vram_manager.touch_model(model_id)
+                return self._sessions[model_id]
+
+            spec = self._specs[model_id]
+
+            # Register with VRAM manager
+            self.vram_manager.register_model(
+                model_id=spec.model_id,
+                name=spec.name,
+                estimated_vram_mb=spec.vram_mb,
+                priority=priority or spec.priority,
+                unload_callback=lambda mid=model_id: self._do_unload(mid)
+            )
+
+            # Reserve VRAM
+            if not self.vram_manager.reserve(model_id, force=force):
+                logger.error(f"Cannot reserve VRAM for {spec.name}")
                 return None
 
-            # Commit VRAM
-            self.vram_manager.commit(model_id)
-            self._sessions[model_id] = session
+            try:
+                # Load based on type
+                if spec.model_type == ModelType.ONNX:
+                    session = self._load_onnx(spec)
+                elif spec.model_type == ModelType.ONNX_SPLIT:
+                    session = self._load_onnx_split(spec)
+                else:
+                    logger.error(f"Unsupported model type: {spec.model_type}")
+                    self.vram_manager.cancel_reservation(model_id)
+                    return None
 
-            logger.info(f"Loaded model: {spec.name} (Provider: {self._get_active_provider(session)})")
-            return session
+                if session is None:
+                    self.vram_manager.cancel_reservation(model_id)
+                    return None
 
-        except Exception as e:
-            logger.error(f"Failed to load {spec.name}: {e}")
-            self.vram_manager.cancel_reservation(model_id)
-            return None
+                # Commit VRAM
+                self.vram_manager.commit(model_id)
+                self._sessions[model_id] = session
+
+                logger.info(f"Loaded model: {spec.name} (Provider: {self._get_active_provider(session)})")
+                return session
+
+            except Exception as e:
+                logger.error(f"Failed to load {spec.name}: {e}")
+                self.vram_manager.cancel_reservation(model_id)
+                return None
 
     def _load_onnx(self, spec: ModelSpec) -> Optional[ort.InferenceSession]:
         """Load a standard ONNX model."""
@@ -326,28 +329,29 @@ class ModelLoader:
         return self._do_unload(model_id)
 
     def _do_unload(self, model_id: str) -> bool:
-        """Internal unload implementation."""
-        if model_id not in self._sessions:
-            return False
+        """Internal unload implementation (thread-safe)."""
+        with self._session_lock:
+            if model_id not in self._sessions:
+                return False
 
-        # Delete session(s)
-        session = self._sessions.pop(model_id)
+            # Delete session(s)
+            session = self._sessions.pop(model_id)
 
-        if isinstance(session, dict):
-            for key in list(session.keys()):
-                session[key] = None
-        else:
-            session = None
+            if isinstance(session, dict):
+                for key in list(session.keys()):
+                    session[key] = None
+            else:
+                session = None
 
-        # Release VRAM
-        self.vram_manager.release(model_id)
+            # Release VRAM
+            self.vram_manager.release(model_id)
 
-        logger.info(f"Unloaded model: {model_id}")
-        return True
+            logger.info(f"Unloaded model: {model_id}")
+            return True
 
     def get_session(self, model_id: str) -> Optional[Any]:
         """
-        Get a loaded model session.
+        Get a loaded model session (thread-safe).
 
         Loads the model if not already loaded.
 
@@ -357,28 +361,39 @@ class ModelLoader:
         Returns:
             Session or None
         """
-        if model_id in self._sessions:
-            self.vram_manager.touch_model(model_id)
-            return self._sessions[model_id]
+        with self._session_lock:
+            if model_id in self._sessions:
+                self.vram_manager.touch_model(model_id)
+                return self._sessions[model_id]
 
+        # load_model acquires the lock itself
         return self.load_model(model_id)
 
     def is_loaded(self, model_id: str) -> bool:
         """Check if a model is currently loaded."""
-        return model_id in self._sessions
+        with self._session_lock:
+            return model_id in self._sessions
 
     def get_stats(self) -> Dict[str, Any]:
         """Get loader statistics."""
-        return {
-            "loaded_models": list(self._sessions.keys()),
-            "registered_models": list(self._specs.keys()),
-            "vram_stats": self.vram_manager.get_stats()
-        }
+        with self._session_lock:
+            return {
+                "loaded_models": list(self._sessions.keys()),
+                "registered_models": list(self._specs.keys()),
+                "vram_stats": self.vram_manager.get_stats()
+            }
 
     def unload_all(self):
         """Unload all models."""
-        for model_id in list(self._sessions.keys()):
-            self._do_unload(model_id)
+        with self._session_lock:
+            for model_id in list(self._sessions.keys()):
+                # _do_unload acquires lock, but we already hold it — need to call inner logic
+                if model_id in self._sessions:
+                    session = self._sessions.pop(model_id)
+                    if isinstance(session, dict):
+                        for key in list(session.keys()):
+                            session[key] = None
+                    self.vram_manager.release(model_id)
 
         logger.info("All models unloaded")
 

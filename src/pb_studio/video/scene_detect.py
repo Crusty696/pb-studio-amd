@@ -15,23 +15,37 @@ class SceneDetector:
         logger.info(f"Detecting scenes for: {video_path} (Threshold: {self.threshold})")
         scene_list = []
         
+        video = None
         try:
             video = open_video(video_path)
             scene_manager = SceneManager()
             scene_manager.add_detector(ContentDetector(threshold=self.threshold))
-            
+
             # Detect
             scene_manager.detect_scenes(video, show_progress=False)
             scenes = scene_manager.get_scene_list()
-            
+
             # Convert FrameTimecodes to seconds
             for scene in scenes:
                 start, end = scene
                 scene_list.append((start.get_seconds(), end.get_seconds()))
-                
+
             logger.info(f"Found {len(scene_list)} scenes.")
             return scene_list
-            
+
+        except FileNotFoundError:
+            logger.error(f"Video file not found: {video_path}")
+            return []
         except Exception as e:
             logger.error(f"Scene detection failed: {e}")
             return []
+        finally:
+            # Video-Handle schliessen um File-Locks zu vermeiden
+            if video is not None:
+                try:
+                    if hasattr(video, 'release'):
+                        video.release()
+                    elif hasattr(video, 'close'):
+                        video.close()
+                except Exception as release_err:
+                    logger.warning("Failed to release video handle for %s: %s", video_path, release_err)

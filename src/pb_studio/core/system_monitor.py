@@ -1,10 +1,16 @@
-import clr # pythonnet
 import sys
 import logging
 from pathlib import Path
-from src.pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
+
+# pythonnet ist optional - nur auf Windows mit LibreHardwareMonitor
+try:
+    import clr
+    _HAS_CLR = True
+except ImportError:
+    _HAS_CLR = False
+    logger.warning("pythonnet (clr) nicht verfuegbar - Hardware-Monitoring deaktiviert")
 
 class SystemMonitor:
     _instance = None
@@ -19,14 +25,18 @@ class SystemMonitor:
         if self._initialized:
             return
         self._initialized = True
+        from pb_studio.config_manager import ConfigManager
         self.config = ConfigManager()
         self.computer = None
         self.gpu_sensor = None
-        self._initialize_lhm()
+        if _HAS_CLR:
+            self._initialize_lhm()
+        else:
+            logger.info("Hardware-Monitoring uebersprungen (pythonnet nicht verfuegbar)")
 
     def _initialize_lhm(self):
-        lib_path = self.config.lhm_path
-        if not Path(lib_path).exists():
+        lib_path = getattr(self.config, 'lhm_path', None)
+        if not lib_path or not Path(lib_path).exists():
             logger.error(f"LibreHardwareMonitorLib.dll not found at: {lib_path}")
             return
 
@@ -101,6 +111,7 @@ class SystemMonitor:
     def get_stats(self) -> dict:
         """Reads current hardware stats."""
         stats = {
+            "gpu_name": self.gpu_sensor.Name if self.gpu_sensor else "Unknown",
             "gpu_load": 0.0,
             "gpu_temp": 0.0,
             "gpu_memory_used": 0.0,

@@ -1,8 +1,8 @@
 import logging
-from src.pb_studio.audio.analyzer import AudioAnalyzer
-from src.pb_studio.video.scene_detect import SceneDetector
-from src.pb_studio.data.repositories.media_repository import MediaRepository
-from src.pb_studio.core.thread_pool import ThreadPoolManager, Worker
+from pb_studio.audio.analyzer import AudioAnalyzer
+from pb_studio.video.scene_detect import SceneDetector
+from pb_studio.data.repositories.media_repository import MediaRepository
+from pb_studio.core.thread_pool import ThreadPoolManager, Worker
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +18,17 @@ class AnalysisService:
         Starts analysis in background thread.
         Calls on_complete(result_dict) when done.
         """
-        def run_analysis():
+        def run_analysis(progress_callback=None, status_callback=None):
             results = {}
 
             # Zwischenstatus setzen (verhindert Re-Analyse bei Crash)
-            self.media_repo.update_status(media_id, "analyzing")
+            try:
+                self.media_repo.update_status(media_id, "analyzing")
+            except Exception as e:
+                logger.warning(f"Could not update status to analyzing: {e}")
 
             # Determine type by extension
-            ext = file_path.lower().split(".")[-1]
+            ext = file_path.lower().rsplit(".", 1)[-1] if "." in file_path else ""
             is_audio = ext in ["mp3", "wav", "flac", "ogg", "aac"]
             is_video = ext in ["mp4", "mov", "avi", "mkv", "webm"]
 
@@ -55,21 +58,22 @@ class AnalysisService:
             has_errors = "audio_error" in results or "scene_error" in results
             has_results = "bpm" in results or "scenes" in results
 
-            if has_errors and not has_results:
-                # Komplett fehlgeschlagen
-                self.media_repo.update_status(media_id, "error", results)
-            else:
-                # Erfolgreich (oder teilweise erfolgreich)
-                self.media_repo.update_status(media_id, "ready", results)
+            try:
+                if has_errors and not has_results:
+                    self.media_repo.update_status(media_id, "error", results)
+                else:
+                    self.media_repo.update_status(media_id, "ready", results)
+            except Exception as e:
+                logger.error(f"Could not update media status: {e}")
 
             return results
 
         worker = Worker(run_analysis)
-        
+
         if on_complete:
             worker.signals.result.connect(on_complete)
         if on_error:
             worker.signals.error.connect(on_error)
-            
+
         self.pool.start(worker)
         logger.info(f"Analysis queued for media_id={media_id}")

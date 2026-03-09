@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal
 
 # Import encoder utilities
-from src.pb_studio.video.encoder_utils import get_encoder_info, check_amf_available
+from pb_studio.video.encoder_utils import get_encoder_info, check_amf_available
 
 logger = logging.getLogger(__name__)
 
@@ -398,7 +398,7 @@ class EncoderSettingsWidget(QFrame):
 
     def refresh_encoder_status(self):
         """Re-check encoder availability and update UI."""
-        from src.pb_studio.video.encoder_utils import reset_availability_cache
+        from pb_studio.video.encoder_utils import reset_availability_cache
 
         # Reset cache and re-check
         reset_availability_cache()

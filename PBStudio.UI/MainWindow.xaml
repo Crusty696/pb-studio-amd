@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window x:Class="PBStudio.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+        xmlns:views="clr-namespace:PBStudio.UI.Views"
+        mc:Ignorable="d"
+        Title="PB Studio AMD"
+        Width="1400" Height="900"
+        MinWidth="1200" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource AbletonBg}"
+        Style="{StaticResource MaterialDesignWindow}"
+        d:DataContext="{d:DesignInstance vm:MainViewModel}">
+
+    <md:DialogHost Identifier="RootDialog">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- HEADER BAR - Ultra-compact, Ableton style             -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <Border Grid.Row="0" Height="36"
+                    Background="{StaticResource AbletonPanel}"
+                    BorderBrush="{StaticResource AbletonBorder}"
+                    BorderThickness="0,0,0,1">
+                <DockPanel Margin="12,0">
+                    <!-- App Title - left aligned -->
+                    <TextBlock Text="PB STUDIO"
+                               DockPanel.Dock="Left"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               />
+
+                    <!-- Status indicators - right aligned -->
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <!-- GPU Status -->
+                        <StackPanel Orientation="Horizontal"
+                                    ToolTip="GPU-Auslastung und VRAM"
+                                    Margin="0,0,16,0">
+                            <icon:PackIconMaterial Kind="Memory"
+                                                   Width="12" Height="12"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{StaticResource AbletonTextDim}"
+                                                   Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding GpuStatusText}"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource AbletonTextDim}"/>
+                        </StackPanel>
+
+                        <!-- Backend Status -->
+                        <StackPanel Orientation="Horizontal"
+                                    ToolTip="Backend-Verbindungsstatus">
+                            <Ellipse Width="7" Height="7"
+                                     Fill="{Binding BackendStatusColor}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding BackendStatusText}"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource AbletonTextDim}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Spacer -->
+                    <StackPanel/>
+                </DockPanel>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- TAB NAVIGATION + CONTENT - Ableton flat tabs          -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <TabControl Grid.Row="1"
+                        SelectedIndex="{Binding SelectedTabIndex}"
+                        Background="{StaticResource AbletonBg}"
+                        BorderThickness="0">
+                <TabControl.Resources>
+                    <!-- Override TabItem style for flat Ableton look -->
+                    <Style TargetType="TabItem">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="14,8"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <Border x:Name="TabBorder"
+                                            Background="Transparent"
+                                            Padding="{TemplateBinding Padding}"
+                                            BorderThickness="0,0,0,2"
+                                            BorderBrush="Transparent">
+                                        <ContentPresenter x:Name="ContentSite"
+                                                          ContentSource="Header"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="TabBorder"
+                                                    Property="BorderBrush"
+                                                    Value="{StaticResource AbletonAccent}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="TabBorder"
+                                                    Property="Background"
+                                                    Value="#15FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TabControl.Resources>
+
+                <!-- Tab strip background -->
+                <TabControl.Template>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <!-- Tab header strip -->
+                            <Border Grid.Row="0"
+                                    Background="{StaticResource AbletonPanel}"
+                                    BorderBrush="{StaticResource AbletonBorder}"
+                                    BorderThickness="0,0,0,1">
+                                <TabPanel IsItemsHost="True"
+                                          Margin="4,0,0,0"/>
+                            </Border>
+                            <!-- Content area -->
+                            <Border Grid.Row="1"
+                                    Background="{StaticResource AbletonBg}">
+                                <ContentPresenter ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </TabControl.Template>
+
+                <!-- IMPORT -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="IMPORT" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:MediaIngestView/>
+                </TabItem>
+
+                <!-- AUDIO -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="AUDIO" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:AudioLibraryView/>
+                </TabItem>
+
+                <!-- VIDEO -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="VIDEO" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:VideoLibraryView/>
+                </TabItem>
+
+                <!-- ANCHORS -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="ANCHORS" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:AnchorView/>
+                </TabItem>
+
+                <!-- DIRECTOR -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="DIRECTOR" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:DirectorView/>
+                </TabItem>
+
+                <!-- TIMELINE -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="TIMELINE" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:TimelineView/>
+                </TabItem>
+
+                <!-- PRODUKTION -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="PRODUKTION" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:ProductionView/>
+                </TabItem>
+
+                <!-- SETTINGS -->
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="SETTINGS" FontSize="11" FontWeight="Medium">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </TabItem.Header>
+                    <views:SettingsView/>
+                </TabItem>
+            </TabControl>
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- STATUS BAR - Minimal, Ableton style                   -->
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <Border Grid.Row="2" Height="24"
+                    Background="{StaticResource AbletonPanel}"
+                    BorderBrush="{StaticResource AbletonBorder}"
+                    BorderThickness="0,1,0,0">
+                <DockPanel Margin="10,0">
+                    <!-- Status message -->
+                    <TextBlock Text="{Binding StatusMessage}"
+                               DockPanel.Dock="Left"
+                               VerticalAlignment="Center"
+                               FontSize="10"
+                               Foreground="{StaticResource AbletonTextDim}"/>
+
+                    <!-- Progress bar - thin, right aligned -->
+                    <ProgressBar DockPanel.Dock="Right"
+                                 Width="180" Height="3"
+                                 VerticalAlignment="Center"
+                                 Margin="8,0,0,0"
+                                 Value="{Binding GlobalProgress}"
+                                 Visibility="{Binding IsProgressVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                 Background="{StaticResource AbletonBorder}"
+                                 Foreground="{StaticResource AbletonAccent}"
+                                 BorderThickness="0"/>
+
+                    <!-- Spacer -->
+                    <StackPanel/>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </md:DialogHost>
+</Window>

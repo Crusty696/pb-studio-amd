@@ -6,7 +6,6 @@ VRAM Budget: 800 MB (runs on CPU, but reserves memory for potential GPU offload)
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -67,7 +66,7 @@ class AudioEmbeddingWorker(BaseWorker):
         self._check_cancelled()
 
         # Validate input file
-        if not os.path.exists(self.wav_path):
+        if not Path(self.wav_path).exists():
             raise FileNotFoundError(f"Input file not found: {self.wav_path}")
 
         # Initialize CLAP

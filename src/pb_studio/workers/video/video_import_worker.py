@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from ..base_worker import BaseWorker
 from ...models.video import VideoMetadata
+from ...video.encoder_utils import _get_ffprobe_path
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class VideoImportWorker(BaseWorker):
             VideoMetadata with extracted information
         """
         ffprobe_cmd = [
-            "ffprobe",
+            _get_ffprobe_path(),
             "-v", "quiet",
             "-print_format", "json",
             "-show_format",

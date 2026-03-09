@@ -5,18 +5,21 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QMessageBox)
 from PyQt6.QtCore import Qt, QTimer
 
-from src.pb_studio.core.system_monitor import SystemMonitor
-from src.pb_studio.config_manager import ConfigManager
-from src.pb_studio.services.generation_service import GenerationService
-from src.pb_studio.data.database_core import DatabaseCore
-from src.pb_studio.ui.widgets.dashboard import DashboardWidget
-from src.pb_studio.ui.widgets.library_browser import LibraryBrowserWidget
-from src.pb_studio.ui.widgets.editor_widget import EditorWidget
-from src.pb_studio.ui.widgets.settings_widget import SettingsWidget
+from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.config_manager import ConfigManager
+from pb_studio.services.generation_service import GenerationService
+from pb_studio.data.database_core import DatabaseCore
+from pb_studio.ui.widgets.dashboard import DashboardWidget
+from pb_studio.ui.widgets.library_container import LibraryContainer
+from pb_studio.ui.widgets.editor_widget import EditorWidget
+from pb_studio.ui.widgets.settings_widget import SettingsWidget
 
 # Neue modulare Widgets
-from src.pb_studio.ui.widgets.analysis import AnalysisQueueWidget
-from src.pb_studio.ui.widgets.generation import GenerationContainer
+from pb_studio.ui.widgets.analysis import AnalysisQueueWidget
+from pb_studio.ui.widgets.generation import GenerationContainer
+from pb_studio.ui.widgets.director_widget import DirectorWidget
+from pb_studio.ui.widgets.anchor_widget import AnchorWidget
+from pb_studio.ui.widgets.production_widget import ProductionWidget
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +62,20 @@ class MainWindow(QMainWindow):
         self.nav_library = self._create_nav_button("Library", "folder")
         self.nav_editor = self._create_nav_button("Editor", "edit")
         self.nav_analysis = self._create_nav_button("Analysis", "activity")
-        self.nav_generate = self._create_nav_button("Generate", "film") # New Tab
+        self.nav_director = self._create_nav_button("Director", "video")
+        self.nav_anchor = self._create_nav_button("Anchors", "link")
+        self.nav_generate = self._create_nav_button("Generate", "film")
+        self.nav_production = self._create_nav_button("Production", "package")
         self.nav_settings = self._create_nav_button("Settings", "settings")
 
         sidebar_layout.addWidget(self.nav_dashboard)
         sidebar_layout.addWidget(self.nav_library)
         sidebar_layout.addWidget(self.nav_editor)
         sidebar_layout.addWidget(self.nav_analysis)
+        sidebar_layout.addWidget(self.nav_director)
+        sidebar_layout.addWidget(self.nav_anchor)
         sidebar_layout.addWidget(self.nav_generate)
+        sidebar_layout.addWidget(self.nav_production)
         sidebar_layout.addStretch()
         sidebar_layout.addWidget(self.nav_settings)
         
@@ -77,18 +86,24 @@ class MainWindow(QMainWindow):
         
         # Pages
         self.dashboard_page = DashboardWidget()
-        self.library_page = LibraryBrowserWidget()
+        self.library_page = LibraryContainer()         # NEU: Audio/Video getrennt
         self.editor_page = EditorWidget()
-        self.analysis_page = AnalysisQueueWidget()  # NEU: Modulare Analyse-Queue
-        self.generation_page = GenerationContainer()  # NEU: Modularer Generation-Container
+        self.analysis_page = AnalysisQueueWidget()
+        self.director_page = DirectorWidget()          # NEU: Smart Director
+        self.anchor_page = AnchorWidget()              # NEU: Few-Shot Anchors
+        self.generation_page = GenerationContainer()
+        self.production_page = ProductionWidget()      # NEU: Export/Rendering
         self.settings_page = SettingsWidget()
         
-        self.content_stack.addWidget(self.dashboard_page) # Index 0
-        self.content_stack.addWidget(self.library_page)   # Index 1
-        self.content_stack.addWidget(self.editor_page)    # Index 2
-        self.content_stack.addWidget(self.analysis_page)  # Index 3
-        self.content_stack.addWidget(self.generation_page) # Index 4
-        self.content_stack.addWidget(self.settings_page)  # Index 5
+        self.content_stack.addWidget(self.dashboard_page)  # Index 0
+        self.content_stack.addWidget(self.library_page)    # Index 1
+        self.content_stack.addWidget(self.editor_page)     # Index 2
+        self.content_stack.addWidget(self.analysis_page)   # Index 3
+        self.content_stack.addWidget(self.director_page)   # Index 4
+        self.content_stack.addWidget(self.anchor_page)     # Index 5
+        self.content_stack.addWidget(self.generation_page)  # Index 6
+        self.content_stack.addWidget(self.production_page)  # Index 7
+        self.content_stack.addWidget(self.settings_page)   # Index 8
         
         main_layout.addWidget(self.content_stack)
         
@@ -97,8 +112,11 @@ class MainWindow(QMainWindow):
         self.nav_library.clicked.connect(lambda: self.content_stack.setCurrentIndex(1))
         self.nav_editor.clicked.connect(lambda: self.content_stack.setCurrentIndex(2))
         self.nav_analysis.clicked.connect(lambda: self.content_stack.setCurrentIndex(3))
-        self.nav_generate.clicked.connect(lambda: self.content_stack.setCurrentIndex(4)) # Generate
-        self.nav_settings.clicked.connect(lambda: self.content_stack.setCurrentIndex(5)) # Settings
+        self.nav_director.clicked.connect(lambda: self.content_stack.setCurrentIndex(4))
+        self.nav_anchor.clicked.connect(lambda: self.content_stack.setCurrentIndex(5))
+        self.nav_generate.clicked.connect(lambda: self.content_stack.setCurrentIndex(6))
+        self.nav_production.clicked.connect(lambda: self.content_stack.setCurrentIndex(7))
+        self.nav_settings.clicked.connect(lambda: self.content_stack.setCurrentIndex(8)) # Settings
         
         # Connect Dashboard project buttons
         self.dashboard_page.projectCreated.connect(self._on_project_switch)
@@ -212,6 +230,7 @@ class MainWindow(QMainWindow):
 
         self.analysis_page.add_files(paths)
         self.content_stack.setCurrentIndex(3)  # Switch to Analysis View
+        self.nav_analysis.setChecked(True)
         logger.info(f"Enqueued {len(paths)} files for analysis.")
 
     def _on_file_analyzed(self, result: dict):

@@ -56,7 +56,7 @@ class SigLIPWrapper:
             lazy_load: If True, defer model loading until first use.
         """
         # Import here to avoid circular imports
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self._models_dir = models_dir or self.config.get("paths", {}).get("models_dir", "./models")

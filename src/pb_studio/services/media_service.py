@@ -4,7 +4,8 @@ import subprocess
 import json
 import os
 from pathlib import Path
-from src.pb_studio.data.repositories.media_repository import MediaRepository
+from pb_studio.data.repositories.media_repository import MediaRepository
+from pb_studio.video.encoder_utils import _get_ffprobe_path
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,8 @@ class MediaService:
             meta = self._get_metadata(path)
             duration = meta.get("duration", 0.0)
             
-            # 4. Save
-            mid = self.repo.add_media(project_id, str(path), file_hash, duration, meta)
+            # 4. Save (file_hash kann None sein bei Fehler)
+            mid = self.repo.add_media(project_id, str(path), file_hash or "", duration, meta)
             results.append((mid, "imported"))
             logger.info(f"Imported: {path.name} (ID: {mid})")
             
@@ -63,7 +64,7 @@ class MediaService:
         try:
             # We assume ffprobe is in PATH or accessible (user installed via script)
             cmd = [
-                "ffprobe", 
+                _get_ffprobe_path(), 
                 "-v", "quiet", 
                 "-print_format", "json", 
                 "-show_format", 
@@ -87,7 +88,10 @@ class MediaService:
             data = json.loads(result.stdout)
             
             format_info = data.get("format", {})
-            duration = float(format_info.get("duration", 0.0))
+            try:
+                duration = float(format_info.get("duration", 0.0) or 0.0)
+            except (ValueError, TypeError):
+                duration = 0.0
             
             return {
                 "duration": duration,

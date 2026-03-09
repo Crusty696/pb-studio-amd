@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: Python Backend – Syntax + Tests
+  # ─────────────────────────────────────────────
+  python-tests:
+    name: Python Backend (3.11)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Abhängigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Syntax-Check (py_compile)
+        run: |
+          python -m py_compile backend/app_state.py
+          python -m py_compile backend/dependencies.py
+          python -m py_compile backend/main.py
+          python -m py_compile backend/config.py
+          python -m py_compile backend/routers/audio_router.py
+          python -m py_compile backend/routers/video_router.py
+          python -m py_compile backend/routers/pacing_router.py
+          python -m py_compile backend/routers/render_router.py
+          python -m py_compile backend/routers/events_router.py
+          python -m py_compile backend/routers/project_router.py
+        shell: pwsh
+
+      - name: Tests ausführen (ohne GPU/Integration)
+        run: pytest tests/ -v --tb=short -m "not gpu and not integration"
+        shell: pwsh
+
+  # ─────────────────────────────────────────────
+  # Job 2: C# WPF – Build-Check
+  # ─────────────────────────────────────────────
+  csharp-build:
+    name: C# WPF Build (.NET 9)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: .NET 9 einrichten
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: NuGet-Pakete wiederherstellen
+        run: dotnet restore PBStudio.UI/PBStudio.UI.csproj
+        shell: pwsh
+
+      - name: Build (Release, kein Test-Run)
+        run: dotnet build PBStudio.UI/PBStudio.UI.csproj --configuration Release --no-restore
+        shell: pwsh

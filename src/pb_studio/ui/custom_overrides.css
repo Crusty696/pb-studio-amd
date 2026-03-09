@@ -1,69 +1,14 @@
-/* Custom Overrides for qt-material to make it fit PB Studio perfectly */
-
-/* Make the sidebar look distinct from the content */
-#Sidebar {
-    background-color: #232629; /* Slightly darker/different than main bg */
-    border-right: 1px solid #31363b;
-}
-
-/* Style the big title in sidebar */
-#Sidebar QLabel {
-    color: #1de9b6; /* Teal accent to match theme */
-    font-size: 20px;
-    font-weight: bold;
-    padding: 10px;
-}
-
-/* Nav Buttons in Sidebar */
-#NavButton {
-    text-align: left;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 0px;
-    font-size: 14px;
-    background-color: transparent;
-}
-
-#NavButton:hover {
-    background-color: rgba(29, 233, 182, 0.1); /* Subtle teal hover */
-    border-left: 3px solid #1de9b6;
-}
-
-#NavButton:checked {
-    background-color: rgba(29, 233, 182, 0.2);
-    border-left: 4px solid #1de9b6;
-    color: #ffffff;
-    font-weight: bold;
-}
-
-/* Status Bar adjustments */
 QStatusBar {
     background-color: #1e2124;
     color: #aaaaaa;
 }
-
-#StatusLabel {
-    padding: 0 10px;
-    font-family: "Consolas", monospace;
-}
-
-/* Card-like containers for Dashboard */
-.CardWidget {
-    background-color: #2b2f35;
-    border: 1px solid #3a4048;
-    border-radius: 8px;
-}
-
-/* Editor specific tweaks */
-QTextEdit, QPlainTextEdit {
+QTextEdit {
     background-color: #1e2124;
-    font-family: "Consolas", "Monaco", monospace;
     font-size: 13px;
     border: 1px solid #3a4048;
 }
-
-/* Tab Widgets */
-QTabWidget::pane {
-    border: 1px solid #31363b;
-    border-radius: 4px;
+QPlainTextEdit {
+    background-color: #1e2124;
+    font-size: 13px;
+    border: 1px solid #3a4048;
 }

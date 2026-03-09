@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import List, Optional, Dict
-from src.pb_studio.data.database_core import DatabaseCore
+from pb_studio.data.database_core import DatabaseCore
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class MediaRepository:
                 
         except Exception as e:
             logger.error(f"Add Media failed: {e}", exc_info=True)
-            return -1
+            raise RuntimeError(f"Media-Persistierung fehlgeschlagen: {e}") from e
 
     def get_by_project(self, project_id: int) -> List[Dict]:
         """Get all media files for a project."""

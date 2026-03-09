@@ -155,6 +155,9 @@ class WorkerOrchestrator(QObject):
         # Cancellation flag
         self._cancelled = False
 
+        # Referenz auf den aktuell laufenden Worker (fuer cancel()-Propagation)
+        self._current_worker: Optional[BaseWorker] = None
+
     @property
     def vram_arbiter(self):
         """Lazy-load VRAM arbiter."""
@@ -171,7 +174,7 @@ class WorkerOrchestrator(QObject):
     def cancel(self) -> None:
         """Request cancellation of current pipeline and active worker."""
         self._cancelled = True
-        if hasattr(self, '_current_worker') and self._current_worker:
+        if self._current_worker is not None:
             self._current_worker.cancel()
         logger.info("Pipeline cancellation requested")
 

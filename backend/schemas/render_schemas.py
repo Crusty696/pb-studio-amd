@@ -1,0 +1,59 @@
+"""Render-bezogene Schemas."""
+
+from pydantic import BaseModel, Field
+from typing import Optional
+from enum import Enum
+
+
+class RenderQuality(str, Enum):
+    """Render-Qualitätsstufen."""
+    PREVIEW = "preview"    # 720p, schnell
+    STANDARD = "standard"  # 1080p, balanced
+    HIGH = "high"          # 1080p, hohe Bitrate
+    ULTRA = "ultra"        # 4K, maximale Qualität
+
+
+class RenderEncoder(str, Enum):
+    """Verfügbare Video-Encoder."""
+    HEVC_AMF = "hevc_amf"    # AMD Hardware H.265
+    H264_AMF = "h264_amf"    # AMD Hardware H.264
+    LIBX265 = "libx265"      # Software H.265
+    LIBX264 = "libx264"      # Software H.264
+
+
+class RenderRequest(BaseModel):
+    """Request: Rendering starten."""
+    output_path: str = Field(..., description="Ziel-Dateipfad")
+    audio_path: str = Field(..., description="Audio-Quell-Pfad")
+    quality: RenderQuality = RenderQuality.HIGH
+    encoder: Optional[RenderEncoder] = None  # None = Auto-Detect
+    resolution_width: int = 1920
+    resolution_height: int = 1080
+    fps: float = 30.0
+    bitrate_mbps: float = 12.0
+    include_audio: bool = True
+
+
+class RenderProgress(BaseModel):
+    """Response: Render-Fortschritt."""
+    task_id: str
+    status: str = "running"  # pending, running, completed, failed, cancelled
+    percent: float = 0.0
+    current_frame: int = 0
+    total_frames: int = 0
+    fps: float = 0.0
+    elapsed_seconds: float = 0.0
+    eta_seconds: float = 0.0
+    output_path: Optional[str] = None
+    error: Optional[str] = None
+
+
+class RenderResult(BaseModel):
+    """Response: Render-Ergebnis."""
+    task_id: str
+    success: bool
+    output_path: Optional[str] = None
+    duration_seconds: float = 0.0
+    file_size_mb: float = 0.0
+    encoder_used: str = ""
+    error: Optional[str] = None

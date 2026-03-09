@@ -17,6 +17,7 @@ from ...models.timeline import RenderSegment, RenderResult
 from ...video.encoder_utils import (
     get_encoder_config,
     build_ffmpeg_encode_args,
+    _get_ffmpeg_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,8 @@ class ConcatWorker(BaseWorker):
         self.emit_progress(10, "Creating concat list")
 
         # Ensure output directory exists
-        os.makedirs(os.path.dirname(self.output_path) or ".", exist_ok=True)
+        output_dir = Path(self.output_path).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create concat list file
         concat_list_path = self._create_concat_list(valid_segments)
@@ -135,7 +137,7 @@ class ConcatWorker(BaseWorker):
 
         finally:
             # Clean up concat list
-            if os.path.exists(concat_list_path):
+            if Path(concat_list_path).exists():
                 os.remove(concat_list_path)
 
     def _create_concat_list(self, segments: list[RenderSegment]) -> str:
@@ -148,10 +150,7 @@ class ConcatWorker(BaseWorker):
         Returns:
             Path to concat list file
         """
-        list_path = os.path.join(
-            os.path.dirname(self.output_path) or ".",
-            "_concat_list.txt"
-        )
+        list_path = str(Path(self.output_path).parent / "_concat_list.txt")
 
         with open(list_path, "w", encoding="utf-8") as f:
             for segment in sorted(segments, key=lambda s: s.segment_index):
@@ -173,7 +172,7 @@ class ConcatWorker(BaseWorker):
         """
         # Try fast concat first (stream copy)
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", concat_list_path,
@@ -212,7 +211,7 @@ class ConcatWorker(BaseWorker):
         encode_args = build_ffmpeg_encode_args(encoder_config)
 
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", concat_list_path,
@@ -265,7 +264,7 @@ class ConcatWorker(BaseWorker):
         encode_args = build_ffmpeg_encode_args(encoder_config)
 
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", concat_list_path,

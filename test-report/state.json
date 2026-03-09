@@ -1,0 +1,28 @@
+{
+  "current_area": "Gesamt",
+  "current_function": "Report",
+  "phase": "REPORT",
+  "fix_attempt": 0,
+  "functions_tested": 30,
+  "functions_passed": 28,
+  "functions_failed": 1,
+  "functions_skipped": 1,
+  "fixes_applied": 1,
+  "fixes_pending": 0,
+  "started_at": "2026-03-09",
+  "media_paths": {
+    "audio": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Audio\\Psy-Set",
+    "video": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Video\\Sora_20250622_0307_100_Generations"
+  },
+  "bugs_found": [
+    {
+      "id": "BUG-STEM-001",
+      "severity": "KRITISCH",
+      "function": "F-4.6",
+      "description": "Stem-Separation Key-Mismatch: Router erwartet result['vocals'] etc., Separator gibt {'stems': [paths]} zurück",
+      "fixed": true,
+      "file": "backend/routers/audio_router.py",
+      "fix": "_run_stem_separation() parst jetzt 'stems'-Liste und mappt Dateinamen auf Vocal/Instrumental/etc."
+    }
+  ]
+}

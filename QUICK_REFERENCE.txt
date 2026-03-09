@@ -1,0 +1,149 @@
+╔════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                    NVIDIA vs AMD - QUICK REFERENCE                                                ║
+║                          PB Studio Vergleich (2026-03-04)                                          ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  STATUS                                                                                             │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  NVIDIA Version:    ❌ NICHT VORHANDEN (archived/older)                                            │
+│  AMD Version:       ✅ AKTUELL (März 2026)                                                         │
+│  Produktionsreife:  🟡 75% (4 Komponenten fehlen)                                                  │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  KERN-UNTERSCHIEDE (Nicht portierbar)                                                              │
+├──────────────────┬───────────────────────┬────────────────────┬────────────────────────────────────┤
+│ BEREICH          │ NVIDIA (erwartet)     │ AMD (aktuell)      │ GEWINNER                           │
+├──────────────────┼───────────────────────┼────────────────────┼────────────────────────────────────┤
+│ GPU Backend      │ CUDA (locked-in)      │ DirectML (portable)│ ✅ AMD (flexibler)                 │
+│ VRAM Strategy    │ Reaktiv (OOM crash)   │ Proaktiv (Budget)  │ ✅ AMD (stabiler)                  │
+│ Encoding         │ NVENC (h264_nvenc)    │ AMF (h264_amf)     │ Hardware-spezifisch                │
+│ AI Models        │ PyTorch GPU           │ ONNX DirectML      │ ✅ AMD (fallback CPU)              │
+│ Architecture     │ Monolitisch (expected)│ Modular/Services   │ ✅ AMD (testbar)                   │
+└──────────────────┴───────────────────────┴────────────────────┴────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  MODUL-VERGLEICH                                                                                    │
+├──────────────────────┬──────────────────────────┬──────────────────────┬──────────────────────────┤
+│ MODUL                │ NVIDIA                   │ AMD                  │ STATUS                   │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ rendering/           │ final_renderer.py        │ video/engine.py      │ ✅ Äquivalent             │
+│                      │ preview_renderer.py      │ encoder_utils.py     │                          │
+│                      │ render_engine.py         │                      │                          │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ database/            │ models.py (ORM)          │ database_core.py     │ 🟡 AMD simpler           │
+│                      │ crud.py                  │ repositories/        │    (braucht Cache)      │
+│                      │ global_cache.py          │ global_cache.py ❌   │                          │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ services/            │ audio_service.py         │ analysis_service.py  │ ✅ Äquivalent             │
+│                      │ pacing_service.py        │ generation_service.py│    (renamed/merged)     │
+│                      │ render_service.py        │ media_service.py     │                          │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ core/                │ gpu_manager.py (CUDA)    │ vram_arbiter.py      │ ✅ AMD MODERNER          │
+│                      │ hardware.py              │ vram_budget_manager  │    (proaktiv)            │
+│                      │ session_manager.py       │ system_monitor.py    │                          │
+│                      │ project_manager.py       │ task_queue.py        │                          │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ workers/             │ Im UI (erwartet)         │ Dedicated Folder     │ ✅ AMD MODERNER          │
+│                      │                          │ orchestrator.py      │    (decoupled)           │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ ui/                  │ PyQt6 (gui/)             │ PyQt6 (ui/)          │ 🟡 C# WPF geplant       │
+│                      │                          │ C# WPF (geplant)     │    (beide nicht fertig)  │
+├──────────────────────┼──────────────────────────┼──────────────────────┼──────────────────────────┤
+│ config              │ YAML (erwartet)          │ JSON                 │ 🟢 Beide OK              │
+└──────────────────────┴──────────────────────────┴──────────────────────┴──────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  FEHLENDE KOMPONENTEN IN AMD (BLOCKERS)                                                            │
+├──────────────────────────┬─────────────┬──────────────┬────────────────────┬──────────────────────┤
+│ KOMPONENTE               │ PRIORITY    │ AUFWAND      │ WARUM FEHLT?       │ IMPACT               │
+├──────────────────────────┼─────────────┼──────────────┼────────────────────┼──────────────────────┤
+│ 1. Global Cache          │ 🔴 BLOCKER  │ 2-3 Stunden  │ N+1 Query Problem  │ Performance 🔴       │
+│    (global_cache.py)     │             │              │ bei 100+ Medien    │ UI langsam           │
+├──────────────────────────┼─────────────┼──────────────┼────────────────────┼──────────────────────┤
+│ 2. FastAPI Server        │ 🔴 BLOCKER  │ 4-6 Stunden  │ C# WPF braucht API │ Keine API 🔴         │
+│    (fastapi_server.py)   │             │              │ über HTTP          │ C# kann nicht laden  │
+├──────────────────────────┼─────────────┼──────────────┼────────────────────┼──────────────────────┤
+│ 3. C# WPF Frontend       │ 🔴 BLOCKER  │ 25-30 Stunden│ Migration noch     │ Keine moderne UI 🔴 │
+│    (separate .NET proj)  │             │              │ nicht abgeschlossen│                      │
+├──────────────────────────┼─────────────┼──────────────┼────────────────────┼──────────────────────┤
+│ 4. VRAM Eviction         │ 🟡 MEDIUM   │ 2 Stunden    │ Nur Blocking,      │ Fallback auf CPU 🟡 │
+│    Handler               │             │              │ nicht Freigabe     │                      │
+├──────────────────────────┼─────────────┼──────────────┼────────────────────┼──────────────────────┤
+│ 5. Error Recovery        │ 🟡 MEDIUM   │ 2 Stunden    │ CrashHandler basic │ Keine Autorestart 🟡│
+│    Handler               │             │              │                    │                      │
+└──────────────────────────┴─────────────┴──────────────┴────────────────────┴──────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  TIMELINE ZUR PRODUKTION                                                                            │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                      │
+│  WOCHE 1: Cache + FastAPI Backend        (6-9 Stunden)                                             │
+│  ├─ Global Cache implementieren          [████░░░░░░]  2-3h                                         │
+│  ├─ FastAPI Server schreiben             [█████░░░░░]  4-6h                                         │
+│  └─ Backend Tests                        [███░░░░░░░]  2h                                           │
+│                                                                                                      │
+│  WOCHE 2-3: C# WPF Frontend              (25-30 Stunden)                                            │
+│  ├─ .NET 9.0 Projekt Setup               [██░░░░░░░░]  3h                                           │
+│  ├─ MVVM ViewModel Implementation        [████████░░]  10h                                          │
+│  ├─ UI Widgets Migration                 [█████████░]  12h                                          │
+│  └─ ApiClient Integration                [███░░░░░░░]  5h                                           │
+│                                                                                                      │
+│  WOCHE 4: Stability + Testing            (8-10 Stunden)                                             │
+│  ├─ VRAM Eviction Handler                [██░░░░░░░░]  2h                                           │
+│  ├─ Error Recovery                       [██░░░░░░░░]  2h                                           │
+│  ├─ Unit Tests                           [████░░░░░░]  3h                                           │
+│  ├─ Integration Tests                    [███░░░░░░░]  3h                                           │
+│  └─ Dokumentation                        [██░░░░░░░░]  2h                                           │
+│                                                                                                      │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────
+│  TOTAL EFFORT: 40-50 Stunden mit 2 Entwicklern = 2-3 Wochen                                         │
+│                                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  EMPFEHLUNGEN                                                                                       │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                      │
+│  ✅ BEHALTEN (AMD-Version):                                                                         │
+│     • VRAM Budget Manager (proaktiv, stabil)                                                        │
+│     • Modular Services Architecture                                                                 │
+│     • Worker Orchestration System                                                                   │
+│     • DirectML + ONNX (portable)                                                                    │
+│     • SmartDirector AI Integration                                                                  │
+│                                                                                                      │
+│  ❌ NICHT MACHEN:                                                                                   │
+│     • Zu NVIDIA-Code zurückmigieren (existiert nicht)                                               │
+│     • PyQt6 weiter ausbauen (C# WPF ist Ziel)                                                       │
+│     • CUDA-Support hinzufügen (DirectML ist Platform-Choice)                                        │
+│                                                                                                      │
+│  🔧 SOFORT IMPLEMENTIEREN:                                                                          │
+│     1. Global Cache (Performance-Blocker)                                                           │
+│     2. FastAPI Server (API-Blocker)                                                                 │
+│     3. VRAM Eviction (Stability)                                                                    │
+│                                                                                                      │
+│  🚀 NÄCHSTER SCHRITT:                                                                               │
+│     C# WPF Frontend (separate .NET 9.0 Codebase)                                                    │
+│     mit async ApiClient zu Port 8765                                                                │
+│                                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+DATEIEN GELESEN:
+├─ src/pb_studio/core/__init__.py
+├─ src/pb_studio/services/analysis_service.py
+├─ src/pb_studio/services/generation_service.py
+├─ src/pb_studio/services/media_service.py
+├─ src/pb_studio/data/database_core.py
+├─ src/pb_studio/config_manager.py
+├─ src/pb_studio/core/vram_arbiter.py
+├─ src/pb_studio/core/vram_budget_manager.py
+├─ src/pb_studio/core/task_queue.py
+└─ src/pb_studio/video/engine.py
+
+ERGEBNIS DATEIEN ERSTELLT:
+├─ VERGLEICH_NVIDIA_AMD.md        (Detaillierter Vergleich, 300+ Zeilen)
+├─ FEATURE_MATRIX.md              (Feature Tabellen + Checklisten)
+├─ FEHLENDE_KOMPONENTEN.md        (Code Examples für 5 fehlende Teile)
+├─ EXECUTIVE_SUMMARY.md           (Management Summary)
+└─ QUICK_REFERENCE.txt            (Dieses File)

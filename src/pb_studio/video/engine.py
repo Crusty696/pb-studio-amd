@@ -1,19 +1,20 @@
 import logging
-import os
 import random
 import subprocess
 import json
 import numpy as np
 import shutil
 from pathlib import Path
-from src.pb_studio.audio.analyzer import AudioAnalyzer
-from src.pb_studio.video.encoder_utils import (
+from ..audio.analyzer import AudioAnalyzer
+from .encoder_utils import (
     get_preview_encoder,
     get_export_encoder,
     build_ffmpeg_encode_args,
     check_amf_available,
     get_encoder_info,
-    get_encoder_config
+    get_encoder_config,
+    _get_ffmpeg_path,
+    _get_ffprobe_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class VideoGenerator:
         self.output_quality = config.get("output_quality", "balanced")
 
         # 1. Validation
-        if not os.path.exists(master_audio):
+        if not Path(master_audio).exists():
             raise FileNotFoundError(f"Master audio not found: {master_audio}")
         if not source_videos:
             raise ValueError("No video sources selected.")
@@ -213,7 +214,9 @@ class VideoGenerator:
             if callback: callback(f"Rendering Clip {i+1}/{total_cuts}...", prog)
 
             # 1. Pick Source
-            # TODO: Use tags/logic. For now: Random.
+            # Clip-Auswahl: random.choice als Fallback.
+            # Wenn cut["clip_id"] gesetzt ist (SmartDirector-Output), sollte das
+            # jeweilige source-File direkt verwendet werden (ADR-002 Backlog).
             src = random.choice(video_sources)
 
             # Get duration if unknown
@@ -238,7 +241,7 @@ class VideoGenerator:
 
     def _get_video_duration(self, path):
         try:
-            cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)]
+            cmd = [_get_ffprobe_path(), "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             stdout = result.stdout.strip()
             if not stdout or result.returncode != 0:
@@ -270,7 +273,7 @@ class VideoGenerator:
         # Build FFmpeg command
         # Standardize: 1080p, 30fps, no audio (we use master track)
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-ss", str(start),
             "-i", str(input_path),
             "-t", str(duration),
@@ -297,7 +300,7 @@ class VideoGenerator:
             )
 
             cmd = [
-                "ffmpeg", "-y",
+                _get_ffmpeg_path(), "-y",
                 "-ss", str(start),
                 "-i", str(input_path),
                 "-t", str(duration),
@@ -341,7 +344,7 @@ class VideoGenerator:
 
         # Concat with re-encoding for consistent output
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(list_path),
@@ -362,10 +365,19 @@ class VideoGenerator:
         ])
 
         logger.info(f"Running Final Encode: {' '.join(cmd)}")
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=1800)
-        if result.returncode != 0:
-            logger.error(f"Final encode failed (code {result.returncode}): {result.stderr.decode()[:500] if result.stderr else 'no stderr'}")
-            raise RuntimeError(f"FFmpeg concat failed with code {result.returncode}")
+        try:
+            result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=1800)
+            if result.returncode != 0:
+                stderr_text = result.stderr.decode()[:500] if result.stderr else 'no stderr'
+                logger.error(f"Final encode failed (code {result.returncode}): {stderr_text}")
+                raise RuntimeError(f"FFmpeg concat failed with code {result.returncode}")
+        finally:
+            # Cleanup list.txt - verhindert File Handle Leak
+            try:
+                if list_path.exists():
+                    list_path.unlink()
+            except Exception:
+                pass
 
     def generate_from_timeline(self, config: dict, timeline, callback=None):
         """Generate video from a SmartDirector Timeline.
@@ -379,9 +391,8 @@ class VideoGenerator:
             callback: Progress callback(step_str, percent_int).
 
         Returns:
-            dict with output_path on success.
+            dict with output_path on success, or cancelled flag.
         """
-        self.cancel_flag = False
         master_audio = config["master_audio"]
         output_path = config["output_path"]
         temp_dir = Path(config.get("temp_dir", "./data/temp_render"))

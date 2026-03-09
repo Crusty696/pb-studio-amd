@@ -63,7 +63,7 @@ class MotionAnalyzer:
                       Recommended since RAFT is memory-intensive.
         """
         # Import here to avoid circular imports
-        from src.pb_studio.config_manager import ConfigManager
+        from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
         self._models_dir = models_dir or self.config.get("paths", {}).get("models_dir", "./models")
@@ -280,14 +280,37 @@ class MotionAnalyzer:
             if isinstance(outputs, list) and len(outputs) > 0:
                 # Letzter Output ist finaler Flow bei iterativen Modellen
                 flow = outputs[-1] if len(outputs) > 1 else outputs[0]
-            else:
+            elif outputs is not None:
                 flow = outputs
+            else:
+                logger.warning("RAFT returned None output")
+                h, w = frame1.shape[:2]
+                return np.zeros((h, w)), np.zeros((h, w))
+
+            # Output-Shape validieren
+            if not isinstance(flow, np.ndarray):
+                logger.warning(f"RAFT returned non-ndarray output: {type(flow)}")
+                h, w = frame1.shape[:2]
+                return np.zeros((h, w)), np.zeros((h, w))
+
+            if flow.ndim not in (3, 4):
+                logger.warning(f"RAFT output has unexpected ndim={flow.ndim}, shape={flow.shape}")
+                h, w = frame1.shape[:2]
+                return np.zeros((h, w)), np.zeros((h, w))
 
             # Extrahiere U (horizontal) und V (vertikal) Komponenten
             if flow.ndim == 4:  # [B, 2, H, W]
+                if flow.shape[1] < 2:
+                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
+                    h, w = frame1.shape[:2]
+                    return np.zeros((h, w)), np.zeros((h, w))
                 flow_u = flow[0, 0, :, :]
                 flow_v = flow[0, 1, :, :]
             elif flow.ndim == 3:  # [2, H, W]
+                if flow.shape[0] < 2:
+                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
+                    h, w = frame1.shape[:2]
+                    return np.zeros((h, w)), np.zeros((h, w))
                 flow_u = flow[0, :, :]
                 flow_v = flow[1, :, :]
             else:
