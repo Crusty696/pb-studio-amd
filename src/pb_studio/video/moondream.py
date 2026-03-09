@@ -575,7 +575,11 @@ class MoondreamAnalyzer:
             (self.encoder_session is None and self.combined_session is None)
         ):
             try:
-                return self._pytorch_fallback.answer_question(image, prompt)
+                response = self._pytorch_fallback.answer_question(image, prompt)
+                if isinstance(response, str) and response.strip():
+                    return response.strip()
+                logger.warning("Moondream PyTorch returned an empty response")
+                return "[Error: Model returned empty response]"
             except Exception as e:
                 logger.error(f"PyTorch caption generation failed: {e}")
                 return f"[Error: {str(e)}]"

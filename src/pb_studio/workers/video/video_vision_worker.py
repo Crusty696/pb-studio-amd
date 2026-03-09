@@ -149,17 +149,24 @@ class VideoVisionWorker(BaseWorker):
         Returns:
             Model type string ('ONNX' or 'PyTorch')
         """
-        # Try ONNX MoondreamAnalyzer first
+        # Try MoondreamAnalyzer first; it may internally use ONNX, hybrid mode, or PyTorch fallback.
         try:
             from ...video.moondream import MoondreamAnalyzer
 
             self._analyzer = MoondreamAnalyzer(lazy_load=False)
             if self._analyzer.is_ready:
+                provider = getattr(self._analyzer, "active_provider", "Unknown")
+                if "PyTorch" in provider:
+                    logger.info("Using Moondream PyTorch fallback via analyzer")
+                    return "PyTorch"
+                if getattr(self._analyzer, "_hybrid_mode", False):
+                    logger.info("Using Moondream hybrid model")
+                    return "Hybrid"
                 logger.info("Using Moondream ONNX model")
                 return "ONNX"
 
         except Exception as e:
-            logger.warning(f"ONNX Moondream initialization failed: {e}")
+            logger.warning(f"Moondream analyzer initialization failed: {e}")
 
         # Fallback to PyTorch
         try:
