@@ -1,5 +1,6 @@
 import logging
 import json
+from pathlib import Path
 from typing import List, Optional, Dict
 from pb_studio.data.database_core import DatabaseCore
 
@@ -9,22 +10,55 @@ class MediaRepository:
     def __init__(self):
         self.db = DatabaseCore()
 
+    @staticmethod
+    def _normalize_path(file_path: str) -> str:
+        return str(Path(file_path).expanduser().resolve())
+
+    def find_by_project_and_path(self, project_id: int, file_path: str) -> Optional[Dict]:
+        """Find media row by project and normalized absolute path."""
+        normalized_path = self._normalize_path(file_path)
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM media WHERE project_id = ? AND file_path = ? ORDER BY id DESC LIMIT 1",
+            (project_id, normalized_path),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def add_media(self, project_id: int, file_path: str, file_hash: str, duration: float, meta: Dict = None) -> int:
-        """Add a media file to the database with proper transaction handling."""
+        """Add a media file to the database with idempotent project+path semantics."""
+        normalized_path = self._normalize_path(file_path)
         json_meta = json.dumps(meta) if meta else "{}"
-        
+
         try:
             with self.db.transaction() as conn:
                 cursor = conn.cursor()
+                existing = cursor.execute(
+                    "SELECT id FROM media WHERE project_id = ? AND file_path = ? ORDER BY id DESC LIMIT 1",
+                    (project_id, normalized_path),
+                ).fetchone()
+                if existing:
+                    cursor.execute(
+                        """
+                        UPDATE media
+                        SET file_hash = ?, duration_sec = ?, metadata_json = ?, status = COALESCE(status, 'pending')
+                        WHERE id = ?
+                        """,
+                        (file_hash, duration, json_meta, existing[0]),
+                    )
+                    logger.info(f"Reused existing media {existing[0]}: {normalized_path}")
+                    return existing[0]
+
                 cursor.execute("""
                     INSERT INTO media (project_id, file_path, file_hash, duration_sec, metadata_json, status)
                     VALUES (?, ?, ?, ?, ?, 'pending')
-                """, (project_id, file_path, file_hash, duration, json_meta))
-                
+                """, (project_id, normalized_path, file_hash, duration, json_meta))
+
                 media_id = cursor.lastrowid
-                logger.info(f"Added media {media_id}: {file_path}")
+                logger.info(f"Added media {media_id}: {normalized_path}")
                 return media_id
-                
+
         except Exception as e:
             logger.error(f"Add Media failed: {e}", exc_info=True)
             raise RuntimeError(f"Media-Persistierung fehlgeschlagen: {e}") from e

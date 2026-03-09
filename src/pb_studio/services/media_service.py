@@ -20,7 +20,7 @@ class MediaService:
         """
         results = []
         for path_str in file_paths:
-            path = Path(path_str)
+            path = Path(path_str).expanduser().resolve()
             if not path.exists():
                 results.append((-1, "not_found"))
                 continue
