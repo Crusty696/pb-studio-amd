@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
@@ -39,11 +41,14 @@ public partial class MediaIngestViewModel : ObservableObject
         IsImporting = true;
         StatusText = $"Importiere {dialog.FileNames.Length} Audio-Dateien...";
 
+        var importedCount = 0;
+
         for (int i = 0; i < dialog.FileNames.Length; i++)
         {
             var result = await _api.ImportAudioAsync(dialog.FileNames[i]);
             if (result != null)
             {
+                importedCount++;
                 ImportedAudio.Add(new AudioClipModel
                 {
                     Id = result.Id,
@@ -57,8 +62,14 @@ public partial class MediaIngestViewModel : ObservableObject
             ImportProgress = (i + 1.0) / dialog.FileNames.Length * 100;
         }
 
+        if (importedCount > 0)
+        {
+            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
+            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+        }
+
         IsImporting = false;
-        StatusText = $"{dialog.FileNames.Length} Audio-Dateien importiert";
+        StatusText = $"{importedCount}/{dialog.FileNames.Length} Audio-Dateien importiert";
     }
 
     [RelayCommand]
@@ -94,9 +105,15 @@ public partial class MediaIngestViewModel : ObservableObject
                     Tags = r.Tags,
                 });
             }
+
+            if (results.Count > 0)
+            {
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+            }
         }
 
         IsImporting = false;
-        StatusText = $"{results?.Count ?? 0} Video-Dateien importiert";
+        StatusText = $"{results?.Count ?? 0}/{dialog.FileNames.Length} Video-Dateien importiert";
     }
 }

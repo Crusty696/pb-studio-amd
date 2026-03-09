@@ -42,7 +42,9 @@ jobs:
         shell: pwsh
 
       - name: Tests ausführen (ohne GPU/Integration)
-        run: pytest tests/ -v --tb=short -m "not gpu and not integration"
+        run: |
+          $env:PYTHONPATH = "src"
+          pytest Tests/ -v --tb=short -m "not gpu and not integration"
         shell: pwsh
 
   # ─────────────────────────────────────────────

@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -25,6 +27,13 @@ public partial class VideoLibraryViewModel : ObservableObject
     public VideoLibraryViewModel(IApiClient api)
     {
         _api = api;
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "video-imported" or "video-library-refresh" or "media-library-refresh")
+                _ = LoadClipsAsync();
+        });
+
         _ = LoadClipsAsync();
     }
 

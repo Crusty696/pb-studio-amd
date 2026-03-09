@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -26,6 +28,13 @@ public partial class AudioLibraryViewModel : ObservableObject
     public AudioLibraryViewModel(IApiClient api)
     {
         _api = api;
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "audio-imported" or "audio-library-refresh" or "media-library-refresh")
+                _ = LoadAudioClipsAsync();
+        });
+
         _ = LoadAudioClipsAsync();
     }
 
