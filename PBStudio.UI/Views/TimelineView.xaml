@@ -72,6 +72,39 @@
                      Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
                      Margin="0,0,0,4"/>
 
+        <!-- ══ Details Panel ══ -->
+        <md:Card DockPanel.Dock="Bottom" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="SELEKTIERTER CUT" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <TextBlock Foreground="{StaticResource AbletonText}" FontSize="12" FontWeight="SemiBold"
+                               Text="{Binding SelectedClipName}"/>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,4,0,0">
+                        <Run Text="Zeitraum: "/><Run Text="{Binding SelectedTimeRange}"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                        <Run Text="Clip-In: "/><Run Text="{Binding SelectedClipStart}"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                        <Run Text="Trigger: "/><Run Text="{Binding SelectedTrigger}"/>
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="QUELLE" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="{Binding SelectedFilePath}"/>
+                </StackPanel>
+            </Grid>
+        </md:Card>
+
         <!-- ══ Status Bar ══ -->
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}"
                    Foreground="{StaticResource AbletonTextDim}" FontSize="11"
@@ -80,6 +113,7 @@
         <!-- ══ Main Timeline List ══ -->
         <md:Card Style="{StaticResource AbletonCard}" Padding="0">
             <ListView ItemsSource="{Binding TimelineEntries}"
+                      SelectedItem="{Binding SelectedEntry}"
                       Background="Transparent" BorderThickness="0"
                       Foreground="{StaticResource AbletonText}"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto">

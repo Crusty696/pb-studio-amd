@@ -76,3 +76,5 @@ assets/
 nul
 .openclaw_codex_prompt.txt
 LEAD_ANALYST_REPORT_*.md
+project.json
+timeline.json

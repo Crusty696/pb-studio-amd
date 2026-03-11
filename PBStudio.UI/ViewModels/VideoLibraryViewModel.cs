@@ -30,11 +30,9 @@ public partial class VideoLibraryViewModel : ObservableObject
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
-            if (message.Value is "video-imported" or "video-library-refresh" or "media-library-refresh")
+            if (message.Value is "backend-ready" or "video-imported" or "video-library-refresh" or "media-library-refresh")
                 _ = LoadClipsAsync();
         });
-
-        _ = LoadClipsAsync();
     }
 
     [RelayCommand]

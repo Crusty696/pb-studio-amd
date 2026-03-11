@@ -1,6 +1,8 @@
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
@@ -43,6 +45,7 @@ public partial class MainViewModel : ObservableObject
             {
                 BackendStatusText = "Backend: Online";
                 BackendStatusColor = Brushes.LimeGreen;
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("backend-ready"));
                 _sse.StartListening();
                 await RefreshGpuStatusAsync();
                 return;
@@ -59,6 +62,8 @@ public partial class MainViewModel : ObservableObject
         {
             BackendStatusText = isRunning ? "Backend: Online" : "Backend: Offline";
             BackendStatusColor = isRunning ? Brushes.LimeGreen : Brushes.Red;
+            if (isRunning)
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("backend-ready"));
         });
     }
 

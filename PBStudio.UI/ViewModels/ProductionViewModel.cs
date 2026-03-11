@@ -1,5 +1,8 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Win32;
 using PBStudio.UI.Services;
 
@@ -23,6 +26,7 @@ public partial class ProductionViewModel : ObservableObject
     [ObservableProperty] private bool _isRendering;
     [ObservableProperty] private string _etaText = "";
 
+    public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
 
     public ProductionViewModel(IApiClient api, SSEClient sse)
@@ -30,6 +34,13 @@ public partial class ProductionViewModel : ObservableObject
         _api = api;
         _sse = sse;
         _sse.ProgressReceived += OnRenderProgress;
+        _sse.LogReceived += OnLogReceived;
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "backend-ready" or "timeline-refresh")
+                _ = SyncAudioPathFromTimelineAsync();
+        });
     }
 
     [RelayCommand]
@@ -48,26 +59,25 @@ public partial class ProductionViewModel : ObservableObject
     [RelayCommand]
     private async Task StartRenderAsync()
     {
-        if (string.IsNullOrEmpty(OutputPath))
+        if (string.IsNullOrWhiteSpace(OutputPath))
         {
             StatusText = "Kein Ausgabepfad gewählt";
             return;
         }
 
-        // Audio-Pfad aus Timeline laden falls nicht manuell gesetzt
-        if (string.IsNullOrEmpty(AudioPath))
-        {
-            var timeline = await _api.GetTimelineAsync();
-            if (timeline?.AudioPath != null)
-                AudioPath = timeline.AudioPath;
-        }
-        if (string.IsNullOrEmpty(AudioPath))
+        await SyncAudioPathFromTimelineAsync();
+        if (string.IsNullOrWhiteSpace(AudioPath))
         {
             StatusText = "Kein Audio-Pfad vorhanden. Bitte zuerst eine Cut-Liste generieren.";
             return;
         }
 
+        RenderLogEntries.Clear();
+        AppendLog("info", $"Render startet: {OutputPath}");
+
         IsRendering = true;
+        RenderProgress = 0;
+        EtaText = "";
         StatusText = "Rendering startet...";
 
         var request = new RenderRequest(
@@ -84,35 +94,106 @@ public partial class ProductionViewModel : ObservableObject
         {
             _currentTaskId = result.TaskId;
             StatusText = $"Render-Task: {result.TaskId}";
+            AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
         }
         else
         {
             IsRendering = false;
             StatusText = "Rendering konnte nicht gestartet werden";
+            AppendLog("error", "Render-Start fehlgeschlagen");
         }
     }
 
     [RelayCommand]
     private async Task CancelRenderAsync()
     {
-        if (_currentTaskId == null) return;
+        if (_currentTaskId == null)
+            return;
+
         await _api.CancelRenderAsync(_currentTaskId);
-        IsRendering = false;
-        StatusText = "Rendering abgebrochen";
+        StatusText = "Abbruch angefordert...";
+        AppendLog("warn", $"Cancel angefordert für Task {_currentTaskId}");
+    }
+
+    [RelayCommand]
+    private void ClearRenderLog()
+    {
+        RenderLogEntries.Clear();
+        AppendLog("info", "Render-Log geleert");
+    }
+
+    private async Task SyncAudioPathFromTimelineAsync()
+    {
+        var timeline = await _api.GetTimelineAsync();
+        if (!string.IsNullOrEmpty(timeline?.AudioPath))
+            AudioPath = timeline.AudioPath;
     }
 
     private void OnRenderProgress(object? sender, ProgressEventArgs e)
     {
         if (e.EventType != "render_progress") return;
+        if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId) return;
+
         App.Current.Dispatcher.Invoke(() =>
         {
             RenderProgress = e.Percent;
-            StatusText = e.Message;
-            if (e.Percent >= 100)
+
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                StatusText = e.Message;
+
+            switch (e.Status)
             {
-                IsRendering = false;
-                StatusText = "Rendering abgeschlossen!";
+                case "completed":
+                    IsRendering = false;
+                    RenderProgress = 100;
+                    EtaText = "";
+                    StatusText = "Rendering abgeschlossen!";
+                    AppendLog("info", "Rendering abgeschlossen");
+                    break;
+
+                case "cancelled":
+                    IsRendering = false;
+                    EtaText = "";
+                    StatusText = "Rendering abgebrochen";
+                    AppendLog("warn", "Rendering wurde abgebrochen");
+                    break;
+
+                case "failed":
+                    IsRendering = false;
+                    EtaText = "";
+                    StatusText = string.IsNullOrWhiteSpace(e.Message) ? "Rendering fehlgeschlagen" : e.Message;
+                    AppendLog("error", $"Rendering fehlgeschlagen: {StatusText}");
+                    break;
+
+                case "running":
+                    if (e.Percent > 0)
+                        EtaText = $"{e.Percent:F0}%";
+                    break;
             }
         });
+    }
+
+    private void OnLogReceived(object? sender, LogEventArgs e)
+    {
+        App.Current.Dispatcher.Invoke(() => AppendLog(e.Level, e.Message));
+    }
+
+    private void AppendLog(string level, string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var prefix = level.ToUpperInvariant() switch
+        {
+            "ERROR" => "[ERR]",
+            "WARN" or "WARNING" => "[WRN]",
+            "DEBUG" => "[DBG]",
+            _ => "[INF]",
+        };
+
+        RenderLogEntries.Add($"{DateTime.Now:HH:mm:ss} {prefix} {message}");
+
+        while (RenderLogEntries.Count > 300)
+            RenderLogEntries.RemoveAt(0);
     }
 }

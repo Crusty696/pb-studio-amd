@@ -14,14 +14,13 @@ public class SSEClient : IDisposable
     private readonly HttpClient _httpClient;
     private readonly ILogger<SSEClient> _logger;
     private CancellationTokenSource? _cts;
-    private Task? _listenTask;
+    private readonly List<Task> _listenTasks = [];
+    private bool _isListening;
 
     // Exponential Backoff für Reconnect
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
     private const int MaxReconnectAttempts = 50;
-    private int _currentReconnectDelayMs = InitialReconnectDelayMs;
-    private int _reconnectAttempts = 0;
 
     public event EventHandler<ProgressEventArgs>? ProgressReceived;
     public event EventHandler<LogEventArgs>? LogReceived;
@@ -40,32 +39,51 @@ public class SSEClient : IDisposable
     /// <summary>Startet das Lauschen auf SSE Events.</summary>
     public void StartListening()
     {
+        if (_isListening)
+        {
+            _logger.LogDebug("SSE Client läuft bereits");
+            return;
+        }
+
         _cts = new CancellationTokenSource();
-        _listenTask = Task.Run(() => ListenAsync(_cts.Token));
-        _logger.LogInformation("SSE Client gestartet");
+        _listenTasks.Clear();
+        _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));
+        _listenTasks.Add(Task.Run(() => ListenAsync("/events/log", StreamKind.Log, _cts.Token)));
+        _listenTasks.Add(Task.Run(() => ListenAsync("/events/gpu", StreamKind.Gpu, _cts.Token)));
+        _isListening = true;
+        _logger.LogInformation("SSE Client gestartet (progress, log, gpu)");
     }
 
     /// <summary>Stoppt das Lauschen.</summary>
     public void StopListening()
     {
+        if (!_isListening)
+            return;
+
         _cts?.Cancel();
+        _isListening = false;
         _logger.LogInformation("SSE Client gestoppt");
     }
 
-    private async Task ListenAsync(CancellationToken ct)
+    private async Task ListenAsync(string endpoint, StreamKind streamKind, CancellationToken ct)
     {
+        var reconnectDelayMs = InitialReconnectDelayMs;
+        var reconnectAttempts = 0;
+
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, "/events/progress");
+                using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
 
                 // Erfolgreiche Verbindung: Backoff zurücksetzen
-                _currentReconnectDelayMs = InitialReconnectDelayMs;
-                _reconnectAttempts = 0;
+                reconnectDelayMs = InitialReconnectDelayMs;
+                reconnectAttempts = 0;
 
                 string? eventType = null;
 
@@ -81,7 +99,7 @@ public class SSEClient : IDisposable
                     else if (line.StartsWith("data: "))
                     {
                         var data = line[6..];
-                        ProcessEvent(eventType ?? "message", data);
+                        ProcessEvent(streamKind, eventType ?? "message", data);
                         eventType = null;
                     }
                     else if (line.StartsWith(":"))
@@ -96,47 +114,44 @@ public class SSEClient : IDisposable
             }
             catch (Exception ex)
             {
-                _reconnectAttempts++;
-                if (_reconnectAttempts > MaxReconnectAttempts)
+                reconnectAttempts++;
+                if (reconnectAttempts > MaxReconnectAttempts)
                 {
-                    _logger.LogError("SSE: Max Reconnect-Versuche ({Attempts}) erreicht, gebe auf.", _reconnectAttempts);
+                    _logger.LogError("SSE {Endpoint}: Max Reconnect-Versuche ({Attempts}) erreicht, gebe auf.", endpoint, reconnectAttempts);
                     break;
                 }
 
-                _logger.LogWarning(ex, "SSE Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
-                    _currentReconnectDelayMs, _reconnectAttempts, MaxReconnectAttempts);
+                _logger.LogWarning(ex,
+                    "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
+                    endpoint, reconnectDelayMs, reconnectAttempts, MaxReconnectAttempts);
 
-                await Task.Delay(_currentReconnectDelayMs, ct).ConfigureAwait(false);
-
-                // Exponential Backoff: 3s → 6s → 12s → 24s → 30s max
-                _currentReconnectDelayMs = Math.Min(_currentReconnectDelayMs * 2, MaxReconnectDelayMs);
+                await Task.Delay(reconnectDelayMs, ct).ConfigureAwait(false);
+                reconnectDelayMs = Math.Min(reconnectDelayMs * 2, MaxReconnectDelayMs);
             }
         }
     }
 
-    private void ProcessEvent(string eventType, string jsonData)
+    private void ProcessEvent(StreamKind streamKind, string eventType, string jsonData)
     {
         try
         {
             var json = JsonDocument.Parse(jsonData);
             var root = json.RootElement;
 
-            switch (eventType)
+            switch (streamKind)
             {
-                case "analysis_progress":
-                case "render_progress":
-                case "stem_progress":
-                case "import_progress":
+                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress":
                     ProgressReceived?.Invoke(this, new ProgressEventArgs
                     {
                         EventType = eventType,
                         Percent = root.TryGetProperty("percent", out var p) ? p.GetDouble() : 0,
                         Message = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "",
                         TaskId = root.TryGetProperty("task_id", out var t) ? t.GetString() ?? "" : "",
+                        Status = root.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "",
                     });
                     break;
 
-                case "log":
+                case StreamKind.Log when eventType == "log":
                     LogReceived?.Invoke(this, new LogEventArgs
                     {
                         Level = root.TryGetProperty("level", out var l) ? l.GetString() ?? "info" : "info",
@@ -144,7 +159,7 @@ public class SSEClient : IDisposable
                     });
                     break;
 
-                case "gpu_status":
+                case StreamKind.Gpu when eventType == "gpu_status":
                     GpuStatusReceived?.Invoke(this, new GpuEventArgs
                     {
                         VramUsedMb = root.TryGetProperty("vram_used_mb", out var vu) ? vu.GetInt32() : 0,
@@ -156,7 +171,7 @@ public class SSEClient : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SSE Event Parsing fehlgeschlagen: {Data}", jsonData);
+            _logger.LogWarning(ex, "SSE Event Parsing fehlgeschlagen ({StreamKind}): {Data}", streamKind, jsonData);
         }
     }
 
@@ -165,6 +180,13 @@ public class SSEClient : IDisposable
         StopListening();
         _httpClient.Dispose();
         _cts?.Dispose();
+    }
+
+    private enum StreamKind
+    {
+        Progress,
+        Log,
+        Gpu,
     }
 }
 
@@ -176,6 +198,7 @@ public class ProgressEventArgs : EventArgs
     public double Percent { get; init; }
     public string Message { get; init; } = "";
     public string TaskId { get; init; } = "";
+    public string Status { get; init; } = "";
 }
 
 public class LogEventArgs : EventArgs

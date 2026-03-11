@@ -26,6 +26,15 @@ from pb_studio.data.database_core import normalize_media_path
 logger = logging.getLogger(__name__)
 
 
+def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
+    """Gibt den aktiven Projekt-Root zurück, sonst den konfigurierten Fallback."""
+    current = state.current_project or {}
+    current_path = current.get("path") if isinstance(current, dict) else None
+    if current_path:
+        return Path(current_path).resolve()
+    return Path(fallback_root).resolve()
+
+
 @dataclass
 class AppState:
     """Thread-sicherer In-Memory State für alle FastAPI Router."""

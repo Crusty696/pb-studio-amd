@@ -23,6 +23,7 @@ public class ApiClient : IApiClient
     public ApiClient(HttpClient http, ILogger<ApiClient> logger)
     {
         _http = http;
+        _http.Timeout = TimeSpan.FromMinutes(10);
         _logger = logger;
     }
 
@@ -199,7 +200,7 @@ public class ApiClient : IApiClient
 
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
 public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
-public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format);
+public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float> EnergyCurve = null!, List<Dictionary<string, object>>? StructureSegments = null, Dictionary<string, object>? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);

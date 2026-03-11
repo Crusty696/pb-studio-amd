@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -40,7 +42,12 @@ public partial class DirectorViewModel : ObservableObject
     public DirectorViewModel(IApiClient api)
     {
         _api = api;
-        _ = LoadClipsAsync();
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "backend-ready" or "audio-library-refresh" or "video-library-refresh" or "media-library-refresh")
+                _ = LoadClipsAsync();
+        });
     }
 
     [RelayCommand]
@@ -76,6 +83,10 @@ public partial class DirectorViewModel : ObservableObject
                     SampleRate = clip.SampleRate,
                     Channels = clip.Channels,
                     Format = clip.Format,
+                    Bpm = clip.Bpm,
+                    Key = clip.Key ?? "",
+                    BeatCount = clip.BeatCount,
+                    IsAnalyzed = clip.IsAnalyzed,
                 });
             }
 
@@ -174,6 +185,7 @@ public partial class DirectorViewModel : ObservableObject
             CutCount = result.CutCount;
             TotalDuration = result.TotalDuration;
             StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
+            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("timeline-refresh"));
         }
         else
         {

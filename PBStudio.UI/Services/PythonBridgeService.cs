@@ -41,6 +41,14 @@ public class PythonBridgeService
     {
         if (_isRunning) return;
 
+        if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+        {
+            _logger.LogInformation("Python Backend läuft bereits auf Port {Port} – kein neuer Start nötig", Port);
+            _isRunning = true;
+            StatusChanged?.Invoke(this, true);
+            return;
+        }
+
         var backendDir = FindBackendDirectory();
         if (backendDir == null)
         {
@@ -147,6 +155,19 @@ public class PythonBridgeService
                 }
             }
         });
+    }
+
+    private async Task<bool> IsBackendAlreadyHealthyAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/health").ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<bool> WaitForHealthAsync()

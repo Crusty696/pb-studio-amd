@@ -11,7 +11,7 @@ class AudioImportRequest(BaseModel):
 
 
 class AudioClipInfo(BaseModel):
-    """Response: Importierter Audio-Clip."""
+    """Response: Importierter Audio-Clip inkl. vorhandenem Analyse-Status."""
     id: int
     name: str
     path: str
@@ -19,6 +19,10 @@ class AudioClipInfo(BaseModel):
     sample_rate: int = 44100
     channels: int = 2
     format: str = "mp3"
+    bpm: float = 0.0
+    key: Optional[str] = None
+    beat_count: int = 0
+    is_analyzed: bool = False
 
 
 class AudioAnalyzeRequest(BaseModel):

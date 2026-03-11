@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state
+from ..app_state import AppState, get_app_state, resolve_active_project_root
 from ..config import config
 from ..dependencies import gpu_lock, publish_event
 from ..schemas.common import validate_timeline
@@ -50,7 +50,7 @@ async def start_render(
 
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
-    allowed_render = Path(config.project_dir).resolve()
+    allowed_render = resolve_active_project_root(state, config.project_dir)
     if not output_p_check.is_relative_to(allowed_render):
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
 

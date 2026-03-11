@@ -15,33 +15,128 @@
         <!-- ══ Left: Audio Timeline ══ -->
         <md:Card Grid.Column="0" Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,8,0">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="AUDIO TIMELINE"
-                           Style="{StaticResource SectionHeader}"/>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <TextBlock Text="AUDIO TIMELINE"
+                               Style="{StaticResource SectionHeader}"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <ComboBox Width="280"
+                                  Margin="0,0,8,0"
+                                  ItemsSource="{Binding AvailableAudioClips}"
+                                  SelectedItem="{Binding SelectedAudioClip}"
+                                  DisplayMemberPath="Name"
+                                  Background="{StaticResource AbletonSurface}"
+                                  Foreground="{StaticResource AbletonText}"
+                                  BorderBrush="{StaticResource AbletonBorder}"
+                                  FontSize="12"
+                                  ToolTip="Audio-Quelle für Waveform und Beat-Marker"/>
+                        <Button Command="{Binding ReloadWaveformCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Foreground="{StaticResource AbletonAccent}"
+                                ToolTip="Waveform und Beat-Marker neu laden"
+                                Padding="6,4" Height="30">
+                            <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
 
                 <!-- Position Controls -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-                    <Slider Value="{Binding CurrentPosition}" Minimum="0" Maximum="300"
-                            TickFrequency="1" IsSnapToTickEnabled="False"
+                    <Slider Value="{Binding CurrentPosition}"
+                            Minimum="0"
+                            Maximum="{Binding TimelineDuration}"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="False"
                             Foreground="{StaticResource AbletonAccent}"
                             ToolTip="Position im Audio-Track (Sekunden)"/>
-                    <TextBlock HorizontalAlignment="Center" Margin="0,4,0,0"
-                               Foreground="{StaticResource AbletonTextDim}" FontSize="12">
-                        <Run Text="Position: "/><Run Text="{Binding CurrentPosition, StringFormat={}{0:F2}, Mode=OneWay}"/><Run Text=" s"/>
-                    </TextBlock>
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Foreground="{StaticResource AbletonTextDim}" FontSize="12">
+                            <Run Text="Position: "/><Run Text="{Binding CurrentPosition, StringFormat={}{0:F2}, Mode=OneWay}"/><Run Text=" s"/>
+                        </TextBlock>
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource AbletonTextDim}" FontSize="12">
+                            <Run Text="Dauer: "/><Run Text="{Binding TimelineDuration, StringFormat={}{0:F2}}"/><Run Text=" s"/>
+                        </TextBlock>
+                    </DockPanel>
                 </StackPanel>
 
-                <!-- Waveform Placeholder -->
+                <!-- Real Waveform Surface -->
                 <Border Background="#1A1A2E" CornerRadius="2" Margin="0,8,0,0"
                         BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1">
-                    <Grid MinHeight="180">
-                        <!-- Fake waveform lines -->
-                        <Canvas ClipToBounds="True" Opacity="0.3">
-                            <Line X1="0" Y1="90" X2="9999" Y2="90" Stroke="{StaticResource AbletonAccent}"
-                                  StrokeThickness="0.5" StrokeDashArray="4,4"/>
+                    <Grid MinHeight="180" Width="720" HorizontalAlignment="Stretch">
+                        <Canvas Width="720" Height="180" ClipToBounds="True">
+                            <!-- Midline -->
+                            <Line X1="0" Y1="90" X2="720" Y2="90"
+                                  Stroke="{StaticResource AbletonBorder}"
+                                  StrokeThickness="1"
+                                  StrokeDashArray="4,4"/>
+
+                            <!-- Waveform bars -->
+                            <ItemsControl ItemsSource="{Binding WaveformBars}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Width="720" Height="180"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Rectangle Width="{Binding Width}"
+                                                   Height="{Binding Height}"
+                                                   RadiusX="1" RadiusY="1"
+                                                   Fill="{StaticResource AbletonAccent}"
+                                                   Opacity="0.75"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Beat markers -->
+                            <ItemsControl ItemsSource="{Binding BeatMarkers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Width="720" Height="180"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                        <Setter Property="Canvas.Top" Value="0"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="1.5" Height="180"
+                                                Background="{StaticResource AbletonYellow}"
+                                                Opacity="0.55"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Current position marker -->
+                            <Border Width="2" Height="180"
+                                    Background="{StaticResource AbletonGreen}"
+                                    Canvas.Left="{Binding PositionMarkerX}"
+                                    Canvas.Top="0"/>
                         </Canvas>
-                        <TextBlock Text="WAVEFORM" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Foreground="{StaticResource AbletonTextDim}"
-                                   FontSize="11" FontWeight="SemiBold" Opacity="0.5"/>
+
+                        <Grid Visibility="{Binding IsLoadingWaveform, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              Background="#66000000">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ProgressBar IsIndeterminate="True" Width="140" Height="4"
+                                             Foreground="{StaticResource AbletonAccent}"/>
+                                <TextBlock Text="Waveform wird geladen..."
+                                           HorizontalAlignment="Center"
+                                           Margin="0,8,0,0"
+                                           Foreground="{StaticResource AbletonTextDim}"
+                                           FontSize="11"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
             </DockPanel>
@@ -82,7 +177,7 @@
 
                 <!-- Status -->
                 <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Margin="0,6,0,0"
-                           Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
+                           Foreground="{StaticResource AbletonTextDim}" FontSize="11" TextWrapping="Wrap"/>
 
                 <!-- Anchor ListView -->
                 <ListView ItemsSource="{Binding Anchors}" SelectedItem="{Binding SelectedAnchor}"
