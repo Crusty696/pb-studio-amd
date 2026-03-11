@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +19,6 @@ public class SSEClient : IDisposable
     private readonly List<Task> _listenTasks = [];
     private bool _isListening;
 
-    // Exponential Backoff für Reconnect
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
     private const int MaxReconnectAttempts = 50;
@@ -36,7 +37,6 @@ public class SSEClient : IDisposable
         };
     }
 
-    /// <summary>Startet das Lauschen auf SSE Events.</summary>
     public void StartListening()
     {
         if (_isListening)
@@ -54,7 +54,6 @@ public class SSEClient : IDisposable
         _logger.LogInformation("SSE Client gestartet (progress, log, gpu)");
     }
 
-    /// <summary>Stoppt das Lauschen.</summary>
     public void StopListening()
     {
         if (!_isListening)
@@ -81,32 +80,44 @@ public class SSEClient : IDisposable
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
 
-                // Erfolgreiche Verbindung: Backoff zurücksetzen
                 reconnectDelayMs = InitialReconnectDelayMs;
                 reconnectAttempts = 0;
 
-                string? eventType = null;
+                var eventType = "message";
+                var dataBuilder = new StringBuilder();
 
                 while (!ct.IsCancellationRequested)
                 {
                     var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
-                    if (line == null) break;
+                    if (line == null)
+                        break;
 
-                    if (line.StartsWith("event: "))
+                    if (string.IsNullOrEmpty(line))
                     {
-                        eventType = line[7..];
+                        DispatchBufferedEvent(streamKind, eventType, dataBuilder);
+                        eventType = "message";
+                        dataBuilder.Clear();
+                        continue;
                     }
-                    else if (line.StartsWith("data: "))
+
+                    if (line.StartsWith(':'))
+                        continue;
+
+                    if (line.StartsWith("event: ", StringComparison.Ordinal))
                     {
-                        var data = line[6..];
-                        ProcessEvent(streamKind, eventType ?? "message", data);
-                        eventType = null;
+                        eventType = line[7..].Trim();
+                        continue;
                     }
-                    else if (line.StartsWith(":"))
+
+                    if (line.StartsWith("data: ", StringComparison.Ordinal))
                     {
-                        // Keepalive — ignorieren
+                        if (dataBuilder.Length > 0)
+                            dataBuilder.Append('\n');
+                        dataBuilder.Append(line[6..]);
                     }
                 }
+
+                DispatchBufferedEvent(streamKind, eventType, dataBuilder);
             }
             catch (OperationCanceledException)
             {
@@ -121,9 +132,13 @@ public class SSEClient : IDisposable
                     break;
                 }
 
-                _logger.LogWarning(ex,
+                _logger.LogWarning(
+                    ex,
                     "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
-                    endpoint, reconnectDelayMs, reconnectAttempts, MaxReconnectAttempts);
+                    endpoint,
+                    reconnectDelayMs,
+                    reconnectAttempts,
+                    MaxReconnectAttempts);
 
                 await Task.Delay(reconnectDelayMs, ct).ConfigureAwait(false);
                 reconnectDelayMs = Math.Min(reconnectDelayMs * 2, MaxReconnectDelayMs);
@@ -131,11 +146,19 @@ public class SSEClient : IDisposable
         }
     }
 
+    private void DispatchBufferedEvent(StreamKind streamKind, string eventType, StringBuilder dataBuilder)
+    {
+        if (dataBuilder.Length == 0)
+            return;
+
+        ProcessEvent(streamKind, eventType, dataBuilder.ToString());
+    }
+
     private void ProcessEvent(StreamKind streamKind, string eventType, string jsonData)
     {
         try
         {
-            var json = JsonDocument.Parse(jsonData);
+            using var json = JsonDocument.Parse(jsonData);
             var root = json.RootElement;
 
             switch (streamKind)
@@ -144,27 +167,38 @@ public class SSEClient : IDisposable
                     ProgressReceived?.Invoke(this, new ProgressEventArgs
                     {
                         EventType = eventType,
-                        Percent = root.TryGetProperty("percent", out var p) ? p.GetDouble() : 0,
-                        Message = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "",
-                        TaskId = root.TryGetProperty("task_id", out var t) ? t.GetString() ?? "" : "",
-                        Status = root.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "",
+                        Percent = TryGetDouble(root, "percent"),
+                        Message = FirstNonEmpty(
+                            TryGetString(root, "message"),
+                            TryGetString(root, "error"),
+                            TryGetString(root, "detail")),
+                        TaskId = FirstNonEmpty(TryGetString(root, "task_id"), TryGetString(root, "job_id")),
+                        Status = NormalizeStatus(root),
+                        CurrentFrame = TryGetInt(root, "current_frame"),
+                        TotalFrames = TryGetInt(root, "total_frames"),
+                        ElapsedSeconds = TryGetDouble(root, "elapsed_seconds"),
+                        EtaSeconds = TryGetDouble(root, "eta_seconds"),
+                        OutputPath = TryGetString(root, "output_path"),
+                        Error = TryGetString(root, "error"),
                     });
                     break;
 
                 case StreamKind.Log when eventType == "log":
                     LogReceived?.Invoke(this, new LogEventArgs
                     {
-                        Level = root.TryGetProperty("level", out var l) ? l.GetString() ?? "info" : "info",
-                        Message = root.TryGetProperty("message", out var lm) ? lm.GetString() ?? "" : "",
+                        Level = string.IsNullOrWhiteSpace(TryGetString(root, "level")) ? "info" : TryGetString(root, "level"),
+                        Message = FirstNonEmpty(TryGetString(root, "message"), TryGetString(root, "detail")),
                     });
                     break;
 
                 case StreamKind.Gpu when eventType == "gpu_status":
                     GpuStatusReceived?.Invoke(this, new GpuEventArgs
                     {
-                        VramUsedMb = root.TryGetProperty("vram_used_mb", out var vu) ? vu.GetInt32() : 0,
-                        VramTotalMb = root.TryGetProperty("vram_total_mb", out var vt) ? vt.GetInt32() : 0,
-                        TemperatureC = root.TryGetProperty("temperature_c", out var tc) ? tc.GetInt32() : 0,
+                        VramUsedMb = (int)Math.Round(TryGetDouble(root, "vram_used_mb")),
+                        VramTotalMb = (int)Math.Round(TryGetDouble(root, "vram_total_mb")),
+                        TemperatureC = (int)Math.Round(TryGetDouble(root, "temperature_c")),
+                        GpuLoadPercent = TryGetDouble(root, "gpu_load"),
+                        Error = TryGetString(root, "error"),
                     });
                     break;
             }
@@ -174,6 +208,55 @@ public class SSEClient : IDisposable
             _logger.LogWarning(ex, "SSE Event Parsing fehlgeschlagen ({StreamKind}): {Data}", streamKind, jsonData);
         }
     }
+
+    private static string NormalizeStatus(JsonElement root)
+    {
+        var status = FirstNonEmpty(
+            TryGetString(root, "status"),
+            TryGetString(root, "state"),
+            TryGetString(root, "phase"));
+
+        return status.ToLowerInvariant() switch
+        {
+            "done" or "complete" => "completed",
+            "error" => "failed",
+            _ => status,
+        };
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+        => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+
+    private static string TryGetString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return string.Empty;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => string.Empty,
+        };
+    }
+
+    private static double TryGetDouble(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return 0;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetDouble(out var d) => d,
+            JsonValueKind.String when double.TryParse(value.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => 0,
+        };
+    }
+
+    private static int TryGetInt(JsonElement root, string propertyName)
+        => (int)Math.Round(TryGetDouble(root, propertyName));
 
     public void Dispose()
     {
@@ -190,8 +273,6 @@ public class SSEClient : IDisposable
     }
 }
 
-// --- Event Args ---
-
 public class ProgressEventArgs : EventArgs
 {
     public string EventType { get; init; } = "";
@@ -199,6 +280,12 @@ public class ProgressEventArgs : EventArgs
     public string Message { get; init; } = "";
     public string TaskId { get; init; } = "";
     public string Status { get; init; } = "";
+    public int CurrentFrame { get; init; }
+    public int TotalFrames { get; init; }
+    public double ElapsedSeconds { get; init; }
+    public double EtaSeconds { get; init; }
+    public string OutputPath { get; init; } = "";
+    public string Error { get; init; } = "";
 }
 
 public class LogEventArgs : EventArgs
@@ -212,4 +299,6 @@ public class GpuEventArgs : EventArgs
     public int VramUsedMb { get; init; }
     public int VramTotalMb { get; init; }
     public int TemperatureC { get; init; }
+    public double GpuLoadPercent { get; init; }
+    public string Error { get; init; } = "";
 }

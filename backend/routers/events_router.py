@@ -11,54 +11,75 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from .. import dependencies
 from ..dependencies import get_event_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["Events (SSE)"])
 
+KEEPALIVE_TIMEOUT_SECONDS = 15.0
+GPU_POLL_SECONDS = 5.0
 
-async def _sse_generator(request: Request, event_filter: Optional[str] = None) -> AsyncIterator[str]:
-    """Generiert SSE Events aus der Event-Queue."""
-    queue = get_event_queue()
 
-    # Keepalive alle 15 Sekunden
-    last_event = time.monotonic()
+def _register_client_queue(prefix: str) -> str:
+    client_id = f"{prefix}:{uuid.uuid4().hex}"
+    get_event_queue(client_id)
+    return client_id
 
-    while True:
-        # Prüfe ob Client noch verbunden ist
-        if await request.is_disconnected():
-            logger.debug("SSE Client getrennt")
-            break
 
-        try:
-            event = await asyncio.wait_for(queue.get(), timeout=15.0)
+def _cleanup_client_queue(client_id: Optional[str]) -> None:
+    if not client_id:
+        return
+    dependencies._event_queues.pop(client_id, None)
 
-            if event_filter and event.get("event") != event_filter:
+
+async def _event_stream(
+    request: Request,
+    *,
+    client_id: str,
+    event_filter: Optional[set[str]] = None,
+) -> AsyncIterator[str]:
+    """Generiert SSE Events aus einer dedizierten per-connection Queue."""
+    queue = get_event_queue(client_id)
+
+    try:
+        while True:
+            if await request.is_disconnected():
+                logger.debug("SSE Client getrennt: %s", client_id)
+                break
+
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                yield f": keepalive {int(time.monotonic())}\n\n"
                 continue
 
             event_type = event.get("event", "message")
+            if event_filter and event_type not in event_filter:
+                continue
+
             data = json.dumps(event.get("data", {}), ensure_ascii=False)
-
             yield f"event: {event_type}\ndata: {data}\n\n"
-            last_event = time.monotonic()
-
-        except asyncio.TimeoutError:
-            # Keepalive senden
-            yield f": keepalive {int(time.monotonic())}\n\n"
+    finally:
+        _cleanup_client_queue(client_id)
 
 
 @router.get("/progress")
 async def progress_stream(request: Request) -> StreamingResponse:
     """SSE Stream für Progress-Updates (Analyse, Rendering, Import)."""
-    logger.info("SSE Client verbunden: /events/progress")
+    client_id = _register_client_queue("progress")
+    logger.info("SSE Client verbunden: /events/progress (%s)", client_id)
+    progress_events = {"analysis_progress", "render_progress", "stem_progress", "import_progress"}
     return StreamingResponse(
-        _sse_generator(request),
+        _event_stream(request, client_id=client_id, event_filter=progress_events),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -71,29 +92,10 @@ async def progress_stream(request: Request) -> StreamingResponse:
 @router.get("/log")
 async def log_stream(request: Request) -> StreamingResponse:
     """SSE Stream für Log-Nachrichten."""
-    logger.info("SSE Client verbunden: /events/log")
-
-    async def _log_generator() -> AsyncIterator[str]:
-        """Generiert Log-Events aus der dedizierten Log-Queue (event_type='log').
-        BUG-005 Fix: Default-Queue nutzen, nicht "logs"-Queue die nie befüllt wurde.
-        BUG-028 Fix: Eigene "log"-Queue statt Default-Queue (Fan-out in publish_event).
-        """
-        queue = get_event_queue("log")  # Eigene Queue — kein Event-Diebstahl von /events/progress
-        while True:
-            if await request.is_disconnected():
-                break
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                # Nur Log-Events dieses Streams weiterleiten
-                if event.get("event") != "log":
-                    continue
-                data = json.dumps(event.get("data", {}), ensure_ascii=False)
-                yield f"event: log\ndata: {data}\n\n"
-            except asyncio.TimeoutError:
-                yield f": keepalive\n\n"
-
+    client_id = _register_client_queue("log")
+    logger.info("SSE Client verbunden: /events/log (%s)", client_id)
     return StreamingResponse(
-        _log_generator(),
+        _event_stream(request, client_id=client_id, event_filter={"log"}),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -109,28 +111,39 @@ async def gpu_stream(request: Request) -> StreamingResponse:
     logger.info("SSE Client verbunden: /events/gpu")
 
     async def _gpu_generator() -> AsyncIterator[str]:
-        """Generiert periodische GPU-Status Events."""
+        monitor = None
+        try:
+            from pb_studio.core.system_monitor import SystemMonitor
+
+            monitor = SystemMonitor()
+        except Exception as exc:
+            logger.debug("GPU-Monitor Initialisierung fehlgeschlagen: %s", exc)
+
         while True:
             if await request.is_disconnected():
                 break
             try:
-                from pb_studio.core.system_monitor import SystemMonitor
-                monitor = SystemMonitor()
-                # BUG-024 Fix: get_gpu_info() → get_stats(); Keys an get_stats()-Format angepasst
-                gpu_info = monitor.get_stats()
-                data = json.dumps({
-                    "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
-                    "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
-                    "temperature_c": gpu_info.get("gpu_temp", 0),
-                    "gpu_load": gpu_info.get("gpu_load", 0),
-                    "timestamp": time.time(),
-                }, ensure_ascii=False)
-                yield f"event: gpu_status\ndata: {data}\n\n"
-            except Exception as e:
-                logger.debug(f"GPU-Status nicht verfügbar: {e}")
-                yield f"event: gpu_status\ndata: {{\"error\": \"nicht verfügbar\"}}\n\n"
+                if monitor is None:
+                    raise RuntimeError("GPU-Monitor nicht verfügbar")
 
-            await asyncio.sleep(5.0)  # Alle 5 Sekunden
+                gpu_info = monitor.get_stats() or {}
+                data = json.dumps(
+                    {
+                        "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
+                        "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
+                        "temperature_c": gpu_info.get("gpu_temp", 0),
+                        "gpu_load": gpu_info.get("gpu_load", 0),
+                        "timestamp": time.time(),
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"event: gpu_status\ndata: {data}\n\n"
+            except Exception as exc:
+                logger.debug("GPU-Status nicht verfügbar: %s", exc)
+                yield "event: gpu_status\ndata: {\"error\": \"nicht verfügbar\"}\n\n"
+
+            with suppress(asyncio.CancelledError):
+                await asyncio.sleep(GPU_POLL_SECONDS)
 
     return StreamingResponse(
         _gpu_generator(),

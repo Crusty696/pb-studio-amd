@@ -43,68 +43,63 @@ public class ApiClient : IApiClient
     }
 
     public async Task<GpuStatus?> GetGpuStatusAsync()
-    {
-        return await GetAsync<GpuStatus>("/gpu/status").ConfigureAwait(false);
-    }
+        => await GetAsync<GpuStatus>("/gpu/status").ConfigureAwait(false);
 
     public async Task CleanupGpuAsync()
         => await PostAsync<object>("/gpu/cleanup", null).ConfigureAwait(false);
 
+    // --- Project ---
+
+    public async Task<ProjectInfo?> CreateProjectAsync(string name, string path)
+        => await PostAsync<ProjectInfo>("/project/create", new { name, path }).ConfigureAwait(false);
+
+    public async Task<ProjectInfo?> OpenProjectAsync(string path)
+        => await PostAsync<ProjectInfo>("/project/open", new { path }).ConfigureAwait(false);
+
+    public async Task<StatusResponse?> SaveProjectAsync()
+        => await PostAsync<StatusResponse>("/project/save", null).ConfigureAwait(false);
+
+    public async Task<StatusResponse?> CloseProjectAsync()
+        => await PostAsync<StatusResponse>("/project/close", null).ConfigureAwait(false);
+
+    public async Task<ProjectInfo?> GetProjectInfoAsync()
+        => await GetAsync<ProjectInfo>("/project/info").ConfigureAwait(false);
+
     // --- Audio ---
 
     public async Task<AudioClipInfo?> ImportAudioAsync(string path)
-    {
-        return await PostAsync<AudioClipInfo>("/audio/import", new { path }).ConfigureAwait(false);
-    }
+        => await PostAsync<AudioClipInfo>("/audio/import", new { path }).ConfigureAwait(false);
 
     public async Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200)
-    {
-        return await GetAsync<List<AudioClipInfo>>($"/audio/clips?page={page}&limit={limit}").ConfigureAwait(false);
-    }
+        => await GetAsync<List<AudioClipInfo>>($"/audio/clips?page={page}&limit={limit}").ConfigureAwait(false);
 
     public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId)
-    {
-        return await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }).ConfigureAwait(false);
-    }
+        => await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }).ConfigureAwait(false);
 
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
-    {
-        return await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
-    }
+        => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
 
     public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "UVR-MDX-NET-Inst_HQ_3.onnx")
-    {
-        return await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
-    }
+        => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
 
     // --- Audio (Erweitert) ---
 
     public async Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3)
-    {
-        return await GetAsync<WaveformData>($"/audio/waveform/{clipId}?bands={bands}").ConfigureAwait(false);
-    }
+        => await GetAsync<WaveformData>($"/audio/waveform/{clipId}?bands={bands}").ConfigureAwait(false);
 
     public async Task<List<Dictionary<string, object>>?> GetStructureAsync(int clipId)
-    {
-        return await GetAsync<List<Dictionary<string, object>>>($"/audio/structure/{clipId}").ConfigureAwait(false);
-    }
+        => await GetAsync<List<Dictionary<string, object>>>($"/audio/structure/{clipId}").ConfigureAwait(false);
 
     public async Task<Dictionary<string, object>?> GetSpectralAsync(int clipId)
-    {
-        return await GetAsync<Dictionary<string, object>>($"/audio/spectral/{clipId}").ConfigureAwait(false);
-    }
+        => await GetAsync<Dictionary<string, object>>($"/audio/spectral/{clipId}").ConfigureAwait(false);
 
     // --- Video ---
 
     public async Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths)
-    {
-        return await PostAsync<List<VideoClipInfo>>("/video/import", new { paths }).ConfigureAwait(false);
-    }
+        => await PostAsync<List<VideoClipInfo>>("/video/import", new { paths }).ConfigureAwait(false);
 
     public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200)
-    {
-        return await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}").ConfigureAwait(false);
-    }
+        => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}").ConfigureAwait(false);
 
     public async Task<byte[]?> GetThumbnailAsync(int clipId)
     {
@@ -120,48 +115,32 @@ public class ApiClient : IApiClient
     }
 
     public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId)
-    {
-        return await PostAsync<VideoAnalysisResult>("/video/analyze", new { clip_id = clipId }).ConfigureAwait(false);
-    }
+        => await PostAsync<VideoAnalysisResult>("/video/analyze", new { clip_id = clipId }).ConfigureAwait(false);
 
     public async Task<List<SceneInfo>?> GetScenesAsync(int clipId)
-    {
-        return await GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}").ConfigureAwait(false);
-    }
+        => await GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}").ConfigureAwait(false);
 
     public async Task<MotionData?> GetMotionAsync(int clipId)
-    {
-        return await GetAsync<MotionData>($"/video/motion/{clipId}").ConfigureAwait(false);
-    }
+        => await GetAsync<MotionData>($"/video/motion/{clipId}").ConfigureAwait(false);
 
     // --- Pacing ---
 
     public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config)
-    {
-        return await PostAsync<CutListResponse>("/pacing/generate", config).ConfigureAwait(false);
-    }
+        => await PostAsync<CutListResponse>("/pacing/generate", config).ConfigureAwait(false);
 
     public async Task<TimelineResponse?> GetTimelineAsync()
-    {
-        return await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
-    }
+        => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
 
     // --- Render ---
 
     public async Task<RenderProgress?> StartRenderAsync(RenderRequest request)
-    {
-        return await PostAsync<RenderProgress>("/render/start", request).ConfigureAwait(false);
-    }
+        => await PostAsync<RenderProgress>("/render/start", request).ConfigureAwait(false);
 
     public async Task<RenderProgress?> GetRenderStatusAsync(string taskId)
-    {
-        return await GetAsync<RenderProgress>($"/render/status/{taskId}").ConfigureAwait(false);
-    }
+        => await GetAsync<RenderProgress>($"/render/status/{taskId}").ConfigureAwait(false);
 
     public async Task CancelRenderAsync(string taskId)
-    {
-        await PostAsync<object>($"/render/cancel/{taskId}", null).ConfigureAwait(false);
-    }
+        => await PostAsync<object>($"/render/cancel/{taskId}", null).ConfigureAwait(false);
 
     // --- Generische Helfer ---
 
@@ -200,6 +179,8 @@ public class ApiClient : IApiClient
 
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
 public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
+public record StatusResponse(bool Success, string Message);
+public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float> EnergyCurve = null!, List<Dictionary<string, object>>? StructureSegments = null, Dictionary<string, object>? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);

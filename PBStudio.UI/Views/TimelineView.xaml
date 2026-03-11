@@ -72,6 +72,80 @@
                      Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
                      Margin="0,0,0,4"/>
 
+        <!-- ══ Timeline Transport / Scrubber ══ -->
+        <md:Card DockPanel.Dock="Top" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Command="{Binding PreviousCutCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Padding="10,4" Margin="0,0,6,0"
+                        ToolTip="Vorherigen Cut auswählen">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="SkipPrevious" Width="16" Height="16" Margin="0,0,4,0"/>
+                        <TextBlock Text="Zurück" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Grid.Column="1"
+                        Command="{Binding NextCutCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Padding="10,4"
+                        ToolTip="Nächsten Cut auswählen">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="SkipNext" Width="16" Height="16" Margin="0,0,4,0"/>
+                        <TextBlock Text="Weiter" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="TIMELINE SCRUBBER" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <Slider Minimum="0"
+                            Maximum="{Binding TotalDuration, Mode=OneWay}"
+                            Value="{Binding SelectedTimelinePosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            IsEnabled="{Binding HasTimeline}"
+                            AutoToolTipPlacement="TopLeft"
+                            AutoToolTipPrecision="1"
+                            TickPlacement="None"/>
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   FontSize="11"
+                                   Text="{Binding SelectedTimelinePositionText, Mode=OneWay}"/>
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   FontSize="11"
+                                   Text="{Binding SelectionIndexText, Mode=OneWay}"/>
+                    </DockPanel>
+                </StackPanel>
+
+                <Border Grid.Column="5"
+                        Background="{StaticResource AbletonPanel}"
+                        CornerRadius="4"
+                        Padding="10,6"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Aktuell" Foreground="{StaticResource AbletonTextDim}" FontSize="10" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding SelectedClipName, Mode=OneWay}"
+                                   Foreground="{StaticResource AbletonText}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   MaxWidth="180"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </md:Card>
+
         <!-- ══ Details Panel ══ -->
         <md:Card DockPanel.Dock="Bottom" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,8,0,0">
             <Grid>
@@ -83,15 +157,15 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="SELEKTIERTER CUT" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
                     <TextBlock Foreground="{StaticResource AbletonText}" FontSize="12" FontWeight="SemiBold"
-                               Text="{Binding SelectedClipName}"/>
+                               Text="{Binding SelectedClipName, Mode=OneWay}"/>
                     <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,4,0,0">
-                        <Run Text="Zeitraum: "/><Run Text="{Binding SelectedTimeRange}"/>
+                        <Run Text="Zeitraum: "/><Run Text="{Binding SelectedTimeRange, Mode=OneWay}"/>
                     </TextBlock>
                     <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                        <Run Text="Clip-In: "/><Run Text="{Binding SelectedClipStart}"/>
+                        <Run Text="Clip-In: "/><Run Text="{Binding SelectedClipStart, Mode=OneWay}"/>
                     </TextBlock>
                     <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                        <Run Text="Trigger: "/><Run Text="{Binding SelectedTrigger}"/>
+                        <Run Text="Trigger: "/><Run Text="{Binding SelectedTrigger, Mode=OneWay}"/>
                     </TextBlock>
                 </StackPanel>
 
@@ -100,7 +174,7 @@
                     <TextBlock Foreground="{StaticResource AbletonTextDim}"
                                FontSize="11"
                                TextWrapping="Wrap"
-                               Text="{Binding SelectedFilePath}"/>
+                               Text="{Binding SelectedFilePath, Mode=OneWay}"/>
                 </StackPanel>
             </Grid>
         </md:Card>

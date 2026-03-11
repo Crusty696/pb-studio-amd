@@ -286,5 +286,105 @@
 - Timeline is still not a full interactive editor, but it is no longer just a dumb dump table.
 - This is a sensible intermediate step before a true timeline-control rebuild.
 
+### WPF project workflow implementation
+- Closed the largest remaining product-shell gap by wiring real project lifecycle actions into the WPF main shell.
+- Updated `PBStudio.UI/Services/IApiClient.cs` + `ApiClient.cs`:
+  - added typed `/project/create|open|save|close|info` client methods
+  - added `ProjectInfo` + `StatusResponse` response models
+- Replaced stubbed `PBStudio.UI/Services/ProjectService.cs` behavior with real backend-backed project state management.
+- Updated `PBStudio.UI/ViewModels/MainViewModel.cs`:
+  - added project state (`CurrentProjectName`, `CurrentProjectPath`, `HasProject`)
+  - added `CreateProject`, `OpenProject`, `SaveProject`, `CloseProject` commands
+  - refreshes project info after backend startup
+- Updated `PBStudio.UI/MainWindow.xaml`:
+  - added minimal top-level project actions (Neu / Öffnen / Speichern / Schließen)
+  - shows current project name/path in the shell header
+- Added lightweight `PromptDialog` helper for project naming.
+- Verification:
+  - `dotnet build PBStudio.UI/PBStudio.UI.csproj -c Debug`
+  - result: `0 warnings`, `0 errors`
+
+### Interpretation
+- PB Studio now exposes a real project lifecycle in the actual WPF product shell instead of hiding it in backend-only capability.
+- This meaningfully improves launchability and reduces the biggest “not finished” product gap.
+
+### WPF startup smoke + crash fix
+- Ran the real WPF startup path via `dotnet run --project PBStudio.UI/PBStudio.UI.csproj -c Debug` instead of relying only on compile success.
+- Found and fixed a real startup blocker:
+  - `TimelineView.xaml` bound computed read-only properties (`SelectedClipName`, `SelectedTimeRange`, `SelectedClipStart`, `SelectedTrigger`, `SelectedFilePath`) without explicit `Mode=OneWay`
+  - WPF attempted default editable binding semantics and crashed the app during window creation
+- Fixed all affected bindings to `Mode=OneWay`.
+- Re-verified:
+  - `dotnet build PBStudio.UI/PBStudio.UI.csproj -c Debug` -> `0 warnings`, `0 errors`
+  - `dotnet run --project PBStudio.UI/PBStudio.UI.csproj -c Debug` -> app reached running state and actively loaded backend/media data instead of crashing on startup
+
+### Interpretation
+- PB Studio now has a real WPF startup smoke proof, not just a build proof.
+- This closed an actual launch-blocking regression introduced by the earlier timeline inspection upgrade.
+
+### Release surface cleanup
+- Rewrote `README.md` onto the real product architecture and launch path:
+  - WPF frontend + FastAPI backend + Python core
+  - real startup commands
+  - smoke checklist
+  - known limits
+- This removes the old mixed PyQt/WPF ambiguity from the project surface.
+
+### Integrated runtime + workflow hardening pass
+- Implemented a real WPF project workflow in the main shell:
+  - New / Open / Save / Close actions
+  - current project name/path shown in the shell
+  - `ProjectService` now uses real backend project endpoints instead of stub behavior
+- Performed a real WPF startup smoke against the app, not just a build check.
+- Found and fixed a launch blocker in `TimelineView.xaml`:
+  - read-only computed bindings now use `Mode=OneWay`
+  - app now reaches running state instead of crashing during window creation
+- Hardened `VideoLibraryViewModel` against overlapping refreshes:
+  - load gate added
+  - thumbnail cache added
+  - duplicate thumbnail churn reduced
+  - project-close now clears library state cleanly
+- Hardened `SSEClient` against runtime payload issues:
+  - numeric parsing now tolerates float/string variants
+  - fixed live GPU SSE format errors
+
+### Parallel team integration results
+- Timeline usability improved:
+  - scrubber/transport card added
+  - previous/next cut navigation added
+  - nearest-cut auto-selection during scrub
+  - selected cut index/status surfaced in UI
+- Anchor runtime hardened:
+  - duplicate waveform/beat loads serialized
+  - audio selection preserved across refreshes
+  - beat loading skips non-analyzed clips
+  - beat recovery retries through analyze once
+  - repeated 404 churn suppressed after failed recovery
+  - waveform remains usable even if beats are unavailable
+- SSE / Production runtime hardened further:
+  - SSE frame parsing now respects proper blank-line event dispatch
+  - multi-line payloads and keepalives handled more correctly
+  - progress payload support widened (frames, elapsed, ETA, output, error)
+  - backend SSE router fanout made more robust per connection
+  - Production tab now gives richer runtime/GPU/render feedback and cleaner state transitions
+
+### Integrated verification
+- `dotnet build PBStudio.UI/PBStudio.UI.csproj -c Debug -p:OutDir=.build_verify\integrated\` passed cleanly.
+- `python -m py_compile backend/routers/events_router.py backend/routers/project_router.py` passed.
+- Real WPF launch from verified output directory succeeded.
+- Backend smoke during integrated run succeeded:
+  - `/health` ok
+  - audio clips reachable
+  - video clips reachable
+- Live SSE verification completed earlier for:
+  - `/events/progress`
+  - `/events/log`
+  - `/events/gpu`
+
+### Current known remaining gaps
+- Full click-confirmed WPF project open/save/close/reopen path is still not fully exercised end-to-end from the desktop UI.
+- Anchor visual click-smoke is still lighter than build/runtime verification.
+- A full safe render-progress UI proof from the integrated WPF shell still remains desirable.
+
 ### Next work block
-- Optional real-world video-analysis validation with richer external/local clip
+- Commit integrated product/runtime hardening block, then continue with practical WPF click-path verification and release/publish readiness

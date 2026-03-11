@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -13,6 +14,9 @@ namespace PBStudio.UI.ViewModels;
 public partial class AnchorViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly HashSet<int> _beatsUnavailableClipIds = [];
+    private int _loadSequence;
     private const double WaveformWidth = 720.0;
     private const double WaveformHeight = 180.0;
     private const int MaxWaveformBars = 180;
@@ -45,7 +49,7 @@ public partial class AnchorViewModel : ObservableObject
     {
         TimelineDuration = value?.DurationSeconds > 0 ? value.DurationSeconds : 300;
         CurrentPosition = 0;
-        _ = LoadWaveformAndBeatsAsync();
+        _ = LoadWaveformAndBeatsAsync(forceBeatReload: false);
     }
 
     partial void OnCurrentPositionChanged(double value)
@@ -93,8 +97,15 @@ public partial class AnchorViewModel : ObservableObject
             });
         }
 
-        if (SelectedAudioClip == null && AvailableAudioClips.Count > 0)
+        var selectedClipId = SelectedAudioClip?.Id;
+        if (selectedClipId.HasValue)
+        {
+            SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value);
+        }
+        else if (AvailableAudioClips.Count > 0)
+        {
             SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.IsAnalyzed) ?? AvailableAudioClips[0];
+        }
 
         StatusText = $"{AvailableAudioClips.Count} Audio-Quellen verfügbar";
     }
@@ -102,7 +113,10 @@ public partial class AnchorViewModel : ObservableObject
     [RelayCommand]
     private async Task ReloadWaveformAsync()
     {
-        await LoadWaveformAndBeatsAsync();
+        if (SelectedAudioClip != null)
+            _beatsUnavailableClipIds.Remove(SelectedAudioClip.Id);
+
+        await LoadWaveformAndBeatsAsync(forceBeatReload: true);
     }
 
     [RelayCommand]
@@ -126,35 +140,62 @@ public partial class AnchorViewModel : ObservableObject
         }
     }
 
-    private async Task LoadWaveformAndBeatsAsync()
+    private async Task LoadWaveformAndBeatsAsync(bool forceBeatReload)
     {
-        WaveformBars.Clear();
-        BeatMarkers.Clear();
-
-        if (SelectedAudioClip == null)
+        var clip = SelectedAudioClip;
+        if (clip == null)
         {
+            WaveformBars.Clear();
+            BeatMarkers.Clear();
             StatusText = "Keine Audio-Quelle ausgewählt";
             return;
         }
 
-        IsLoadingWaveform = true;
-        StatusText = $"Lade Waveform: {SelectedAudioClip.Name}...";
+        var loadSequence = Interlocked.Increment(ref _loadSequence);
 
+        await _loadGate.WaitAsync();
         try
         {
-            var waveform = await _api.GetWaveformAsync(SelectedAudioClip.Id, bands: 3);
-            var beats = await _api.GetBeatsAsync(SelectedAudioClip.Id);
+            if (loadSequence != _loadSequence)
+                return;
+
+            clip = SelectedAudioClip;
+            if (clip == null)
+            {
+                WaveformBars.Clear();
+                BeatMarkers.Clear();
+                StatusText = "Keine Audio-Quelle ausgewählt";
+                return;
+            }
+
+            WaveformBars.Clear();
+            BeatMarkers.Clear();
+            IsLoadingWaveform = true;
+            StatusText = $"Lade Waveform: {clip.Name}...";
+
+            var waveform = await _api.GetWaveformAsync(clip.Id, bands: 3);
+            if (loadSequence != _loadSequence || SelectedAudioClip?.Id != clip.Id)
+                return;
+
+            var beats = await LoadBeatsAsync(clip, forceBeatReload);
+            if (loadSequence != _loadSequence || SelectedAudioClip?.Id != clip.Id)
+                return;
 
             TimelineDuration = waveform?.DurationSeconds > 0
                 ? waveform.DurationSeconds
-                : SelectedAudioClip.DurationSeconds > 0
-                    ? SelectedAudioClip.DurationSeconds
+                : clip.DurationSeconds > 0
+                    ? clip.DurationSeconds
                     : 300;
 
             BuildWaveformBars(waveform);
             BuildBeatMarkers(beats, TimelineDuration);
 
-            StatusText = $"Waveform geladen: {WaveformBars.Count} Bars | {BeatMarkers.Count} Beats";
+            var beatStatus = beats?.Count > 0
+                ? $"{BeatMarkers.Count} Beats"
+                : clip.IsAnalyzed
+                    ? "0 Beats"
+                    : "Beat-Analyse ausstehend";
+            StatusText = $"Waveform geladen: {WaveformBars.Count} Bars | {beatStatus}";
         }
         catch (Exception ex)
         {
@@ -163,7 +204,41 @@ public partial class AnchorViewModel : ObservableObject
         finally
         {
             IsLoadingWaveform = false;
+            _loadGate.Release();
         }
+    }
+
+    private async Task<List<BeatData>?> LoadBeatsAsync(AudioClipModel clip, bool forceBeatReload)
+    {
+        if (!forceBeatReload && _beatsUnavailableClipIds.Contains(clip.Id))
+            return null;
+
+        if (!clip.IsAnalyzed)
+            return null;
+
+        var beats = await _api.GetBeatsAsync(clip.Id);
+        if (beats != null)
+        {
+            _beatsUnavailableClipIds.Remove(clip.Id);
+            clip.BeatCount = beats.Count;
+            return beats;
+        }
+
+        var analysis = await _api.AnalyzeAudioAsync(clip.Id);
+        if (analysis != null)
+        {
+            clip.IsAnalyzed = true;
+            clip.Bpm = analysis.Bpm;
+            clip.Key = analysis.Key ?? string.Empty;
+            clip.BeatCount = analysis.BeatCount;
+            _beatsUnavailableClipIds.Remove(clip.Id);
+            return analysis.Beats;
+        }
+
+        clip.IsAnalyzed = false;
+        clip.BeatCount = 0;
+        _beatsUnavailableClipIds.Add(clip.Id);
+        return null;
     }
 
     private void BuildWaveformBars(WaveformData? waveform)

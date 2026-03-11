@@ -28,13 +28,13 @@ Verification levels:
 
 | Area | Status | Verification | Notes | Next step |
 |---|---|---|---|---|
-| App startup | present | live-tested | WPF app starts and stays running in smoke test | UI interaction check |
+| App startup | present | live-tested + crash-fixed | real WPF startup path verified via `dotnet run`; startup crash from read-only timeline bindings was fixed and app now stays running in smoke test | broader click-path verify |
 | Main/backend status integration | present | code-inspected + build-start-verified | MainViewModel waits for backend, updates status | UI path verification |
 | Audio library UI wiring | present | code-inspected + live-tested (backend flow) | Import refresh bug fixed via messenger | WPF click-path verify |
-| Video library UI wiring | partial | code-inspected + live-tested (backend flow) | Import/list flow works, thumbnail API verified; WPF visual path still unverified | Thumbnail/UI verify |
+| Video library UI wiring | present | build-start-verified + live-tested (backend flow) | import/list flow works; startup/load behavior hardened against overlapping refreshes and thumbnail churn via gating + cache | broader click-path verify |
 | Director UI wiring | partial | code-inspected + live-tested (backend pacing) | Generate path works through API | Multi-clip + UI verify |
-| Timeline UI | present | live-tested contract + glue-fixed + build-verified | timeline contract verified live; WPF auto-refresh wiring exists and selected-cut inspection UI now makes review materially more useful | WPF click-path verify / future true timeline control |
-| Production/Render UI | present | live-tested contract + glue-fixed + build-verified | render contract verified live; WPF now syncs audio path, handles render terminal states properly, and exposes a real bound render log instead of placeholder text | live click-path verify |
+| Timeline UI | present | build-start-verified + live-tested contract + glue-fixed | timeline contract verified live; WPF now has selected-cut inspection plus scrubber and previous/next cut navigation for materially better review | broader click-path verify / future true timeline control |
+| Production/Render UI | present | build-start-verified + live-tested contract + glue-fixed | render contract verified live; WPF now syncs audio path, handles render terminal states properly, exposes a real bound render log, and surfaces richer runtime/GPU feedback | live click-path verify |
 | Settings UI | partial | code-inspected | Present, not validated | Settings smoke test |
 | WPF parity vs old PyQt product UI | partial | code-inspected + build-verified | Removed PyQt area is explicitly classified in `PYQT_MIGRATION_CLASSIFICATION.md`; shell screens are largely replaced and Anchor now has real waveform + beat-marker inspection, but true timeline/player/scene-motion inspection still remain rebuild targets | prioritize next interactive timeline/player block |
 
@@ -47,7 +47,7 @@ Verification levels:
 | Video routes core | present | live-tested | import/list/analyze/thumbnail/scenes/motion all exercised live | broader quality / heavier-input test |
 | Pacing generate | present | live-tested | generated 3 cuts in live smoke test | multi-input test |
 | Render routes | partial | code-inspected | API exists, not yet live-tested | render smoke test |
-| Project routes | present | live-tested + fixed | `open/save/close/info` now practically verified; save/load was previously stub-like, now persists `project.json` + `timeline.json` and restores timeline/audio path on reopen | WPF save/open UI path verify |
+| Project routes | present | live-tested + fixed + build-verified | `open/save/close/info` now practically verified; WPF shell now exposes real project lifecycle actions instead of backend-only capability | WPF click-path verify |
 | Schema / DTO alignment | partial | code-inspected + live-tested subset | key routes align | broaden verification |
 
 ## 3. Events / SSE / Runtime Bridge
@@ -56,8 +56,8 @@ Verification levels:
 |---|---|---|---|---|
 | GPU SSE | present | live-tested | `/events/gpu` returns `gpu_status` | long-run observe |
 | Progress SSE | present | code-inspected + build-verified + live-tested backend path | WPF SSE client now actively listens to progress stream and understands backend status fields; backend render progress path already live-tested | WPF click-path observe during long job |
-| Log SSE | partial | code-inspected + build-verified | WPF client now actively listens to `/events/log`; backend/UI wiring no longer dead code, but practical live log-stream proof is still pending | practical test |
-| Reconnect behavior | partial | code-inspected + build-verified | reconnect/backoff logic now applies across progress/log/gpu listeners, but forced-disconnect behavior is still not practically exercised | forced reconnect test |
+| Log SSE | present | live-tested + build-verified | `/events/log` live endpoint verified; client/backend fanout logic hardened and keepalive path observed | WPF render-log click-path verify |
+| Reconnect behavior | partial | code-inspected + live-tested keepalive + build-verified | reconnect/backoff logic applies across progress/log/gpu listeners; live keepalive behavior verified, but forced-disconnect recovery is still not practically exercised | forced reconnect test |
 
 ## 4. Audio
 
@@ -66,7 +66,7 @@ Verification levels:
 | Audio import | present | live-tested | passed | none |
 | Audio library data flow | present | live-tested | clip list available | WPF UI path verify |
 | Audio analysis | present | live-tested | BPM/key/beat count returned | longer file test |
-| Waveform | present | live-tested + build-verified | backend 3-band waveform already verified; Anchor WPF view now renders a real waveform inspection surface instead of placeholder-only UI | live click-path verify |
+| Waveform | present | build-start-verified + live-tested | backend 3-band waveform verified; Anchor WPF view renders a real waveform inspection surface and runtime loading was hardened against duplicate refresh races | broader click-path verify |
 | Structure data | partial | code-inspected | endpoint exists, not tested live | structure test |
 | Spectral data | partial | code-inspected | endpoint exists, not tested live | spectral test |
 | Stem separation | present | live-tested + fixed | API now returns normalized usable stem paths; real vocal/instrumental files verified in `temp/` | optional multi-model / richer-audio test |
@@ -88,7 +88,7 @@ Verification levels:
 | Area | Status | Verification | Notes | Next step |
 |---|---|---|---|---|
 | Basic pacing generate | present | live-tested | generated cuts successfully | quality/multi-input test |
-| Timeline persistence / retrieval | partial | code-inspected | not tested live | timeline route test |
+| Timeline persistence / retrieval | present | live-tested + fixed | timeline state now persists and reloads via project save/open flow; active timeline retrieval route already exercised live | WPF click-path verify |
 | Multi-clip selection logic | partial | code-inspected | UI supports it | multi-clip pacing test |
 | Cut quality / semantic quality | partial | not-yet-verified | functional only, not judged | manual output review |
 
@@ -116,7 +116,7 @@ Verification levels:
 |---|---|---|---|---|
 | DB startup load | present | live-tested | backend restored audio/video clips | none |
 | Clip metadata persistence | partial | live-tested subset | import/analyze metadata visible | restart-consistency test |
-| Project persistence | present | live-tested + fixed | save/load now durably persists `project.json` + `timeline.json`; close→reopen restored timeline/audio path and project counts in live test | WPF save/open path verify |
+| Project persistence | present | live-tested + fixed + build-verified | save/load now durably persists `project.json` + `timeline.json`; WPF shell has save/open/close actions wired, but full click-path proof is still pending | WPF click-path verify |
 | Vector store / embeddings | partial | code-inspected | not practically tested | vector path review |
 
 ## 10. QA / Delivery Confidence
@@ -126,15 +126,15 @@ Verification levels:
 | Build confidence | present | live-tested | WPF build clean | keep verifying after changes |
 | Backend smoke confidence | present | live-tested | core import/analyze/video/render paths green | broaden coverage |
 | Full E2E confidence | partial | live-tested subset | focused end-to-end smoke coverage now exists, but not full user-path coverage | expand focused E2E list |
-| Release readiness | partial | assessed | major core flows work; config-alignment risk reduced and removed-PyQt area classified, but interactive WPF parity + cancel/stress/persistence coverage remain open | close red/yellow items |
+| Release readiness | partial | assessed + build-start-verified | major core flows work; project shell, startup, SSE, timeline and anchor runtime are materially stronger, but full WPF click-path proof and publish/release packaging are still open | close remaining click-path/publish gaps |
 
 ---
 
 ## Current Priority Order
-1. Optional real-world video-analysis validation with richer external/local clip
-2. Optional multi-model / richer-audio stem validation
-3. SSE progress/log/reconnect practical verification
-4. WPF click-path verification for Timeline / Production / Anchor
+1. Practical WPF project workflow verification (open/save/close/reopen) + click-path smoke
+2. WPF click-path verification for Timeline / Production / Anchor
+3. Render-progress / cancel UI proof from integrated WPF shell
+4. Publish/release readiness pass
 5. True timeline/player control rebuild planning
 
 ## Working Rules

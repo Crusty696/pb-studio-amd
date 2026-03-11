@@ -14,6 +14,7 @@ public partial class ProductionViewModel : ObservableObject
     private readonly IApiClient _api;
     private readonly SSEClient _sse;
     private string? _currentTaskId;
+    private DateTime _lastGpuLogUtc = DateTime.MinValue;
 
     [ObservableProperty] private string _outputPath = "";
     [ObservableProperty] private string _audioPath = "";
@@ -35,6 +36,7 @@ public partial class ProductionViewModel : ObservableObject
         _sse = sse;
         _sse.ProgressReceived += OnRenderProgress;
         _sse.LogReceived += OnLogReceived;
+        _sse.GpuStatusReceived += OnGpuStatusReceived;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
@@ -59,6 +61,12 @@ public partial class ProductionViewModel : ObservableObject
     [RelayCommand]
     private async Task StartRenderAsync()
     {
+        if (IsRendering)
+        {
+            AppendLog("warn", "Rendering läuft bereits");
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(OutputPath))
         {
             StatusText = "Kein Ausgabepfad gewählt";
@@ -74,11 +82,15 @@ public partial class ProductionViewModel : ObservableObject
 
         RenderLogEntries.Clear();
         AppendLog("info", $"Render startet: {OutputPath}");
+        AppendLog("info", $"Quelle: {AudioPath}");
+        AppendLog("info", $"Preset: {SelectedQuality} | {Width}x{Height} @ {Fps:0.##} fps");
 
         IsRendering = true;
         RenderProgress = 0;
-        EtaText = "";
+        EtaText = "Verbinde…";
         StatusText = "Rendering startet...";
+        _currentTaskId = null;
+        _lastGpuLogUtc = DateTime.MinValue;
 
         var request = new RenderRequest(
             OutputPath: OutputPath,
@@ -93,14 +105,12 @@ public partial class ProductionViewModel : ObservableObject
         if (result != null)
         {
             _currentTaskId = result.TaskId;
-            StatusText = $"Render-Task: {result.TaskId}";
+            ApplyProgressUpdate(result.TaskId, result.Status, result.Percent, "Render-Task registriert", result.CurrentFrame, result.TotalFrames, result.ElapsedSeconds, result.EtaSeconds, result.OutputPath, result.Error);
             AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
         }
         else
         {
-            IsRendering = false;
-            StatusText = "Rendering konnte nicht gestartet werden";
-            AppendLog("error", "Render-Start fehlgeschlagen");
+            ResetRenderState("Rendering konnte nicht gestartet werden", "error", "Render-Start fehlgeschlagen");
         }
     }
 
@@ -112,6 +122,7 @@ public partial class ProductionViewModel : ObservableObject
 
         await _api.CancelRenderAsync(_currentTaskId);
         StatusText = "Abbruch angefordert...";
+        EtaText = "Stoppt…";
         AppendLog("warn", $"Cancel angefordert für Task {_currentTaskId}");
     }
 
@@ -131,51 +142,171 @@ public partial class ProductionViewModel : ObservableObject
 
     private void OnRenderProgress(object? sender, ProgressEventArgs e)
     {
-        if (e.EventType != "render_progress") return;
-        if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId) return;
+        if (e.EventType != "render_progress")
+            return;
+
+        if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId)
+            return;
 
         App.Current.Dispatcher.Invoke(() =>
         {
-            RenderProgress = e.Percent;
+            if (!string.IsNullOrWhiteSpace(e.TaskId))
+                _currentTaskId = e.TaskId;
 
-            if (!string.IsNullOrWhiteSpace(e.Message))
-                StatusText = e.Message;
-
-            switch (e.Status)
-            {
-                case "completed":
-                    IsRendering = false;
-                    RenderProgress = 100;
-                    EtaText = "";
-                    StatusText = "Rendering abgeschlossen!";
-                    AppendLog("info", "Rendering abgeschlossen");
-                    break;
-
-                case "cancelled":
-                    IsRendering = false;
-                    EtaText = "";
-                    StatusText = "Rendering abgebrochen";
-                    AppendLog("warn", "Rendering wurde abgebrochen");
-                    break;
-
-                case "failed":
-                    IsRendering = false;
-                    EtaText = "";
-                    StatusText = string.IsNullOrWhiteSpace(e.Message) ? "Rendering fehlgeschlagen" : e.Message;
-                    AppendLog("error", $"Rendering fehlgeschlagen: {StatusText}");
-                    break;
-
-                case "running":
-                    if (e.Percent > 0)
-                        EtaText = $"{e.Percent:F0}%";
-                    break;
-            }
+            ApplyProgressUpdate(
+                e.TaskId,
+                e.Status,
+                e.Percent,
+                e.Message,
+                e.CurrentFrame,
+                e.TotalFrames,
+                e.ElapsedSeconds,
+                e.EtaSeconds,
+                e.OutputPath,
+                e.Error);
         });
+    }
+
+    private void ApplyProgressUpdate(
+        string? taskId,
+        string? status,
+        double percent,
+        string? message,
+        int currentFrame,
+        int totalFrames,
+        double elapsedSeconds,
+        double etaSeconds,
+        string? outputPath,
+        string? error)
+    {
+        var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+        var effectiveMessage = string.IsNullOrWhiteSpace(message)
+            ? normalizedStatus switch
+            {
+                "completed" => "Rendering abgeschlossen",
+                "cancelled" => "Rendering abgebrochen",
+                "failed" => "Rendering fehlgeschlagen",
+                "pending" => "Render-Task wartet…",
+                "running" => "Rendering läuft...",
+                _ => "Render-Update empfangen",
+            }
+            : message.Trim();
+
+        RenderProgress = Math.Clamp(percent, 0, 100);
+        StatusText = effectiveMessage;
+        EtaText = BuildEtaText(normalizedStatus, percent, currentFrame, totalFrames, elapsedSeconds, etaSeconds);
+
+        switch (normalizedStatus)
+        {
+            case "completed":
+                IsRendering = false;
+                RenderProgress = 100;
+                EtaText = string.Empty;
+                StatusText = effectiveMessage;
+                AppendLog("info", taskId is null ? effectiveMessage : $"{effectiveMessage} ({taskId})");
+                if (!string.IsNullOrWhiteSpace(outputPath))
+                    AppendLog("info", $"Output: {outputPath}");
+                _currentTaskId = null;
+                break;
+
+            case "cancelled":
+                ResetRenderState(effectiveMessage, "warn", taskId is null ? effectiveMessage : $"{effectiveMessage} ({taskId})");
+                break;
+
+            case "failed":
+                ResetRenderState(effectiveMessage, "error", string.IsNullOrWhiteSpace(error) ? effectiveMessage : $"{effectiveMessage}: {error}");
+                break;
+
+            default:
+                IsRendering = true;
+                break;
+        }
+    }
+
+    private static string BuildEtaText(string status, double percent, int currentFrame, int totalFrames, double elapsedSeconds, double etaSeconds)
+    {
+        if (status is "completed" or "cancelled" or "failed")
+            return string.Empty;
+
+        var parts = new List<string>();
+
+        if (percent > 0)
+            parts.Add($"{percent:F0}%");
+
+        if (totalFrames > 0)
+            parts.Add($"{currentFrame}/{totalFrames} Frames");
+
+        if (etaSeconds > 0)
+            parts.Add($"ETA {FormatDuration(etaSeconds)}");
+        else if (elapsedSeconds > 0)
+            parts.Add($"Läuft {FormatDuration(elapsedSeconds)}");
+
+        return string.Join(" | ", parts);
+    }
+
+    private static string FormatDuration(double totalSeconds)
+    {
+        var safeSeconds = Math.Max(0, (int)Math.Round(totalSeconds));
+        var duration = TimeSpan.FromSeconds(safeSeconds);
+
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}"
+            : $"{duration.Minutes:D2}:{duration.Seconds:D2}";
     }
 
     private void OnLogReceived(object? sender, LogEventArgs e)
     {
         App.Current.Dispatcher.Invoke(() => AppendLog(e.Level, e.Message));
+    }
+
+    private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
+    {
+        if (!IsRendering)
+            return;
+
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Error))
+            {
+                if (DateTime.UtcNow - _lastGpuLogUtc > TimeSpan.FromSeconds(15))
+                {
+                    AppendLog("debug", $"GPU-Monitor: {e.Error}");
+                    _lastGpuLogUtc = DateTime.UtcNow;
+                }
+                return;
+            }
+
+            var gpuParts = new List<string>();
+            if (e.VramTotalMb > 0)
+                gpuParts.Add($"VRAM {e.VramUsedMb}/{e.VramTotalMb} MB");
+            if (e.GpuLoadPercent > 0)
+                gpuParts.Add($"Load {e.GpuLoadPercent:F0}%");
+            if (e.TemperatureC > 0)
+                gpuParts.Add($"{e.TemperatureC}°C");
+
+            if (gpuParts.Count == 0)
+                return;
+
+            var gpuSummary = string.Join(" | ", gpuParts);
+            EtaText = string.IsNullOrWhiteSpace(EtaText)
+                ? gpuSummary
+                : $"{EtaText} | {gpuSummary}";
+
+            if (DateTime.UtcNow - _lastGpuLogUtc > TimeSpan.FromSeconds(15))
+            {
+                AppendLog("debug", $"GPU: {gpuSummary}");
+                _lastGpuLogUtc = DateTime.UtcNow;
+            }
+        });
+    }
+
+    private void ResetRenderState(string statusText, string logLevel, string logMessage)
+    {
+        IsRendering = false;
+        EtaText = string.Empty;
+        StatusText = statusText;
+        AppendLog(logLevel, logMessage);
+        _currentTaskId = null;
     }
 
     private void AppendLog(string level, string message)

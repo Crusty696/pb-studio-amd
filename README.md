@@ -1,159 +1,169 @@
-# PB Studio - AMD Premium Edition
+# PB Studio AMD
 
-Video- und Audio-Produktionsanwendung, optimiert fuer AMD-Grafikkarten mit DirectML-Beschleunigung.
+PB Studio AMD ist die Windows-/AMD-orientierte Hybrid-Version von PB Studio mit:
+- **WPF-Frontend** (`PBStudio.UI`)
+- **FastAPI-Backend** (`backend/`)
+- **Python-Core** für Audio-, Video- und Render-Pipelines (`src/pb_studio/`)
 
-## Features
+Der aktuelle Produktpfad ist **nicht mehr die alte PyQt-UI**. Die aktive Desktop-Oberfläche ist die WPF-Anwendung.
 
-- **Beat Detection**: Automatische Erkennung von Beats und Rhythmus mit BeatNet
-- **Stem Separation**: Trennung von Vocals, Drums, Bass und anderen Instrumenten mit Demucs
-- **Scene Detection**: Automatische Erkennung von Szenenwechseln
-- **Vision Analysis**: Bildbeschreibung und -analyse mit Moondream (ONNX)
-- **Optical Flow**: Motion-Analyse mit RAFT fuer Szenenuebergaenge
-- **Hardware Monitoring**: Echtzeit-Ueberwachung von GPU, CPU und RAM
-- **AMF Encoding**: Hardware-beschleunigtes Video-Encoding (H.264, HEVC, AV1)
+---
 
-## Hardware-Anforderungen
+## Aktueller Stand
 
-### Minimum
-- AMD Radeon RX 5000 Serie oder neuer
-- 8 GB VRAM (16 GB empfohlen)
-- Windows 10 (Version 1903+) oder Windows 11
-- 16 GB RAM
+Die App deckt heute bereits zentrale Kernpfade ab:
+- Audio import / list / analyze / waveform / beats
+- Video import / list / thumbnails / analyze
+- Pacing / Timeline-Erzeugung
+- Render start / status / cancel
+- Projekt save / open / close / reopen
 
-### Empfohlen
-- AMD Radeon RX 7800 XT oder besser
-- 16 GB VRAM
-- Windows 11
-- 32 GB RAM
-- SSD fuer schnellen Dateizugriff
+Wichtiger Hinweis:
+- Die Architektur befindet sich in einer laufenden Hybrid-Migration.
+- WPF ist die aktive UI.
+- Einige reichere Interaktionsflächen (z. B. echter Timeline-/Player-Editor) sind noch im Ausbau.
+
+---
+
+## Voraussetzungen
+
+### Betriebssystem
+- Windows 10/11
+
+### Hardware
+- AMD-GPU mit aktuellem Treiber empfohlen
+- ausreichend VRAM für Analyse-/ML-Pfade
 
 ### Software
-- Python 3.10 oder 3.11 (NICHT 3.12!)
-- AMD Adrenalin Treiber 24.x oder neuer
-- FFmpeg mit AMF Support (fuer Hardware-Encoding)
+- Python **3.10 oder 3.11**
+- FFmpeg mit AMF-Support bzw. das projektinterne FFmpeg-Setup
+- funktionierende `.venv`
 
-## Installation
+---
 
-### One-Click Installer (Empfohlen)
+## Projektstruktur
 
-1. PowerShell als Administrator oeffnen
-2. Zum Projektverzeichnis navigieren:
-   ```powershell
-   cd C:\CLAUDE_PROJEKTE\Pb_studio_AMD_version
-   ```
-3. Installer ausfuehren:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1
-   ```
-
-### Manuelle Installation
-
-1. Python 3.10 oder 3.11 installieren
-2. Virtuelle Umgebung erstellen:
-   ```bash
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-3. Dependencies installieren:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Installation verifizieren:
-   ```bash
-   python verify_env_v2.py
-   ```
-
-## Schnellstart
-
-1. Virtuelle Umgebung aktivieren:
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-2. Anwendung starten:
-   ```powershell
-   python run_ui.py
-   ```
-
-## Verzeichnisstruktur
-
-```
-Pb_studio_AMD_version/
-    src/pb_studio/       # Hauptanwendung
-        audio/           # Audio-Verarbeitung (BeatNet, Demucs)
-        video/           # Video-Verarbeitung (Moondream, RAFT, AMF)
-        ui/              # Benutzeroberflaeche (PyQt6)
-        core/            # Kernsysteme (VRAM, Tasks, Monitoring)
-        data/            # Datenpersistenz (SQLite, FAISS)
-        services/        # Business Logic
-    models/              # Heruntergeladene ML-Modelle
-    data/                # Anwendungsdaten
-    logs/                # Log-Dateien
-    tests/               # Unit-Tests
-    install.ps1          # One-Click-Installer
-    run_ui.py            # Anwendungs-Einstiegspunkt
-    requirements.txt     # Python-Abhaengigkeiten
-    verify_env_v2.py     # Umgebungs-Validierung
-    CLAUDE.md            # Claude Code Konfiguration
+```text
+PBStudio.UI/          WPF-Desktop-App
+backend/              FastAPI-Router, App-State, Schemas
+src/pb_studio/        Python-Domainlogik für Audio/Video/Render
+models/               ML-Modelle
+data/                 Laufzeitdaten / Outputs
+logs/                 Log-Dateien
+Tests/                Python-Tests
+plans/                Arbeits-/Ausführungspläne
+STATUS_MATRIX.md      verifizierter Status je Bereich
+WORKLOG.md            laufender Projektbericht
 ```
 
-## Bekannte Einschraenkungen
+---
 
-### Python-Version
-- **Python 3.12+ wird NICHT unterstuetzt** aufgrund von Inkompatibilitaeten mit BeatNet
-- Nur Python 3.10 oder 3.11 verwenden
+## Starten
 
-### DirectML vs CUDA
-- Diese Version verwendet **DirectML** (Windows, AMD)
-- CUDA/ROCm werden nicht unterstuetzt
-- Keine Installation von `onnxruntime-gpu`!
+### Empfohlener Produktstart
 
-### BFloat16
-- DirectML unterstuetzt KEIN BFloat16
-- Alle Modelle muessen FP16 oder FP32 sein
-
-### Memory Pattern Bug
-- `enable_mem_pattern = False` ist Pflicht bei DirectML
-- Ohne diese Einstellung kommt es zu Abstuerzen
-
-## Fehlerbehebung
-
-### "DmlExecutionProvider not found"
-```bash
-pip uninstall onnxruntime onnxruntime-gpu -y
-pip install onnxruntime-directml
+```powershell
+dotnet run --project .\PBStudio.UI\PBStudio.UI.csproj -c Debug
 ```
 
-### BeatNet Crash beim Import
-```bash
-pip install numpy==1.26.4 --force-reinstall
+Die WPF-App startet das Python-Backend beim Start automatisch über die Bridge.
+
+### Alternativ: Backend separat starten
+
+```powershell
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
-### FFmpeg AMF Encoder fehlt
-FFmpeg mit AMF-Support herunterladen:
-https://github.com/BtbN/FFmpeg-Builds/releases
+---
 
-### LibreHardwareMonitor Fehler
-Die DLL muss im lib/ Verzeichnis vorhanden sein:
-https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+## Entwickler-Setup
 
-## Tests ausfuehren
+### Python-Umgebung
 
-```bash
-# Alle Tests
-pytest tests/ -v
-
-# Nur schnelle Tests
-pytest tests/ -v -m "not slow"
-
-# Mit GPU-Tests
-pytest tests/ -v -m gpu
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-## Lizenz
+### .NET / WPF
+- .NET SDK installieren
+- danach:
 
-Internes Projekt - Nicht zur Veroeffentlichung bestimmt.
+```powershell
+dotnet build .\PBStudio.UI\PBStudio.UI.csproj -c Debug
+```
 
-## Support
+---
 
-Bei Problemen die Log-Dateien unter `logs/` pruefen oder `verify_env_v2.py` ausfuehren.
+## Smoke-Checklist
+
+### Backend / Core
+- [ ] `/health` antwortet
+- [ ] Audio-Clips abrufbar
+- [ ] Video-Clips abrufbar
+- [ ] Waveform-/Beat-Endpunkte funktionieren
+- [ ] Timeline abrufbar
+- [ ] Render start/status/cancel funktionieren
+
+### WPF / Produktpfad
+- [ ] App startet ohne Crash
+- [ ] Backend wird als online angezeigt
+- [ ] Projekt kann erstellt oder geöffnet werden
+- [ ] Audio/Video-Listen laden sichtbar
+- [ ] Timeline-Ansicht lädt ohne Binding-/UI-Fehler
+- [ ] Production-View zeigt Renderstatus / Log sauber
+- [ ] Save / Close / Reopen funktionieren ohne Zustandsverlust
+
+---
+
+## Tests
+
+### Python-Tests
+
+```powershell
+pytest Tests -q -rs
+```
+
+### WPF Build-Smoke
+
+```powershell
+dotnet build .\PBStudio.UI\PBStudio.UI.csproj -c Debug
+```
+
+### WPF Lauf-Smoke
+
+```powershell
+dotnet run --project .\PBStudio.UI\PBStudio.UI.csproj -c Debug
+```
+
+---
+
+## Bekannte Grenzen
+
+- Die alte PyQt-Oberfläche ist nicht mehr der führende Produktpfad.
+- Ein echter interaktiver Timeline-/Player-Editor ist noch nicht vollständig ausgebaut.
+- Einige UI-Pfade sind funktional vorhanden, aber noch nicht vollständig end-to-end durchgeklickt.
+- Bestimmte modell-/asset-abhängige Tests benötigen lokale Modelle oder Testmedien.
+
+---
+
+## Wichtige Dateien für den Projektstatus
+
+- `STATUS_MATRIX.md` — Ampel-/Verifikationsstand
+- `WORKLOG.md` — zuletzt erledigte Blöcke
+- `PYQT_MIGRATION_CLASSIFICATION.md` — Alt-UI-zu-WPF-Klassifikation
+
+---
+
+## Logs / Diagnose
+
+- WPF-Log: `logs/wpf_app.log`
+- zusätzliche Backend-/Bridge-Ausgaben erscheinen beim lokalen Start im Konsolen-/Run-Kontext
+
+Bei Problemen zuerst prüfen:
+1. startet das Backend?
+2. ist `.venv` vollständig?
+3. ist FFmpeg erreichbar?
+4. zeigt `STATUS_MATRIX.md` den Bereich als live-getestet oder nur code-inspected?

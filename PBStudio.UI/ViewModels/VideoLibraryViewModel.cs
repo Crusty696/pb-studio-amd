@@ -14,6 +14,9 @@ namespace PBStudio.UI.ViewModels;
 public partial class VideoLibraryViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly Dictionary<int, BitmapImage> _thumbnailCache = [];
+    private int _loadVersion;
 
     [ObservableProperty] private VideoClipModel? _selectedClip;
     [ObservableProperty] private string _statusText = "";
@@ -21,6 +24,7 @@ public partial class VideoLibraryViewModel : ObservableObject
     [ObservableProperty] private bool _isAnalyzingAll;
     [ObservableProperty] private double _analyzeAllProgress;
     [ObservableProperty] private bool _isLoadingThumbnails;
+    [ObservableProperty] private bool _isLoadingClips;
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
 
@@ -30,35 +34,59 @@ public partial class VideoLibraryViewModel : ObservableObject
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
-            if (message.Value is "backend-ready" or "video-imported" or "video-library-refresh" or "media-library-refresh")
+            if (message.Value is "backend-ready" or "video-imported" or "video-library-refresh" or "media-library-refresh" or "project-opened")
                 _ = LoadClipsAsync();
+            else if (message.Value is "project-closed")
+                ClearClips();
         });
     }
 
     [RelayCommand]
     private async Task LoadClipsAsync()
     {
-        var clips = await _api.GetVideoClipsAsync();
-        if (clips == null) return;
-
-        VideoClips.Clear();
-        foreach (var c in clips)
+        var version = Interlocked.Increment(ref _loadVersion);
+        await _loadGate.WaitAsync();
+        try
         {
-            VideoClips.Add(new VideoClipModel
-            {
-                Id = c.Id,
-                Name = c.Name,
-                Path = c.Path,
-                DurationSeconds = c.DurationSeconds,
-                Width = c.Width,
-                Height = c.Height,
-                Fps = c.Fps,
-                Tags = c.Tags,
-            });
-        }
-        StatusText = $"{VideoClips.Count} Clips geladen";
+            IsLoadingClips = true;
+            StatusText = "Video-Clips werden geladen...";
 
-        await LoadAllThumbnailsAsync();
+            var clips = await _api.GetVideoClipsAsync();
+            if (clips == null)
+            {
+                StatusText = "Video-Clips laden fehlgeschlagen";
+                return;
+            }
+
+            VideoClips.Clear();
+            foreach (var c in clips)
+            {
+                var clip = new VideoClipModel
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Path = c.Path,
+                    DurationSeconds = c.DurationSeconds,
+                    Width = c.Width,
+                    Height = c.Height,
+                    Fps = c.Fps,
+                    Tags = c.Tags,
+                };
+
+                if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))
+                    clip.Thumbnail = cachedThumb;
+
+                VideoClips.Add(clip);
+            }
+            StatusText = $"{VideoClips.Count} Clips geladen";
+
+            await LoadAllThumbnailsAsync(version);
+        }
+        finally
+        {
+            IsLoadingClips = false;
+            _loadGate.Release();
+        }
     }
 
     [RelayCommand]
@@ -114,23 +142,50 @@ public partial class VideoLibraryViewModel : ObservableObject
         IsAnalyzing = false;
     }
 
-    private async Task LoadAllThumbnailsAsync()
+    private async Task LoadAllThumbnailsAsync(int version)
     {
         IsLoadingThumbnails = true;
-        foreach (var clip in VideoClips.ToList())
+        try
         {
-            var bytes = await _api.GetThumbnailAsync(clip.Id);
-            if (bytes != null && bytes.Length > 0)
+            foreach (var clip in VideoClips.ToList())
             {
-                clip.Thumbnail = BytesToBitmapImage(bytes);
-                var idx = VideoClips.IndexOf(clip);
-                if (idx >= 0)
+                if (version != _loadVersion)
+                    return;
+
+                if (_thumbnailCache.TryGetValue(clip.Id, out var cached))
                 {
-                    VideoClips.RemoveAt(idx);
-                    VideoClips.Insert(idx, clip);
+                    clip.Thumbnail = cached;
+                    continue;
+                }
+
+                var bytes = await _api.GetThumbnailAsync(clip.Id);
+                if (bytes != null && bytes.Length > 0)
+                {
+                    var bmp = BytesToBitmapImage(bytes);
+                    _thumbnailCache[clip.Id] = bmp;
+                    clip.Thumbnail = bmp;
+
+                    var idx = VideoClips.IndexOf(clip);
+                    if (idx >= 0)
+                    {
+                        VideoClips.RemoveAt(idx);
+                        VideoClips.Insert(idx, clip);
+                    }
                 }
             }
         }
+        finally
+        {
+            IsLoadingThumbnails = false;
+        }
+    }
+
+    private void ClearClips()
+    {
+        VideoClips.Clear();
+        SelectedClip = null;
+        StatusText = "Kein Projekt geöffnet";
+        IsLoadingClips = false;
         IsLoadingThumbnails = false;
     }
 

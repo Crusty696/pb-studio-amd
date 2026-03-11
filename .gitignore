@@ -78,3 +78,5 @@ nul
 LEAD_ANALYST_REPORT_*.md
 project.json
 timeline.json
+.build_verify/
+artifacts/

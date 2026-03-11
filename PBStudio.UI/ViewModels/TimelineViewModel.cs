@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -18,6 +19,9 @@ public partial class TimelineViewModel : ObservableObject
     [ObservableProperty] private string? _audioPath;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private TimelineEntryModel? _selectedEntry;
+    [ObservableProperty] private double _selectedTimelinePosition;
+
+    private bool _isSyncingSelection;
 
     public ObservableCollection<TimelineEntryModel> TimelineEntries { get; } = [];
 
@@ -38,14 +42,85 @@ public partial class TimelineViewModel : ObservableObject
     public string SelectedClipStart => SelectedEntry == null ? "–" : $"{SelectedEntry.ClipStart:F2}s";
     public string SelectedTimeRange => SelectedEntry?.TimeRangeText ?? "–";
     public string SelectedFilePath => SelectedEntry?.FilePath ?? "–";
+    public string SelectedTimelinePositionText => SelectedEntry == null
+        ? "–"
+        : $"{TimeSpan.FromSeconds(SelectedEntry.StartTime):mm\\:ss} / {TimeSpan.FromSeconds(TotalDuration):mm\\:ss}";
+    public string SelectionIndexText
+    {
+        get
+        {
+            if (SelectedEntry == null)
+                return "Kein Cut selektiert";
+
+            var index = TimelineEntries.IndexOf(SelectedEntry);
+            return index < 0 ? "Kein Cut selektiert" : $"Cut {index + 1} / {TimelineEntries.Count}";
+        }
+    }
 
     partial void OnSelectedEntryChanged(TimelineEntryModel? value)
     {
+        if (!_isSyncingSelection)
+        {
+            _isSyncingSelection = true;
+            SelectedTimelinePosition = value?.StartTime ?? 0;
+            _isSyncingSelection = false;
+        }
+
         OnPropertyChanged(nameof(SelectedClipName));
         OnPropertyChanged(nameof(SelectedTrigger));
         OnPropertyChanged(nameof(SelectedClipStart));
         OnPropertyChanged(nameof(SelectedTimeRange));
         OnPropertyChanged(nameof(SelectedFilePath));
+        OnPropertyChanged(nameof(SelectedTimelinePositionText));
+        OnPropertyChanged(nameof(SelectionIndexText));
+        PreviousCutCommand.NotifyCanExecuteChanged();
+        NextCutCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedTimelinePositionChanged(double value)
+    {
+        if (_isSyncingSelection || TimelineEntries.Count == 0)
+            return;
+
+        var nearestEntry = TimelineEntries
+            .OrderBy(entry => value >= entry.StartTime && value <= entry.EndTime ? 0 : 1)
+            .ThenBy(entry => Math.Abs(entry.StartTime - value))
+            .FirstOrDefault();
+
+        if (nearestEntry == null || ReferenceEquals(nearestEntry, SelectedEntry))
+            return;
+
+        _isSyncingSelection = true;
+        SelectedEntry = nearestEntry;
+        _isSyncingSelection = false;
+    }
+
+    private bool CanSelectPreviousCut() =>
+        SelectedEntry != null && TimelineEntries.IndexOf(SelectedEntry) > 0;
+
+    private bool CanSelectNextCut() =>
+        SelectedEntry != null && TimelineEntries.IndexOf(SelectedEntry) >= 0 && TimelineEntries.IndexOf(SelectedEntry) < TimelineEntries.Count - 1;
+
+    [RelayCommand(CanExecute = nameof(CanSelectPreviousCut))]
+    private void PreviousCut()
+    {
+        if (SelectedEntry == null)
+            return;
+
+        var index = TimelineEntries.IndexOf(SelectedEntry);
+        if (index > 0)
+            SelectedEntry = TimelineEntries[index - 1];
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSelectNextCut))]
+    private void NextCut()
+    {
+        if (SelectedEntry == null)
+            return;
+
+        var index = TimelineEntries.IndexOf(SelectedEntry);
+        if (index >= 0 && index < TimelineEntries.Count - 1)
+            SelectedEntry = TimelineEntries[index + 1];
     }
 
     [RelayCommand]
@@ -78,13 +153,18 @@ public partial class TimelineViewModel : ObservableObject
             });
         }
 
-        SelectedEntry = TimelineEntries.FirstOrDefault();
         TotalDuration = timeline.TotalDuration;
         AudioPath = timeline.AudioPath;
+        SelectedEntry = TimelineEntries.FirstOrDefault();
+        SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
         StatusText = TimelineEntries.Count == 0
             ? "Timeline ist leer"
             : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
         OnPropertyChanged(nameof(HasTimeline));
+        OnPropertyChanged(nameof(SelectedTimelinePositionText));
+        OnPropertyChanged(nameof(SelectionIndexText));
+        PreviousCutCommand.NotifyCanExecuteChanged();
+        NextCutCommand.NotifyCanExecuteChanged();
         IsLoading = false;
     }
 }
