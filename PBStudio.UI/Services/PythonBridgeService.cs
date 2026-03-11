@@ -16,7 +16,6 @@ public class PythonBridgeService
     private Process? _pythonProcess;
     private bool _isRunning;
 
-    // BUG-007 Fix: Python-Pfad konfigurierbar (Env: PBSTUDIO_PYTHON_EXE oder auto-detect)
     private static readonly string PythonExe = ResolvePythonExe();
     private const int Port = 8765;
     private const int StartupTimeoutMs = 30_000;
@@ -25,7 +24,6 @@ public class PythonBridgeService
     public bool IsRunning => _isRunning;
     public event EventHandler<bool>? StatusChanged;
 
-    // KORREKTUR: HttpClient direkt erstellen — kein DI-Injection Problem für Singleton
     public PythonBridgeService(ILogger<PythonBridgeService> logger)
     {
         _logger = logger;
@@ -36,7 +34,6 @@ public class PythonBridgeService
         };
     }
 
-    /// <summary>Startet den Python FastAPI Server.</summary>
     public async Task StartAsync()
     {
         if (_isRunning) return;
@@ -56,18 +53,20 @@ public class PythonBridgeService
             return;
         }
 
+        var projectRoot = Path.GetDirectoryName(backendDir)!;
         _logger.LogInformation("Starte Python Backend: {Dir}", backendDir);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = PythonExe,
             Arguments = $"-m uvicorn backend.main:app --host 127.0.0.1 --port {Port}",
-            WorkingDirectory = Path.GetDirectoryName(backendDir)!,
+            WorkingDirectory = projectRoot,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        startInfo.Environment["PYTHONPATH"] = Path.Combine(projectRoot, "src");
 
         try
         {
@@ -98,7 +97,9 @@ public class PythonBridgeService
                 StartWatchdog();
             }
             else
+            {
                 _logger.LogError("Python Backend Health-Check fehlgeschlagen");
+            }
         }
         catch (Exception ex)
         {
@@ -106,7 +107,6 @@ public class PythonBridgeService
         }
     }
 
-    /// <summary>Stoppt den Python FastAPI Server.</summary>
     public async Task StopAsync()
     {
         if (!_isRunning || _pythonProcess == null) return;
@@ -190,17 +190,12 @@ public class PythonBridgeService
         return false;
     }
 
-    /// <summary>
-    /// Ermittelt den Python-Interpreter-Pfad.
-    /// Priorität: PBSTUDIO_PYTHON_EXE (Env) → py.exe Launcher → Standard-Pfade → PATH
-    /// </summary>
     private static string ResolvePythonExe()
     {
         var envPath = Environment.GetEnvironmentVariable("PBSTUDIO_PYTHON_EXE");
         if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
             return envPath;
 
-        // Bevorzuge venv-Python im Projekt-Verzeichnis
         var backendDir = FindBackendDirectory();
         if (backendDir != null)
         {
@@ -228,15 +223,31 @@ public class PythonBridgeService
 
     private static string? FindBackendDirectory()
     {
-        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        var candidates = new[]
+        var envBackend = Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_DIR");
+        if (!string.IsNullOrWhiteSpace(envBackend))
         {
-            Path.Combine(exeDir, "..", "..", "..", "..", "backend"),
-            Path.Combine(exeDir, "..", "backend"),
-            Path.Combine(exeDir, "backend"),
+            var envFull = Path.GetFullPath(envBackend);
+            if (Directory.Exists(envFull) && File.Exists(Path.Combine(envFull, "main.py")))
+                return envFull;
+        }
+
+        var exeDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+        for (var current = exeDir; current != null; current = current.Parent)
+        {
+            var backendCandidate = Path.Combine(current.FullName, "backend");
+            if (Directory.Exists(backendCandidate) && File.Exists(Path.Combine(backendCandidate, "main.py")))
+                return backendCandidate;
+        }
+
+        var explicitCandidates = new[]
+        {
+            Path.Combine(exeDir.FullName, "..", "..", "..", "backend"),
+            Path.Combine(exeDir.FullName, "..", "..", "..", "..", "backend"),
+            Path.Combine(exeDir.FullName, "..", "backend"),
+            Path.Combine(exeDir.FullName, "backend"),
         };
 
-        foreach (var candidate in candidates)
+        foreach (var candidate in explicitCandidates)
         {
             var full = Path.GetFullPath(candidate);
             if (Directory.Exists(full) && File.Exists(Path.Combine(full, "main.py")))

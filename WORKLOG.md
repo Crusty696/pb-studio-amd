@@ -414,5 +414,23 @@
 - Release smoke coverage is now encoded in a runnable script instead of only chat/manual memory.
 - This materially improves delivery confidence and makes future regressions easier to detect.
 
+### Publish-launch backend bootstrap fix
+- During the comprehensive verify/fix pass, the published frontend build exposed a real release bug:
+  - launching `artifacts/publish/framework/PBStudio.UI.exe` did not reliably bootstrap the backend
+  - root cause: `PythonBridgeService.FindBackendDirectory()` only searched the wrong relative publish paths and missed the repo-root `backend/` from publish output
+- Fixed `PBStudio.UI/Services/PythonBridgeService.cs`:
+  - backend discovery now walks parent directories and also supports `PBSTUDIO_BACKEND_DIR`
+  - backend startup now always sets `PYTHONPATH` to `<projectRoot>\src`
+  - working directory now uses the resolved project root derived from the backend directory
+- Re-verified after republish:
+  - `publish.ps1 -Mode framework -Configuration Release` passed
+  - published `PBStudio.UI.exe` launched successfully
+  - backend health responded `ok`
+  - app loaded live thumbnail traffic from the embedded backend session
+
+### Interpretation
+- Publish artifacts are now materially closer to real usability instead of only being file-output proof.
+- This removed a genuine release-launch regression from the published app path.
+
 ### Next work block
 - Practical WPF click-path verification and remaining product-polish gaps

@@ -28,7 +28,7 @@ Verification levels:
 
 | Area | Status | Verification | Notes | Next step |
 |---|---|---|---|---|
-| App startup | present | live-tested + crash-fixed | real WPF startup path verified via `dotnet run`; startup crash from read-only timeline bindings was fixed and app now stays running in smoke test | broader click-path verify |
+| App startup | present | live-tested + crash-fixed + publish-launch-verified | real WPF startup path verified via `dotnet run`; startup crash from read-only timeline bindings was fixed, and published frontend launch now also boots the backend correctly | broader click-path verify |
 | Main/backend status integration | present | code-inspected + build-start-verified | MainViewModel waits for backend, updates status | UI path verification |
 | Audio library UI wiring | present | code-inspected + live-tested (backend flow) | Import refresh bug fixed via messenger | WPF click-path verify |
 | Video library UI wiring | present | build-start-verified + live-tested (backend flow) | import/list flow works; startup/load behavior hardened against overlapping refreshes and thumbnail churn via gating + cache | broader click-path verify |
@@ -126,7 +126,7 @@ Verification levels:
 | Build confidence | present | live-tested + publish-verified | WPF build clean and framework-dependent publish path now verified via `publish.ps1` | keep verifying after changes |
 | Backend smoke confidence | present | live-tested | core import/analyze/video/render paths green | broaden coverage |
 | Full E2E confidence | partial | live-tested subset + scripted smoke | focused end-to-end smoke coverage now exists and `verify_release_smoke.ps1` encodes a repeatable project/analyze/timeline/save/render-cancel flow | expand focused WPF/UI path coverage |
-| Release readiness | partial | assessed + build-start-verified + publish-smoke-verified | major core flows work; project shell, startup, SSE, timeline and anchor runtime are materially stronger, and publish + scripted release smoke now exist, but full WPF click-path proof and final packaging choice are still open | close remaining click-path/publish gaps |
+| Release readiness | partial | assessed + build-start-verified + publish-smoke-verified + publish-launch-fixed | major core flows work; project shell, startup, SSE, timeline and anchor runtime are materially stronger, publish + scripted release smoke exist, and published frontend launch now boots the backend correctly, but full WPF click-path proof and final packaging choice are still open | close remaining click-path/publish gaps |
 
 ---
 
