@@ -386,5 +386,33 @@
 - Anchor visual click-smoke is still lighter than build/runtime verification.
 - A full safe render-progress UI proof from the integrated WPF shell still remains desirable.
 
+### Publish / release readiness tooling
+- Added `publish.ps1` for reproducible WPF publish output in three modes:
+  - `framework`
+  - `selfcontained`
+  - `singlefile`
+- Updated `launch.ps1`:
+  - prefers project `.venv` Python
+  - can launch published frontend output
+  - searches published artifact paths before falling back to Debug/Release bin folders
+- Added `verify_release_smoke.ps1`:
+  - self-starts backend if needed
+  - opens active project root
+  - verifies audio/video clip availability
+  - verifies audio analyze + waveform + beats
+  - generates pacing/timeline
+  - saves project state
+  - verifies render start + cancel terminal behavior
+- Verification:
+  - `publish.ps1 -Mode framework -Configuration Release` passed
+  - published frontend emitted to `artifacts/publish/framework/`
+  - `verify_release_smoke.ps1` passed end-to-end
+  - render smoke task `394f6147` ended in `cancelled` as expected
+
+### Interpretation
+- PB Studio now has a real reproducible publish path, not just ad-hoc local builds.
+- Release smoke coverage is now encoded in a runnable script instead of only chat/manual memory.
+- This materially improves delivery confidence and makes future regressions easier to detect.
+
 ### Next work block
-- Commit integrated product/runtime hardening block, then continue with practical WPF click-path verification and release/publish readiness
+- Practical WPF click-path verification and remaining product-polish gaps

@@ -138,6 +138,24 @@ dotnet build .\PBStudio.UI\PBStudio.UI.csproj -c Debug
 dotnet run --project .\PBStudio.UI\PBStudio.UI.csproj -c Debug
 ```
 
+### Publish
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\publish.ps1 -Mode framework -Configuration Release
+```
+
+Weitere Modi:
+- `-Mode selfcontained`
+- `-Mode singlefile`
+
+### Release Smoke
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify_release_smoke.ps1
+```
+
+Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Projekt, prüft Audio/Video/Waveform/Beats, generiert eine Timeline, speichert das Projekt und verifiziert einen sicheren Render-Start+Cancel-Pfad.
+
 ---
 
 ## Bekannte Grenzen

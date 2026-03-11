@@ -123,10 +123,10 @@ Verification levels:
 
 | Area | Status | Verification | Notes | Next step |
 |---|---|---|---|---|
-| Build confidence | present | live-tested | WPF build clean | keep verifying after changes |
+| Build confidence | present | live-tested + publish-verified | WPF build clean and framework-dependent publish path now verified via `publish.ps1` | keep verifying after changes |
 | Backend smoke confidence | present | live-tested | core import/analyze/video/render paths green | broaden coverage |
-| Full E2E confidence | partial | live-tested subset | focused end-to-end smoke coverage now exists, but not full user-path coverage | expand focused E2E list |
-| Release readiness | partial | assessed + build-start-verified | major core flows work; project shell, startup, SSE, timeline and anchor runtime are materially stronger, but full WPF click-path proof and publish/release packaging are still open | close remaining click-path/publish gaps |
+| Full E2E confidence | partial | live-tested subset + scripted smoke | focused end-to-end smoke coverage now exists and `verify_release_smoke.ps1` encodes a repeatable project/analyze/timeline/save/render-cancel flow | expand focused WPF/UI path coverage |
+| Release readiness | partial | assessed + build-start-verified + publish-smoke-verified | major core flows work; project shell, startup, SSE, timeline and anchor runtime are materially stronger, and publish + scripted release smoke now exist, but full WPF click-path proof and final packaging choice are still open | close remaining click-path/publish gaps |
 
 ---
 
@@ -134,7 +134,7 @@ Verification levels:
 1. Practical WPF project workflow verification (open/save/close/reopen) + click-path smoke
 2. WPF click-path verification for Timeline / Production / Anchor
 3. Render-progress / cancel UI proof from integrated WPF shell
-4. Publish/release readiness pass
+4. Final packaging/deployment choice for release artifact
 5. True timeline/player control rebuild planning
 
 ## Working Rules
