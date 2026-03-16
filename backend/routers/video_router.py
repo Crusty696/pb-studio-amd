@@ -264,7 +264,7 @@ def _get_video_info(path: str) -> dict[str, Any]:
         "-show_entries", "format=duration",
         "-of", "json", path,
     ]
-    res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
+    res = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=30)
     data = json.loads(res)
 
     stream = data.get("streams", [{}])[0]
@@ -342,22 +342,25 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             import numpy as np
             from pb_studio.video.raft import MotionAnalyzer
 
-            # Frames gleichmäßig samplen (max 30 für Performance)
+            # Frames gleichmäßig samplen — temporal-dichte (~2 Frames/s), min 2, max 30
             cap = cv2.VideoCapture(video_path)
-            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-            n_frames = min(30, max(2, total // int(fps * 2)))  # alle 2s, max 30
-            step = max(1, total // n_frames)
+            try:
+                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                duration_sec = total / max(fps, 1.0)
+                n_frames = min(30, max(2, int(duration_sec * 2)))  # ~2 Samples/s
+                step = max(1, total // n_frames)
 
-            frames = []
-            for i in range(0, total - step, step):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    frames.append(frame)
-                if len(frames) >= n_frames:
-                    break
-            cap.release()
+                frames = []
+                for i in range(0, total - step, step):
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        frames.append(frame)
+                    if len(frames) >= n_frames:
+                        break
+            finally:
+                cap.release()
 
             if len(frames) >= 2:
                 motion_analyzer = MotionAnalyzer()
@@ -365,7 +368,6 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
                     motion_result = motion_analyzer.analyze_video_segment(frames, stride=1)
 
                     # Übersetze Sample-Indizes zu echten Video-Frame-Nummern
-                    # fps is already captured before cap.release()
                     translated_scene_changes = [
                         {
                             "frame_index": sc["frame_index"] * step,
@@ -385,7 +387,10 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
                     }
                     result["avg_motion"] = result["motion"]["avg_motion"]
                 finally:
-                    del motion_analyzer  # Release RAFT ONNX session / DirectML VRAM
+                    # FIX 4: .unload() aufrufen um DirectML VRAM explizit freizugeben
+                    motion_analyzer.unload()
+                    import gc; gc.collect()
+                    del motion_analyzer
         except Exception as e:
             logger.warning(f"Motion-Analyse fehlgeschlagen: {e}")
 
@@ -401,11 +406,13 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
                 if wrapper.is_ready:
                     # Repräsentatives Frame aus Mitte des Videos
                     cap = cv2.VideoCapture(video_path)
-                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    mid = max(0, total_frames // 2)
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                    ret, frame = cap.read()
-                    cap.release()
+                    try:
+                        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        mid = max(0, total_frames // 2)
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                        ret, frame = cap.read()
+                    finally:
+                        cap.release()
 
                     if ret:
                         import numpy as _np

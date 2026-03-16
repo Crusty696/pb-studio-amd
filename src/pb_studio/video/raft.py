@@ -113,7 +113,7 @@ class MotionAnalyzer:
         return sess_options
 
     def _get_providers(self) -> List[str]:
-        """Get available execution providers with DirectML priority."""
+        """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
         providers = []
@@ -122,9 +122,7 @@ class MotionAnalyzer:
             providers.append('DmlExecutionProvider')
             logger.info("DirectML provider available - using AMD GPU acceleration for RAFT")
 
-        # CPU als Fallback immer hinzufuegen (KEIN CUDA - AMD-only build)
-        providers.append('CPUExecutionProvider')
-
+        # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
         return providers
 
     def _init_model(self) -> bool:
@@ -148,6 +146,13 @@ class MotionAnalyzer:
         try:
             sess_options = self._create_session_options()
             providers = self._get_providers()
+
+            if not providers:
+                logger.warning(
+                    "RAFT: DmlExecutionProvider nicht verfügbar. "
+                    "Motion-Analyse deaktiviert (IRON RULE: kein CPU-Fallback)."
+                )
+                return False
 
             logger.info(f"Loading RAFT model from {self.model_path}...")
 
@@ -256,21 +261,35 @@ class MotionAnalyzer:
             # Prepare inputs based on model's expected format
             input_names = [inp.name for inp in self.session.get_inputs()]
 
-            # RAFT typische Input-Namen: "image1"/"image2" oder "frame1"/"frame2"
+            # Robustes Input-Mapping: positional-first wenn genau 2 Inputs
             inputs = {}
-            for name in input_names:
-                name_lower = name.lower()
-                if "1" in name or "first" in name_lower or "prev" in name_lower:
-                    inputs[name] = img1
-                elif "2" in name or "second" in name_lower or "curr" in name_lower or "next" in name_lower:
-                    inputs[name] = img2
-                elif "iter" in name_lower:
-                    inputs[name] = np.array([num_iterations], dtype=np.int64)
+            img_inputs = [n for n in input_names if "iter" not in n.lower()]
+            iter_inputs = [n for n in input_names if "iter" in n.lower()]
 
-            # Wenn nur 2 Inputs ohne numerische Kennzeichnung
-            if len(inputs) < 2 and len(input_names) >= 2:
+            if len(img_inputs) == 2:
+                # Direktes positionales Mapping — unabhaengig von Namenskonventionen
+                inputs[img_inputs[0]] = img1
+                inputs[img_inputs[1]] = img2
+            elif len(img_inputs) >= 3:
+                # Bei 3+ Bild-Inputs: heuristisches Matching fuer bekannte Namen
+                for name in img_inputs:
+                    name_lower = name.lower()
+                    if any(k in name_lower for k in ["1", "first", "prev", "image1", "frame1"]):
+                        inputs[name] = img1
+                    elif any(k in name_lower for k in ["2", "second", "next", "image2", "frame2", "curr"]):
+                        inputs[name] = img2
+                # Fallback: positional wenn Heuristik nicht ausreicht
+                if len(inputs) < 2 and len(img_inputs) >= 2:
+                    inputs[img_inputs[0]] = img1
+                    inputs[img_inputs[1]] = img2
+            elif len(input_names) >= 2:
+                # Alle Inputs sind Bild-Inputs (keine iter-Inputs)
                 inputs[input_names[0]] = img1
                 inputs[input_names[1]] = img2
+
+            # Iterations-Input falls vorhanden
+            for name in iter_inputs:
+                inputs[name] = np.array([num_iterations], dtype=np.int64)
 
             # Run inference
             outputs = self.session.run(None, inputs)
@@ -684,20 +703,35 @@ class FarnebackFlowAnalyzer:
         return float(np.percentile(magnitude, percentile))
 
 
-def create_motion_analyzer(prefer_gpu: bool = True) -> Union[MotionAnalyzer, FarnebackFlowAnalyzer]:
+def create_motion_analyzer(prefer_gpu: bool = True) -> MotionAnalyzer:
     """
-    Factory function to create the best available motion analyzer.
+    Factory function to create a DirectML RAFT motion analyzer.
+
+    IRON RULE: Kein CPU-Fallback (kein Farneback). Wenn RAFT/DirectML nicht
+    verfuegbar ist, wird ein nicht-initialisierter MotionAnalyzer zurueckgegeben
+    dessen analyze_video_segment() ein leeres Ergebnis liefert.
 
     Args:
-        prefer_gpu: If True, try RAFT first, fall back to Farneback
+        prefer_gpu: Reserviert fuer API-Kompatibilitaet — wird ignoriert.
+                   Nur DirectML wird unterstuetzt.
 
     Returns:
-        MotionAnalyzer if RAFT is available, FarnebackFlowAnalyzer otherwise
+        MotionAnalyzer (ggf. nicht initialisiert wenn DirectML fehlt)
     """
-    if prefer_gpu:
+    import os
+    allow_cpu = os.environ.get("ALLOW_CPU_FALLBACK", "0").strip().lower() in ("1", "true", "yes")
+    if allow_cpu:
+        # Nur per explizitem Env-Flag erlaubt (z.B. fuer Unit-Tests)
+        logger.warning("ALLOW_CPU_FALLBACK=1 gesetzt — Farneback CPU-Fallback aktiviert")
         analyzer = MotionAnalyzer(lazy_load=False)
         if analyzer.is_ready:
             return analyzer
-        logger.warning("RAFT not available, falling back to Farneback")
+        return FarnebackFlowAnalyzer()  # type: ignore[return-value]
 
-    return FarnebackFlowAnalyzer()
+    analyzer = MotionAnalyzer(lazy_load=False)
+    if not analyzer.is_ready:
+        logger.warning(
+            "RAFT DirectML nicht verfuegbar — Motion-Analyse deaktiviert. "
+            "Kein CPU-Fallback (IRON RULE)."
+        )
+    return analyzer
