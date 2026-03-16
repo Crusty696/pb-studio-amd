@@ -108,10 +108,12 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[VideoClipInfo]:
     """Gibt die Video-Clip-Liste zurück (paginiert)."""
-    clips = list(state.video_clips.values())
+    clips_snap = state.get_video_clips_snapshot()
+    analysis_snap = state.get_video_analysis_snapshot()
+    clips = list(clips_snap.values())
     start = (page - 1) * limit
     end = start + limit
-    return [VideoClipInfo(**c, is_analyzed=c["id"] in state.video_analysis_cache) for c in clips[start:end]]
+    return [VideoClipInfo(**c, is_analyzed=c["id"] in analysis_snap) for c in clips[start:end]]
 
 
 @router.get(
@@ -214,9 +216,10 @@ async def get_scenes(
     state: AppState = Depends(get_app_state),
 ) -> list[SceneInfo]:
     """Gibt Scene-Cuts für einen Clip zurück."""
-    if clip_id not in state.video_analysis_cache:
+    analysis = state.get_video_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    scenes = state.video_analysis_cache[clip_id].get("scenes", [])
+    scenes = analysis.get("scenes", [])
     return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
 
 
@@ -234,9 +237,10 @@ async def get_motion(
     state: AppState = Depends(get_app_state),
 ) -> MotionData:
     """Gibt Motion-Analyse Daten zurück."""
-    if clip_id not in state.video_analysis_cache:
+    analysis = state.get_video_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    motion = state.video_analysis_cache[clip_id].get("motion", {})
+    motion = analysis.get("motion", {})
     if not motion:
         return MotionData(clip_id=clip_id)
     if "clip_id" not in motion:
@@ -354,15 +358,19 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             cap.release()
 
             if len(frames) >= 2:
-                motion_result = MotionAnalyzer().analyze_video_segment(frames, stride=1)
-                result["motion"] = {
-                    "clip_id": clip_id,
-                    "avg_motion": float(motion_result.get("avg_motion", 0.0)),
-                    "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
-                    "peak_frames": motion_result.get("scene_changes", []),
-                    "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
-                }
-                result["avg_motion"] = result["motion"]["avg_motion"]
+                motion_analyzer = MotionAnalyzer()
+                try:
+                    motion_result = motion_analyzer.analyze_video_segment(frames, stride=1)
+                    result["motion"] = {
+                        "clip_id": clip_id,
+                        "avg_motion": float(motion_result.get("avg_motion", 0.0)),
+                        "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
+                        "peak_frames": motion_result.get("scene_changes", []),
+                        "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
+                    }
+                    result["avg_motion"] = result["motion"]["avg_motion"]
+                finally:
+                    del motion_analyzer  # Release RAFT ONNX session / DirectML VRAM
         except Exception as e:
             logger.warning(f"Motion-Analyse fehlgeschlagen: {e}")
 
@@ -374,45 +382,48 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             from pb_studio.data.vector_store import VectorStore
 
             wrapper = SigLIPWrapper(lazy_load=False)
-            if wrapper.is_ready:
-                # Repräsentatives Frame aus Mitte des Videos
-                cap = cv2.VideoCapture(video_path)
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                mid = max(0, total_frames // 2)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                ret, frame = cap.read()
-                cap.release()
+            try:
+                if wrapper.is_ready:
+                    # Repräsentatives Frame aus Mitte des Videos
+                    cap = cv2.VideoCapture(video_path)
+                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    mid = max(0, total_frames // 2)
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                    ret, frame = cap.read()
+                    cap.release()
 
-                if ret:
-                    import numpy as _np
-                    from PIL import Image as _PILImage
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    pil_img = _PILImage.fromarray(frame_rgb)
-                    embedding = wrapper.encode_image(pil_img)
+                    if ret:
+                        import numpy as _np
+                        from PIL import Image as _PILImage
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        pil_img = _PILImage.fromarray(frame_rgb)
+                        embedding = wrapper.encode_image(pil_img)
 
-                    if embedding is not None:
-                        # FAISS VectorStore speichern (index "video_index")
-                        vs = VectorStore(index_name="video_index")
-                        vs.add_embedding(embedding.astype(_np.float32), {
-                            "clip_id": clip_id,
-                            "path": video_path,
-                            "scene_id": f"clip_{clip_id}_mid",
-                            "duration": result.get("duration_seconds", 0.0),
-                        })
-                        result["has_embedding"] = True
-                        result["embedding_dim"] = len(embedding)
-                        logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                        if embedding is not None:
+                            # FAISS VectorStore speichern (index "video_index")
+                            vs = VectorStore(index_name="video_index")
+                            vs.add_embedding(embedding.astype(_np.float32), {
+                                "clip_id": clip_id,
+                                "path": video_path,
+                                "scene_id": f"clip_{clip_id}_mid",
+                                "duration": result.get("duration_seconds", 0.0),
+                            })
+                            result["has_embedding"] = True
+                            result["embedding_dim"] = len(embedding)
+                            logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                        else:
+                            result["has_embedding"] = False
                     else:
                         result["has_embedding"] = False
                 else:
+                    # ONNX-Modell nicht vorhanden — kein Fehler, nur Info
+                    logger.info(
+                        "SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen. "
+                        "Pacing verwendet Round-Robin Fallback."
+                    )
                     result["has_embedding"] = False
-            else:
-                # ONNX-Modell nicht vorhanden — kein Fehler, nur Info
-                logger.info(
-                    "SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen. "
-                    "Pacing verwendet Round-Robin Fallback."
-                )
-                result["has_embedding"] = False
+            finally:
+                del wrapper  # Release SigLIP ONNX session / DirectML VRAM
 
         except Exception as e:
             logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")

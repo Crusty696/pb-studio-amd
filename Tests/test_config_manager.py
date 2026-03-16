@@ -45,11 +45,17 @@ class TestConfigManagerDefaults:
         assert hardware["gpu_backend"] == "directml"
 
     def test_defaults_vram_limit_is_reasonable(self, reset_config_singleton):
-        """Verify default VRAM limit is reasonable (2-16GB)."""
+        """Verify default VRAM limit is 0 (auto-detect) or a reasonable fixed value (2-16GB).
+
+        0 means 'let VRAMBudgetManager detect the actual GPU capacity at runtime'
+        which is the correct default for AMD GPUs with varying VRAM sizes.
+        """
         from pb_studio.config_manager import ConfigManager
 
         vram = ConfigManager.DEFAULTS["hardware"]["vram_limit_mb"]
-        assert 2048 <= vram <= 16384, f"Unreasonable VRAM default: {vram}"
+        assert vram == 0 or (2048 <= vram <= 16384), (
+            f"Unreasonable VRAM default: {vram}. Must be 0 (auto-detect) or 2048-16384 MB."
+        )
 
 
 class TestConfigManagerSingleton:

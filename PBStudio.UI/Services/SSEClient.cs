@@ -195,7 +195,7 @@ public class SSEClient : IDisposable
 
             switch (streamKind)
             {
-                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress":
+                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "gpu_error":
                     ProgressReceived?.Invoke(this, new ProgressEventArgs
                     {
                         EventType = eventType,

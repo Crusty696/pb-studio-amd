@@ -358,11 +358,20 @@ class AppState:
             if row is None:
                 logger.warning(f"update_audio_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
                 return
+            # beats_json is already a serialised JSON string — parse it back to a list
+            # so that the surrounding json.dumps() in the repository layer does not
+            # double-encode it into a string-of-a-string.
+            try:
+                beats_list = json.loads(beats_json) if beats_json else []
+            except (json.JSONDecodeError, TypeError):
+                beats_list = []
+                logger.warning("update_audio_analysis: beats_json konnte nicht geparst werden; leere Liste verwendet")
+
             ai_data = {
                 "bpm": bpm,
                 "key": key,
                 "beat_count": beat_count,
-                "beats_json": beats_json,
+                "beats_json": beats_list,
                 "is_analyzed": is_analyzed,
             }
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)

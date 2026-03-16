@@ -24,7 +24,7 @@ class ConfigManager:
         },
         "hardware": {
             "gpu_backend": "directml",
-            "vram_limit_mb": 4096,
+            "vram_limit_mb": 0,   # 0 = auto-detect (VRAMBudgetManager reads actual capacity)
             "enable_monitoring": True
         },
         "ai": {

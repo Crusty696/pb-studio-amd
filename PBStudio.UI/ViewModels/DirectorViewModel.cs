@@ -35,7 +35,9 @@ public partial class DirectorViewModel : ObservableObject
     [ObservableProperty] private bool _useStructureAwareness;
     [ObservableProperty] private double? _durationLimit;
     [ObservableProperty] private string _statusText = "";
-    [ObservableProperty] private bool _isGenerating;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCutListCommand))]
+    private bool _isGenerating;
     [ObservableProperty] private int _cutCount;
     [ObservableProperty] private double _totalDuration;
     [ObservableProperty] private AudioClipModel? _selectedAudioClip;
@@ -158,7 +160,9 @@ public partial class DirectorViewModel : ObservableObject
         SelectedVideoClipCount = AvailableVideoClips.Count(c => c.IsSelected);
     }
 
-    [RelayCommand]
+    private bool CanGenerateCutList() => !IsGenerating;
+
+    [RelayCommand(CanExecute = nameof(CanGenerateCutList))]
     private async Task GenerateCutListAsync()
     {
         if (SelectedAudioClip == null)

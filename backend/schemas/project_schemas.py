@@ -20,6 +20,7 @@ class ProjectInfo(BaseModel):
     """Response: Projekt-Informationen."""
     name: str
     path: str
+    db_project_id: Optional[int] = None
     audio_count: int = 0
     video_count: int = 0
     has_timeline: bool = False
