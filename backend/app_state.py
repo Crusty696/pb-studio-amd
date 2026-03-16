@@ -189,7 +189,14 @@ class AppState:
             return self.cancel_flags.get(task_id, False)
 
     def reset(self) -> None:
-        """Setzt den gesamten State zurück (z.B. bei neuem Projekt)."""
+        """Setzt den gesamten State zurück (z.B. bei neuem Projekt).
+
+        MEDIUM-015 Fix: cancel_flags wird NICHT geleert, sondern alle verbleibenden Flags
+        werden auf True gesetzt. close_project setzt die Flags vor reset(); würden sie hier
+        sofort geleert, sähen laufende Render-Threads das Cancel-Signal nie, weil reset()
+        vom Event-Loop und der Render-Check vom Thread-Pool aus ausgeführt werden.
+        Individuelle Cleanup: render_router.py entfernt Flags per .pop() nach Abschluss.
+        """
         with self._state_lock:
             with self._lock:
                 self.current_project = None
@@ -200,7 +207,10 @@ class AppState:
                 self.current_timeline.clear()
                 self.current_audio_path = None
                 self.render_tasks.clear()
-                self.cancel_flags.clear()
+                # Alle in-flight Tasks als abgebrochen markieren statt Flags zu leeren.
+                # Render-Threads sehen beim nächsten get_cancel_flag() True und stoppen.
+                for tid in list(self.cancel_flags.keys()):
+                    self.cancel_flags[tid] = True
                 self._audio_next_id = 1
                 self._video_next_id = 1
 

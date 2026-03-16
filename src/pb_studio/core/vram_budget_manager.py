@@ -610,6 +610,7 @@ class VRAMBudgetManager:
 
             # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
             self._committed_mb -= budget.estimated_vram_mb
+            self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
             budget.is_loaded = False
             freed += budget.estimated_vram_mb
 
