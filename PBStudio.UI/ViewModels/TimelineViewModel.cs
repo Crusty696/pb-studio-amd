@@ -182,6 +182,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                     ClipStart = entry.ClipStart,
                     TriggerType = entry.TriggerType,
                     TriggerStrength = entry.TriggerStrength,
+                    SegmentType = entry.SegmentType,
                 });
             }
 

@@ -214,10 +214,18 @@ class BatchRenderer:
             )
 
             concat_file.unlink(missing_ok=True)
-            return result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            ok = result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            if not ok:
+                # R14/CRITICAL-003: Ungültige (0-Byte) Output-Datei aufräumen, damit
+                # kein beschädigter Chunk in der Concat-Phase verwendet wird.
+                if result.returncode != 0 and result.stderr:
+                    logger.error(f"FFmpeg Chunk stderr: {result.stderr[-500:]}")
+                output_path.unlink(missing_ok=True)
+            return ok
 
         except Exception as e:
             logger.error(f"Chunk-Rendering Fehler: {e}")
+            output_path.unlink(missing_ok=True)
             return False
 
     def _concatenate_chunks(self, chunk_files: list[Path], output_path: Path) -> bool:
@@ -240,10 +248,17 @@ class BatchRenderer:
                 encoding="utf-8", errors="replace", timeout=3600
             )
             concat_list.unlink(missing_ok=True)
-            return result.returncode == 0 and output_path.exists()
+            ok = result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            if not ok:
+                # R14/CRITICAL-003: Ungültige concat-Ausgabe löschen.
+                if result.returncode != 0 and result.stderr:
+                    logger.error(f"FFmpeg Concat stderr: {result.stderr[-500:]}")
+                output_path.unlink(missing_ok=True)
+            return ok
 
         except Exception as e:
             logger.error(f"Concatenation Fehler: {e}")
+            output_path.unlink(missing_ok=True)
             return False
 
     def _merge_audio(self, video_path: Path, audio_path: Path, output_path: Path) -> bool:
@@ -261,7 +276,10 @@ class BatchRenderer:
                 cmd, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=3600
             )
-            return result.returncode == 0 and output_path.exists()
+            ok = result.returncode == 0 and output_path.exists()
+            if not ok and result.returncode != 0 and result.stderr:
+                logger.error(f"FFmpeg Audio-Merge stderr: {result.stderr[-500:]}")
+            return ok
         except Exception as e:
             logger.error(f"Audio-Merge Fehler: {e}")
             return False

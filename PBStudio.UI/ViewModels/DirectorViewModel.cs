@@ -237,6 +237,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                         ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? ConvertToDoubleSafe(cs) : 0.0,
                         TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
                         TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? ConvertToDoubleSafe(ts) : 0.0,
+                        SegmentType = meta?.GetValueOrDefault("segment_type")?.ToString(),
                     });
                 }
                 CutCount = result.CutCount;

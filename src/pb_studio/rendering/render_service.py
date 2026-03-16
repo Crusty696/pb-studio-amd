@@ -542,6 +542,10 @@ class RenderService:
             process.kill()
             process.wait()
             raise RuntimeError("FFmpeg Finalisierung Timeout")
+        finally:
+            # R14/CRITICAL-002: Daemon-Thread kurz joinen, damit noch ausstehende
+            # stderr-Zeilen in stderr_lines geschrieben werden, bevor wir sie lesen.
+            stderr_thread.join(timeout=5)
 
         stderr = "".join(stderr_lines)
         if process.returncode != 0:

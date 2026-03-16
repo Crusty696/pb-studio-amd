@@ -90,7 +90,9 @@ async def start_render(
     state.set_render_task(task_id, task_data)
     state.set_cancel_flag(task_id, False)
 
-    task = asyncio.create_task(_run_render_task(task_id, request, state))
+    # R14/HIGH-004: Snapshot beim Start übergeben — _run_render_task darf den State nicht
+    # erneut lesen, damit kein Stale-Timeline-Race zwischen start_render und Task-Ausführung entsteht.
+    task = asyncio.create_task(_run_render_task(task_id, request, state, timeline_snapshot))
 
     def _on_task_done(t: asyncio.Task) -> None:
         if t.cancelled():
@@ -184,13 +186,19 @@ async def cancel_render(
     return {"cancelled": True, "task_id": task_id}
 
 
-async def _run_render_task(task_id: str, request: RenderRequest, state: AppState) -> None:
-    """Background-Task für Rendering mit Cancel-Support."""
+async def _run_render_task(
+    task_id: str,
+    request: RenderRequest,
+    state: AppState,
+    timeline_snapshot: list[dict[str, Any]],
+) -> None:
+    """Background-Task für Rendering mit Cancel-Support.
+
+    timeline_snapshot wird von start_render übergeben — wird hier NICHT erneut aus dem
+    State gelesen (R14/HIGH-004: Race zwischen Snapshot-Check und Task-Start vermeiden).
+    """
     state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
     start_time = time.monotonic()
-
-    # Timeline-Snapshot aus AppState (thread-safe)
-    timeline_snapshot = state.get_timeline_snapshot()
 
     # Record the output file's mtime BEFORE the render starts.
     # _cleanup_render_temps will only delete it if it was modified DURING this render
