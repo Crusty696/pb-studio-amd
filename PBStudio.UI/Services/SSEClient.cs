@@ -299,7 +299,12 @@ public class SSEClient : IDisposable
         // Sonst kann ein noch laufender ListenAsync-Task eine ObjectDisposedException
         // auf dem bereits entsorgten HttpClient werfen.
         if (_listenTasks.Count > 0)
-            Task.WaitAll([.. _listenTasks], TimeSpan.FromMilliseconds(200));
+        {
+            // Wait up to 2 s for listen tasks to observe CancellationToken and exit cleanly
+            // before we dispose the HttpClient they are using (CRITICAL-001 fix).
+            Task.WaitAll([.. _listenTasks], TimeSpan.FromSeconds(2));
+            _listenTasks.Clear();
+        }
         _httpClient.Dispose();
         _cts?.Dispose();
         _cts = null;

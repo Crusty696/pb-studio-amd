@@ -674,14 +674,17 @@ class VRAMBudgetManager:
                 logger.debug(f"Set {model_id} priority to {priority.name}")
 
     def get_model(self, model_id: str) -> Optional[ModelBudget]:
-        """Get model budget info."""
-        return self._models.get(model_id)
+        """Get model budget info (thread-safe snapshot)."""
+        with self._registry_lock:
+            return self._models.get(model_id)
 
     def is_model_loaded(self, model_id: str) -> bool:
-        """Check if a model is currently loaded."""
+        """Check if a model is currently loaded (thread-safe, read budget.is_loaded under lock)."""
         with self._registry_lock:
             budget = self._models.get(model_id)
-            return budget.is_loaded if budget else False
+            if budget is None:
+                return False
+            return budget.is_loaded  # read while holding lock to avoid race with evict_all
 
 
 # =========================================================================

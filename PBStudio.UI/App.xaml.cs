@@ -119,9 +119,16 @@ public partial class App : Application
             if (bridge != null)
                 await bridge.StopAsync().WaitAsync(shutdownCts.Token);
         }
-        catch { /* unkritisch */ }
-
-        _serviceProvider?.Dispose();
-        base.OnExit(e);
+        catch (Exception ex)
+        {
+            // Shutdown errors are non-critical — log but always proceed with cleanup
+            System.Diagnostics.Debug.WriteLine($"[PBStudio] OnExit async error (non-critical): {ex.Message}");
+        }
+        finally
+        {
+            // Dispose MUST run even if shutdown tasks fail (CRITICAL-002 fix)
+            try { _serviceProvider?.Dispose(); } catch { /* ServiceProvider.Dispose is best-effort */ }
+            base.OnExit(e);
+        }
     }
 }
