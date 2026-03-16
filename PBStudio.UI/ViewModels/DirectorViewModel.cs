@@ -160,7 +160,14 @@ public partial class DirectorViewModel : ObservableObject
         SelectedVideoClipCount = AvailableVideoClips.Count(c => c.IsSelected);
     }
 
-    private bool CanGenerateCutList() => !IsGenerating;
+    private bool CanGenerateCutList() =>
+        !IsGenerating && SelectedAudioClip != null && SelectedVideoClipCount > 0;
+
+    partial void OnSelectedAudioClipChanged(AudioClipModel? value)
+        => GenerateCutListCommand.NotifyCanExecuteChanged();
+
+    partial void OnSelectedVideoClipCountChanged(int value)
+        => GenerateCutListCommand.NotifyCanExecuteChanged();
 
     [RelayCommand(CanExecute = nameof(CanGenerateCutList))]
     private async Task GenerateCutListAsync()

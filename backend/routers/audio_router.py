@@ -152,6 +152,13 @@ async def analyze_audio(
         source="audio.analyze",
         detail=f"clip_id={request.clip_id}",
     )
+    await publish_event("analysis_progress", {
+        "event": "analysis_progress",
+        "task_id": str(request.clip_id),
+        "status": "running",
+        "percent": 0,
+        "message": f"Analyse gestartet: Clip {request.clip_id}",
+    })
 
     try:
         _loop = asyncio.get_running_loop()
@@ -186,6 +193,13 @@ async def analyze_audio(
             source="audio.analyze",
             detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
         )
+        await publish_event("analysis_progress", {
+            "event": "analysis_progress",
+            "task_id": str(request.clip_id),
+            "status": "completed",
+            "percent": 100,
+            "message": f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}",
+        })
         return AudioAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
@@ -195,6 +209,14 @@ async def analyze_audio(
             source="audio.analyze",
             detail=str(e),
         )
+        await publish_event("analysis_progress", {
+            "event": "analysis_progress",
+            "task_id": str(request.clip_id),
+            "status": "failed",
+            "percent": 0,
+            "message": f"Analyse fehlgeschlagen: {str(e)}",
+            "error": str(e),
+        })
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 
