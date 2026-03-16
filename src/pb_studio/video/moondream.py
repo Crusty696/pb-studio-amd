@@ -104,14 +104,14 @@ class MoondreamAnalyzer:
         """Create optimized session options for DirectML compatibility."""
         sess_options = ort.SessionOptions()
 
-        # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
+        # KRITISCH fuer DirectML: beide Memory-Flags MÜSSEN False sein.
+        # R16: enable_cpu_mem_arena=True war falsch — CPU-Arena konkurriert mit
+        # DmlExecutionProvider-Allocator und kann OOM / Instabilität verursachen.
         sess_options.enable_mem_pattern = False
+        sess_options.enable_cpu_mem_arena = False
 
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-
-        # Weitere Performance-Optimierungen
-        sess_options.enable_cpu_mem_arena = True
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 

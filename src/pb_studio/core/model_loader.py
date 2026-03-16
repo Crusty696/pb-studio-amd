@@ -14,6 +14,8 @@ DirectML Considerations:
 import logging
 import threading
 import onnxruntime as ort
+
+_model_loader_init_lock = threading.Lock()
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable, Type
 from dataclasses import dataclass
@@ -103,9 +105,11 @@ class ModelLoader:
     _instance = None
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+        # R16: Thread-safe singleton — use lock like SystemMonitor does.
+        with _model_loader_init_lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):
@@ -135,12 +139,16 @@ class ModelLoader:
         """Create DirectML-compatible session options."""
         opts = ort.SessionOptions()
 
-        # KRITISCH: Memory Pattern MUSS deaktiviert sein fuer DirectML
+        # KRITISCH: Beide Memory-Flags MÜSSEN für DirectML deaktiviert sein.
+        # enable_mem_pattern=False: Pflicht für DmlExecutionProvider (Graph-Speicher
+        #   wird dynamisch, nicht vorab alloziert — DirectML erfordert das).
+        # enable_cpu_mem_arena=False: CPU-Arena konkurriert mit DirectML-Allocator
+        #   und führt zu Instabilität / OOM. R16/IRON-RULE fix (war True — falsch).
         opts.enable_mem_pattern = False
+        opts.enable_cpu_mem_arena = False
 
         # Optimierungen
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        opts.enable_cpu_mem_arena = True
         opts.intra_op_num_threads = 0  # Auto
         opts.inter_op_num_threads = 0
 
