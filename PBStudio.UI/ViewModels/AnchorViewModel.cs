@@ -162,13 +162,17 @@ public partial class AnchorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RemoveAnchor(AnchorPoint? anchor)
+    private void RemoveAnchor()
     {
-        if (anchor != null)
+        if (SelectedAnchor == null)
         {
-            Anchors.Remove(anchor);
-            StatusText = "Anchor entfernt";
+            StatusText = "Kein Anchor ausgewählt";
+            return;
         }
+
+        Anchors.Remove(SelectedAnchor);
+        SelectedAnchor = null;
+        StatusText = "Anchor entfernt";
     }
 
     private async Task LoadWaveformAndBeatsAsync(bool forceBeatReload)

@@ -1,6 +1,11 @@
-"""Quick test of waveform loading"""
+"""Quick test of waveform loading against the current PyQt widget path."""
+import os
 import sys
 from pathlib import Path
+
+PROJECT = r"C:\Users\david\Dokumente\Pb_studio_AMD_version"
+sys.path.insert(0, os.path.join(PROJECT, "src"))
+os.chdir(PROJECT)
 
 # Test librosa
 print("[1] Testing librosa import...")
@@ -11,11 +16,11 @@ except ImportError as e:
     print(f"   [FAIL] {e}")
     sys.exit(1)
 
-# Test WaveformWidget
-print("\n[2] Testing WaveformWidget...")
+# Test current waveform UI component
+print("\n[2] Testing waveform widget import...")
 try:
-    from src.pb_studio.ui.widgets.waveform_widget import WaveformWidget
-    print("   [OK] Import successful")
+    from pb_studio.ui.widgets.audio.waveform_container import WaveformContainer
+    print(f"   [OK] Import successful: {WaveformContainer.__name__}")
 except Exception as e:
     print(f"   [FAIL] {e}")
     sys.exit(1)
@@ -27,7 +32,7 @@ test_files = list(Path(".").glob("*.mp3")) + list(Path(".").glob("*.wav"))
 if test_files:
     test_file = str(test_files[0])
     print(f"   Found: {test_file}")
-    
+
     try:
         y, sr = librosa.load(test_file, sr=22050, mono=True)
         print(f"   [OK] Loaded: {len(y)} samples, {sr}Hz")

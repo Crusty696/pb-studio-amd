@@ -80,7 +80,7 @@ public partial class MainViewModel : ObservableObject
         {
             Title = "Basisordner für neues Projekt wählen",
         };
-        if (folderDialog.ShowDialog() != true)
+        if (folderDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(folderDialog.FolderName))
             return;
 
         var name = PromptDialog.Show("Neues Projekt", "Projektname:", "pb-studio-project");
@@ -106,7 +106,7 @@ public partial class MainViewModel : ObservableObject
         {
             Title = "Projektordner öffnen",
         };
-        if (folderDialog.ShowDialog() != true)
+        if (folderDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(folderDialog.FolderName))
             return;
 
         StatusMessage = "Projekt wird geöffnet...";

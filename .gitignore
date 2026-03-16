@@ -80,3 +80,6 @@ project.json
 timeline.json
 .build_verify/
 artifacts/
+.tmp_*.ps1
+.tmp_*.py
+gui_screenshots/

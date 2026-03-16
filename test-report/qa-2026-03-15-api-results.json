@@ -1,0 +1,227 @@
+{
+  "timestamp": "2026-03-15",
+  "run_at": "2026-03-16T00:01:54.952321",
+  "backend_url": "http://localhost:8765",
+  "audio_file": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Audio\\Psy-Set\\Progressive Psy trance 2.wav",
+  "video_file": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Video\\Sora_20250622_0307_100_Generations\\2025-06-25T22.19.31_1.mp4",
+  "qa_project_path": "C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio\\QA-Test-2026-03-15",
+  "allowed_project_base": "C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio",
+  "summary": {
+    "total": 30,
+    "pass": 28,
+    "partial": 2,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": "F-1.1",
+      "name": "Health-Check",
+      "status": "PASS",
+      "details": "status=ok, gpu_available=False, uptime=331.0",
+      "error": null
+    },
+    {
+      "id": "F-1.2",
+      "name": "GPU-Status",
+      "status": "PASS",
+      "details": "response={\"name\": \"Unknown\", \"vram_total_mb\": 0.0, \"vram_used_mb\": 0.0, \"temperature_c\": 0.0, \"driver_version\": \"Unknown\"}",
+      "error": null
+    },
+    {
+      "id": "F-1.3",
+      "name": "GPU-Cleanup",
+      "status": "PASS",
+      "details": "response={\"freed_mb\": 0}",
+      "error": null
+    },
+    {
+      "id": "F-2.1",
+      "name": "Project-Create",
+      "status": "PASS",
+      "details": "response={\"name\": \"QA-Test-2026-03-15\", \"path\": \"C:\\\\Users\\\\david\\\\OneDrive\\\\Dokumente\\\\PBStudio\\\\QA-Test-2026-03-15\", \"audio_count\": 0, \"video_count\": 0, \"has_timeline\": false, \"created_at\": \"2026-03-15T22:57",
+      "error": null
+    },
+    {
+      "id": "F-2.2",
+      "name": "Project-Info",
+      "status": "PASS",
+      "details": "name=QA-Test-2026-03-15, path=C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio\\QA-Test-2026-03-15",
+      "error": null
+    },
+    {
+      "id": "F-2.3",
+      "name": "Project-Save",
+      "status": "PASS",
+      "details": "response={\"success\": true, \"message\": \"Projekt gespeichert\"}",
+      "error": null
+    },
+    {
+      "id": "F-2.4",
+      "name": "Project-Close",
+      "status": "PASS",
+      "details": "response={\"success\": true, \"message\": \"Projekt 'QA-Test-2026-03-15' geschlossen\"}",
+      "error": null
+    },
+    {
+      "id": "F-2.5",
+      "name": "Project-Open",
+      "status": "PASS",
+      "details": "response={\"name\": \"QA-Test-2026-03-15\", \"path\": \"C:\\\\Users\\\\david\\\\OneDrive\\\\Dokumente\\\\PBStudio\\\\QA-Test-2026-03-15\", \"audio_count\": 0, \"video_count\": 0, \"has_timeline\": false, \"created_at\": \"2026-03-15T22:57",
+      "error": null
+    },
+    {
+      "id": "F-3.1",
+      "name": "Audio-Import",
+      "status": "PASS",
+      "details": "clip_id=1, file=Progressive Psy trance 2.wav",
+      "error": null
+    },
+    {
+      "id": "F-3.2",
+      "name": "Audio-Clips-List",
+      "status": "PASS",
+      "details": "clips=1",
+      "error": null
+    },
+    {
+      "id": "F-4.1",
+      "name": "Audio-Analyze",
+      "status": "PASS",
+      "details": "bpm=135.99917763157342, beats=8972",
+      "error": null
+    },
+    {
+      "id": "F-4.2",
+      "name": "Audio-Beats",
+      "status": "PASS",
+      "details": "beats=8972",
+      "error": null
+    },
+    {
+      "id": "F-4.3",
+      "name": "Audio-Waveform",
+      "status": "PASS",
+      "details": "response_type=dict, size=62116 chars",
+      "error": null
+    },
+    {
+      "id": "F-4.4",
+      "name": "Audio-Structure",
+      "status": "PASS",
+      "details": "segments=6",
+      "error": null
+    },
+    {
+      "id": "F-4.5",
+      "name": "Audio-Spectral",
+      "status": "PASS",
+      "details": "clip_id=1",
+      "error": null
+    },
+    {
+      "id": "F-5.1",
+      "name": "Video-Import",
+      "status": "PASS",
+      "details": "clip_id=1, file=2025-06-25T22.19.31_1.mp4",
+      "error": null
+    },
+    {
+      "id": "F-5.2",
+      "name": "Video-Clips-List",
+      "status": "PASS",
+      "details": "clips=1",
+      "error": null
+    },
+    {
+      "id": "F-5.3",
+      "name": "Video-Thumbnail",
+      "status": "PASS",
+      "details": "size=11655 bytes, content_type=image/jpeg",
+      "error": null
+    },
+    {
+      "id": "F-6.1",
+      "name": "Video-Analyze",
+      "status": "PASS",
+      "details": "scenes=0, avg_motion=0.0",
+      "error": null
+    },
+    {
+      "id": "F-6.2",
+      "name": "Video-Scenes",
+      "status": "PASS",
+      "details": "scenes=0",
+      "error": null
+    },
+    {
+      "id": "F-6.3",
+      "name": "Video-Motion",
+      "status": "PASS",
+      "details": "avg_motion=0.0",
+      "error": null
+    },
+    {
+      "id": "F-7.1",
+      "name": "Pacing-Generate",
+      "status": "PASS",
+      "details": "cuts=2247, total_dur=3973.539501133787",
+      "error": null
+    },
+    {
+      "id": "F-7.2",
+      "name": "Pacing-Timeline",
+      "status": "PASS",
+      "details": "timeline_entries=2247",
+      "error": null
+    },
+    {
+      "id": "F-7.3",
+      "name": "Pacing-Preview",
+      "status": "PASS",
+      "details": "preview_path=",
+      "error": null
+    },
+    {
+      "id": "F-8.1",
+      "name": "Render-Start",
+      "status": "PASS",
+      "details": "task_id=45af6886, status=pending",
+      "error": null
+    },
+    {
+      "id": "F-8.2",
+      "name": "Render-Status",
+      "status": "PASS",
+      "details": "status=running, percent=10.0",
+      "error": null
+    },
+    {
+      "id": "F-8.3",
+      "name": "Render-Cancel",
+      "status": "PASS",
+      "details": "code=200, response={\"cancelled\": true, \"task_id\": \"45af6886\"}",
+      "error": null
+    },
+    {
+      "id": "F-9.1",
+      "name": "SSE-GPU",
+      "status": "PASS",
+      "details": "Received 2 lines in 4s. First: event: gpu_status",
+      "error": null
+    },
+    {
+      "id": "F-9.2",
+      "name": "SSE-Log",
+      "status": "PARTIAL",
+      "details": "Stream connected but no events in 4s (idle stream is acceptable)",
+      "error": null
+    },
+    {
+      "id": "F-9.3",
+      "name": "SSE-Progress",
+      "status": "PARTIAL",
+      "details": "Stream connected but no events in 4s (idle stream is acceptable)",
+      "error": null
+    }
+  ]
+}

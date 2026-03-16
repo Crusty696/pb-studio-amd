@@ -108,8 +108,11 @@ public partial class App : Application
         try
         {
             using var saveCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var saveTask = api?.SaveProjectAsync() ?? Task.CompletedTask;
-            saveTask.Wait(saveCts.Token);
+            var saveTask = api?.SaveProjectAsync();
+            if (saveTask != null)
+            {
+                saveTask.Wait(saveCts.Token);
+            }
         }
         catch { /* unkritisch — Projekt wird beim nächsten Start ggf. neu geladen */ }
 
