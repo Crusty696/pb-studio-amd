@@ -106,6 +106,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         Fps = c.Fps,
                         Tags = c.Tags,
                         IsAnalyzed = c.IsAnalyzed,
+                        ThumbnailAvailable = c.ThumbnailAvailable,
                     };
 
                     if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))

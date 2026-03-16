@@ -89,6 +89,14 @@ async def import_videos(
             "message": f"Importiert: {video_path.name}",
         })
 
+    # R15/M-01: Finales 100%-Event sicherstellen — bei übersprungenen Pfaden
+    # (falsches Format, Info-Fehler) würde der letzte Event nie 100% erreichen.
+    await publish_event("import_progress", {
+        "clip_id": None,
+        "percent": 100.0,
+        "message": f"{len(imported)}/{len(request.paths)} Videos importiert",
+    })
+
     logger.info(f"{len(imported)} von {len(request.paths)} Videos importiert")
     return imported
 
@@ -158,6 +166,13 @@ async def analyze_video(
     clip = state.get_video_clip(request.clip_id)
     if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
+
+    # R15/C-02: Datei-Existenz VOR GPU-Lock prüfen — fehlendes File würde sonst als
+    # leeres Analyse-Ergebnis (scene_count=0, avg_motion=0.0) in die DB geschrieben
+    # und vorherige Analysen überschreiben (Silent Data Corruption).
+    if not Path(clip["path"]).exists():
+        raise HTTPException(status_code=422, detail=f"Video-Datei nicht gefunden: {clip['path']!r}")
+
     logger.info(f"Starte Video-Analyse: {clip['name']}")
     await publish_log(
         f"Video-Analyse gestartet: {clip['name']}",

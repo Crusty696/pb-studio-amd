@@ -80,6 +80,9 @@ class MotionAnalyzer:
         self.session: Optional[ort.InferenceSession] = None
         self._active_provider = "Unknown"
         self._initialized = False
+        # R15/H-05: Einmalig-Fehlschlag-Flag — verhindert wiederholte _init_model()-Aufrufe
+        # mit jeweils neuem Log-Spam, wenn DirectML oder Modell-Datei fehlt.
+        self._init_failed = False
 
         # Model path - unterstuetze beide Dateinamen
         raft_small = Path(self._models_dir) / "raft_small.onnx"
@@ -102,8 +105,9 @@ class MotionAnalyzer:
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        # Performance-Optimierungen
-        sess_options.enable_cpu_mem_arena = True
+        # R15/M-07: CPU Memory Arena MUSS für DirectML deaktiviert sein —
+        # aktiviertes Arena-Management kann mit DmlExecutionProvider-Allokator kollidieren.
+        sess_options.enable_cpu_mem_arena = False
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 
@@ -135,12 +139,17 @@ class MotionAnalyzer:
         if self._initialized:
             return True
 
+        # R15/H-05: Nach erstem Fehlschlag kein erneuter Versuch (verhindert Log-Spam).
+        if self._init_failed:
+            return False
+
         if not self.model_path.exists():
             logger.warning(
                 f"RAFT ONNX model not found at {self.model_path}. "
                 "Motion analysis will be unavailable. "
                 "Download the model or export from PyTorch."
             )
+            self._init_failed = True
             return False
 
         try:
@@ -152,6 +161,7 @@ class MotionAnalyzer:
                     "RAFT: DmlExecutionProvider nicht verfügbar. "
                     "Motion-Analyse deaktiviert (IRON RULE: kein CPU-Fallback)."
                 )
+                self._init_failed = True
                 return False
 
             logger.info(f"Loading RAFT model from {self.model_path}...")
@@ -173,6 +183,7 @@ class MotionAnalyzer:
         except Exception as e:
             logger.error(f"Failed to initialize RAFT model: {e}")
             self.session = None
+            self._init_failed = True
             return False
 
     def _log_model_info(self):

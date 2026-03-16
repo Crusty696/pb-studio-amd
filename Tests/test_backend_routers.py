@@ -303,14 +303,19 @@ class TestVideoRouter:
             "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
         }
 
+        # R15/C-02: Patch Path.exists so the new file-existence guard passes in tests.
+        from pathlib import Path as _Path
+        from unittest.mock import patch as _patch
+
         video_mod._run_video_analysis = fake_run
         try:
-            r = client.post("/video/analyze", json={
-                "clip_id": 1,
-                "detect_scenes": True,
-                "analyze_motion": True,
-                "generate_embeddings": False,
-            })
+            with _patch.object(_Path, "exists", return_value=True):
+                r = client.post("/video/analyze", json={
+                    "clip_id": 1,
+                    "detect_scenes": True,
+                    "analyze_motion": True,
+                    "generate_embeddings": False,
+                })
         finally:
             video_mod._run_video_analysis = orig_run
 
