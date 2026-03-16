@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -169,35 +170,39 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             if (version != _loadVersion)
                 return;
 
-            TimelineEntries.Clear();
-            foreach (var entry in timeline.Entries)
+            // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                TimelineEntries.Add(new TimelineEntryModel
+                TimelineEntries.Clear();
+                foreach (var entry in timeline.Entries)
                 {
-                    ClipId = entry.ClipId,
-                    ClipName = entry.ClipName,
-                    FilePath = entry.FilePath,
-                    StartTime = entry.StartTime,
-                    EndTime = entry.EndTime,
-                    ClipStart = entry.ClipStart,
-                    TriggerType = entry.TriggerType,
-                    TriggerStrength = entry.TriggerStrength,
-                    SegmentType = entry.SegmentType,
-                });
-            }
+                    TimelineEntries.Add(new TimelineEntryModel
+                    {
+                        ClipId = entry.ClipId,
+                        ClipName = entry.ClipName,
+                        FilePath = entry.FilePath,
+                        StartTime = entry.StartTime,
+                        EndTime = entry.EndTime,
+                        ClipStart = entry.ClipStart,
+                        TriggerType = entry.TriggerType,
+                        TriggerStrength = entry.TriggerStrength,
+                        SegmentType = entry.SegmentType,
+                    });
+                }
 
-            TotalDuration = timeline.TotalDuration;
-            AudioPath = timeline.AudioPath;
-            SelectedEntry = TimelineEntries.FirstOrDefault();
-            SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
-            StatusText = TimelineEntries.Count == 0
-                ? "Timeline ist leer"
-                : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
-            OnPropertyChanged(nameof(HasTimeline));
-            OnPropertyChanged(nameof(SelectedTimelinePositionText));
-            OnPropertyChanged(nameof(SelectionIndexText));
-            PreviousCutCommand.NotifyCanExecuteChanged();
-            NextCutCommand.NotifyCanExecuteChanged();
+                TotalDuration = timeline.TotalDuration;
+                AudioPath = timeline.AudioPath;
+                SelectedEntry = TimelineEntries.FirstOrDefault();
+                SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
+                StatusText = TimelineEntries.Count == 0
+                    ? "Timeline ist leer"
+                    : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
+                OnPropertyChanged(nameof(HasTimeline));
+                OnPropertyChanged(nameof(SelectedTimelinePositionText));
+                OnPropertyChanged(nameof(SelectionIndexText));
+                PreviousCutCommand.NotifyCanExecuteChanged();
+                NextCutCommand.NotifyCanExecuteChanged();
+            });
         }
         finally
         {

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -81,43 +82,51 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             var videoClips = await _videoLibraryState.RefreshAsync();
             if (videoClips != null && version == _loadVersion)
             {
-                AvailableVideoClips.Clear();
-                foreach (var clip in videoClips)
+                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    AvailableVideoClips.Add(new SelectableVideoClip
+                    AvailableVideoClips.Clear();
+                    foreach (var clip in videoClips)
                     {
-                        Id = clip.Id,
-                        Name = clip.Name,
-                        DurationSeconds = clip.DurationSeconds,
-                    });
-                }
+                        AvailableVideoClips.Add(new SelectableVideoClip
+                        {
+                            Id = clip.Id,
+                            Name = clip.Name,
+                            DurationSeconds = clip.DurationSeconds,
+                        });
+                    }
+                });
             }
 
             var audioClips = await _audioLibraryState.RefreshAsync();
             if (audioClips != null && version == _loadVersion)
             {
                 var previousAudioClipId = SelectedAudioClip?.Id;
-                AvailableAudioClips.Clear();
-                foreach (var clip in audioClips)
+                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    AvailableAudioClips.Add(new AudioClipModel
+                    AvailableAudioClips.Clear();
+                    foreach (var clip in audioClips)
                     {
-                        Id = clip.Id,
-                        Name = clip.Name,
-                        Path = clip.Path,
-                        DurationSeconds = clip.DurationSeconds,
-                        SampleRate = clip.SampleRate,
-                        Channels = clip.Channels,
-                        Format = clip.Format,
-                        Bpm = clip.Bpm,
-                        Key = clip.Key ?? "",
-                        BeatCount = clip.BeatCount,
-                        IsAnalyzed = clip.IsAnalyzed,
-                    });
-                }
+                        AvailableAudioClips.Add(new AudioClipModel
+                        {
+                            Id = clip.Id,
+                            Name = clip.Name,
+                            Path = clip.Path,
+                            DurationSeconds = clip.DurationSeconds,
+                            SampleRate = clip.SampleRate,
+                            Channels = clip.Channels,
+                            Format = clip.Format,
+                            Bpm = clip.Bpm,
+                            Key = clip.Key ?? "",
+                            BeatCount = clip.BeatCount,
+                            IsAnalyzed = clip.IsAnalyzed,
+                        });
+                    }
 
-                SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == previousAudioClipId)
-                    ?? AvailableAudioClips.FirstOrDefault();
+                    SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == previousAudioClipId)
+                        ?? AvailableAudioClips.FirstOrDefault();
+                });
             }
 
             if (version == _loadVersion)
