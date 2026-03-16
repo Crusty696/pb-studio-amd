@@ -940,10 +940,17 @@ class AdvancedPacingEngine:
         sr = 22050
 
         has_pre_cached = hasattr(self, "_pre_cached_beats") and self._pre_cached_beats
-        if has_pre_cached and duration <= 0 and beats:
-            # Dauer aus letztem Beat schätzen
-            duration = beats[-1] + 1.0
-            logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
+
+        # R17/HIGH-03: Prefer injected duration (from audio analysis) over beat estimation.
+        # Beat estimation under-counts for tracks with silent outros.
+        if has_pre_cached and duration <= 0:
+            pre_dur = getattr(self, "_pre_cached_duration", 0.0)
+            if pre_dur > 0:
+                duration = pre_dur
+                logger.info(f"Dauer aus gecachter Audio-Analyse: {duration:.1f}s")
+            elif beats:
+                duration = beats[-1] + 1.0
+                logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
 
         if not has_pre_cached and not (onset_times and energy_curve and duration > 0):
             if not hasattr(self, "_cached_audio_path"):

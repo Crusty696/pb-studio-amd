@@ -139,6 +139,20 @@ class PacingService:
                         # must compute from start_time/end_time.
                         cut_dur = cut.end_time - cut.start_time
                         cut.metadata["clip_start"] = self._get_random_clip_start(fp, cut_dur)
+
+                    # R12b/SEV-004: Cap sequencer cut duration to actual clip length
+                    # (automatic pacing paths already do this at lines 79-83 and 252-256)
+                    try:
+                        actual_clip_dur = self._get_clip_duration(fp)
+                        clip_start = float(cut.metadata.get("clip_start", 0.0))
+                        cut_dur = cut.end_time - cut.start_time
+                        if actual_clip_dur > 0 and (clip_start + cut_dur) > actual_clip_dur:
+                            cut.metadata["clip_start"] = 0.0
+                            capped_dur = min(cut_dur, actual_clip_dur)
+                            cut.end_time = cut.start_time + capped_dur
+                    except ValueError:
+                        pass  # ffprobe failed — let render handle it
+
                     final_cuts.append(cut)
             return final_cuts
 
@@ -176,12 +190,17 @@ class PacingService:
             f"(Motion={pacing_config.get('use_motion_matching', False)})"
         )
 
-        # Pre-cached Beats in Engine injizieren (vermeidet Re-Analyse langer Dateien)
+        # Pre-cached Beats + Dauer in Engine injizieren (vermeidet Re-Analyse langer Dateien)
         if pre_cached_beats:
             pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
             if pre_cached_bpm:
                 pacing_engine._pre_cached_bpm = pre_cached_bpm
+            # R17/HIGH-03: Inject cached duration so the engine doesn't estimate from
+            # last beat time (which under-estimates for tracks with silent outros).
+            cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
+            if cached_dur > 0:
+                pacing_engine._pre_cached_duration = cached_dur
 
         try:
             if pacing_config.get("use_motion_matching", False):

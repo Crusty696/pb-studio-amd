@@ -70,6 +70,7 @@ class RenderService:
         """Testet verfügbare AMD-Encoder und gibt den besten zurück."""
         encoders = [
             ("hevc_amf", "AMD GPU H.265 (beste Kompression)"),
+            ("av1_amf", "AMD GPU AV1 (modernste Kompression)"),
             ("h264_amf", "AMD GPU H.264"),
             ("h264_mf", "Windows Media Foundation"),
             ("libx265", "CPU H.265 (langsam)"),

@@ -153,7 +153,8 @@ public class ApiClient : IApiClient
         {
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            // R16/MEDIUM-002: Use linked token (includes _shutdownCts) for content read too
+            return await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
@@ -220,7 +221,8 @@ public class ApiClient : IApiClient
         {
             using var response = await _http.GetAsync(url, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            // R16/MEDIUM-001: Use linked token (includes _shutdownCts) for deserialization too
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {

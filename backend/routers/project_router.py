@@ -11,6 +11,7 @@ Endpoints:
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -255,7 +256,15 @@ async def save_project(state: AppState = Depends(get_app_state)) -> StatusRespon
             "timeline": timeline,
             "saved_at": _utc_now_iso(),
         }
-        timeline_path.write_text(json.dumps(timeline_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        # R17/FINDING-5: Atomic write — crash during save must not corrupt timeline.json.
+        # Same tmp+os.replace pattern used by _write_project_meta.
+        tmp_tl = timeline_path.with_suffix(".tmp")
+        try:
+            tmp_tl.write_text(json.dumps(timeline_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            os.replace(str(tmp_tl), str(timeline_path))
+        finally:
+            if tmp_tl.exists():
+                tmp_tl.unlink(missing_ok=True)
     else:
         timeline_path.unlink(missing_ok=True)
 
