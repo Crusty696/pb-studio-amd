@@ -292,7 +292,18 @@ def _get_video_info(path: str) -> dict[str, Any]:
     except (ValueError, ZeroDivisionError):
         fps = 30.0
 
-    duration = float(stream.get("duration", 0) or fmt.get("duration", 0))
+    # R20/MEDIUM-020-5: ffprobe returns "N/A" for some formats (e.g. .wmv stream duration).
+    # "N/A" is truthy so the `or` short-circuit does NOT protect float() from ValueError.
+    # Resolve to format-level duration when the stream value is unusable.
+    _stream_dur = stream.get("duration", 0)
+    _fmt_dur = fmt.get("duration", 0)
+    try:
+        duration = float(_stream_dur) if _stream_dur not in (None, "", "N/A") else float(_fmt_dur or 0)
+    except (ValueError, TypeError):
+        try:
+            duration = float(_fmt_dur or 0)
+        except (ValueError, TypeError):
+            duration = 0.0
 
     return {
         "width": int(stream.get("width", 1920)),
@@ -307,24 +318,23 @@ def _generate_thumbnail(video_path: str) -> bytes:
     """Generiert ein Thumbnail-JPEG (blockierend)."""
     import subprocess
     import tempfile
-    import os
 
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        tmp_path = tmp.name
+        tmp_path = Path(tmp.name)
 
     try:
         cmd = [
             "ffmpeg", "-y", "-i", video_path,
             "-ss", "1", "-frames:v", "1",
             "-vf", "scale=320:-1",
-            tmp_path,
+            str(tmp_path),
         ]
         subprocess.run(cmd, capture_output=True, timeout=15, check=True)
-        with open(tmp_path, "rb") as f:
-            return f.read()
+        return tmp_path.read_bytes()
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        # R20/LOW: unlink(missing_ok=True) avoids FileNotFoundError if ffmpeg
+        # failed before creating the file.
+        tmp_path.unlink(missing_ok=True)
 
 
 def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequest) -> dict[str, Any]:
