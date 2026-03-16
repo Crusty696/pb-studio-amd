@@ -6,6 +6,8 @@ namespace PBStudio.UI.Services;
 /// </summary>
 public interface IApiClient
 {
+    void BeginShutdown();
+
     // --- Health ---
     Task<HealthStatus?> GetHealthAsync();
     Task<GpuStatus?> GetGpuStatusAsync();
@@ -32,8 +34,8 @@ public interface IApiClient
 
     // --- Video ---
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);
-    Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200);
-    Task<byte[]?> GetThumbnailAsync(int clipId);
+    Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default);
+    Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default);
     Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
@@ -46,4 +48,5 @@ public interface IApiClient
     Task<RenderProgress?> StartRenderAsync(RenderRequest request);
     Task<RenderProgress?> GetRenderStatusAsync(string taskId);
     Task CancelRenderAsync(string taskId);
+    Task ShutdownAsync();
 }

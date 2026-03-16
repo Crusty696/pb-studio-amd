@@ -63,12 +63,9 @@ public class ProjectService
     public async Task<bool> RefreshProjectInfoAsync()
     {
         var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        if (project == null)
-            return false;
-
         CurrentProject = project;
         ProjectChanged?.Invoke(this, CurrentProject);
-        return true;
+        return project != null;
     }
 
     public async Task CloseProjectAsync()

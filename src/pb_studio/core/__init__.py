@@ -21,19 +21,29 @@ from pb_studio.core.vram_budget_manager import (
     get_vram_manager,
     KNOWN_MODEL_BUDGETS
 )
-from pb_studio.core.model_loader import (
-    ModelLoader,
-    ModelSpec,
-    ModelType,
-    get_model_loader,
-    load_model,
-    unload_model
-)
+try:
+    from pb_studio.core.model_loader import (
+        ModelLoader,
+        ModelSpec,
+        ModelType,
+        get_model_loader,
+        load_model,
+        unload_model
+    )
+except ImportError:  # Optional in verification envs without onnxruntime
+    ModelLoader = None
+    ModelSpec = None
+    ModelType = None
+    get_model_loader = None
+    load_model = None
+    unload_model = None
+
 from pb_studio.core.task_queue import TaskQueue, TaskPriority, TaskItem
 try:
     from pb_studio.core.thread_pool import ThreadPoolManager, Worker
 except ImportError:
-    pass  # PyQt6 nicht verfügbar (z.B. Linux CI ohne Windows-.venv)
+    ThreadPoolManager = None
+    Worker = None  # PyQt6 nicht verfügbar (z.B. Linux CI ohne Windows-.venv)
 from pb_studio.core.crash_handler import CrashHandler
 
 __all__ = [

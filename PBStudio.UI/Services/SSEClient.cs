@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ public class SSEClient : IDisposable
     private CancellationTokenSource? _cts;
     private readonly List<Task> _listenTasks = [];
     private bool _isListening;
+    private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
 
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
@@ -80,6 +82,9 @@ public class SSEClient : IDisposable
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
 
+                if (reconnectAttempts > 0)
+                    _logger.LogInformation("SSE {Endpoint} wieder verbunden nach {Attempts} Reconnect-Versuchen", endpoint, reconnectAttempts);
+
                 reconnectDelayMs = InitialReconnectDelayMs;
                 reconnectAttempts = 0;
 
@@ -132,13 +137,7 @@ public class SSEClient : IDisposable
                     break;
                 }
 
-                _logger.LogWarning(
-                    ex,
-                    "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
-                    endpoint,
-                    reconnectDelayMs,
-                    reconnectAttempts,
-                    MaxReconnectAttempts);
+                LogReconnectFailure(endpoint, reconnectDelayMs, reconnectAttempts, ex);
 
                 await Task.Delay(reconnectDelayMs, ct).ConfigureAwait(false);
                 reconnectDelayMs = Math.Min(reconnectDelayMs * 2, MaxReconnectDelayMs);
@@ -152,6 +151,39 @@ public class SSEClient : IDisposable
             return;
 
         ProcessEvent(streamKind, eventType, dataBuilder.ToString());
+    }
+
+    private void LogReconnectFailure(string endpoint, int reconnectDelayMs, int reconnectAttempts, Exception ex)
+    {
+        var now = DateTime.UtcNow;
+        var isConnectionRefused = ex is HttpRequestException httpEx && httpEx.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused };
+        var shouldLog = !_lastReconnectLogUtc.TryGetValue(endpoint, out var lastLogUtc)
+            || now - lastLogUtc >= TimeSpan.FromSeconds(30)
+            || reconnectAttempts <= 2;
+
+        if (!shouldLog)
+            return;
+
+        _lastReconnectLogUtc[endpoint] = now;
+
+        if (isConnectionRefused)
+        {
+            _logger.LogInformation(
+                "SSE {Endpoint} wartet auf Backend, nächster Reconnect in {Delay}ms (Versuch {Attempt}/{Max}).",
+                endpoint,
+                reconnectDelayMs,
+                reconnectAttempts,
+                MaxReconnectAttempts);
+            return;
+        }
+
+        _logger.LogWarning(
+            ex,
+            "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
+            endpoint,
+            reconnectDelayMs,
+            reconnectAttempts,
+            MaxReconnectAttempts);
     }
 
     private void ProcessEvent(StreamKind streamKind, string eventType, string jsonData)

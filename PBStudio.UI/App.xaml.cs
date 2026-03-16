@@ -28,9 +28,20 @@ public partial class App : Application
         // für DataContext-Auflösung ohne XAML-Instantiierung
         Ioc.Default.ConfigureServices(_serviceProvider);
 
-        // Python Backend starten
+        // Python Backend asynchron starten — UI blockiert nicht beim Backend-Start.
         var bridge = _serviceProvider.GetRequiredService<PythonBridgeService>();
-        _ = bridge.StartAsync();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await bridge.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                var logger = _serviceProvider.GetService<ILogger<App>>();
+                logger?.LogError(ex, "Python Backend konnte nicht gestartet werden");
+            }
+        });
 
         // MainWindow mit DI
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
@@ -52,6 +63,8 @@ public partial class App : Application
             builder.AddConsole();
             builder.AddProvider(new FileLoggerProvider(logFile));
             builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
+            builder.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
         });
 
         // HTTP Client für API-Kommunikation (ApiClient + SSEClient)
@@ -68,6 +81,9 @@ public partial class App : Application
         services.AddSingleton<SSEClient>();
         services.AddSingleton<NavigationService>();
         services.AddSingleton<ProjectService>();
+        services.AddSingleton<TimelineStateService>();
+        services.AddSingleton<AudioLibraryStateService>();
+        services.AddSingleton<VideoLibraryStateService>();
 
         // ViewModels (Transient — jeder Tab bekommt seine eigene Instanz via Ioc.Default)
         services.AddTransient<MainViewModel>();
@@ -86,6 +102,20 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        var api = _serviceProvider?.GetService<IApiClient>();
+
+        // P-3: Auto-Save: Projekt speichern bevor Backend beendet wird (5s Timeout)
+        try
+        {
+            using var saveCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var saveTask = api?.SaveProjectAsync() ?? Task.CompletedTask;
+            saveTask.Wait(saveCts.Token);
+        }
+        catch { /* unkritisch — Projekt wird beim nächsten Start ggf. neu geladen */ }
+
+        // Graceful Backend-Shutdown via API (3s Timeout)
+        try { api?.ShutdownAsync().GetAwaiter().GetResult(); } catch { /* unkritisch */ }
+
         var bridge = _serviceProvider?.GetService<PythonBridgeService>();
         bridge?.StopAsync().GetAwaiter().GetResult();
 

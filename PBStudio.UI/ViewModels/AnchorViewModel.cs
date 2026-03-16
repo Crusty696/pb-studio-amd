@@ -14,9 +14,11 @@ namespace PBStudio.UI.ViewModels;
 public partial class AnchorViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly AudioLibraryStateService _audioLibraryState;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private readonly HashSet<int> _beatsUnavailableClipIds = [];
     private int _loadSequence;
+    private volatile bool _reloadQueued;
     private const double WaveformWidth = 720.0;
     private const double WaveformHeight = 180.0;
     private const int MaxWaveformBars = 180;
@@ -34,14 +36,17 @@ public partial class AnchorViewModel : ObservableObject
     public ObservableCollection<WaveformBar> WaveformBars { get; } = [];
     public ObservableCollection<BeatMarker> BeatMarkers { get; } = [];
 
-    public AnchorViewModel(IApiClient api)
+    public AnchorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState)
     {
         _api = api;
+        _audioLibraryState = audioLibraryState;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
-            if (message.Value is "backend-ready" or "audio-library-refresh" or "audio-imported" or "media-library-refresh")
-                _ = LoadAudioSourcesAsync();
+            if (message.Value is "audio-library-refresh" or "audio-imported" or "media-library-refresh" or "project-opened")
+                _ = RequestAudioReloadAsync();
+            else if (message.Value == "project-closed")
+                ResetProjectState();
         });
     }
 
@@ -71,43 +76,66 @@ public partial class AnchorViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadAudioSourcesAsync()
     {
-        var clips = await _api.GetAudioClipsAsync();
-        if (clips == null)
+        _reloadQueued = false;
+
+        if (!await _loadGate.WaitAsync(0))
         {
-            StatusText = "Audio-Quellen laden fehlgeschlagen";
+            _reloadQueued = true;
             return;
         }
 
-        AvailableAudioClips.Clear();
-        foreach (var clip in clips)
+        try
         {
-            AvailableAudioClips.Add(new AudioClipModel
+            var clips = await _audioLibraryState.RefreshAsync();
+            if (clips == null)
             {
-                Id = clip.Id,
-                Name = clip.Name,
-                Path = clip.Path,
-                DurationSeconds = clip.DurationSeconds,
-                SampleRate = clip.SampleRate,
-                Channels = clip.Channels,
-                Format = clip.Format,
-                Bpm = clip.Bpm,
-                Key = clip.Key ?? "",
-                BeatCount = clip.BeatCount,
-                IsAnalyzed = clip.IsAnalyzed,
-            });
+                StatusText = "Audio-Quellen laden fehlgeschlagen";
+                return;
+            }
+
+            var selectedClipId = SelectedAudioClip?.Id;
+
+            AvailableAudioClips.Clear();
+            foreach (var clip in clips)
+            {
+                AvailableAudioClips.Add(new AudioClipModel
+                {
+                    Id = clip.Id,
+                    Name = clip.Name,
+                    Path = clip.Path,
+                    DurationSeconds = clip.DurationSeconds,
+                    SampleRate = clip.SampleRate,
+                    Channels = clip.Channels,
+                    Format = clip.Format,
+                    Bpm = clip.Bpm,
+                    Key = clip.Key ?? "",
+                    BeatCount = clip.BeatCount,
+                    IsAnalyzed = clip.IsAnalyzed,
+                });
+            }
+
+            var nextSelection = selectedClipId.HasValue
+                ? AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value)
+                : AvailableAudioClips.FirstOrDefault(c => c.IsAnalyzed) ?? AvailableAudioClips.FirstOrDefault();
+
+            if (nextSelection?.Id != SelectedAudioClip?.Id)
+            {
+                SelectedAudioClip = nextSelection;
+            }
+            else if (nextSelection != null && (WaveformBars.Count == 0 || BeatMarkers.Count == 0))
+            {
+                _ = LoadWaveformAndBeatsAsync(forceBeatReload: false);
+            }
+
+            StatusText = $"{AvailableAudioClips.Count} Audio-Quellen verfügbar";
+        }
+        finally
+        {
+            _loadGate.Release();
         }
 
-        var selectedClipId = SelectedAudioClip?.Id;
-        if (selectedClipId.HasValue)
-        {
-            SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value);
-        }
-        else if (AvailableAudioClips.Count > 0)
-        {
-            SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.IsAnalyzed) ?? AvailableAudioClips[0];
-        }
-
-        StatusText = $"{AvailableAudioClips.Count} Audio-Quellen verfügbar";
+        if (_reloadQueued)
+            await LoadAudioSourcesAsync();
     }
 
     [RelayCommand]
@@ -122,11 +150,14 @@ public partial class AnchorViewModel : ObservableObject
     [RelayCommand]
     private void AddAnchor()
     {
-        Anchors.Add(new AnchorPoint
+        var anchor = new AnchorPoint
         {
             Time = CurrentPosition,
             Label = $"Anchor {Anchors.Count + 1}",
-        });
+        };
+
+        Anchors.Add(anchor);
+        SelectedAnchor = anchor;
         StatusText = $"Anchor bei {CurrentPosition:F2}s hinzugefügt";
     }
 
@@ -206,6 +237,9 @@ public partial class AnchorViewModel : ObservableObject
             IsLoadingWaveform = false;
             _loadGate.Release();
         }
+
+        if (_reloadQueued)
+            await LoadAudioSourcesAsync();
     }
 
     private async Task<List<BeatData>?> LoadBeatsAsync(AudioClipModel clip, bool forceBeatReload)
@@ -302,6 +336,31 @@ public partial class AnchorViewModel : ObservableObject
     {
         var duration = TimelineDuration > 0 ? TimelineDuration : 300;
         PositionMarkerX = Math.Clamp((CurrentPosition / duration) * WaveformWidth, 0, WaveformWidth - 2);
+    }
+
+    private async Task RequestAudioReloadAsync()
+    {
+        _reloadQueued = true;
+        if (IsLoadingWaveform)
+            return;
+
+        await LoadAudioSourcesAsync();
+    }
+
+    private void ResetProjectState()
+    {
+        Interlocked.Increment(ref _loadSequence);
+        _reloadQueued = false;
+        AvailableAudioClips.Clear();
+        WaveformBars.Clear();
+        BeatMarkers.Clear();
+        Anchors.Clear();
+        SelectedAudioClip = null;
+        SelectedAnchor = null;
+        CurrentPosition = 0;
+        TimelineDuration = 300;
+        IsLoadingWaveform = false;
+        StatusText = "Kein Projekt geöffnet";
     }
 }
 

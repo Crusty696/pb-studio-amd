@@ -1,9 +1,10 @@
 using System.Windows.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PBStudio.UI.Models;
 
 /// <summary>Video-Clip Model für die UI-Darstellung.</summary>
-public class VideoClipModel
+public partial class VideoClipModel : ObservableObject
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
@@ -14,8 +15,8 @@ public class VideoClipModel
     public double Fps { get; set; } = 30.0;
     public string Codec { get; set; } = "";
     public List<string> Tags { get; set; } = [];
-    public BitmapImage? Thumbnail { get; set; }
-    public bool IsAnalyzed { get; set; }
+    [ObservableProperty] private BitmapImage? _thumbnail;
+    [ObservableProperty] private bool _isAnalyzed;
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public string ResolutionText => $"{Width}x{Height}";
 }

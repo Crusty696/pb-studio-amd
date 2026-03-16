@@ -21,6 +21,7 @@ class VideoClipInfo(BaseModel):
     codec: str = ""
     thumbnail_available: bool = False
     tags: list[str] = []
+    is_analyzed: bool = False
 
 
 class VideoAnalyzeRequest(BaseModel):

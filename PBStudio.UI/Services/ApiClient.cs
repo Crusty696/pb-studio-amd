@@ -13,6 +13,8 @@ public class ApiClient : IApiClient
 {
     private readonly HttpClient _http;
     private readonly ILogger<ApiClient> _logger;
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private volatile bool _isShuttingDown;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -25,6 +27,15 @@ public class ApiClient : IApiClient
         _http = http;
         _http.Timeout = TimeSpan.FromMinutes(10);
         _logger = logger;
+    }
+
+    public void BeginShutdown()
+    {
+        if (_isShuttingDown)
+            return;
+
+        _isShuttingDown = true;
+        _shutdownCts.Cancel();
     }
 
     // --- Health ---
@@ -63,7 +74,35 @@ public class ApiClient : IApiClient
         => await PostAsync<StatusResponse>("/project/close", null).ConfigureAwait(false);
 
     public async Task<ProjectInfo?> GetProjectInfoAsync()
-        => await GetAsync<ProjectInfo>("/project/info").ConfigureAwait(false);
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/project/info");
+
+        try
+        {
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CreateRequestCancellationToken()).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var detail = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (detail.Contains("Kein Projekt geöffnet", StringComparison.OrdinalIgnoreCase)
+                    || detail.Contains("Kein Projekt ge\u00f6ffnet", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+            }
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<ProjectInfo>(JsonOptions).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GET {Url} fehlgeschlagen", "/project/info");
+            return null;
+        }
+    }
 
     // --- Audio ---
 
@@ -98,14 +137,22 @@ public class ApiClient : IApiClient
     public async Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths)
         => await PostAsync<List<VideoClipInfo>>("/video/import", new { paths }).ConfigureAwait(false);
 
-    public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200)
-        => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}").ConfigureAwait(false);
+    public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default)
+        => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<byte[]?> GetThumbnailAsync(int clipId)
+    public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/video/thumbnails/{clipId}");
+
         try
         {
-            return await _http.GetByteArrayAsync($"/video/thumbnails/{clipId}").ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
+        {
+            return null;
         }
         catch (Exception ex)
         {
@@ -142,15 +189,33 @@ public class ApiClient : IApiClient
     public async Task CancelRenderAsync(string taskId)
         => await PostAsync<object>($"/render/cancel/{taskId}", null).ConfigureAwait(false);
 
-    // --- Generische Helfer ---
-
-    private async Task<T?> GetAsync<T>(string url) where T : class
+    public async Task ShutdownAsync()
     {
         try
         {
-            var response = await _http.GetAsync(url).ConfigureAwait(false);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var response = await _http.PostAsJsonAsync("/shutdown", (object?)null, JsonOptions, cts.Token).ConfigureAwait(false);
+            _logger.LogInformation("Backend graceful shutdown angefordert: {StatusCode}", response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Backend /shutdown fehlgeschlagen (unkritisch — Prozess wird beendet)");
+        }
+    }
+
+    // --- Generische Helfer ---
+
+    private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
+    {
+        try
+        {
+            using var response = await _http.GetAsync(url, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
+        {
+            return null;
         }
         catch (Exception ex)
         {
@@ -163,9 +228,13 @@ public class ApiClient : IApiClient
     {
         try
         {
-            var response = await _http.PostAsJsonAsync(url, body, JsonOptions).ConfigureAwait(false);
+            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, CreateRequestCancellationToken()).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
         }
         catch (Exception ex)
         {
@@ -173,6 +242,17 @@ public class ApiClient : IApiClient
             return null;
         }
     }
+
+    private CancellationToken CreateRequestCancellationToken(CancellationToken cancellationToken = default)
+        => cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token).Token
+            : _shutdownCts.Token;
+
+    private bool IsExpectedCancellation(Exception ex, CancellationToken cancellationToken = default)
+        => ex is OperationCanceledException
+           || (_isShuttingDown && ex is ObjectDisposedException)
+           || cancellationToken.IsCancellationRequested
+           || _shutdownCts.IsCancellationRequested;
 }
 
 // --- API Response Models ---
@@ -182,11 +262,11 @@ public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, doub
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
-public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float> EnergyCurve = null!, List<Dictionary<string, object>>? StructureSegments = null, Dictionary<string, object>? SpectralData = null);
+public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<Dictionary<string, object>>? StructureSegments = null, Dictionary<string, object>? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
-public record VideoClipInfo(int Id, string Name, string Path, double DurationSeconds, int Width, int Height, double Fps, string Codec, bool ThumbnailAvailable, List<string> Tags);
-public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152);
+public record VideoClipInfo(int Id, string Name, string Path, double DurationSeconds, int Width, int Height, double Fps, string Codec, bool ThumbnailAvailable, List<string> Tags, bool IsAnalyzed = false);
+public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
@@ -197,4 +277,4 @@ public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, 
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory);
 public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true);
-public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);
+public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);

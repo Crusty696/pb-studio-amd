@@ -2,13 +2,13 @@
 param(
     [string]$BaseUrl = 'http://127.0.0.1:8765',
     [string]$ProjectPath = $PSScriptRoot,
-    [string]$OutputPath = ''
+    [string]$OutputPath = '',
+    [string]$AllowedProjectRoot = '',
+    [switch]$ReuseExistingBackend
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $OutputPath) {
-    $OutputPath = Join-Path $ProjectPath 'data\release_smoke_render.mp4'
-}
+$ProjectPath = (Resolve-Path $ProjectPath).Path
 
 $script:StartedBackend = $false
 $script:BackendProcess = $null
@@ -18,13 +18,43 @@ function Step($name, [scriptblock]$action) {
     & $action
 }
 
+function Convert-JsonResponse($response) {
+    if ($null -eq $response) {
+        return $null
+    }
+
+    $content = $response.Content
+    if ([string]::IsNullOrWhiteSpace($content)) {
+        return $null
+    }
+
+    return $content | ConvertFrom-Json -NoEnumerate
+}
+
 function Get-Json($url) {
-    Invoke-RestMethod -Uri ($BaseUrl + $url) -Method Get -TimeoutSec 60
+    $response = Invoke-WebRequest -Uri ($BaseUrl + $url) -Method Get -TimeoutSec 60
+    return Convert-JsonResponse $response
 }
 
 function Post-Json($url, $body) {
     $json = if ($null -eq $body) { $null } else { $body | ConvertTo-Json -Depth 10 }
-    Invoke-RestMethod -Uri ($BaseUrl + $url) -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 300
+
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -Uri ($BaseUrl + $url) -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 300
+            return Convert-JsonResponse $response
+        }
+        catch {
+            if ($attempt -ge 2) {
+                throw
+            }
+
+            Start-Sleep -Milliseconds 750
+            if (-not (Test-Health)) {
+                throw "Backend unavailable during POST $url"
+            }
+        }
+    }
 }
 
 function Test-Health {
@@ -57,10 +87,47 @@ function Resolve-PythonExe {
     throw 'Python executable not found for backend startup.'
 }
 
+function Wait-BackendStopped {
+    param(
+        [int]$TimeoutSeconds = 20,
+        [int]$RequiredConsecutiveFailures = 3
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $failures = 0
+    while ((Get-Date) -lt $deadline) {
+        if (Test-Health) {
+            $failures = 0
+        }
+        else {
+            $failures += 1
+            if ($failures -ge $RequiredConsecutiveFailures) {
+                Start-Sleep -Seconds 2
+                return $true
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    return $false
+}
+
 function Ensure-Backend {
     if (Test-Health) {
-        Write-Host '  backend already running'
-        return
+        if ($ReuseExistingBackend) {
+            Write-Host '  backend already running (reuse enabled)'
+            return
+        }
+
+        Write-Host '  restarting existing backend for isolated smoke run'
+        try {
+            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+        }
+        catch { }
+
+        if (-not (Wait-BackendStopped)) {
+            throw 'Existing backend stayed alive; refusing non-isolated smoke run.'
+        }
     }
 
     $pythonExe = Resolve-PythonExe
@@ -81,7 +148,78 @@ function Ensure-Backend {
     throw 'Backend failed to start for release smoke.'
 }
 
+function Get-AllowedProjectRoot {
+    if ($AllowedProjectRoot) {
+        if (-not (Test-Path $AllowedProjectRoot)) {
+            New-Item -ItemType Directory -Path $AllowedProjectRoot -Force | Out-Null
+        }
+        return (Resolve-Path $AllowedProjectRoot).Path
+    }
+
+    try {
+        $pythonExe = Resolve-PythonExe
+        $configured = & $pythonExe -c "from backend.config import config; print(config.project_dir)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $configured) {
+            $configuredPath = $configured.Trim()
+            if (-not (Test-Path $configuredPath)) {
+                New-Item -ItemType Directory -Path $configuredPath -Force | Out-Null
+            }
+            return (Resolve-Path $configuredPath).Path
+        }
+    } catch {}
+
+    $fallback = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PBStudio'
+    if (-not (Test-Path $fallback)) {
+        New-Item -ItemType Directory -Path $fallback -Force | Out-Null
+    }
+    return (Resolve-Path $fallback).Path
+}
+
+function Ensure-VerificationMedia {
+    $fixtureRoot = Join-Path (Get-AllowedProjectRoot) 'E2E_Complete'
+    $scriptPath = Join-Path $ProjectPath 'scripts\ensure_verification_media.py'
+    if (-not (Test-Path $scriptPath)) {
+        throw "Verification media helper missing: $scriptPath"
+    }
+
+    $pythonExe = Resolve-PythonExe
+    $output = & $pythonExe $scriptPath $fixtureRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Verification media generation failed for $fixtureRoot"
+    }
+
+    $result = @{}
+    foreach ($line in $output) {
+        if ($line -match '^(?<key>[^=]+)=(?<value>.+)$') {
+            $result[$Matches['key']] = $Matches['value']
+        }
+    }
+
+    foreach ($required in @('audio', 'video_a', 'video_b')) {
+        if (-not $result.ContainsKey($required) -or -not (Test-Path $result[$required])) {
+            throw "Verification media missing after generation: $required"
+        }
+    }
+
+    return $result
+}
+
+function Resolve-SampleAudioPath {
+    $fixtures = Ensure-VerificationMedia
+    return $fixtures['audio']
+}
+
+function Resolve-SampleVideoPaths {
+    $fixtures = Ensure-VerificationMedia
+    return @($fixtures['video_a'], $fixtures['video_b'])
+}
+
 try {
+    $verifyRoot = Get-AllowedProjectRoot
+    $verifyName = 'ReleaseSmoke_{0}' -f (Get-Date -Format 'yyyyMMdd_HHmmss')
+    $sampleAudioPath = Resolve-SampleAudioPath
+    $sampleVideoPaths = Resolve-SampleVideoPaths
+
     Step 'Health / backend startup' {
         Ensure-Backend
         $health = Get-Json '/health'
@@ -89,22 +227,59 @@ try {
         Write-Host "  ok | GPU available = $($health.gpu_available)"
     }
 
-    Step 'Open active project root' {
-        $project = Post-Json '/project/open' @{ path = $ProjectPath }
-        Write-Host "  opened | $($project.name)"
+    Step 'Create verify project in allowed root' {
+        $project = Post-Json '/project/create' @{ name = $verifyName; path = $verifyRoot }
+        if (-not $project.path) { throw 'Verify project creation returned no path' }
+        $script:SmokeProjectPath = $project.path
+        Write-Host "  opened | $($project.name) | path=$($script:SmokeProjectPath)"
+    }
+
+    Step 'Import smoke media' {
+        $audioImport = Post-Json '/audio/import' @{ path = $sampleAudioPath }
+        if (-not $audioImport.id) { throw 'Audio import failed for release smoke' }
+
+        $videoImport = Post-Json '/video/import' @{ paths = $sampleVideoPaths }
+        if (-not $videoImport -or $videoImport.Count -lt 2) { throw 'Video import failed for release smoke' }
+
+        if (-not $script:OutputPath) {
+            $script:OutputPath = Join-Path $script:SmokeProjectPath ('output\release_smoke_render_{0}.mp4' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        }
+
+        Write-Host "  audio=$sampleAudioPath"
+        Write-Host "  video=$($sampleVideoPaths -join ', ')"
     }
 
     Step 'Load audio/video clip lists' {
-        $audio = Get-Json '/audio/clips?page=1&limit=20'
-        $video = Get-Json '/video/clips?page=1&limit=20'
+        $audio = @(Get-Json '/audio/clips?page=1&limit=50')
+        $video = @(Get-Json '/video/clips?page=1&limit=50')
         if (-not $audio -or $audio.Count -lt 1) { throw 'No audio clips available' }
         if (-not $video -or $video.Count -lt 2) { throw 'Need at least 2 video clips' }
 
-        $script:AudioClip = $audio[0]
-        $script:VideoClipIds = @($video[0].id, $video[1].id)
-        if ($video.Count -ge 3) { $script:VideoClipIds += $video[2].id }
+        $preferredAudio = $audio |
+            Where-Object { $_.duration_seconds -gt 0 -and $_.duration_seconds -le 120 } |
+            Sort-Object duration_seconds |
+            Select-Object -First 1
+        if (-not $preferredAudio) {
+            $preferredAudio = $audio |
+                Where-Object { $_.duration_seconds -gt 0 } |
+                Sort-Object duration_seconds |
+                Select-Object -First 1
+        }
+        if (-not $preferredAudio) {
+            $preferredAudio = $audio[0]
+        }
 
-        Write-Host "  audio=$($AudioClip.id) video=$($VideoClipIds -join ',')"
+        $preferredVideos = $video |
+            Where-Object { $_.duration_seconds -gt 0 } |
+            Sort-Object duration_seconds |
+            Select-Object -First 3
+        if ($preferredVideos.Count -lt 2) { throw 'Need at least 2 usable video clips' }
+
+        $script:AudioClip = $preferredAudio
+        $script:VideoClipIds = @($preferredVideos[0].id, $preferredVideos[1].id)
+        if ($preferredVideos.Count -ge 3) { $script:VideoClipIds += $preferredVideos[2].id }
+
+        Write-Host "  audio=$($AudioClip.id) duration=$([math]::Round([double]$AudioClip.duration_seconds,2))s video=$($VideoClipIds -join ',')"
     }
 
     Step 'Analyze audio + waveform + beats' {
@@ -114,7 +289,7 @@ try {
         $waveform = Get-Json "/audio/waveform/$($AudioClip.id)?bands=3"
         if (-not $waveform.bands) { throw 'Waveform missing' }
 
-        $beats = Get-Json "/audio/beats/$($AudioClip.id)"
+        $beats = @(Get-Json "/audio/beats/$($AudioClip.id)")
         if ($beats.Count -lt 1) { throw 'Beats missing after analysis' }
 
         Write-Host "  bpm=$($analysis.bpm) beats=$($beats.Count)"
@@ -156,11 +331,21 @@ try {
     }
 
     Step 'Render start + cancel proof' {
-        if (Test-Path $OutputPath) { Remove-Item $OutputPath -Force }
+        $renderOutputPath = $script:OutputPath
+        if (-not $renderOutputPath) {
+            $renderOutputPath = Join-Path $script:SmokeProjectPath ('output\release_smoke_render_{0}.mp4' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+            $script:OutputPath = $renderOutputPath
+        }
+
+        $outputDir = Split-Path -Parent $renderOutputPath
+        if ($outputDir) {
+            New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+        }
+        if (Test-Path $renderOutputPath) { Remove-Item $renderOutputPath -Force }
 
         $timeline = Get-Json '/pacing/timeline'
         $render = Post-Json '/render/start' @{
-            output_path = $OutputPath
+            output_path = $renderOutputPath
             audio_path = $timeline.audio_path
             quality = 'preview'
             resolution_width = 640
@@ -182,10 +367,13 @@ try {
             if ($final.status -in @('cancelled', 'completed', 'failed')) { break }
         }
 
+        if ($final.status -eq 'failed') {
+            throw "Render task failed during cancel proof: $($final.error)"
+        }
         if ($final.status -notin @('cancelled', 'completed')) {
             throw "Unexpected render final status: $($final.status)"
         }
-        Write-Host "  render task=$taskId final=$($final.status)"
+        Write-Host "  render task=$taskId final=$($final.status) output=$renderOutputPath"
     }
 
     Write-Host '[SMOKE] PASS' -ForegroundColor Green

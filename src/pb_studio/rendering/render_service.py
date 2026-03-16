@@ -13,6 +13,7 @@ Features:
 - Echtzeit-Progress
 """
 
+import inspect
 import json
 import os
 import re
@@ -21,7 +22,7 @@ import threading
 import time
 import queue
 from pathlib import Path
-from typing import List, Dict, Optional, Callable
+from typing import Any, List, Dict, Optional, Callable
 
 
 class RenderCancelledError(RuntimeError):
@@ -108,7 +109,7 @@ class RenderService:
         target_fps: float = 30.0,
         bitrate: str = "15M",
         preset: str = "balanced",
-        progress_callback: Optional[Callable[[str, float], None]] = None,
+        progress_callback: Optional[Callable[..., None]] = None,
         audio_offset: float = 0.0,
         cancel_callback: Optional[Callable[[], bool]] = None,
     ) -> str:
@@ -116,30 +117,64 @@ class RenderService:
         final_output = self.output_dir / output_filename
         audio_dur = self._get_audio_duration(audio_path)
         total_duration = audio_dur if audio_dur and audio_dur > 0 else self._calculate_timeline_duration(timeline)
+        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
+        render_start = time.monotonic()
 
         try:
-            if progress_callback:
-                progress_callback("Prüfe Quellmaterial...", 10)
+            self._emit_progress(
+                progress_callback,
+                "Prüfe Quellmaterial...",
+                10,
+                total_frames=total_frames,
+                current_frame=0,
+                fps=0.0,
+                elapsed_seconds=0.0,
+                eta_seconds=0.0,
+            )
 
             normalized_clips = self._normalize_clips(
                 timeline, target_width, target_height, target_fps, progress_callback, cancel_callback
             )
 
-            if progress_callback:
-                progress_callback("Erstelle Schnittliste...", 55)
+            self._emit_progress(
+                progress_callback,
+                "Erstelle Schnittliste...",
+                55,
+                total_frames=total_frames,
+                current_frame=0,
+                fps=0.0,
+                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                eta_seconds=0.0,
+            )
             concat_list_path = self.temp_dir / "concat_list.txt"
             self._generate_concat_file(normalized_clips, concat_list_path)
 
-            if progress_callback:
-                progress_callback("Starte Rendering...", 58)
+            self._emit_progress(
+                progress_callback,
+                "Starte Rendering...",
+                58,
+                total_frames=total_frames,
+                current_frame=0,
+                fps=0.0,
+                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                eta_seconds=0.0,
+            )
 
             self._run_ffmpeg_render(
                 concat_list_path, audio_path, final_output,
-                bitrate, preset, audio_offset, total_duration, progress_callback, cancel_callback
+                bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start
             )
 
-            if progress_callback:
-                progress_callback("Fertig!", 100)
+            self._emit_progress(
+                progress_callback,
+                "Fertig!",
+                100,
+                total_frames=total_frames,
+                current_frame=total_frames,
+                fps=0.0,
+                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                eta_seconds=0.0,
+            )
             logger.info(f"Rendering erfolgreich: {final_output}")
             return str(final_output)
 
@@ -312,8 +347,10 @@ class RenderService:
         self, list_path: Path, audio_path: str, output_path: Path,
         bitrate: str, preset: str, audio_offset: float,
         total_duration: float,
-        progress_callback: Optional[Callable[[str, int], None]] = None,
+        target_fps: float,
+        progress_callback: Optional[Callable[..., None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        render_start_time: Optional[float] = None,
     ):
         """Finaler Render mit Echtzeit-Progress."""
         cmd = [
@@ -372,7 +409,14 @@ class RenderService:
         )
 
         try:
-            self._parse_ffmpeg_progress(process, total_duration, progress_callback, cancel_callback)
+            self._parse_ffmpeg_progress(
+                process,
+                total_duration,
+                target_fps,
+                progress_callback,
+                cancel_callback,
+                render_start_time=render_start_time,
+            )
         finally:
             if process.poll() is None:
                 try:
@@ -388,9 +432,13 @@ class RenderService:
                         pass
 
     def _parse_ffmpeg_progress(
-        self, process: subprocess.Popen, total_duration: float,
-        progress_callback: Optional[Callable],
+        self,
+        process: subprocess.Popen,
+        total_duration: float,
+        target_fps: float,
+        progress_callback: Optional[Callable[..., None]],
         cancel_callback: Optional[Callable[[], bool]] = None,
+        render_start_time: Optional[float] = None,
     ):
         """Liest FFmpeg stderr und verfolgt Fortschritt."""
         stderr_queue: queue.Queue = queue.Queue()
@@ -412,7 +460,12 @@ class RenderService:
         stderr_thread.start()
 
         time_pattern = re.compile(r"time=(\d+):(\d+):(\d+\.?\d*)")
+        frame_pattern = re.compile(r"frame=\s*(\d+)")
+        fps_pattern = re.compile(r"fps=\s*([0-9]+(?:\.[0-9]+)?)")
+        total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
         last_progress = 60
+        last_publish_at = 0.0
+        last_frame = 0
 
         while process.poll() is None:
             if cancel_callback and cancel_callback():
@@ -424,19 +477,53 @@ class RenderService:
             except queue.Empty:
                 continue
 
-            match = time_pattern.search(line.strip())
+            stripped = line.strip()
+            match = time_pattern.search(stripped)
             if match:
                 try:
                     h, m, s = match.groups()
                     time_sec = int(h) * 3600 + int(m) * 60 + float(s)
+                    frame_match = frame_pattern.search(stripped)
+                    parsed_frame = int(frame_match.group(1)) if frame_match else 0
+                    fps_match = fps_pattern.search(stripped)
+                    parsed_fps = float(fps_match.group(1)) if fps_match else 0.0
+                    current_frame = parsed_frame if parsed_frame > 0 else int(round(time_sec * max(target_fps, 0.0)))
+                    if total_frames > 0:
+                        current_frame = min(current_frame, total_frames)
+                    current_frame = max(current_frame, last_frame)
+                    last_frame = current_frame
+
+                    elapsed_seconds = max(
+                        (time.monotonic() - render_start_time) if render_start_time is not None else time_sec,
+                        0.0,
+                    )
+                    effective_fps = parsed_fps
+                    if effective_fps <= 0.0 and elapsed_seconds > 0 and current_frame > 0:
+                        effective_fps = current_frame / elapsed_seconds
+                    remaining_frames = max(total_frames - current_frame, 0) if total_frames > 0 else 0
+                    eta_seconds = (remaining_frames / effective_fps) if effective_fps > 0.0 else 0.0
+
                     if total_duration > 0:
                         render_pct = min(time_sec / total_duration, 1.0)
                         overall_pct = 60 + int(38 * render_pct)
-                        if overall_pct > last_progress and progress_callback:
-                            last_progress = overall_pct
-                            progress_callback(
+                        now = time.monotonic()
+                        should_publish = (
+                            overall_pct > last_progress
+                            or now - last_publish_at >= 1.0
+                            or current_frame >= total_frames > 0
+                        )
+                        if should_publish:
+                            last_progress = max(last_progress, overall_pct)
+                            last_publish_at = now
+                            self._emit_progress(
+                                progress_callback,
                                 f"Rendering: {self._format_time(time_sec)} / {self._format_time(total_duration)}",
-                                overall_pct
+                                overall_pct,
+                                current_frame=current_frame,
+                                total_frames=total_frames,
+                                fps=effective_fps,
+                                elapsed_seconds=elapsed_seconds,
+                                eta_seconds=max(eta_seconds, 0.0),
                             )
                 except (ValueError, IndexError):
                     pass
@@ -458,6 +545,28 @@ class RenderService:
         mins = int(seconds // 60)
         secs = int(seconds % 60)
         return f"{mins:02d}:{secs:02d}"
+
+    @staticmethod
+    def _emit_progress(
+        progress_callback: Optional[Callable[..., None]],
+        message: str,
+        percent: float,
+        **telemetry: Any,
+    ) -> None:
+        if progress_callback is None:
+            return
+        try:
+            signature = inspect.signature(progress_callback)
+            supports_varargs = any(
+                param.kind == inspect.Parameter.VAR_POSITIONAL
+                for param in signature.parameters.values()
+            )
+            if supports_varargs or len(signature.parameters) >= 3:
+                progress_callback(message, percent, telemetry)
+            else:
+                progress_callback(message, percent)
+        except (TypeError, ValueError):
+            progress_callback(message, percent)
 
     def _get_audio_duration(self, audio_path: str) -> Optional[float]:
         cmd = [

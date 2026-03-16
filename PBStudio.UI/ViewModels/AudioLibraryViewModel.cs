@@ -12,6 +12,7 @@ namespace PBStudio.UI.ViewModels;
 public partial class AudioLibraryViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly AudioLibraryStateService _audioLibraryState;
 
     [ObservableProperty] private AudioClipModel? _selectedClip;
     [ObservableProperty] private string _statusText = "";
@@ -25,14 +26,17 @@ public partial class AudioLibraryViewModel : ObservableObject
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
 
-    public AudioLibraryViewModel(IApiClient api)
+    public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState)
     {
         _api = api;
+        _audioLibraryState = audioLibraryState;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
-            if (message.Value is "backend-ready" or "audio-imported" or "audio-library-refresh" or "media-library-refresh")
+            if (message.Value is "project-opened" or "audio-imported" or "audio-library-refresh" or "media-library-refresh")
                 _ = LoadAudioClipsAsync();
+            else if (message.Value is "project-closed")
+                ResetProjectState();
         });
     }
 
@@ -43,12 +47,20 @@ public partial class AudioLibraryViewModel : ObservableObject
         BeatCount = value.BeatCount;
         Key = value.Key;
         DurationSeconds = value.DurationSeconds;
+        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsAnalyzingChanged(bool value)
+    {
+        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+        AnalyzeAllCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     private async Task LoadAudioClipsAsync()
     {
-        var clips = await _api.GetAudioClipsAsync();
+        var previousId = SelectedClip?.Id;
+        var clips = await _audioLibraryState.RefreshAsync();
         if (clips != null)
         {
             AudioClips.Clear();
@@ -69,7 +81,11 @@ public partial class AudioLibraryViewModel : ObservableObject
                     IsAnalyzed = clipInfo.IsAnalyzed,
                 });
             }
+            // Auswahl wiederherstellen
+            if (previousId.HasValue)
+                SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
             StatusText = $"{clips.Count} Audio-Clips geladen";
+            AnalyzeAllCommand.NotifyCanExecuteChanged();
         }
         else
         {
@@ -92,11 +108,11 @@ public partial class AudioLibraryViewModel : ObservableObject
         SelectedClip = null;
     }
 
-    [RelayCommand]
+    private bool CanAnalyzeAll() => AudioClips.Count > 0 && !IsAnalyzing;
+
+    [RelayCommand(CanExecute = nameof(CanAnalyzeAll))]
     private async Task AnalyzeAllAsync()
     {
-        if (AudioClips.Count == 0) return;
-
         IsAnalyzing = true;
         var total = AudioClips.Count;
         var done = 0;
@@ -133,10 +149,13 @@ public partial class AudioLibraryViewModel : ObservableObject
             IsAnalyzing = false;
         }
 
+        // Info-Felder für den aktuell ausgewählten Clip aktualisieren
         if (SelectedClip != null) OnSelectedClipChanged(SelectedClip);
     }
 
-    [RelayCommand]
+    private bool CanAnalyzeSelected() => SelectedClip != null && !IsAnalyzing;
+
+    [RelayCommand(CanExecute = nameof(CanAnalyzeSelected))]
     private async Task AnalyzeSelectedAsync()
     {
         if (SelectedClip == null)
@@ -205,5 +224,19 @@ public partial class AudioLibraryViewModel : ObservableObject
         {
             IsSeparating = false;
         }
+    }
+
+    private void ResetProjectState()
+    {
+        AudioClips.Clear();
+        SelectedClip = null;
+        StatusText = "Kein Projekt geöffnet";
+        IsAnalyzing = false;
+        IsSeparating = false;
+        AnalysisProgress = 0;
+        Bpm = 0;
+        BeatCount = 0;
+        Key = string.Empty;
+        DurationSeconds = 0;
     }
 }

@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
@@ -20,6 +22,16 @@ public partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(IApiClient api)
     {
         _api = api;
+        StatusText = "Backend: Startet...";
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value == "backend-ready")
+                _ = RefreshAsync();
+            else if (message.Value == "app-shutdown")
+                BackendOnline = false;
+        });
+
         _ = RefreshAsync();
     }
 

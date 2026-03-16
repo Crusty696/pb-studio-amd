@@ -129,3 +129,16 @@ async def publish_event(event_type: str, data: dict[str, Any], client_id: str = 
                 queue.put_nowait(event)
             except asyncio.QueueEmpty:
                 pass
+
+
+async def publish_log(message: str, *, level: str = "info", detail: str | None = None, source: str | None = None) -> None:
+    """Publiziert ein strukturiertes Log-Event für /events/log."""
+    payload: dict[str, Any] = {
+        "level": (level or "info").lower(),
+        "message": message,
+    }
+    if detail:
+        payload["detail"] = detail
+    if source:
+        payload["source"] = source
+    await publish_event("log", payload)

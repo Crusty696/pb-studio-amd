@@ -11,10 +11,34 @@ Architecture:
 
 import logging
 import numpy as np
-import onnxruntime as ort
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 from PIL import Image
+
+try:
+    import onnxruntime as ort
+except ImportError:  # pragma: no cover - optional dependency in test envs
+    class _FallbackSessionOptions:
+        def __init__(self):
+            self.enable_mem_pattern = True
+            self.graph_optimization_level = None
+            self.enable_cpu_mem_arena = True
+            self.intra_op_num_threads = 0
+            self.inter_op_num_threads = 0
+
+    class _FallbackGraphOptimizationLevel:
+        ORT_ENABLE_ALL = "ORT_ENABLE_ALL"
+
+    class _FallbackOrt:
+        SessionOptions = _FallbackSessionOptions
+        GraphOptimizationLevel = _FallbackGraphOptimizationLevel
+        InferenceSession = object
+
+        @staticmethod
+        def get_available_providers() -> List[str]:
+            return ["CPUExecutionProvider"]
+
+    ort = _FallbackOrt()
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +227,19 @@ class MoondreamAnalyzer:
         # Initialize tokenizer first
         if not self._init_tokenizer():
             logger.warning("Tokenizer not available - text generation will be limited")
+
+        if not hasattr(ort, "InferenceSession") or ort.__class__.__name__ == "_FallbackOrt":
+            logger.warning("onnxruntime not installed - forcing PyTorch fallback for Moondream")
+            try:
+                from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
+                self._pytorch_fallback = MoondreamPyTorch()
+                if self._pytorch_fallback.load():
+                    self._initialized = True
+                    self._active_provider = "PyTorch (CPU)"
+                    return True
+            except ImportError as e:
+                logger.error(f"PyTorch fallback not available: {e}")
+            return False
 
         # Session options und providers
         sess_options = self._create_session_options()

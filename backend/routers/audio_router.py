@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..app_state import AppState, get_app_state
-from ..dependencies import with_gpu_task, publish_event
+from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..schemas.audio_schemas import (
     AudioImportRequest, AudioClipInfo,
     AudioAnalyzeRequest, AudioAnalysisResult,
@@ -72,6 +72,12 @@ async def import_audio(
     })
 
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
+    await publish_log(
+        f"Audio importiert: {audio_path.name}",
+        level="info",
+        source="audio.import",
+        detail=f"clip_id={clip['id']} duration={probe_info['duration']:.2f}s",
+    )
     await publish_event("import_progress", {"clip_id": clip['id'], "percent": 100.0, "message": "Import abgeschlossen"})
     return AudioClipInfo(**clip)
 
@@ -91,13 +97,13 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[AudioClipInfo]:
     """Gibt die Audio-Clip-Liste zurück (paginiert)."""
-    clips = list(state.audio_clips.values())
+    clips = list(state.get_audio_clips_snapshot().values())
     start = (page - 1) * limit
     end = start + limit
 
     items: list[AudioClipInfo] = []
     for clip in clips[start:end]:
-        analysis = state.audio_analysis_cache.get(clip["id"])
+        analysis = state.get_audio_analysis(clip["id"])
         merged = dict(clip)
         merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
@@ -122,26 +128,58 @@ async def analyze_audio(
     state: AppState = Depends(get_app_state),
 ) -> AudioAnalysisResult:
     """Analysiert einen Audio-Clip (Beats, Struktur, Spektral)."""
-    if request.clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
 
-    clip = state.audio_clips[request.clip_id]
     audio_path = clip["path"]
 
     logger.info(f"Starte Audio-Analyse für Clip {request.clip_id}: {clip['name']}")
+    await publish_log(
+        f"Audio-Analyse gestartet: {clip['name']}",
+        level="info",
+        source="audio.analyze",
+        detail=f"clip_id={request.clip_id}",
+    )
 
     try:
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request
         )
-        state.audio_analysis_cache[request.clip_id] = result
+        state.set_audio_analysis(request.clip_id, result)
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
         clip["is_analyzed"] = True
+        state.set_audio_clip(request.clip_id, clip)
+
+        # P-1: Analyse-Ergebnisse in SQLite persistieren
+        import json as _json
+        beats_json = _json.dumps(result.get("beats", []))
+        state.update_audio_analysis(
+            clip_id=request.clip_id,
+            bpm=clip["bpm"],
+            key=clip["key"],
+            beat_count=clip["beat_count"],
+            beats_json=beats_json,
+            is_analyzed=True,
+        )
+
+        await publish_log(
+            f"Audio-Analyse abgeschlossen: {clip['name']}",
+            level="info",
+            source="audio.analyze",
+            detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
+        )
         return AudioAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
+        await publish_log(
+            f"Audio-Analyse fehlgeschlagen: {clip['name']}",
+            level="error",
+            source="audio.analyze",
+            detail=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 

@@ -44,9 +44,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-03-09
 - **Phase:** Production / Verified
-- **Status:** Deep-Audit 2026-03-09 abgeschlossen. 163 passed, 9 skipped, 0 failures.
+- **Status:** HIGH-Findings gefixt 2026-03-11. 182 passed, 9 skipped, 0 failures.
 - **Next Task:** End-to-End Test (WPF App starten + alle 9 Views testen).
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09)
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11)
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)

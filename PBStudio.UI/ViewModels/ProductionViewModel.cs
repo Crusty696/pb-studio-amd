@@ -13,6 +13,8 @@ public partial class ProductionViewModel : ObservableObject
 {
     private readonly IApiClient _api;
     private readonly SSEClient _sse;
+    private readonly TimelineStateService _timelineState;
+    private readonly ProjectService _projects;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
 
@@ -26,23 +28,41 @@ public partial class ProductionViewModel : ObservableObject
     [ObservableProperty] private double _renderProgress;
     [ObservableProperty] private bool _isRendering;
     [ObservableProperty] private string _etaText = "";
+    [ObservableProperty] private bool _hasProject;
 
     public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
 
-    public ProductionViewModel(IApiClient api, SSEClient sse)
+    public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects)
     {
         _api = api;
         _sse = sse;
+        _timelineState = timelineState;
+        _projects = projects;
+        HasProject = _projects.HasProject;
         _sse.ProgressReceived += OnRenderProgress;
         _sse.LogReceived += OnLogReceived;
         _sse.GpuStatusReceived += OnGpuStatusReceived;
+        _timelineState.TimelineChanged += OnTimelineChanged;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
-            if (message.Value is "backend-ready" or "timeline-refresh")
-                _ = SyncAudioPathFromTimelineAsync();
+            if (message.Value == "project-opened")
+            {
+                HasProject = true;
+                StartRenderCommand.NotifyCanExecuteChanged();
+            }
+            else if (message.Value == "project-closed")
+            {
+                ResetProjectState();
+            }
         });
+
+        if (HasProject)
+        {
+            StatusText = "Bereit für Rendering";
+            _ = SyncAudioPathFromTimelineAsync();
+        }
     }
 
     [RelayCommand]
@@ -58,7 +78,9 @@ public partial class ProductionViewModel : ObservableObject
             OutputPath = dialog.FileName;
     }
 
-    [RelayCommand]
+    private bool CanStartRender() => HasProject && !IsRendering;
+
+    [RelayCommand(CanExecute = nameof(CanStartRender))]
     private async Task StartRenderAsync()
     {
         if (IsRendering)
@@ -101,16 +123,23 @@ public partial class ProductionViewModel : ObservableObject
             Fps: Fps
         );
 
-        var result = await _api.StartRenderAsync(request);
-        if (result != null)
+        try
         {
-            _currentTaskId = result.TaskId;
-            ApplyProgressUpdate(result.TaskId, result.Status, result.Percent, "Render-Task registriert", result.CurrentFrame, result.TotalFrames, result.ElapsedSeconds, result.EtaSeconds, result.OutputPath, result.Error);
-            AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
+            var result = await _api.StartRenderAsync(request);
+            if (result != null)
+            {
+                _currentTaskId = result.TaskId;
+                ApplyProgressUpdate(result.TaskId, result.Status, result.Percent, "Render-Task registriert", result.CurrentFrame, result.TotalFrames, result.ElapsedSeconds, result.EtaSeconds, result.OutputPath, result.Error);
+                AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
+            }
+            else
+            {
+                ResetRenderState("Rendering konnte nicht gestartet werden", "error", "Render-Start fehlgeschlagen");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            ResetRenderState("Rendering konnte nicht gestartet werden", "error", "Render-Start fehlgeschlagen");
+            ResetRenderState($"Rendering fehlgeschlagen: {ex.Message}", "error", $"Unerwarteter Fehler beim Render-Start: {ex.Message}");
         }
     }
 
@@ -135,9 +164,17 @@ public partial class ProductionViewModel : ObservableObject
 
     private async Task SyncAudioPathFromTimelineAsync()
     {
-        var timeline = await _api.GetTimelineAsync();
+        var timeline = _timelineState.CurrentTimeline ?? await _timelineState.RefreshAsync();
         if (!string.IsNullOrEmpty(timeline?.AudioPath))
             AudioPath = timeline.AudioPath;
+    }
+
+    private void OnTimelineChanged(object? sender, TimelineResponse? timeline)
+    {
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            AudioPath = timeline?.AudioPath ?? string.Empty;
+        });
     }
 
     private void OnRenderProgress(object? sender, ProgressEventArgs e)
@@ -300,6 +337,11 @@ public partial class ProductionViewModel : ObservableObject
         });
     }
 
+    partial void OnIsRenderingChanged(bool value)
+    {
+        StartRenderCommand.NotifyCanExecuteChanged();
+    }
+
     private void ResetRenderState(string statusText, string logLevel, string logMessage)
     {
         IsRendering = false;
@@ -326,5 +368,17 @@ public partial class ProductionViewModel : ObservableObject
 
         while (RenderLogEntries.Count > 300)
             RenderLogEntries.RemoveAt(0);
+    }
+
+    private void ResetProjectState()
+    {
+        HasProject = false;
+        StartRenderCommand.NotifyCanExecuteChanged();
+        _currentTaskId = null;
+        AudioPath = string.Empty;
+        RenderProgress = 0;
+        IsRendering = false;
+        EtaText = string.Empty;
+        StatusText = "Kein Projekt geöffnet";
     }
 }

@@ -25,45 +25,76 @@ from .base_worker import BaseWorker, CancelledError
 from .worker_registry import WorkerRegistry
 
 # Setup utilities
-from .registry_setup import (
-    setup_worker_registry,
-    get_worker_vram_requirements,
-    get_gpu_workers,
-    get_cpu_workers,
-    calculate_pipeline_vram,
-    get_worker_class,
-)
+try:
+    from .registry_setup import (
+        setup_worker_registry,
+        get_worker_vram_requirements,
+        get_gpu_workers,
+        get_cpu_workers,
+        calculate_pipeline_vram,
+        get_worker_class,
+    )
+except ImportError:
+    setup_worker_registry = None
+    get_worker_vram_requirements = None
+    get_gpu_workers = None
+    get_cpu_workers = None
+    calculate_pipeline_vram = None
+    get_worker_class = None
 
 # Orchestrator
-from .orchestrator import (
-    WorkerOrchestrator,
-    AudioPipelineResult,
-    VideoPipelineResult,
-)
+try:
+    from .orchestrator import (
+        WorkerOrchestrator,
+        AudioPipelineResult,
+        VideoPipelineResult,
+    )
+except ImportError:
+    WorkerOrchestrator = None
+    AudioPipelineResult = None
+    VideoPipelineResult = None
 
 # Audio Workers
-from .audio import (
-    AudioImportWorker,
-    AudioAnalyzeWorker,
-    AudioStemWorker,
-    AudioEmbeddingWorker,
-)
+try:
+    from .audio import (
+        AudioImportWorker,
+        AudioAnalyzeWorker,
+        AudioStemWorker,
+        AudioEmbeddingWorker,
+    )
+except ImportError:
+    AudioImportWorker = None
+    AudioAnalyzeWorker = None
+    AudioStemWorker = None
+    AudioEmbeddingWorker = None
 
 # Video Workers
-from .video import (
-    VideoImportWorker,
-    VideoSceneWorker,
-    VideoMotionWorker,
-    VideoVisionWorker,
-)
+try:
+    from .video import (
+        VideoImportWorker,
+        VideoSceneWorker,
+        VideoMotionWorker,
+        VideoVisionWorker,
+    )
+except ImportError:
+    VideoImportWorker = None
+    VideoSceneWorker = None
+    VideoMotionWorker = None
+    VideoVisionWorker = None
 
 # Generation Workers
-from .generation import (
-    PacingWorker,
-    RenderWorker,
-    ConcatWorker,
-    ExportWorker,
-)
+try:
+    from .generation import (
+        PacingWorker,
+        RenderWorker,
+        ConcatWorker,
+        ExportWorker,
+    )
+except ImportError:
+    PacingWorker = None
+    RenderWorker = None
+    ConcatWorker = None
+    ExportWorker = None
 
 __all__ = [
     # Base infrastructure

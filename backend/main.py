@@ -10,6 +10,7 @@ Kein Auth, kein HTTPS, kein Multi-User.
 
 import logging
 import sys
+import threading
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -58,10 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error(f"  pb_studio NICHT importierbar: {e}")
         logger.error(f"  sys.path enthält: {[p for p in sys.path if 'pb_studio' in p.lower() or 'src' in p.lower()]}")
 
-    # ADR-003 Phase 2: Clips aus SQLite wiederherstellen
-    from .app_state import get_app_state
-    get_app_state().load_from_db()
-
+    # Kein automatischer Medien-Restore beim Startup:
+    # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
     yield
 
     logger.info("PB Studio AMD Backend wird heruntergefahren...")
@@ -146,9 +145,13 @@ async def gpu_cleanup() -> dict[str, int]:
 @app.post("/shutdown")
 async def shutdown() -> dict[str, str]:
     """Graceful Shutdown (aufgerufen von C# beim App-Close)."""
-    import asyncio
     logger.info("Shutdown-Request erhalten, fahre in 2s herunter...")
-    asyncio.get_event_loop().call_later(2, _force_exit)
+    # Windows/Uvicorn: loop.call_later() hat hier im detached Launcher-Pfad
+    # nicht zuverlässig ausgelöst, wodurch der alte Prozess Port 8765 belegt hielt.
+    # Ein Timer auf separatem Thread ist für den lokalen Shutdown robuster.
+    timer = threading.Timer(2.0, _force_exit)
+    timer.daemon = True
+    timer.start()
     return {"status": "shutting_down"}
 
 

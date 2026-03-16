@@ -16,6 +16,8 @@ public partial class MainViewModel : ObservableObject
     private readonly SSEClient _sse;
     private readonly PythonBridgeService _bridge;
     private readonly ProjectService _projects;
+    private bool _backendReadySent;
+    private string? _lastProjectPath;
 
     [ObservableProperty] private int _selectedTabIndex;
     [ObservableProperty] private string _statusMessage = "Bereit";
@@ -40,6 +42,12 @@ public partial class MainViewModel : ObservableObject
         _sse.GpuStatusReceived += OnGpuStatusReceived;
         _projects.ProjectChanged += OnProjectChanged;
 
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value == "app-shutdown")
+                _sse.StopListening();
+        });
+
         _ = InitializeAsync();
     }
 
@@ -47,19 +55,20 @@ public partial class MainViewModel : ObservableObject
     {
         for (int i = 0; i < 60; i++)
         {
-            var health = await _api.GetHealthAsync();
-            if (health != null)
+            if (_bridge.IsRunning)
             {
                 BackendStatusText = "Backend: Online";
                 BackendStatusColor = Brushes.LimeGreen;
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("backend-ready"));
+                SendBackendReadyOnce();
                 _sse.StartListening();
                 await RefreshGpuStatusAsync();
                 await _projects.RefreshProjectInfoAsync();
                 return;
             }
+
             await Task.Delay(500);
         }
+
         BackendStatusText = "Backend: Offline";
         BackendStatusColor = Brushes.Red;
     }
@@ -87,7 +96,6 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
         StatusMessage = $"Projekt erstellt: {_projects.CurrentProjectName}";
     }
 
@@ -110,8 +118,6 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("timeline-refresh"));
         StatusMessage = $"Projekt geöffnet: {_projects.CurrentProjectName}";
     }
 
@@ -134,8 +140,8 @@ public partial class MainViewModel : ObservableObject
         if (!HasProject)
             return;
 
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-closing"));
         await _projects.CloseProjectAsync();
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-closed"));
         StatusMessage = "Projekt geschlossen";
     }
 
@@ -143,9 +149,24 @@ public partial class MainViewModel : ObservableObject
     {
         App.Current.Dispatcher.Invoke(() =>
         {
+            var previousProjectPath = _lastProjectPath;
+            var currentProjectPath = project?.Path;
+
             CurrentProjectName = project?.Name ?? "Kein Projekt";
-            CurrentProjectPath = project?.Path ?? "";
+            CurrentProjectPath = currentProjectPath ?? "";
             HasProject = project != null;
+            _lastProjectPath = currentProjectPath;
+
+            if (project == null)
+            {
+                if (!string.IsNullOrEmpty(previousProjectPath))
+                    WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-closed"));
+
+                return;
+            }
+
+            if (!string.Equals(previousProjectPath, currentProjectPath, StringComparison.OrdinalIgnoreCase))
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
         });
     }
 
@@ -155,9 +176,24 @@ public partial class MainViewModel : ObservableObject
         {
             BackendStatusText = isRunning ? "Backend: Online" : "Backend: Offline";
             BackendStatusColor = isRunning ? Brushes.LimeGreen : Brushes.Red;
+
             if (isRunning)
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("backend-ready"));
+            {
+                SendBackendReadyOnce();
+                return;
+            }
+
+            _backendReadySent = false;
         });
+    }
+
+    private void SendBackendReadyOnce()
+    {
+        if (_backendReadySent)
+            return;
+
+        _backendReadySent = true;
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("backend-ready"));
     }
 
     private void OnProgressReceived(object? sender, ProgressEventArgs e)
@@ -184,4 +220,5 @@ public partial class MainViewModel : ObservableObject
         if (gpu != null)
             GpuStatusText = $"GPU: {gpu.VramUsedMb}/{gpu.VramTotalMb} MB";
     }
+
 }

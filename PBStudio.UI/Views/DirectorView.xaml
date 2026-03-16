@@ -153,7 +153,9 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                              Style="{StaticResource ClipCheckBox}">
+                                              Style="{StaticResource ClipCheckBox}"
+                                              Checked="VideoClipCheckBox_Changed"
+                                              Unchecked="VideoClipCheckBox_Changed">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}" Foreground="{StaticResource AbletonText}" FontSize="11"/>
                                             <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource AbletonTextDim}"
@@ -427,7 +429,7 @@
                         </GridView.ColumnHeaderContainerStyle>
 
                         <GridViewColumn Header="CLIP" Width="160"
-                                        DisplayMemberBinding="{Binding ClipId}"/>
+                                        DisplayMemberBinding="{Binding ClipName}"/>
                         <GridViewColumn Header="ZEITRAUM" Width="180"
                                         DisplayMemberBinding="{Binding TimeRangeText}"/>
                         <GridViewColumn Header="DAUER" Width="80"

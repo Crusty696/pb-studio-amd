@@ -11,7 +11,22 @@ import sys
 import types
 from pathlib import Path
 
-import onnxruntime as ort
+try:
+    import onnxruntime as ort
+except ImportError:  # pragma: no cover - optional dependency in test envs
+    class _FallbackSessionOptions:
+        def __init__(self):
+            self.enable_mem_pattern = True
+
+    class _FallbackOrt:
+        SessionOptions = _FallbackSessionOptions
+
+        @staticmethod
+        def get_available_providers():
+            return ["CPUExecutionProvider"]
+
+    ort = _FallbackOrt()
+
 import torch
 
 from pb_studio.config_manager import ConfigManager
