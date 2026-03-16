@@ -1,8 +1,10 @@
 """
-GPU-Lock Middleware für FastAPI.
+GPU-Timing Middleware für FastAPI.
 
-Stellt sicher, dass nur 1 ONNX DirectML Session gleichzeitig läuft.
-AMD DirectML hat Memory-Konflikte bei parallelen Sessions.
+Diese Middleware ist ein Logger/Timer für GPU-intensive Requests.
+Der eigentliche GPU-Lock (Serialisierung von DirectML ONNX Sessions) befindet sich
+in ``backend/dependencies.py`` als ``gpu_lock = asyncio.Lock()``,
+welches über ``with_gpu_task()`` erworben wird.
 """
 
 import logging
@@ -26,7 +28,7 @@ GPU_PATHS = {
 
 
 class GPULockMiddleware(BaseHTTPMiddleware):
-    """Middleware die GPU-intensive Requests serialisiert."""
+    """Middleware die GPU-intensive Requests loggt und zeitlich erfasst."""
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         path = request.url.path

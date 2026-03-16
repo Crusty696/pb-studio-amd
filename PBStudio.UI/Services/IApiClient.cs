@@ -29,8 +29,8 @@ public interface IApiClient
 
     // --- Audio (Erweitert) ---
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
-    Task<List<Dictionary<string, object>>?> GetStructureAsync(int clipId);
-    Task<Dictionary<string, object>?> GetSpectralAsync(int clipId);
+    Task<List<StructureSegment>?> GetStructureAsync(int clipId);
+    Task<SpectralData?> GetSpectralAsync(int clipId);
 
     // --- Video ---
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);

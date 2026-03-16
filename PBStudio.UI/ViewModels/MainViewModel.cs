@@ -10,7 +10,7 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>Haupt-ViewModel für das MainWindow. Verwaltet Tab-Navigation und globalen Status.</summary>
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly SSEClient _sse;
@@ -219,6 +219,15 @@ public partial class MainViewModel : ObservableObject
         var gpu = await _api.GetGpuStatusAsync();
         if (gpu != null)
             GpuStatusText = $"GPU: {gpu.VramUsedMb}/{gpu.VramTotalMb} MB";
+    }
+
+    public void Dispose()
+    {
+        _bridge.StatusChanged -= OnBackendStatusChanged;
+        _sse.ProgressReceived -= OnProgressReceived;
+        _sse.GpuStatusReceived -= OnGpuStatusReceived;
+        _projects.ProjectChanged -= OnProjectChanged;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 
 }

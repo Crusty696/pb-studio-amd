@@ -65,6 +65,12 @@ KNOWN_MODEL_BUDGETS = {
     "raft_small": 400,           # RAFT Small: ~300-400 MB
     "raft_standard": 800,        # RAFT Standard: ~600-800 MB
 
+    # Embeddings
+    "siglip_so400m": 2500,       # SigLIP SO400M: ~2.3-2.5 GB
+
+    # Combined budgets (mehrere Modelle gleichzeitig aktiv)
+    "video_analysis_full": 2900, # RAFT Small + SigLIP SO400M kombiniert
+
     # Audio Separation (ONNX models)
     "mdx_net_inst": 600,         # MDX-NET Inst: ~500-600 MB
     "mdx_net_voc": 600,          # MDX-NET Vocal: ~500-600 MB

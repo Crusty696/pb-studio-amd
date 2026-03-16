@@ -143,8 +143,9 @@ async def analyze_audio(
     )
 
     try:
+        _loop = asyncio.get_event_loop()
         result = await asyncio.to_thread(
-            _run_audio_analysis, audio_path, request.clip_id, request
+            _run_audio_analysis, audio_path, request.clip_id, request, _loop
         )
         state.set_audio_analysis(request.clip_id, result)
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
@@ -344,10 +345,25 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
     return {"duration": duration, "sample_rate": sample_rate, "channels": channels}
 
 
-def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequest) -> dict[str, Any]:
+def _emit_analysis_progress(loop, step: str, percent: float, message: str) -> None:
+    """Sendet ein analysis_progress SSE-Event aus einem Worker-Thread (fire-and-forget)."""
+    if loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(
+            publish_event("analysis_progress", {"step": step, "percent": percent, "message": message}),
+            loop,
+        )
+    except Exception:
+        pass
+
+
+def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequest, _loop=None) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
     import numpy as np
+
+    _emit_analysis_progress(_loop, "load", 5.0, "Audio wird geladen…")
 
     # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
     try:
@@ -361,6 +377,7 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         }
 
     duration = float(len(y)) / sr if sr > 0 else 0.0
+    _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
 
     # 1. BeatNet Beat-Detection
     beats: list[dict] = []
@@ -370,7 +387,8 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
     if request.detect_beats:
         try:
             from pb_studio.audio.beat_detector import BeatDetector
-            detector = BeatDetector()
+            # mode='offline' + DBN: stimmt mit AudioAnalyzeWorker überein (bessere Genauigkeit)
+            detector = BeatDetector(mode='offline', inference_model='DBN')
             # detect_beats gibt list[float] zurück — BeatNet oder Librosa-Fallback
             beat_times = detector.detect_beats(audio_path)
             if beat_times:
@@ -393,6 +411,8 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
 
+    _emit_analysis_progress(_loop, "beats", 45.0, "Beats erkannt — starte Struktur-Analyse…")
+
     # 2. Struktur-Analyse (Novelty + Clustering)
     structure_segments: list = []
     if request.detect_structure:
@@ -403,19 +423,23 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         except Exception as e:
             logger.warning(f"Struktur-Analyse fehlgeschlagen: {e}")
 
+    _emit_analysis_progress(_loop, "structure", 70.0, "Struktur analysiert — starte Spektral-Analyse…")
+
     # 3. Spektral-Analyse (8-Band STFT) — nutzt bereits geladenes y/sr (kein erneuter Disk-Zugriff)
     spectral_data = None
     if request.spectral_analysis:
         try:
-            from pb_studio.audio.spectral_analyzer import SpectralAnalyzer
+            from pb_studio.audio.spectral_analyzer import SpectralAnalyzer, FREQUENCY_BANDS
             spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
             spectral_data = {
                 "clip_id": clip_id,
                 "bands": spec_result.get("band_energies", {}),
-                "frequency_ranges": {},
+                "frequency_ranges": {k: list(v) for k, v in FREQUENCY_BANDS.items()},
             }
         except Exception as e:
             logger.warning(f"Spektral-Analyse fehlgeschlagen: {e}")
+
+    _emit_analysis_progress(_loop, "spectral", 85.0, "Spektrum analysiert — starte Tonart-Erkennung…")
 
     # 4. Tonart-Erkennung (Krumhansl-Kessler, immer aktiv)
     key = None
@@ -424,6 +448,8 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         key = KeyDetector().detect_key(y, sr)
     except Exception as e:
         logger.warning(f"Key-Detection fehlgeschlagen: {e}")
+
+    _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")
 
     return {
         "clip_id": clip_id,

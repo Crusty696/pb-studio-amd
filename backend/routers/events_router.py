@@ -142,8 +142,10 @@ async def gpu_stream(request: Request) -> StreamingResponse:
                 logger.debug("GPU-Status nicht verfügbar: %s", exc)
                 yield "event: gpu_status\ndata: {\"error\": \"nicht verfügbar\"}\n\n"
 
-            with suppress(asyncio.CancelledError):
+            try:
                 await asyncio.sleep(GPU_POLL_SECONDS)
+            except asyncio.CancelledError:
+                break
 
     return StreamingResponse(
         _gpu_generator(),

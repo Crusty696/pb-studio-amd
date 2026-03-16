@@ -25,7 +25,9 @@ public partial class AnchorViewModel : ObservableObject
 
     [ObservableProperty] private string _statusText = "Anchors werden hier definiert";
     [ObservableProperty] private double _currentPosition;
-    [ObservableProperty] private AnchorPoint? _selectedAnchor;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveAnchorCommand))]
+    private AnchorPoint? _selectedAnchor;
     [ObservableProperty] private AudioClipModel? _selectedAudioClip;
     [ObservableProperty] private bool _isLoadingWaveform;
     [ObservableProperty] private double _timelineDuration = 300;
@@ -161,19 +163,18 @@ public partial class AnchorViewModel : ObservableObject
         StatusText = $"Anchor bei {CurrentPosition:F2}s hinzugefügt";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRemoveAnchor))]
     private void RemoveAnchor()
     {
         if (SelectedAnchor == null)
-        {
-            StatusText = "Kein Anchor ausgewählt";
             return;
-        }
 
         Anchors.Remove(SelectedAnchor);
         SelectedAnchor = null;
         StatusText = "Anchor entfernt";
     }
+
+    private bool CanRemoveAnchor() => SelectedAnchor != null;
 
     private async Task LoadWaveformAndBeatsAsync(bool forceBeatReload)
     {

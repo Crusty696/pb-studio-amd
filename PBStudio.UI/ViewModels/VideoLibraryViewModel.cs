@@ -281,6 +281,8 @@ public partial class VideoLibraryViewModel : ObservableObject
         StatusText = "Kein Projekt geöffnet";
         IsLoadingClips = false;
         IsLoadingThumbnails = false;
+        IsAnalyzing = false;
+        IsAnalyzingAll = false;
     }
 
     private void BeginShutdown()

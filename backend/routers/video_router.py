@@ -130,10 +130,9 @@ async def get_thumbnail(
     state: AppState = Depends(get_app_state),
 ) -> Response:
     """Gibt das Thumbnail eines Clips als JPEG zurück."""
-    if clip_id not in state.video_clips:
+    clip = state.get_video_clip(clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
-
-    clip = state.video_clips[clip_id]
     try:
         jpeg_bytes = await asyncio.to_thread(_generate_thumbnail, clip["path"])
         return Response(content=jpeg_bytes, media_type="image/jpeg")
@@ -156,10 +155,9 @@ async def analyze_video(
     state: AppState = Depends(get_app_state),
 ) -> VideoAnalysisResult:
     """Analysiert einen Video-Clip (GPU-Lock via Middleware)."""
-    if request.clip_id not in state.video_clips:
+    clip = state.get_video_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
-
-    clip = state.video_clips[request.clip_id]
     logger.info(f"Starte Video-Analyse: {clip['name']}")
     await publish_log(
         f"Video-Analyse gestartet: {clip['name']}",
@@ -171,7 +169,7 @@ async def analyze_video(
     try:
         result = await with_gpu_task(
             _run_video_analysis, clip["path"], request.clip_id, request,
-            model_id="raft_small",  # VRAM-Budget-Check via VRAMBudgetManager
+            model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
         )
         state.set_video_analysis(request.clip_id, result)
 

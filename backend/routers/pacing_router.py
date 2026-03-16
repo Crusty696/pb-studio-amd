@@ -63,6 +63,9 @@ async def generate_cut_list(
         raise HTTPException(status_code=404, detail=f"Audio-Clip {config.audio_clip_id} nicht gefunden")
     if not config.video_clip_ids:
         raise HTTPException(status_code=400, detail="Keine Video-Clips ausgewählt")
+    missing_video_ids = [vid for vid in config.video_clip_ids if vid not in video_clips_snapshot]
+    if missing_video_ids:
+        raise HTTPException(status_code=404, detail=f"Video-Clips nicht gefunden: {missing_video_ids}")
 
     # Gecachte Audio-Analyse-Daten extrahieren (Beats, BPM, Energie)
     cached_analysis = state.get_audio_analysis(config.audio_clip_id) or {}

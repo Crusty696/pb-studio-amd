@@ -88,6 +88,13 @@ async def with_gpu_task(
                 "message": f"GPU-Task Timeout: {func.__name__} ({timeout_seconds}s)",
                 "task": func.__name__,
             })
+            # VRAM-Reservation freigeben — sonst driftet das Budget permanent
+            if model_id:
+                try:
+                    from pb_studio.core.vram_budget_manager import get_vram_manager
+                    get_vram_manager().release(model_id)
+                except Exception as _vram_err:
+                    logger.debug(f"VRAM-Release nach Timeout fehlgeschlagen (ignoriert): {_vram_err}")
             raise TimeoutError(
                 f"GPU-Task '{func.__name__}' hat Timeout von {timeout_seconds}s überschritten"
             )

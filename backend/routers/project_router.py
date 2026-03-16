@@ -275,6 +275,9 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
     if not state.current_project:
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
     name = state.current_project.get("name", "Unbekannt")
+    # In-flight Render-Tasks abbrechen bevor State geleert wird (verhindert GPU-Lock Stall)
+    for task_id in list(state.render_tasks.keys()):
+        state.set_cancel_flag(task_id, True)
     # Reset BEVOR current_project = None (reset() leert alle Caches)
     state.reset()
     logger.info(f"Projekt geschlossen: {name}")

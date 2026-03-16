@@ -126,11 +126,11 @@ public class ApiClient : IApiClient
     public async Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3)
         => await GetAsync<WaveformData>($"/audio/waveform/{clipId}?bands={bands}").ConfigureAwait(false);
 
-    public async Task<List<Dictionary<string, object>>?> GetStructureAsync(int clipId)
-        => await GetAsync<List<Dictionary<string, object>>>($"/audio/structure/{clipId}").ConfigureAwait(false);
+    public async Task<List<StructureSegment>?> GetStructureAsync(int clipId)
+        => await GetAsync<List<StructureSegment>>($"/audio/structure/{clipId}").ConfigureAwait(false);
 
-    public async Task<Dictionary<string, object>?> GetSpectralAsync(int clipId)
-        => await GetAsync<Dictionary<string, object>>($"/audio/spectral/{clipId}").ConfigureAwait(false);
+    public async Task<SpectralData?> GetSpectralAsync(int clipId)
+        => await GetAsync<SpectralData>($"/audio/spectral/{clipId}").ConfigureAwait(false);
 
     // --- Video ---
 
@@ -262,7 +262,9 @@ public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, doub
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
-public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<Dictionary<string, object>>? StructureSegments = null, Dictionary<string, object>? SpectralData = null);
+public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0);
+public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, List<double>>? FrequencyRanges = null);
+public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(int Id, string Name, string Path, double DurationSeconds, int Width, int Height, double Fps, string Codec, bool ThumbnailAvailable, List<string> Tags, bool IsAnalyzed = false);
@@ -276,5 +278,5 @@ public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5,
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory);
-public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true);
+public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true, string? Encoder = null);
 public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);

@@ -9,7 +9,7 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für den Produktions/Rendering Tab.</summary>
-public partial class ProductionViewModel : ObservableObject
+public partial class ProductionViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly SSEClient _sse;
@@ -380,5 +380,14 @@ public partial class ProductionViewModel : ObservableObject
         IsRendering = false;
         EtaText = string.Empty;
         StatusText = "Kein Projekt geöffnet";
+    }
+
+    public void Dispose()
+    {
+        _sse.ProgressReceived -= OnRenderProgress;
+        _sse.LogReceived -= OnLogReceived;
+        _sse.GpuStatusReceived -= OnGpuStatusReceived;
+        _timelineState.TimelineChanged -= OnTimelineChanged;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }
