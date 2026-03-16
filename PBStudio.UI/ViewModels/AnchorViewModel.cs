@@ -191,7 +191,20 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
 
         var loadSequence = Interlocked.Increment(ref _loadSequence);
 
-        await _loadGate.WaitAsync(_shutdownCts.Token);
+        // R15/MEDIUM: Acquired-Flag explizit tracken — finally darf nur dann Release() rufen,
+        // wenn WaitAsync erfolgreich war. Bei Cancellation (OperationCanceledException) wird
+        // das Semaphor NICHT akquiriert; ein Release() würde den Lock eines anderen Callers freigeben.
+        bool acquired = false;
+        try
+        {
+            await _loadGate.WaitAsync(_shutdownCts.Token);
+            acquired = true;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         try
         {
             if (loadSequence != _loadSequence)
@@ -246,7 +259,7 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         finally
         {
             IsLoadingWaveform = false;
-            if (_loadGate.CurrentCount == 0)
+            if (acquired)
                 _loadGate.Release();
         }
 
