@@ -73,6 +73,12 @@ class AudioAnalyzer:
                     # Check if failure is due to missing audio stream (Silent Video)
                     if "does not contain any stream" in err_output or "Output file does not contain any stream" in err_output:
                         logger.warning(f"No audio stream found in {Path(file_path).name}. Returning 0 BPM.")
+                        # Temp-Datei aufräumen bevor Early-Return
+                        if Path(temp_wav).exists():
+                            try:
+                                os.remove(temp_wav)
+                            except Exception:
+                                pass
                         return {"bpm": 0, "beat_data": [], "count": 0, "warning": "No Audio Stream"}
                     else:
                         logger.warning(f"FFmpeg conversion failed (Code {result.returncode}). Stderr: {err_output[:200]}...")

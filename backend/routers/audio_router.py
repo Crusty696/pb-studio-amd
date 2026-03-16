@@ -194,9 +194,10 @@ async def get_beats(
     state: AppState = Depends(get_app_state),
 ) -> list[BeatData]:
     """Gibt Beat-Daten für einen Clip zurück."""
-    if clip_id not in state.audio_analysis_cache:
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    beats = state.audio_analysis_cache[clip_id].get("beats", [])
+    beats = analysis.get("beats", [])
     return [BeatData(**b) if isinstance(b, dict) else b for b in beats]
 
 
@@ -277,9 +278,10 @@ async def get_structure(
     state: AppState = Depends(get_app_state),
 ) -> list[StructureSegment]:
     """Gibt Struktur-Segmente für einen Clip zurück."""
-    if clip_id not in state.audio_analysis_cache:
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    segments = state.audio_analysis_cache[clip_id].get("structure_segments", [])
+    segments = analysis.get("structure_segments", [])
     return [StructureSegment(**s) if isinstance(s, dict) else s for s in segments]
 
 
@@ -297,9 +299,10 @@ async def get_spectral(
     state: AppState = Depends(get_app_state),
 ) -> SpectralData:
     """Gibt Spektral-Analyse Daten zurück."""
-    if clip_id not in state.audio_analysis_cache:
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    spectral = state.audio_analysis_cache[clip_id].get("spectral_data", {}) or {}
+    spectral = analysis.get("spectral_data", {}) or {}
     if spectral.get("clip_id") != clip_id:
         spectral = {**spectral, "clip_id": clip_id}
     return SpectralData(**spectral)
@@ -400,12 +403,12 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         except Exception as e:
             logger.warning(f"Struktur-Analyse fehlgeschlagen: {e}")
 
-    # 3. Spektral-Analyse (8-Band STFT)
+    # 3. Spektral-Analyse (8-Band STFT) — nutzt bereits geladenes y/sr (kein erneuter Disk-Zugriff)
     spectral_data = None
     if request.spectral_analysis:
         try:
             from pb_studio.audio.spectral_analyzer import SpectralAnalyzer
-            spec_result = SpectralAnalyzer(sr=sr).analyze(audio_path)
+            spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
             spectral_data = {
                 "clip_id": clip_id,
                 "bands": spec_result.get("band_energies", {}),

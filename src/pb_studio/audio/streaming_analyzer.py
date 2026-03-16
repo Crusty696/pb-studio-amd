@@ -266,11 +266,19 @@ class StreamingAudioAnalyzer:
                 hasher.update(chunk)
         return hasher.hexdigest()
 
+    def _settings_suffix(self) -> str:
+        """Kurzer Suffix der Analyse-Einstellungen für den Cache-Key.
+
+        Verhindert falsche Cache-Treffer wenn dieselbe Datei mit unterschiedlichen
+        Einstellungen (z.B. use_drum_stem_for_beats) analysiert wird.
+        """
+        return f"_drums{int(self.use_drum_stem_for_beats)}"
+
     def _get_cache_path(self, file_hash: str) -> Path:
-        return self.cache_dir / f"streaming_analysis_{file_hash}.json"
+        return self.cache_dir / f"streaming_analysis_{file_hash}{self._settings_suffix()}.json"
 
     def _get_progress_path(self, file_hash: str) -> Path:
-        return self.cache_dir / f"progress_{file_hash}.json"
+        return self.cache_dir / f"progress_{file_hash}{self._settings_suffix()}.json"
 
     def _save_progress(self, file_hash: str, progress: AnalysisProgress) -> None:
         with open(self._get_progress_path(file_hash), "w", encoding="utf-8") as f:

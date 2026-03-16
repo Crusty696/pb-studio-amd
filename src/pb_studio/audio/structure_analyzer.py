@@ -61,9 +61,13 @@ class StructureAnalyzer:
 
         max_frames = 5000
         if features.shape[1] > max_frames:
-            indices = np.linspace(0, features.shape[1] - 1, max_frames, dtype=int)
+            original_num_frames = features.shape[1]
+            indices = np.linspace(0, original_num_frames - 1, max_frames, dtype=int)
             features = features[:, indices]
-            effective_hop = hop_length * (features.shape[1] / max_frames)
+            # Jedes Downsampled-Frame repräsentiert original_num_frames/max_frames Originals.
+            # effective_hop muss entsprechend skaliert werden, damit
+            # librosa.frames_to_time() die richtigen Zeiten liefert.
+            effective_hop = hop_length * (original_num_frames / max_frames)
         else:
             effective_hop = hop_length
 
