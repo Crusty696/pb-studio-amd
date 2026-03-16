@@ -11,12 +11,13 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Timeline-Vorschau.</summary>
-public partial class TimelineViewModel : ObservableObject
+public partial class TimelineViewModel : ObservableObject, IDisposable
 {
     private readonly TimelineStateService _timelineState;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
+    private bool _disposed;
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private double _totalDuration;
@@ -229,5 +230,13 @@ public partial class TimelineViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectionIndexText));
         PreviousCutCommand.NotifyCanExecuteChanged();
         NextCutCommand.NotifyCanExecuteChanged();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        _loadGate.Dispose();
     }
 }

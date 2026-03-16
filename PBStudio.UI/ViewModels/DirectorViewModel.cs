@@ -10,7 +10,7 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für den Smart Director / Pacing Tab.</summary>
-public partial class DirectorViewModel : ObservableObject
+public partial class DirectorViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
@@ -18,6 +18,8 @@ public partial class DirectorViewModel : ObservableObject
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
+    private volatile bool _isShuttingDown;
+    private bool _disposed;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -172,6 +174,8 @@ public partial class DirectorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanGenerateCutList))]
     private async Task GenerateCutListAsync()
     {
+        if (_isShuttingDown) return;
+
         if (SelectedAudioClip == null)
         {
             StatusText = "Kein Audio-Clip ausgewählt";
@@ -282,6 +286,7 @@ public partial class DirectorViewModel : ObservableObject
 
     private void ResetProjectState()
     {
+        _isShuttingDown = false; // project closed, but app is still running
         AvailableAudioClips.Clear();
         AvailableVideoClips.Clear();
         CutList.Clear();
@@ -291,6 +296,15 @@ public partial class DirectorViewModel : ObservableObject
         TotalDuration = 0;
         IsGenerating = false;
         StatusText = "Kein Projekt geöffnet";
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _isShuttingDown = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        _loadGate.Dispose();
     }
 }
 

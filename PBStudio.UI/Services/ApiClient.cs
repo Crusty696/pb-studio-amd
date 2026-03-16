@@ -79,7 +79,7 @@ public class ApiClient : IApiClient
 
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CreateRequestCancellationToken()).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _shutdownCts.Token).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
                 var detail = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -143,10 +143,14 @@ public class ApiClient : IApiClient
     public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/video/thumbnails/{clipId}");
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
 
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -207,9 +211,13 @@ public class ApiClient : IApiClient
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.GetAsync(url, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
+            using var response = await _http.GetAsync(url, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
@@ -228,7 +236,7 @@ public class ApiClient : IApiClient
     {
         try
         {
-            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, CreateRequestCancellationToken()).ConfigureAwait(false);
+            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, _shutdownCts.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
         }
@@ -242,11 +250,6 @@ public class ApiClient : IApiClient
             return null;
         }
     }
-
-    private CancellationToken CreateRequestCancellationToken(CancellationToken cancellationToken = default)
-        => cancellationToken.CanBeCanceled
-            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token).Token
-            : _shutdownCts.Token;
 
     private bool IsExpectedCancellation(Exception ex, CancellationToken cancellationToken = default)
         => ex is OperationCanceledException

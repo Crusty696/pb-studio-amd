@@ -10,8 +10,9 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Audio-Bibliothek.</summary>
-public partial class AudioLibraryViewModel : ObservableObject
+public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 {
+    private bool _disposed;
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
 
@@ -243,5 +244,12 @@ public partial class AudioLibraryViewModel : ObservableObject
         BeatCount = 0;
         Key = string.Empty;
         DurationSeconds = 0;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }

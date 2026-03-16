@@ -12,8 +12,9 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Video-Bibliothek.</summary>
-public partial class VideoLibraryViewModel : ObservableObject
+public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 {
+    private bool _disposed;
     private readonly IApiClient _api;
     private readonly VideoLibraryStateService _videoLibraryState;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
@@ -340,6 +341,15 @@ public partial class VideoLibraryViewModel : ObservableObject
             if (ReferenceEquals(_activeLoadCts, loadCts))
                 _activeLoadCts = null;
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        BeginShutdown();
+        _loadGate.Dispose();
     }
 
     private static BitmapImage BytesToBitmapImage(byte[] bytes)
