@@ -185,6 +185,10 @@ async def analyze_audio(
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
         clip["is_analyzed"] = True
+        # R4-HOCH-9: Update duration from librosa when ffprobe returned 0.0
+        analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
+        if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
+            clip["duration_seconds"] = analysis_dur
         state.set_audio_clip(request.clip_id, clip)
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
