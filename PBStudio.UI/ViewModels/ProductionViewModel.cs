@@ -17,6 +17,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private readonly ProjectService _projects;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
+    private bool _disposed;
 
     [ObservableProperty] private string _outputPath = "";
     [ObservableProperty] private string _audioPath = "";
@@ -381,8 +382,11 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         StatusText = "Kein Projekt geöffnet";
     }
 
+    // R17/LOW: Added _disposed guard — consistent with all other ViewModels.
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _sse.ProgressReceived -= OnRenderProgress;
         _sse.LogReceived -= OnLogReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
