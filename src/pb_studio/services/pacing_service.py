@@ -11,7 +11,7 @@ import logging
 import random
 import subprocess
 from pathlib import Path
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, Tuple
 
 from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
 from pb_studio.pacing.pacing_models import CutListEntry
@@ -23,10 +23,15 @@ class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
     def __init__(self):
-        pass
+        # R18/HIGH-018-2: Cache ffprobe results — avoids 2 subprocess calls per cut
+        # for the same file (once inside _get_random_clip_start, once for out-point check).
+        self._duration_cache: Dict[str, float] = {}
 
     def _get_clip_duration(self, clip_path: str) -> float:
-        """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python)."""
+        """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
+        key = str(clip_path)
+        if key in self._duration_cache:
+            return self._duration_cache[key]
         cmd = [
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
@@ -34,7 +39,9 @@ class PacingService:
         ]
         try:
             res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
-            return float(json.loads(res)["format"]["duration"])
+            dur = float(json.loads(res)["format"]["duration"])
+            self._duration_cache[key] = dur
+            return dur
         except Exception as e:
             logger.error(f"Clip-Dauer nicht ermittelbar: {clip_path}: {e}")
             raise ValueError(f"Konnte Dauer nicht lesen: {Path(clip_path).name}") from e
@@ -128,7 +135,10 @@ class PacingService:
                         "clip_name": cd.get("name", "Unknown"),
                     })
                     if "clip_start" not in cut.metadata:
-                        cut.metadata["clip_start"] = self._get_random_clip_start(fp, cut.duration)
+                        # R18/CRIT-018-1: CutListEntry has no .duration attribute —
+                        # must compute from start_time/end_time.
+                        cut_dur = cut.end_time - cut.start_time
+                        cut.metadata["clip_start"] = self._get_random_clip_start(fp, cut_dur)
                     final_cuts.append(cut)
             return final_cuts
 
