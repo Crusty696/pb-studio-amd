@@ -210,6 +210,79 @@ class TestLoadFromDb:
         assert deleted_ids == [10]
         assert state._audio_next_id == 9
 
+    def test_load_from_db_verwendet_aktive_db_project_id(self, tmp_path, monkeypatch):
+        existing_audio = tmp_path / "active.wav"
+        existing_audio.write_bytes(b"RIFF")
+
+        captured_project_ids = []
+        rows = [
+            {
+                "id": 21,
+                "file_path": str(existing_audio),
+                "duration_sec": 5.0,
+                "metadata_json": json.dumps({
+                    "clip_type": "audio",
+                    "clip_id": 3,
+                    "name": "active",
+                }),
+            },
+        ]
+
+        class FakeRepo:
+            def get_by_project(self, project_id):
+                captured_project_ids.append(project_id)
+                return rows
+
+            def delete_media(self, media_id):
+                raise AssertionError("delete_media should not be called in this test")
+
+        monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
+
+        state = AppState()
+        state.current_project = {"db_project_id": 42, "path": str(tmp_path)}
+        state.load_from_db()
+
+        assert captured_project_ids == [42]
+        assert list(state.audio_clips) == [3]
+
+    def test_load_from_db_akzeptiert_string_clip_ids_aus_legacy_metadata(self, tmp_path, monkeypatch):
+        existing_video = tmp_path / "legacy.mp4"
+        existing_video.write_bytes(b"\x00\x00\x00\x18ftyp")
+
+        rows = [
+            {
+                "id": 31,
+                "file_path": str(existing_video),
+                "duration_sec": 7.5,
+                "metadata_json": json.dumps({
+                    "clip_type": "video",
+                    "clip_id": "12",
+                    "name": "legacy",
+                    "width": 1280,
+                    "height": 720,
+                    "fps": 25.0,
+                    "codec": "h264",
+                }),
+            },
+        ]
+
+        class FakeRepo:
+            def get_by_project(self, project_id):
+                assert project_id == 1
+                return rows
+
+            def delete_media(self, media_id):
+                raise AssertionError("delete_media should not be called in this test")
+
+        monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
+
+        state = AppState()
+        state.load_from_db()
+
+        assert list(state.video_clips) == [12]
+        assert state.video_clips[12]["path"] == str(existing_video)
+        assert state._video_next_id == 13
+
 
 class TestGetAppState:
     """get_app_state() Singleton-Verhalten."""

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -10,6 +12,7 @@ namespace PBStudio.UI.ViewModels;
 public partial class AudioLibraryViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly AudioLibraryStateService _audioLibraryState;
 
     [ObservableProperty] private AudioClipModel? _selectedClip;
     [ObservableProperty] private string _statusText = "";
@@ -23,10 +26,18 @@ public partial class AudioLibraryViewModel : ObservableObject
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
 
-    public AudioLibraryViewModel(IApiClient api)
+    public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState)
     {
         _api = api;
-        _ = LoadAudioClipsAsync();
+        _audioLibraryState = audioLibraryState;
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "project-opened" or "audio-imported" or "audio-library-refresh" or "media-library-refresh")
+                _ = LoadAudioClipsAsync();
+            else if (message.Value is "project-closed")
+                ResetProjectState();
+        });
     }
 
     partial void OnSelectedClipChanged(AudioClipModel? value)
@@ -36,12 +47,20 @@ public partial class AudioLibraryViewModel : ObservableObject
         BeatCount = value.BeatCount;
         Key = value.Key;
         DurationSeconds = value.DurationSeconds;
+        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsAnalyzingChanged(bool value)
+    {
+        AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+        AnalyzeAllCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     private async Task LoadAudioClipsAsync()
     {
-        var clips = await _api.GetAudioClipsAsync();
+        var previousId = SelectedClip?.Id;
+        var clips = await _audioLibraryState.RefreshAsync();
         if (clips != null)
         {
             AudioClips.Clear();
@@ -56,9 +75,17 @@ public partial class AudioLibraryViewModel : ObservableObject
                     SampleRate = clipInfo.SampleRate,
                     Channels = clipInfo.Channels,
                     Format = clipInfo.Format,
+                    Bpm = clipInfo.Bpm,
+                    Key = clipInfo.Key ?? "",
+                    BeatCount = clipInfo.BeatCount,
+                    IsAnalyzed = clipInfo.IsAnalyzed,
                 });
             }
+            // Auswahl wiederherstellen
+            if (previousId.HasValue)
+                SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
             StatusText = $"{clips.Count} Audio-Clips geladen";
+            AnalyzeAllCommand.NotifyCanExecuteChanged();
         }
         else
         {
@@ -81,82 +108,135 @@ public partial class AudioLibraryViewModel : ObservableObject
         SelectedClip = null;
     }
 
-    [RelayCommand]
+    private bool CanAnalyzeAll() => AudioClips.Count > 0 && !IsAnalyzing;
+
+    [RelayCommand(CanExecute = nameof(CanAnalyzeAll))]
     private async Task AnalyzeAllAsync()
     {
-        if (AudioClips.Count == 0) return;
-
         IsAnalyzing = true;
         var total = AudioClips.Count;
         var done = 0;
 
-        foreach (var clip in AudioClips.ToList())
+        try
         {
-            if (clip.IsAnalyzed) { done++; continue; }
-
-            StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
-            AnalysisProgress = (double)done / total * 100;
-
-            var result = await _api.AnalyzeAudioAsync(clip.Id);
-            if (result != null)
+            foreach (var clip in AudioClips.ToList())
             {
-                clip.Bpm = result.Bpm;
-                clip.BeatCount = result.BeatCount;
-                clip.Key = result.Key ?? "";
-                clip.IsAnalyzed = true;
+                if (clip.IsAnalyzed) { done++; continue; }
+
+                StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
+                AnalysisProgress = (double)done / total * 100;
+
+                var result = await _api.AnalyzeAudioAsync(clip.Id);
+                if (result != null)
+                {
+                    clip.Bpm = result.Bpm;
+                    clip.BeatCount = result.BeatCount;
+                    clip.Key = result.Key ?? "";
+                    clip.IsAnalyzed = true;
+                }
+                done++;
             }
-            done++;
+
+            AnalysisProgress = 100;
+            StatusText = $"Alle {total} Clips analysiert";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Analysefehler: {ex.Message}";
+        }
+        finally
+        {
+            IsAnalyzing = false;
         }
 
-        AnalysisProgress = 100;
-        StatusText = $"Alle {total} Clips analysiert";
-        IsAnalyzing = false;
-
-        // Aktualisiere Detail-Anzeige
+        // Info-Felder für den aktuell ausgewählten Clip aktualisieren
         if (SelectedClip != null) OnSelectedClipChanged(SelectedClip);
     }
 
-    [RelayCommand]
+    private bool CanAnalyzeSelected() => SelectedClip != null && !IsAnalyzing;
+
+    [RelayCommand(CanExecute = nameof(CanAnalyzeSelected))]
     private async Task AnalyzeSelectedAsync()
     {
-        if (SelectedClip == null) return;
+        if (SelectedClip == null)
+        {
+            StatusText = "Kein Audio-Clip ausgewählt";
+            return;
+        }
 
         IsAnalyzing = true;
         StatusText = $"Analysiere: {SelectedClip.Name}...";
 
-        var result = await _api.AnalyzeAudioAsync(SelectedClip.Id);
-        if (result != null)
+        try
         {
-            SelectedClip.Bpm = result.Bpm;
-            SelectedClip.BeatCount = result.BeatCount;
-            SelectedClip.Key = result.Key ?? "";
-            SelectedClip.IsAnalyzed = true;
-            Bpm = result.Bpm;
-            BeatCount = result.BeatCount;
-            Key = result.Key ?? "";
-            StatusText = $"Analyse fertig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
+            var result = await _api.AnalyzeAudioAsync(SelectedClip.Id);
+            if (result != null)
+            {
+                SelectedClip.Bpm = result.Bpm;
+                SelectedClip.BeatCount = result.BeatCount;
+                SelectedClip.Key = result.Key ?? "";
+                SelectedClip.IsAnalyzed = true;
+                Bpm = result.Bpm;
+                BeatCount = result.BeatCount;
+                Key = result.Key ?? "";
+                StatusText = $"Analyse fertig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+            }
+            else
+            {
+                StatusText = "Analyse fehlgeschlagen";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            StatusText = "Analyse fehlgeschlagen";
+            StatusText = $"Analysefehler: {ex.Message}";
         }
-
-        IsAnalyzing = false;
+        finally
+        {
+            IsAnalyzing = false;
+        }
     }
 
     [RelayCommand]
     private async Task SeparateStemsAsync()
     {
-        if (SelectedClip == null) return;
+        if (SelectedClip == null)
+        {
+            StatusText = "Kein Audio-Clip ausgewählt";
+            return;
+        }
 
         IsSeparating = true;
-        StatusText = $"Stem-Separation: {SelectedClip.Name}...";
+        StatusText = $"Stem-Separation läuft: {SelectedClip.Name}...";
 
-        var result = await _api.SeparateStemsAsync(SelectedClip.Id);
-        StatusText = result != null
-            ? $"Stems getrennt: {result.ModelUsed}"
-            : "Stem-Separation fehlgeschlagen";
+        try
+        {
+            var result = await _api.SeparateStemsAsync(SelectedClip.Id);
+            StatusText = result != null
+                ? $"Stems getrennt: {result.ModelUsed}"
+                : "Stem-Separation fehlgeschlagen oder Timeout/Backend-Fehler";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Stem-Fehler: {ex.Message}";
+        }
+        finally
+        {
+            IsSeparating = false;
+        }
+    }
 
+    private void ResetProjectState()
+    {
+        AudioClips.Clear();
+        SelectedClip = null;
+        StatusText = "Kein Projekt geöffnet";
+        IsAnalyzing = false;
         IsSeparating = false;
+        AnalysisProgress = 0;
+        Bpm = 0;
+        BeatCount = 0;
+        Key = string.Empty;
+        DurationSeconds = 0;
     }
 }

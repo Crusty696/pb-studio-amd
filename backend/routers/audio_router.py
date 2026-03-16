@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..app_state import AppState, get_app_state
-from ..dependencies import with_gpu_task, publish_event
+from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..schemas.audio_schemas import (
     AudioImportRequest, AudioClipInfo,
     AudioAnalyzeRequest, AudioAnalysisResult,
@@ -65,9 +65,19 @@ async def import_audio(
         "sample_rate": probe_info["sample_rate"],
         "channels": probe_info["channels"],
         "format": audio_path.suffix.lstrip("."),
+        "bpm": 0.0,
+        "key": None,
+        "beat_count": 0,
+        "is_analyzed": False,
     })
 
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
+    await publish_log(
+        f"Audio importiert: {audio_path.name}",
+        level="info",
+        source="audio.import",
+        detail=f"clip_id={clip['id']} duration={probe_info['duration']:.2f}s",
+    )
     await publish_event("import_progress", {"clip_id": clip['id'], "percent": 100.0, "message": "Import abgeschlossen"})
     return AudioClipInfo(**clip)
 
@@ -87,10 +97,21 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[AudioClipInfo]:
     """Gibt die Audio-Clip-Liste zurück (paginiert)."""
-    clips = list(state.audio_clips.values())
+    clips = list(state.get_audio_clips_snapshot().values())
     start = (page - 1) * limit
     end = start + limit
-    return [AudioClipInfo(**c) for c in clips[start:end]]
+
+    items: list[AudioClipInfo] = []
+    for clip in clips[start:end]:
+        analysis = state.get_audio_analysis(clip["id"])
+        merged = dict(clip)
+        merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
+        merged["key"] = analysis.get("key") if analysis else clip.get("key")
+        merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
+        merged["is_analyzed"] = analysis is not None or bool(clip.get("is_analyzed", False))
+        items.append(AudioClipInfo(**merged))
+
+    return items
 
 
 @router.post(
@@ -107,22 +128,58 @@ async def analyze_audio(
     state: AppState = Depends(get_app_state),
 ) -> AudioAnalysisResult:
     """Analysiert einen Audio-Clip (Beats, Struktur, Spektral)."""
-    if request.clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
 
-    clip = state.audio_clips[request.clip_id]
     audio_path = clip["path"]
 
     logger.info(f"Starte Audio-Analyse für Clip {request.clip_id}: {clip['name']}")
+    await publish_log(
+        f"Audio-Analyse gestartet: {clip['name']}",
+        level="info",
+        source="audio.analyze",
+        detail=f"clip_id={request.clip_id}",
+    )
 
     try:
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request
         )
-        state.audio_analysis_cache[request.clip_id] = result
+        state.set_audio_analysis(request.clip_id, result)
+        clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
+        clip["key"] = result.get("key")
+        clip["beat_count"] = int(result.get("beat_count", 0) or 0)
+        clip["is_analyzed"] = True
+        state.set_audio_clip(request.clip_id, clip)
+
+        # P-1: Analyse-Ergebnisse in SQLite persistieren
+        import json as _json
+        beats_json = _json.dumps(result.get("beats", []))
+        state.update_audio_analysis(
+            clip_id=request.clip_id,
+            bpm=clip["bpm"],
+            key=clip["key"],
+            beat_count=clip["beat_count"],
+            beats_json=beats_json,
+            is_analyzed=True,
+        )
+
+        await publish_log(
+            f"Audio-Analyse abgeschlossen: {clip['name']}",
+            level="info",
+            source="audio.analyze",
+            detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
+        )
         return AudioAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
+        await publish_log(
+            f"Audio-Analyse fehlgeschlagen: {clip['name']}",
+            level="error",
+            source="audio.analyze",
+            detail=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 
@@ -422,9 +479,20 @@ def _run_stem_separation(audio_path: str, model_name: str) -> dict[str, Any]:
     if "error" in result:
         raise RuntimeError(f"Stem-Separation fehlgeschlagen: {result['error']}")
 
+    # StemSeparator.separate() kann relative Dateinamen zurückgeben.
+    # Diese auf den konfigurierten Output-/Temp-Ordner normalisieren.
+    output_dir_raw = separator.config.get("paths", {}).get("temp_dir", "./temp")
+    output_dir = separator.config.resolve_path(output_dir_raw)
+
     # StemSeparator.separate() gibt {"stems": [path1, path2, ...]} zurück.
     # audio-separator benennt Output-Dateien mit (Vocals), (Instrumental), etc.
     stem_files = result.get("stems", [])
+    normalized_stem_files: list[str] = []
+    for fpath in stem_files:
+        p = Path(fpath)
+        resolved = p.resolve() if p.is_absolute() else (output_dir / p).resolve()
+        normalized_stem_files.append(str(resolved))
+
     mapped: dict[str, str | None] = {
         "vocals_path": None,
         "instrumental_path": None,
@@ -434,7 +502,7 @@ def _run_stem_separation(audio_path: str, model_name: str) -> dict[str, Any]:
         "model_used": model_name,
     }
 
-    for fpath in stem_files:
+    for fpath in normalized_stem_files:
         name_lower = Path(fpath).stem.lower()
         if "vocal" in name_lower:
             mapped["vocals_path"] = fpath
@@ -451,5 +519,5 @@ def _run_stem_separation(audio_path: str, model_name: str) -> dict[str, Any]:
             if mapped["other_path"] is None:
                 mapped["other_path"] = fpath
 
-    logger.info(f"Stem-Mapping: {len(stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
+    logger.info(f"Stem-Mapping: {len(normalized_stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
     return mapped

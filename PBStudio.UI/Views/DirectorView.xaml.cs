@@ -20,4 +20,12 @@ public partial class DirectorView : UserControl
             vm.UpdateSelectedCount();
         }
     }
+
+    private void VideoClipCheckBox_Changed(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (DataContext is DirectorViewModel vm)
+        {
+            vm.UpdateSelectedCount();
+        }
+    }
 }

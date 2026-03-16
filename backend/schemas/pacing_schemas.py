@@ -28,7 +28,7 @@ class PacingConfigSchema(BaseModel):
     audio_clip_id: int
     video_clip_ids: list[int] = []
     expected_bpm: float = 120.0
-    trigger_settings: TriggerSettingsSchema = TriggerSettingsSchema()
+    trigger_settings: Optional[TriggerSettingsSchema] = None
     use_motion_matching: bool = False
     use_structure_awareness: bool = False
     duration_limit: Optional[float] = None

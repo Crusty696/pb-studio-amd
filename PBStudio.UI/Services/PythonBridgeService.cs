@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 
 namespace PBStudio.UI.Services;
@@ -15,9 +16,12 @@ public class PythonBridgeService
     private readonly HttpClient _httpClient;
     private Process? _pythonProcess;
     private bool _isRunning;
+    private volatile bool _isStopping;
+    private volatile bool _ownsProcess;
+    private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
-    // BUG-007 Fix: Python-Pfad konfigurierbar (Env: PBSTUDIO_PYTHON_EXE oder auto-detect)
     private static readonly string PythonExe = ResolvePythonExe();
+    private static readonly bool PreferExternalBackend = IsEnabled(Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY"));
     private const int Port = 8765;
     private const int StartupTimeoutMs = 30_000;
     private const int HealthCheckIntervalMs = 500;
@@ -25,7 +29,6 @@ public class PythonBridgeService
     public bool IsRunning => _isRunning;
     public event EventHandler<bool>? StatusChanged;
 
-    // KORREKTUR: HttpClient direkt erstellen — kein DI-Injection Problem für Singleton
     public PythonBridgeService(ILogger<PythonBridgeService> logger)
     {
         _logger = logger;
@@ -36,98 +39,169 @@ public class PythonBridgeService
         };
     }
 
-    /// <summary>Startet den Python FastAPI Server.</summary>
     public async Task StartAsync()
     {
-        if (_isRunning) return;
-
-        var backendDir = FindBackendDirectory();
-        if (backendDir == null)
-        {
-            _logger.LogError("Backend-Verzeichnis nicht gefunden!");
-            return;
-        }
-
-        _logger.LogInformation("Starte Python Backend: {Dir}", backendDir);
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = PythonExe,
-            Arguments = $"-m uvicorn backend.main:app --host 127.0.0.1 --port {Port}",
-            WorkingDirectory = Path.GetDirectoryName(backendDir)!,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            _pythonProcess = Process.Start(startInfo);
-            if (_pythonProcess == null)
+            _isStopping = false;
+
+            if (_isRunning) return;
+
+            if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
             {
-                _logger.LogError("Python-Prozess konnte nicht gestartet werden");
+                AttachToExistingBackend("Python Backend läuft bereits auf Port {Port} - kein neuer Start nötig");
                 return;
             }
 
-            _pythonProcess.OutputDataReceived += (_, e) =>
+            if (PreferExternalBackend)
             {
-                if (e.Data != null) _logger.LogDebug("[Python] {Line}", e.Data);
-            };
-            _pythonProcess.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data != null) _logger.LogDebug("[Python] {Line}", e.Data);
-            };
-            _pythonProcess.BeginOutputReadLine();
-            _pythonProcess.BeginErrorReadLine();
-
-            _isRunning = await WaitForHealthAsync().ConfigureAwait(false);
-            StatusChanged?.Invoke(this, _isRunning);
-
-            if (_isRunning)
-            {
-                _logger.LogInformation("Python Backend gestartet (PID={Pid})", _pythonProcess.Id);
-                StartWatchdog();
+                _logger.LogWarning("Extern verwaltetes Backend erwartet, aber Port {Port} ist nicht gesund - es wird kein zweiter Backend-Prozess gestartet", Port);
+                return;
             }
-            else
+
+            var backendDir = FindBackendDirectory();
+            if (backendDir == null)
+            {
+                _logger.LogError("Backend-Verzeichnis nicht gefunden!");
+                return;
+            }
+
+            var projectRoot = Path.GetDirectoryName(backendDir)!;
+            _logger.LogInformation("Starte Python Backend: {Dir}", backendDir);
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = PythonExe,
+                Arguments = $"-m uvicorn backend.main:app --host 127.0.0.1 --port {Port}",
+                WorkingDirectory = projectRoot,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            startInfo.Environment["PYTHONPATH"] = Path.Combine(projectRoot, "src");
+
+            try
+            {
+                _pythonProcess = Process.Start(startInfo);
+                _ownsProcess = _pythonProcess != null;
+                if (_pythonProcess == null)
+                {
+                    _logger.LogError("Python-Prozess konnte nicht gestartet werden");
+                    return;
+                }
+
+                _pythonProcess.OutputDataReceived += (_, e) =>
+                {
+                    if (e.Data != null) _logger.LogDebug("[Python] {Line}", e.Data);
+                };
+                _pythonProcess.ErrorDataReceived += (_, e) =>
+                {
+                    if (e.Data != null) _logger.LogDebug("[Python] {Line}", e.Data);
+                };
+                _pythonProcess.BeginOutputReadLine();
+                _pythonProcess.BeginErrorReadLine();
+
+                var backendHealthy = await WaitForHealthAsync().ConfigureAwait(false);
+                if (backendHealthy)
+                {
+                    _isRunning = true;
+                    StatusChanged?.Invoke(this, true);
+                    _logger.LogInformation("Python Backend gestartet (Startprozess-PID={Pid})", _pythonProcess.Id);
+                    StartWatchdog();
+                    return;
+                }
+
+                if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+                {
+                    AttachToExistingBackend("Backend wurde während des Starts von einem anderen Owner übernommen - hänge an bestehende Instanz an");
+                    return;
+                }
+
+                _isRunning = false;
+                _ownsProcess = false;
+                StatusChanged?.Invoke(this, false);
                 _logger.LogError("Python Backend Health-Check fehlgeschlagen");
+
+                try
+                {
+                    if (!_pythonProcess.HasExited)
+                    {
+                        _pythonProcess.Kill(entireProcessTree: true);
+                        await _pythonProcess.WaitForExitAsync().ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    _logger.LogDebug(ex, "Python-Prozess war nach fehlgeschlagenem Start bereits beendet");
+                }
+
+                _pythonProcess = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fehler beim Starten des Python Backends");
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "Fehler beim Starten des Python Backends");
+            _lifecycleGate.Release();
         }
     }
 
-    /// <summary>Stoppt den Python FastAPI Server.</summary>
     public async Task StopAsync()
     {
-        if (!_isRunning || _pythonProcess == null) return;
-
-        _logger.LogInformation("Stoppe Python Backend...");
-
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await _httpClient.PostAsync("/shutdown", null).ConfigureAwait(false);
-            await Task.Delay(3000).ConfigureAwait(false);
-        }
-        catch { }
+            _isStopping = true;
 
-        try
-        {
-            if (!_pythonProcess.HasExited)
+            if (!_isRunning)
+                return;
+
+            _logger.LogInformation("Stoppe Python Backend...");
+
+            if (_ownsProcess)
             {
-                _pythonProcess.Kill(entireProcessTree: true);
-                await _pythonProcess.WaitForExitAsync().ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Fehler beim Stoppen des Python-Prozesses");
-        }
+                try
+                {
+                    await _httpClient.PostAsync("/shutdown", null).ConfigureAwait(false);
+                    await Task.Delay(3000).ConfigureAwait(false);
+                }
+                catch { }
 
-        _isRunning = false;
-        StatusChanged?.Invoke(this, false);
-        _logger.LogInformation("Python Backend gestoppt");
+                if (_pythonProcess != null)
+                {
+                    try
+                    {
+                        if (!_pythonProcess.HasExited)
+                        {
+                            _pythonProcess.Kill(entireProcessTree: true);
+                            await _pythonProcess.WaitForExitAsync().ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                    {
+                        _logger.LogDebug(ex, "Python-Prozess war beim Shutdown bereits beendet");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Fehler beim Stoppen des Python-Prozesses");
+                    }
+                }
+            }
+
+            _pythonProcess = null;
+            _ownsProcess = false;
+            _isRunning = false;
+            StatusChanged?.Invoke(this, false);
+            _logger.LogInformation("Python Backend gestoppt");
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
     }
 
     private void StartWatchdog()
@@ -139,14 +213,47 @@ public class PythonBridgeService
                 await Task.Delay(10_000).ConfigureAwait(false);
                 if (_pythonProcess == null || _pythonProcess.HasExited)
                 {
-                    _logger.LogWarning("Python Backend unerwartet beendet — starte neu...");
+                    if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+                    {
+                        _logger.LogDebug("Backend-Health ist weiterhin OK, obwohl der Startprozess beendet wurde - vermutlich Python-Wrapper/Child-Prozess auf Windows");
+                        continue;
+                    }
+
                     _isRunning = false;
                     StatusChanged?.Invoke(this, false);
+
+                    if (_isStopping || !_ownsProcess)
+                        break;
+
+                    _logger.LogWarning("Python Backend unerwartet beendet – starte neu...");
+                    _pythonProcess = null;
                     await StartAsync().ConfigureAwait(false);
                     break;
                 }
             }
         });
+    }
+
+    private void AttachToExistingBackend(string logMessage)
+    {
+        _pythonProcess = null;
+        _isRunning = true;
+        _ownsProcess = false;
+        _logger.LogInformation(logMessage, Port);
+        StatusChanged?.Invoke(this, true);
+    }
+
+    private async Task<bool> IsBackendAlreadyHealthyAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/health").ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<bool> WaitForHealthAsync()
@@ -169,17 +276,20 @@ public class PythonBridgeService
         return false;
     }
 
-    /// <summary>
-    /// Ermittelt den Python-Interpreter-Pfad.
-    /// Priorität: PBSTUDIO_PYTHON_EXE (Env) → py.exe Launcher → Standard-Pfade → PATH
-    /// </summary>
+    private static bool IsEnabled(string? value)
+    {
+        return value is not null &&
+               (value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("yes", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string ResolvePythonExe()
     {
         var envPath = Environment.GetEnvironmentVariable("PBSTUDIO_PYTHON_EXE");
         if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
             return envPath;
 
-        // Bevorzuge venv-Python im Projekt-Verzeichnis
         var backendDir = FindBackendDirectory();
         if (backendDir != null)
         {
@@ -207,15 +317,31 @@ public class PythonBridgeService
 
     private static string? FindBackendDirectory()
     {
-        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-        var candidates = new[]
+        var envBackend = Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_DIR");
+        if (!string.IsNullOrWhiteSpace(envBackend))
         {
-            Path.Combine(exeDir, "..", "..", "..", "..", "backend"),
-            Path.Combine(exeDir, "..", "backend"),
-            Path.Combine(exeDir, "backend"),
+            var envFull = Path.GetFullPath(envBackend);
+            if (Directory.Exists(envFull) && File.Exists(Path.Combine(envFull, "main.py")))
+                return envFull;
+        }
+
+        var exeDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+        for (var current = exeDir; current != null; current = current.Parent)
+        {
+            var backendCandidate = Path.Combine(current.FullName, "backend");
+            if (Directory.Exists(backendCandidate) && File.Exists(Path.Combine(backendCandidate, "main.py")))
+                return backendCandidate;
+        }
+
+        var explicitCandidates = new[]
+        {
+            Path.Combine(exeDir.FullName, "..", "..", "..", "backend"),
+            Path.Combine(exeDir.FullName, "..", "..", "..", "..", "backend"),
+            Path.Combine(exeDir.FullName, "..", "backend"),
+            Path.Combine(exeDir.FullName, "backend"),
         };
 
-        foreach (var candidate in candidates)
+        foreach (var candidate in explicitCandidates)
         {
             var full = Path.GetFullPath(candidate);
             if (Directory.Exists(full) && File.Exists(Path.Combine(full, "main.py")))

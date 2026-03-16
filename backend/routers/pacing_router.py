@@ -14,10 +14,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..app_state import AppState, get_app_state
-from ..dependencies import publish_event
+from ..dependencies import publish_event, publish_log
 from ..schemas.common import validate_timeline
 from ..schemas.pacing_schemas import (
-    PacingConfigSchema, CutListResponse, CutListEntrySchema,
+    PacingConfigSchema, TriggerSettingsSchema, CutListResponse, CutListEntrySchema,
     TimelineResponse, TimelineEntrySchema,
     PreviewRequest, PreviewResponse,
 )
@@ -46,6 +46,12 @@ async def generate_cut_list(
         f"Cut-Liste generieren: BPM={config.expected_bpm}, "
         f"Motion={config.use_motion_matching}, "
         f"Clips={len(config.video_clip_ids)}"
+    )
+    await publish_log(
+        "Pacing-Generierung gestartet",
+        level="info",
+        source="pacing.generate",
+        detail=f"audio_clip_id={config.audio_clip_id} video_clips={len(config.video_clip_ids)} bpm={config.expected_bpm}",
     )
 
     # Audio- und Video-Daten aus AppState extrahieren (thread-safe Snapshots)
@@ -92,6 +98,12 @@ async def generate_cut_list(
             "percent": 100.0,
             "message": f"{len(cuts)} Cuts generiert",
         })
+        await publish_log(
+            "Pacing-Generierung abgeschlossen",
+            level="info",
+            source="pacing.generate",
+            detail=f"cuts={len(cuts)} total_duration={total_dur:.2f}s",
+        )
 
         return CutListResponse(
             cuts=[CutListEntrySchema(**c) for c in cuts],
@@ -101,6 +113,12 @@ async def generate_cut_list(
         )
     except Exception as e:
         logger.error(f"Pacing-Generierung fehlgeschlagen: {e}", exc_info=True)
+        await publish_log(
+            "Pacing-Generierung fehlgeschlagen",
+            level="error",
+            source="pacing.generate",
+            detail=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Generierung fehlgeschlagen: {e}")
 
 
@@ -210,13 +228,16 @@ def _run_pacing_generation(
             # Motion-Daten aus Video-Analyse-Cache anhängen
             if video_analysis_cache and vid in video_analysis_cache:
                 va = video_analysis_cache[vid]
+                motion = va.get("motion", {})
                 clip_data["motion_score"] = va.get("avg_motion", 0.0)
-                clip_data["peak_motion"] = va.get("peak_motion", 0.0)
-                clip_data["scene_changes"] = va.get("scene_changes", [])
+                clip_data["avg_motion"] = motion.get("avg_motion", 0.0) if motion else 0.0
+                clip_data["peak_motion"] = motion.get("peak_motion", 0.0) if motion else 0.0
+                clip_data["peak_frames"] = motion.get("peak_frames", []) if motion else []
+                clip_data["scene_changes"] = va.get("scenes", [])
             clips.append(clip_data)
 
     pacing_config = {
-        "trigger_settings": config.trigger_settings.model_dump(),
+        "trigger_settings": (config.trigger_settings or TriggerSettingsSchema()).model_dump(),
         "expected_bpm": config.expected_bpm,
         "use_motion_matching": config.use_motion_matching,
         "use_structure_awareness": config.use_structure_awareness,

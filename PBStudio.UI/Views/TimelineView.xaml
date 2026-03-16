@@ -72,6 +72,197 @@
                      Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
                      Margin="0,0,0,4"/>
 
+        <!-- ══ Timeline Transport / Scrubber ══ -->
+        <md:Card DockPanel.Dock="Top" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Command="{Binding PreviousCutCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Padding="10,4" Margin="0,0,6,0"
+                        ToolTip="Vorherigen Cut auswählen">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="SkipPrevious" Width="16" Height="16" Margin="0,0,4,0"/>
+                        <TextBlock Text="Zurück" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Grid.Column="1"
+                        Command="{Binding NextCutCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Padding="10,4"
+                        ToolTip="Nächsten Cut auswählen">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="SkipNext" Width="16" Height="16" Margin="0,0,4,0"/>
+                        <TextBlock Text="Weiter" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="TIMELINE SCRUBBER" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <Slider Minimum="0"
+                            Maximum="{Binding TotalDuration, Mode=OneWay}"
+                            Value="{Binding SelectedTimelinePosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            IsEnabled="{Binding HasTimeline}"
+                            AutoToolTipPlacement="TopLeft"
+                            AutoToolTipPrecision="1"
+                            TickPlacement="None"/>
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   FontSize="11"
+                                   Text="{Binding SelectedTimelinePositionText, Mode=OneWay}"/>
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   FontSize="11"
+                                   Text="{Binding SelectionIndexText, Mode=OneWay}"/>
+                    </DockPanel>
+                </StackPanel>
+
+                <Border Grid.Column="5"
+                        Background="{StaticResource AbletonPanel}"
+                        CornerRadius="4"
+                        Padding="10,6"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Aktuell" Foreground="{StaticResource AbletonTextDim}" FontSize="10" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding SelectedClipName, Mode=OneWay}"
+                                   Foreground="{StaticResource AbletonText}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   MaxWidth="180"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </md:Card>
+
+        <!-- ══ Preview + Details Panel ══ -->
+        <md:Card DockPanel.Dock="Bottom" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="420"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="CLIP PREVIEW" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <Border Background="#FF111111" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1" CornerRadius="4">
+                        <Grid Height="236">
+                            <MediaElement x:Name="PreviewPlayer"
+                                          Stretch="Uniform"
+                                          LoadedBehavior="Manual"
+                                          UnloadedBehavior="Manual"
+                                          MediaOpened="PreviewPlayer_OnMediaOpened"
+                                          MediaEnded="PreviewPlayer_OnMediaEnded"
+                                          MediaFailed="PreviewPlayer_OnMediaFailed"/>
+                            <TextBlock x:Name="PreviewEmptyText"
+                                       Text="Wähle einen Timeline-Cut mit vorhandener Video-Datei"
+                                       Foreground="{StaticResource AbletonTextDim}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="250"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Click="PlayPreview_Click"
+                                IsEnabled="{Binding CanPreviewSelectedClip}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="10,4" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Play" Width="16" Height="16" Margin="0,0,4,0"/>
+                                <TextBlock Text="Play"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="1"
+                                Click="PausePreview_Click"
+                                IsEnabled="{Binding CanPreviewSelectedClip}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="10,4" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Pause" Width="16" Height="16" Margin="0,0,4,0"/>
+                                <TextBlock Text="Pause"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="2"
+                                Click="StopPreview_Click"
+                                IsEnabled="{Binding CanPreviewSelectedClip}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="10,4">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Stop" Width="16" Height="16" Margin="0,0,4,0"/>
+                                <TextBlock Text="Stop"/>
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                            <TextBlock x:Name="PreviewStatusText"
+                                       Text="Kein Preview geladen"
+                                       Foreground="{StaticResource AbletonTextDim}"
+                                       FontSize="11"/>
+                            <TextBlock Text="{Binding SelectedPreviewRange, Mode=OneWay}"
+                                       Foreground="{StaticResource AbletonTextDim}"
+                                       FontSize="11"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <Grid Grid.Column="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="SELEKTIERTER CUT" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                        <TextBlock Foreground="{StaticResource AbletonText}" FontSize="12" FontWeight="SemiBold"
+                                   Text="{Binding SelectedClipName, Mode=OneWay}"/>
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,4,0,0">
+                            <Run Text="Zeitraum: "/><Run Text="{Binding SelectedTimeRange, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                            <Run Text="Clip-In: "/><Run Text="{Binding SelectedClipStart, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                            <Run Text="Trigger: "/><Run Text="{Binding SelectedTrigger, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="QUELLE" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                        <TextBlock Foreground="{StaticResource AbletonTextDim}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding SelectedFilePath, Mode=OneWay}"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </md:Card>
+
         <!-- ══ Status Bar ══ -->
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}"
                    Foreground="{StaticResource AbletonTextDim}" FontSize="11"
@@ -80,6 +271,7 @@
         <!-- ══ Main Timeline List ══ -->
         <md:Card Style="{StaticResource AbletonCard}" Padding="0">
             <ListView ItemsSource="{Binding TimelineEntries}"
+                      SelectedItem="{Binding SelectedEntry}"
                       Background="Transparent" BorderThickness="0"
                       Foreground="{StaticResource AbletonText}"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto">

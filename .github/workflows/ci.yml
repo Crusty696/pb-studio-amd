@@ -25,7 +25,7 @@ jobs:
           cache: "pip"
 
       - name: Abhängigkeiten installieren
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
       - name: Syntax-Check (py_compile)
         run: |
@@ -42,7 +42,9 @@ jobs:
         shell: pwsh
 
       - name: Tests ausführen (ohne GPU/Integration)
-        run: pytest tests/ -v --tb=short -m "not gpu and not integration"
+        run: |
+          $env:PYTHONPATH = "src"
+          pytest Tests/ -v --tb=short -m "not gpu and not integration"
         shell: pwsh
 
   # ─────────────────────────────────────────────

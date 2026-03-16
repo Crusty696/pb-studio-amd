@@ -18,10 +18,34 @@ Architecture:
 
 import logging
 import numpy as np
-import onnxruntime as ort
 from pathlib import Path
 from typing import Optional, List, Union, Tuple
 from PIL import Image
+
+try:
+    import onnxruntime as ort
+except ImportError:  # pragma: no cover - exercised via degraded test envs
+    class _FallbackSessionOptions:
+        def __init__(self):
+            self.enable_mem_pattern = True
+            self.graph_optimization_level = None
+            self.enable_cpu_mem_arena = True
+            self.intra_op_num_threads = 0
+            self.inter_op_num_threads = 0
+
+    class _FallbackGraphOptimizationLevel:
+        ORT_ENABLE_ALL = "ORT_ENABLE_ALL"
+
+    class _FallbackOrt:
+        SessionOptions = _FallbackSessionOptions
+        GraphOptimizationLevel = _FallbackGraphOptimizationLevel
+        InferenceSession = object
+
+        @staticmethod
+        def get_available_providers() -> List[str]:
+            return ["CPUExecutionProvider"]
+
+    ort = _FallbackOrt()
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +186,10 @@ class SigLIPWrapper:
         # Initialize tokenizer first
         if not self._init_tokenizer():
             logger.warning("Tokenizer not available - text encoding will be limited")
+
+        if not hasattr(ort, "InferenceSession") or ort.InferenceSession is object:
+            logger.warning("onnxruntime not installed - SigLIP model loading disabled")
+            return False
 
         # Session options und providers
         sess_options = self._create_session_options()

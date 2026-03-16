@@ -1,4 +1,8 @@
+using System.ComponentModel;
 using System.Windows;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using PBStudio.UI.Services;
 using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI;
@@ -8,9 +12,24 @@ namespace PBStudio.UI;
 /// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow(MainViewModel viewModel)
+    private readonly IApiClient _api;
+    private bool _shutdownStarted;
+
+    public MainWindow(MainViewModel viewModel, IApiClient api)
     {
+        _api = api;
         InitializeComponent();
         DataContext = viewModel;
+        Closing += OnClosing;
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_shutdownStarted)
+            return;
+
+        _shutdownStarted = true;
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("app-shutdown"));
+        _api.BeginShutdown();
     }
 }

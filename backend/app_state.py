@@ -22,8 +22,30 @@ from pathlib import Path
 from typing import Optional
 
 from pb_studio.data.database_core import normalize_media_path
+from pb_studio.data.repositories.project_repository import ProjectRepository
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
+    """Gibt den aktiven Projekt-Root zurück, sonst den konfigurierten Fallback."""
+    current = state.current_project or {}
+    current_path = current.get("path") if isinstance(current, dict) else None
+    if current_path:
+        return Path(current_path).resolve()
+    return Path(fallback_root).resolve()
+
+
+def resolve_project_db_id(project_data: Optional[dict]) -> int:
+    """Extrahiert die DB-Projekt-ID aus current_project; Fallback bleibt 1 für Legacy-Fälle."""
+    if isinstance(project_data, dict):
+        raw = project_data.get("db_project_id")
+        if raw not in (None, ""):
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                logger.warning("Ungültige db_project_id im AppState: %r", raw)
+    return 1
 
 
 @dataclass
@@ -184,6 +206,33 @@ class AppState:
     # ADR-003 Phase 2: SQLite-Persistenz
     # =========================================================================
 
+    def get_current_project_db_id(self) -> int:
+        """Aktive DB-Projekt-ID; 1 bleibt Legacy-Fallback wenn kein Projekt geöffnet ist."""
+        with self._state_lock:
+            return resolve_project_db_id(self.current_project)
+
+    def sync_project_db_record(self) -> None:
+        """Schreibt current_project in die Projects-Tabelle, falls eine DB-Projekt-ID bekannt ist."""
+        with self._state_lock:
+            project = dict(self.current_project) if isinstance(self.current_project, dict) else None
+
+        if not project:
+            return
+
+        project_id = resolve_project_db_id(project)
+        project_data = {
+            "path": project.get("path"),
+            "audio_count": project.get("audio_count", 0),
+            "video_count": project.get("video_count", 0),
+            "has_timeline": project.get("has_timeline", False),
+            "created_at": project.get("created_at"),
+            "modified_at": project.get("modified_at"),
+        }
+        try:
+            ProjectRepository().update_project(project_id, name=project.get("name"), data=project_data)
+        except Exception as e:
+            logger.warning("Projekt-DB-Sync fehlgeschlagen (unkritisch): %s", e)
+
     def _find_audio_clip_by_path(self, file_path: str) -> Optional[dict]:
         normalized = normalize_media_path(file_path)
         with self._state_lock:
@@ -209,7 +258,10 @@ class AppState:
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
-            row = repo.find_by_project_and_path(project_id=1, file_path=clip_data["path"])
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip_data["path"],
+            )
             if row:
                 meta = json.loads(row.get("metadata_json") or "{}")
                 if meta.get("clip_type") == "audio" and meta.get("clip_id") is not None:
@@ -245,7 +297,10 @@ class AppState:
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
-            row = repo.find_by_project_and_path(project_id=1, file_path=clip_data["path"])
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip_data["path"],
+            )
             if row:
                 meta = json.loads(row.get("metadata_json") or "{}")
                 if meta.get("clip_type") == "video" and meta.get("clip_id") is not None:
@@ -275,9 +330,87 @@ class AppState:
         self.persist_video_clip(clip)
         return clip
 
+    def update_audio_analysis(
+        self,
+        clip_id: int,
+        bpm: float,
+        key: Optional[str],
+        beat_count: int,
+        beats_json: str,
+        is_analyzed: bool,
+    ) -> None:
+        """
+        Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats) in der ai_data_json-Spalte
+        des zugehörigen media-Eintrags.
+        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
+        """
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            clip = self.get_audio_clip(clip_id)
+            if clip is None:
+                logger.warning(f"update_audio_analysis: Clip {clip_id} nicht im In-Memory State")
+                return
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip["path"],
+            )
+            if row is None:
+                logger.warning(f"update_audio_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
+                return
+            ai_data = {
+                "bpm": bpm,
+                "key": key,
+                "beat_count": beat_count,
+                "beats_json": beats_json,
+                "is_analyzed": is_analyzed,
+            }
+            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            logger.debug(f"Audio-Analyse für Clip {clip_id} in DB persistiert (bpm={bpm:.1f}, key={key})")
+        except Exception as e:
+            logger.warning(f"Audio-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+
+    def update_video_analysis(
+        self,
+        clip_id: int,
+        scene_count: int,
+        avg_motion: float,
+        has_embedding: bool,
+        is_analyzed: bool,
+    ) -> None:
+        """
+        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding) in der
+        ai_data_json-Spalte des zugehörigen media-Eintrags.
+        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
+        """
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            clip = self.get_video_clip(clip_id)
+            if clip is None:
+                logger.warning(f"update_video_analysis: Clip {clip_id} nicht im In-Memory State")
+                return
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip["path"],
+            )
+            if row is None:
+                logger.warning(f"update_video_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
+                return
+            ai_data = {
+                "scene_count": scene_count,
+                "avg_motion": avg_motion,
+                "has_embedding": has_embedding,
+                "is_analyzed": is_analyzed,
+            }
+            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            logger.debug(f"Video-Analyse für Clip {clip_id} in DB persistiert (scenes={scene_count}, motion={avg_motion:.2f})")
+        except Exception as e:
+            logger.warning(f"Video-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+
     def persist_audio_clip(self, clip: dict) -> None:
         """
-        Persistiert einen Audio-Clip in SQLite (project_id=1).
+        Persistiert einen Audio-Clip in SQLite für das aktuell aktive Projekt.
         Fehler werden NUR geloggt — niemals geworfen (nicht kritisch für Import).
         """
         try:
@@ -292,7 +425,7 @@ class AppState:
                 "format": clip.get("format", ""),
             }
             repo.add_media(
-                project_id=1,
+                project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
                 file_hash="",
                 duration=clip.get("duration_seconds", 0.0),
@@ -304,7 +437,7 @@ class AppState:
 
     def persist_video_clip(self, clip: dict) -> None:
         """
-        Persistiert einen Video-Clip in SQLite (project_id=1).
+        Persistiert einen Video-Clip in SQLite für das aktuell aktive Projekt.
         Fehler werden NUR geloggt — niemals geworfen (nicht kritisch für Import).
         """
         try:
@@ -320,7 +453,7 @@ class AppState:
                 "codec": clip.get("codec", ""),
             }
             repo.add_media(
-                project_id=1,
+                project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
                 file_hash="",
                 duration=clip.get("duration_seconds", 0.0),
@@ -330,22 +463,41 @@ class AppState:
         except Exception as e:
             logger.warning(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}")
 
-    def load_from_db(self) -> None:
+    def load_from_db(self, project_id: Optional[int] = None) -> None:
         """
-        Lädt alle persistierten Clips aus SQLite beim Backend-Startup.
+        Lädt alle persistierten Clips aus SQLite für das aktive bzw. übergebene Projekt.
         Stellt audio_clips, video_clips und ID-Counter wieder her.
         Fehler werden NUR geloggt — Backend startet immer (leerer State ist OK).
+
+        Wichtig: Vor dem Restore wird der aktuelle Medienkatalog ersetzt statt gemerged,
+        damit Re-Open/Restore deterministisch bleibt und keine stale In-Memory-Clips mitschleppt.
         """
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
-            rows = repo.get_by_project(project_id=1)
+            project_id = int(project_id or self.get_current_project_db_id())
+            rows = repo.get_by_project(project_id=project_id)
+
+            with self._state_lock:
+                self.audio_clips.clear()
+                self.audio_analysis_cache.clear()
+                self.video_clips.clear()
+                self.video_analysis_cache.clear()
+            with self._lock:
+                self._audio_next_id = 1
+                self._video_next_id = 1
 
             max_audio_id = 0
             max_video_id = 0
             audio_count = 0
             video_count = 0
             stale_count = 0
+
+            # Clips und Analyse-Caches in lokalen Variablen sammeln, dann unter Lock zuweisen
+            tmp_audio: dict[int, dict] = {}
+            tmp_video: dict[int, dict] = {}
+            tmp_audio_analysis: dict[int, dict] = {}
+            tmp_video_analysis: dict[int, dict] = {}
 
             for row in rows:
                 file_path = row.get("file_path")
@@ -376,7 +528,21 @@ class AppState:
                 if not clip_type or clip_id is None:
                     continue
 
+                try:
+                    clip_id = int(clip_id)
+                except (TypeError, ValueError):
+                    logger.warning("Ungültige clip_id in Media-DB-Eintrag: %r", clip_id)
+                    continue
+
+                # Analyse-Daten aus ai_data_json laden
+                raw_ai = row.get("ai_data_json") or "{}"
+                try:
+                    ai_data = json.loads(raw_ai)
+                except json.JSONDecodeError:
+                    ai_data = {}
+
                 if clip_type == "audio":
+                    is_analyzed = bool(ai_data.get("is_analyzed", False))
                     clip = {
                         "id": clip_id,
                         "name": meta.get("name", ""),
@@ -385,12 +551,36 @@ class AppState:
                         "sample_rate": meta.get("sample_rate", 44100),
                         "channels": meta.get("channels", 2),
                         "format": meta.get("format", ""),
+                        "bpm": float(ai_data.get("bpm", 0.0) or 0.0),
+                        "key": ai_data.get("key"),
+                        "beat_count": int(ai_data.get("beat_count", 0) or 0),
+                        "is_analyzed": is_analyzed,
                     }
-                    self.audio_clips[clip_id] = clip
+                    tmp_audio[clip_id] = clip
                     max_audio_id = max(max_audio_id, clip_id)
                     audio_count += 1
 
+                    # Audio-Analyse-Cache wiederherstellen (Beats aus beats_json)
+                    if is_analyzed and ai_data:
+                        beats_raw = ai_data.get("beats_json", "[]")
+                        try:
+                            beats = json.loads(beats_raw) if isinstance(beats_raw, str) else beats_raw
+                        except json.JSONDecodeError:
+                            beats = []
+                        tmp_audio_analysis[clip_id] = {
+                            "clip_id": clip_id,
+                            "bpm": float(ai_data.get("bpm", 0.0) or 0.0),
+                            "key": ai_data.get("key"),
+                            "beat_count": int(ai_data.get("beat_count", 0) or 0),
+                            "beats": beats,
+                            "energy_curve": [],
+                            "structure_segments": [],
+                            "spectral_data": None,
+                            "duration_seconds": row.get("duration_sec") or 0.0,
+                        }
+
                 elif clip_type == "video":
+                    is_analyzed = bool(ai_data.get("is_analyzed", False))
                     clip = {
                         "id": clip_id,
                         "name": meta.get("name", ""),
@@ -403,9 +593,31 @@ class AppState:
                         "thumbnail_available": False,
                         "tags": [],
                     }
-                    self.video_clips[clip_id] = clip
+                    tmp_video[clip_id] = clip
                     max_video_id = max(max_video_id, clip_id)
                     video_count += 1
+
+                    # Video-Analyse-Cache wiederherstellen
+                    if is_analyzed and ai_data:
+                        tmp_video_analysis[clip_id] = {
+                            "clip_id": clip_id,
+                            "scene_count": int(ai_data.get("scene_count", 0) or 0),
+                            "avg_motion": float(ai_data.get("avg_motion", 0.0) or 0.0),
+                            "has_embedding": bool(ai_data.get("has_embedding", False)),
+                            "scenes": [],
+                            "motion": {},
+                            "dominant_colors": [],
+                            "tags": [],
+                        }
+
+            # Unter Lock alle Clips und Analyse-Caches atomar zuweisen
+            with self._state_lock:
+                self.audio_clips.update(tmp_audio)
+                self.video_clips.update(tmp_video)
+                if tmp_audio_analysis:
+                    self.audio_analysis_cache.update(tmp_audio_analysis)
+                if tmp_video_analysis:
+                    self.video_analysis_cache.update(tmp_video_analysis)
 
             # ID-Counter nach dem Load anpassen
             with self._lock:
@@ -415,8 +627,9 @@ class AppState:
                     self._video_next_id = max_video_id + 1
 
             logger.info(
-                f"DB-Load OK: {audio_count} Audio-Clips, {video_count} Video-Clips wiederhergestellt"
-                f" ({stale_count} verwaiste Einträge übersprungen)"
+                f"DB-Load OK für Projekt {project_id}: {audio_count} Audio-Clips, {video_count} Video-Clips wiederhergestellt"
+                f" (Audio-Analyse: {len(tmp_audio_analysis)}, Video-Analyse: {len(tmp_video_analysis)} gecacht,"
+                f" {stale_count} verwaiste Einträge übersprungen)"
             )
 
         except Exception as e:

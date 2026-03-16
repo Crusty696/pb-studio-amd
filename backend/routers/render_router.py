@@ -9,6 +9,7 @@ Endpoints:
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -16,9 +17,9 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state
+from ..app_state import AppState, get_app_state, resolve_active_project_root
 from ..config import config
-from ..dependencies import gpu_lock, publish_event
+from ..dependencies import gpu_lock, publish_event, publish_log
 from ..schemas.common import validate_timeline
 from ..schemas.render_schemas import (
     RenderRequest, RenderProgress, RenderResult,
@@ -48,21 +49,35 @@ async def start_render(
     """Startet ein Rendering als Background Task."""
     task_id = str(uuid.uuid4())[:8]
 
+    # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
+    timeline_snapshot = state.get_timeline_snapshot()
+    if not timeline_snapshot:
+        raise HTTPException(status_code=400, detail="Keine Timeline für Rendering vorhanden")
+
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
-    allowed_render = Path(config.project_dir).resolve()
+    allowed_render = resolve_active_project_root(state, config.project_dir)
     if not output_p_check.is_relative_to(allowed_render):
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
 
     # Render-Task Cleanup: alte abgeschlossene Tasks entfernen (max 50)
     _cleanup_old_render_tasks(state)
 
+    timeline_total_seconds = 0.0
+    for entry in timeline_snapshot:
+        try:
+            timeline_total_seconds += max(float(entry.get("end_time", 0.0)) - float(entry.get("start_time", 0.0)), 0.0)
+        except (TypeError, ValueError):
+            continue
+    estimated_total_seconds = max(timeline_total_seconds, 0.0)
+    estimated_total_frames = max(int(round(estimated_total_seconds * max(request.fps, 0.0))), 0)
+
     task_data = {
         "task_id": task_id,
         "status": TaskStatus.PENDING.value,
         "percent": 0.0,
         "current_frame": 0,
-        "total_frames": 0,
+        "total_frames": estimated_total_frames,
         "fps": 0.0,
         "elapsed_seconds": 0.0,
         "eta_seconds": 0.0,
@@ -75,6 +90,12 @@ async def start_render(
     asyncio.create_task(_run_render_task(task_id, request, state))
 
     logger.info(f"Render-Task gestartet: {task_id}")
+    await publish_log(
+        f"Render gestartet: {task_id}",
+        level="info",
+        source="render.start",
+        detail=f"output={request.output_path}",
+    )
     return RenderProgress(**task_data)
 
 
@@ -164,9 +185,9 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
                 _execute_render,
                 task_id,
                 request,
-                state.render_tasks,
-                state.cancel_flags,
+                state,
                 timeline_snapshot,
+                asyncio.get_running_loop(),
             )
 
         # Finaler Cancel-Check
@@ -187,6 +208,12 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
             "status": "completed",
             "message": "Rendering abgeschlossen",
         })
+        await publish_log(
+            f"Render abgeschlossen: {task_id}",
+            level="info",
+            source="render.run",
+            detail=f"elapsed={elapsed:.1f}s output={request.output_path}",
+        )
 
         logger.info(f"Render {task_id} abgeschlossen: {elapsed:.1f}s")
 
@@ -206,13 +233,21 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
             "status": "cancelled",
             "message": "Rendering abgebrochen",
         })
+        await publish_log(
+            f"Render abgebrochen: {task_id}",
+            level="warning",
+            source="render.run",
+            detail=f"elapsed={elapsed:.1f}s",
+        )
 
     except Exception as e:
         elapsed = time.monotonic() - start_time
+        _cleanup_render_temps(request.output_path)
         state.update_render_task(task_id, {
             "status": TaskStatus.FAILED.value,
             "error": str(e),
             "elapsed_seconds": round(elapsed, 1),
+            "eta_seconds": 0.0,
         })
         logger.error(f"Render {task_id} fehlgeschlagen: {e}", exc_info=True)
 
@@ -222,6 +257,12 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
             "status": "failed",
             "message": str(e),
         })
+        await publish_log(
+            f"Render fehlgeschlagen: {task_id}",
+            level="error",
+            source="render.run",
+            detail=str(e),
+        )
 
 
 class _RenderCancelled(Exception):
@@ -248,14 +289,14 @@ def _cleanup_render_temps(output_path: str) -> None:
 def _execute_render(
     task_id: str,
     request: RenderRequest,
-    render_tasks: dict[str, dict[str, Any]],
-    cancel_flags: dict[str, bool],
+    state: "AppState",
     timeline: list[dict[str, Any]],
+    event_loop: asyncio.AbstractEventLoop,
 ) -> dict[str, Any]:
     """Führt das Rendering durch (blockierend, GPU).
 
-    Erhält render_tasks, cancel_flags und timeline als Parameter.
-    Prüft periodisch cancel_flags[task_id] und bricht bei Cancel ab.
+    Verwendet state.update_render_task() und state.get_cancel_flag() für
+    thread-sichere Dict-Zugriffe statt direkter Mutation.
     """
     from pathlib import Path as _Path
     from pb_studio.rendering.render_service import RenderService, RenderCancelledError
@@ -269,17 +310,78 @@ def _execute_render(
     output_p = _Path(request.output_path)
     service = RenderService(output_dir=str(output_p.parent))
 
-    def is_cancelled() -> bool:
-        return cancel_flags.get(task_id, False)
+    progress_publish_lock = threading.Lock()
+    progress_state = {"percent": -1.0, "message": "", "at": 0.0}
 
-    def on_progress(message: str, percent: float) -> None:
+    def is_cancelled() -> bool:
+        return state.get_cancel_flag(task_id)
+
+    def publish_progress_event(message: str, percent: float) -> None:
+        task_snapshot = state.get_render_task(task_id) or {}
+        payload = {
+            "task_id": task_id,
+            "percent": round(percent, 1),
+            "status": task_snapshot.get("status", TaskStatus.RUNNING.value),
+            "message": message,
+            "output_path": str(output_p),
+            "current_frame": task_snapshot.get("current_frame", 0),
+            "total_frames": task_snapshot.get("total_frames", 0),
+            "fps": task_snapshot.get("fps", 0.0),
+            "elapsed_seconds": task_snapshot.get("elapsed_seconds", 0.0),
+            "eta_seconds": task_snapshot.get("eta_seconds", 0.0),
+        }
+        future = asyncio.run_coroutine_threadsafe(
+            publish_event("render_progress", payload),
+            event_loop,
+        )
+
+        def _log_publish_failure(done: Any) -> None:
+            try:
+                error = done.exception()
+            except Exception as exc:
+                logger.debug("Render progress future inspection failed: %s", exc)
+                return
+            if error:
+                logger.debug("Render progress publish failed for %s: %s", task_id, error)
+
+        future.add_done_callback(_log_publish_failure)
+
+    def on_progress(message: str, percent: float, telemetry: Optional[dict[str, Any]] = None) -> None:
         # Cancel-Check bei jedem Progress-Callback
         if is_cancelled():
             raise _RenderCancelled()
-        render_tasks[task_id].update({
+
+        percent = round(float(percent), 1)
+        telemetry = telemetry or {}
+        updates = {
+            "status": TaskStatus.RUNNING.value,
             "percent": percent,
-            "fps": 0.0,
-        })
+            "fps": round(float(telemetry.get("fps", 0.0) or 0.0), 2),
+            "current_frame": max(int(telemetry.get("current_frame", 0) or 0), 0),
+            "total_frames": max(int(telemetry.get("total_frames", 0) or 0), 0),
+            "elapsed_seconds": round(float(telemetry.get("elapsed_seconds", 0.0) or 0.0), 1),
+            "eta_seconds": round(float(telemetry.get("eta_seconds", 0.0) or 0.0), 1),
+            "output_path": str(output_p),
+        }
+        state.update_render_task(task_id, updates)
+
+        now = time.monotonic()
+        with progress_publish_lock:
+            last_percent = progress_state["percent"]
+            last_message = progress_state["message"]
+            last_at = progress_state["at"]
+            should_publish = (
+                percent >= 100.0
+                or last_percent < 0.0
+                or percent - last_percent >= 1.0
+                or message != last_message
+                or (now - last_at) >= 1.0
+            )
+            if should_publish:
+                progress_state.update({"percent": percent, "message": message, "at": now})
+
+        if should_publish:
+            publish_progress_event(message, percent)
 
     if not timeline:
         raise RuntimeError("Keine Timeline für Rendering vorhanden")
@@ -322,7 +424,7 @@ def _execute_render(
         # Realtest-Härtung: Status direkt im synchronen Worker auf completed setzen,
         # damit /render/status nicht auf "running" hängen bleibt, falls der Async-
         # Wrapper den finalen State erst verzögert nachzieht.
-        render_tasks[task_id].update({
+        state.update_render_task(task_id, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
             "eta_seconds": 0.0,

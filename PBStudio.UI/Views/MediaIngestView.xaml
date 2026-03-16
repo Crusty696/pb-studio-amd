@@ -81,6 +81,32 @@
                         <TextBlock Text="Video importieren" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
+
+                <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
+
+                <TextBox Width="320"
+                         Margin="6,0,6,0"
+                         Text="{Binding VideoImportPath, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center"
+                         ToolTip="Workaround für flakigen Windows-Dateidialog: vollständigen Video-Pfad direkt eingeben. Mehrere Pfade via Semikolon oder neue Zeile trennen."/>
+
+                <Button Command="{Binding BrowseVideoPathCommand}" Style="{StaticResource ToolbarBtn}"
+                        ToolTip="Video-Dateien auswählen und nur den/die Pfad/Pfade in das In-App-Feld übernehmen">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="FolderSearchOutline" Width="14" Height="14"
+                                               Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Pfad wählen" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Command="{Binding ImportVideoFromPathCommand}" Style="{StaticResource ToolbarBtn}"
+                        ToolTip="Video direkt vom angegebenen Pfad importieren, ohne den nativen Import-Lauf zu verwenden">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="FileImportOutline" Width="14" Height="14"
+                                               Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Pfad importieren" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Border>
 

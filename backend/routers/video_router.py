@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from ..app_state import AppState, get_app_state
-from ..dependencies import with_gpu_task, publish_event
+from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..schemas.video_schemas import (
     VideoImportRequest, VideoClipInfo,
     VideoAnalyzeRequest, VideoAnalysisResult,
@@ -76,6 +76,13 @@ async def import_videos(
         })
         imported.append(VideoClipInfo(**clip))
 
+        await publish_log(
+            f"Video importiert: {video_path.name}",
+            level="info",
+            source="video.import",
+            detail=f"clip_id={clip['id']} duration={info.get('duration', 0.0):.2f}s fps={info.get('fps', 0.0):.2f}",
+        )
+
         await publish_event("import_progress", {
             "clip_id": clip["id"],
             "percent": len(imported) / len(request.paths) * 100,
@@ -104,7 +111,7 @@ async def list_clips(
     clips = list(state.video_clips.values())
     start = (page - 1) * limit
     end = start + limit
-    return [VideoClipInfo(**c) for c in clips[start:end]]
+    return [VideoClipInfo(**c, is_analyzed=c["id"] in state.video_analysis_cache) for c in clips[start:end]]
 
 
 @router.get(
@@ -152,16 +159,44 @@ async def analyze_video(
 
     clip = state.video_clips[request.clip_id]
     logger.info(f"Starte Video-Analyse: {clip['name']}")
+    await publish_log(
+        f"Video-Analyse gestartet: {clip['name']}",
+        level="info",
+        source="video.analyze",
+        detail=f"clip_id={request.clip_id}",
+    )
 
     try:
         result = await with_gpu_task(
             _run_video_analysis, clip["path"], request.clip_id, request,
             model_id="raft_small",  # VRAM-Budget-Check via VRAMBudgetManager
         )
-        state.video_analysis_cache[request.clip_id] = result
+        state.set_video_analysis(request.clip_id, result)
+
+        # P-2: Analyse-Ergebnisse in SQLite persistieren
+        state.update_video_analysis(
+            clip_id=request.clip_id,
+            scene_count=int(result.get("scene_count", 0) or 0),
+            avg_motion=float(result.get("avg_motion", 0.0) or 0.0),
+            has_embedding=bool(result.get("has_embedding", False)),
+            is_analyzed=True,
+        )
+
+        await publish_log(
+            f"Video-Analyse abgeschlossen: {clip['name']}",
+            level="info",
+            source="video.analyze",
+            detail=f"clip_id={request.clip_id} scenes={int(result.get('scene_count', 0) or 0)} avg_motion={float(result.get('avg_motion', 0.0) or 0.0):.2f}",
+        )
         return VideoAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Video-Analyse fehlgeschlagen: {e}", exc_info=True)
+        await publish_log(
+            f"Video-Analyse fehlgeschlagen: {clip['name']}",
+            level="error",
+            source="video.analyze",
+            detail=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 

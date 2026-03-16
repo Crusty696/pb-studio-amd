@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using System.Text.Json;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -10,6 +13,11 @@ namespace PBStudio.UI.ViewModels;
 public partial class DirectorViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly AudioLibraryStateService _audioLibraryState;
+    private readonly VideoLibraryStateService _videoLibraryState;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private int _loadVersion;
+    private volatile bool _reloadQueued;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -37,53 +45,96 @@ public partial class DirectorViewModel : ObservableObject
     public ObservableCollection<SelectableVideoClip> AvailableVideoClips { get; } = [];
     public ObservableCollection<TimelineEntryModel> CutList { get; } = [];
 
-    public DirectorViewModel(IApiClient api)
+    public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState)
     {
         _api = api;
-        _ = LoadClipsAsync();
+        _audioLibraryState = audioLibraryState;
+        _videoLibraryState = videoLibraryState;
+
+        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        {
+            if (message.Value is "project-opened" or "audio-library-refresh" or "video-library-refresh" or "media-library-refresh")
+                _ = RequestClipReloadAsync();
+            else if (message.Value is "project-closed")
+                ResetProjectState();
+        });
     }
 
     [RelayCommand]
     private async Task LoadClipsAsync()
     {
-        var videoClips = await _api.GetVideoClipsAsync();
-        if (videoClips != null)
+        _reloadQueued = false;
+        var version = Interlocked.Increment(ref _loadVersion);
+
+        if (!await _loadGate.WaitAsync(0))
         {
-            AvailableVideoClips.Clear();
-            foreach (var clip in videoClips)
-            {
-                AvailableVideoClips.Add(new SelectableVideoClip
-                {
-                    Id = clip.Id,
-                    Name = clip.Name,
-                    DurationSeconds = clip.DurationSeconds,
-                });
-            }
+            _reloadQueued = true;
+            return;
         }
 
-        var audioClips = await _api.GetAudioClipsAsync();
-        if (audioClips != null)
+        try
         {
-            AvailableAudioClips.Clear();
-            foreach (var clip in audioClips)
+            var videoClips = await _videoLibraryState.RefreshAsync();
+            if (videoClips != null && version == _loadVersion)
             {
-                AvailableAudioClips.Add(new AudioClipModel
+                AvailableVideoClips.Clear();
+                foreach (var clip in videoClips)
                 {
-                    Id = clip.Id,
-                    Name = clip.Name,
-                    Path = clip.Path,
-                    DurationSeconds = clip.DurationSeconds,
-                    SampleRate = clip.SampleRate,
-                    Channels = clip.Channels,
-                    Format = clip.Format,
-                });
+                    AvailableVideoClips.Add(new SelectableVideoClip
+                    {
+                        Id = clip.Id,
+                        Name = clip.Name,
+                        DurationSeconds = clip.DurationSeconds,
+                    });
+                }
             }
 
-            if (AvailableAudioClips.Count > 0)
-                SelectedAudioClip = AvailableAudioClips[0];
+            var audioClips = await _audioLibraryState.RefreshAsync();
+            if (audioClips != null && version == _loadVersion)
+            {
+                var previousAudioClipId = SelectedAudioClip?.Id;
+                AvailableAudioClips.Clear();
+                foreach (var clip in audioClips)
+                {
+                    AvailableAudioClips.Add(new AudioClipModel
+                    {
+                        Id = clip.Id,
+                        Name = clip.Name,
+                        Path = clip.Path,
+                        DurationSeconds = clip.DurationSeconds,
+                        SampleRate = clip.SampleRate,
+                        Channels = clip.Channels,
+                        Format = clip.Format,
+                        Bpm = clip.Bpm,
+                        Key = clip.Key ?? "",
+                        BeatCount = clip.BeatCount,
+                        IsAnalyzed = clip.IsAnalyzed,
+                    });
+                }
+
+                SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == previousAudioClipId)
+                    ?? AvailableAudioClips.FirstOrDefault();
+            }
+
+            if (version == _loadVersion)
+            {
+                UpdateSelectedCount();
+                StatusText = $"{AvailableVideoClips.Count} Video / {AvailableAudioClips.Count} Audio Clips geladen";
+            }
+        }
+        finally
+        {
+            _loadGate.Release();
         }
 
-        StatusText = $"{AvailableVideoClips.Count} Video / {AvailableAudioClips.Count} Audio Clips geladen";
+        if (_reloadQueued)
+            await LoadClipsAsync();
+    }
+
+    private async Task RequestClipReloadAsync()
+    {
+        _reloadQueued = true;
+        await LoadClipsAsync();
     }
 
     [RelayCommand]
@@ -130,57 +181,105 @@ public partial class DirectorViewModel : ObservableObject
         IsGenerating = true;
         StatusText = "Generiere Cut-Liste...";
 
-        var config = new PacingConfig(
-            AudioClipId: SelectedAudioClip.Id,
-            VideoClipIds: selectedVideoIds,
-            ExpectedBpm: ExpectedBpm,
-            UseMotionMatching: UseMotionMatching,
-            UseStructureAwareness: UseStructureAwareness,
-            DurationLimit: DurationLimit,
-            MinCutInterval: MinCutInterval,
-            TriggerSettings: new TriggerSettings(
-                BeatWeight: BeatWeight,
-                OnsetWeight: OnsetWeight,
-                KickWeight: KickWeight,
-                SnareWeight: SnareWeight,
-                HihatWeight: HihatWeight,
-                EnergyWeight: EnergyWeight,
-                EnergyThreshold: EnergyThreshold,
-                MinClipLength: MinClipLength,
-                MaxClipLength: MaxClipLength,
-                OnsetSensitivity: OnsetSensitivity
-            )
-        );
-
-        var result = await _api.GenerateCutListAsync(config);
-        if (result != null)
+        try
         {
-            CutList.Clear();
-            foreach (var cut in result.Cuts)
+            var config = new PacingConfig(
+                AudioClipId: SelectedAudioClip.Id,
+                VideoClipIds: selectedVideoIds,
+                ExpectedBpm: ExpectedBpm,
+                UseMotionMatching: UseMotionMatching,
+                UseStructureAwareness: UseStructureAwareness,
+                DurationLimit: DurationLimit,
+                MinCutInterval: MinCutInterval,
+                TriggerSettings: new TriggerSettings(
+                    BeatWeight: BeatWeight,
+                    OnsetWeight: OnsetWeight,
+                    KickWeight: KickWeight,
+                    SnareWeight: SnareWeight,
+                    HihatWeight: HihatWeight,
+                    EnergyWeight: EnergyWeight,
+                    EnergyThreshold: EnergyThreshold,
+                    MinClipLength: MinClipLength,
+                    MaxClipLength: MaxClipLength,
+                    OnsetSensitivity: OnsetSensitivity
+                )
+            );
+
+            var result = await _api.GenerateCutListAsync(config);
+            if (result != null)
             {
-                var meta = cut.Metadata;
-                CutList.Add(new TimelineEntryModel
+                CutList.Clear();
+                foreach (var cut in result.Cuts)
                 {
-                    ClipId = cut.ClipId,
-                    StartTime = cut.StartTime,
-                    EndTime = cut.EndTime,
-                    ClipName = meta?.GetValueOrDefault("clip_name")?.ToString() ?? "",
-                    FilePath = meta?.GetValueOrDefault("file_path")?.ToString() ?? "",
-                    ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? Convert.ToDouble(cs) : 0.0,
-                    TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
-                    TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? Convert.ToDouble(ts) : 0.0,
-                });
+                    var meta = cut.Metadata;
+                    CutList.Add(new TimelineEntryModel
+                    {
+                        ClipId = cut.ClipId,
+                        StartTime = cut.StartTime,
+                        EndTime = cut.EndTime,
+                        ClipName = meta?.GetValueOrDefault("clip_name")?.ToString() ?? "",
+                        FilePath = meta?.GetValueOrDefault("file_path")?.ToString() ?? "",
+                        ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? ConvertToDoubleSafe(cs) : 0.0,
+                        TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
+                        TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? ConvertToDoubleSafe(ts) : 0.0,
+                    });
+                }
+                CutCount = result.CutCount;
+                TotalDuration = result.TotalDuration;
+                StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("timeline-refresh"));
             }
-            CutCount = result.CutCount;
-            TotalDuration = result.TotalDuration;
-            StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
+            else
+            {
+                StatusText = "Cut-Liste generieren fehlgeschlagen";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            StatusText = "Cut-Liste generieren fehlgeschlagen";
+            StatusText = $"Cut-Liste generieren fehlgeschlagen: {ex.Message}";
+        }
+        finally
+        {
+            IsGenerating = false;
+        }
+    }
+
+    private static double ConvertToDoubleSafe(object? value)
+    {
+        if (value is null)
+            return 0.0;
+
+        if (value is JsonElement json)
+        {
+            return json.ValueKind switch
+            {
+                JsonValueKind.Number when json.TryGetDouble(out var number) => number,
+                JsonValueKind.String when double.TryParse(json.GetString(), out var parsed) => parsed,
+                _ => 0.0,
+            };
         }
 
+        try
+        {
+            return Convert.ToDouble(value);
+        }
+        catch
+        {
+            return 0.0;
+        }
+    }
+
+    private void ResetProjectState()
+    {
+        AvailableAudioClips.Clear();
+        AvailableVideoClips.Clear();
+        CutList.Clear();
+        SelectedAudioClip = null;
+        SelectedVideoClipCount = 0;
+        CutCount = 0;
+        TotalDuration = 0;
         IsGenerating = false;
+        StatusText = "Kein Projekt geöffnet";
     }
 }
 
