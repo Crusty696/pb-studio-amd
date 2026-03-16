@@ -33,13 +33,19 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
+_beat_detector_lock = __import__("threading").Lock()
 
 
 def _get_beat_detector() -> "Any":
+    """Return the module-level BeatDetector singleton (thread-safe init)."""
     global _beat_detector
+    # R17/MEDIUM: double-checked locking prevents two worker threads from
+    # simultaneously constructing BeatDetector (CPU-intensive, no GPU).
     if _beat_detector is None:
-        from pb_studio.audio.beat_detector import BeatDetector
-        _beat_detector = BeatDetector(mode='offline', inference_model='DBN')
+        with _beat_detector_lock:
+            if _beat_detector is None:
+                from pb_studio.audio.beat_detector import BeatDetector
+                _beat_detector = BeatDetector(mode='offline', inference_model='DBN')
     return _beat_detector
 
 
@@ -144,6 +150,15 @@ async def analyze_audio(
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
 
     audio_path = clip["path"]
+
+    # R17/MEDIUM: Verify file exists on disk BEFORE to_thread boundary — same guard
+    # added to video_router in R15. Without this, a deleted/moved file returns HTTP 500
+    # instead of the correct HTTP 422 (Unprocessable Entity).
+    if not Path(audio_path).exists():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Audio-Datei nicht gefunden: {audio_path!r}",
+        )
 
     logger.info(f"Starte Audio-Analyse für Clip {request.clip_id}: {clip['name']}")
     await publish_log(
