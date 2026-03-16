@@ -15,7 +15,6 @@ Features:
 
 import inspect
 import json
-import os
 import re
 import subprocess
 import threading
@@ -116,11 +115,16 @@ class RenderService:
     ) -> str:
         """Hauptfunktion für Timeline-Rendering."""
         final_output = self.output_dir / output_filename
+        # R19/LOW-019-3: Cache audio_dur here — _run_ffmpeg_render reuses it
+        # to avoid a second ffprobe subprocess on the same audio file.
         audio_dur = self._get_audio_duration(audio_path)
         total_duration = audio_dur if audio_dur and audio_dur > 0 else self._calculate_timeline_duration(timeline)
         total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
         render_start = time.monotonic()
 
+        # R19/LOW-019-1: Pre-init so finally can always call _cleanup_temp safely,
+        # even if an exception occurs before _normalize_clips assigns the variable.
+        normalized_clips: List[Dict] = []
         try:
             self._emit_progress(
                 progress_callback,
@@ -163,7 +167,8 @@ class RenderService:
 
             self._run_ffmpeg_render(
                 concat_list_path, audio_path, final_output,
-                bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start
+                bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
+                audio_dur=audio_dur,
             )
 
             self._emit_progress(
@@ -183,7 +188,7 @@ class RenderService:
             logger.error(f"Render Error: {e}", exc_info=True)
             raise
         finally:
-            self._cleanup_temp(normalized_clips if "normalized_clips" in locals() else [])
+            self._cleanup_temp(normalized_clips)
 
     def _calculate_timeline_duration(self, timeline: List[Dict]) -> float:
         total = 0.0
@@ -353,6 +358,7 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
+        audio_dur: Optional[float] = None,
     ):
         """Finaler Render mit Echtzeit-Progress."""
         if audio_path and not Path(audio_path).exists():
@@ -393,7 +399,10 @@ class RenderService:
             "-stats_period", "0.5",
         ])
 
-        audio_dur = self._get_audio_duration(audio_path)
+        # R19/LOW-019-3: Reuse audio_dur passed from render_timeline — avoids a
+        # second ffprobe subprocess call for the same file.
+        if audio_dur is None:
+            audio_dur = self._get_audio_duration(audio_path)
         # Render-Dauer: kürzere von Audio und Timeline (nicht gesamte Audio bei kurzer Timeline)
         render_dur = total_duration
         if audio_dur and audio_dur > 0:
@@ -595,10 +604,9 @@ class RenderService:
     def _cleanup_temp(self, normalized_clips: List[Dict]):
         for clip in normalized_clips:
             if clip.get("is_temp", False):
-                try:
-                    os.remove(clip["clip_path"])
-                except Exception:
-                    pass
+                # R19/LOW-019-2: unlink(missing_ok=True) avoids FileNotFoundError
+                # if the temp file was already cleaned up elsewhere.
+                Path(clip["clip_path"]).unlink(missing_ok=True)
         try:
             (self.temp_dir / "concat_list.txt").unlink(missing_ok=True)
         except Exception:
