@@ -24,6 +24,7 @@ $BackendHost = '127.0.0.1'
 $HealthCheckUrl = "http://${BackendHost}:${BackendPort}/health"
 $MaxStartupWaitSeconds = 30
 $startedBackend = $false
+$backendProcess = $null
 $backendWasAlreadyRunning = $false
 $previousExternalBackendFlag = $env:PBSTUDIO_BACKEND_MANAGED_EXTERNALLY
 $previousBackendDir = $env:PBSTUDIO_BACKEND_DIR

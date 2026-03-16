@@ -228,7 +228,7 @@ class MoondreamAnalyzer:
         if not self._init_tokenizer():
             logger.warning("Tokenizer not available - text generation will be limited")
 
-        if not hasattr(ort, "InferenceSession") or ort.__class__.__name__ == "_FallbackOrt":
+        if not hasattr(ort, "InferenceSession") or type(ort).__name__ == "_FallbackOrt":
             logger.warning("onnxruntime not installed - forcing PyTorch fallback for Moondream")
             try:
                 from pb_studio.ai.moondream_pytorch import MoondreamPyTorch

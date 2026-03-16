@@ -1,28 +1,153 @@
 {
-  "current_area": "Gesamt",
-  "current_function": "Report",
-  "phase": "REPORT",
-  "fix_attempt": 0,
-  "functions_tested": 30,
-  "functions_passed": 28,
-  "functions_failed": 1,
-  "functions_skipped": 1,
-  "fixes_applied": 1,
-  "fixes_pending": 0,
-  "started_at": "2026-03-09",
-  "media_paths": {
-    "audio": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Audio\\Psy-Set",
-    "video": "C:\\Users\\david\\Videos\\Music-Video_Clips\\AV\\Video\\Sora_20250622_0307_100_Generations"
-  },
-  "bugs_found": [
-    {
-      "id": "BUG-STEM-001",
-      "severity": "KRITISCH",
-      "function": "F-4.6",
-      "description": "Stem-Separation Key-Mismatch: Router erwartet result['vocals'] etc., Separator gibt {'stems': [paths]} zurück",
-      "fixed": true,
-      "file": "backend/routers/audio_router.py",
-      "fix": "_run_stem_separation() parst jetzt 'stems'-Liste und mappt Dateinamen auf Vocal/Instrumental/etc."
+  "timestamp": "2026-03-16T05:13:33.931883",
+  "backend_status": "running",
+  "project_path": "C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio\\AutoQA-051308",
+  "audio_id": 1,
+  "video_ids": [
+    1,
+    2
+  ],
+  "results": {
+    "project/create_project": {
+      "passed": true,
+      "details": "status=200 name=AutoQA-051308"
+    },
+    "project/project_info": {
+      "passed": true,
+      "details": "status=200 name=AutoQA-051308"
+    },
+    "project/save_project": {
+      "passed": true,
+      "details": "status=200 success=True"
+    },
+    "project/close_project": {
+      "passed": true,
+      "details": "status=200"
+    },
+    "project/open_project": {
+      "passed": true,
+      "details": "status=200 name=AutoQA-051308"
+    },
+    "media/import_audio": {
+      "passed": true,
+      "details": "status=200 id=1 duration=60.0s"
+    },
+    "media/import_video1": {
+      "passed": true,
+      "details": "status=200 id=1"
+    },
+    "media/import_video2": {
+      "passed": true,
+      "details": "status=200 id=2"
+    },
+    "media/list_audio_clips": {
+      "passed": true,
+      "details": "status=200 count=1"
+    },
+    "media/list_video_clips": {
+      "passed": true,
+      "details": "status=200 count=2"
+    },
+    "audio/analyze_audio": {
+      "passed": true,
+      "details": "status=200 bpm=123.0 key=E minor beats=122"
+    },
+    "audio/get_beats": {
+      "passed": true,
+      "details": "status=200 count=122"
+    },
+    "audio/get_waveform": {
+      "passed": true,
+      "details": "status=200 bands=3 samples=1033"
+    },
+    "audio/get_structure": {
+      "passed": true,
+      "details": "status=200 segments=3"
+    },
+    "audio/get_spectral": {
+      "passed": true,
+      "details": "status=200 bands_available=True"
+    },
+    "video/analyze_video": {
+      "passed": true,
+      "details": "status=200 scenes=0 avg_motion=80.85"
+    },
+    "video/get_thumbnail": {
+      "passed": true,
+      "details": "status=200 size=12733 bytes"
+    },
+    "video/get_scenes": {
+      "passed": true,
+      "details": "status=200 count=0"
+    },
+    "video/get_motion": {
+      "passed": true,
+      "details": "status=200 avg_motion=80.84647369384766"
+    },
+    "pacing/generate_cutlist": {
+      "passed": true,
+      "details": "status=200 cuts=31 total_duration=60.1s"
+    },
+    "pacing/get_timeline": {
+      "passed": true,
+      "details": "status=200 entries=31 total_duration=60.1s"
+    },
+    "render/start_render": {
+      "passed": true,
+      "details": "status=200 task_id=714da3ba"
+    },
+    "render/render_status": {
+      "passed": true,
+      "details": "final_status=completed percent=100.0%"
+    },
+    "sse/gpu_sse_stream": {
+      "passed": true,
+      "details": "received 395 bytes, has gpu_status=True"
+    },
+    "sse/progress_sse_connect": {
+      "passed": true,
+      "details": "status_line present=True"
+    },
+    "persistence/close_before_reopen": {
+      "passed": true,
+      "details": "status=200"
+    },
+    "persistence/reopen_project": {
+      "passed": true,
+      "details": "status=200 name=AutoQA-051308"
+    },
+    "persistence/audio_clips_persist": {
+      "passed": true,
+      "details": "count_after_reopen=1"
+    },
+    "persistence/video_clips_persist": {
+      "passed": true,
+      "details": "count_after_reopen=2"
     }
-  ]
+  },
+  "bugs": [],
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "cleanup": {
+    "timestamp": "2026-03-16T05:15:25.904149",
+    "projects_deleted": [
+      "AutoQA-050113",
+      "AutoQA-050506",
+      "AutoQA-051146",
+      "AutoQA-051308"
+    ],
+    "db_projects_after": 69,
+    "db_media_after": 305,
+    "temp_files_deleted": [
+      "test_audio_30s.wav",
+      "test_audio_beats_30s.wav"
+    ],
+    "test_files_kept": [
+      "test_audio_music_60s.wav"
+    ]
+  },
+  "final_status": "COMPLETE - 29/29 PASS"
 }
