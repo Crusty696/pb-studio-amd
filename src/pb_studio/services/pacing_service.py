@@ -68,6 +68,13 @@ class PacingService:
             file_path = str(Path(clip_path).absolute())
             clip_start = self._get_random_clip_start(file_path, duration)
 
+            # Prüfe ob out_point die tatsächliche Clip-Dauer überschreitet
+            actual_clip_dur = self._get_clip_duration(file_path)
+            if actual_clip_dur > 0 and (clip_start + duration) > actual_clip_dur:
+                # Clip zu kurz: von vorne, Dauer auf verfügbare Länge kappen
+                clip_start = 0.0
+                duration = min(duration, actual_clip_dur)
+
             metadata = {
                 "file_path": file_path,
                 "clip_name": Path(clip_path).stem,
@@ -231,6 +238,12 @@ class PacingService:
                 continue
             fp = str(Path(fp).absolute())
             cs = self._get_random_clip_start(fp, dur)
+
+            # Prüfe ob out_point die tatsächliche Clip-Dauer überschreitet
+            actual_clip_dur = self._get_clip_duration(fp)
+            if actual_clip_dur > 0 and (cs + dur) > actual_clip_dur:
+                cs = 0.0
+                dur = min(dur, actual_clip_dur)
 
             cut_list.append(CutListEntry(
                 clip_id=f"clip_{clip['id']}",

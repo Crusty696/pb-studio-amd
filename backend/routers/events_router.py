@@ -126,7 +126,7 @@ async def gpu_stream(request: Request) -> StreamingResponse:
                 if monitor is None:
                     raise RuntimeError("GPU-Monitor nicht verfügbar")
 
-                gpu_info = monitor.get_stats() or {}
+                gpu_info = await asyncio.to_thread(monitor.get_stats) or {}
                 data = json.dumps(
                     {
                         "vram_used_mb": gpu_info.get("gpu_memory_used", 0),

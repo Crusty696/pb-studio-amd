@@ -168,7 +168,6 @@ class DatabaseCore:
 
     def _create_schema(self, conn):
         self._apply_migrations(conn)
-        self._backfill_media_import_guard(conn)
         conn.commit()
 
         cursor = conn.cursor()

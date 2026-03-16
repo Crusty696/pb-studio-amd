@@ -171,7 +171,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnTimelineChanged(object? sender, TimelineResponse? timeline)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             AudioPath = timeline?.AudioPath ?? string.Empty;
         });
@@ -185,7 +185,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId)
             return;
 
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.TaskId))
                 _currentTaskId = e.TaskId;
@@ -293,7 +293,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnLogReceived(object? sender, LogEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() => AppendLog(e.Level, e.Message));
+        _ = App.Current.Dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
     }
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
@@ -301,7 +301,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         if (!IsRendering)
             return;
 
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.Error))
             {

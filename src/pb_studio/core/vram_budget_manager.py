@@ -639,16 +639,19 @@ class VRAMBudgetManager:
                 if budget.is_loaded and budget.priority >= min_priority:
                     logger.info(f"Evicting {budget.name} ({budget.priority.name})")
 
-                    if budget.unload_callback:
-                        try:
+                    try:
+                        if budget.unload_callback:
                             budget.unload_callback()
-                        except Exception as e:
-                            logger.error(f"Unload failed: {e}")
-                            continue
-
-                    self._committed_mb -= budget.estimated_vram_mb
-                    budget.is_loaded = False
-                    freed += budget.estimated_vram_mb
+                    except Exception as e:
+                        logger.error(f"Unload callback failed für {model_id}: {e}")
+                        budget.metadata["eviction_error"] = str(e)
+                    finally:
+                        # Immer Accounting aktualisieren — auch bei Fehler
+                        self._committed_mb -= budget.estimated_vram_mb
+                        self._committed_mb = max(0, self._committed_mb)  # nie negativ
+                        budget.is_loaded = False
+                        budget.metadata.setdefault("evicted", True)
+                        freed += budget.estimated_vram_mb
 
             return freed
 

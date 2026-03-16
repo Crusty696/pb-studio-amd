@@ -73,8 +73,15 @@ def _read_project_meta(project_path: Path) -> dict:
 
 
 def _write_project_meta(project_path: Path, meta: dict) -> None:
+    import os
     meta_path = _project_meta_path(project_path)
-    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_path = meta_path.with_suffix(".tmp")
+    try:
+        tmp_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(str(tmp_path), str(meta_path))
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
 
 def _normalize_timeline_entries(timeline: list[dict]) -> list[dict]:
@@ -121,9 +128,11 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
             raise ValueError("timeline ist keine Liste")
 
         timeline = _normalize_timeline_entries(timeline)
-        warnings = validate_timeline(timeline)
+        warnings, errors = validate_timeline(timeline)
         for w in warnings:
             logger.warning(f"Projekt-Timeline Warnung beim Laden: {w}")
+        for e in errors:
+            logger.warning(f"Projekt-Timeline Fehler beim Laden: {e}")
 
         state.set_timeline(timeline)
         state.current_audio_path = audio_path if isinstance(audio_path, str) and audio_path else None

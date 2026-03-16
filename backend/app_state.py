@@ -444,7 +444,7 @@ class AppState:
             )
             logger.debug(f"Audio Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.warning(f"Audio-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
 
     def persist_video_clip(self, clip: dict) -> None:
         """
@@ -472,7 +472,7 @@ class AppState:
             )
             logger.debug(f"Video Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.warning(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
 
     def load_from_db(self, project_id: Optional[int] = None) -> None:
         """

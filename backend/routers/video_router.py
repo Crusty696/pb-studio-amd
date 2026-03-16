@@ -359,11 +359,24 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
                 motion_analyzer = MotionAnalyzer()
                 try:
                     motion_result = motion_analyzer.analyze_video_segment(frames, stride=1)
+
+                    # Übersetze Sample-Indizes zu echten Video-Frame-Nummern
+                    # fps is already captured before cap.release()
+                    translated_scene_changes = [
+                        {
+                            "frame_index": sc["frame_index"] * step,
+                            "time_seconds": round((sc["frame_index"] * step) / max(fps, 1.0), 3),
+                            "confidence": sc.get("confidence", 0.0),
+                        }
+                        for sc in motion_result.get("scene_changes", [])
+                        if isinstance(sc, dict)
+                    ]
+
                     result["motion"] = {
                         "clip_id": clip_id,
                         "avg_motion": float(motion_result.get("avg_motion", 0.0)),
                         "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
-                        "peak_frames": motion_result.get("scene_changes", []),
+                        "peak_frames": translated_scene_changes,
                         "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
                     }
                     result["avg_motion"] = result["motion"]["avg_motion"]
@@ -398,17 +411,25 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
                         embedding = wrapper.encode_image(pil_img)
 
                         if embedding is not None:
-                            # FAISS VectorStore speichern (index "video_index")
-                            vs = VectorStore(index_name="video_index")
-                            vs.add_embedding(embedding.astype(_np.float32), {
-                                "clip_id": clip_id,
-                                "path": video_path,
-                                "scene_id": f"clip_{clip_id}_mid",
-                                "duration": result.get("duration_seconds", 0.0),
-                            })
-                            result["has_embedding"] = True
-                            result["embedding_dim"] = len(embedding)
-                            logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                            raw_norm = float(_np.linalg.norm(embedding))
+                            if raw_norm < 1e-3:
+                                logger.warning(
+                                    f"SigLIP near-zero embedding (norm={raw_norm:.2e}) für clip {clip_id} "
+                                    "— FAISS-Insert übersprungen"
+                                )
+                                result["has_embedding"] = False
+                            else:
+                                # FAISS VectorStore speichern (index "video_index")
+                                vs = VectorStore(index_name="video_index")
+                                vs.add_embedding(embedding.astype(_np.float32), {
+                                    "clip_id": clip_id,
+                                    "path": video_path,
+                                    "scene_id": f"clip_{clip_id}_mid",
+                                    "duration": result.get("duration_seconds", 0.0),
+                                })
+                                result["has_embedding"] = True
+                                result["embedding_dim"] = len(embedding)
+                                logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
                         else:
                             result["has_embedding"] = False
                     else:

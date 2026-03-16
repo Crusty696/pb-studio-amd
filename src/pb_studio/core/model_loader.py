@@ -334,7 +334,7 @@ class ModelLoader:
             if model_id not in self._sessions:
                 return False
 
-            # Delete session(s)
+            # Delete session(s) — null out references so refcount drops to 0
             session = self._sessions.pop(model_id)
 
             if isinstance(session, dict):
@@ -342,12 +342,16 @@ class ModelLoader:
                     session[key] = None
             else:
                 session = None
+        # Lock released — now run gc so C++ ONNX destructor fires and VRAM is
+        # actually freed before we update the budget accounting.
+        import gc
+        gc.collect()
 
-            # Release VRAM
-            self.vram_manager.release(model_id)
+        # Update VRAM budget after memory is actually released
+        self.vram_manager.release(model_id)
 
-            logger.info(f"Unloaded model: {model_id}")
-            return True
+        logger.info(f"Unloaded model: {model_id}")
+        return True
 
     def get_session(self, model_id: str) -> Optional[Any]:
         """

@@ -31,6 +31,17 @@ from ..schemas.audio_schemas import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
 
+# Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
+_beat_detector: "Any | None" = None
+
+
+def _get_beat_detector() -> "Any":
+    global _beat_detector
+    if _beat_detector is None:
+        from pb_studio.audio.beat_detector import BeatDetector
+        _beat_detector = BeatDetector(mode='offline', inference_model='DBN')
+    return _beat_detector
+
 
 @router.post(
     "/import",
@@ -224,7 +235,7 @@ async def get_waveform(
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
             clip_id=clip_id,
-            sample_rate=clip["sample_rate"],
+            sample_rate=44100,  # WaveformAnalyzer analysiert immer bei 44100 Hz
             bands=waveform,
             duration_seconds=clip["duration_seconds"],
         )
@@ -368,11 +379,7 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         y, sr = librosa.load(audio_path, sr=22050, mono=True)
     except Exception as e:
         logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
-        return {
-            "clip_id": clip_id, "duration_seconds": 0.0, "bpm": 0.0,
-            "beat_count": 0, "beats": [], "key": None,
-            "energy_curve": [], "structure_segments": [], "spectral_data": None,
-        }
+        raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
 
     duration = float(len(y)) / sr if sr > 0 else 0.0
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
@@ -384,9 +391,8 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
 
     if request.detect_beats:
         try:
-            from pb_studio.audio.beat_detector import BeatDetector
-            # mode='offline' + DBN: stimmt mit AudioAnalyzeWorker überein (bessere Genauigkeit)
-            detector = BeatDetector(mode='offline', inference_model='DBN')
+            # Use module-level singleton to avoid re-initializing on every call
+            detector = _get_beat_detector()
             # detect_beats gibt list[float] zurück — BeatNet oder Librosa-Fallback
             beat_times = detector.detect_beats(audio_path)
             if beat_times:

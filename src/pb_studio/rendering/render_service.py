@@ -55,11 +55,12 @@ class RenderService:
     _working_encoder: Optional[str] = None
     _encoder_lock: threading.Lock = threading.Lock()
 
-    def __init__(self, output_dir: str = "exports"):
+    def __init__(self, output_dir: str = "exports", encoder_override: Optional[str] = None):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True, parents=True)
         self.temp_dir = self.output_dir / ".temp_render"
         self.temp_dir.mkdir(exist_ok=True)
+        self._encoder_override = encoder_override
 
         with RenderService._encoder_lock:
             if RenderService._working_encoder is None:
@@ -263,12 +264,14 @@ class RenderService:
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
-        encoder = RenderService._working_encoder or "libx264"
+        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
 
         if encoder == "hevc_amf":
             enc_args = ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
         elif encoder == "h264_amf":
             enc_args = ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
+        elif encoder == "av1_amf":
+            enc_args = ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
         elif encoder == "h264_mf":
             enc_args = ["-c:v", "h264_mf", "-b:v", "10M"]
         elif encoder == "libx265":
@@ -352,6 +355,8 @@ class RenderService:
         render_start_time: Optional[float] = None,
     ):
         """Finaler Render mit Echtzeit-Progress."""
+        if audio_path and not Path(audio_path).exists():
+            raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
         cmd = [
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0",
@@ -366,11 +371,13 @@ class RenderService:
 
         cmd.extend(["-map", "0:v", "-map", "1:a"])
 
-        encoder = RenderService._working_encoder or "libx264"
+        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_amf":
             cmd.extend(["-c:v", "h264_amf", "-quality", preset, "-b:v", bitrate])
+        elif encoder == "av1_amf":
+            cmd.extend(["-c:v", "av1_amf", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_mf":
             cmd.extend(["-c:v", "h264_mf", "-b:v", "10M"])
         elif encoder == "libx265":

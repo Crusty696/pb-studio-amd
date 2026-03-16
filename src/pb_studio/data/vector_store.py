@@ -9,8 +9,27 @@ from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
+_vs_lock = threading.Lock()
+
+
 class VectorStore:
-    def __init__(self, index_name="main_index", dimension=None):
+    _instance: "VectorStore | None" = None
+    _instance_index_name: str | None = None
+
+    def __new__(cls, index_name: str = "main_index", dimension=None):
+        with _vs_lock:
+            if cls._instance is None or cls._instance_index_name != index_name:
+                instance = super().__new__(cls)
+                instance._initialized = False
+                cls._instance = instance
+                cls._instance_index_name = index_name
+            return cls._instance
+
+    def __init__(self, index_name: str = "main_index", dimension=None):
+        if getattr(self, '_initialized', False):
+            return
+        self._initialized = True
+
         self.config = ConfigManager()
         self.data_dir = Path(self.config.get("paths", {}).get("db_path", "./data")).parent
         self.index_path = self.data_dir / f"{index_name}.faiss"

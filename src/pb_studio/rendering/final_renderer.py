@@ -14,6 +14,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -165,8 +166,9 @@ class BatchRenderer:
     def _render_chunk(self, chunk: list, output_path: Path) -> bool:
         """Rendert einen einzelnen Chunk via subprocess."""
         try:
-            # Concat-File für den Chunk erstellen
-            concat_file = self.temp_dir / "chunk_concat.txt"
+            # Concat-File für den Chunk erstellen (eindeutiger Name verhindert Race Conditions)
+            chunk_suffix = output_path.stem  # z.B. "chunk_0001"
+            concat_file = self.temp_dir / f"chunk_concat_{chunk_suffix}_{int(time.time()*1000)}.txt"
             with open(concat_file, "w", encoding="utf-8") as f:
                 for entry in chunk:
                     vpath = entry.video_path if hasattr(entry, "video_path") else entry.get("video_path", "")

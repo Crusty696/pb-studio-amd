@@ -100,27 +100,26 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
     }
 
-    protected override void OnExit(ExitEventArgs e)
+    protected override async void OnExit(ExitEventArgs e)
     {
         var api = _serviceProvider?.GetService<IApiClient>();
+        (api as ApiClient)?.BeginShutdown();
 
-        // P-3: Auto-Save: Projekt speichern bevor Backend beendet wird (5s Timeout)
+        using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         try
         {
-            using var saveCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var saveTask = api?.SaveProjectAsync();
-            if (saveTask != null)
+            if (api != null)
             {
-                saveTask.Wait(saveCts.Token);
+                await Task.WhenAll(
+                    api.SaveProjectAsync().WaitAsync(shutdownCts.Token),
+                    api.ShutdownAsync().WaitAsync(shutdownCts.Token)
+                ).WaitAsync(shutdownCts.Token);
             }
+            var bridge = _serviceProvider?.GetService<PythonBridgeService>();
+            if (bridge != null)
+                await bridge.StopAsync().WaitAsync(shutdownCts.Token);
         }
-        catch { /* unkritisch — Projekt wird beim nächsten Start ggf. neu geladen */ }
-
-        // Graceful Backend-Shutdown via API (3s Timeout)
-        try { api?.ShutdownAsync().GetAwaiter().GetResult(); } catch { /* unkritisch */ }
-
-        var bridge = _serviceProvider?.GetService<PythonBridgeService>();
-        bridge?.StopAsync().GetAwaiter().GetResult();
+        catch { /* unkritisch */ }
 
         _serviceProvider?.Dispose();
         base.OnExit(e);

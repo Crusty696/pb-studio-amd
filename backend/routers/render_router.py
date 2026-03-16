@@ -47,7 +47,10 @@ async def start_render(
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
     """Startet ein Rendering als Background Task."""
-    task_id = str(uuid.uuid4())[:8]
+    while True:
+        task_id = str(uuid.uuid4())[:8]
+        if state.get_render_task(task_id) is None:
+            break
 
     # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
     timeline_snapshot = state.get_timeline_snapshot()
@@ -347,14 +350,11 @@ def _execute_render(
     audio_path = request.audio_path
 
     output_p = _Path(request.output_path)
-    service = RenderService(output_dir=str(output_p.parent))
-
-    # R01 Fix: Encoder-Override aus Request anwenden (überschreibt Auto-Detect).
-    # RenderService._working_encoder ist ein class-level Attribut; direktes Setzen
-    # wirkt für diese Instanz und alle nachfolgenden Aufrufe bis zum nächsten Override.
-    if request.encoder is not None:
-        RenderService._working_encoder = request.encoder.value
-        logger.info(f"Render {task_id}: Encoder-Override via Request: {request.encoder.value}")
+    # R01/FIX-4: Encoder-Override als Konstruktor-Parameter übergeben (kein GlobalSeiteneffekt)
+    encoder_override = request.encoder.value if request.encoder is not None else None
+    service = RenderService(output_dir=str(output_p.parent), encoder_override=encoder_override)
+    if encoder_override is not None:
+        logger.info(f"Render {task_id}: Encoder-Override via Request: {encoder_override}")
 
     progress_publish_lock = threading.Lock()
     progress_state = {"percent": -1.0, "message": "", "at": 0.0}
@@ -433,7 +433,9 @@ def _execute_render(
         raise RuntimeError("Keine Timeline für Rendering vorhanden")
 
     # Timeline validieren
-    warnings = validate_timeline(timeline)
+    warnings, errors = validate_timeline(timeline)
+    if errors:
+        raise RuntimeError(f"Ungültige Timeline: {'; '.join(errors)}")
     for w in warnings:
         logger.warning(f"Render-Timeline Warnung: {w}")
 

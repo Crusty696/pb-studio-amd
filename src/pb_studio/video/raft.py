@@ -360,6 +360,7 @@ class MotionAnalyzer:
 
         # Berechne Magnitude
         magnitude = np.sqrt(flow_u**2 + flow_v**2)
+        magnitude = np.nan_to_num(magnitude, nan=0.0, posinf=1000.0, neginf=0.0)
 
         # Verwende Percentil statt Maximum (robuster gegen Ausreisser)
         if magnitude.size > 0:

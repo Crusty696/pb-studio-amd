@@ -81,7 +81,9 @@ async def generate_cut_list(
 
         # Timeline validieren
         audio_dur = audio_clips_snapshot.get(config.audio_clip_id, {}).get("duration_seconds")
-        timeline_warnings = validate_timeline(cuts, audio_duration=audio_dur)
+        timeline_warnings, timeline_errors = validate_timeline(cuts, audio_duration=audio_dur)
+        if timeline_errors:
+            raise HTTPException(status_code=400, detail=f"Ungültige Timeline: {'; '.join(timeline_errors)}")
         for w in timeline_warnings:
             logger.warning(f"Timeline-Validierung: {w}")
 

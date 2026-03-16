@@ -19,6 +19,7 @@ public class SSEClient : IDisposable
     private CancellationTokenSource? _cts;
     private readonly List<Task> _listenTasks = [];
     private volatile bool _isListening;
+    private volatile bool _disposed;
     private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
 
     private const int InitialReconnectDelayMs = 3000;
@@ -292,14 +293,16 @@ public class SSEClient : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return; _disposed = true;
         StopListening();
         // FINDING-020 Fix: Erst auf Tasks warten, dann HttpClient freigeben.
         // Sonst kann ein noch laufender ListenAsync-Task eine ObjectDisposedException
         // auf dem bereits entsorgten HttpClient werfen.
         if (_listenTasks.Count > 0)
-            Task.WaitAll([.. _listenTasks], TimeSpan.FromSeconds(3));
+            Task.WaitAll([.. _listenTasks], TimeSpan.FromMilliseconds(200));
         _httpClient.Dispose();
         _cts?.Dispose();
+        _cts = null;
     }
 
     private enum StreamKind

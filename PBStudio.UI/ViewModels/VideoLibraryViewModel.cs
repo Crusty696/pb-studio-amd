@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -88,29 +89,32 @@ public partial class VideoLibraryViewModel : ObservableObject
                 return;
             }
 
-            VideoClips.Clear();
-            foreach (var c in clips)
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                var clip = new VideoClipModel
+                VideoClips.Clear();
+                foreach (var c in clips)
                 {
-                    Id = c.Id,
-                    Name = c.Name,
-                    Path = c.Path,
-                    DurationSeconds = c.DurationSeconds,
-                    Width = c.Width,
-                    Height = c.Height,
-                    Fps = c.Fps,
-                    Tags = c.Tags,
-                    IsAnalyzed = c.IsAnalyzed,
-                };
+                    var clip = new VideoClipModel
+                    {
+                        Id = c.Id,
+                        Name = c.Name,
+                        Path = c.Path,
+                        DurationSeconds = c.DurationSeconds,
+                        Width = c.Width,
+                        Height = c.Height,
+                        Fps = c.Fps,
+                        Tags = c.Tags,
+                        IsAnalyzed = c.IsAnalyzed,
+                    };
 
-                if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))
-                    clip.Thumbnail = cachedThumb;
-                else if (_thumbnailFailureCache.Contains(c.Id))
-                    clip.Thumbnail = null;
+                    if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))
+                        clip.Thumbnail = cachedThumb;
+                    else if (_thumbnailFailureCache.Contains(c.Id))
+                        clip.Thumbnail = null;
 
-                VideoClips.Add(clip);
-            }
+                    VideoClips.Add(clip);
+                }
+            });
             StatusText = $"{VideoClips.Count} Clips geladen";
 
             await LoadAllThumbnailsAsync(version, cancellationToken);
@@ -276,6 +280,7 @@ public partial class VideoLibraryViewModel : ObservableObject
         _reloadQueued = false;
         _videoLibraryState.Clear();
         _thumbnailFailureCache.Clear();
+        _thumbnailCache.Clear();
         VideoClips.Clear();
         SelectedClip = null;
         StatusText = "Kein Projekt geöffnet";

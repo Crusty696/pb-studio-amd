@@ -125,7 +125,7 @@ def export_for_ffmpeg(
             # Backslashes für FFmpeg escapen
             clip_path_escaped = clip_path.replace("\\", "/")
             
-            lines.append(f"file '{clip_path_escaped}'")
+            lines.append(f'file "{clip_path_escaped}"')
             lines.append(f"inpoint {in_point:.3f}")
             lines.append(f"outpoint {out_point:.3f}")
             lines.append("")
