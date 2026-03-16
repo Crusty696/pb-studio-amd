@@ -260,10 +260,10 @@ public class ApiClient : IApiClient
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
 public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
 public record StatusResponse(bool Success, string Message);
-public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null);
+public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0);
-public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, List<double>>? FrequencyRanges = null);
+public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);

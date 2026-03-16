@@ -44,11 +44,11 @@ class BatchRenderer:
     CHUNK_SIZE = 30
     OUTPUT_WIDTH = 1920
     OUTPUT_HEIGHT = 1080
-    OUTPUT_FPS = 30
 
-    def __init__(self, temp_dir: str | Path | None = None) -> None:
+    def __init__(self, temp_dir: str | Path | None = None, fps: float = 30.0) -> None:
         self.temp_dir = Path(temp_dir) if temp_dir else Path("data/temp")
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._output_fps: float = float(fps)
         self._progress_callback: Any = None
         self._encoder = self._detect_encoder()
 
@@ -174,8 +174,7 @@ class BatchRenderer:
                     dur = entry.duration if hasattr(entry, "duration") else entry.get("duration", 2.0)
 
                     safe_path = str(Path(vpath).absolute()).replace("\\", "/")
-                    safe_path = safe_path.replace("'", "'\\''")
-                    f.write(f"file '{safe_path}'\n")
+                    f.write(f'file "{safe_path}"\n')
                     f.write(f"inpoint {start:.3f}\n")
                     f.write(f"outpoint {start + dur:.3f}\n")
 
@@ -183,7 +182,7 @@ class BatchRenderer:
                 f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
                 f":force_original_aspect_ratio=decrease,"
                 f"pad={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-                f"fps={self.OUTPUT_FPS}"
+                f"fps={self._output_fps:.3f}"
             )
 
             # Encoder-Args
@@ -225,7 +224,7 @@ class BatchRenderer:
             with open(concat_list, "w", encoding="utf-8") as f:
                 for chunk_file in chunk_files:
                     safe_path = str(chunk_file.absolute()).replace("\\", "/")
-                    f.write(f"file '{safe_path}'\n")
+                    f.write(f'file "{safe_path}"\n')
 
             cmd = [
                 "ffmpeg", "-y",

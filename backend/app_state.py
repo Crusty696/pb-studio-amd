@@ -96,9 +96,10 @@ class AppState:
     # =========================================================================
 
     def get_audio_clip(self, clip_id: int) -> Optional[dict]:
-        """Thread-safe Zugriff auf einen Audio-Clip."""
+        """Thread-safe Zugriff auf einen Audio-Clip (shallow copy, safe to mutate)."""
         with self._state_lock:
-            return self.audio_clips.get(clip_id)
+            clip = self.audio_clips.get(clip_id)
+            return dict(clip) if clip is not None else None
 
     def set_audio_clip(self, clip_id: int, clip: dict) -> None:
         """Thread-safe Setzen eines Audio-Clips."""
@@ -106,9 +107,10 @@ class AppState:
             self.audio_clips[clip_id] = clip
 
     def get_video_clip(self, clip_id: int) -> Optional[dict]:
-        """Thread-safe Zugriff auf einen Video-Clip."""
+        """Thread-safe Zugriff auf einen Video-Clip (shallow copy, safe to mutate)."""
         with self._state_lock:
-            return self.video_clips.get(clip_id)
+            clip = self.video_clips.get(clip_id)
+            return dict(clip) if clip is not None else None
 
     def set_video_clip(self, clip_id: int, clip: dict) -> None:
         """Thread-safe Setzen eines Video-Clips."""

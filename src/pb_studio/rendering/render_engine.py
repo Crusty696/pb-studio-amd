@@ -56,6 +56,39 @@ class RenderEngine:
         self._active_processes: list[subprocess.Popen] = []
         self._progress_callback: Optional[Callable[[float, str], None]] = None
         self._is_cancelled = False
+        self._encoder = self._detect_encoder()
+        logger.info(f"RenderEngine: Encoder erkannt: {self._encoder}")
+
+    def _detect_encoder(self) -> str:
+        """Testet verfügbare AMD-Encoder und gibt den besten zurück.
+
+        Reihenfolge: hevc_amf → h264_amf → h264_mf → libx264.
+        Kein NVENC, kein CUDA — AMD-only (IRON RULE).
+        """
+        candidates = [
+            "hevc_amf",
+            "h264_amf",
+            "h264_mf",
+            "libx264",
+        ]
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-encoders"],
+                capture_output=True,
+                timeout=15,
+            )
+            available = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            logger.warning("RenderEngine: FFmpeg nicht erreichbar — verwende libx264")
+            return "libx264"
+
+        for enc in candidates:
+            if enc in available:
+                logger.info(f"RenderEngine: Encoder ausgewählt: {enc}")
+                return enc
+
+        logger.warning("RenderEngine: Kein bevorzugter Encoder gefunden — verwende libx264")
+        return "libx264"
 
     def render(self, timeline: dict[str, Any]) -> bool:
         """Rendert die Timeline mit AMD AMF GPU-Encoding."""
@@ -99,8 +132,8 @@ class RenderEngine:
             concat_file = temp_dir / "concat_list.txt"
             with open(concat_file, "w", encoding="utf-8") as f:
                 for path in valid_clips:
-                    escaped_path = str(path).replace("'", "'\\''")
-                    f.write(f"file '{escaped_path}'\n")
+                    safe_path = str(path.resolve()).replace("\\", "/")
+                    f.write(f'file "{safe_path}"\n')
             return concat_file
         except Exception as e:
             logger.error(f"Concat-Datei konnte nicht erstellt werden: {e}")
@@ -120,8 +153,18 @@ class RenderEngine:
                 cmd.extend(["-ss", str(audio_offset)])
             cmd.extend(["-i", str(audio_path)])
 
-        # AMD AMF Encoder: hevc_amf bevorzugt (50% kleiner), dann h264_amf
-        cmd.extend(["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"])
+        # R02 Fix: Dynamisch erkannter Encoder statt hardcodiertem hevc_amf
+        encoder = self._encoder
+        if encoder == "hevc_amf":
+            cmd.extend(["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"])
+        elif encoder == "h264_amf":
+            cmd.extend(["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"])
+        elif encoder == "h264_mf":
+            cmd.extend(["-c:v", "h264_mf", "-b:v", "10M"])
+        elif encoder == "libx265":
+            cmd.extend(["-c:v", "libx265", "-preset", "fast", "-crf", "24", "-tag:v", "hvc1"])
+        else:
+            cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "18"])
 
         scale_filter = (
             f"scale={self.config.width}:{self.config.height}"

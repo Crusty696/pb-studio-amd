@@ -87,7 +87,23 @@ async def start_render(
     state.set_render_task(task_id, task_data)
     state.set_cancel_flag(task_id, False)
 
-    asyncio.create_task(_run_render_task(task_id, request, state))
+    task = asyncio.create_task(_run_render_task(task_id, request, state))
+
+    def _on_task_done(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error(f"Render-Task {task_id} unerwartete Exception: {exc}", exc_info=exc)
+            try:
+                state.update_render_task(task_id, {
+                    "status": "failed",
+                    "error": str(exc),
+                })
+            except Exception:
+                pass
+
+    task.add_done_callback(_on_task_done)
 
     logger.info(f"Render-Task gestartet: {task_id}")
     await publish_log(
@@ -332,6 +348,13 @@ def _execute_render(
 
     output_p = _Path(request.output_path)
     service = RenderService(output_dir=str(output_p.parent))
+
+    # R01 Fix: Encoder-Override aus Request anwenden (überschreibt Auto-Detect).
+    # RenderService._working_encoder ist ein class-level Attribut; direktes Setzen
+    # wirkt für diese Instanz und alle nachfolgenden Aufrufe bis zum nächsten Override.
+    if request.encoder is not None:
+        RenderService._working_encoder = request.encoder.value
+        logger.info(f"Render {task_id}: Encoder-Override via Request: {request.encoder.value}")
 
     progress_publish_lock = threading.Lock()
     progress_state = {"percent": -1.0, "message": "", "at": 0.0}

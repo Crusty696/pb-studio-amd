@@ -143,7 +143,7 @@ async def analyze_audio(
     )
 
     try:
-        _loop = asyncio.get_event_loop()
+        _loop = asyncio.get_running_loop()
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request, _loop
         )
@@ -217,10 +217,9 @@ async def get_waveform(
     state: AppState = Depends(get_app_state),
 ) -> WaveformData:
     """Gibt Waveform-Daten für einen Clip zurück."""
-    if clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
-
-    clip = state.audio_clips[clip_id]
     try:
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
@@ -248,10 +247,9 @@ async def separate_stems(
     state: AppState = Depends(get_app_state),
 ) -> StemResult:
     """Führt Stem-Separation durch (GPU-Lock via Middleware)."""
-    if request.clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
-
-    clip = state.audio_clips[request.clip_id]
     logger.info(f"Starte Stem-Separation: {clip['name']} mit {request.model.value}")
 
     try:

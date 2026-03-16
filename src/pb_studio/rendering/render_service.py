@@ -338,8 +338,7 @@ class RenderService:
                 if not p:
                     continue
                 p_str = str(Path(p).absolute()).replace("\\", "/")
-                p_str = p_str.replace("'", "'\\''")
-                f.write(f"file '{p_str}'\n")
+                f.write(f'file "{p_str}"\n')
                 f.write(f"inpoint {in_pt:.3f}\n")
                 f.write(f"outpoint {out_pt:.3f}\n")
 
@@ -528,11 +527,13 @@ class RenderService:
                 except (ValueError, IndexError):
                     pass
 
+        # R05 Fix: communicate() würde mit dem stderr-Daemon-Thread rasen.
+        # process.wait() wartet nur auf den Exit-Code ohne Pipes zu lesen.
         try:
-            process.communicate(timeout=60)
+            process.wait(timeout=60)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.communicate()
+            process.wait()
             raise RuntimeError("FFmpeg Finalisierung Timeout")
 
         stderr = "".join(stderr_lines)
