@@ -180,6 +180,10 @@ async def analyze_video(
             avg_motion=float(result.get("avg_motion", 0.0) or 0.0),
             has_embedding=bool(result.get("has_embedding", False)),
             is_analyzed=True,
+            scenes=result.get("scenes"),
+            motion=result.get("motion"),
+            dominant_colors=result.get("dominant_colors"),
+            tags=result.get("tags"),
         )
 
         await publish_log(

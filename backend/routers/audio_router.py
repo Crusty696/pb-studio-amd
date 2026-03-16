@@ -175,6 +175,9 @@ async def analyze_audio(
             beat_count=clip["beat_count"],
             beats_json=beats_json,
             is_analyzed=True,
+            energy_curve=result.get("energy_curve"),
+            structure_segments=result.get("structure_segments"),
+            spectral_data=result.get("spectral_data"),
         )
 
         await publish_log(

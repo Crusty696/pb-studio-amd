@@ -224,6 +224,7 @@ class AppState:
         project_id = resolve_project_db_id(project)
         project_data = {
             "path": project.get("path"),
+            "db_project_id": project_id,
             "audio_count": project.get("audio_count", 0),
             "video_count": project.get("video_count", 0),
             "has_timeline": project.get("has_timeline", False),
@@ -340,10 +341,13 @@ class AppState:
         beat_count: int,
         beats_json: str,
         is_analyzed: bool,
+        energy_curve=None,
+        structure_segments=None,
+        spectral_data=None,
     ) -> None:
         """
-        Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats) in der ai_data_json-Spalte
-        des zugehörigen media-Eintrags.
+        Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
+        StructureSegments, SpectralData) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
         Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
         """
         try:
@@ -376,6 +380,12 @@ class AppState:
                 "beats_json": beats_list,
                 "is_analyzed": is_analyzed,
             }
+            if energy_curve is not None:
+                ai_data["energy_curve"] = energy_curve
+            if structure_segments is not None:
+                ai_data["structure_segments"] = structure_segments
+            if spectral_data is not None:
+                ai_data["spectral_data"] = spectral_data
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
             logger.debug(f"Audio-Analyse für Clip {clip_id} in DB persistiert (bpm={bpm:.1f}, key={key})")
         except Exception as e:
@@ -388,10 +398,14 @@ class AppState:
         avg_motion: float,
         has_embedding: bool,
         is_analyzed: bool,
+        scenes=None,
+        motion=None,
+        dominant_colors=None,
+        tags=None,
     ) -> None:
         """
-        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding) in der
-        ai_data_json-Spalte des zugehörigen media-Eintrags.
+        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding, scenes,
+        motion, dominant_colors, tags) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
         Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
         """
         try:
@@ -414,6 +428,14 @@ class AppState:
                 "has_embedding": has_embedding,
                 "is_analyzed": is_analyzed,
             }
+            if scenes is not None:
+                ai_data["scenes"] = scenes
+            if motion is not None:
+                ai_data["motion"] = motion
+            if dominant_colors is not None:
+                ai_data["dominant_colors"] = dominant_colors
+            if tags is not None:
+                ai_data["tags"] = tags
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
             logger.debug(f"Video-Analyse für Clip {clip_id} in DB persistiert (scenes={scene_count}, motion={avg_motion:.2f})")
         except Exception as e:
@@ -584,9 +606,9 @@ class AppState:
                             "key": ai_data.get("key"),
                             "beat_count": int(ai_data.get("beat_count", 0) or 0),
                             "beats": beats,
-                            "energy_curve": [],
-                            "structure_segments": [],
-                            "spectral_data": None,
+                            "energy_curve": ai_data.get("energy_curve", []),
+                            "structure_segments": ai_data.get("structure_segments", []),
+                            "spectral_data": ai_data.get("spectral_data"),
                             "duration_seconds": row.get("duration_sec") or 0.0,
                         }
 
@@ -615,10 +637,10 @@ class AppState:
                             "scene_count": int(ai_data.get("scene_count", 0) or 0),
                             "avg_motion": float(ai_data.get("avg_motion", 0.0) or 0.0),
                             "has_embedding": bool(ai_data.get("has_embedding", False)),
-                            "scenes": [],
-                            "motion": {},
-                            "dominant_colors": [],
-                            "tags": [],
+                            "scenes": ai_data.get("scenes", []),
+                            "motion": ai_data.get("motion", {}),
+                            "dominant_colors": ai_data.get("dominant_colors", []),
+                            "tags": ai_data.get("tags", []),
                         }
 
             # Unter Lock alle Clips und Analyse-Caches atomar zuweisen

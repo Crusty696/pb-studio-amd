@@ -285,7 +285,10 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
     name = state.current_project.get("name", "Unbekannt")
     # In-flight Render-Tasks abbrechen bevor State geleert wird (verhindert GPU-Lock Stall)
-    for task_id in list(state.render_tasks.keys()):
+    # Snapshot der Task-IDs unter Lock nehmen um Race-Condition beim Iterieren zu verhindern.
+    with state._state_lock:
+        task_ids = list(state.render_tasks.keys())
+    for task_id in task_ids:
         state.set_cancel_flag(task_id, True)
     # Reset BEVOR current_project = None (reset() leert alle Caches)
     state.reset()
@@ -299,6 +302,6 @@ async def project_info(state: AppState = Depends(get_app_state)) -> ProjectInfo:
     if not state.current_project:
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
     project_data = dict(state.current_project)
-    project_data["audio_count"] = len(state.audio_clips)
-    project_data["video_count"] = len(state.video_clips)
+    project_data["audio_count"] = len(state.get_audio_clips_snapshot())
+    project_data["video_count"] = len(state.get_video_clips_snapshot())
     return ProjectInfo(**project_data)
