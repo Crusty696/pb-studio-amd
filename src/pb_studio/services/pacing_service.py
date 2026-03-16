@@ -185,6 +185,9 @@ class PacingService:
                     f"BPM={pre_cached_bpm}"
                 )
 
+        # C1/HIGH: Read min_cut_interval from config (was hardcoded to 0.5)
+        min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
+
         logger.info(
             f"Cut-Liste für {target_duration:.2f}s generieren "
             f"(Motion={pacing_config.get('use_motion_matching', False)})"
@@ -210,7 +213,7 @@ class PacingService:
                     pacing_cuts = pacing_engine.generate_cut_list_with_structure(
                         audio_path=audio_path,
                         expected_bpm=pacing_config.get("expected_bpm", 120),
-                        min_cut_interval=0.5,
+                        min_cut_interval=min_cut_interval,
                     )
                     cut_with_clips = []
                     for cut in pacing_cuts:
@@ -223,7 +226,7 @@ class PacingService:
                         audio_path=audio_path,
                         available_clips=clips,
                         expected_bpm=pacing_config.get("expected_bpm", 120),
-                        min_cut_interval=0.5,
+                        min_cut_interval=min_cut_interval,
                     )
                     cut_with_clips = [
                         (c, cl.get("file_path", ""), cl.get("id", "unknown"))
@@ -233,21 +236,23 @@ class PacingService:
             else:
                 return self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
-                    pacing_config.get("expected_bpm", 120), target_duration
+                    pacing_config.get("expected_bpm", 120), target_duration,
+                    min_cut_interval=min_cut_interval,
                 )
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             raise RuntimeError(f"Cut-List-Generierung fehlgeschlagen: {e}") from e
 
     def _generate_simple_round_robin(
-        self, engine, audio_path, clips, bpm, target_duration
+        self, engine, audio_path, clips, bpm, target_duration,
+        min_cut_interval: float = 0.5,
     ) -> List[CutListEntry]:
         """Einfache Round-Robin Clip-Zuweisung."""
         if not clips:
             raise ValueError("Mindestens ein Clip erforderlich.")
 
         pacing_cuts = engine.generate_cut_list(
-            audio_track=audio_path, expected_bpm=bpm, min_cut_interval=0.5
+            audio_track=audio_path, expected_bpm=bpm, min_cut_interval=min_cut_interval
         )
 
         cut_list = []

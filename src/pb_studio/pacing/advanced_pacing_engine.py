@@ -975,6 +975,10 @@ class AdvancedPacingEngine:
         if expected_bpm is None:
             if cached_audio_data and cached_audio_data.get("bpm"):
                 bpm = float(cached_audio_data["bpm"])
+            # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
+            elif hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
+                bpm = float(self._pre_cached_bpm)
+                logger.info(f"BPM aus gecachter Audio-Analyse: {bpm:.1f}")
             elif len(beats) >= 2:
                 intervals = np.diff(beats)
                 median_interval = float(np.median(intervals))

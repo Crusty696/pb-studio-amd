@@ -246,6 +246,8 @@ def _run_pacing_generation(
         "expected_bpm": config.expected_bpm,
         "use_motion_matching": config.use_motion_matching,
         "use_structure_awareness": config.use_structure_awareness,
+        # C1/HIGH: Pass min_cut_interval from schema (was silently dropped, hardcoded to 0.5)
+        "min_cut_interval": config.min_cut_interval,
     }
 
     cut_list = service.generate_cut_list(
