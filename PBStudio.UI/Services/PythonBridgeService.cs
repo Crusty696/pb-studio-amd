@@ -10,7 +10,7 @@ namespace PBStudio.UI.Services;
 /// Verwaltet den Python FastAPI Backend-Prozess.
 /// Startet, überwacht und stoppt den Python-Server.
 /// </summary>
-public class PythonBridgeService
+public class PythonBridgeService : IDisposable
 {
     private readonly ILogger<PythonBridgeService> _logger;
     private readonly HttpClient _httpClient;
@@ -19,6 +19,7 @@ public class PythonBridgeService
     private volatile bool _isStopping;
     private volatile bool _ownsProcess;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+    private bool _disposed;
 
     private static readonly string PythonExe = ResolvePythonExe();
     private static readonly bool PreferExternalBackend = IsEnabled(Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY"));
@@ -313,6 +314,17 @@ public class PythonBridgeService
         if (File.Exists(pyLauncher)) return pyLauncher;
 
         return "python";
+    }
+
+    // R16/HIGH-002: PythonBridgeService owned an HttpClient and SemaphoreSlim but
+    // had no IDisposable implementation. On app exit both were silently leaked.
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _isStopping = true;
+        _httpClient.Dispose();
+        _lifecycleGate.Dispose();
     }
 
     private static string? FindBackendDirectory()

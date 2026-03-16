@@ -48,6 +48,9 @@ public class SSEClient : IDisposable
             return;
         }
 
+        // R16/CRITICAL-001: Dispose previous CTS before overwriting — a stop+start
+        // cycle would leak the old CancellationTokenSource without this guard.
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _listenTasks.Clear();
         _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));

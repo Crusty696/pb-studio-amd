@@ -15,6 +15,7 @@ public class ApiClient : IApiClient
     private readonly ILogger<ApiClient> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
     private volatile bool _isShuttingDown;
+    private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -256,6 +257,20 @@ public class ApiClient : IApiClient
            || (_isShuttingDown && ex is ObjectDisposedException)
            || cancellationToken.IsCancellationRequested
            || _shutdownCts.IsCancellationRequested;
+
+    // R16/CRITICAL-004: _shutdownCts was never disposed. IApiClient now extends
+    // IDisposable so the DI container (singleton scoped) disposes this on app exit.
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (!_isShuttingDown)
+        {
+            _isShuttingDown = true;
+            _shutdownCts.Cancel();
+        }
+        _shutdownCts.Dispose();
+    }
 }
 
 // --- API Response Models ---

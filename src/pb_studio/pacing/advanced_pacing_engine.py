@@ -1046,7 +1046,7 @@ class AdvancedPacingEngine:
                            end_time, energy_level)
 
         Returns:
-            Gleiche Liste mit angepassten strength-Werten (clamp 0.0–1.5)
+            Gleiche Liste mit angepassten strength-Werten (clamp 0.0–1.0)
         """
         if not song_sections or not triggers:
             return triggers
@@ -1065,7 +1065,11 @@ class AdvancedPacingEngine:
 
             if section is not None:
                 original_strength = cut.strength
-                cut.strength = min(cut.strength * section.energy_level, 1.5)
+                # R16/CRIT-01: Clamp to 1.0 — consistent with PacingCut.__post_init__.
+                # energy_level is already in [0.0, 1.0], so the product can never
+                # exceed 1.0. The old 1.5 cap was unreachable and contradicted the
+                # model invariant.
+                cut.strength = min(cut.strength * section.energy_level, 1.0)
                 if abs(cut.strength - original_strength) > 0.01:
                     modified += 1
 
