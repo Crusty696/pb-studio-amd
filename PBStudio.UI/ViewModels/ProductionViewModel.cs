@@ -325,9 +325,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 return;
 
             var gpuSummary = string.Join(" | ", gpuParts);
-            EtaText = string.IsNullOrWhiteSpace(EtaText)
-                ? gpuSummary
-                : $"{EtaText} | {gpuSummary}";
+            // Replace — never accumulate, to avoid unbounded string growth
+            EtaText = gpuSummary;
 
             if (DateTime.UtcNow - _lastGpuLogUtc > TimeSpan.FromSeconds(15))
             {
