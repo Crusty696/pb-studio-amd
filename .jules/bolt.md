@@ -1,0 +1,3 @@
+## 2026-03-14 - [SQLite Performance Optimization]
+**Learning:** This codebase uses SQLite as the core database with `journal_mode=WAL` for concurrent reads/writes. However, it did not explicitly set `synchronous`. When `synchronous` defaults to `FULL`, write throughput suffers because SQLite forcefully flushes to disk on every commit. Using `synchronous=NORMAL` combined with WAL maintains durability for regular power outages/crashes (though not OS-level crashes) while significantly speeding up write performance.
+**Action:** When configuring SQLite databases with WAL mode, explicitly set `PRAGMA synchronous=NORMAL` to get the performance benefits unless OS-level crash durability is strictly necessary.
