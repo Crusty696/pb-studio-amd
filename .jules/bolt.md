@@ -1,0 +1,3 @@
+## 2025-03-14 - Vectorized checkerboard novelty in AudioAnalyzer
+**Learning:** Nested python `for` loops extracting overlapping sliding windows from a matrix can be extremely slow and can be fully vectorized. Using `np.lib.stride_tricks.as_strided` allows creating zero-copy views of the sub-matrices, and `np.tensordot` can compute the novelty kernel projection across all windows simultaneously.
+**Action:** Next time you need to apply a 2D kernel convolution over an image or matrix diagonal in Python, skip the explicit `for` loop and use `as_strided` and `tensordot` (or `einsum`) to offload the tight loop to optimized C/BLAS backends.

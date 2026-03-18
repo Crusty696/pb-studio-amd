@@ -83,3 +83,5 @@ artifacts/
 .tmp_*.ps1
 .tmp_*.py
 gui_screenshots/
+.pytest_tmp
+.pytest_tmp2
