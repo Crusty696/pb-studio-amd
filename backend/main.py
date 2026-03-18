@@ -74,10 +74,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS für lokalen C# WPF Client
+# CORS für lokalen C# WPF Client (native App benötigt kein CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lokal — kein Risiko
+    allow_origins=[],  # SEC-005 Fix: Keine Wildcards (*) erlaubt
     allow_methods=["*"],
     allow_headers=["*"],
 )

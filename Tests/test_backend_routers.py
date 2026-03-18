@@ -510,3 +510,18 @@ class TestRenderRouter:
         assert body["task_id"] == task_id
         assert body["percent"] == 42.0
         assert body["status"] == "running"
+
+
+# ─────────────────────────────────────────────────────────────────
+# Security / CORS
+# ─────────────────────────────────────────────────────────────────
+
+class TestSecurity:
+    def test_cors_restricted_origins(self, client):
+        """SEC-005: Verifiziert, dass keine Wildcard-Origins erlaubt sind."""
+        headers = {"Origin": "http://malicious-website.com"}
+        r = client.get("/health", headers=headers)
+
+        # Wenn allow_origins=[] gesetzt ist, darf der Header nicht '*' sein.
+        # CORSMiddleware sendet den Header bei nicht-gelisteten Origins gar nicht erst mit.
+        assert r.headers.get("access-control-allow-origin") != "*"
