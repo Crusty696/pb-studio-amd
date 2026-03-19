@@ -361,23 +361,38 @@ class ClipSelector:
         trigger_type: str,
     ) -> SelectedClip:
         """
-        FAISS-basierte semantische Auswahl.
+        Semantische Auswahl. Bevorzugt FAISS, sonst direktes Embedding-Matching.
         Nutzt TRIGGER_PROMPTS für Text→Embedding Query.
-        Fallback auf motion-basierte Auswahl wenn FAISS nicht verfügbar.
+        Fallback auf motion-basierte Auswahl wenn keine Embeddings verfügbar.
         """
         # Prompt für diesen Trigger-Typ holen
         prompt = TRIGGER_PROMPTS.get(trigger_type, DEFAULT_PROMPT)
 
-        # FAISS-Suche via SigLIP Embedding
         try:
-            embedding = self._get_text_embedding(prompt)
-            if embedding is not None and self.vector_store is not None:
-                results = self.vector_store.search(embedding, k=min(10, len(clips)))
+            query_embedding = self._get_text_embedding(prompt)
+            if query_embedding is None:
+                return self._select_by_motion(clips, trigger_strength, trigger_type)
 
-                # Ergebnis-Pfade aus FAISS
+            # 1. Versuch: FAISS-Suche (wenn VectorStore vorhanden und befüllt)
+            vector_store_ready = False
+            if self.vector_store is not None:
+                try:
+                    # Prüfe ob Index vorhanden und nicht leer (defensiv)
+                    if hasattr(self.vector_store, "index") and self.vector_store.index.ntotal > 0:
+                        vector_store_ready = True
+                    elif hasattr(self.vector_store, "ntotal") and self.vector_store.ntotal > 0:
+                        vector_store_ready = True
+                except Exception:
+                    pass
+
+            if vector_store_ready:
+                results = self.vector_store.search(query_embedding, k=min(10, len(clips)))
+
+                # Ergebnis-Pfade aus FAISS (Metadata-Mapping beachten)
                 faiss_paths = set()
                 for meta, score in results:
-                    p = meta.get("path", meta.get("file_path", ""))
+                    # NV-kompatible Keys: file_path, path
+                    p = meta.get("file_path", meta.get("path", ""))
                     if p:
                         faiss_paths.add(p)
 
@@ -390,6 +405,21 @@ class ClipSelector:
                 if semantic_candidates:
                     # Unter semantischen Kandidaten nach Motion wählen
                     return self._select_by_motion(semantic_candidates, trigger_strength, trigger_type)
+
+            # 2. Versuch: On-the-fly Matching (wenn Embeddings direkt in Clips sind)
+            # BUG-02 FIX: Keine Dummy-Embeddings mehr nötig, da wir hier direkt vergleichen
+            scored_candidates = []
+            for c in clips:
+                c_emb = c.get("embedding")
+                if c_emb is not None:
+                    sim = self._cosine_similarity(query_embedding, c_emb)
+                    scored_candidates.append((c, sim))
+
+            if scored_candidates:
+                # Nimm die Top 10 semantischen Kandidaten
+                scored_candidates.sort(key=lambda x: x[1], reverse=True)
+                semantic_candidates = [c for c, _ in scored_candidates[:10]]
+                return self._select_by_motion(semantic_candidates, trigger_strength, trigger_type)
 
         except Exception as e:
             logger.warning(f"Semantische Suche fehlgeschlagen: {e} — Fallback auf Motion")
@@ -420,8 +450,8 @@ class ClipSelector:
         except Exception:
             pass
 
-        # Fallback: Zufälliges Embedding (degraded mode)
-        logger.debug(f"Text-Embedding nicht verfügbar für: '{text}' — degraded mode")
+        # Kein Fallback auf Zufalls-Embeddings (No Dummies Regel)
+        logger.debug(f"Text-Embedding nicht verfügbar für: '{text}'")
         return None
 
     def _analyze_clip_motion(self, file_path: str) -> float:
