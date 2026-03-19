@@ -65,9 +65,9 @@ class AudioAnalyzer:
                 result = subprocess.run(command, capture_output=True, text=True, timeout=120)
                 
                 if result.returncode == 0 and Path(temp_wav).exists() and Path(temp_wav).stat().st_size > 0:
-                     logger.debug(f"Audio extraction success. Size: {Path(temp_wav).stat().st_size} bytes")
-                     analyze_path = temp_wav
-                     conversion_success = True
+                    logger.debug(f"Audio extraction success. Size: {Path(temp_wav).stat().st_size} bytes")
+                    analyze_path = temp_wav
+                    conversion_success = True
                 else:
                     err_output = result.stderr
                     # Check if failure is due to missing audio stream (Silent Video)
