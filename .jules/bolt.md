@@ -1,0 +1,3 @@
+## 2026-03-14 - FAISS Metadata Reconstruction Lookups
+**Learning:** Performing a linear search over a FAISS `metadata.items()` dictionary to find the corresponding `faiss_id` for a given `scene_id` inside an inner loop causes O(N) lookup bottleneck per element. This occurs frequently when trying to use `IndexFlatIP.reconstruct()` and mapping your internal IDs back to FAISS IDs.
+**Action:** When reconstructing FAISS embeddings or querying the vector index frequently, implement an inverted dictionary cache mapping `internal_id -> faiss_id` (e.g. `_inverted_metadata_cache`). Ensure to invalidate/rebuild this cache if the size of the original metadata dictionary changes to maintain O(1) performance.
