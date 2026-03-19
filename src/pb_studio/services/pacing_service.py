@@ -22,15 +22,17 @@ logger = logging.getLogger(__name__)
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
-    def __init__(self):
-        pass
-
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python)."""
         cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "json", str(clip_path)
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(clip_path),
         ]
         try:
             res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
@@ -116,12 +118,16 @@ class PacingService:
                     fp = str(Path(cd.get("file_path", "")).absolute())
                     if not cut.metadata:
                         cut.metadata = {}
-                    cut.metadata.update({
-                        "file_path": fp,
-                        "clip_name": cd.get("name", "Unknown"),
-                    })
+                    cut.metadata.update(
+                        {
+                            "file_path": fp,
+                            "clip_name": cd.get("name", "Unknown"),
+                        }
+                    )
                     if "clip_start" not in cut.metadata:
-                        cut.metadata["clip_start"] = self._get_random_clip_start(fp, cut.duration)
+                        cut.metadata["clip_start"] = self._get_random_clip_start(
+                            fp, cut.duration
+                        )
                     final_cuts.append(cut)
             return final_cuts
 
@@ -193,11 +199,16 @@ class PacingService:
                         (c, cl.get("file_path", ""), cl.get("id", "unknown"))
                         for c, cl in raw
                     ]
-                return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+                return self._process_pacing_cuts_to_cutlist(
+                    cut_with_clips, target_duration
+                )
             else:
                 return self._generate_simple_round_robin(
-                    pacing_engine, audio_path, clips,
-                    pacing_config.get("expected_bpm", 120), target_duration
+                    pacing_engine,
+                    audio_path,
+                    clips,
+                    pacing_config.get("expected_bpm", 120),
+                    target_duration,
                 )
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
@@ -232,18 +243,20 @@ class PacingService:
             fp = str(Path(fp).absolute())
             cs = self._get_random_clip_start(fp, dur)
 
-            cut_list.append(CutListEntry(
-                clip_id=f"clip_{clip['id']}",
-                start_time=cur.time,
-                end_time=nxt.time,
-                metadata={
-                    "file_path": fp,
-                    "clip_name": clip.get("name", "Unknown"),
-                    "clip_start": cs,
-                    "trigger_type": cur.trigger_type,
-                    "trigger_strength": cur.strength,
-                },
-            ))
+            cut_list.append(
+                CutListEntry(
+                    clip_id=f"clip_{clip['id']}",
+                    start_time=cur.time,
+                    end_time=nxt.time,
+                    metadata={
+                        "file_path": fp,
+                        "clip_name": clip.get("name", "Unknown"),
+                        "clip_start": cs,
+                        "trigger_type": cur.trigger_type,
+                        "trigger_strength": cur.strength,
+                    },
+                )
+            )
             idx += 1
 
         logger.info(f"Cut-Liste: {len(cut_list)} Cuts generiert.")
