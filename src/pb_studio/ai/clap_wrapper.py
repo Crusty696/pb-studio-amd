@@ -147,8 +147,8 @@ class CLAPAnalyzer:
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        # Weitere Performance-Optimierungen
-        sess_options.enable_cpu_mem_arena = True
+        # KRITISCH fuer DirectML: CPU-Arena konkurriert mit DirectML-Allocator
+        sess_options.enable_cpu_mem_arena = False
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 

@@ -847,6 +847,7 @@ class AdvancedPacingEngine:
                             stems=stems_dict,
                             expected_bpm=expected_bpm,
                             min_cut_interval=min_cut_interval,
+                            song_sections=song_sections,
                         )
                 except (json.JSONDecodeError, Exception) as e:
                     logger.warning(f"Stems-JSON ungültig: {e}")
@@ -1099,6 +1100,7 @@ class AdvancedPacingEngine:
         stems: Dict[str, str],
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
+        song_sections: Optional[List[Any]] = None,
     ) -> List["PacingCut"]:
         """
         NV-kompatible Methode: Generiert Cut-Liste unter Verwendung von Demucs-Stems.
@@ -1121,6 +1123,7 @@ class AdvancedPacingEngine:
             audio_path=audio_path,
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval * 2,
+            song_sections=song_sections,
         )
 
         # Stem-Trigger extrahieren
@@ -1135,6 +1138,10 @@ class AdvancedPacingEngine:
             for t in bass_triggers:
                 t.strength *= 0.7
             stem_triggers.extend(bass_triggers)
+
+        # Struktur-Gewichtung auf Stem-Trigger anwenden
+        if song_sections:
+            stem_triggers = self._apply_structure_weights(stem_triggers, song_sections)
 
         all_triggers = base_cuts + stem_triggers
         all_triggers.sort(key=lambda x: x.time)

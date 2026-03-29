@@ -68,16 +68,24 @@ def main() -> int:
 
     tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
     ref_tables: list[dict[str, Any]] = []
-    for table in tables:
-        for fk in cur.execute(f'PRAGMA foreign_key_list("{table}")').fetchall():
-            if fk[2] == "media":
-                ref_tables.append({
-                    "table": table,
-                    "from_column": fk[3],
-                    "to_column": fk[4],
-                    "on_delete": fk[6],
-                    "on_update": fk[5],
-                })
+
+    # Optimization: Use a single query to find all foreign keys referencing 'media'.
+    # This avoids the N+1 query pattern (calling PRAGMA foreign_key_list for each table).
+    fk_query = """
+        SELECT m.name AS source_table, fk.*
+        FROM sqlite_master m
+        JOIN pragma_foreign_key_list(m.name) fk ON fk.[table] = 'media'
+        WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%'
+        ORDER BY m.name
+    """
+    for fk_row in cur.execute(fk_query).fetchall():
+        ref_tables.append({
+            "table": fk_row["source_table"],
+            "from_column": fk_row["from"],
+            "to_column": fk_row["to"],
+            "on_delete": fk_row["on_delete"],
+            "on_update": fk_row["on_update"],
+        })
 
     vector_ref_map = {
         row[0]: row[1]
