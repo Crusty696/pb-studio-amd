@@ -3,6 +3,13 @@
 
 ---
 
+## [2026-03-28] – Audit Bugfixes
+- FIX KRITISCH-001: clap_wrapper.py – enable_cpu_mem_arena auf False gesetzt (IRON RULE §2)
+- FIX KRITISCH-002: separator.py – _apply_directml_patch() ergänzt um enable_cpu_mem_arena=False (IRON RULE §2)
+- FIX WARN-002: requirements.txt – faiss-cpu auf ==1.7.4 gepinnt
+
+---
+
 ## Deep-Audit 2026-03-09 (5 CRITICAL + 4 HIGH + 1 Test)
 - **BUG-037 (CRITICAL):** `video_renderer.py`: `get_encoder_config().get("ffmpeg_path")` AttributeError → `_get_ffmpeg_path()`.
 - **BUG-038 (CRITICAL):** `streaming_analyzer.py`: tempo=0 ZeroDivisionError → guard.
