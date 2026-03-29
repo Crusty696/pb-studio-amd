@@ -11,11 +11,13 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Anchor-Bearbeitung (Beat-Marker + Video-Zuordnung).</summary>
-public partial class AnchorViewModel : ObservableObject
+public partial class AnchorViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private bool _disposed;
     private readonly HashSet<int> _beatsUnavailableClipIds = [];
     private int _loadSequence;
     private volatile bool _reloadQueued;
@@ -189,7 +191,20 @@ public partial class AnchorViewModel : ObservableObject
 
         var loadSequence = Interlocked.Increment(ref _loadSequence);
 
-        await _loadGate.WaitAsync();
+        // R15/MEDIUM: Acquired-Flag explizit tracken — finally darf nur dann Release() rufen,
+        // wenn WaitAsync erfolgreich war. Bei Cancellation (OperationCanceledException) wird
+        // das Semaphor NICHT akquiriert; ein Release() würde den Lock eines anderen Callers freigeben.
+        bool acquired = false;
+        try
+        {
+            await _loadGate.WaitAsync(_shutdownCts.Token);
+            acquired = true;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         try
         {
             if (loadSequence != _loadSequence)
@@ -233,6 +248,10 @@ public partial class AnchorViewModel : ObservableObject
                     : "Beat-Analyse ausstehend";
             StatusText = $"Waveform geladen: {WaveformBars.Count} Bars | {beatStatus}";
         }
+        catch (OperationCanceledException)
+        {
+            // Shutdown or sequence superseded — silent exit
+        }
         catch (Exception ex)
         {
             StatusText = $"Waveform/Beats laden fehlgeschlagen: {ex.Message}";
@@ -240,7 +259,8 @@ public partial class AnchorViewModel : ObservableObject
         finally
         {
             IsLoadingWaveform = false;
-            _loadGate.Release();
+            if (acquired)
+                _loadGate.Release();
         }
 
         if (_reloadQueued)
@@ -366,6 +386,16 @@ public partial class AnchorViewModel : ObservableObject
         TimelineDuration = 300;
         IsLoadingWaveform = false;
         StatusText = "Kein Projekt geöffnet";
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        _shutdownCts.Cancel();
+        _shutdownCts.Dispose();
+        _loadGate.Dispose();
     }
 }
 

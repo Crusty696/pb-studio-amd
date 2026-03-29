@@ -31,6 +31,23 @@ from ..schemas.audio_schemas import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
 
+# Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
+_beat_detector: "Any | None" = None
+_beat_detector_lock = __import__("threading").Lock()
+
+
+def _get_beat_detector() -> "Any":
+    """Return the module-level BeatDetector singleton (thread-safe init)."""
+    global _beat_detector
+    # R17/MEDIUM: double-checked locking prevents two worker threads from
+    # simultaneously constructing BeatDetector (CPU-intensive, no GPU).
+    if _beat_detector is None:
+        with _beat_detector_lock:
+            if _beat_detector is None:
+                from pb_studio.audio.beat_detector import BeatDetector
+                _beat_detector = BeatDetector(mode='offline', inference_model='DBN')
+    return _beat_detector
+
 
 @router.post(
     "/import",
@@ -134,6 +151,15 @@ async def analyze_audio(
 
     audio_path = clip["path"]
 
+    # R17/MEDIUM: Verify file exists on disk BEFORE to_thread boundary — same guard
+    # added to video_router in R15. Without this, a deleted/moved file returns HTTP 500
+    # instead of the correct HTTP 422 (Unprocessable Entity).
+    if not Path(audio_path).exists():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Audio-Datei nicht gefunden: {audio_path!r}",
+        )
+
     logger.info(f"Starte Audio-Analyse für Clip {request.clip_id}: {clip['name']}")
     await publish_log(
         f"Audio-Analyse gestartet: {clip['name']}",
@@ -141,9 +167,16 @@ async def analyze_audio(
         source="audio.analyze",
         detail=f"clip_id={request.clip_id}",
     )
+    await publish_event("analysis_progress", {
+        "event": "analysis_progress",
+        "task_id": str(request.clip_id),
+        "status": "running",
+        "percent": 0,
+        "message": f"Analyse gestartet: Clip {request.clip_id}",
+    })
 
     try:
-        _loop = asyncio.get_event_loop()
+        _loop = asyncio.get_running_loop()
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request, _loop
         )
@@ -152,6 +185,10 @@ async def analyze_audio(
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
         clip["is_analyzed"] = True
+        # R4-HOCH-9: Update duration from librosa when ffprobe returned 0.0
+        analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
+        if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
+            clip["duration_seconds"] = analysis_dur
         state.set_audio_clip(request.clip_id, clip)
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
@@ -164,6 +201,9 @@ async def analyze_audio(
             beat_count=clip["beat_count"],
             beats_json=beats_json,
             is_analyzed=True,
+            energy_curve=result.get("energy_curve"),
+            structure_segments=result.get("structure_segments"),
+            spectral_data=result.get("spectral_data"),
         )
 
         await publish_log(
@@ -172,6 +212,13 @@ async def analyze_audio(
             source="audio.analyze",
             detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
         )
+        await publish_event("analysis_progress", {
+            "event": "analysis_progress",
+            "task_id": str(request.clip_id),
+            "status": "completed",
+            "percent": 100,
+            "message": f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}",
+        })
         return AudioAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
@@ -181,6 +228,14 @@ async def analyze_audio(
             source="audio.analyze",
             detail=str(e),
         )
+        await publish_event("analysis_progress", {
+            "event": "analysis_progress",
+            "task_id": str(request.clip_id),
+            "status": "failed",
+            "percent": 0,
+            "message": f"Analyse fehlgeschlagen: {str(e)}",
+            "error": str(e),
+        })
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 
@@ -217,15 +272,14 @@ async def get_waveform(
     state: AppState = Depends(get_app_state),
 ) -> WaveformData:
     """Gibt Waveform-Daten für einen Clip zurück."""
-    if clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
-
-    clip = state.audio_clips[clip_id]
     try:
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
             clip_id=clip_id,
-            sample_rate=clip["sample_rate"],
+            sample_rate=44100,  # WaveformAnalyzer analysiert immer bei 44100 Hz
             bands=waveform,
             duration_seconds=clip["duration_seconds"],
         )
@@ -248,10 +302,9 @@ async def separate_stems(
     state: AppState = Depends(get_app_state),
 ) -> StemResult:
     """Führt Stem-Separation durch (GPU-Lock via Middleware)."""
-    if request.clip_id not in state.audio_clips:
+    clip = state.get_audio_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
-
-    clip = state.audio_clips[request.clip_id]
     logger.info(f"Starte Stem-Separation: {clip['name']} mit {request.model.value}")
 
     try:
@@ -370,11 +423,7 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         y, sr = librosa.load(audio_path, sr=22050, mono=True)
     except Exception as e:
         logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
-        return {
-            "clip_id": clip_id, "duration_seconds": 0.0, "bpm": 0.0,
-            "beat_count": 0, "beats": [], "key": None,
-            "energy_curve": [], "structure_segments": [], "spectral_data": None,
-        }
+        raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
 
     duration = float(len(y)) / sr if sr > 0 else 0.0
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
@@ -386,9 +435,8 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
 
     if request.detect_beats:
         try:
-            from pb_studio.audio.beat_detector import BeatDetector
-            # mode='offline' + DBN: stimmt mit AudioAnalyzeWorker überein (bessere Genauigkeit)
-            detector = BeatDetector(mode='offline', inference_model='DBN')
+            # Use module-level singleton to avoid re-initializing on every call
+            detector = _get_beat_detector()
             # detect_beats gibt list[float] zurück — BeatNet oder Librosa-Fallback
             beat_times = detector.detect_beats(audio_path)
             if beat_times:

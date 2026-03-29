@@ -59,6 +59,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error(f"  pb_studio NICHT importierbar: {e}")
         logger.error(f"  sys.path enthält: {[p for p in sys.path if 'pb_studio' in p.lower() or 'src' in p.lower()]}")
 
+    try:
+        from pb_studio.core.crash_handler import CrashHandler
+        CrashHandler()
+        logger.info("  CrashHandler aktiv")
+    except Exception as e:
+        logger.warning(f"  CrashHandler nicht verfügbar: {e}")
+
+    try:
+        config.project_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"  Projekt-Verzeichnis bereit: {config.project_dir}")
+    except Exception as e:
+        logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
+
     # Kein automatischer Medien-Restore beim Startup:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
     yield
@@ -77,9 +90,13 @@ app = FastAPI(
 # CORS für lokalen C# WPF Client
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lokal — kein Risiko
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://127.0.0.1",
+        "http://localhost",
+        "null",
+    ],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 # GPU-Lock Middleware

@@ -17,6 +17,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private readonly ProjectService _projects;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
+    private bool _disposed;
 
     [ObservableProperty] private string _outputPath = "";
     [ObservableProperty] private string _audioPath = "";
@@ -171,7 +172,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnTimelineChanged(object? sender, TimelineResponse? timeline)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             AudioPath = timeline?.AudioPath ?? string.Empty;
         });
@@ -185,7 +186,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId)
             return;
 
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.TaskId))
                 _currentTaskId = e.TaskId;
@@ -293,7 +294,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnLogReceived(object? sender, LogEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() => AppendLog(e.Level, e.Message));
+        _ = App.Current.Dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
     }
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
@@ -301,7 +302,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         if (!IsRendering)
             return;
 
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.Error))
             {
@@ -325,9 +326,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 return;
 
             var gpuSummary = string.Join(" | ", gpuParts);
-            EtaText = string.IsNullOrWhiteSpace(EtaText)
-                ? gpuSummary
-                : $"{EtaText} | {gpuSummary}";
+            // Replace — never accumulate, to avoid unbounded string growth
+            EtaText = gpuSummary;
 
             if (DateTime.UtcNow - _lastGpuLogUtc > TimeSpan.FromSeconds(15))
             {
@@ -382,8 +382,11 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         StatusText = "Kein Projekt geöffnet";
     }
 
+    // R17/LOW: Added _disposed guard — consistent with all other ViewModels.
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _sse.ProgressReceived -= OnRenderProgress;
         _sse.LogReceived -= OnLogReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;

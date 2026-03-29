@@ -610,6 +610,7 @@ class VRAMBudgetManager:
 
             # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
             self._committed_mb -= budget.estimated_vram_mb
+            self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
             budget.is_loaded = False
             freed += budget.estimated_vram_mb
 
@@ -639,16 +640,19 @@ class VRAMBudgetManager:
                 if budget.is_loaded and budget.priority >= min_priority:
                     logger.info(f"Evicting {budget.name} ({budget.priority.name})")
 
-                    if budget.unload_callback:
-                        try:
+                    try:
+                        if budget.unload_callback:
                             budget.unload_callback()
-                        except Exception as e:
-                            logger.error(f"Unload failed: {e}")
-                            continue
-
-                    self._committed_mb -= budget.estimated_vram_mb
-                    budget.is_loaded = False
-                    freed += budget.estimated_vram_mb
+                    except Exception as e:
+                        logger.error(f"Unload callback failed für {model_id}: {e}")
+                        budget.metadata["eviction_error"] = str(e)
+                    finally:
+                        # Immer Accounting aktualisieren — auch bei Fehler
+                        self._committed_mb -= budget.estimated_vram_mb
+                        self._committed_mb = max(0, self._committed_mb)  # nie negativ
+                        budget.is_loaded = False
+                        budget.metadata.setdefault("evicted", True)
+                        freed += budget.estimated_vram_mb
 
             return freed
 
@@ -671,14 +675,17 @@ class VRAMBudgetManager:
                 logger.debug(f"Set {model_id} priority to {priority.name}")
 
     def get_model(self, model_id: str) -> Optional[ModelBudget]:
-        """Get model budget info."""
-        return self._models.get(model_id)
+        """Get model budget info (thread-safe snapshot)."""
+        with self._registry_lock:
+            return self._models.get(model_id)
 
     def is_model_loaded(self, model_id: str) -> bool:
-        """Check if a model is currently loaded."""
+        """Check if a model is currently loaded (thread-safe, read budget.is_loaded under lock)."""
         with self._registry_lock:
             budget = self._models.get(model_id)
-            return budget.is_loaded if budget else False
+            if budget is None:
+                return False
+            return budget.is_loaded  # read while holding lock to avoid race with evict_all
 
 
 # =========================================================================

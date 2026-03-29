@@ -4,7 +4,7 @@ namespace PBStudio.UI.Services;
 /// Abstraktion für die Kommunikation mit dem Python FastAPI Backend.
 /// Ermöglicht Mocking in Tests und Austauschbarkeit der Implementierung.
 /// </summary>
-public interface IApiClient
+public interface IApiClient : IDisposable
 {
     void BeginShutdown();
 

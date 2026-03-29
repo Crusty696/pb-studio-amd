@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -11,12 +12,13 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Timeline-Vorschau.</summary>
-public partial class TimelineViewModel : ObservableObject
+public partial class TimelineViewModel : ObservableObject, IDisposable
 {
     private readonly TimelineStateService _timelineState;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
+    private bool _disposed;
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private double _totalDuration;
@@ -168,34 +170,39 @@ public partial class TimelineViewModel : ObservableObject
             if (version != _loadVersion)
                 return;
 
-            TimelineEntries.Clear();
-            foreach (var entry in timeline.Entries)
+            // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                TimelineEntries.Add(new TimelineEntryModel
+                TimelineEntries.Clear();
+                foreach (var entry in timeline.Entries)
                 {
-                    ClipId = entry.ClipId,
-                    ClipName = entry.ClipName,
-                    FilePath = entry.FilePath,
-                    StartTime = entry.StartTime,
-                    EndTime = entry.EndTime,
-                    ClipStart = entry.ClipStart,
-                    TriggerType = entry.TriggerType,
-                    TriggerStrength = entry.TriggerStrength,
-                });
-            }
+                    TimelineEntries.Add(new TimelineEntryModel
+                    {
+                        ClipId = entry.ClipId,
+                        ClipName = entry.ClipName,
+                        FilePath = entry.FilePath,
+                        StartTime = entry.StartTime,
+                        EndTime = entry.EndTime,
+                        ClipStart = entry.ClipStart,
+                        TriggerType = entry.TriggerType,
+                        TriggerStrength = entry.TriggerStrength,
+                        SegmentType = entry.SegmentType,
+                    });
+                }
 
-            TotalDuration = timeline.TotalDuration;
-            AudioPath = timeline.AudioPath;
-            SelectedEntry = TimelineEntries.FirstOrDefault();
-            SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
-            StatusText = TimelineEntries.Count == 0
-                ? "Timeline ist leer"
-                : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
-            OnPropertyChanged(nameof(HasTimeline));
-            OnPropertyChanged(nameof(SelectedTimelinePositionText));
-            OnPropertyChanged(nameof(SelectionIndexText));
-            PreviousCutCommand.NotifyCanExecuteChanged();
-            NextCutCommand.NotifyCanExecuteChanged();
+                TotalDuration = timeline.TotalDuration;
+                AudioPath = timeline.AudioPath;
+                SelectedEntry = TimelineEntries.FirstOrDefault();
+                SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
+                StatusText = TimelineEntries.Count == 0
+                    ? "Timeline ist leer"
+                    : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
+                OnPropertyChanged(nameof(HasTimeline));
+                OnPropertyChanged(nameof(SelectedTimelinePositionText));
+                OnPropertyChanged(nameof(SelectionIndexText));
+                PreviousCutCommand.NotifyCanExecuteChanged();
+                NextCutCommand.NotifyCanExecuteChanged();
+            });
         }
         finally
         {
@@ -229,5 +236,13 @@ public partial class TimelineViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectionIndexText));
         PreviousCutCommand.NotifyCanExecuteChanged();
         NextCutCommand.NotifyCanExecuteChanged();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        _loadGate.Dispose();
     }
 }

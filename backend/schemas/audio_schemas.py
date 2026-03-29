@@ -103,7 +103,7 @@ class SpectralData(BaseModel):
     """Response: Spektral-Analyse Daten."""
     clip_id: int
     bands: dict[str, list[float]] = {}  # Band-Name → Amplitude-Werte
-    frequency_ranges: dict[str, tuple[float, float]] = {}
+    frequency_ranges: dict[str, list[float]] = {}
 
 
 # Forward-References auflösen (StructureSegment/SpectralData nach AudioAnalysisResult definiert)

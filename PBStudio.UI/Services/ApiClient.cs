@@ -15,6 +15,7 @@ public class ApiClient : IApiClient
     private readonly ILogger<ApiClient> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
     private volatile bool _isShuttingDown;
+    private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -79,7 +80,7 @@ public class ApiClient : IApiClient
 
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CreateRequestCancellationToken()).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _shutdownCts.Token).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
                 var detail = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -143,12 +144,17 @@ public class ApiClient : IApiClient
     public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/video/thumbnails/{clipId}");
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
 
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            // R16/MEDIUM-002: Use linked token (includes _shutdownCts) for content read too
+            return await response.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
@@ -207,11 +213,16 @@ public class ApiClient : IApiClient
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.GetAsync(url, CreateRequestCancellationToken(cancellationToken)).ConfigureAwait(false);
+            using var response = await _http.GetAsync(url, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            // R16/MEDIUM-001: Use linked token (includes _shutdownCts) for deserialization too
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
@@ -228,7 +239,7 @@ public class ApiClient : IApiClient
     {
         try
         {
-            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, CreateRequestCancellationToken()).ConfigureAwait(false);
+            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, _shutdownCts.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
         }
@@ -243,16 +254,25 @@ public class ApiClient : IApiClient
         }
     }
 
-    private CancellationToken CreateRequestCancellationToken(CancellationToken cancellationToken = default)
-        => cancellationToken.CanBeCanceled
-            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token).Token
-            : _shutdownCts.Token;
-
     private bool IsExpectedCancellation(Exception ex, CancellationToken cancellationToken = default)
         => ex is OperationCanceledException
            || (_isShuttingDown && ex is ObjectDisposedException)
            || cancellationToken.IsCancellationRequested
            || _shutdownCts.IsCancellationRequested;
+
+    // R16/CRITICAL-004: _shutdownCts was never disposed. IApiClient now extends
+    // IDisposable so the DI container (singleton scoped) disposes this on app exit.
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (!_isShuttingDown)
+        {
+            _isShuttingDown = true;
+            _shutdownCts.Cancel();
+        }
+        _shutdownCts.Dispose();
+    }
 }
 
 // --- API Response Models ---
@@ -260,10 +280,10 @@ public class ApiClient : IApiClient
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
 public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
 public record StatusResponse(bool Success, string Message);
-public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null);
+public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0);
-public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, List<double>>? FrequencyRanges = null);
+public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);

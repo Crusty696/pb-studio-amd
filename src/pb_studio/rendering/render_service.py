@@ -15,7 +15,6 @@ Features:
 
 import inspect
 import json
-import os
 import re
 import subprocess
 import threading
@@ -55,11 +54,12 @@ class RenderService:
     _working_encoder: Optional[str] = None
     _encoder_lock: threading.Lock = threading.Lock()
 
-    def __init__(self, output_dir: str = "exports"):
+    def __init__(self, output_dir: str = "exports", encoder_override: Optional[str] = None):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True, parents=True)
         self.temp_dir = self.output_dir / ".temp_render"
         self.temp_dir.mkdir(exist_ok=True)
+        self._encoder_override = encoder_override
 
         with RenderService._encoder_lock:
             if RenderService._working_encoder is None:
@@ -70,6 +70,7 @@ class RenderService:
         """Testet verfügbare AMD-Encoder und gibt den besten zurück."""
         encoders = [
             ("hevc_amf", "AMD GPU H.265 (beste Kompression)"),
+            ("av1_amf", "AMD GPU AV1 (modernste Kompression)"),
             ("h264_amf", "AMD GPU H.264"),
             ("h264_mf", "Windows Media Foundation"),
             ("libx265", "CPU H.265 (langsam)"),
@@ -115,11 +116,16 @@ class RenderService:
     ) -> str:
         """Hauptfunktion für Timeline-Rendering."""
         final_output = self.output_dir / output_filename
+        # R19/LOW-019-3: Cache audio_dur here — _run_ffmpeg_render reuses it
+        # to avoid a second ffprobe subprocess on the same audio file.
         audio_dur = self._get_audio_duration(audio_path)
         total_duration = audio_dur if audio_dur and audio_dur > 0 else self._calculate_timeline_duration(timeline)
         total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
         render_start = time.monotonic()
 
+        # R19/LOW-019-1: Pre-init so finally can always call _cleanup_temp safely,
+        # even if an exception occurs before _normalize_clips assigns the variable.
+        normalized_clips: List[Dict] = []
         try:
             self._emit_progress(
                 progress_callback,
@@ -162,7 +168,8 @@ class RenderService:
 
             self._run_ffmpeg_render(
                 concat_list_path, audio_path, final_output,
-                bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start
+                bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
+                audio_dur=audio_dur,
             )
 
             self._emit_progress(
@@ -182,7 +189,7 @@ class RenderService:
             logger.error(f"Render Error: {e}", exc_info=True)
             raise
         finally:
-            self._cleanup_temp(normalized_clips if "normalized_clips" in locals() else [])
+            self._cleanup_temp(normalized_clips)
 
     def _calculate_timeline_duration(self, timeline: List[Dict]) -> float:
         total = 0.0
@@ -263,12 +270,14 @@ class RenderService:
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
-        encoder = RenderService._working_encoder or "libx264"
+        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
 
         if encoder == "hevc_amf":
             enc_args = ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
         elif encoder == "h264_amf":
             enc_args = ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
+        elif encoder == "av1_amf":
+            enc_args = ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
         elif encoder == "h264_mf":
             enc_args = ["-c:v", "h264_mf", "-b:v", "10M"]
         elif encoder == "libx265":
@@ -338,8 +347,7 @@ class RenderService:
                 if not p:
                     continue
                 p_str = str(Path(p).absolute()).replace("\\", "/")
-                p_str = p_str.replace("'", "'\\''")
-                f.write(f"file '{p_str}'\n")
+                f.write(f'file "{p_str}"\n')
                 f.write(f"inpoint {in_pt:.3f}\n")
                 f.write(f"outpoint {out_pt:.3f}\n")
 
@@ -351,8 +359,11 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
+        audio_dur: Optional[float] = None,
     ):
         """Finaler Render mit Echtzeit-Progress."""
+        if audio_path and not Path(audio_path).exists():
+            raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
         cmd = [
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0",
@@ -367,11 +378,13 @@ class RenderService:
 
         cmd.extend(["-map", "0:v", "-map", "1:a"])
 
-        encoder = RenderService._working_encoder or "libx264"
+        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_amf":
             cmd.extend(["-c:v", "h264_amf", "-quality", preset, "-b:v", bitrate])
+        elif encoder == "av1_amf":
+            cmd.extend(["-c:v", "av1_amf", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_mf":
             cmd.extend(["-c:v", "h264_mf", "-b:v", "10M"])
         elif encoder == "libx265":
@@ -387,7 +400,10 @@ class RenderService:
             "-stats_period", "0.5",
         ])
 
-        audio_dur = self._get_audio_duration(audio_path)
+        # R19/LOW-019-3: Reuse audio_dur passed from render_timeline — avoids a
+        # second ffprobe subprocess call for the same file.
+        if audio_dur is None:
+            audio_dur = self._get_audio_duration(audio_path)
         # Render-Dauer: kürzere von Audio und Timeline (nicht gesamte Audio bei kurzer Timeline)
         render_dur = total_duration
         if audio_dur and audio_dur > 0:
@@ -528,12 +544,18 @@ class RenderService:
                 except (ValueError, IndexError):
                     pass
 
+        # R05 Fix: communicate() würde mit dem stderr-Daemon-Thread rasen.
+        # process.wait() wartet nur auf den Exit-Code ohne Pipes zu lesen.
         try:
-            process.communicate(timeout=60)
+            process.wait(timeout=60)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.communicate()
+            process.wait()
             raise RuntimeError("FFmpeg Finalisierung Timeout")
+        finally:
+            # R14/CRITICAL-002: Daemon-Thread kurz joinen, damit noch ausstehende
+            # stderr-Zeilen in stderr_lines geschrieben werden, bevor wir sie lesen.
+            stderr_thread.join(timeout=5)
 
         stderr = "".join(stderr_lines)
         if process.returncode != 0:
@@ -583,10 +605,9 @@ class RenderService:
     def _cleanup_temp(self, normalized_clips: List[Dict]):
         for clip in normalized_clips:
             if clip.get("is_temp", False):
-                try:
-                    os.remove(clip["clip_path"])
-                except Exception:
-                    pass
+                # R19/LOW-019-2: unlink(missing_ok=True) avoids FileNotFoundError
+                # if the temp file was already cleaned up elsewhere.
+                Path(clip["clip_path"]).unlink(missing_ok=True)
         try:
             (self.temp_dir / "concat_list.txt").unlink(missing_ok=True)
         except Exception:

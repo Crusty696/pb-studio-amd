@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -9,8 +10,9 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Audio-Bibliothek.</summary>
-public partial class AudioLibraryViewModel : ObservableObject
+public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 {
+    private bool _disposed;
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
 
@@ -63,29 +65,32 @@ public partial class AudioLibraryViewModel : ObservableObject
         var clips = await _audioLibraryState.RefreshAsync();
         if (clips != null)
         {
-            AudioClips.Clear();
-            foreach (var clipInfo in clips)
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                AudioClips.Add(new AudioClipModel
+                AudioClips.Clear();
+                foreach (var clipInfo in clips)
                 {
-                    Id = clipInfo.Id,
-                    Name = clipInfo.Name,
-                    Path = clipInfo.Path,
-                    DurationSeconds = clipInfo.DurationSeconds,
-                    SampleRate = clipInfo.SampleRate,
-                    Channels = clipInfo.Channels,
-                    Format = clipInfo.Format,
-                    Bpm = clipInfo.Bpm,
-                    Key = clipInfo.Key ?? "",
-                    BeatCount = clipInfo.BeatCount,
-                    IsAnalyzed = clipInfo.IsAnalyzed,
-                });
-            }
-            // Auswahl wiederherstellen
-            if (previousId.HasValue)
-                SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
-            StatusText = $"{clips.Count} Audio-Clips geladen";
-            AnalyzeAllCommand.NotifyCanExecuteChanged();
+                    AudioClips.Add(new AudioClipModel
+                    {
+                        Id = clipInfo.Id,
+                        Name = clipInfo.Name,
+                        Path = clipInfo.Path,
+                        DurationSeconds = clipInfo.DurationSeconds,
+                        SampleRate = clipInfo.SampleRate,
+                        Channels = clipInfo.Channels,
+                        Format = clipInfo.Format,
+                        Bpm = clipInfo.Bpm,
+                        Key = clipInfo.Key ?? "",
+                        BeatCount = clipInfo.BeatCount,
+                        IsAnalyzed = clipInfo.IsAnalyzed,
+                    });
+                }
+                // Auswahl wiederherstellen
+                if (previousId.HasValue)
+                    SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
+                StatusText = $"{clips.Count} Audio-Clips geladen";
+                AnalyzeAllCommand.NotifyCanExecuteChanged();
+            });
         }
         else
         {
@@ -139,6 +144,7 @@ public partial class AudioLibraryViewModel : ObservableObject
 
             AnalysisProgress = 100;
             StatusText = $"Alle {total} Clips analysiert";
+            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
         }
         catch (Exception ex)
         {
@@ -238,5 +244,12 @@ public partial class AudioLibraryViewModel : ObservableObject
         BeatCount = 0;
         Key = string.Empty;
         DurationSeconds = 0;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }

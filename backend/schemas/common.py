@@ -64,18 +64,25 @@ class TimelineEntry(BaseModel):
         return self.end_time - self.start_time
 
 
-def validate_timeline(entries: list[dict], audio_duration: float | None = None) -> list[str]:
-    """Validiert eine Timeline auf Konsistenz. Gibt Liste von Warnings zurück."""
-    warnings = []
+def validate_timeline(entries: list[dict], audio_duration: float | None = None) -> tuple[list[str], list[str]]:
+    """Validiert eine Timeline auf Konsistenz.
+
+    Returns:
+        Tuple (warnings, errors):
+          - warnings: nicht-kritische Probleme (z.B. kurze Cuts, Überlappungen)
+          - errors:   kritische Fehler die ein Rendering verhindern (z.B. end_time <= start_time)
+    """
+    warnings: list[str] = []
+    errors: list[str] = []
     if not entries:
-        return warnings
+        return warnings, errors
 
     for i, entry in enumerate(entries):
         start = entry.get("start_time", 0.0)
         end = entry.get("end_time", 0.0)
         if end <= start:
-            warnings.append(f"Cut {i}: end_time ({end}) <= start_time ({start})")
-        if end - start < 0.1:
+            errors.append(f"Cut {i}: end_time ({end}) <= start_time ({start})")
+        elif end - start < 0.1:
             warnings.append(f"Cut {i}: Dauer zu kurz ({end - start:.3f}s)")
         fp = entry.get("metadata", {}).get("file_path") or entry.get("file_path", "")
         if not fp:
@@ -100,4 +107,4 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
                 f"Timeline ({last_end:.1f}s) überschreitet Audio-Dauer ({audio_duration:.1f}s)"
             )
 
-    return warnings
+    return warnings, errors

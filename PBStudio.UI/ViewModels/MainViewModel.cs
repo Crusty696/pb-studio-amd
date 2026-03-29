@@ -147,7 +147,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnProjectChanged(object? sender, ProjectInfo? project)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             var previousProjectPath = _lastProjectPath;
             var currentProjectPath = project?.Path;
@@ -172,7 +172,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnBackendStatusChanged(object? sender, bool isRunning)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             BackendStatusText = isRunning ? "Backend: Online" : "Backend: Offline";
             BackendStatusColor = isRunning ? Brushes.LimeGreen : Brushes.Red;
@@ -198,7 +198,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnProgressReceived(object? sender, ProgressEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             GlobalProgress = e.Percent;
             StatusMessage = string.IsNullOrWhiteSpace(e.Message) ? StatusMessage : e.Message;
@@ -208,7 +208,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             GpuStatusText = $"GPU: {e.VramUsedMb}/{e.VramTotalMb} MB | {e.TemperatureC}°C";
         });

@@ -7,9 +7,10 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für die Einstellungen.</summary>
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private bool _disposed;
 
     [ObservableProperty] private string _gpuName = "Wird geladen...";
     [ObservableProperty] private double _vramTotal;
@@ -59,5 +60,12 @@ public partial class SettingsViewModel : ObservableObject
         StatusText = "VRAM aufräumen...";
         await _api.CleanupGpuAsync();
         StatusText = "VRAM aufgeräumt";
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }

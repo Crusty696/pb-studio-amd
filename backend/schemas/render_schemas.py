@@ -1,6 +1,7 @@
 """Render-bezogene Schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from pathlib import Path as _Path
 from typing import Optional
 from enum import Enum
 
@@ -17,6 +18,7 @@ class RenderEncoder(str, Enum):
     """Verfügbare Video-Encoder."""
     HEVC_AMF = "hevc_amf"    # AMD Hardware H.265
     H264_AMF = "h264_amf"    # AMD Hardware H.264
+    AV1_AMF = "av1_amf"      # AMD Hardware AV1
     LIBX265 = "libx265"      # Software H.265
     LIBX264 = "libx264"      # Software H.264
 
@@ -27,11 +29,18 @@ class RenderRequest(BaseModel):
     audio_path: str = Field(..., description="Audio-Quell-Pfad")
     quality: RenderQuality = RenderQuality.HIGH
     encoder: Optional[RenderEncoder] = None  # None = Auto-Detect
-    resolution_width: int = 1920
-    resolution_height: int = 1080
-    fps: float = 30.0
-    bitrate_mbps: float = 12.0
+    resolution_width: int = Field(default=1920, ge=2, le=7680)
+    resolution_height: int = Field(default=1080, ge=2, le=4320)
+    fps: float = Field(default=30.0, gt=0.0, le=120.0)
+    bitrate_mbps: float = Field(default=12.0, gt=0.0, le=500.0)
     include_audio: bool = True
+
+    @field_validator("audio_path")
+    @classmethod
+    def audio_path_must_exist(cls, v: str) -> str:
+        if v and not _Path(v).exists():
+            raise ValueError(f"audio_path existiert nicht: {v!r}")
+        return v
 
 
 class RenderProgress(BaseModel):

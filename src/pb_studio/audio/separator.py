@@ -16,7 +16,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency in test envs
     class _FallbackSessionOptions:
         def __init__(self):
-            self.enable_mem_pattern = True
+            self.enable_mem_pattern = False
 
     class _FallbackOrt:
         SessionOptions = _FallbackSessionOptions

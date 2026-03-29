@@ -81,7 +81,9 @@ async def generate_cut_list(
 
         # Timeline validieren
         audio_dur = audio_clips_snapshot.get(config.audio_clip_id, {}).get("duration_seconds")
-        timeline_warnings = validate_timeline(cuts, audio_duration=audio_dur)
+        timeline_warnings, timeline_errors = validate_timeline(cuts, audio_duration=audio_dur)
+        if timeline_errors:
+            raise HTTPException(status_code=400, detail=f"Ungültige Timeline: {'; '.join(timeline_errors)}")
         for w in timeline_warnings:
             logger.warning(f"Timeline-Validierung: {w}")
 
@@ -244,6 +246,8 @@ def _run_pacing_generation(
         "expected_bpm": config.expected_bpm,
         "use_motion_matching": config.use_motion_matching,
         "use_structure_awareness": config.use_structure_awareness,
+        # C1/HIGH: Pass min_cut_interval from schema (was silently dropped, hardcoded to 0.5)
+        "min_cut_interval": config.min_cut_interval,
     }
 
     cut_list = service.generate_cut_list(

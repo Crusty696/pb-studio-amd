@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -10,7 +11,7 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für den Smart Director / Pacing Tab.</summary>
-public partial class DirectorViewModel : ObservableObject
+public partial class DirectorViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
@@ -18,6 +19,8 @@ public partial class DirectorViewModel : ObservableObject
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
+    private volatile bool _isShuttingDown;
+    private bool _disposed;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -79,43 +82,51 @@ public partial class DirectorViewModel : ObservableObject
             var videoClips = await _videoLibraryState.RefreshAsync();
             if (videoClips != null && version == _loadVersion)
             {
-                AvailableVideoClips.Clear();
-                foreach (var clip in videoClips)
+                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    AvailableVideoClips.Add(new SelectableVideoClip
+                    AvailableVideoClips.Clear();
+                    foreach (var clip in videoClips)
                     {
-                        Id = clip.Id,
-                        Name = clip.Name,
-                        DurationSeconds = clip.DurationSeconds,
-                    });
-                }
+                        AvailableVideoClips.Add(new SelectableVideoClip
+                        {
+                            Id = clip.Id,
+                            Name = clip.Name,
+                            DurationSeconds = clip.DurationSeconds,
+                        });
+                    }
+                });
             }
 
             var audioClips = await _audioLibraryState.RefreshAsync();
             if (audioClips != null && version == _loadVersion)
             {
                 var previousAudioClipId = SelectedAudioClip?.Id;
-                AvailableAudioClips.Clear();
-                foreach (var clip in audioClips)
+                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    AvailableAudioClips.Add(new AudioClipModel
+                    AvailableAudioClips.Clear();
+                    foreach (var clip in audioClips)
                     {
-                        Id = clip.Id,
-                        Name = clip.Name,
-                        Path = clip.Path,
-                        DurationSeconds = clip.DurationSeconds,
-                        SampleRate = clip.SampleRate,
-                        Channels = clip.Channels,
-                        Format = clip.Format,
-                        Bpm = clip.Bpm,
-                        Key = clip.Key ?? "",
-                        BeatCount = clip.BeatCount,
-                        IsAnalyzed = clip.IsAnalyzed,
-                    });
-                }
+                        AvailableAudioClips.Add(new AudioClipModel
+                        {
+                            Id = clip.Id,
+                            Name = clip.Name,
+                            Path = clip.Path,
+                            DurationSeconds = clip.DurationSeconds,
+                            SampleRate = clip.SampleRate,
+                            Channels = clip.Channels,
+                            Format = clip.Format,
+                            Bpm = clip.Bpm,
+                            Key = clip.Key ?? "",
+                            BeatCount = clip.BeatCount,
+                            IsAnalyzed = clip.IsAnalyzed,
+                        });
+                    }
 
-                SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == previousAudioClipId)
-                    ?? AvailableAudioClips.FirstOrDefault();
+                    SelectedAudioClip = AvailableAudioClips.FirstOrDefault(c => c.Id == previousAudioClipId)
+                        ?? AvailableAudioClips.FirstOrDefault();
+                });
             }
 
             if (version == _loadVersion)
@@ -160,11 +171,20 @@ public partial class DirectorViewModel : ObservableObject
         SelectedVideoClipCount = AvailableVideoClips.Count(c => c.IsSelected);
     }
 
-    private bool CanGenerateCutList() => !IsGenerating;
+    private bool CanGenerateCutList() =>
+        !IsGenerating && SelectedAudioClip != null && SelectedVideoClipCount > 0;
+
+    partial void OnSelectedAudioClipChanged(AudioClipModel? value)
+        => GenerateCutListCommand.NotifyCanExecuteChanged();
+
+    partial void OnSelectedVideoClipCountChanged(int value)
+        => GenerateCutListCommand.NotifyCanExecuteChanged();
 
     [RelayCommand(CanExecute = nameof(CanGenerateCutList))]
     private async Task GenerateCutListAsync()
     {
+        if (_isShuttingDown) return;
+
         if (SelectedAudioClip == null)
         {
             StatusText = "Kein Audio-Clip ausgewählt";
@@ -226,6 +246,7 @@ public partial class DirectorViewModel : ObservableObject
                         ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? ConvertToDoubleSafe(cs) : 0.0,
                         TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
                         TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? ConvertToDoubleSafe(ts) : 0.0,
+                        SegmentType = meta?.GetValueOrDefault("segment_type")?.ToString(),
                     });
                 }
                 CutCount = result.CutCount;
@@ -275,6 +296,7 @@ public partial class DirectorViewModel : ObservableObject
 
     private void ResetProjectState()
     {
+        _isShuttingDown = false; // project closed, but app is still running
         AvailableAudioClips.Clear();
         AvailableVideoClips.Clear();
         CutList.Clear();
@@ -284,6 +306,15 @@ public partial class DirectorViewModel : ObservableObject
         TotalDuration = 0;
         IsGenerating = false;
         StatusText = "Kein Projekt geöffnet";
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _isShuttingDown = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        _loadGate.Dispose();
     }
 }
 

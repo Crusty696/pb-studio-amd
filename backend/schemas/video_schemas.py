@@ -40,7 +40,7 @@ class VideoAnalysisResult(BaseModel):
     avg_motion: float = 0.0
     dominant_colors: list[str] = []
     tags: list[str] = []
-    embedding_dim: int = 1152  # SigLIP
+    embedding_dim: int = 0  # SigLIP; 0 = kein Embedding vorhanden
     has_embedding: bool = False
     scenes: list["SceneInfo"] = []
     motion: Optional["MotionData"] = None
