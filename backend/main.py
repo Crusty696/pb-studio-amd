@@ -87,9 +87,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS für lokalen C# WPF Client
+# CORS für lokalen C# WPF Client (native App benötigt kein CORS)
 app.add_middleware(
     CORSMiddleware,
+ claude/upbeat-liskov
     allow_origins=[
         "http://127.0.0.1",
         "http://localhost",
@@ -97,6 +98,11 @@ app.add_middleware(
     ],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Accept"],
+
+    allow_origins=[],  # SEC-005 Fix: Keine Wildcards (*) erlaubt
+    allow_methods=["*"],
+    allow_headers=["*"],
+ backup/pre-hybrid-alignment-2026-03-09
 )
 
 # GPU-Lock Middleware
