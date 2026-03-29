@@ -324,11 +324,31 @@ class SemanticMatcher:
             faiss_id = None
 
             if hasattr(vs, "metadata"):
-                for fid, fmeta in vs.metadata.items():
-                    if (str(fmeta.get("scene_id", "")) == scene_id or
-                            str(fmeta.get("id", "")) == scene_id):
-                        faiss_id = int(fid)
-                        break
+                # Inverted Index Cache to avoid O(N) lookup over all metadata items
+                current_metadata_len = len(vs.metadata)
+
+                # Check if cache is missing or if the vector store length has changed.
+                # For a more robust cache, we also store the id() of vs to ensure we don't
+                # use a cache from a different vector store instance.
+                if (getattr(self, "_vs_metadata_len", -1) != current_metadata_len or
+                    getattr(self, "_vs_instance_id", -1) != id(vs)):
+
+                    new_cache = {}
+                    # We iterate backwards so that the *first* occurrence in the original order
+                    # overwrites any later occurrences, preserving the original `break` behavior.
+                    for fid, fmeta in reversed(list(vs.metadata.items())):
+                        s_id = str(fmeta.get("scene_id", ""))
+                        m_id = str(fmeta.get("id", ""))
+
+                        # In the original code, empty strings were allowed to match
+                        new_cache[s_id] = int(fid)
+                        new_cache[m_id] = int(fid)
+
+                    self._inverted_metadata_cache = new_cache
+                    self._vs_metadata_len = current_metadata_len
+                    self._vs_instance_id = id(vs)
+
+                faiss_id = self._inverted_metadata_cache.get(scene_id)
 
             if faiss_id is None:
                 return None

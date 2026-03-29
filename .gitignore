@@ -83,3 +83,13 @@ artifacts/
 .tmp_*.ps1
 .tmp_*.py
 gui_screenshots/
+bolt-optimize-checkerboard-novelty-4639455432380006930
+.pytest_tmp
+.pytest_tmp2
+=======
+bolt-semantic-matcher-cache-10971711345514938352
+.pytest_tmp*/
+=======
+.pytest_tmp2/
+main
+main

@@ -152,7 +152,7 @@ class SystemMonitor:
                 if s_type == "Temperature":
                     # Prefer "Core" or generic "GPU Core", avoid "Hot Spot" if possible (or take max?)
                     if "core" in name or "edge" in name:
-                         stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
+                        stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
 
                 # Memory (SmallData in LHM)
                 if s_type == "SmallData":
