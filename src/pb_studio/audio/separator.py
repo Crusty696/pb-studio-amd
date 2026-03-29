@@ -171,6 +171,7 @@ class StemSeparator:
         def _patched_init(self_opts, *args, **kwargs):
             self._original_session_options_init(self_opts, *args, **kwargs)
             self_opts.enable_mem_pattern = False
+            self_opts.enable_cpu_mem_arena = False
         ort.SessionOptions.__init__ = _patched_init
         logger.debug("SessionOptions patch applied for DirectML separation")
 

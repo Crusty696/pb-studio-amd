@@ -34,5 +34,5 @@ opencv-python==4.9.0.80
 pythonnet>=3.0.0
 audio-separator>=0.17.0
 scikit-learn>=1.3.0
-faiss-cpu>=1.7.0
+faiss-cpu==1.7.4
 sentencepiece>=0.2.0
