@@ -120,17 +120,42 @@ class StructureAnalyzer:
     def _checkerboard_novelty(self, rec_matrix: FloatArray, kernel_size: int = 64) -> FloatArray:
         n = rec_matrix.shape[0]
         half_k = kernel_size // 2
+
+        # Original loop bound is for i in range(half_k, n - half_k)
+        # So we extract windows of size 2 * half_k
+        window_size = 2 * half_k
+
         kernel = np.ones((kernel_size, kernel_size))
         kernel[:half_k, :half_k] = -1
         kernel[half_k:, half_k:] = -1
         novelty = np.zeros(n)
-        for i in range(half_k, n - half_k):
-            start = i - half_k
-            end = i + half_k
-            if end <= n and start >= 0:
-                sub = rec_matrix[start:end, start:end]
-                if sub.shape == kernel.shape:
-                    novelty[i] = np.abs(np.sum(sub * kernel))
+
+        if n < window_size:
+            return novelty
+
+        stride_bytes = rec_matrix.strides[0]
+
+        # Number of sliding windows must exactly match the number of loop iterations
+        # The loop iterations are from half_k to n - half_k, so length is n - 2*half_k
+        num_windows = n - window_size
+
+        # Ensure we don't try to stride negative shapes if n == window_size
+        if num_windows <= 0:
+            return novelty
+
+        windows = np.lib.stride_tricks.as_strided(
+            rec_matrix,
+            shape=(num_windows, window_size, window_size),
+            strides=(stride_bytes + rec_matrix.strides[1], stride_bytes, rec_matrix.strides[1])
+        )
+
+        # The window kernel must match the extracted window_size exactly
+        sub_kernel = kernel[:window_size, :window_size]
+
+        novelty[half_k : n - half_k] = np.abs(
+            np.tensordot(windows, sub_kernel, axes=([1, 2], [0, 1]))
+        )
+
         return novelty
 
     # ------------------------------------------------------------------
