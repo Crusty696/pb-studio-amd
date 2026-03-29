@@ -17,6 +17,9 @@ public partial class VideoClipModel : ObservableObject
     public List<string> Tags { get; set; } = [];
     [ObservableProperty] private BitmapImage? _thumbnail;
     [ObservableProperty] private bool _isAnalyzed;
+    /// <summary>R15/C-03: Flag aus Python VideoClipInfo.thumbnail_available — gibt an, ob das
+    /// Backend bereits ein Thumbnail für diesen Clip generiert hat.</summary>
+    public bool ThumbnailAvailable { get; set; }
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public string ResolutionText => $"{Width}x{Height}";
 }

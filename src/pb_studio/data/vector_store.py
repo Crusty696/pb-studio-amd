@@ -1,3 +1,4 @@
+import atexit
 import faiss
 import numpy as np
 import logging
@@ -9,8 +10,27 @@ from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
+_vs_lock = threading.Lock()
+
+
 class VectorStore:
-    def __init__(self, index_name="main_index", dimension=None):
+    _instance: "VectorStore | None" = None
+    _instance_index_name: str | None = None
+
+    def __new__(cls, index_name: str = "main_index", dimension=None):
+        with _vs_lock:
+            if cls._instance is None or cls._instance_index_name != index_name:
+                instance = super().__new__(cls)
+                instance._initialized = False
+                cls._instance = instance
+                cls._instance_index_name = index_name
+            return cls._instance
+
+    def __init__(self, index_name: str = "main_index", dimension=None):
+        if getattr(self, '_initialized', False):
+            return
+        self._initialized = True
+
         self.config = ConfigManager()
         self.data_dir = Path(self.config.get("paths", {}).get("db_path", "./data")).parent
         self.index_path = self.data_dir / f"{index_name}.faiss"
@@ -25,6 +45,7 @@ class VectorStore:
         self.metadata = {} # Map faiss_id -> dict (media_id, desc, etc)
 
         self._load_index()
+        atexit.register(self._save_on_exit)
 
     def _load_index(self):
         if self.index_path.exists():
@@ -123,9 +144,9 @@ class VectorStore:
 
             self.metadata[faiss_id] = meta_info
 
-            # Auto-save alle 10 Embeddings um Datenverlust bei Crash zu verhindern
-            if self.index.ntotal % 10 == 0:
-                self._save_unlocked()
+            # Immer nach jedem Embedding speichern — Desktop-App mit kleinem Index,
+            # Performance-Overhead akzeptabel; verhindert Datenverlust bei Absturz.
+            self._save_unlocked()
 
             return faiss_id
 
@@ -154,7 +175,7 @@ class VectorStore:
 
     def _save_unlocked(self):
         """Save index and metadata atomically (caller must hold lock)."""
-        if self.index:
+        if self.index and getattr(self, "index_path", None) is not None:
             # Atomic save: write to temp files, then rename
             try:
                 # Save FAISS index to temp file first
@@ -186,3 +207,11 @@ class VectorStore:
                         Path(tmp).unlink(missing_ok=True)
                     except Exception:
                         pass
+
+    def _save_on_exit(self):
+        """atexit-Handler: stellt sicher dass beim Prozessende gespeichert wird."""
+        try:
+            with self._lock:
+                self._save_unlocked()
+        except Exception:
+            pass

@@ -104,33 +104,30 @@ class MoondreamAnalyzer:
         """Create optimized session options for DirectML compatibility."""
         sess_options = ort.SessionOptions()
 
-        # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
+        # KRITISCH fuer DirectML: beide Memory-Flags MÜSSEN False sein.
+        # R16: enable_cpu_mem_arena=True war falsch — CPU-Arena konkurriert mit
+        # DmlExecutionProvider-Allocator und kann OOM / Instabilität verursachen.
         sess_options.enable_mem_pattern = False
+        sess_options.enable_cpu_mem_arena = False
 
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-
-        # Weitere Performance-Optimierungen
-        sess_options.enable_cpu_mem_arena = True
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 
         return sess_options
 
     def _get_providers(self) -> List[str]:
-        """Get available execution providers with DirectML priority."""
+        """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
-        # Prioritaet: DirectML > CPU (AMD-only Build, kein CUDA)
         providers = []
 
         if 'DmlExecutionProvider' in available:
             providers.append('DmlExecutionProvider')
             logger.info("DirectML provider available - using AMD GPU acceleration")
 
-        # CPU als Fallback immer hinzufuegen (KEIN CUDA - AMD-only build)
-        providers.append('CPUExecutionProvider')
-
+        # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
         return providers
 
     def _init_tokenizer(self) -> bool:
@@ -200,7 +197,7 @@ class MoondreamAnalyzer:
                 encoder_path = candidate
                 break
 
-        # Wenn keine ONNX-Modelle vorhanden, nutze PyTorch-Fallback
+        # Wenn keine ONNX-Modelle vorhanden → kein PyTorch-Fallback (IRON RULE)
         has_onnx_models = (
             (encoder_path is not None and decoder_path.exists()) or
             encoder_path is not None or
@@ -208,42 +205,39 @@ class MoondreamAnalyzer:
         )
 
         if not has_onnx_models:
-            logger.warning("Moondream ONNX models not found - using PyTorch fallback")
-            try:
-                from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
-                self._pytorch_fallback = MoondreamPyTorch()
-                if self._pytorch_fallback.load():
-                    self._initialized = True
-                    self._active_provider = "PyTorch (CPU)"
-                    logger.info("[OK] Moondream PyTorch fallback loaded")
-                    return True
-                else:
-                    logger.error("PyTorch fallback failed to load")
-                    return False
-            except ImportError as e:
-                logger.error(f"PyTorch fallback not available: {e}")
-                return False
+            logger.warning(
+                "Moondream ONNX-Modelle nicht gefunden. "
+                "Kein CPU-Fallback (IRON RULE: AMD DirectML only). "
+                "generate_caption() gibt Platzhaltertext zurück."
+            )
+            return False
 
         # Initialize tokenizer first
         if not self._init_tokenizer():
             logger.warning("Tokenizer not available - text generation will be limited")
 
-        if not hasattr(ort, "InferenceSession") or type(ort).__name__ == "_FallbackOrt":
-            logger.warning("onnxruntime not installed - forcing PyTorch fallback for Moondream")
-            try:
-                from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
-                self._pytorch_fallback = MoondreamPyTorch()
-                if self._pytorch_fallback.load():
-                    self._initialized = True
-                    self._active_provider = "PyTorch (CPU)"
-                    return True
-            except ImportError as e:
-                logger.error(f"PyTorch fallback not available: {e}")
+        has_real_ort = (
+            hasattr(ort, "InferenceSession") and
+            ort.InferenceSession is not object and
+            isinstance(ort.InferenceSession, type)
+        )
+        if not has_real_ort:
+            logger.warning(
+                "onnxruntime nicht installiert — Moondream deaktiviert. "
+                "Kein PyTorch-Fallback (IRON RULE: kein CPU-Fallback)."
+            )
             return False
 
         # Session options und providers
         sess_options = self._create_session_options()
         providers = self._get_providers()
+
+        if not providers:
+            logger.warning(
+                "Moondream: DmlExecutionProvider nicht verfügbar. "
+                "Moondream deaktiviert (IRON RULE: kein CPU-Fallback)."
+            )
+            return False
 
         try:
             if encoder_path is not None and decoder_path.exists():
@@ -268,8 +262,8 @@ class MoondreamAnalyzer:
                 logger.info(f"Moondream decoder loaded. Provider: {self.decoder_session.get_providers()[0]}")
 
             elif encoder_path is not None and not decoder_path.exists():
-                # Hybrid Mode: ONNX Vision Encoder (GPU) + PyTorch Text Decoder (CPU)
-                logger.info(f"Loading hybrid Moondream: ONNX encoder + PyTorch decoder")
+                # Encoder-only ONNX — kein PyTorch-Decoder-Fallback (IRON RULE)
+                logger.info(f"Loading Moondream ONNX encoder only (no decoder found): {encoder_path}")
 
                 self.encoder_session = ort.InferenceSession(
                     str(encoder_path),
@@ -279,23 +273,12 @@ class MoondreamAnalyzer:
 
                 self._is_combined_model = False
                 self._active_provider = self.encoder_session.get_providers()[0]
-                self._hybrid_mode = True
-
-                # PyTorch Decoder laden fuer Text-Generierung
-                try:
-                    from pb_studio.ai.moondream_pytorch import MoondreamPyTorch
-                    self._pytorch_fallback = MoondreamPyTorch()
-                    if not self._pytorch_fallback.load():
-                        logger.warning("PyTorch decoder failed to load - disabling hybrid mode")
-                        self._pytorch_fallback = None
-                        self._hybrid_mode = False
-                    else:
-                        logger.info(f"Moondream encoder: {self._active_provider} (GPU)")
-                        logger.info("Moondream decoder: PyTorch (CPU)")
-                except ImportError:
-                    logger.warning("PyTorch decoder not available - using encoder-only mode")
-                    self._pytorch_fallback = None
-                    self._hybrid_mode = False
+                # Hybrid-Mode bleibt False — kein PyTorch-Decoder
+                logger.info(f"Moondream encoder loaded (encoder-only mode). Provider: {self._active_provider}")
+                logger.warning(
+                    "Moondream-Decoder (ONNX) fehlt — Textgenerierung nicht verfügbar. "
+                    "Kein PyTorch-Fallback (IRON RULE)."
+                )
 
             elif combined_path.exists():
                 # Combined Model Architecture
@@ -604,22 +587,7 @@ class MoondreamAnalyzer:
         """
         if not self._initialized:
             if not self._init_model():
-                return "[Error: Model not initialized]"
-
-        # Hybrid Mode oder reiner PyTorch-Fallback
-        if self._pytorch_fallback is not None and (
-            self._hybrid_mode or
-            (self.encoder_session is None and self.combined_session is None)
-        ):
-            try:
-                response = self._pytorch_fallback.answer_question(image, prompt)
-                if isinstance(response, str) and response.strip():
-                    return response.strip()
-                logger.warning("Moondream PyTorch returned an empty response")
-                return "[Error: Model returned empty response]"
-            except Exception as e:
-                logger.error(f"PyTorch caption generation failed: {e}")
-                return f"[Error: {str(e)}]"
+                return "[Moondream-Modell nicht gefunden]"
 
         if self.tokenizer is None:
             return "[Error: Tokenizer not available]"

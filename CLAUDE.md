@@ -31,7 +31,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 ## 2. ⚠️ IRON RULES (NEVER OVERRIDE)
 1. **AMD DIRECTML ONLY:** NO CUDA, NO ROCm. Use `onnxruntime-directml`.
-2. **DIRECTML PATTERN:** `session_options.enable_mem_pattern = False` (MANDATORY).
+2. **DIRECTML PATTERN:** `enable_mem_pattern = False` AND `enable_cpu_mem_arena = False` (BOTH MANDATORY).
 3. **PYTHON & NUMPY:** Python 3.11.x | NumPy 1.26.4 (< 2.0 strict — BeatNet).
 4. **HARDWARE ENCODING:** NO NVENC. Use `h264_amf`, `hevc_amf`, `av1_amf` via FFmpeg.
 5. **GPU MONITORING:** NO `pynvml`. Use `LibreHardwareMonitorLib.dll` via `pythonnet`.
@@ -42,11 +42,11 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-03-09
+- **Date:** 2026-03-16
 - **Phase:** Production / Verified
-- **Status:** HIGH-Findings gefixt 2026-03-11. 182 passed, 9 skipped, 0 failures.
+- **Status:** 20-Runden Deep-Audit abgeschlossen 2026-03-16. 186 passed, 9 skipped, 0 failures.
 - **Next Task:** End-to-End Test (WPF App starten + alle 9 Views testen).
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11)
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R16–R20 gefixt 2026-03-16)
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)

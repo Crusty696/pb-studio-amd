@@ -18,7 +18,8 @@ public class SSEClient : IDisposable
     private readonly ILogger<SSEClient> _logger;
     private CancellationTokenSource? _cts;
     private readonly List<Task> _listenTasks = [];
-    private bool _isListening;
+    private volatile bool _isListening;
+    private volatile bool _disposed;
     private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
 
     private const int InitialReconnectDelayMs = 3000;
@@ -47,6 +48,9 @@ public class SSEClient : IDisposable
             return;
         }
 
+        // R16/CRITICAL-001: Dispose previous CTS before overwriting — a stop+start
+        // cycle would leak the old CancellationTokenSource without this guard.
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _listenTasks.Clear();
         _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));
@@ -195,7 +199,7 @@ public class SSEClient : IDisposable
 
             switch (streamKind)
             {
-                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress":
+                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "gpu_error":
                     ProgressReceived?.Invoke(this, new ProgressEventArgs
                     {
                         EventType = eventType,
@@ -292,9 +296,21 @@ public class SSEClient : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return; _disposed = true;
         StopListening();
+        // FINDING-020 Fix: Erst auf Tasks warten, dann HttpClient freigeben.
+        // Sonst kann ein noch laufender ListenAsync-Task eine ObjectDisposedException
+        // auf dem bereits entsorgten HttpClient werfen.
+        if (_listenTasks.Count > 0)
+        {
+            // Wait up to 2 s for listen tasks to observe CancellationToken and exit cleanly
+            // before we dispose the HttpClient they are using (CRITICAL-001 fix).
+            Task.WaitAll([.. _listenTasks], TimeSpan.FromSeconds(2));
+            _listenTasks.Clear();
+        }
         _httpClient.Dispose();
         _cts?.Dispose();
+        _cts = null;
     }
 
     private enum StreamKind

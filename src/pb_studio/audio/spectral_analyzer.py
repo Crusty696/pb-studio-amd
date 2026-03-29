@@ -48,6 +48,57 @@ class SpectralAnalyzer:
         self.hop_length = hop_length
         self.n_fft = n_fft
 
+    def analyze_from_array(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Führt vollständige 8-Band Spektral-Analyse auf bereits geladenem Audio durch.
+
+        Vermeidet einen erneuten Disk-Zugriff wenn Audio bereits im Speicher liegt.
+
+        Args:
+            y:  Audio-Signal (float32/float64, mono)
+            sr: Sample-Rate des Signals
+
+        Returns:
+            Gleiche Struktur wie analyze() — band_energies, band_means, events, …
+        """
+        try:
+            # STFT berechnen
+            S = np.abs(librosa.stft(y, n_fft=self.n_fft, hop_length=self.hop_length))
+            freqs = librosa.fft_frequencies(sr=sr, n_fft=self.n_fft)
+            times = librosa.frames_to_time(
+                np.arange(S.shape[1]), sr=sr, hop_length=self.hop_length
+            )
+
+            band_energies: Dict[str, Any] = {}
+            band_means: Dict[str, float] = {}
+            band_variances: Dict[str, float] = {}
+
+            for band_name, (low_freq, high_freq) in FREQUENCY_BANDS.items():
+                freq_mask = (freqs >= low_freq) & (freqs < high_freq)
+                if not np.any(freq_mask):
+                    band_energies[band_name] = np.zeros(len(times))
+                    band_means[band_name] = 0.0
+                    band_variances[band_name] = 0.0
+                    continue
+                band_energy = np.sum(S[freq_mask, :], axis=0)
+                band_energies[band_name] = band_energy
+                band_means[band_name] = float(np.mean(band_energy))
+                band_variances[band_name] = float(np.var(band_energy))
+
+            events = self._detect_events(band_energies, times)
+
+            return {
+                "times": times.tolist(),
+                "band_energies": {k: v.tolist() for k, v in band_energies.items()},
+                "band_means": band_means,
+                "band_variances": band_variances,
+                "events": events,
+                "duration": float(len(y) / sr),
+                "num_frames": len(times),
+            }
+        except Exception as e:
+            logger.error(f"Spektral-Analyse (Array) fehlgeschlagen: {e}")
+            return self._empty_result()
+
     def analyze(self, audio_path: str | Path, duration: float | None = None, offset: float = 0.0) -> Dict[str, Any]:
         """Führt vollständige 8-Band Spektral-Analyse durch.
 

@@ -48,7 +48,7 @@ async def with_gpu_task(
     # VRAM-Budget-Check (nur wenn model_id gesetzt)
     if model_id:
         try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager, KNOWN_MODEL_BUDGETS
+            from pb_studio.core.vram_budget_manager import get_vram_manager, KNOWN_MODEL_BUDGETS, ModelPriority
             manager = get_vram_manager()
             required_mb = KNOWN_MODEL_BUDGETS.get(model_id, 0)
             if required_mb > 0:
@@ -58,7 +58,7 @@ async def with_gpu_task(
                         f"VRAM-Check '{model_id}': Braucht {required_mb}MB, "
                         f"Verfügbar {available}MB — starte Eviction"
                     )
-                    manager.evict_all()
+                    manager.evict_all(min_priority=ModelPriority.MEDIUM)
                 else:
                     logger.debug(
                         f"VRAM-Check '{model_id}': OK ({available}MB verfügbar, "
@@ -88,6 +88,13 @@ async def with_gpu_task(
                 "message": f"GPU-Task Timeout: {func.__name__} ({timeout_seconds}s)",
                 "task": func.__name__,
             })
+            # VRAM-Reservation freigeben — sonst driftet das Budget permanent
+            if model_id:
+                try:
+                    from pb_studio.core.vram_budget_manager import get_vram_manager
+                    get_vram_manager().release(model_id)
+                except Exception as _vram_err:
+                    logger.debug(f"VRAM-Release nach Timeout fehlgeschlagen (ignoriert): {_vram_err}")
             raise TimeoutError(
                 f"GPU-Task '{func.__name__}' hat Timeout von {timeout_seconds}s überschritten"
             )
@@ -112,11 +119,11 @@ async def publish_event(event_type: str, data: dict[str, Any], client_id: str = 
     BUG-028 Fix: Fan-out an alle registrierten Queues, damit /events/progress und
     /events/log gleichzeitig betrieben werden können ohne sich Events zu stehlen.
     """
+    if not _event_queues:
+        return
     event = {"event": event_type, "data": data}
     # Fan-out: alle registrierten Queues beliefern
-    # Falls noch keine Queue registriert ist, default-Queue anlegen
-    target_queues = list(_event_queues.values()) if _event_queues else [get_event_queue("default")]
-    for queue in target_queues:
+    for queue in list(_event_queues.values()):
         try:
             queue.put_nowait(event)
         except asyncio.QueueFull:
@@ -126,9 +133,9 @@ async def publish_event(event_type: str, data: dict[str, Any], client_id: str = 
             )
             try:
                 queue.get_nowait()
-                queue.put_nowait(event)
             except asyncio.QueueEmpty:
                 pass
+            queue.put_nowait(event)
 
 
 async def publish_log(message: str, *, level: str = "info", detail: str | None = None, source: str | None = None) -> None:

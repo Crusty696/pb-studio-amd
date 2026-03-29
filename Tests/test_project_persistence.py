@@ -132,7 +132,9 @@ class TestProjectLifecyclePersistence:
         assert fresh_state.current_timeline == []
         assert fresh_state.current_audio_path is None
         assert fresh_state.render_tasks == {}
-        assert fresh_state.cancel_flags == {}
+        # MEDIUM-015: reset() marks remaining cancel_flags as True (not clears) so
+        # in-flight render threads see the cancellation signal after project reset.
+        assert fresh_state.cancel_flags == {"task-1": True}
 
         project = response.json()
         assert project["audio_count"] == 0

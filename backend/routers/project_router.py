@@ -11,6 +11,7 @@ Endpoints:
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,8 +74,15 @@ def _read_project_meta(project_path: Path) -> dict:
 
 
 def _write_project_meta(project_path: Path, meta: dict) -> None:
+    import os
     meta_path = _project_meta_path(project_path)
-    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_path = meta_path.with_suffix(".tmp")
+    try:
+        tmp_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(str(tmp_path), str(meta_path))
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
 
 def _normalize_timeline_entries(timeline: list[dict]) -> list[dict]:
@@ -121,9 +129,11 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
             raise ValueError("timeline ist keine Liste")
 
         timeline = _normalize_timeline_entries(timeline)
-        warnings = validate_timeline(timeline)
+        warnings, errors = validate_timeline(timeline)
         for w in warnings:
             logger.warning(f"Projekt-Timeline Warnung beim Laden: {w}")
+        for e in errors:
+            logger.warning(f"Projekt-Timeline Fehler beim Laden: {e}")
 
         state.set_timeline(timeline)
         state.current_audio_path = audio_path if isinstance(audio_path, str) and audio_path else None
@@ -246,7 +256,15 @@ async def save_project(state: AppState = Depends(get_app_state)) -> StatusRespon
             "timeline": timeline,
             "saved_at": _utc_now_iso(),
         }
-        timeline_path.write_text(json.dumps(timeline_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        # R17/FINDING-5: Atomic write — crash during save must not corrupt timeline.json.
+        # Same tmp+os.replace pattern used by _write_project_meta.
+        tmp_tl = timeline_path.with_suffix(".tmp")
+        try:
+            tmp_tl.write_text(json.dumps(timeline_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            os.replace(str(tmp_tl), str(timeline_path))
+        finally:
+            if tmp_tl.exists():
+                tmp_tl.unlink(missing_ok=True)
     else:
         timeline_path.unlink(missing_ok=True)
 
@@ -275,6 +293,12 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
     if not state.current_project:
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
     name = state.current_project.get("name", "Unbekannt")
+    # In-flight Render-Tasks abbrechen bevor State geleert wird (verhindert GPU-Lock Stall)
+    # Snapshot der Task-IDs unter Lock nehmen um Race-Condition beim Iterieren zu verhindern.
+    with state._state_lock:
+        task_ids = list(state.render_tasks.keys())
+    for task_id in task_ids:
+        state.set_cancel_flag(task_id, True)
     # Reset BEVOR current_project = None (reset() leert alle Caches)
     state.reset()
     logger.info(f"Projekt geschlossen: {name}")
@@ -287,6 +311,6 @@ async def project_info(state: AppState = Depends(get_app_state)) -> ProjectInfo:
     if not state.current_project:
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
     project_data = dict(state.current_project)
-    project_data["audio_count"] = len(state.audio_clips)
-    project_data["video_count"] = len(state.video_clips)
+    project_data["audio_count"] = len(state.get_audio_clips_snapshot())
+    project_data["video_count"] = len(state.get_video_clips_snapshot())
     return ProjectInfo(**project_data)

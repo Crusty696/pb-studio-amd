@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import random
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -154,7 +154,8 @@ class ClipSelector:
         self._rr_index = 0
 
         # Blacklist für kürzlich verwendete Clips (NV-Roter-Faden)
-        self._recently_used: List[str] = []
+        # R18/MEDIUM-018-3: Use deque so popleft() is O(1) instead of list.pop(0) O(N).
+        self._recently_used: deque = deque()
         self._blacklist_size = 10
 
         # Roter Faden - Visueller Zusammenhang zwischen Clips
@@ -222,10 +223,10 @@ class ClipSelector:
         else:  # motion oder default
             selected = self._select_by_motion(candidates, trigger_strength, trigger_type)
 
-        # Blacklist aktualisieren
+        # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
         self._recently_used.append(selected.clip_id)
         if len(self._recently_used) > self._blacklist_size:
-            self._recently_used.pop(0)
+            self._recently_used.popleft()
 
         # Roter Faden: Motion Score merken
         self._last_clip_motion_score = selected.motion_score

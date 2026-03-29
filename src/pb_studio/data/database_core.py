@@ -9,6 +9,28 @@ from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
+
+def _iter_sql_statements(sql: str):
+    """Yield individual SQL statements from a script.
+
+    Uses sqlite3.complete_statement() to correctly handle BEGIN...END blocks
+    in CREATE TRIGGER statements (naive semicolon-split would break them).
+
+    R16/CRIT-002: Replaces executescript() which issues an implicit COMMIT,
+    breaking migration transaction atomicity.
+    """
+    current = ""
+    for line in sql.splitlines():
+        current += line + "\n"
+        if sqlite3.complete_statement(current):
+            stmt = current.strip()
+            if stmt:
+                yield stmt
+            current = ""
+    remainder = current.strip()
+    if remainder:
+        yield remainder
+
 SCHEMA_MIGRATIONS = (
     (
         1,
@@ -168,7 +190,6 @@ class DatabaseCore:
 
     def _create_schema(self, conn):
         self._apply_migrations(conn)
-        self._backfill_media_import_guard(conn)
         conn.commit()
 
         cursor = conn.cursor()
@@ -181,6 +202,9 @@ class DatabaseCore:
     def _configure_connection(self, conn):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
+        # ⚡ Bolt: Optimize SQLite performance. When using WAL mode, synchronous=NORMAL
+        # is safe and provides a significant write throughput boost by avoiding a disk flush on every commit.
+        conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
         conn.execute("PRAGMA busy_timeout=30000;")
         self._register_sql_functions(conn)
@@ -212,7 +236,14 @@ class DatabaseCore:
                 continue
 
             with conn:
-                conn.executescript(sql)
+                # R16/CRIT-002: executescript() issues implicit COMMIT before
+                # running, which silently breaks the with-conn transaction and
+                # makes DDL + backfill + version-recording non-atomic.
+                # Fix: execute each statement individually — sqlite3 keeps them
+                # in the same transaction. _iter_sql_statements handles
+                # BEGIN...END trigger bodies correctly via complete_statement().
+                for stmt in _iter_sql_statements(sql):
+                    conn.execute(stmt)
                 if version == 2:
                     self._backfill_media_import_guard(conn)
                 conn.execute(

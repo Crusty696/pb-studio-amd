@@ -12,6 +12,7 @@ Endpoints:
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +90,14 @@ async def import_videos(
             "message": f"Importiert: {video_path.name}",
         })
 
+    # R15/M-01: Finales 100%-Event sicherstellen — bei übersprungenen Pfaden
+    # (falsches Format, Info-Fehler) würde der letzte Event nie 100% erreichen.
+    await publish_event("import_progress", {
+        "clip_id": None,
+        "percent": 100.0,
+        "message": f"{len(imported)}/{len(request.paths)} Videos importiert",
+    })
+
     logger.info(f"{len(imported)} von {len(request.paths)} Videos importiert")
     return imported
 
@@ -108,10 +117,12 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[VideoClipInfo]:
     """Gibt die Video-Clip-Liste zurück (paginiert)."""
-    clips = list(state.video_clips.values())
+    clips_snap = state.get_video_clips_snapshot()
+    analysis_snap = state.get_video_analysis_snapshot()
+    clips = list(clips_snap.values())
     start = (page - 1) * limit
     end = start + limit
-    return [VideoClipInfo(**c, is_analyzed=c["id"] in state.video_analysis_cache) for c in clips[start:end]]
+    return [VideoClipInfo(**c, is_analyzed=c["id"] in analysis_snap) for c in clips[start:end]]
 
 
 @router.get(
@@ -128,10 +139,9 @@ async def get_thumbnail(
     state: AppState = Depends(get_app_state),
 ) -> Response:
     """Gibt das Thumbnail eines Clips als JPEG zurück."""
-    if clip_id not in state.video_clips:
+    clip = state.get_video_clip(clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
-
-    clip = state.video_clips[clip_id]
     try:
         jpeg_bytes = await asyncio.to_thread(_generate_thumbnail, clip["path"])
         return Response(content=jpeg_bytes, media_type="image/jpeg")
@@ -154,10 +164,16 @@ async def analyze_video(
     state: AppState = Depends(get_app_state),
 ) -> VideoAnalysisResult:
     """Analysiert einen Video-Clip (GPU-Lock via Middleware)."""
-    if request.clip_id not in state.video_clips:
+    clip = state.get_video_clip(request.clip_id)
+    if clip is None:
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
 
-    clip = state.video_clips[request.clip_id]
+    # R15/C-02: Datei-Existenz VOR GPU-Lock prüfen — fehlendes File würde sonst als
+    # leeres Analyse-Ergebnis (scene_count=0, avg_motion=0.0) in die DB geschrieben
+    # und vorherige Analysen überschreiben (Silent Data Corruption).
+    if not Path(clip["path"]).exists():
+        raise HTTPException(status_code=422, detail=f"Video-Datei nicht gefunden: {clip['path']!r}")
+
     logger.info(f"Starte Video-Analyse: {clip['name']}")
     await publish_log(
         f"Video-Analyse gestartet: {clip['name']}",
@@ -169,7 +185,7 @@ async def analyze_video(
     try:
         result = await with_gpu_task(
             _run_video_analysis, clip["path"], request.clip_id, request,
-            model_id="raft_small",  # VRAM-Budget-Check via VRAMBudgetManager
+            model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
         )
         state.set_video_analysis(request.clip_id, result)
 
@@ -180,6 +196,10 @@ async def analyze_video(
             avg_motion=float(result.get("avg_motion", 0.0) or 0.0),
             has_embedding=bool(result.get("has_embedding", False)),
             is_analyzed=True,
+            scenes=result.get("scenes"),
+            motion=result.get("motion"),
+            dominant_colors=result.get("dominant_colors"),
+            tags=result.get("tags"),
         )
 
         await publish_log(
@@ -214,9 +234,10 @@ async def get_scenes(
     state: AppState = Depends(get_app_state),
 ) -> list[SceneInfo]:
     """Gibt Scene-Cuts für einen Clip zurück."""
-    if clip_id not in state.video_analysis_cache:
+    analysis = state.get_video_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    scenes = state.video_analysis_cache[clip_id].get("scenes", [])
+    scenes = analysis.get("scenes", [])
     return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
 
 
@@ -234,9 +255,10 @@ async def get_motion(
     state: AppState = Depends(get_app_state),
 ) -> MotionData:
     """Gibt Motion-Analyse Daten zurück."""
-    if clip_id not in state.video_analysis_cache:
+    analysis = state.get_video_analysis(clip_id)
+    if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    motion = state.video_analysis_cache[clip_id].get("motion", {})
+    motion = analysis.get("motion", {})
     if not motion:
         return MotionData(clip_id=clip_id)
     if "clip_id" not in motion:
@@ -258,7 +280,11 @@ def _get_video_info(path: str) -> dict[str, Any]:
         "-show_entries", "format=duration",
         "-of", "json", path,
     ]
-    res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30, startupinfo=startupinfo)
     data = json.loads(res)
 
     stream = data.get("streams", [{}])[0]
@@ -271,7 +297,18 @@ def _get_video_info(path: str) -> dict[str, Any]:
     except (ValueError, ZeroDivisionError):
         fps = 30.0
 
-    duration = float(stream.get("duration", 0) or fmt.get("duration", 0))
+    # R20/MEDIUM-020-5: ffprobe returns "N/A" for some formats (e.g. .wmv stream duration).
+    # "N/A" is truthy so the `or` short-circuit does NOT protect float() from ValueError.
+    # Resolve to format-level duration when the stream value is unusable.
+    _stream_dur = stream.get("duration", 0)
+    _fmt_dur = fmt.get("duration", 0)
+    try:
+        duration = float(_stream_dur) if _stream_dur not in (None, "", "N/A") else float(_fmt_dur or 0)
+    except (ValueError, TypeError):
+        try:
+            duration = float(_fmt_dur or 0)
+        except (ValueError, TypeError):
+            duration = 0.0
 
     return {
         "width": int(stream.get("width", 1920)),
@@ -286,24 +323,27 @@ def _generate_thumbnail(video_path: str) -> bytes:
     """Generiert ein Thumbnail-JPEG (blockierend)."""
     import subprocess
     import tempfile
-    import os
 
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        tmp_path = tmp.name
+        tmp_path = Path(tmp.name)
 
     try:
         cmd = [
             "ffmpeg", "-y", "-i", video_path,
             "-ss", "1", "-frames:v", "1",
             "-vf", "scale=320:-1",
-            tmp_path,
+            str(tmp_path),
         ]
-        subprocess.run(cmd, capture_output=True, timeout=15, check=True)
-        with open(tmp_path, "rb") as f:
-            return f.read()
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        subprocess.run(cmd, capture_output=True, timeout=15, check=True, startupinfo=startupinfo)
+        return tmp_path.read_bytes()
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        # R20/LOW: unlink(missing_ok=True) avoids FileNotFoundError if ffmpeg
+        # failed before creating the file.
+        tmp_path.unlink(missing_ok=True)
 
 
 def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequest) -> dict[str, Any]:
@@ -336,33 +376,55 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             import numpy as np
             from pb_studio.video.raft import MotionAnalyzer
 
-            # Frames gleichmäßig samplen (max 30 für Performance)
+            # Frames gleichmäßig samplen — temporal-dichte (~2 Frames/s), min 2, max 30
             cap = cv2.VideoCapture(video_path)
-            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-            n_frames = min(30, max(2, total // int(fps * 2)))  # alle 2s, max 30
-            step = max(1, total // n_frames)
+            try:
+                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                duration_sec = total / max(fps, 1.0)
+                n_frames = min(30, max(2, int(duration_sec * 2)))  # ~2 Samples/s
+                step = max(1, total // n_frames)
 
-            frames = []
-            for i in range(0, total - step, step):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    frames.append(frame)
-                if len(frames) >= n_frames:
-                    break
-            cap.release()
+                frames = []
+                for i in range(0, total - step, step):
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        frames.append(frame)
+                    if len(frames) >= n_frames:
+                        break
+            finally:
+                cap.release()
 
             if len(frames) >= 2:
-                motion_result = MotionAnalyzer().analyze_video_segment(frames, stride=1)
-                result["motion"] = {
-                    "clip_id": clip_id,
-                    "avg_motion": float(motion_result.get("avg_motion", 0.0)),
-                    "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
-                    "peak_frames": motion_result.get("scene_changes", []),
-                    "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
-                }
-                result["avg_motion"] = result["motion"]["avg_motion"]
+                motion_analyzer = MotionAnalyzer()
+                try:
+                    motion_result = motion_analyzer.analyze_video_segment(frames, stride=1)
+
+                    # Übersetze Sample-Indizes zu echten Video-Frame-Nummern
+                    translated_scene_changes = [
+                        {
+                            "frame_index": sc["frame_index"] * step,
+                            "time_seconds": round((sc["frame_index"] * step) / max(fps, 1.0), 3),
+                            "confidence": sc.get("confidence", 0.0),
+                        }
+                        for sc in motion_result.get("scene_changes", [])
+                        if isinstance(sc, dict)
+                    ]
+
+                    result["motion"] = {
+                        "clip_id": clip_id,
+                        "avg_motion": float(motion_result.get("avg_motion", 0.0)),
+                        "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
+                        "peak_frames": translated_scene_changes,
+                        "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
+                    }
+                    result["avg_motion"] = result["motion"]["avg_motion"]
+                finally:
+                    # FIX 4: .unload() aufrufen um DirectML VRAM explizit freizugeben
+                    motion_analyzer.unload()
+                    import gc; gc.collect()
+                    del motion_analyzer
         except Exception as e:
             logger.warning(f"Motion-Analyse fehlgeschlagen: {e}")
 
@@ -374,45 +436,58 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             from pb_studio.data.vector_store import VectorStore
 
             wrapper = SigLIPWrapper(lazy_load=False)
-            if wrapper.is_ready:
-                # Repräsentatives Frame aus Mitte des Videos
-                cap = cv2.VideoCapture(video_path)
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                mid = max(0, total_frames // 2)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                ret, frame = cap.read()
-                cap.release()
+            try:
+                if wrapper.is_ready:
+                    # Repräsentatives Frame aus Mitte des Videos
+                    cap = cv2.VideoCapture(video_path)
+                    try:
+                        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        mid = max(0, total_frames // 2)
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                        ret, frame = cap.read()
+                    finally:
+                        cap.release()
 
-                if ret:
-                    import numpy as _np
-                    from PIL import Image as _PILImage
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    pil_img = _PILImage.fromarray(frame_rgb)
-                    embedding = wrapper.encode_image(pil_img)
+                    if ret:
+                        import numpy as _np
+                        from PIL import Image as _PILImage
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        pil_img = _PILImage.fromarray(frame_rgb)
+                        embedding = wrapper.encode_image(pil_img)
 
-                    if embedding is not None:
-                        # FAISS VectorStore speichern (index "video_index")
-                        vs = VectorStore(index_name="video_index")
-                        vs.add_embedding(embedding.astype(_np.float32), {
-                            "clip_id": clip_id,
-                            "path": video_path,
-                            "scene_id": f"clip_{clip_id}_mid",
-                            "duration": result.get("duration_seconds", 0.0),
-                        })
-                        result["has_embedding"] = True
-                        result["embedding_dim"] = len(embedding)
-                        logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                        if embedding is not None:
+                            raw_norm = float(_np.linalg.norm(embedding))
+                            if raw_norm < 1e-3:
+                                logger.warning(
+                                    f"SigLIP near-zero embedding (norm={raw_norm:.2e}) für clip {clip_id} "
+                                    "— FAISS-Insert übersprungen"
+                                )
+                                result["has_embedding"] = False
+                            else:
+                                # FAISS VectorStore speichern (index "video_index")
+                                vs = VectorStore(index_name="video_index")
+                                vs.add_embedding(embedding.astype(_np.float32), {
+                                    "clip_id": clip_id,
+                                    "path": video_path,
+                                    "scene_id": f"clip_{clip_id}_mid",
+                                    "duration": result.get("duration_seconds", 0.0),
+                                })
+                                result["has_embedding"] = True
+                                result["embedding_dim"] = len(embedding)
+                                logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                        else:
+                            result["has_embedding"] = False
                     else:
                         result["has_embedding"] = False
                 else:
+                    # ONNX-Modell nicht vorhanden — kein Fehler, nur Info
+                    logger.info(
+                        "SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen. "
+                        "Pacing verwendet Round-Robin Fallback."
+                    )
                     result["has_embedding"] = False
-            else:
-                # ONNX-Modell nicht vorhanden — kein Fehler, nur Info
-                logger.info(
-                    "SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen. "
-                    "Pacing verwendet Round-Robin Fallback."
-                )
-                result["has_embedding"] = False
+            finally:
+                del wrapper  # Release SigLIP ONNX session / DirectML VRAM
 
         except Exception as e:
             logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")

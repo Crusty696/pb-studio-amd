@@ -14,6 +14,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -44,11 +45,11 @@ class BatchRenderer:
     CHUNK_SIZE = 30
     OUTPUT_WIDTH = 1920
     OUTPUT_HEIGHT = 1080
-    OUTPUT_FPS = 30
 
-    def __init__(self, temp_dir: str | Path | None = None) -> None:
+    def __init__(self, temp_dir: str | Path | None = None, fps: float = 30.0) -> None:
         self.temp_dir = Path(temp_dir) if temp_dir else Path("data/temp")
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._output_fps: float = float(fps)
         self._progress_callback: Any = None
         self._encoder = self._detect_encoder()
 
@@ -165,8 +166,9 @@ class BatchRenderer:
     def _render_chunk(self, chunk: list, output_path: Path) -> bool:
         """Rendert einen einzelnen Chunk via subprocess."""
         try:
-            # Concat-File für den Chunk erstellen
-            concat_file = self.temp_dir / "chunk_concat.txt"
+            # Concat-File für den Chunk erstellen (eindeutiger Name verhindert Race Conditions)
+            chunk_suffix = output_path.stem  # z.B. "chunk_0001"
+            concat_file = self.temp_dir / f"chunk_concat_{chunk_suffix}_{int(time.time()*1000)}.txt"
             with open(concat_file, "w", encoding="utf-8") as f:
                 for entry in chunk:
                     vpath = entry.video_path if hasattr(entry, "video_path") else entry.get("video_path", "")
@@ -174,8 +176,7 @@ class BatchRenderer:
                     dur = entry.duration if hasattr(entry, "duration") else entry.get("duration", 2.0)
 
                     safe_path = str(Path(vpath).absolute()).replace("\\", "/")
-                    safe_path = safe_path.replace("'", "'\\''")
-                    f.write(f"file '{safe_path}'\n")
+                    f.write(f'file "{safe_path}"\n')
                     f.write(f"inpoint {start:.3f}\n")
                     f.write(f"outpoint {start + dur:.3f}\n")
 
@@ -183,7 +184,7 @@ class BatchRenderer:
                 f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
                 f":force_original_aspect_ratio=decrease,"
                 f"pad={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-                f"fps={self.OUTPUT_FPS}"
+                f"fps={self._output_fps:.3f}"
             )
 
             # Encoder-Args
@@ -213,10 +214,18 @@ class BatchRenderer:
             )
 
             concat_file.unlink(missing_ok=True)
-            return result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            ok = result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            if not ok:
+                # R14/CRITICAL-003: Ungültige (0-Byte) Output-Datei aufräumen, damit
+                # kein beschädigter Chunk in der Concat-Phase verwendet wird.
+                if result.returncode != 0 and result.stderr:
+                    logger.error(f"FFmpeg Chunk stderr: {result.stderr[-500:]}")
+                output_path.unlink(missing_ok=True)
+            return ok
 
         except Exception as e:
             logger.error(f"Chunk-Rendering Fehler: {e}")
+            output_path.unlink(missing_ok=True)
             return False
 
     def _concatenate_chunks(self, chunk_files: list[Path], output_path: Path) -> bool:
@@ -225,7 +234,7 @@ class BatchRenderer:
             with open(concat_list, "w", encoding="utf-8") as f:
                 for chunk_file in chunk_files:
                     safe_path = str(chunk_file.absolute()).replace("\\", "/")
-                    f.write(f"file '{safe_path}'\n")
+                    f.write(f'file "{safe_path}"\n')
 
             cmd = [
                 "ffmpeg", "-y",
@@ -239,10 +248,17 @@ class BatchRenderer:
                 encoding="utf-8", errors="replace", timeout=3600
             )
             concat_list.unlink(missing_ok=True)
-            return result.returncode == 0 and output_path.exists()
+            ok = result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
+            if not ok:
+                # R14/CRITICAL-003: Ungültige concat-Ausgabe löschen.
+                if result.returncode != 0 and result.stderr:
+                    logger.error(f"FFmpeg Concat stderr: {result.stderr[-500:]}")
+                output_path.unlink(missing_ok=True)
+            return ok
 
         except Exception as e:
             logger.error(f"Concatenation Fehler: {e}")
+            output_path.unlink(missing_ok=True)
             return False
 
     def _merge_audio(self, video_path: Path, audio_path: Path, output_path: Path) -> bool:
@@ -260,7 +276,10 @@ class BatchRenderer:
                 cmd, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=3600
             )
-            return result.returncode == 0 and output_path.exists()
+            ok = result.returncode == 0 and output_path.exists()
+            if not ok and result.returncode != 0 and result.stderr:
+                logger.error(f"FFmpeg Audio-Merge stderr: {result.stderr[-500:]}")
+            return ok
         except Exception as e:
             logger.error(f"Audio-Merge Fehler: {e}")
             return False

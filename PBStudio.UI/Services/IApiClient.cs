@@ -4,7 +4,7 @@ namespace PBStudio.UI.Services;
 /// Abstraktion für die Kommunikation mit dem Python FastAPI Backend.
 /// Ermöglicht Mocking in Tests und Austauschbarkeit der Implementierung.
 /// </summary>
-public interface IApiClient
+public interface IApiClient : IDisposable
 {
     void BeginShutdown();
 
@@ -29,8 +29,8 @@ public interface IApiClient
 
     // --- Audio (Erweitert) ---
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
-    Task<List<Dictionary<string, object>>?> GetStructureAsync(int clipId);
-    Task<Dictionary<string, object>?> GetSpectralAsync(int clipId);
+    Task<List<StructureSegment>?> GetStructureAsync(int clipId);
+    Task<SpectralData?> GetSpectralAsync(int clipId);
 
     // --- Video ---
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);

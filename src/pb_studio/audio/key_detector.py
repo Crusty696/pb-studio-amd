@@ -68,10 +68,14 @@ class KeyDetector:
                 # Dur-Profil auf Grundton i rotieren
                 major_rotated = np.roll(_MAJOR_PROFILE, i)
                 corr_major = float(np.corrcoef(chroma_mean, major_rotated)[0, 1])
+                if np.isnan(corr_major):
+                    continue
 
                 # Moll-Profil auf Grundton i rotieren
                 minor_rotated = np.roll(_MINOR_PROFILE, i)
                 corr_minor = float(np.corrcoef(chroma_mean, minor_rotated)[0, 1])
+                if np.isnan(corr_minor):
+                    continue
 
                 if corr_major > best_corr:
                     best_corr = corr_major
@@ -80,6 +84,10 @@ class KeyDetector:
                 if corr_minor > best_corr:
                     best_corr = corr_minor
                     best_key = f"{_NOTE_NAMES[i]} minor"
+
+            if best_corr == -np.inf:
+                logger.warning("Key detection fehlgeschlagen (NaN correlation) — Audio möglicherweise leer oder Ton-Sinus")
+                return "Unknown"
 
             logger.debug(f"Tonart erkannt: {best_key} (Korrelation: {best_corr:.3f})")
             return best_key

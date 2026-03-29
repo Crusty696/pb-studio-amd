@@ -15,7 +15,14 @@
       "Bash(python test_imports.py:*)",
       "Bash(python check_status.py:*)",
       "Bash(ls -d src/pb_studio/*/ backend/*/ PBStudio.UI/*/ Tests/)",
-      "mcp__filesystem__read_text_file"
+      "mcp__filesystem__read_text_file",
+      "Bash(wc -l \"C:\\\\Users\\\\david\\\\Dokumente\\\\Pb_studio_AMD_version/backend\"/*.py)",
+      "Bash(PYTHONPATH=src .venv/Scripts/python.exe -m pytest Tests/ -v --tb=short)",
+      "WebSearch",
+      "Bash(find C:Pb_studio_AMD_versionupbeat-liskovbackendmiddleware -type f -name *.py)",
+      "Bash(find C:Pb_studio_AMD_versionupbeat-liskovbackendschemas -type f -name *.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   },
   "enableAllProjectMcpServers": false,

@@ -96,9 +96,10 @@ class AppState:
     # =========================================================================
 
     def get_audio_clip(self, clip_id: int) -> Optional[dict]:
-        """Thread-safe Zugriff auf einen Audio-Clip."""
+        """Thread-safe Zugriff auf einen Audio-Clip (shallow copy, safe to mutate)."""
         with self._state_lock:
-            return self.audio_clips.get(clip_id)
+            clip = self.audio_clips.get(clip_id)
+            return dict(clip) if clip is not None else None
 
     def set_audio_clip(self, clip_id: int, clip: dict) -> None:
         """Thread-safe Setzen eines Audio-Clips."""
@@ -106,9 +107,10 @@ class AppState:
             self.audio_clips[clip_id] = clip
 
     def get_video_clip(self, clip_id: int) -> Optional[dict]:
-        """Thread-safe Zugriff auf einen Video-Clip."""
+        """Thread-safe Zugriff auf einen Video-Clip (shallow copy, safe to mutate)."""
         with self._state_lock:
-            return self.video_clips.get(clip_id)
+            clip = self.video_clips.get(clip_id)
+            return dict(clip) if clip is not None else None
 
     def set_video_clip(self, clip_id: int, clip: dict) -> None:
         """Thread-safe Setzen eines Video-Clips."""
@@ -187,7 +189,14 @@ class AppState:
             return self.cancel_flags.get(task_id, False)
 
     def reset(self) -> None:
-        """Setzt den gesamten State zurück (z.B. bei neuem Projekt)."""
+        """Setzt den gesamten State zurück (z.B. bei neuem Projekt).
+
+        MEDIUM-015 Fix: cancel_flags wird NICHT geleert, sondern alle verbleibenden Flags
+        werden auf True gesetzt. close_project setzt die Flags vor reset(); würden sie hier
+        sofort geleert, sähen laufende Render-Threads das Cancel-Signal nie, weil reset()
+        vom Event-Loop und der Render-Check vom Thread-Pool aus ausgeführt werden.
+        Individuelle Cleanup: render_router.py entfernt Flags per .pop() nach Abschluss.
+        """
         with self._state_lock:
             with self._lock:
                 self.current_project = None
@@ -198,7 +207,10 @@ class AppState:
                 self.current_timeline.clear()
                 self.current_audio_path = None
                 self.render_tasks.clear()
-                self.cancel_flags.clear()
+                # Alle in-flight Tasks als abgebrochen markieren statt Flags zu leeren.
+                # Render-Threads sehen beim nächsten get_cancel_flag() True und stoppen.
+                for tid in list(self.cancel_flags.keys()):
+                    self.cancel_flags[tid] = True
                 self._audio_next_id = 1
                 self._video_next_id = 1
 
@@ -222,6 +234,7 @@ class AppState:
         project_id = resolve_project_db_id(project)
         project_data = {
             "path": project.get("path"),
+            "db_project_id": project_id,
             "audio_count": project.get("audio_count", 0),
             "video_count": project.get("video_count", 0),
             "has_timeline": project.get("has_timeline", False),
@@ -338,10 +351,13 @@ class AppState:
         beat_count: int,
         beats_json: str,
         is_analyzed: bool,
+        energy_curve=None,
+        structure_segments=None,
+        spectral_data=None,
     ) -> None:
         """
-        Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats) in der ai_data_json-Spalte
-        des zugehörigen media-Eintrags.
+        Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
+        StructureSegments, SpectralData) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
         Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
         """
         try:
@@ -358,13 +374,28 @@ class AppState:
             if row is None:
                 logger.warning(f"update_audio_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
                 return
+            # beats_json is already a serialised JSON string — parse it back to a list
+            # so that the surrounding json.dumps() in the repository layer does not
+            # double-encode it into a string-of-a-string.
+            try:
+                beats_list = json.loads(beats_json) if beats_json else []
+            except (json.JSONDecodeError, TypeError):
+                beats_list = []
+                logger.warning("update_audio_analysis: beats_json konnte nicht geparst werden; leere Liste verwendet")
+
             ai_data = {
                 "bpm": bpm,
                 "key": key,
                 "beat_count": beat_count,
-                "beats_json": beats_json,
+                "beats_json": beats_list,
                 "is_analyzed": is_analyzed,
             }
+            if energy_curve is not None:
+                ai_data["energy_curve"] = energy_curve
+            if structure_segments is not None:
+                ai_data["structure_segments"] = structure_segments
+            if spectral_data is not None:
+                ai_data["spectral_data"] = spectral_data
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
             logger.debug(f"Audio-Analyse für Clip {clip_id} in DB persistiert (bpm={bpm:.1f}, key={key})")
         except Exception as e:
@@ -377,10 +408,14 @@ class AppState:
         avg_motion: float,
         has_embedding: bool,
         is_analyzed: bool,
+        scenes=None,
+        motion=None,
+        dominant_colors=None,
+        tags=None,
     ) -> None:
         """
-        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding) in der
-        ai_data_json-Spalte des zugehörigen media-Eintrags.
+        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding, scenes,
+        motion, dominant_colors, tags) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
         Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
         """
         try:
@@ -403,6 +438,14 @@ class AppState:
                 "has_embedding": has_embedding,
                 "is_analyzed": is_analyzed,
             }
+            if scenes is not None:
+                ai_data["scenes"] = scenes
+            if motion is not None:
+                ai_data["motion"] = motion
+            if dominant_colors is not None:
+                ai_data["dominant_colors"] = dominant_colors
+            if tags is not None:
+                ai_data["tags"] = tags
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
             logger.debug(f"Video-Analyse für Clip {clip_id} in DB persistiert (scenes={scene_count}, motion={avg_motion:.2f})")
         except Exception as e:
@@ -433,7 +476,7 @@ class AppState:
             )
             logger.debug(f"Audio Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.warning(f"Audio-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
 
     def persist_video_clip(self, clip: dict) -> None:
         """
@@ -461,7 +504,7 @@ class AppState:
             )
             logger.debug(f"Video Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.warning(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
 
     def load_from_db(self, project_id: Optional[int] = None) -> None:
         """
@@ -573,9 +616,9 @@ class AppState:
                             "key": ai_data.get("key"),
                             "beat_count": int(ai_data.get("beat_count", 0) or 0),
                             "beats": beats,
-                            "energy_curve": [],
-                            "structure_segments": [],
-                            "spectral_data": None,
+                            "energy_curve": ai_data.get("energy_curve", []),
+                            "structure_segments": ai_data.get("structure_segments", []),
+                            "spectral_data": ai_data.get("spectral_data"),
                             "duration_seconds": row.get("duration_sec") or 0.0,
                         }
 
@@ -604,10 +647,10 @@ class AppState:
                             "scene_count": int(ai_data.get("scene_count", 0) or 0),
                             "avg_motion": float(ai_data.get("avg_motion", 0.0) or 0.0),
                             "has_embedding": bool(ai_data.get("has_embedding", False)),
-                            "scenes": [],
-                            "motion": {},
-                            "dominant_colors": [],
-                            "tags": [],
+                            "scenes": ai_data.get("scenes", []),
+                            "motion": ai_data.get("motion", {}),
+                            "dominant_colors": ai_data.get("dominant_colors", []),
+                            "tags": ai_data.get("tags", []),
                         }
 
             # Unter Lock alle Clips und Analyse-Caches atomar zuweisen

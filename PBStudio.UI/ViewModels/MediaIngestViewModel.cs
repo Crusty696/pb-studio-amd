@@ -11,9 +11,10 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>ViewModel für den Media-Import Tab.</summary>
-public partial class MediaIngestViewModel : ObservableObject
+public partial class MediaIngestViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private bool _disposed;
 
     [ObservableProperty] private string _statusText = "Bereit für Import";
     [ObservableProperty] private double _importProgress;
@@ -233,4 +234,11 @@ public partial class MediaIngestViewModel : ObservableObject
 
     private static string QuoteIfNeeded(string path)
         => path.Contains(' ') ? $"\"{path}\"" : path;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+    }
 }

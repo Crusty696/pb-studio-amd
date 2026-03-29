@@ -122,7 +122,9 @@ class TestReset:
         assert state.current_timeline == []
         assert state.current_audio_path is None
         assert state.render_tasks == {}
-        assert state.cancel_flags == {}
+        # MEDIUM-015: reset() marks all remaining cancel flags as True (not clear) so
+        # in-flight render threads observe the cancellation signal after project close.
+        assert state.cancel_flags == {"abc": True}
 
     def test_reset_setzt_id_counter_zurueck(self):
         state = AppState()

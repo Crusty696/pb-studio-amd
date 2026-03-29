@@ -941,10 +941,17 @@ class AdvancedPacingEngine:
         sr = 22050
 
         has_pre_cached = hasattr(self, "_pre_cached_beats") and self._pre_cached_beats
-        if has_pre_cached and duration <= 0 and beats:
-            # Dauer aus letztem Beat schätzen
-            duration = beats[-1] + 1.0
-            logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
+
+        # R17/HIGH-03: Prefer injected duration (from audio analysis) over beat estimation.
+        # Beat estimation under-counts for tracks with silent outros.
+        if has_pre_cached and duration <= 0:
+            pre_dur = getattr(self, "_pre_cached_duration", 0.0)
+            if pre_dur > 0:
+                duration = pre_dur
+                logger.info(f"Dauer aus gecachter Audio-Analyse: {duration:.1f}s")
+            elif beats:
+                duration = beats[-1] + 1.0
+                logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
 
         if not has_pre_cached and not (onset_times and energy_curve and duration > 0):
             if not hasattr(self, "_cached_audio_path"):
@@ -969,6 +976,10 @@ class AdvancedPacingEngine:
         if expected_bpm is None:
             if cached_audio_data and cached_audio_data.get("bpm"):
                 bpm = float(cached_audio_data["bpm"])
+            # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
+            elif hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
+                bpm = float(self._pre_cached_bpm)
+                logger.info(f"BPM aus gecachter Audio-Analyse: {bpm:.1f}")
             elif len(beats) >= 2:
                 intervals = np.diff(beats)
                 median_interval = float(np.median(intervals))
@@ -1047,7 +1058,7 @@ class AdvancedPacingEngine:
                            end_time, energy_level)
 
         Returns:
-            Gleiche Liste mit angepassten strength-Werten (clamp 0.0–1.5)
+            Gleiche Liste mit angepassten strength-Werten (clamp 0.0–1.0)
         """
         if not song_sections or not triggers:
             return triggers
@@ -1066,7 +1077,11 @@ class AdvancedPacingEngine:
 
             if section is not None:
                 original_strength = cut.strength
-                cut.strength = min(cut.strength * section.energy_level, 1.5)
+                # R16/CRIT-01: Clamp to 1.0 — consistent with PacingCut.__post_init__.
+                # energy_level is already in [0.0, 1.0], so the product can never
+                # exceed 1.0. The old 1.5 cap was unreachable and contradicted the
+                # model invariant.
+                cut.strength = min(cut.strength * section.energy_level, 1.0)
                 if abs(cut.strength - original_strength) > 0.01:
                     modified += 1
 

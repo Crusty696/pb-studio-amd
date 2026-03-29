@@ -10,7 +10,7 @@ using PBStudio.UI.Services;
 namespace PBStudio.UI.ViewModels;
 
 /// <summary>Haupt-ViewModel für das MainWindow. Verwaltet Tab-Navigation und globalen Status.</summary>
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly SSEClient _sse;
@@ -147,7 +147,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnProjectChanged(object? sender, ProjectInfo? project)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             var previousProjectPath = _lastProjectPath;
             var currentProjectPath = project?.Path;
@@ -172,7 +172,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnBackendStatusChanged(object? sender, bool isRunning)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             BackendStatusText = isRunning ? "Backend: Online" : "Backend: Offline";
             BackendStatusColor = isRunning ? Brushes.LimeGreen : Brushes.Red;
@@ -198,7 +198,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnProgressReceived(object? sender, ProgressEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             GlobalProgress = e.Percent;
             StatusMessage = string.IsNullOrWhiteSpace(e.Message) ? StatusMessage : e.Message;
@@ -208,7 +208,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             GpuStatusText = $"GPU: {e.VramUsedMb}/{e.VramTotalMb} MB | {e.TemperatureC}°C";
         });
@@ -219,6 +219,15 @@ public partial class MainViewModel : ObservableObject
         var gpu = await _api.GetGpuStatusAsync();
         if (gpu != null)
             GpuStatusText = $"GPU: {gpu.VramUsedMb}/{gpu.VramTotalMb} MB";
+    }
+
+    public void Dispose()
+    {
+        _bridge.StatusChanged -= OnBackendStatusChanged;
+        _sse.ProgressReceived -= OnProgressReceived;
+        _sse.GpuStatusReceived -= OnGpuStatusReceived;
+        _projects.ProjectChanged -= OnProjectChanged;
+        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 
 }

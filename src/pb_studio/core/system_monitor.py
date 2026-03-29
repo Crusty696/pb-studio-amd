@@ -1,5 +1,6 @@
 import sys
 import logging
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -12,13 +13,17 @@ except ImportError:
     _HAS_CLR = False
     logger.warning("pythonnet (clr) nicht verfuegbar - Hardware-Monitoring deaktiviert")
 
+_monitor_init_lock = threading.Lock()
+
 class SystemMonitor:
     _instance = None
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(SystemMonitor, cls).__new__(cls)
-            cls._instance._initialized = False
+        with _monitor_init_lock:
+            if cls._instance is None:
+                instance = super(SystemMonitor, cls).__new__(cls)
+                instance._initialized = False
+                cls._instance = instance
         return cls._instance
 
     def __init__(self):
@@ -147,7 +152,7 @@ class SystemMonitor:
                 if s_type == "Temperature":
                     # Prefer "Core" or generic "GPU Core", avoid "Hot Spot" if possible (or take max?)
                     if "core" in name or "edge" in name:
-                         stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
+                        stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
 
                 # Memory (SmallData in LHM)
                 if s_type == "SmallData":

@@ -47,7 +47,10 @@ async def start_render(
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
     """Startet ein Rendering als Background Task."""
-    task_id = str(uuid.uuid4())[:8]
+    while True:
+        task_id = str(uuid.uuid4())[:8]
+        if state.get_render_task(task_id) is None:
+            break
 
     # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
     timeline_snapshot = state.get_timeline_snapshot()
@@ -87,7 +90,25 @@ async def start_render(
     state.set_render_task(task_id, task_data)
     state.set_cancel_flag(task_id, False)
 
-    asyncio.create_task(_run_render_task(task_id, request, state))
+    # R14/HIGH-004: Snapshot beim Start übergeben — _run_render_task darf den State nicht
+    # erneut lesen, damit kein Stale-Timeline-Race zwischen start_render und Task-Ausführung entsteht.
+    task = asyncio.create_task(_run_render_task(task_id, request, state, timeline_snapshot))
+
+    def _on_task_done(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error(f"Render-Task {task_id} unerwartete Exception: {exc}", exc_info=exc)
+            try:
+                state.update_render_task(task_id, {
+                    "status": "failed",
+                    "error": str(exc),
+                })
+            except Exception:
+                pass
+
+    task.add_done_callback(_on_task_done)
 
     logger.info(f"Render-Task gestartet: {task_id}")
     await publish_log(
@@ -165,13 +186,25 @@ async def cancel_render(
     return {"cancelled": True, "task_id": task_id}
 
 
-async def _run_render_task(task_id: str, request: RenderRequest, state: AppState) -> None:
-    """Background-Task für Rendering mit Cancel-Support."""
+async def _run_render_task(
+    task_id: str,
+    request: RenderRequest,
+    state: AppState,
+    timeline_snapshot: list[dict[str, Any]],
+) -> None:
+    """Background-Task für Rendering mit Cancel-Support.
+
+    timeline_snapshot wird von start_render übergeben — wird hier NICHT erneut aus dem
+    State gelesen (R14/HIGH-004: Race zwischen Snapshot-Check und Task-Start vermeiden).
+    """
     state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
     start_time = time.monotonic()
 
-    # Timeline-Snapshot aus AppState (thread-safe)
-    timeline_snapshot = state.get_timeline_snapshot()
+    # Record the output file's mtime BEFORE the render starts.
+    # _cleanup_render_temps will only delete it if it was modified DURING this render
+    # — protecting any previously completed output file at the same path.
+    _output_p = Path(request.output_path)
+    _output_mtime_before: float | None = _output_p.stat().st_mtime if _output_p.exists() else None
 
     try:
         async with gpu_lock:
@@ -223,8 +256,8 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
             "status": TaskStatus.CANCELLED.value,
             "elapsed_seconds": round(elapsed, 1),
         })
-        # Temp-Files aufräumen
-        _cleanup_render_temps(request.output_path)
+        # Temp-Files aufräumen (schützt vorherige Outputs durch mtime-Check)
+        _cleanup_render_temps(request.output_path, _output_mtime_before)
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
         await publish_event("render_progress", {
@@ -242,7 +275,7 @@ async def _run_render_task(task_id: str, request: RenderRequest, state: AppState
 
     except Exception as e:
         elapsed = time.monotonic() - start_time
-        _cleanup_render_temps(request.output_path)
+        _cleanup_render_temps(request.output_path, _output_mtime_before)
         state.update_render_task(task_id, {
             "status": TaskStatus.FAILED.value,
             "error": str(e),
@@ -270,14 +303,31 @@ class _RenderCancelled(Exception):
     pass
 
 
-def _cleanup_render_temps(output_path: str) -> None:
-    """Räumt temporäre Render-Dateien auf."""
+def _cleanup_render_temps(
+    output_path: str,
+    output_mtime_before: "float | None" = None,
+) -> None:
+    """Räumt temporäre Render-Dateien auf.
+
+    Args:
+        output_path:         Pfad zur Output-Datei.
+        output_mtime_before: Mtime der Output-Datei VOR dem Render-Start (None = Datei
+                             existierte vorher nicht).  Die Output-Datei wird NUR gelöscht,
+                             wenn sie NACH dem Render-Start geschrieben wurde — d.h.
+                             eine vorherige erfolgreiche Render-Ausgabe an demselben Pfad
+                             bleibt erhalten.
+    """
     try:
         output_p = Path(output_path)
-        # Unvollständige Output-Datei löschen
         if output_p.exists():
-            output_p.unlink(missing_ok=True)
-        # Temp-Dir aufräumen
+            current_mtime = output_p.stat().st_mtime
+            # Delete only if the file was created or modified during this render task
+            if output_mtime_before is None or current_mtime > output_mtime_before:
+                output_p.unlink(missing_ok=True)
+                logger.debug(f"Unvollständige Render-Ausgabe gelöscht: {output_p.name}")
+            else:
+                logger.debug(f"Vorherige Render-Ausgabe beibehalten (nicht von diesem Task): {output_p.name}")
+        # Temp-Dir immer aufräumen
         temp_dir = output_p.parent / ".temp_render"
         if temp_dir.exists():
             import shutil
@@ -308,7 +358,11 @@ def _execute_render(
     audio_path = request.audio_path
 
     output_p = _Path(request.output_path)
-    service = RenderService(output_dir=str(output_p.parent))
+    # R01/FIX-4: Encoder-Override als Konstruktor-Parameter übergeben (kein GlobalSeiteneffekt)
+    encoder_override = request.encoder.value if request.encoder is not None else None
+    service = RenderService(output_dir=str(output_p.parent), encoder_override=encoder_override)
+    if encoder_override is not None:
+        logger.info(f"Render {task_id}: Encoder-Override via Request: {encoder_override}")
 
     progress_publish_lock = threading.Lock()
     progress_state = {"percent": -1.0, "message": "", "at": 0.0}
@@ -387,7 +441,9 @@ def _execute_render(
         raise RuntimeError("Keine Timeline für Rendering vorhanden")
 
     # Timeline validieren
-    warnings = validate_timeline(timeline)
+    warnings, errors = validate_timeline(timeline)
+    if errors:
+        raise RuntimeError(f"Ungültige Timeline: {'; '.join(errors)}")
     for w in warnings:
         logger.warning(f"Render-Timeline Warnung: {w}")
 
