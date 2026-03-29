@@ -22,20 +22,28 @@ logger = logging.getLogger(__name__)
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
+ claude/upbeat-liskov
     def __init__(self):
         # R18/HIGH-018-2: Cache ffprobe results — avoids 2 subprocess calls per cut
         # for the same file (once inside _get_random_clip_start, once for out-point check).
         self._duration_cache: Dict[str, float] = {}
 
+
+ backup/pre-hybrid-alignment-2026-03-09
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
         key = str(clip_path)
         if key in self._duration_cache:
             return self._duration_cache[key]
         cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "json", str(clip_path)
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(clip_path),
         ]
         try:
             res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
@@ -130,11 +138,14 @@ class PacingService:
                     fp = str(Path(cd.get("file_path", "")).absolute())
                     if not cut.metadata:
                         cut.metadata = {}
-                    cut.metadata.update({
-                        "file_path": fp,
-                        "clip_name": cd.get("name", "Unknown"),
-                    })
+                    cut.metadata.update(
+                        {
+                            "file_path": fp,
+                            "clip_name": cd.get("name", "Unknown"),
+                        }
+                    )
                     if "clip_start" not in cut.metadata:
+ claude/upbeat-liskov
                         # R18/CRIT-018-1: CutListEntry has no .duration attribute —
                         # must compute from start_time/end_time.
                         cut_dur = cut.end_time - cut.start_time
@@ -153,6 +164,11 @@ class PacingService:
                     except ValueError:
                         pass  # ffprobe failed — let render handle it
 
+
+                        cut.metadata["clip_start"] = self._get_random_clip_start(
+                            fp, cut.duration
+                        )
+ backup/pre-hybrid-alignment-2026-03-09
                     final_cuts.append(cut)
             return final_cuts
 
@@ -232,12 +248,22 @@ class PacingService:
                         (c, cl.get("file_path", ""), cl.get("id", "unknown"))
                         for c, cl in raw
                     ]
-                return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+                return self._process_pacing_cuts_to_cutlist(
+                    cut_with_clips, target_duration
+                )
             else:
                 return self._generate_simple_round_robin(
+ claude/upbeat-liskov
                     pacing_engine, audio_path, clips,
                     pacing_config.get("expected_bpm", 120), target_duration,
                     min_cut_interval=min_cut_interval,
+
+                    pacing_engine,
+                    audio_path,
+                    clips,
+                    pacing_config.get("expected_bpm", 120),
+                    target_duration,
+ backup/pre-hybrid-alignment-2026-03-09
                 )
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
@@ -273,6 +299,7 @@ class PacingService:
             fp = str(Path(fp).absolute())
             cs = self._get_random_clip_start(fp, dur)
 
+ claude/upbeat-liskov
             # Prüfe ob out_point die tatsächliche Clip-Dauer überschreitet
             actual_clip_dur = self._get_clip_duration(fp)
             if actual_clip_dur > 0 and (cs + dur) > actual_clip_dur:
@@ -291,6 +318,22 @@ class PacingService:
                     "trigger_strength": cur.strength,
                 },
             ))
+
+            cut_list.append(
+                CutListEntry(
+                    clip_id=f"clip_{clip['id']}",
+                    start_time=cur.time,
+                    end_time=nxt.time,
+                    metadata={
+                        "file_path": fp,
+                        "clip_name": clip.get("name", "Unknown"),
+                        "clip_start": cs,
+                        "trigger_type": cur.trigger_type,
+                        "trigger_strength": cur.strength,
+                    },
+                )
+            )
+ backup/pre-hybrid-alignment-2026-03-09
             idx += 1
 
         logger.info(f"Cut-Liste: {len(cut_list)} Cuts generiert.")

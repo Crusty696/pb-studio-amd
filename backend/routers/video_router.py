@@ -12,6 +12,7 @@ Endpoints:
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -279,12 +280,19 @@ def _get_video_info(path: str) -> dict[str, Any]:
         "-show_entries", "format=duration",
         "-of", "json", path,
     ]
+ claude/nifty-sammet
     import os
+
+ backup/pre-hybrid-alignment-2026-03-09
     startupinfo = None
     if os.name == "nt":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+ claude/nifty-sammet
     res = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=30, startupinfo=startupinfo)
+
+    res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30, startupinfo=startupinfo)
+ backup/pre-hybrid-alignment-2026-03-09
     data = json.loads(res)
 
     stream = data.get("streams", [{}])[0]
