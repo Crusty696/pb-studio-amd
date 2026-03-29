@@ -279,7 +279,12 @@ def _get_video_info(path: str) -> dict[str, Any]:
         "-show_entries", "format=duration",
         "-of", "json", path,
     ]
-    res = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=30)
+    import os
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    res = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=30, startupinfo=startupinfo)
     data = json.loads(res)
 
     stream = data.get("streams", [{}])[0]
@@ -329,7 +334,11 @@ def _generate_thumbnail(video_path: str) -> bytes:
             "-vf", "scale=320:-1",
             str(tmp_path),
         ]
-        subprocess.run(cmd, capture_output=True, timeout=15, check=True)
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        subprocess.run(cmd, capture_output=True, timeout=15, check=True, startupinfo=startupinfo)
         return tmp_path.read_bytes()
     finally:
         # R20/LOW: unlink(missing_ok=True) avoids FileNotFoundError if ffmpeg

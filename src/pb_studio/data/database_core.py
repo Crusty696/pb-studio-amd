@@ -202,6 +202,9 @@ class DatabaseCore:
     def _configure_connection(self, conn):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
+        # ⚡ Bolt: Optimize SQLite performance. When using WAL mode, synchronous=NORMAL
+        # is safe and provides a significant write throughput boost by avoiding a disk flush on every commit.
+        conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
         conn.execute("PRAGMA busy_timeout=30000;")
         self._register_sql_functions(conn)
