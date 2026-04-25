@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from ..app_state import AppState, get_app_state
+from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..schemas.video_schemas import (
     VideoImportRequest, VideoClipInfo,
@@ -50,8 +51,16 @@ async def import_videos(
 
     for path_str in request.paths:
         video_path = Path(path_str)
-        if not video_path.exists():
-            logger.warning(f"Video nicht gefunden: {path_str}")
+        # SEC-001: Nur absolute Pfade erlauben
+        if not video_path.is_absolute():
+            logger.warning(f"Relativer Pfad abgelehnt: {path_str}")
+            continue
+        try:
+            if not video_path.exists():
+                logger.warning(f"Video nicht gefunden: {path_str}")
+                continue
+        except PermissionError:
+            logger.warning(f"Zugriff verweigert: {path_str}")
             continue
         if video_path.suffix.lower() not in supported:
             logger.warning(f"Format nicht unterstützt: {video_path.suffix}")
@@ -273,7 +282,7 @@ def _get_video_info(path: str) -> dict[str, Any]:
     import subprocess
 
     cmd = [
-        "ffprobe", "-v", "error",
+        str(config.ffprobe_path), "-v", "error",
         "-select_streams", "v:0",
         "-show_entries", "stream=width,height,r_frame_rate,codec_name,duration",
         "-show_entries", "format=duration",
@@ -318,13 +327,14 @@ def _generate_thumbnail(video_path: str) -> bytes:
     """Generiert ein Thumbnail-JPEG (blockierend)."""
     import subprocess
     import tempfile
+    from ..config import config
 
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         tmp_path = Path(tmp.name)
 
     try:
         cmd = [
-            "ffmpeg", "-y", "-i", video_path,
+            str(config.ffmpeg_path), "-y", "-i", video_path,
             "-ss", "1", "-frames:v", "1",
             "-vf", "scale=320:-1",
             str(tmp_path),
@@ -364,7 +374,6 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
     if request.analyze_motion:
         try:
             import cv2
-            import numpy as np
             from pb_studio.video.raft import MotionAnalyzer
 
             # Frames gleichmäßig samplen — temporal-dichte (~2 Frames/s), min 2, max 30

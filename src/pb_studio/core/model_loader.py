@@ -17,12 +17,11 @@ import onnxruntime as ort
 
 _model_loader_init_lock = threading.Lock()
 from pathlib import Path
-from typing import Optional, Dict, Any, Callable, Type
+from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
 from pb_studio.core.vram_budget_manager import (
-    VRAMBudgetManager,
     ModelPriority,
     KNOWN_MODEL_BUDGETS,
     get_vram_manager

@@ -5,7 +5,7 @@ Segment-Boundary-Detection, Feature-Extraktion, Clustering und Label-Zuweisung.
 AMD-Version: Rein CPU-basiert mit librosa + sklearn.
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Callable, Dict, List
 
 import librosa
 import numpy as np

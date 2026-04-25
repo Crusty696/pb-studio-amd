@@ -31,9 +31,8 @@ class AudioService:
         """Lazy-Initialisierung des StemSeparators."""
         if self._stem_separator is None:
             from ..audio.separator import StemSeparator
-            self._stem_separator = StemSeparator(
-                output_dir=str(self.stems_output_dir) if self.stems_output_dir else None
-            )
+            # BUG-060 FIX: StemSeparator erwartet kein output_dir im __init__
+            self._stem_separator = StemSeparator()
         return self._stem_separator
 
     def separate(

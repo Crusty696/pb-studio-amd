@@ -367,11 +367,6 @@ try:
     print(f"DirectML: {'OK' if dml else 'NOT Available'}")
 except Exception as e:
     print(f"ONNX Runtime: Error - {e}")
-try:
-    import PyQt6
-    print("PyQt6: OK")
-except:
-    print("PyQt6: NOT FOUND")
 '@
     & $venvPython -c $validationCode
 }

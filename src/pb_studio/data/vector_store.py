@@ -6,6 +6,7 @@ import json
 import tempfile
 import threading
 from pathlib import Path
+from typing import Optional
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -136,10 +137,11 @@ class VectorStore:
             if embedding.shape != expected_shape:
                 raise ValueError(f"Embedding dim mismatch. Expected: {expected_shape}, Got: {embedding.shape}")
 
-            # Normalize for Cosine Similarity
-            faiss.normalize_L2(embedding.reshape(1, -1))
+            # BUG-072 FIX: Copy array before in-place normalization to avoid mutating caller data
+            emb_copy = embedding.copy().reshape(1, -1)
+            faiss.normalize_L2(emb_copy)
 
-            self.index.add(embedding.reshape(1, -1))
+            self.index.add(emb_copy)
             faiss_id = self.index.ntotal - 1
 
             self.metadata[faiss_id] = meta_info
@@ -150,14 +152,20 @@ class VectorStore:
 
             return faiss_id
 
-    def search(self, query_embedding: np.ndarray, k=5):
+    def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
         """Returns list of (metadata, score). Thread-safe."""
         with self._lock:
             if self.index is None or self.index.ntotal == 0:
                 return []
 
-            faiss.normalize_L2(query_embedding.reshape(1, -1))
-            D, I = self.index.search(query_embedding.reshape(1, -1), k)
+            # BUG-078 FIX: nprobe handling for IVF indexes
+            if hasattr(self.index, 'nprobe'):
+                self.index.nprobe = nprobe if nprobe is not None else 1
+
+            # BUG-101 FIX: Copy query_embedding before in-place normalization
+            q_copy = query_embedding.copy().reshape(1, -1)
+            faiss.normalize_L2(q_copy)
+            D, I = self.index.search(q_copy, k)
 
             results = []
             for i, idx in enumerate(I[0]):
@@ -187,16 +195,10 @@ class VectorStore:
                 with open(temp_meta, "w") as f:
                     json.dump(self.metadata, f, indent=2)
 
-                # Atomic rename (on Windows, need to remove old first)
+                # BUG-102 FIX: Atomic replace (os.replace works even if dest does not exist)
                 import os
-                if self.index_path.exists():
-                    os.replace(temp_index, str(self.index_path))
-                else:
-                    os.rename(temp_index, str(self.index_path))
-                if self.meta_path.exists():
-                    os.replace(temp_meta, str(self.meta_path))
-                else:
-                    os.rename(temp_meta, str(self.meta_path))
+                os.replace(temp_index, str(self.index_path))
+                os.replace(temp_meta, str(self.meta_path))
 
                 logger.info("FAISS Index saved.")
             except Exception as e:

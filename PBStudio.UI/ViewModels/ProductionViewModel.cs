@@ -15,6 +15,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private readonly SSEClient _sse;
     private readonly TimelineStateService _timelineState;
     private readonly ProjectService _projects;
+    private readonly IDialogService _dialogService;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
     private bool _disposed;
@@ -34,12 +35,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
 
-    public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects)
+    public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects, IDialogService dialogService)
     {
         _api = api;
         _sse = sse;
         _timelineState = timelineState;
         _projects = projects;
+        _dialogService = dialogService;
         HasProject = _projects.HasProject;
         _sse.ProgressReceived += OnRenderProgress;
         _sse.LogReceived += OnLogReceived;
@@ -69,14 +71,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void BrowseOutput()
     {
-        var dialog = new SaveFileDialog
-        {
-            Filter = "MP4 Video|*.mp4|MKV Video|*.mkv",
-            DefaultExt = ".mp4",
-            Title = "Ausgabedatei wählen",
-        };
-        if (dialog.ShowDialog() == true)
-            OutputPath = dialog.FileName;
+        var file = _dialogService.SaveFile(
+            "Ausgabedatei wählen",
+            "MP4 Video|*.mp4|MKV Video|*.mkv",
+            "output.mp4"
+        );
+        if (!string.IsNullOrEmpty(file))
+            OutputPath = file;
     }
 
     private bool CanStartRender() => HasProject && !IsRendering;
@@ -299,9 +300,6 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
     {
-        if (!IsRendering)
-            return;
-
         _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.Error))
@@ -326,8 +324,12 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 return;
 
             var gpuSummary = string.Join(" | ", gpuParts);
-            // Replace — never accumulate, to avoid unbounded string growth
-            EtaText = gpuSummary;
+
+            // BUG-053 FIX: Nur aktualisieren, wenn nicht gerendert wird
+            if (!IsRendering)
+            {
+                EtaText = gpuSummary;
+            }
 
             if (DateTime.UtcNow - _lastGpuLogUtc > TimeSpan.FromSeconds(15))
             {

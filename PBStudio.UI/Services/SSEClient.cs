@@ -19,6 +19,7 @@ public class SSEClient : IDisposable
     private CancellationTokenSource? _cts;
     private readonly List<Task> _listenTasks = [];
     private volatile bool _isListening;
+    private readonly object _stateLock = new object(); // BUG-056 FIX
     private volatile bool _disposed;
     private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
 
@@ -29,6 +30,21 @@ public class SSEClient : IDisposable
     public event EventHandler<ProgressEventArgs>? ProgressReceived;
     public event EventHandler<LogEventArgs>? LogReceived;
     public event EventHandler<GpuEventArgs>? GpuStatusReceived;
+    public event EventHandler<bool>? ConnectionStateChanged;
+
+    private bool _isConnected;
+    public bool IsConnected
+    {
+        get => _isConnected;
+        private set
+        {
+            if (_isConnected != value)
+            {
+                _isConnected = value;
+                ConnectionStateChanged?.Invoke(this, _isConnected);
+            }
+        }
+    }
 
     public SSEClient(ILogger<SSEClient> logger)
     {
@@ -42,31 +58,37 @@ public class SSEClient : IDisposable
 
     public void StartListening()
     {
-        if (_isListening)
+        lock (_stateLock)
         {
-            _logger.LogDebug("SSE Client läuft bereits");
-            return;
-        }
+            if (_isListening)
+            {
+                _logger.LogDebug("SSE Client läuft bereits");
+                return;
+            }
 
-        // R16/CRITICAL-001: Dispose previous CTS before overwriting — a stop+start
-        // cycle would leak the old CancellationTokenSource without this guard.
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
-        _listenTasks.Clear();
-        _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));
-        _listenTasks.Add(Task.Run(() => ListenAsync("/events/log", StreamKind.Log, _cts.Token)));
-        _listenTasks.Add(Task.Run(() => ListenAsync("/events/gpu", StreamKind.Gpu, _cts.Token)));
-        _isListening = true;
+            // R16/CRITICAL-001: Dispose previous CTS before overwriting — a stop+start
+            // cycle would leak the old CancellationTokenSource without this guard.
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+            _listenTasks.Clear();
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/log", StreamKind.Log, _cts.Token)));
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/gpu", StreamKind.Gpu, _cts.Token)));
+            _isListening = true;
+        }
         _logger.LogInformation("SSE Client gestartet (progress, log, gpu)");
     }
 
     public void StopListening()
     {
-        if (!_isListening)
-            return;
+        lock (_stateLock)
+        {
+            if (!_isListening)
+                return;
 
-        _cts?.Cancel();
-        _isListening = false;
+            _cts?.Cancel();
+            _isListening = false;
+        }
         _logger.LogInformation("SSE Client gestoppt");
     }
 
@@ -82,6 +104,8 @@ public class SSEClient : IDisposable
                 using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
+
+                IsConnected = true;
 
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
@@ -134,6 +158,7 @@ public class SSEClient : IDisposable
             }
             catch (Exception ex)
             {
+                IsConnected = false;
                 reconnectAttempts++;
                 if (reconnectAttempts > MaxReconnectAttempts)
                 {

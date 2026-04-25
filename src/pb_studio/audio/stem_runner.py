@@ -1,10 +1,10 @@
 import sys
-import os
 from pathlib import Path
 
 # Projektroot zu sys.path hinzufuegen (audio -> pb_studio -> src -> root)
 _project_root = str(Path(__file__).resolve().parents[3])
-sys.path.insert(0, _project_root)
+if _project_root not in sys.path:
+    sys.path.append(_project_root)
 
 import logging
 import argparse

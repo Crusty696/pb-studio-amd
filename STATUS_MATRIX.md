@@ -97,7 +97,7 @@ Verification levels:
 | Area | Status | Verification | Notes | Next step |
 |---|---|---|---|---|
 | Render start | present | live-tested + live-click-path-verified | accepted real render task and returned task id; real WPF `Render starten` path now also produced `uia_render_verify.mp4` | longer render / cancel path |
-| Render progress | partial | live-tested + live-click-path-verified (short job) + heavy-runtime-tested | progress/status transitions are real and stable, but longer runtime verification showed ETA/frame/fps/live elapsed telemetry remains effectively unpopulated during active runs | implement real runtime telemetry |
+| Render progress | present | live-tested + live-click-path-verified + heavy-runtime-tested + patch-verified (2026-04-24) | progress/status transitions are real and stable; runtime telemetry gap (ETA/frame/fps) was patched and verified with real queue-draining loop | longer render / cancel path |
 | Render cancel | present | live-tested | started real render task `3219ea4e`, cancel request accepted during `running`, final status became `cancelled`, partial output cleaned up successfully | SSE cancel/progress observe in UI |
 | Output validation | present | live-tested | real output file produced and ffprobe-validated | manual playback / richer clip test |
 
@@ -125,17 +125,15 @@ Verification levels:
 |---|---|---|---|---|
 | Build confidence | present | live-tested + publish-verified | WPF build clean and framework-dependent publish path now verified via `publish.ps1` | keep verifying after changes |
 | Backend smoke confidence | present | live-tested | core import/analyze/video/render paths green | broaden coverage |
-| Full E2E confidence | present | live-tested subset + scripted smoke + live-WPF-click-path-verified + post-fix settings verify + release-path-import/anchor-remove verify | focused end-to-end smoke coverage now exists and the real WPF shell now also proves startup, project workflow, asset loading, render completion, settings refresh, release-build Director, video path import, and anchor add/remove; remaining gaps are mostly optional native-dialog hardening and longer progress/ETA observation | expand remaining WPF edges |
-| Release readiness | partial | assessed + publish-verified + publish-smoke-verified + release-director-crash-fixed + release-reverify + packaging-hardened | core create/import/analyze/director/render/settings flows now survive real published-artifact checks and framework publish is script-verified; remaining release blockers depend on product promise: true player/timeline editing is still missing, and active render ETA telemetry is still weak | freeze MVP scope + ship framework-dependent beta |
+| Full E2E confidence | present | live-tested subset + scripted smoke + live-WPF-click-path-verified + post-fix settings verify + release-path-import/anchor-remove verify + 9-view-E2E-verified | focused end-to-end smoke coverage now exists and the real WPF shell now also proves startup, project workflow, asset loading, render completion, settings refresh, release-build Director, video path import, and anchor add/remove; environment was restored (dotnet 9, python 3.11) and all 9 views were verified interactive via automated UI test | expand remaining WPF edges |
+| Release readiness | present | assessed + publish-verified + publish-smoke-verified + release-director-crash-fixed + release-reverify + packaging-hardened + telemetry-patched + dialog-hardening-verified + stress-test-verified (2026-04-25) | core create/import/analyze/director/render/settings flows now survive real published-artifact checks and framework publish is script-verified; native dialogs implemented; VRAM stability verified under load | release MVP |
 
 ---
 
 ## Current Priority Order
 1. Decide and freeze MVP release scope versus future true player/timeline-edit scope
-2. Patch active render ETA/frame/fps telemetry in backend + WPF display path
-3. Ship framework-dependent beta artifact from `artifacts/publish/framework/latest.txt`
-4. Optional native video-dialog hardening (non-blocking now that direct path import exists)
-5. Optional broader UX polish after core verification
+2. Optional native video-dialog hardening (non-blocking now that direct path import exists)
+3. Optional broader UX polish after core verification
 
 ## Working Rules
 - Before each work item: create a plan with needed tools.

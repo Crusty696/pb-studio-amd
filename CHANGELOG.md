@@ -3,6 +3,73 @@
 
 ---
 
+## Grand Audit Bugfixes 2026-03-29 (52 Funde)
+### KRITISCH (1)
+- **BUG-051:** `VideoLibraryViewModel.cs` – Semaphore Double-Release durch `acquired`-Flag Fix behoben.
+
+### HOCH (9)
+- **BUG-052:** `smart_director.py` – CLAP Loading Fix (AttributeError `active_provider` entfernt).
+- **BUG-053:** `ProductionViewModel.cs` – ETA-Flicker während Render durch `IsRendering`-Guard unterbunden.
+- **BUG-054:** `PythonBridgeService.cs` – Watchdog-Restart während Shutdown durch `_isStopping`-Check verhindert.
+- **BUG-066:** `advanced_pacing_engine.py` – Energy-Modulation bei pacing=5 korrigiert (Clamp-Fix).
+- **BUG-067:** `advanced_pacing_engine.py` – `audio_duration` Präzision in `generate_cut_list_with_stems`.
+- **BUG-083:** `orchestrator.py` – `worker.run()` Aufruf fixiert (Signale werden nun korrekt emittiert).
+- **BUG-084:** `video_renderer.py` – Invertierter `isinstance`-Check bei Preview-Filter korrigiert.
+- **BUG-085:** `thread_pool.py` – Kwargs-Injektion Guard via `inspect.signature` hinzugefügt.
+- **BUG-086:** `concat_worker.py` – Windows-spezifisches Pfad-Escaping für FFmpeg concat implementiert.
+
+### MITTEL (22)
+- **BUG-055:** `engine.py` – Absolute Pfade in Concat-Dateien (Fix für Dateiname-only Bug).
+- **BUG-056:** `SSEClient.cs` – Thread-Safety für Start/Stop via `_stateLock` implementiert.
+- **BUG-057:** `routers/` – Hardcodierte `ffmpeg`/`ffprobe` Aufrufe durch `config.ffmpeg_path` ersetzt.
+- **BUG-058:** `dj_mix_analyzer.py` – Windowing-Mapping und ID-Generierung in `app_state.py` korrigiert.
+- **BUG-059:** `vram_budget_manager.py` – Lock-Schutz für VRAM-Stats Properties hinzugefügt.
+- **BUG-060:** `audio_service.py` – Ungültiges Keyword-Argument im `StemSeparator` entfernt.
+- **BUG-061:** `pacing_router.py` – Atomares Update von Timeline und Audio-Pfad im `AppState`.
+- **BUG-068:** `config_manager.py` – `deepcopy` für `DEFAULTS` gegen Mutation-Leech.
+- **BUG-069:** `render_engine.py` – Single-Quote Escaping für FFmpeg Concat (Standard-Konformität).
+- **BUG-070:** `render_service.py` – `Path(None)` TypeError durch Null-Check behoben.
+- **BUG-071:** `render_engine.py` – Thread-Safe Zugriff auf `_active_processes`.
+- **BUG-072:** `vector_store.py` – In-place Normalisierung mutiert Caller-Array nicht mehr (Copy-Fix).
+- **BUG-073:** `video_specialist.py` – Vektor-Normalisierung vor Dot-Product (Score-Klammerung 0-1).
+- **BUG-074:** `generation_service.py` – Import-Guards für PyQt6/VideoGenerator hinzugefügt.
+- **BUG-087:** `audio_import_worker.py` – Temp-WAV-Cleanup im Fehlerfall/Abbruch.
+- **BUG-088:** `streaming_analyzer.py` – Blockweises Hashing mit Progress-Logging für große Dateien.
+- **BUG-089:** `waveform_cache.py` – Disk-I/O aus Lock-Bereich extrahiert, Mutation atomarisiert.
+- **BUG-090:** `worker_registry.py` – Globaler Lock für Worker-Registrierung und -Abfrage.
+- **BUG-091:** `logging_setup.py` – Handler-Duplizierung verhindert und absolute Pfade fixiert.
+- **BUG-092:** `audio_embedding_worker.py` – Exakter CLAP-Shape-Match durch Padding/Crop-Fix.
+- **BUG-093:** `pacing_worker.py` – O(1) Set-Lookup für Downbeat-Matching (Performance).
+- **BUG-094:** `stem_runner.py` – Sicherer `sys.path`-Append statt `insert(0)`.
+
+### NIEDRIG (17)
+- **BUG-062 bis BUG-065:** Pydantic-Validierungen verschärft (clip_id, start_sec, output_path).
+- **BUG-075:** `MainViewModel.cs` – Try/Catch für `InitializeAsync`.
+- **BUG-076:** `moondream.py` – Expliziter Check für `temperature=0` (Greedy Decoding).
+- **BUG-077:** `siglip_wrapper.py` – Normalisierungskonstanten auf CLIP-Standard aktualisiert.
+- **BUG-078:** `vector_store.py` – `nprobe`-Unterstützung für IVF-Indizes ergänzt.
+- **BUG-079:** `crash_handler.py` – Windows Event Log Integration.
+- **BUG-080:** `system_monitor.py` – `driver_version` Extraktion via WMI.
+- **BUG-081:** `video_specialist.py` – `np.linspace` Guard gegen leere Clips.
+- **BUG-082:** `vram_arbiter.py` – Korrektur der Puffer-Berechnung (available_real).
+- **BUG-095:** `render_worker.py` – Deterministische Seeds für reproduzierbare Renders.
+- **BUG-096:** `anchor_features.py` – Vermeidung von doppeltem Audio-Laden.
+- **BUG-097:** `thumbnail_generator.py` – `clip_id=0` Handling fixiert.
+- **BUG-098:** `encoder_utils.py` – AMF-Status Cache-Invalidierung implementiert.
+- **BUG-099:** `thread_pool.py` – Thread-Safe Singleton Pattern für Manager.
+
+### DEAD CODE (3)
+- **CLEANUP:** `RenderConfigModel`, `NavigationRequested` Event und ungenutzte Wrapper-Methoden auskommentiert.
+
+---
+
+## Audit-Bugfixes 2026-03-28
+- **FIX KRITISCH-001:** `src/pb_studio/ai/clap_wrapper.py:151` – `enable_cpu_mem_arena = True` → `False` (IRON RULE §2 Verstoß behoben)
+- **FIX KRITISCH-002:** `src/pb_studio/audio/separator.py:174` – `_apply_directml_patch()` ergänzt um `enable_cpu_mem_arena = False` (nur `enable_mem_pattern` war gesetzt)
+- **FIX WARN-002:** `requirements.txt:37` – `faiss-cpu>=1.7.0` → `faiss-cpu==1.7.4` (locked version laut CLAUDE.md §5)
+
+---
+
 ## Deep-Audit 2026-03-09 (5 CRITICAL + 4 HIGH + 1 Test)
 - **BUG-037 (CRITICAL):** `video_renderer.py`: `get_encoder_config().get("ffmpeg_path")` AttributeError → `_get_ffmpeg_path()`.
 - **BUG-038 (CRITICAL):** `streaming_analyzer.py`: tempo=0 ZeroDivisionError → guard.

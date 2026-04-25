@@ -1,10 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.Mvvm.Messaging.Messages;
-using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -14,6 +17,7 @@ namespace PBStudio.UI.ViewModels;
 public partial class MediaIngestViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private readonly IDialogService _dialogService;
     private bool _disposed;
 
     [ObservableProperty] private string _statusText = "Bereit für Import";
@@ -24,9 +28,10 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     public ObservableCollection<AudioClipModel> ImportedAudio { get; } = [];
     public ObservableCollection<VideoClipModel> ImportedVideo { get; } = [];
 
-    public MediaIngestViewModel(IApiClient api)
+    public MediaIngestViewModel(IApiClient api, IDialogService dialogService)
     {
         _api = api;
+        _dialogService = dialogService;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
@@ -48,40 +53,69 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ImportAudioAsync()
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac|Alle Dateien|*.*",
-            Multiselect = true,
-            Title = "Audio-Dateien importieren",
-        };
+        var files = _dialogService.OpenFiles(
+            "Audio-Dateien importieren",
+            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac|Alle Dateien|*.*"
+        );
 
-        if (dialog.ShowDialog() != true) return;
+        if (files.Count == 0) return;
 
         ImportProgress = 0;
         IsImporting = true;
-        StatusText = $"Importiere {dialog.FileNames.Length} Audio-Dateien...";
 
+        var validFiles = new List<string>();
+        var failedPrecheck = 0;
+
+        foreach (var file in files)
+        {
+            try
+            {
+                using var fs = File.OpenRead(file);
+                validFiles.Add(file);
+            }
+            catch (Exception)
+            {
+                failedPrecheck++;
+            }
+        }
+
+        if (validFiles.Count == 0)
+        {
+            StatusText = $"Import fehlgeschlagen: Alle {files.Count} Dateien konnten nicht gelesen werden (Berechtigung oder Dateisperre).";
+            IsImporting = false;
+            return;
+        }
+
+        StatusText = $"Importiere {validFiles.Count} Audio-Dateien...";
         var importedCount = 0;
+        var failedImport = 0;
 
         try
         {
-            for (int i = 0; i < dialog.FileNames.Length; i++)
+            for (int i = 0; i < validFiles.Count; i++)
             {
-                var result = await _api.ImportAudioAsync(dialog.FileNames[i]);
-                if (result != null)
+                try
                 {
-                    importedCount++;
-                    ImportedAudio.Add(new AudioClipModel
+                    var result = await _api.ImportAudioAsync(validFiles[i]);
+                    if (result != null)
                     {
-                        Id = result.Id,
-                        Name = result.Name,
-                        Path = result.Path,
-                        DurationSeconds = result.DurationSeconds,
-                        SampleRate = result.SampleRate,
-                        Format = result.Format,
-                    });
+                        importedCount++;
+                        ImportedAudio.Add(new AudioClipModel
+                        {
+                            Id = result.Id,
+                            Name = result.Name,
+                            Path = result.Path,
+                            DurationSeconds = result.DurationSeconds,
+                            SampleRate = result.SampleRate,
+                            Format = result.Format,
+                        });
+                    }
                 }
-                ImportProgress = (i + 1.0) / dialog.FileNames.Length * 100;
+                catch (Exception)
+                {
+                    failedImport++;
+                }
+                ImportProgress = (i + 1.0) / validFiles.Count * 100;
             }
 
             if (importedCount > 0)
@@ -90,11 +124,14 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
             }
 
-            StatusText = $"{importedCount}/{dialog.FileNames.Length} Audio-Dateien importiert";
+            var totalFailed = failedPrecheck + failedImport;
+            StatusText = totalFailed > 0
+                ? $"{importedCount} importiert, {totalFailed} fehlgeschlagen (Format/Zugriff)"
+                : $"{importedCount} Audio-Dateien erfolgreich importiert";
         }
         catch (Exception ex)
         {
-            StatusText = $"Audio-Import fehlgeschlagen: {ex.Message}";
+            StatusText = $"Kritischer Audio-Import-Fehler: {ex.Message}";
         }
         finally
         {
@@ -105,33 +142,61 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ImportVideoAsync()
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv|Alle Dateien|*.*",
-            Multiselect = true,
-            Title = "Video-Dateien importieren",
-        };
+        var files = _dialogService.OpenFiles(
+            "Video-Dateien importieren",
+            "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv|Alle Dateien|*.*"
+        );
 
-        if (dialog.ShowDialog() != true) return;
+        if (files.Count == 0) return;
 
-        await ImportVideosFromPathsAsync(dialog.FileNames.ToList());
+        await ImportVideosFromPathsAsync(files);
     }
 
     [RelayCommand]
     private void BrowseVideoPath()
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv;*.flv|Alle Dateien|*.*",
-            Multiselect = true,
-            Title = "Video-Pfad für In-App-Import auswählen",
-        };
+        var files = _dialogService.OpenFiles(
+            "Video-Pfad für In-App-Import auswählen",
+            "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv;*.flv|Alle Dateien|*.*"
+        );
 
-        if (dialog.ShowDialog() != true)
+        if (files.Count == 0)
             return;
 
-        VideoImportPath = string.Join("; ", dialog.FileNames.Select(QuoteIfNeeded));
-        StatusText = $"{dialog.FileNames.Length} Video-Pfad/Pfade bereit für In-App-Import";
+        VideoImportPath = string.Join("; ", files.Select(QuoteIfNeeded));
+        StatusText = $"{files.Count} Video-Pfad/Pfade bereit für In-App-Import";
+    }
+
+    [RelayCommand]
+    private async Task ImportFolderAsync()
+    {
+        var folder = _dialogService.OpenFolder("Video-Ordner importieren");
+        if (string.IsNullOrEmpty(folder)) return;
+
+        StatusText = $"Scanne Ordner: {folder}...";
+        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv",
+        };
+
+        try
+        {
+            var files = Directory.GetFiles(folder, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => supported.Contains(Path.GetExtension(f)))
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                StatusText = "Keine unterstützten Video-Dateien im Ordner gefunden.";
+                return;
+            }
+
+            await ImportVideosFromPathsAsync(files);
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Fehler beim Scannen des Ordners: " + ex.Message;
+        }
     }
 
     [RelayCommand]
@@ -151,11 +216,35 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     {
         ImportProgress = 0;
         IsImporting = true;
-        StatusText = $"Importiere {paths.Count} Video-Datei(en)...";
+
+        var validPaths = new List<string>();
+        var failedPrecheck = 0;
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                using var fs = File.OpenRead(path);
+                validPaths.Add(path);
+            }
+            catch (Exception)
+            {
+                failedPrecheck++;
+            }
+        }
+
+        if (validPaths.Count == 0)
+        {
+            StatusText = $"Import fehlgeschlagen: Alle {paths.Count} Dateien konnten nicht gelesen werden (Berechtigung oder Dateisperre).";
+            IsImporting = false;
+            return;
+        }
+
+        StatusText = $"Importiere {validPaths.Count} Video-Datei(en)...";
 
         try
         {
-            var results = await _api.ImportVideosAsync(paths);
+            var results = await _api.ImportVideosAsync(validPaths);
             ImportProgress = 100;
 
             if (results != null)
@@ -187,9 +276,10 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
                     VideoImportPath = string.Empty;
                 }
 
-                StatusText = results.Count == paths.Count
-                    ? $"{results.Count}/{paths.Count} Video-Datei(en) importiert"
-                    : $"{results.Count}/{paths.Count} Video-Datei(en) importiert – prüfe Pfade/Format bei den übrigen";
+                var totalFailed = failedPrecheck + (validPaths.Count - results.Count);
+                StatusText = totalFailed > 0
+                    ? $"{results.Count} importiert, {totalFailed} fehlgeschlagen (Format/Zugriff)"
+                    : $"{results.Count} Video-Datei(en) erfolgreich importiert";
             }
             else
             {

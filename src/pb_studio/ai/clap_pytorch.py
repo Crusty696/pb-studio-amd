@@ -113,7 +113,13 @@ class CLAPPyTorch:
 
     def _load_audio(self, audio_path: Union[str, Path]) -> np.ndarray:
         """Load and preprocess audio file."""
-        audio, sr = librosa.load(str(audio_path), sr=CLAP_SAMPLE_RATE, mono=True)
+        try:
+            # BUG-088 FIX: Handle potential librosa load errors
+            audio, sr = librosa.load(str(audio_path), sr=CLAP_SAMPLE_RATE, mono=True)
+        except Exception as e:
+            logger.error(f"CLAP failed to load audio {audio_path}: {e}")
+            # Return silence/zeros as fallback to prevent crash
+            return np.zeros(int(CLAP_SAMPLE_RATE * CLAP_DURATION), dtype=np.float32)
 
         # Ensure 10 seconds
         target_length = int(CLAP_SAMPLE_RATE * CLAP_DURATION)

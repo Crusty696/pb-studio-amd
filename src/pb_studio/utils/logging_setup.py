@@ -4,13 +4,19 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 def setup_logging(app_name="pb_studio"):
-    log_dir = Path("logs")
+    # BUG-091 FIX: Absolute Pfade relativ zum Script
+    log_dir = Path(__file__).resolve().parents[3] / "logs"
     log_dir.mkdir(exist_ok=True)
     
     log_file = log_dir / f"{app_name}.log"
     
     # Root Logger
     logger = logging.getLogger()
+    
+    # BUG-091 FIX: Keine doppelten Handler hinzufuegen
+    if logger.handlers:
+        return logger
+
     logger.setLevel(logging.INFO)
     
     # Format

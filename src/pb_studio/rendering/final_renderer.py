@@ -13,11 +13,10 @@ import gc
 import logging
 import shutil
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,6 @@ class BatchRenderer:
         master_audio_path: str | Path | None = None,
     ) -> bool:
         """Rendert das komplette Projekt."""
-        from .preview_renderer import TimelineEntry
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,8 +173,10 @@ class BatchRenderer:
                     start = entry.start_time if hasattr(entry, "start_time") else entry.get("start_time", 0)
                     dur = entry.duration if hasattr(entry, "duration") else entry.get("duration", 2.0)
 
+                    # BUG-069 FIX: Correct FFmpeg concat escaping
                     safe_path = str(Path(vpath).absolute()).replace("\\", "/")
-                    f.write(f'file "{safe_path}"\n')
+                    p_escaped = safe_path.replace("'", "'\\''")
+                    f.write(f"file '{p_escaped}'\n")
                     f.write(f"inpoint {start:.3f}\n")
                     f.write(f"outpoint {start + dur:.3f}\n")
 

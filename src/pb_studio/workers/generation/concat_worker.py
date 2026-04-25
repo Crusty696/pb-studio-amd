@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..base_worker import BaseWorker
-from ...models.timeline import RenderSegment, RenderResult
+from ...models.timeline import RenderSegment
 from ...video.encoder_utils import (
     get_encoder_config,
     build_ffmpeg_encode_args,
@@ -156,7 +156,13 @@ class ConcatWorker(BaseWorker):
             for segment in sorted(segments, key=lambda s: s.segment_index):
                 # FFmpeg concat requires escaped paths
                 escaped_path = segment.output_path.replace("\\", "/")
-                escaped_path = escaped_path.replace("'", "'\\''")
+                # BUG-086 FIX: Unix-Escaping ('\'') nur auf Unix, auf Windows einfaches Escaping oder Anführungszeichen
+                import os
+                if os.name == 'nt':
+                    # Windows FFmpeg concat: Single quotes are fine, but ' must be escaped as ''
+                    escaped_path = escaped_path.replace("'", "''")
+                else:
+                    escaped_path = escaped_path.replace("'", "'\\''")
                 f.write(f"file '{escaped_path}'\n")
 
         return list_path

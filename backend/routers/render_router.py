@@ -22,8 +22,7 @@ from ..config import config
 from ..dependencies import gpu_lock, publish_event, publish_log
 from ..schemas.common import validate_timeline
 from ..schemas.render_schemas import (
-    RenderRequest, RenderProgress, RenderResult,
-    RenderQuality, RenderEncoder,
+    RenderRequest, RenderProgress,
 )
 from ..schemas.common import TaskStatus
 

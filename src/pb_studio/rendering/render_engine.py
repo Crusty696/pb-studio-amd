@@ -54,6 +54,8 @@ class RenderEngine:
     def __init__(self, config: Optional[RenderConfig] = None) -> None:
         self.config = config if config is not None else RenderConfig()
         self._active_processes: list[subprocess.Popen] = []
+        import threading
+        self._process_lock = threading.Lock()
         self._progress_callback: Optional[Callable[[float, str], None]] = None
         self._is_cancelled = False
         self._encoder = self._detect_encoder()
@@ -132,8 +134,10 @@ class RenderEngine:
             concat_file = temp_dir / "concat_list.txt"
             with open(concat_file, "w", encoding="utf-8") as f:
                 for path in valid_clips:
+                    # BUG-069 FIX: FFmpeg concat protocol requires single quotes and specific escaping
                     safe_path = str(path.resolve()).replace("\\", "/")
-                    f.write(f'file "{safe_path}"\n')
+                    p_escaped = safe_path.replace("'", "'\\''")
+                    f.write(f"file '{p_escaped}'\n")
             return concat_file
         except Exception as e:
             logger.error(f"Concat-Datei konnte nicht erstellt werden: {e}")
@@ -206,7 +210,8 @@ class RenderEngine:
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace", bufsize=1
             )
-            self._active_processes.append(process)
+            with self._process_lock:
+                self._active_processes.append(process)
 
             try:
                 stdout, stderr = process.communicate(timeout=3600)
@@ -233,8 +238,9 @@ class RenderEngine:
             return False
         finally:
             if process is not None:
-                if process in self._active_processes:
-                    self._active_processes.remove(process)
+                with self._process_lock:
+                    if process in self._active_processes:
+                        self._active_processes.remove(process)
                 if process.poll() is None:
                     try:
                         process.kill()
@@ -251,7 +257,9 @@ class RenderEngine:
     def kill_zombie_processes(self) -> int:
         """Beendet alle aktiven FFmpeg-Subprozesse."""
         killed = 0
-        for p in self._active_processes[:]:
+        with self._process_lock:
+            processes = list(self._active_processes)
+        for p in processes:
             try:
                 p.kill()
                 killed += 1

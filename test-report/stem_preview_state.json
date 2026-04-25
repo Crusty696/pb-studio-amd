@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-03-29T03:55:08.289599",
+  "results": {
+    "stem/separate": {
+      "passed": true,
+      "details": "elapsed=26.1s vocals=10584078B inst=10584078B model=UVR-MDX-NET-Inst_HQ_3.onnx"
+    },
+    "stem/vocals_file": {
+      "passed": true,
+      "details": "size=10584078B path=C:\\Users\\david\\Dokumente\\Pb_studio_AMD_version\\temp\\test_audio_music_60s_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    },
+    "stem/instrumental_file": {
+      "passed": true,
+      "details": "size=10584078B path=C:\\Users\\david\\Dokumente\\Pb_studio_AMD_version\\temp\\test_audio_music_60s_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    },
+    "preview/generate": {
+      "passed": true,
+      "details": "path=data\\temp\\preview.mp4 size=6115186B duration=10.0 res=640x360"
+    },
+    "preview/offset": {
+      "passed": true,
+      "details": "start=30s dur=5s exists=True size=3770591B"
+    },
+    "preview/no_timeline": {
+      "passed": true,
+      "details": "status=400 (erwartet 400)"
+    }
+  },
+  "bugs": [],
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0
+  }
+}

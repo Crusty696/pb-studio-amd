@@ -50,7 +50,7 @@ class SystemMonitor:
             sys.path.append(str(Path(lib_path).parent))
             clr.AddReference("LibreHardwareMonitorLib")
             
-            from LibreHardwareMonitor.Hardware import Computer, HardwareType, SensorType
+            from LibreHardwareMonitor.Hardware import Computer
             
             self.computer = Computer()
             self.computer.IsCpuEnabled = True
@@ -122,9 +122,21 @@ class SystemMonitor:
             "gpu_memory_used": 0.0,
             "gpu_memory_total": 0.0,
             "cpu_load": 0.0,
+            "driver_version": "Unknown", # BUG-080 FIX
         }
 
         if not self.computer: return stats
+        
+        # BUG-080/BUG-100 FIX: Get Driver Version (Windows only) via PowerShell (wmic is deprecated)
+        if stats["driver_version"] == "Unknown":
+            try:
+                import subprocess
+                cmd = ["powershell", "-Command", "(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if res.returncode == 0 and res.stdout.strip():
+                    stats["driver_version"] = res.stdout.strip()
+            except Exception:
+                pass
 
         # Update sensors
         for hardware in self.computer.Hardware:

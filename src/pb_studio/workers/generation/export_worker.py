@@ -14,7 +14,6 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from PyQt6.QtCore import QThreadPool
 
 from ..base_worker import BaseWorker
 from ...models.audio import AudioAnalysisResult

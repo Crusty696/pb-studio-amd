@@ -34,8 +34,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any, Union
-import time
+from typing import List, Dict, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +187,7 @@ class SmartDirector:
             pacing_engine: AdvancedPacingEngine instance (optional, created if None)
             lazy_load: If True, defer model loading until first use
         """
-        from pb_studio.core import get_vram_manager, ModelPriority
+        from pb_studio.core import get_vram_manager
         from pb_studio.config_manager import ConfigManager
 
         self.config = ConfigManager()
@@ -300,8 +299,8 @@ class SmartDirector:
             if self._clap.load():
                 self.vram_manager.commit("smart_director_clap")
                 self._active_model = "clap"
-                logger.info("CLAP model loaded successfully (Provider: %s)",
-                           self._clap.active_provider)
+                # BUG-052 FIX: CLAPPyTorch hat kein active_provider Attribut
+                logger.info("CLAP model loaded successfully")
                 return True
             else:
                 logger.warning("CLAP model failed to initialize")
@@ -404,6 +403,15 @@ class SmartDirector:
     # =========================================================================
     # Audio Analysis
     # =========================================================================
+
+    def get_dominant_mood(self, audio_path: str) -> str:
+        """Returns the dominant mood as a string for use in prompts."""
+        moods = self._analyze_mood(audio_path)
+        if not moods:
+            return "energetic music"
+        # Get mood with highest probability
+        dominant = max(moods.items(), key=lambda x: x[1])[0]
+        return f"{dominant} music"
 
     def analyze_audio(self, audio_path: str) -> AudioAnalysis:
         """
@@ -844,7 +852,7 @@ class SmartDirector:
     def _analyze_motion(self, video_path: str) -> float:
         """Analyze average motion intensity in clip."""
         try:
-            from pb_studio.video.raft import MotionAnalyzer, FarnebackFlowAnalyzer
+            from pb_studio.video.raft import FarnebackFlowAnalyzer
             import cv2
 
             cap = cv2.VideoCapture(video_path)
@@ -1303,11 +1311,15 @@ class SmartDirector:
                     fill_index += 1
 
                 remaining = gap_end - pos
-                fill_dur = min(
-                    source.source_end - source.source_start,
-                    remaining
-                )
-                if fill_dur <= 0:
+                
+                # BUG-077 FIX: Prüfe verfügbare Quelldauer und verhindere Null-Schritte
+                src_avail = source.source_end - source.source_start
+                if src_avail <= 0.001:
+                    fill_index += 1
+                    continue
+
+                fill_dur = min(src_avail, remaining)
+                if fill_dur <= 0.001:
                     break
 
                 filler = TimelineClip(

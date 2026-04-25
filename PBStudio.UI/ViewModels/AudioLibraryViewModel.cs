@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.Mvvm.Messaging.Messages;
+using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -15,6 +16,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
+    private readonly SSEClient _sseClient;
+    private readonly IDialogService _dialogService;
 
     [ObservableProperty] private AudioClipModel? _selectedClip;
     [ObservableProperty] private string _statusText = "";
@@ -28,10 +31,14 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
 
-    public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState)
+    public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, SSEClient sseClient, IDialogService dialogService)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
+        _sseClient = sseClient;
+        _dialogService = dialogService;
+
+        _sseClient.ProgressReceived += OnSseProgressReceived;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
@@ -40,6 +47,17 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             else if (message.Value is "project-closed")
                 ResetProjectState();
         });
+    }
+
+    private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
+    {
+        if (e.EventType == "analysis_progress" && IsAnalyzing)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StatusText = e.Message;
+            });
+        }
     }
 
     partial void OnSelectedClipChanged(AudioClipModel? value)
@@ -56,6 +74,45 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         AnalyzeSelectedCommand.NotifyCanExecuteChanged();
         AnalyzeAllCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private async Task ImportAudioAsync()
+    {
+        var files = _dialogService.OpenFiles(
+            "Audio-Dateien zur Bibliothek hinzufügen",
+            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac|Alle Dateien|*.*"
+        );
+
+        if (files.Count == 0) return;
+
+        IsAnalyzing = true;
+        StatusText = $"Importiere {files.Count} Dateien...";
+
+        var imported = 0;
+        try
+        {
+            foreach (var file in files)
+            {
+                var result = await _api.ImportAudioAsync(file);
+                if (result != null) imported++;
+            }
+
+            if (imported > 0)
+            {
+                StatusText = $"{imported} Audio-Dateien erfolgreich importiert";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
+                await LoadAudioClipsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Fehler beim Import: {ex.Message}";
+        }
+        finally
+        {
+            IsAnalyzing = false;
+        }
     }
 
     [RelayCommand]
@@ -85,7 +142,6 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         IsAnalyzed = clipInfo.IsAnalyzed,
                     });
                 }
-                // Auswahl wiederherstellen
                 if (previousId.HasValue)
                     SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
                 StatusText = $"{clips.Count} Audio-Clips geladen";
@@ -101,7 +157,6 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectAll()
     {
-        // ListBox doesn't support multi-select binding easily, so just select first
         if (AudioClips.Count > 0)
             SelectedClip = AudioClips[0];
         StatusText = $"{AudioClips.Count} Clips verfügbar";
@@ -155,7 +210,6 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             IsAnalyzing = false;
         }
 
-        // Info-Felder für den aktuell ausgewählten Clip aktualisieren
         if (SelectedClip != null) OnSelectedClipChanged(SelectedClip);
     }
 
@@ -250,6 +304,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _sseClient.ProgressReceived -= OnSseProgressReceived;
         WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }

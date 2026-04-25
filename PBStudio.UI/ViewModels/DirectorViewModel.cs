@@ -16,6 +16,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly VideoLibraryStateService _videoLibraryState;
+    private readonly SSEClient _sseClient;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
@@ -35,6 +36,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _onsetSensitivity = 0.5;
     [ObservableProperty] private double _minCutInterval = 0.5;
     [ObservableProperty] private bool _useMotionMatching;
+    [ObservableProperty] private bool _useSemanticMatching;
     [ObservableProperty] private bool _useStructureAwareness;
     [ObservableProperty] private double? _durationLimit;
     [ObservableProperty] private string _statusText = "";
@@ -50,14 +52,20 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     public ObservableCollection<SelectableVideoClip> AvailableVideoClips { get; } = [];
     public ObservableCollection<TimelineEntryModel> CutList { get; } = [];
 
-    public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState)
+    public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState, SSEClient sseClient)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
         _videoLibraryState = videoLibraryState;
+        _sseClient = sseClient;
+
+        _sseClient.ProgressReceived += OnSseProgressReceived;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
+            if (_isShuttingDown)
+                return;
+
             if (message.Value is "project-opened" or "audio-library-refresh" or "video-library-refresh" or "media-library-refresh")
                 _ = RequestClipReloadAsync();
             else if (message.Value is "project-closed")
@@ -82,7 +90,6 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             var videoClips = await _videoLibraryState.RefreshAsync();
             if (videoClips != null && version == _loadVersion)
             {
-                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     AvailableVideoClips.Clear();
@@ -102,7 +109,6 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             if (audioClips != null && version == _loadVersion)
             {
                 var previousAudioClipId = SelectedAudioClip?.Id;
-                // R9/FINDING-005: Dispatcher wrapping for defense-in-depth
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     AvailableAudioClips.Clear();
@@ -212,6 +218,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 VideoClipIds: selectedVideoIds,
                 ExpectedBpm: ExpectedBpm,
                 UseMotionMatching: UseMotionMatching,
+                UseSemanticMatching: UseSemanticMatching,
                 UseStructureAwareness: UseStructureAwareness,
                 DurationLimit: DurationLimit,
                 MinCutInterval: MinCutInterval,
@@ -230,33 +237,42 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             );
 
             var result = await _api.GenerateCutListAsync(config);
-            if (result != null)
+            if (result != null && result.Cuts.Count > 0)
             {
-                CutList.Clear();
-                foreach (var cut in result.Cuts)
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    var meta = cut.Metadata;
-                    CutList.Add(new TimelineEntryModel
+                    CutList.Clear();
+                    foreach (var cut in result.Cuts)
                     {
-                        ClipId = cut.ClipId,
-                        StartTime = cut.StartTime,
-                        EndTime = cut.EndTime,
-                        ClipName = meta?.GetValueOrDefault("clip_name")?.ToString() ?? "",
-                        FilePath = meta?.GetValueOrDefault("file_path")?.ToString() ?? "",
-                        ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? ConvertToDoubleSafe(cs) : 0.0,
-                        TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
-                        TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? ConvertToDoubleSafe(ts) : 0.0,
-                        SegmentType = meta?.GetValueOrDefault("segment_type")?.ToString(),
-                    });
-                }
-                CutCount = result.CutCount;
-                TotalDuration = result.TotalDuration;
+                        var meta = cut.Metadata;
+                        CutList.Add(new TimelineEntryModel
+                        {
+                            ClipId = cut.ClipId,
+                            StartTime = cut.StartTime,
+                            EndTime = cut.EndTime,
+                            ClipName = meta?.GetValueOrDefault("clip_name")?.ToString() ?? "",
+                            FilePath = meta?.GetValueOrDefault("file_path")?.ToString() ?? "",
+                            ClipStart = meta?.TryGetValue("clip_start", out var cs) == true ? ConvertToDoubleSafe(cs) : 0.0,
+                            TriggerType = meta?.GetValueOrDefault("trigger_type")?.ToString() ?? "",
+                            TriggerStrength = meta?.TryGetValue("trigger_strength", out var ts) == true ? ConvertToDoubleSafe(ts) : 0.0,
+                            SegmentType = meta?.GetValueOrDefault("segment_type")?.ToString(),
+                        });
+                    }
+                    CutCount = result.CutCount;
+                    TotalDuration = result.TotalDuration;
+                });
                 StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("timeline-refresh"));
             }
             else
             {
-                StatusText = "Cut-Liste generieren fehlgeschlagen";
+                StatusText = result == null ? "Fehler: Backend-Antwort ungültig" : "Warnung: Keine Schnitte generiert (Audio-Dauer prüfen)";
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    CutList.Clear();
+                    CutCount = 0;
+                    TotalDuration = 0;
+                });
             }
         }
         catch (Exception ex)
@@ -296,7 +312,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
 
     private void ResetProjectState()
     {
-        _isShuttingDown = false; // project closed, but app is still running
+        _isShuttingDown = false;
         AvailableAudioClips.Clear();
         AvailableVideoClips.Clear();
         CutList.Clear();
@@ -308,28 +324,35 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         StatusText = "Kein Projekt geöffnet";
     }
 
+    private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
+    {
+        if (e.EventType == "analysis_progress" && IsGenerating)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StatusText = e.Message;
+            });
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _isShuttingDown = true;
+        _sseClient.ProgressReceived -= OnSseProgressReceived;
         WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
         _loadGate.Dispose();
     }
 }
 
 /// <summary>Video-Clip mit Auswahl-Checkbox für den Director.</summary>
-public class SelectableVideoClip : ObservableObject
+public partial class SelectableVideoClip : ObservableObject
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public double DurationSeconds { get; set; }
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
 
-    private bool _isSelected;
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set => SetProperty(ref _isSelected, value);
-    }
+    [ObservableProperty] private bool _isSelected;
 }

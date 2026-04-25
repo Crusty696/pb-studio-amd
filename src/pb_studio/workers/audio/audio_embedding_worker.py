@@ -12,7 +12,7 @@ from typing import List, Optional
 import numpy as np
 
 from ..base_worker import BaseWorker
-from ...ai.clap_pytorch import CLAPPyTorch, CLAP_SAMPLE_RATE, CLAP_DURATION
+from ...ai.clap_pytorch import CLAPPyTorch, CLAP_SAMPLE_RATE
 from ...models.audio import AudioEmbeddingResult
 
 logger = logging.getLogger(__name__)
@@ -117,9 +117,13 @@ class AudioEmbeddingWorker(BaseWorker):
 
                 chunk = audio[start_sample:end_sample]
 
-                # Pad if necessary
+                # BUG-092 FIX: Nutze Konstanten aus clap_pytorch für exaktes Padding/Crop
+                from ...ai.clap_pytorch import CLAP_DURATION, CLAP_SAMPLE_RATE
                 target_length = int(CLAP_DURATION * CLAP_SAMPLE_RATE)
-                if len(chunk) < target_length:
+                
+                if len(chunk) > target_length:
+                    chunk = chunk[:target_length]
+                elif len(chunk) < target_length:
                     chunk = np.pad(chunk, (0, target_length - len(chunk)), mode='constant')
 
                 # Get embedding for this chunk

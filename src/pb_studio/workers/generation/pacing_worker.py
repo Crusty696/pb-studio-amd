@@ -189,7 +189,12 @@ class PacingWorker(BaseWorker):
 
         for i, time in enumerate(beat_times):
             # Beat position: 1 for downbeat, 2-4 for other beats
-            is_downbeat = any(abs(time - dt) < 0.01 for dt in downbeat_set)
+            # BUG-093 FIX: Schnellerer Match durch Set-Lookup (exakt) + Fallback
+            if time in downbeat_set:
+                is_downbeat = True
+            else:
+                is_downbeat = any(abs(time - dt) < 0.01 for dt in downbeat_set)
+                
             position = 1 if is_downbeat else ((i % 4) + 1)
             beat_data.append((time, position))
 

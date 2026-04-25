@@ -14,10 +14,14 @@ class _Shell32Success:
         out_ptr._obj.value = self.documents_path
         return 0
 
+class _Ole32Success:
+    def CoTaskMemFree(self, ptr):
+        pass
 
 class _WindllSuccess:
     def __init__(self, documents_path: str):
         self.shell32 = _Shell32Success(documents_path)
+        self.ole32 = _Ole32Success()
 
 
 class _Shell32Failure:

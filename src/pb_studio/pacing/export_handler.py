@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
-from .pacing_models import TimelineEntry
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,11 @@ def save_timeline(
     try:
         # Statistiken berechnen
         total_duration = sum(item.get("duration", 0) for item in timeline)
-        unique_clips = len(set(item.get("clip_path", "") for item in timeline))
+        # BUG-079 FIX: Pruefe video_path und clip_path fuer korrekte Uniqueness-Zaehlung
+        unique_clips = len(set(
+            item.get("video_path") or item.get("clip_path") or "" 
+            for item in timeline
+        ))
         
         data = {
             "version": "2.0",
@@ -163,7 +166,7 @@ def export_for_davinci(
     try:
         lines = [
             "TITLE: PB_Studio_AMD_Timeline",
-            f"FCM: NON-DROP FRAME",
+            "FCM: NON-DROP FRAME",
             ""
         ]
         

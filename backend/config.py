@@ -48,7 +48,10 @@ def _default_documents_dir() -> Path:
                 ctypes.byref(documents_ptr),
             )
             if result == 0 and documents_ptr.value:
-                return Path(documents_ptr.value)
+                path = Path(documents_ptr.value)
+                # BUG-082 FIX: COM-Speicher freigeben
+                ctypes.windll.ole32.CoTaskMemFree(documents_ptr)
+                return path
         except Exception:
             pass
 

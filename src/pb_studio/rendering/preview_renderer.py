@@ -110,7 +110,7 @@ class PreviewGenerator:
                     f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
                     f":force_original_aspect_ratio=decrease,"
                     f"pad={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-                    f"fps={self.OUTPUT_FPS},setpts=PTS-STARTPTS"
+                    f"fps={self.OUTPUT_FPS:.3f},setpts=PTS-STARTPTS"
                 )
                 cmd = [
                     "ffmpeg", "-y",

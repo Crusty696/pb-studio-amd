@@ -91,9 +91,14 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
     # Überlappungs-Check
     sorted_entries = sorted(entries, key=lambda e: e.get("start_time", 0.0))
     for i in range(1, len(sorted_entries)):
-        prev_end = sorted_entries[i - 1].get("end_time", 0.0)
-        curr_start = sorted_entries[i].get("start_time", 0.0)
-        if curr_start < prev_end - 0.01:  # 10ms Toleranz
+        prev = sorted_entries[i - 1]
+        curr = sorted_entries[i]
+        
+        # BUG-092 FIX: Nutze konsistente Key-Abfrage und schärfere Toleranz (1ms)
+        prev_end = prev.get("end_time") or prev.get("start_time", 0.0) + prev.get("duration", 0.0)
+        curr_start = curr.get("start_time", 0.0)
+        
+        if curr_start < prev_end - 0.001:  # 1ms Toleranz
             warnings.append(
                 f"Cut {i}: Überlappung mit vorherigem Cut "
                 f"(prev_end={prev_end:.3f}, curr_start={curr_start:.3f})"

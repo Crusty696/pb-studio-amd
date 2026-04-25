@@ -15,10 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..app_state import AppState, get_app_state
 from ..dependencies import publish_event, publish_log
-from ..schemas.common import validate_timeline
+from ..schemas.common import validate_timeline, StatusResponse
 from ..schemas.pacing_schemas import (
     PacingConfigSchema, TriggerSettingsSchema, CutListResponse, CutListEntrySchema,
-    TimelineResponse, TimelineEntrySchema,
+    TimelineResponse, TimelineEntrySchema, TimelineUpdateRequest,
     PreviewRequest, PreviewResponse,
 )
 
@@ -88,12 +88,12 @@ async def generate_cut_list(
             logger.warning(f"Timeline-Validierung: {w}")
 
         # Timeline im State speichern (thread-safe)
-        state.set_timeline(cuts)
         state.current_audio_path = (
             audio_clips_snapshot[config.audio_clip_id]["path"]
             if config.audio_clip_id in audio_clips_snapshot
             else None
         )
+        state.set_timeline(cuts)
 
         total_dur = cuts[-1]["end_time"] if cuts else 0.0
         avg_dur = sum(c["end_time"] - c["start_time"] for c in cuts) / len(cuts) if cuts else 0.0
@@ -163,6 +163,51 @@ async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResp
 
 
 @router.post(
+    "/timeline",
+    response_model=StatusResponse,
+    summary="Timeline manuell aktualisieren",
+    description="Ersetzt die aktuelle Timeline durch eine manuell bearbeitete Version.",
+)
+async def update_timeline(
+    request: TimelineUpdateRequest,
+    state: AppState = Depends(get_app_state)
+) -> StatusResponse:
+    """Aktualisiert die Timeline im State."""
+    internal_cuts = []
+    for entry in request.entries:
+        internal_cuts.append({
+            "clip_id": entry.clip_id,
+            "start_time": entry.start_time,
+            "end_time": entry.end_time,
+            "metadata": {
+                "clip_name": entry.clip_name,
+                "file_path": entry.file_path,
+                "clip_start": entry.clip_start,
+                "trigger_type": entry.trigger_type,
+                "trigger_strength": entry.trigger_strength,
+                "segment_type": entry.segment_type,
+            }
+        })
+
+    audio_dur = 0.0
+    if state.current_audio_path:
+        from pb_studio.rendering.render_service import RenderService
+        audio_dur = RenderService()._get_audio_duration(state.current_audio_path) or 0.0
+
+    warnings, errors = validate_timeline(internal_cuts, audio_duration=audio_dur)
+    if errors:
+        raise HTTPException(status_code=400, detail=f"Ungültige Timeline: {'; '.join(errors)}")
+
+    state.set_timeline(internal_cuts)
+    logger.info(f"Timeline manuell aktualisiert: {len(internal_cuts)} Schnitte")
+    
+    return StatusResponse(
+        success=True,
+        message=f"Timeline mit {len(internal_cuts)} Schnitten aktualisiert"
+    )
+
+
+@router.post(
     "/preview",
     response_model=PreviewResponse,
     summary="Preview-Video generieren",
@@ -203,19 +248,17 @@ def _run_pacing_generation(
     cached_analysis: dict[str, Any] | None = None,
     video_analysis_cache: dict[int, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Generiert Cut-Liste via PacingService (blockierend).
-
-    Erhält Snapshots der Clip-Stores als Parameter — kein Cross-Router Import mehr.
-    cached_analysis enthält bereits berechnete Beats/BPM/Energie aus /audio/analyze.
-    video_analysis_cache enthält Motion-Scores pro Video-Clip für Motion Matching.
-    """
+    """Generiert Cut-Liste via PacingService (blockierend)."""
     from pb_studio.services.pacing_service import PacingService
 
     service = PacingService()
 
     audio_path = ""
+    audio_dur = 0.0
     if config.audio_clip_id in audio_clips:
-        audio_path = audio_clips[config.audio_clip_id]["path"]
+        ac = audio_clips[config.audio_clip_id]
+        audio_path = ac["path"]
+        audio_dur = ac.get("duration_seconds", 0.0)
 
     if not audio_path:
         raise ValueError(f"Audio-Clip {config.audio_clip_id} nicht gefunden")
@@ -230,7 +273,6 @@ def _run_pacing_generation(
                 "file_path": vc["path"],
                 "duration": vc["duration_seconds"],
             }
-            # Motion-Daten aus Video-Analyse-Cache anhängen
             if video_analysis_cache and vid in video_analysis_cache:
                 va = video_analysis_cache[vid]
                 motion = va.get("motion", {})
@@ -245,8 +287,8 @@ def _run_pacing_generation(
         "trigger_settings": (config.trigger_settings or TriggerSettingsSchema()).model_dump(),
         "expected_bpm": config.expected_bpm,
         "use_motion_matching": config.use_motion_matching,
+        "use_semantic_matching": config.use_semantic_matching,
         "use_structure_awareness": config.use_structure_awareness,
-        # C1/HIGH: Pass min_cut_interval from schema (was silently dropped, hardcoded to 0.5)
         "min_cut_interval": config.min_cut_interval,
     }
 
@@ -254,7 +296,7 @@ def _run_pacing_generation(
         audio_path=audio_path,
         clips=clips,
         pacing_config=pacing_config,
-        total_duration=0.0,
+        total_duration=audio_dur,
         duration_limit=config.duration_limit,
         cached_analysis=cached_analysis,
     )
@@ -274,7 +316,6 @@ def _render_preview(timeline: list[dict[str, Any]], start_sec: float, duration: 
     """Rendert ein Preview-Video (blockierend)."""
     try:
         from pb_studio.rendering.preview_renderer import PreviewGenerator, TimelineEntry
-        # Timeline-Dicts in TimelineEntry-Objekte konvertieren
         entries = []
         for cut in timeline:
             meta = cut.get("metadata", {})

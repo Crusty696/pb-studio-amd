@@ -7,7 +7,7 @@ GPU-Lock, DB-Session, Config — alles was Router brauchen.
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from .config import config
 from .app_state import AppState, get_app_state  # noqa: F401 — re-export für Router
@@ -32,74 +32,48 @@ async def with_gpu_task(
 ) -> Any:
     """
     Führt eine GPU-Funktion thread-sicher unter dem globalen GPU-Lock aus.
-
-    Optionaler VRAM-Budget-Check vor dem Lock-Erwerb:
-    - Falls model_id gesetzt ist, wird VRAMBudgetManager gefragt
-    - Bei Speichermangel: automatisches Evict von LOW/BACKGROUND Modellen
-    - Fehler im VRAM-Check blockieren NICHT den Task (nur Warning)
-
-    Args:
-        func:             Blockierende Funktion (wird via asyncio.to_thread ausgeführt)
-        *args:            Positional-Argumente für func
-        model_id:         Optionale Modell-ID aus KNOWN_MODEL_BUDGETS (z.B. "mdx_net_inst")
-        timeout_seconds:  GPU-Timeout (None = config.gpu_timeout_seconds)
-        **kwargs:         Keyword-Argumente für func
+    Integrierte VRAM-Budget-Verwaltung (Reserve -> Commit -> Release).
     """
-    # VRAM-Budget-Check (nur wenn model_id gesetzt)
+    manager = None
+    vram_reserved = False
+    
+    # VRAM-Reservierung (vor dem Lock-Erwerb)
     if model_id:
         try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager, KNOWN_MODEL_BUDGETS, ModelPriority
+            from pb_studio.core.vram_budget_manager import get_vram_manager
             manager = get_vram_manager()
-            required_mb = KNOWN_MODEL_BUDGETS.get(model_id, 0)
-            if required_mb > 0:
-                available = manager.available_vram_mb
-                if available < required_mb:
-                    logger.info(
-                        f"VRAM-Check '{model_id}': Braucht {required_mb}MB, "
-                        f"Verfügbar {available}MB — starte Eviction"
-                    )
-                    manager.evict_all(min_priority=ModelPriority.MEDIUM)
-                else:
-                    logger.debug(
-                        f"VRAM-Check '{model_id}': OK ({available}MB verfügbar, "
-                        f"{required_mb}MB benötigt)"
-                    )
+            # C1/FIX: Echte Reservierung triggern (inkl. Eviction falls nötig)
+            if manager.reserve(model_id, force=True):
+                vram_reserved = True
+                logger.debug(f"VRAM-Budget reserviert fÃ¼r: {model_id}")
         except Exception as e:
-            # VRAM-Check ist optional — nie einen Task blockieren
-            logger.warning(f"VRAM-Check fehlgeschlagen (wird ignoriert): {e}")
+            logger.warning(f"VRAM-Reservierung fehlgeschlagen (ignoriert): {e}")
 
     # Timeout bestimmen
     if timeout_seconds is None:
         timeout_seconds = config.gpu_timeout_seconds
 
     async with gpu_lock:
-        logger.debug(f"GPU-Lock erworben für: {func.__name__}")
+        if vram_reserved and manager:
+            manager.commit(model_id)
+
+        logger.debug(f"GPU-Lock erworben fÃ¼r: {func.__name__}")
         try:
             return await asyncio.wait_for(
                 asyncio.to_thread(func, *args, **kwargs),
                 timeout=timeout_seconds,
             )
         except asyncio.TimeoutError:
-            logger.error(
-                f"GPU-Task '{func.__name__}' Timeout nach {timeout_seconds}s! "
-                f"GPU-Lock wird freigegeben."
-            )
+            logger.error(f"GPU-Task '{func.__name__}' Timeout nach {timeout_seconds}s!")
             await publish_event("gpu_error", {
                 "message": f"GPU-Task Timeout: {func.__name__} ({timeout_seconds}s)",
                 "task": func.__name__,
             })
-            # VRAM-Reservation freigeben — sonst driftet das Budget permanent
-            if model_id:
-                try:
-                    from pb_studio.core.vram_budget_manager import get_vram_manager
-                    get_vram_manager().release(model_id)
-                except Exception as _vram_err:
-                    logger.debug(f"VRAM-Release nach Timeout fehlgeschlagen (ignoriert): {_vram_err}")
-            raise TimeoutError(
-                f"GPU-Task '{func.__name__}' hat Timeout von {timeout_seconds}s überschritten"
-            )
+            raise TimeoutError(f"GPU-Task '{func.__name__}' Timeout")
         finally:
-            logger.debug(f"GPU-Lock freigegeben für: {func.__name__}")
+            if vram_reserved and manager:
+                manager.release(model_id)
+            logger.debug(f"GPU-Lock freigegeben fÃ¼r: {func.__name__}")
 
 
 # SSE Event Queue für Progress-Updates

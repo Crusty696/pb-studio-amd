@@ -95,6 +95,12 @@ def check_ffmpeg_available() -> bool:
     return Path(path).is_file() if path != "ffmpeg" else shutil.which("ffmpeg") is not None
 
 
+def invalidate_encoder_cache():
+    """Invalidiert den globalen AMF-Cache (erzwingt Neu-Erkennung)."""
+    global _amf_available
+    _amf_available = None
+    logger.info("AMF encoder status cache invalidated")
+
 def check_amf_available() -> bool:
     """
     Check if AMD AMF encoders are available AND functional.

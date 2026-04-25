@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 class GenerationService:
     def __init__(self):
-        self.engine = VideoGenerator()
+        # BUG-074 FIX: Guard against failed imports
+        self.engine = VideoGenerator() if VideoGenerator else None
         self.thread_pool = ThreadPoolManager()
         self._smart_director = None
 

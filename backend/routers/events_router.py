@@ -13,7 +13,6 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import suppress
 from typing import Optional
 
 from fastapi import APIRouter, Request

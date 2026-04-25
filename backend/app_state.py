@@ -118,14 +118,16 @@ class AppState:
             self.video_clips[clip_id] = clip
 
     def get_audio_clips_snapshot(self) -> dict[int, dict]:
-        """Thread-safe Snapshot aller Audio-Clips."""
+        """Thread-safe Snapshot aller Audio-Clips (deep copy of dicts)."""
         with self._state_lock:
-            return dict(self.audio_clips)
+            # BUG-063 FIX: Deep copy to prevent external mutation of state
+            return {k: dict(v) for k, v in self.audio_clips.items()}
 
     def get_video_clips_snapshot(self) -> dict[int, dict]:
-        """Thread-safe Snapshot aller Video-Clips."""
+        """Thread-safe Snapshot aller Video-Clips (deep copy of dicts)."""
         with self._state_lock:
-            return dict(self.video_clips)
+            # BUG-063 FIX: Deep copy
+            return {k: dict(v) for k, v in self.video_clips.items()}
 
     def get_audio_analysis(self, clip_id: int) -> Optional[dict]:
         """Thread-safe Zugriff auf Audio-Analyse-Cache."""
@@ -318,6 +320,9 @@ class AppState:
                 meta = json.loads(row.get("metadata_json") or "{}")
                 if meta.get("clip_type") == "video" and meta.get("clip_id") is not None:
                     clip_id = int(meta["clip_id"])
+                    # BUG-058 FIX: Update next_id strictly via max() to avoid collisions
+                    with self._lock:
+                        self._video_next_id = max(self._video_next_id, clip_id + 1)
                     clip = {
                         "id": clip_id,
                         "name": meta.get("name", clip_data.get("name", "")),

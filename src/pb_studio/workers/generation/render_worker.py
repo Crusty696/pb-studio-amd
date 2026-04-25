@@ -12,11 +12,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..base_worker import BaseWorker
-from ...models.timeline import CutPlan, CutPoint, RenderSegment, TransitionType
+from ...models.timeline import CutPlan, CutPoint, RenderSegment
 from ...video.encoder_utils import (
     get_encoder_config,
     build_ffmpeg_encode_args,
-    check_amf_available,
     _get_ffmpeg_path,
     _get_ffprobe_path,
 )
@@ -196,7 +195,11 @@ class RenderWorker(BaseWorker):
 
         # Seek-Position INNERHALB des Quell-Clips (nicht Timeline-Position!)
         max_seek = max(0, clip_dur - seg_dur - 0.05)
-        seek_pos = random.uniform(0, max_seek) if max_seek > 0 else 0
+        
+        # BUG-095 FIX: Deterministic randomness using segment_index as seed
+        # Provides variety but ensures same output for same input
+        rnd = random.Random(segment_index + 42)
+        seek_pos = rnd.uniform(0, max_seek) if max_seek > 0 else 0
 
         segment = RenderSegment(
             segment_index=segment_index,

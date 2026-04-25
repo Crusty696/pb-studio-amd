@@ -53,9 +53,9 @@ class TestCLAPAnalyzer:
         """Test DirectML session options configuration"""
         sess_options = analyzer_lazy._create_session_options()
 
-        # KRITISCH: enable_mem_pattern MUSS False sein
+        # KRITISCH (IRON RULE §2): enable_mem_pattern UND enable_cpu_mem_arena MUSS False sein
         assert sess_options.enable_mem_pattern is False
-        assert sess_options.enable_cpu_mem_arena is True
+        assert sess_options.enable_cpu_mem_arena is False
 
     def test_providers_directml_priority(self, analyzer_lazy):
         """Test provider selection with DirectML priority"""

@@ -232,7 +232,7 @@ class VideoRenderer:
         end_time = start_time + duration
         preview_cuts = [
             c for c in cut_list
-            if (getattr(c, 'start_time', c.get('start_time', 0)) if isinstance(c, dict) else getattr(c, 'start_time', 0)) < end_time
+            if (c.get('start_time', 0) if isinstance(c, dict) else getattr(c, 'start_time', 0)) < end_time
         ]
         if not preview_cuts:
             return None

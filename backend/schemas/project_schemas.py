@@ -2,7 +2,6 @@
 
 from pydantic import BaseModel, Field
 from typing import Optional
-from pathlib import Path
 
 
 class ProjectCreate(BaseModel):

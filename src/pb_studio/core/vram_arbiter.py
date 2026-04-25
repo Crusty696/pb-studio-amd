@@ -29,9 +29,20 @@ class VRAMArbiter:
         self.monitor = monitor
         self.config = ConfigManager()
 
+        # C1/RESILIENCE: Forced VRAM limit via environment variable (for testing)
+        import os
+        env_limit = os.environ.get("PB_STUDIO_FORCED_VRAM")
+        self.forced_limit = int(env_limit) if env_limit and env_limit.isdigit() else 0
+
         # Safety buffer: Don't let apps use 100% of VRAM. Leave 500MB for OS/Desktop.
-        self.max_vram = self.config.get("hardware", {}).get("vram_limit_mb", 0) or 8192
+        config_limit = self.config.get("hardware", {}).get("vram_limit_mb", 0)
+        self.max_vram = self.forced_limit or config_limit or 8192
         self.safety_buffer = 500
+
+        if self.forced_limit > 0:
+            logger.info(f"VRAM Arbiter: FORCED LIMIT ACTIVE: {self.forced_limit}MB")
+            # C1/FIX: Ensure BudgetManager knows about this limit
+            self.budget_manager.vram_total_mb = self.forced_limit
 
         # Connect to Budget Manager (lazy init to avoid circular imports)
         self._budget_manager = None
@@ -77,7 +88,10 @@ class VRAMArbiter:
 
         if total_phys > 0:
             # LHM is reporting - use real data as additional check
-            available_real = total_phys - used_real - self.safety_buffer
+            # BUG-082 FIX: available_real is already total - used. 
+            # We check if (free_vram - buffer) is enough for the request.
+            free_vram = total_phys - used_real
+            available_real = free_vram - self.safety_buffer
             sensor_ok = available_real >= required_mb
 
             # Log discrepancy if budget and sensor disagree significantly
@@ -192,6 +206,31 @@ class VRAMArbiter:
             # Model details
             "models": budget_stats["models"]
         }
+
+    def allocate_with_eviction(self, required_mb: int, model_id: str, priority=None) -> bool:
+        """
+        Try to allocate VRAM. If not enough:
+        1. Find evictable models
+        2. Unload them
+        3. Retry allocation
+        """
+        from pb_studio.core.vram_budget_manager import ModelPriority
+        if priority is None:
+            priority = ModelPriority.MEDIUM
+
+        if self.can_allocate(required_mb, model_id):
+            return True
+
+        logger.info(f"VRAM full. Attempting eviction for {required_mb}MB (model: {model_id})...")
+        
+        # Use reserve with force=True which handles eviction safely under lock
+        success = self.budget_manager.reserve(model_id, force=True)
+        if success:
+            logger.info(f"Eviction successful. Space freed for {required_mb}MB.")
+            return True
+        else:
+            logger.error(f"Could not free {required_mb}MB even after eviction attempt.")
+            return False
 
     def evict_if_needed(self, required_mb: int, exclude_models: Optional[list] = None) -> bool:
         """

@@ -6,11 +6,8 @@ Handles worker dependencies, VRAM coordination, and progress aggregation.
 """
 
 import logging
-import os
-import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 from PyQt6.QtCore import QObject, QThreadPool, pyqtSignal
 
@@ -36,14 +33,11 @@ from .video import (
 
 # Generation workers
 from .generation import (
-    PacingWorker,
-    RenderWorker,
-    ConcatWorker,
     ExportWorker,
 )
 
 # Models
-from ..models.audio import AudioAnalysisResult, StemResult, AudioEmbeddingResult
+from ..models.audio import StemResult
 from ..models.video import VideoMetadata, SceneInfo, MotionData
 
 logger = logging.getLogger(__name__)
@@ -240,7 +234,8 @@ class WorkerOrchestrator(QObject):
         # Worker-Referenz speichern fuer cancel()-Propagation
         self._current_worker = worker
         try:
-            return worker._execute()
+            # BUG-083 FIX: Rufe .run() statt ._execute() auf, damit Signale (finished, error) emittiert werden
+            return worker.run()
         finally:
             self._current_worker = None
 

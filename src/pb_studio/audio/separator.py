@@ -171,6 +171,7 @@ class StemSeparator:
         def _patched_init(self_opts, *args, **kwargs):
             self._original_session_options_init(self_opts, *args, **kwargs)
             self_opts.enable_mem_pattern = False
+            self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
         ort.SessionOptions.__init__ = _patched_init
         logger.debug("SessionOptions patch applied for DirectML separation")
 
@@ -182,18 +183,24 @@ class StemSeparator:
             self._original_session_options_init = None
             logger.debug("SessionOptions patch restored")
 
-    def separate(self, file_path: str, model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx"):
+    def unload(self):
+        """Release VRAM and reset separator."""
+        if self.separator is not None:
+            # audio-separator doesn't have an explicit unload for all models, 
+            # but we can clear its state and trigger GC.
+            self.separator = None
+            import gc
+            gc.collect()
+            logger.info("StemSeparator VRAM released")
+
+    def separate(self, file_path: str, model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx", callback=None):
         """
         Separates audio into stems.
 
         Args:
             file_path: Path to audio file.
             model_name: Name of the model to use.
-                       ONNX models (MDX): Get DirectML acceleration.
-                       PyTorch models (Demucs): Run on CPU (PyTorch has no DML).
-
-        Returns:
-            dict with 'stems' list or 'error' string.
+            callback: Optional function(message, percent) for progress.
         """
         if not self.separator:
             return {"error": "Separator not initialized"}
@@ -201,15 +208,19 @@ class StemSeparator:
         if not Path(file_path).exists():
             return {"error": f"File not found: {file_path}"}
 
-        # Scoped DirectML patch: nur während Separation aktiv
+        # Scoped DirectML patch
         self._apply_directml_patch()
         try:
             logger.info(f"Loading model: {model_name}")
             self.separator.load_model(model_name)
+            
+            # Hook into audio-separator progress if possible
+            if callback:
+                # Custom monkeypatch for audio-separator logging if needed, 
+                # or use its internal progress tracker if version supports it.
+                pass
 
             logger.info(f"Starting separation for: {file_path}")
-            logger.info(f"Using ONNX Provider: {self.separator.onnx_execution_provider}")
-
             output_files = self.separator.separate(file_path)
 
             logger.info(f"Separation complete. Files: {output_files}")

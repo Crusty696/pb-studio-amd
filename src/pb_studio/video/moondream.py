@@ -12,7 +12,7 @@ Architecture:
 import logging
 import numpy as np
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, List, Dict, Any
 from PIL import Image
 
 try:
@@ -484,12 +484,12 @@ class MoondreamAnalyzer:
                     neginf=-1e9,
                 )
 
-                # Sample next token
-                if temperature > 0:
+                # BUG-076 FIX: Explicit check for temperature=0 (greedy decoding)
+                if temperature > 1e-6:
                     # Temperature sampling
                     probs = self._softmax(next_token_logits / temperature)
                     if np.any(~np.isfinite(probs)) or np.any(probs < 0) or probs.sum() <= 0:
-                        logger.warning("Invalid Moondream probabilities detected; falling back to greedy decoding")
+                        logger.warning("Invalid Moondream probabilities; falling back to greedy")
                         next_token = int(np.argmax(next_token_logits))
                     else:
                         next_token = int(np.random.choice(len(probs), p=probs))

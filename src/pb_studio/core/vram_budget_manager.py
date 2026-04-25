@@ -20,7 +20,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from enum import IntEnum, auto
+from enum import IntEnum
 from typing import Dict, Optional, Callable, List, Any
 from collections import OrderedDict
 
@@ -150,6 +150,12 @@ class VRAMBudgetManager:
             f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
         )
 
+    @classmethod
+    def reset_for_testing(cls):
+        """Reset the singleton instance for testing purposes."""
+        with cls._lock:
+            cls._instance = None
+
     def _detect_vram_limit(self) -> int:
         """
         Detect total VRAM using multiple methods.
@@ -256,17 +262,20 @@ class VRAMBudgetManager:
     @property
     def available_vram_mb(self) -> int:
         """Get available VRAM (usable - reserved - committed)."""
-        return max(0, self._usable_vram_mb - self._reserved_mb - self._committed_mb)
+        with self._registry_lock:
+            return max(0, self._usable_vram_mb - self._reserved_mb - self._committed_mb)
 
     @property
     def total_reserved_mb(self) -> int:
         """Get total reserved VRAM."""
-        return self._reserved_mb
+        with self._registry_lock:
+            return self._reserved_mb
 
     @property
     def total_committed_mb(self) -> int:
         """Get total committed VRAM."""
-        return self._committed_mb
+        with self._registry_lock:
+            return self._committed_mb
 
     def get_stats(self) -> Dict[str, Any]:
         """Get current VRAM budget statistics."""
@@ -435,11 +444,12 @@ class VRAMBudgetManager:
             # Check space
             if budget.estimated_vram_mb > self.available_vram_mb:
                 if force:
+                    shortfall = budget.estimated_vram_mb - self.available_vram_mb
                     # Try eviction
-                    freed = self._evict_for_space(budget.estimated_vram_mb, exclude=[model_id])
-                    if freed < budget.estimated_vram_mb:
+                    freed = self._evict_for_space(shortfall, exclude=[model_id])
+                    if freed < shortfall:
                         logger.error(
-                            f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB, "
+                            f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB (Shortfall: {shortfall}MB), "
                             f"could only free {freed}MB"
                         )
                         return False
@@ -581,47 +591,48 @@ class VRAMBudgetManager:
         Returns:
             Amount of VRAM freed
         """
-        exclude = set(exclude or [])
-        freed = 0
+        with self._registry_lock:
+            exclude = set(exclude or [])
+            freed = 0
 
-        # Sort by (priority descending, last_used ascending)
-        # Higher priority number = lower importance = evict first
-        candidates = [
-            (m.priority, m.last_used, mid, m)
-            for mid, m in self._models.items()
-            if m.is_loaded and mid not in exclude and m.priority != ModelPriority.CRITICAL
-        ]
-        candidates.sort(key=lambda x: (-x[0], x[1]))  # Evict high number (low priority) first
+            # Sort by (priority descending, last_used ascending)
+            # Higher priority number = lower importance = evict first
+            candidates = [
+                (m.priority, m.last_used, mid, m)
+                for mid, m in self._models.items()
+                if m.is_loaded and mid not in exclude and m.priority != ModelPriority.CRITICAL
+            ]
+            candidates.sort(key=lambda x: (-x[0], x[1]))  # Evict high number (low priority) first
 
-        for _, _, model_id, budget in candidates:
-            if freed >= needed_mb:
-                break
+            for _, _, model_id, budget in candidates:
+                if freed >= needed_mb:
+                    break
 
-            logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
+                logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
 
-            # Call unload callback
-            callback_failed = False
-            if budget.unload_callback:
-                try:
-                    budget.unload_callback()
-                except Exception as e:
-                    logger.error(f"Unload callback failed for {budget.name}: {e}")
-                    callback_failed = True
+                # Call unload callback
+                callback_failed = False
+                if budget.unload_callback:
+                    try:
+                        budget.unload_callback()
+                    except Exception as e:
+                        logger.error(f"Unload callback failed for {budget.name}: {e}")
+                        callback_failed = True
 
-            # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
-            self._committed_mb -= budget.estimated_vram_mb
-            self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
-            budget.is_loaded = False
-            freed += budget.estimated_vram_mb
+                # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
+                self._committed_mb -= budget.estimated_vram_mb
+                self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
+                budget.is_loaded = False
+                freed += budget.estimated_vram_mb
 
-            if callback_failed:
-                budget.metadata["eviction_error"] = True
-                logger.warning(
-                    f"Model {budget.name} marked as evicted_with_error — "
-                    f"VRAM budget freed but session may still be in memory"
-                )
+                if callback_failed:
+                    budget.metadata["eviction_error"] = True
+                    logger.warning(
+                        f"Model {budget.name} marked as evicted_with_error — "
+                        f"VRAM budget freed but session may still be in memory"
+                    )
 
-        return freed
+            return freed
 
     def evict_all(self, min_priority: ModelPriority = ModelPriority.LOW) -> int:
         """

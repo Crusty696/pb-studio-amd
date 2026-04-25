@@ -35,6 +35,16 @@ class RenderRequest(BaseModel):
     bitrate_mbps: float = Field(default=12.0, gt=0.0, le=500.0)
     include_audio: bool = True
 
+    @field_validator("output_path")
+    @classmethod
+    def output_dir_must_exist(cls, v: str) -> str:
+        # BUG-065 FIX: Check if parent directory exists
+        if v:
+            p = _Path(v).resolve()
+            if not p.parent.exists():
+                raise ValueError(f"Zielverzeichnis existiert nicht: {p.parent!r}")
+        return v
+
     @field_validator("audio_path")
     @classmethod
     def audio_path_must_exist(cls, v: str) -> str:

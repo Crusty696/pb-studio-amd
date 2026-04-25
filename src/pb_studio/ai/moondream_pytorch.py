@@ -115,10 +115,16 @@ class MoondreamPyTorch:
             **kwargs
         ):
             del tokenizer, chat_history
+            # BUG-075 FIX: Ensure max_new_tokens is an integer
+            try:
+                max_tokens_int = int(max_new_tokens)
+            except (ValueError, TypeError):
+                max_tokens_int = 256
+
             settings = kwargs.pop("settings", None) or {
                 "temperature": 0.0,
                 "top_p": 1.0,
-                "max_tokens": max_new_tokens,
+                "max_tokens": max_tokens_int,
             }
             answer = model.query(image_embeds, question, settings=settings)["answer"].strip()
             if result_queue is not None:
@@ -400,8 +406,14 @@ class MoondreamPyTorch:
 
 
 # Convenience function
+import threading
+_moondream_lock = threading.Lock()
+
 def get_moondream() -> MoondreamPyTorch:
     """Get a shared Moondream instance."""
+    # BUG-080 FIX: Thread-safe singleton access
     if not hasattr(get_moondream, '_instance'):
-        get_moondream._instance = MoondreamPyTorch()
+        with _moondream_lock:
+            if not hasattr(get_moondream, '_instance'):
+                get_moondream._instance = MoondreamPyTorch()
     return get_moondream._instance

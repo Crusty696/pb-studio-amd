@@ -155,28 +155,28 @@ Write-Host ">>> Installing Dependencies (AMD Optimized v9 - STRICT)..." -Foregro
 # A. Upgrade Pip (Crucial for proper dependency resolution)
 & $pip install --upgrade pip setuptools wheel
 
-# EXPERT FIX: Install Numpy < 2.0 FIRST to lock version before Numba/Librosa
-Write-Host "    Locking Numpy < 2.0..." -ForegroundColor Gray
-& $pip install "numpy<2.0"
+# EXPERT FIX: Install Numpy 1.26.4 FIRST to lock version before Numba/Librosa
+Write-Host "    Locking Numpy 1.26.4..." -ForegroundColor Gray
+& $pip install "numpy==1.26.4"
 
 # B. PyTorch CPU (No Nvidia Bloat)
 Write-Host "    Installing PyTorch (CPU)..." -ForegroundColor Gray
 & $pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # C. Transformers & PythonNet
-& $pip install transformers pythonnet --no-deps
+& $pip install transformers huggingface_hub pythonnet
 
 # D. Core AMD ML (Unified DirectML Stack)
 & $pip install faiss-cpu==1.7.4
-& $pip install onnxruntime-directml==1.23.0
+& $pip install onnxruntime-directml==1.19.2
 # Note: Moondream ONNX runs on this stack. No extra pip package needed besides transformers/ort.
 
 # EXPERT FIX: Install OpenCV-Python BEFORE Scenedetect to avoid headless
 & $pip install opencv-python
 
-# E. Audio & Video
+# E. Audio, Video & Backend
 & $pip install "audio-separator[dml]>=0.17.0" librosa soundfile pydub ffmpeg-python
-& $pip install scenedetect
+& $pip install scenedetect fastapi uvicorn[standard] pydantic pydantic-settings httpx colorlog python-dotenv
 
 Write-Host ">>> SETUP COMPLETE <<<" -ForegroundColor Green
 Write-Host "Unified AMD Stack (DirectML) Ready."

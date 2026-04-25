@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using PBStudio.UI.Models;
 
 namespace PBStudio.UI.Services;
 
@@ -119,6 +120,9 @@ public class ApiClient : IApiClient
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
         => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
 
+    public async Task<List<double>?> GetOnsetsAsync(int clipId)
+        => await GetAsync<List<double>>($"/audio/onsets/{clipId}").ConfigureAwait(false);
+
     public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "UVR-MDX-NET-Inst_HQ_3.onnx")
         => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
 
@@ -184,6 +188,25 @@ public class ApiClient : IApiClient
     public async Task<TimelineResponse?> GetTimelineAsync()
         => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
 
+    public async Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries)
+    {
+        var payload = new
+        {
+            entries = entries.Select(e => new TimelineEntry(
+                e.ClipId,
+                e.ClipName,
+                e.FilePath,
+                e.StartTime,
+                e.EndTime,
+                e.ClipStart,
+                e.TriggerType,
+                e.TriggerStrength,
+                e.SegmentType
+            )).ToList()
+        };
+        return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
+    }
+
     // --- Render ---
 
     public async Task<RenderProgress?> StartRenderAsync(RenderRequest request)
@@ -211,7 +234,7 @@ public class ApiClient : IApiClient
 
     // --- Generische Helfer ---
 
-    private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
+    public async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
     {
         using var requestCts = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
@@ -293,7 +316,7 @@ public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null);
-public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null);
+public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null);
 public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);

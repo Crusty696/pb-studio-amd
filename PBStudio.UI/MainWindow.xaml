@@ -8,6 +8,7 @@
         xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
         xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
         xmlns:views="clr-namespace:PBStudio.UI.Views"
+        xmlns:converters="clr-namespace:PBStudio.UI.Converters"
         mc:Ignorable="d"
         Title="PB Studio AMD"
         Width="1400" Height="900"
@@ -17,6 +18,11 @@
         Style="{StaticResource MaterialDesignWindow}"
         d:DataContext="{d:DesignInstance vm:MainViewModel}">
 
+    <Window.Resources>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
+
     <md:DialogHost Identifier="RootDialog">
         <Grid>
             <Grid.RowDefinitions>
@@ -25,6 +31,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- ── Top Header ── -->
             <Border Grid.Row="0"
                     Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}"
@@ -127,6 +134,7 @@
                 </DockPanel>
             </Border>
 
+            <!-- ── Main Tabs Area ── -->
             <TabControl Grid.Row="1"
                         SelectedIndex="{Binding SelectedTabIndex}"
                         Background="{StaticResource AbletonBg}"
@@ -185,22 +193,106 @@
                             <Border Grid.Row="1"
                                     Background="{StaticResource AbletonBg}">
                                 <ContentPresenter x:Name="PART_SelectedContentHost"
-                                                  ContentSource="SelectedContent"/>
+                                                  ContentSource="SelectedContent">
+                                    <ContentPresenter.RenderTransform>
+                                        <TranslateTransform X="0" Y="0"/>
+                                    </ContentPresenter.RenderTransform>
+                                </ContentPresenter>
                             </Border>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="SelectionChanged">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="PART_SelectedContentHost"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0.5" To="1" Duration="0:0:0.25"/>
+                                        <DoubleAnimation Storyboard.TargetName="PART_SelectedContentHost"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                         From="10" To="0" Duration="0:0:0.25">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </TabControl.Template>
 
-                <TabItem><TabItem.Header><TextBlock Text="IMPORT" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:MediaIngestView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="AUDIO" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:AudioLibraryView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="VIDEO" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:VideoLibraryView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="ANCHORS" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:AnchorView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="DIRECTOR" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:DirectorView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="TIMELINE" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:TimelineView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="PRODUKTION" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:ProductionView/></TabItem>
-                <TabItem><TabItem.Header><TextBlock Text="SETTINGS" FontSize="11" FontWeight="Medium"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TabItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></TabItem.Header><views:SettingsView/></TabItem>
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Home" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="PROJEKT" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:ProjectOverviewView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="MusicNote" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="AUDIO" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:AudioLibraryView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Video" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="VIDEO" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:VideoLibraryView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Brain" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="KI-REGIE" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:DirectorView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="MovieEdit" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="TIMELINE" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:TimelineView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="VideoOutput" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="EXPORT" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:ProductionView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Cog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="SETTINGS" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:SettingsView/>
+                </TabItem>
             </TabControl>
 
+            <!-- ── Status Bar ── -->
             <Border Grid.Row="2" Height="24"
                     Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}"
@@ -222,6 +314,20 @@
                                  Foreground="{StaticResource AbletonAccent}"
                                  BorderThickness="0"/>
                 </DockPanel>
+            </Border>
+
+            <!-- ── Connection Lost Overlay ── -->
+            <Border Grid.RowSpan="3" Background="#AA000000" IsHitTestVisible="True" Panel.ZIndex="1000"
+                    Visibility="{Binding IsBackendConnected, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                <md:Card UniformCornerRadius="8" Padding="24" MaxWidth="400" VerticalAlignment="Center" HorizontalAlignment="Center" Background="{StaticResource AbletonPanel}">
+                    <StackPanel HorizontalAlignment="Center">
+                        <icon:PackIconMaterial Kind="WifiOff" Width="48" Height="48" Foreground="{StaticResource AbletonYellow}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                        <TextBlock Text="Verbindung unterbrochen" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="Die Verbindung zum Python-Backend wurde unterbrochen. PB Studio versucht automatisch wieder zu verbinden..." 
+                                   TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,0,20"/>
+                        <ProgressBar IsIndeterminate="True" Height="4" Foreground="{StaticResource AbletonYellow}" Background="{StaticResource AbletonBorder}" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </md:Card>
             </Border>
         </Grid>
     </md:DialogHost>

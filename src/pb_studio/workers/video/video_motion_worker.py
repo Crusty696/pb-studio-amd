@@ -74,15 +74,28 @@ class VideoMotionWorker(BaseWorker):
             - file_path: Original file path
             - analyzer_type: 'RAFT' or 'Farneback'
         """
+        # C1/HIGH: Reserve VRAM before starting
+        from ...core.system_monitor import get_system_monitor
+        from ...core.vram_arbiter import VRAMArbiter
+        
+        monitor = get_system_monitor()
+        arbiter = VRAMArbiter(monitor)
+        
+        # Model needs approx 1.5GB
+        model_id = f"RAFT_{Path(self.file_path).stem}"
+        vram_reserved = arbiter.reserve(1500, model_id=model_id)
+
         self.emit_status(f"Analyzing motion: {Path(self.file_path).name}")
         self.emit_progress(5, "Initializing motion analyzer...")
 
         # Validate file exists
         video_path = Path(self.file_path)
         if not video_path.exists():
+            if vram_reserved: arbiter.release(model_id=model_id)
             raise FileNotFoundError(f"Video file not found: {self.file_path}")
 
         if not self.scenes:
+            if vram_reserved: arbiter.release(model_id=model_id)
             logger.warning("No scenes provided for motion analysis")
             return {
                 "motion_data": [],
@@ -95,6 +108,12 @@ class VideoMotionWorker(BaseWorker):
         # Initialize motion analyzer
         self._analyzer = create_motion_analyzer(prefer_gpu=self.prefer_gpu)
         analyzer_type = "RAFT" if isinstance(self._analyzer, MotionAnalyzer) else "Farneback"
+        
+        if vram_reserved and analyzer_type == "RAFT":
+            arbiter.commit(model_id)
+        elif vram_reserved:
+            # Not using GPU RAFT, release reservation
+            arbiter.release(model_id=model_id)
 
         self.emit_progress(10, f"Using {analyzer_type} optical flow...")
 
@@ -134,6 +153,7 @@ class VideoMotionWorker(BaseWorker):
             # Unload RAFT model to free VRAM
             if isinstance(self._analyzer, MotionAnalyzer):
                 self._analyzer.unload()
+                if vram_reserved: arbiter.release(model_id=model_id)
 
     def _analyze_scene(
         self,

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state, resolve_active_project_root, resolve_project_db_id
+from ..app_state import AppState, get_app_state, resolve_project_db_id
 from pb_studio.data.repositories.project_repository import ProjectRepository
 from ..config import config
 from ..schemas.common import StatusResponse, validate_timeline

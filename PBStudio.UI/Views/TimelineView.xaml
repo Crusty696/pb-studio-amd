@@ -4,151 +4,57 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             xmlns:models="clr-namespace:PBStudio.UI.Models"
+             xmlns:converters="clr-namespace:PBStudio.UI.Converters"
              Background="{StaticResource AbletonBg}">
+
+    <UserControl.Resources>
+        <converters:TimeToPixelConverter x:Key="TimeToPixelConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </UserControl.Resources>
 
     <DockPanel Margin="12">
 
         <!-- ══ Top Toolbar ══ -->
         <md:Card DockPanel.Dock="Top" Style="{StaticResource AbletonCard}" Padding="10,8" Margin="0,0,0,8">
             <DockPanel>
-                <Button Command="{Binding RefreshTimelineCommand}"
-                        Style="{StaticResource MaterialDesignFlatButton}"
-                        Foreground="{StaticResource AbletonAccent}"
-                        ToolTip="Aktuelle Cut-Liste als Timeline vom Backend laden"
-                        Padding="8,4" Height="30">
-                    <StackPanel Orientation="Horizontal">
-                        <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
-                                               VerticalAlignment="Center" Margin="0,0,6,0"
-                                               RenderTransformOrigin="0.5,0.5">
-                            <icon:PackIconMaterial.Style>
-                                <Style TargetType="icon:PackIconMaterial">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsLoading}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard>
-                                                    <Storyboard RepeatBehavior="Forever">
-                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
-                                                                         From="0" To="360" Duration="0:0:1"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </icon:PackIconMaterial.Style>
-                            <icon:PackIconMaterial.RenderTransform>
-                                <RotateTransform Angle="0"/>
-                            </icon:PackIconMaterial.RenderTransform>
-                        </icon:PackIconMaterial>
-                        <TextBlock Text="Timeline laden" VerticalAlignment="Center" FontSize="12"/>
-                    </StackPanel>
-                </Button>
+                <StackPanel Orientation="Horizontal">
+                    <Button Command="{Binding RefreshTimelineCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonAccent}"
+                            ToolTip="Aktuelle Cut-Liste laden"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Timeline laden" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
+                    
+                    <!-- Zoom Controls -->
+                    <icon:PackIconMaterial Kind="MagnifyMinus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <Slider Width="120" Minimum="10" Maximum="500" Value="{Binding PixelsPerSecond}" 
+                            VerticalAlignment="Center" ToolTip="Horizontaler Zoom (Pixel/Sekunde)"/>
+                    <icon:PackIconMaterial Kind="MagnifyPlus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                </StackPanel>
 
                 <!-- Stats -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <icon:PackIconMaterial Kind="ClockOutline" Width="12" Height="12"
-                                           Foreground="{StaticResource AbletonTextDim}" Margin="0,0,4,0"
-                                           VerticalAlignment="Center"/>
-                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11"
-                               VerticalAlignment="Center" Margin="0,0,14,0">
-                        <Run Text="Dauer: "/><Run Text="{Binding TotalDuration, Mode=OneWay}"/>
+                    <icon:PackIconMaterial Kind="ClockOutline" Width="12" Height="12" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                        <Run Text="Dauer: "/><Run Text="{Binding TotalDuration, StringFormat={}{0:F1}s, Mode=OneWay}"/>
                     </TextBlock>
-
-                    <icon:PackIconMaterial Kind="FilmstripBoxMultiple" Width="12" Height="12"
-                                           Foreground="{StaticResource AbletonTextDim}" Margin="0,0,4,0"
-                                           VerticalAlignment="Center"/>
-                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11"
-                               VerticalAlignment="Center">
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center">
                         <Run Text="{Binding TimelineEntries.Count, Mode=OneWay}"/><Run Text=" Clips"/>
                     </TextBlock>
                 </StackPanel>
             </DockPanel>
         </md:Card>
 
-        <!-- Loading indicator -->
-        <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="2"
-                     Foreground="{StaticResource AbletonAccent}"
-                     Background="Transparent" BorderThickness="0"
-                     Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
-                     Margin="0,0,0,4"/>
-
-        <!-- ══ Timeline Transport / Scrubber ══ -->
-        <md:Card DockPanel.Dock="Top" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,0,0,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0"
-                        Command="{Binding PreviousCutCommand}"
-                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                        Padding="10,4" Margin="0,0,6,0"
-                        ToolTip="Vorherigen Cut auswählen">
-                    <StackPanel Orientation="Horizontal">
-                        <icon:PackIconMaterial Kind="SkipPrevious" Width="16" Height="16" Margin="0,0,4,0"/>
-                        <TextBlock Text="Zurück" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-
-                <Button Grid.Column="1"
-                        Command="{Binding NextCutCommand}"
-                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                        Padding="10,4"
-                        ToolTip="Nächsten Cut auswählen">
-                    <StackPanel Orientation="Horizontal">
-                        <icon:PackIconMaterial Kind="SkipNext" Width="16" Height="16" Margin="0,0,4,0"/>
-                        <TextBlock Text="Weiter" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-
-                <StackPanel Grid.Column="3">
-                    <TextBlock Text="TIMELINE SCRUBBER" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
-                    <Slider Minimum="0"
-                            Maximum="{Binding TotalDuration, Mode=OneWay}"
-                            Value="{Binding SelectedTimelinePosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            IsEnabled="{Binding HasTimeline}"
-                            AutoToolTipPlacement="TopLeft"
-                            AutoToolTipPrecision="1"
-                            TickPlacement="None"/>
-                    <DockPanel Margin="0,4,0,0">
-                        <TextBlock DockPanel.Dock="Left"
-                                   Foreground="{StaticResource AbletonTextDim}"
-                                   FontSize="11"
-                                   Text="{Binding SelectedTimelinePositionText, Mode=OneWay}"/>
-                        <TextBlock DockPanel.Dock="Right"
-                                   Foreground="{StaticResource AbletonTextDim}"
-                                   FontSize="11"
-                                   Text="{Binding SelectionIndexText, Mode=OneWay}"/>
-                    </DockPanel>
-                </StackPanel>
-
-                <Border Grid.Column="5"
-                        Background="{StaticResource AbletonPanel}"
-                        CornerRadius="4"
-                        Padding="10,6"
-                        VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="Aktuell" Foreground="{StaticResource AbletonTextDim}" FontSize="10" HorizontalAlignment="Center"/>
-                        <TextBlock Text="{Binding SelectedClipName, Mode=OneWay}"
-                                   Foreground="{StaticResource AbletonText}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   MaxWidth="180"
-                                   TextAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </md:Card>
-
-        <!-- ══ Preview + Details Panel ══ -->
+        <!-- ══ Preview + Details Panel (Fixed at Bottom) ══ -->
         <md:Card DockPanel.Dock="Bottom" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,8,0,0">
-            <Grid>
+            <Grid Height="280">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="420"/>
                     <ColumnDefinition Width="12"/>
@@ -158,22 +64,11 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="CLIP PREVIEW" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
                     <Border Background="#FF111111" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1" CornerRadius="4">
-                        <Grid Height="236">
-                            <MediaElement x:Name="PreviewPlayer"
-                                          Stretch="Uniform"
-                                          LoadedBehavior="Manual"
-                                          UnloadedBehavior="Manual"
-                                          MediaOpened="PreviewPlayer_OnMediaOpened"
-                                          MediaEnded="PreviewPlayer_OnMediaEnded"
-                                          MediaFailed="PreviewPlayer_OnMediaFailed"/>
-                            <TextBlock x:Name="PreviewEmptyText"
-                                       Text="Wähle einen Timeline-Cut mit vorhandener Video-Datei"
-                                       Foreground="{StaticResource AbletonTextDim}"
-                                       FontSize="12"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       MaxWidth="250"/>
+                        <Grid Height="200">
+                            <MediaElement x:Name="PreviewPlayer" Stretch="Uniform" LoadedBehavior="Manual" UnloadedBehavior="Manual"
+                                          MediaOpened="PreviewPlayer_OnMediaOpened" MediaEnded="PreviewPlayer_OnMediaEnded" MediaFailed="PreviewPlayer_OnMediaFailed"/>
+                            <TextBlock x:Name="PreviewEmptyText" Text="Wähle einen Timeline-Cut" Foreground="{StaticResource AbletonTextDim}" 
+                                       FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="250"/>
                         </Grid>
                     </Border>
 
@@ -186,183 +81,277 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Button Grid.Column="0"
-                                Click="PlayPreview_Click"
-                                IsEnabled="{Binding CanPreviewSelectedClip}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,4" Margin="0,0,6,0">
-                            <StackPanel Orientation="Horizontal">
-                                <icon:PackIconMaterial Kind="Play" Width="16" Height="16" Margin="0,0,4,0"/>
-                                <TextBlock Text="Play"/>
-                            </StackPanel>
+                        <Button Grid.Column="0" Click="PlayPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0">
+                            <icon:PackIconMaterial Kind="Play" Width="14" Height="14"/>
                         </Button>
-
-                        <Button Grid.Column="1"
-                                Click="PausePreview_Click"
-                                IsEnabled="{Binding CanPreviewSelectedClip}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,4" Margin="0,0,6,0">
-                            <StackPanel Orientation="Horizontal">
-                                <icon:PackIconMaterial Kind="Pause" Width="16" Height="16" Margin="0,0,4,0"/>
-                                <TextBlock Text="Pause"/>
-                            </StackPanel>
+                        <Button Grid.Column="1" Click="PausePreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0">
+                            <icon:PackIconMaterial Kind="Pause" Width="14" Height="14"/>
                         </Button>
-
-                        <Button Grid.Column="2"
-                                Click="StopPreview_Click"
-                                IsEnabled="{Binding CanPreviewSelectedClip}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,4">
-                            <StackPanel Orientation="Horizontal">
-                                <icon:PackIconMaterial Kind="Stop" Width="16" Height="16" Margin="0,0,4,0"/>
-                                <TextBlock Text="Stop"/>
-                            </StackPanel>
+                        <Button Grid.Column="2" Click="StopPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4">
+                            <icon:PackIconMaterial Kind="Stop" Width="14" Height="14"/>
                         </Button>
 
                         <StackPanel Grid.Column="4" VerticalAlignment="Center">
-                            <TextBlock x:Name="PreviewStatusText"
-                                       Text="Kein Preview geladen"
-                                       Foreground="{StaticResource AbletonTextDim}"
-                                       FontSize="11"/>
-                            <TextBlock Text="{Binding SelectedPreviewRange, Mode=OneWay}"
-                                       Foreground="{StaticResource AbletonTextDim}"
-                                       FontSize="11"/>
+                            <TextBlock x:Name="PreviewStatusText" Text="Kein Preview" Foreground="{StaticResource AbletonTextDim}" FontSize="10"/>
+                            <TextBlock Text="{Binding SelectedPreviewRange, Mode=OneWay}" Foreground="{StaticResource AbletonTextDim}" FontSize="10"/>
                         </StackPanel>
                     </Grid>
                 </StackPanel>
 
                 <Grid Grid.Column="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Text="SELEKTIERTER CUT" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
-                        <TextBlock Foreground="{StaticResource AbletonText}" FontSize="12" FontWeight="SemiBold"
-                                   Text="{Binding SelectedClipName, Mode=OneWay}"/>
-                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,4,0,0">
-                            <Run Text="Zeitraum: "/><Run Text="{Binding SelectedTimeRange, Mode=OneWay}"/>
-                        </TextBlock>
-                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                            <Run Text="Clip-In: "/><Run Text="{Binding SelectedClipStart, Mode=OneWay}"/>
-                        </TextBlock>
-                        <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                            <Run Text="Trigger: "/><Run Text="{Binding SelectedTrigger, Mode=OneWay}"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="QUELLE" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
-                        <TextBlock Foreground="{StaticResource AbletonTextDim}"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding SelectedFilePath, Mode=OneWay}"/>
-                    </StackPanel>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="SELEKTIERTER CUT" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource AbletonText}" FontSize="14" FontWeight="SemiBold" Text="{Binding SelectedClipName, Mode=OneWay}"/>
+                            <UniformGrid Columns="2" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="ZEITRAUM" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedTimeRange, Mode=OneWay}" Foreground="{StaticResource AbletonGreen}" FontFamily="Consolas"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="CLIP-IN" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedClipStart, Mode=OneWay}" Foreground="{StaticResource AbletonYellow}" FontFamily="Consolas"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,8,0,0">
+                                    <TextBlock Text="TRIGGER" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedTrigger, Mode=OneWay}" Foreground="{StaticResource AbletonAccent}"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,8,0,0">
+                                    <TextBlock Text="DATEI" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedFilePath, Mode=OneWay}" Foreground="{StaticResource AbletonTextDim}" FontSize="10" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Grid>
         </md:Card>
 
-        <!-- ══ Status Bar ══ -->
-        <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}"
-                   Foreground="{StaticResource AbletonTextDim}" FontSize="11"
-                   Margin="4,6,0,0"/>
+        <!-- ══ Main Timeline Container ══ -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="180"/> <!-- ListView height -->
+                <RowDefinition Height="5"/>   <!-- Splitter -->
+                <RowDefinition Height="*"/>   <!-- Interactive Timeline height -->
+            </Grid.RowDefinitions>
 
-        <!-- ══ Main Timeline List ══ -->
-        <md:Card Style="{StaticResource AbletonCard}" Padding="0">
-            <ListView ItemsSource="{Binding TimelineEntries}"
-                      SelectedItem="{Binding SelectedEntry}"
-                      Background="Transparent" BorderThickness="0"
-                      Foreground="{StaticResource AbletonText}"
-                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
-                        <Setter Property="Padding" Value="2,1"/>
-                        <Setter Property="Margin" Value="0"/>
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
-                        <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
-                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                    </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.View>
-                    <GridView>
-                        <!-- Clip Name -->
-                        <GridViewColumn Header="Clip" Width="180">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding ClipName}" FontSize="12"
-                                               Foreground="{StaticResource AbletonText}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
+            <!-- 1. List View (Summary) -->
+            <md:Card Grid.Row="0" Style="{StaticResource AbletonCard}" Padding="0">
+                <ListView ItemsSource="{Binding TimelineEntries}" SelectedItem="{Binding SelectedEntry}" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AbletonText}">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Clip" Width="180" DisplayMemberBinding="{Binding ClipName}"/>
+                            <GridViewColumn Header="Zeitraum" Width="130" DisplayMemberBinding="{Binding TimeRangeText}"/>
+                            <GridViewColumn Header="Trigger" Width="100" DisplayMemberBinding="{Binding TriggerType}"/>
+                            <GridViewColumn Header="Dauer" Width="70" DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </md:Card>
 
-                        <!-- Time Range -->
-                        <GridViewColumn Header="Zeitraum" Width="130">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding TimeRangeText}" FontSize="12"
-                                               FontFamily="Consolas"
-                                               Foreground="{StaticResource AbletonGreen}"/>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
+            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="{StaticResource AbletonBorder}" Margin="0,2"/>
 
-                        <!-- Duration -->
-                        <GridViewColumn Header="Dauer" Width="70">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Duration}" FontSize="12"
-                                               FontFamily="Consolas"
-                                               Foreground="{StaticResource AbletonTextDim}"/>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
+            <!-- 2. INTERACTIVE POWER TIMELINE (Option C) -->
+            <md:Card Grid.Row="2" Style="{StaticResource AbletonCard}" Padding="0" ClipToBounds="True">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="25"/> <!-- Ruler -->
+                        <RowDefinition Height="*"/>  <!-- Tracks -->
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Timeline Ruler -->
+                    <Border Grid.Row="0" Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,0,0,1">
+                        <Canvas x:Name="RulerCanvas" Height="25" Background="Transparent" HorizontalAlignment="Stretch"/>
+                    </Border>
 
-                        <!-- Trigger Type -->
-                        <GridViewColumn Header="Trigger" Width="90">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Border Background="{StaticResource AbletonPanel}"
-                                            CornerRadius="2" Padding="6,2">
-                                        <TextBlock Text="{Binding TriggerType}" FontSize="11"
-                                                   Foreground="{StaticResource AbletonYellow}"
-                                                   HorizontalAlignment="Center"/>
-                                    </Border>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
+                    <!-- Scrollable Track Area -->
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled">
+                        <Grid Width="{Binding TimelineWidth}" Background="#111111" PreviewMouseDown="TimelineGrid_MouseDown">
+                            
+                            <!-- Waveform Layer (Background) -->
+                            <ItemsControl ItemsSource="{Binding WaveformBars}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="X"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Rectangle Height="{Binding Height}"
+                                                   Fill="{StaticResource AbletonAccent}"
+                                                   Opacity="0.15">
+                                            <Rectangle.Width>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="Width"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Rectangle.Width>
+                                        </Rectangle>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-                        <!-- Trigger Strength -->
-                        <GridViewColumn Header="Stärke" Width="90">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Grid ToolTip="Trigger-Stärke: wie stark der Audio-Event den Schnitt ausgelöst hat">
-                                        <ProgressBar Value="{Binding TriggerStrength, Mode=OneWay}"
-                                                     Minimum="0" Maximum="1"
-                                                     Height="4" Width="70"
-                                                     Foreground="{StaticResource AbletonAccent}"
-                                                     Background="{StaticResource AbletonPanel}"
-                                                     BorderThickness="0"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
+                            <!-- Beat Markers Layer -->
+                            <ItemsControl ItemsSource="{Binding BeatMarkers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding />
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Line Y1="0" Y2="500" Stroke="{StaticResource AbletonGreen}" StrokeThickness="0.5" Opacity="0.2" StrokeDashArray="2,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-                        <!-- File Path -->
-                        <GridViewColumn Header="Datei" Width="200">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding FilePath}" FontSize="11"
-                                               Foreground="{StaticResource AbletonTextDim}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
-                    </GridView>
-                </ListView.View>
-            </ListView>
-        </md:Card>
+                            <!-- Onset Markers Layer -->
+                            <ItemsControl ItemsSource="{Binding SnapMarkers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding />
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Line Y1="0" Y2="500" Stroke="{StaticResource AbletonAccent}" StrokeThickness="0.3" Opacity="0.1"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Clip Items Layer -->
+                            <ItemsControl x:Name="TimelineItemsControl" ItemsSource="{Binding TimelineEntries}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="StartTime"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="VerticalAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:TimelineEntryModel}">
+                                        <Border x:Name="ClipBorder" 
+                                                Height="80" 
+                                                Margin="0,10"
+                                                CornerRadius="3"
+                                                BorderThickness="1"
+                                                BorderBrush="{StaticResource AbletonAccent}"
+                                                Background="{StaticResource AbletonPanel}"
+                                                ToolTip="{Binding ClipName}"
+                                                Cursor="Hand"
+                                                PreviewMouseDown="Clip_MouseDown"
+                                                PreviewMouseMove="Clip_MouseMove"
+                                                PreviewMouseUp="Clip_MouseUp">
+                                            <VisualStateManager.VisualStateGroups>
+                                                <VisualStateGroup x:Name="SnapStates">
+                                                    <VisualState x:Name="Normal"/>
+                                                    <VisualState x:Name="Snapped">
+                                                        <Storyboard>
+                                                            <ColorAnimation Storyboard.TargetName="ClipBorder" 
+                                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                                            To="White" Duration="0:0:0.1"/>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="BorderThickness"
+                                                                             To="2" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                </VisualStateGroup>
+                                            </VisualStateManager.VisualStateGroups>
+                                            <Border.Width>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="Duration"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Border.Width>
+                                            <Grid>
+                                                <TextBlock Text="{Binding ClipName}" 
+                                                           FontSize="10" 
+                                                           Foreground="{StaticResource AbletonText}"
+                                                           VerticalAlignment="Center" 
+                                                           HorizontalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Margin="4"/>
+                                                
+                                                <!-- Drag Handles for Trimming -->
+                                                <Rectangle Width="4" HorizontalAlignment="Left" Fill="{StaticResource AbletonAccent}" Cursor="SizeWE" Opacity="0.5"/>
+                                                <Rectangle Width="4" HorizontalAlignment="Right" Fill="{StaticResource AbletonAccent}" Cursor="SizeWE" Opacity="0.5"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Playhead (Current Position) -->
+                            <Canvas HorizontalAlignment="Left" Width="{Binding TimelineWidth}">
+                                <Border Width="2" Background="{StaticResource AbletonGreen}" Height="500">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform>
+                                            <TranslateTransform.X>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="SelectedTimelinePosition"/>
+                                                    <Binding Path="PixelsPerSecond"/>
+                                                </MultiBinding>
+                                            </TranslateTransform.X>
+                                        </TranslateTransform>
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Canvas>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
+            </md:Card>
+        </Grid>
     </DockPanel>
 </UserControl>

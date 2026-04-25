@@ -206,10 +206,12 @@ class BeatDetector:
         return float(60.0 / median_interval)
 
     def _detect_beats_librosa(self, audio_path: str, duration: float | None = None) -> List[float]:
-        total_dur = librosa.get_duration(path=audio_path)
-        load_dur = duration if duration else total_dur
-        logger.info(f"Librosa Fallback: {Path(audio_path).name} ({load_dur:.0f}s von {total_dur:.0f}s)")
         try:
+            # BUG-088 FIX: Move get_duration inside try block
+            total_dur = librosa.get_duration(path=audio_path)
+            load_dur = duration if duration else total_dur
+            logger.info(f"Librosa Fallback: {Path(audio_path).name} ({load_dur:.0f}s von {total_dur:.0f}s)")
+            
             y, sr = librosa.load(audio_path, sr=22050, duration=load_dur)
             tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             beat_times = librosa.frames_to_time(beat_frames, sr=sr)

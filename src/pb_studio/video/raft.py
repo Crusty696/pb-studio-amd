@@ -18,7 +18,7 @@ import numpy as np
 import onnxruntime as ort
 import cv2
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any, Union
+from typing import Optional, Tuple, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,9 @@ class MotionAnalyzer:
 
         # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
         sess_options.enable_mem_pattern = False
+
+        # R15/STABILITY: Sequentieller Modus ist stabiler mit DirectML/AMD Treibern
+        sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
@@ -598,6 +601,9 @@ class MotionAnalyzer:
             - peak_motion: Maximum motion
             - scene_changes: List of detected scene change indices
         """
+        # BUG-074 FIX: Ensure stride is at least 1
+        stride = max(1, int(stride))
+
         if len(frames) < 2:
             return {
                 "frame_motions": [],

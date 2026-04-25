@@ -66,9 +66,11 @@ class ConfigManager:
                     self._config = self._deep_merge(self.DEFAULTS, user_config)
             except Exception as e:
                 logger.error(f"Config load failed: {e}. Using defaults.")
-                self._config = self.DEFAULTS.copy()
+                import copy
+                self._config = copy.deepcopy(self.DEFAULTS)
         else:
-            self._config = self.DEFAULTS.copy()
+            import copy
+            self._config = copy.deepcopy(self.DEFAULTS)
             self.save_config()
 
     def save_config(self):
@@ -78,11 +80,13 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
 
-    def resolve_path(self, relative_path: str) -> Path:
+    def resolve_path(self, relative_path: Any) -> Path:
         """Resolve relative path to absolute based on project root.
         Absolute Pfade werden unveraendert zurueckgegeben."""
-        if not relative_path:
+        # BUG-081 FIX: Sicherer Umgang mit Path-Objekten oder leeren Pfaden
+        if relative_path is None:
             return _PROJECT_ROOT
+            
         p = Path(relative_path)
         if p.is_absolute():
             return p.resolve()

@@ -309,6 +309,12 @@
                             <TextBlock Text="Motion Matching" FontSize="12" Foreground="{StaticResource AbletonText}"/>
                         </CheckBox>
 
+                        <CheckBox IsChecked="{Binding UseSemanticMatching}"
+                                  Style="{StaticResource AbletonCheckBox}"
+                                  ToolTip="KI-Bildinhaltssuche (SigLIP) zur passenden Clip-Auswahl nutzen">
+                            <TextBlock Text="Semantisches Matching" FontSize="12" Foreground="{StaticResource AbletonText}"/>
+                        </CheckBox>
+
                         <CheckBox IsChecked="{Binding UseStructureAwareness}"
                                   Style="{StaticResource AbletonCheckBox}"
                                   ToolTip="Audio-Struktur (Verse, Chorus, Bridge) für Clip-Auswahl berücksichtigen">

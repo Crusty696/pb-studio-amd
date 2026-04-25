@@ -16,7 +16,7 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 import numpy as np
 

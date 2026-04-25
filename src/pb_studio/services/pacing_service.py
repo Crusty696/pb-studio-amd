@@ -11,7 +11,7 @@ import logging
 import random
 import subprocess
 from pathlib import Path
-from typing import Any, List, Dict, Optional, Tuple
+from typing import Any, List, Dict
 
 from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
 from pb_studio.pacing.pacing_models import CutListEntry
@@ -164,9 +164,25 @@ class PacingService:
             return rule_engine.apply_rules(duration=target)
 
         # 3. Automatisches Pacing (Standard)
+        from pb_studio.data.vector_store import VectorStore
+        vstore = VectorStore()
+        
+        # S01/CRITICAL: Ensure total_duration is valid. If 0.0, probe it now.
+        if (not total_duration or total_duration <= 0) and audio_path:
+            logger.info(f"Audio-Dauer fehlt in Snapshot, starte Ad-hoc Probe: {audio_path}")
+            try:
+                total_duration = self._get_clip_duration(audio_path)
+            except Exception as e:
+                logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
+                total_duration = 30.0 # Absoluter Notfall-Fallback
+        
         pacing_engine = AdvancedPacingEngine(
             trigger_settings=pacing_config["trigger_settings"]
         )
+        # VectorStore für semantische Auswahl injizieren
+        pacing_engine.clip_selector.vector_store = vstore
+        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+        
         target_duration = duration_limit or total_duration
 
         # Gecachte Beats aus vorheriger Audio-Analyse extrahieren
@@ -190,24 +206,32 @@ class PacingService:
 
         logger.info(
             f"Cut-Liste für {target_duration:.2f}s generieren "
-            f"(Motion={pacing_config.get('use_motion_matching', False)})"
+            f"(Motion={pacing_config.get('use_motion_matching', False)}, "
+            f"Semantic={pacing_config.get('use_semantic_matching', False)})"
         )
 
-        # Pre-cached Beats + Dauer in Engine injizieren (vermeidet Re-Analyse langer Dateien)
+        # Pre-cached Beats + Dauer in Engine injizieren
         if pre_cached_beats:
             pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
             if pre_cached_bpm:
                 pacing_engine._pre_cached_bpm = pre_cached_bpm
-            # R17/HIGH-03: Inject cached duration so the engine doesn't estimate from
-            # last beat time (which under-estimates for tracks with silent outros).
             cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
             if cached_dur > 0:
                 pacing_engine._pre_cached_duration = cached_dur
 
         try:
-            if pacing_config.get("use_motion_matching", False):
-                pacing_engine.enable_motion_matching(True)
+            # Entscheide welche Generierungsmethode genutzt wird
+            use_advanced = (
+                pacing_config.get("use_motion_matching", False) or 
+                pacing_config.get("use_semantic_matching", False) or
+                pacing_config.get("use_structure_awareness", False)
+            )
+
+            if use_advanced:
+                if pacing_config.get("use_motion_matching", False):
+                    pacing_engine.enable_motion_matching(True)
+                
                 if pacing_config.get("use_structure_awareness", False):
                     pacing_engine.analyze_song_structure(audio_path)
                     pacing_cuts = pacing_engine.generate_cut_list_with_structure(
@@ -215,23 +239,42 @@ class PacingService:
                         expected_bpm=pacing_config.get("expected_bpm", 120),
                         min_cut_interval=min_cut_interval,
                     )
-                    cut_with_clips = []
-                    for cut in pacing_cuts:
-                        sel = pacing_engine.clip_selector.select_clip(
-                            clips, cut.strength, cut.trigger_type
-                        )
-                        cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
                 else:
-                    raw = pacing_engine.generate_cut_list_with_clips(
-                        audio_path=audio_path,
-                        available_clips=clips,
+                    pacing_cuts_raw = pacing_engine.generate_cut_list(
+                        audio_track=audio_path,
                         expected_bpm=pacing_config.get("expected_bpm", 120),
                         min_cut_interval=min_cut_interval,
                     )
-                    cut_with_clips = [
-                        (c, cl.get("file_path", ""), cl.get("id", "unknown"))
-                        for c, cl in raw
-                    ]
+                    # Konvertiere rohe CutPoints in das erwartete Format für die weitere Verarbeitung
+                    pacing_cuts = pacing_cuts_raw
+
+                # Stimmung ermitteln für semantisches Matching
+                song_mood = "energetic music"
+                if pacing_config.get("use_semantic_matching", False):
+                    from pb_studio.ai.smart_director import SmartDirector
+                    director = SmartDirector.get_instance()
+                    song_mood = director.get_dominant_mood(audio_path)
+
+                cut_with_clips = []
+                for cut in pacing_cuts:
+                    prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                    # Falls Struktur aktiv, prompt verfeinern
+                    if prompt and hasattr(cut, "segment_type") and cut.segment_type:
+                        prompt = f"{cut.segment_type} {prompt}"
+                    
+                    sel = pacing_engine.clip_selector.select_clip(
+                        clips, cut.strength, cut.trigger_type, prompt=prompt
+                    )
+                    cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+                
+                if not cut_with_clips:
+                    logger.warning("Advanced generation delivered 0 cuts, falling back to simple mode.")
+                    return self._generate_simple_round_robin(
+                        pacing_engine, audio_path, clips,
+                        pacing_config.get("expected_bpm", 120), target_duration,
+                        min_cut_interval=min_cut_interval,
+                    )
+
                 return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
             else:
                 return self._generate_simple_round_robin(
@@ -241,7 +284,15 @@ class PacingService:
                 )
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
-            raise RuntimeError(f"Cut-List-Generierung fehlgeschlagen: {e}") from e
+            # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
+            try:
+                return self._generate_simple_round_robin(
+                    pacing_engine, audio_path, clips,
+                    pacing_config.get("expected_bpm", 120), target_duration,
+                    min_cut_interval=min_cut_interval,
+                )
+            except Exception as final_e:
+                raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 
     def _generate_simple_round_robin(
         self, engine, audio_path, clips, bpm, target_duration,

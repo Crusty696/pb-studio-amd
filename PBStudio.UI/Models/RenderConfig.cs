@@ -1,3 +1,5 @@
+/* 
+// DEAD CODE - Nirgends referenziert
 namespace PBStudio.UI.Models;
 
 /// <summary>Render-Konfiguration für UI-Darstellung.</summary>
@@ -13,3 +15,4 @@ public class RenderConfigModel
     public double BitrateMbps { get; set; } = 12.0;
     public bool IncludeAudio { get; set; } = true;
 }
+*/

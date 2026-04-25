@@ -11,7 +11,6 @@ Portiert von NVIDIA-Version.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass

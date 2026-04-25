@@ -1,47 +1,29 @@
 """
 Worker Registry for PB Studio AMD
 
-Singleton registry for managing worker types and their VRAM budgets.
+Singleton registry for managing worker classes and their VRAM budgets.
 """
 
-from typing import Dict, List, Optional, Type
+import logging
 import threading
+from typing import Dict, Type, List
 
 from .base_worker import BaseWorker
 
+logger = logging.getLogger(__name__)
 
 class WorkerRegistry:
     """
-    Singleton registry for worker classes.
-
-    Allows registration and retrieval of worker classes by name,
-    along with their associated VRAM budgets.
-
-    Example:
-        # Register a worker
-        registry = WorkerRegistry()
-        registry.register_worker("stem_separator", StemSeparatorWorker, vram_budget=2048)
-
-        # Get and instantiate a worker
-        worker_class = registry.get_worker("stem_separator")
-        worker = worker_class(audio_file="song.mp3")
-
-        # Check VRAM budget before running
-        vram_needed = registry.get_vram_budget("stem_separator")
-        if vram_arbiter.can_allocate(vram_needed):
-            thread_pool.start(worker)
+    Registry for worker classes and their VRAM requirements.
     """
-
-    _instance: Optional['WorkerRegistry'] = None
+    _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls) -> 'WorkerRegistry':
-        """Ensure singleton pattern."""
+    def __new__(cls):
         if cls._instance is None:
             with cls._lock:
-                # Double-check locking
                 if cls._instance is None:
-                    cls._instance = super().__new__(cls)
+                    cls._instance = super(WorkerRegistry, cls).__new__(cls)
                     cls._instance._initialized = False
         return cls._instance
 
@@ -49,10 +31,11 @@ class WorkerRegistry:
         """Initialize the registry (only once)."""
         if self._initialized:
             return
-
+            
         self._workers: Dict[str, Type[BaseWorker]] = {}
         self._vram_budgets: Dict[str, int] = {}
         self._initialized = True
+        self._lock = threading.Lock() # Instance lock for operations
 
     def register_worker(
         self,
@@ -77,11 +60,13 @@ class WorkerRegistry:
                 f"worker_class must be a subclass of BaseWorker, got {type(worker_class)}"
             )
 
-        if name in self._workers:
-            raise ValueError(f"Worker '{name}' is already registered")
+        with self._lock:
+            if name in self._workers:
+                raise ValueError(f"Worker '{name}' is already registered")
 
-        self._workers[name] = worker_class
-        self._vram_budgets[name] = vram_budget
+            self._workers[name] = worker_class
+            self._vram_budgets[name] = vram_budget
+            logger.debug(f"Worker registered: {name} (VRAM: {vram_budget}MB)")
 
     def get_worker(self, name: str) -> Type[BaseWorker]:
         """
@@ -96,13 +81,14 @@ class WorkerRegistry:
         Raises:
             KeyError: If no worker is registered with that name
         """
-        if name not in self._workers:
-            available = ", ".join(self._workers.keys()) or "(none)"
-            raise KeyError(
-                f"No worker registered with name '{name}'. Available: {available}"
-            )
+        with self._lock:
+            if name not in self._workers:
+                available = ", ".join(self._workers.keys()) or "(none)"
+                raise KeyError(
+                    f"No worker registered with name '{name}'. Available: {available}"
+                )
 
-        return self._workers[name]
+            return self._workers[name]
 
     def get_vram_budget(self, name: str) -> int:
         """
@@ -112,24 +98,20 @@ class WorkerRegistry:
             name: Name of the registered worker
 
         Returns:
-            VRAM budget in MB
-
-        Raises:
-            KeyError: If no worker is registered with that name
+            The VRAM budget in MB
         """
-        if name not in self._vram_budgets:
-            raise KeyError(f"No worker registered with name '{name}'")
-
-        return self._vram_budgets[name]
+        with self._lock:
+            return self._vram_budgets.get(name, 0)
 
     def list_workers(self) -> List[str]:
         """
         List all registered worker names.
 
         Returns:
-            List of registered worker names (sorted alphabetically)
+            List of worker names
         """
-        return sorted(self._workers.keys())
+        with self._lock:
+            return list(self._workers.keys())
 
     def is_registered(self, name: str) -> bool:
         """
@@ -141,7 +123,8 @@ class WorkerRegistry:
         Returns:
             True if registered, False otherwise
         """
-        return name in self._workers
+        with self._lock:
+            return name in self._workers
 
     def unregister_worker(self, name: str) -> None:
         """
@@ -153,13 +136,15 @@ class WorkerRegistry:
         Raises:
             KeyError: If no worker is registered with that name
         """
-        if name not in self._workers:
-            raise KeyError(f"No worker registered with name '{name}'")
+        with self._lock:
+            if name not in self._workers:
+                raise KeyError(f"No worker registered with name '{name}'")
 
-        del self._workers[name]
-        del self._vram_budgets[name]
+            del self._workers[name]
+            del self._vram_budgets[name]
 
     def clear(self) -> None:
         """Remove all registered workers (mainly for testing)."""
-        self._workers.clear()
-        self._vram_budgets.clear()
+        with self._lock:
+            self._workers.clear()
+            self._vram_budgets.clear()

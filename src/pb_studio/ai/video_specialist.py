@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from PIL import Image
 
-from .siglip_wrapper import SigLIPWrapper, EMBEDDING_DIM
+from .siglip_wrapper import SigLIPWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -345,9 +345,11 @@ class VideoSpecialist:
                 # Convert time to frame indices
                 start_frame = int(clip.start_time * fps)
                 end_frame = int(clip.end_time * fps)
+                num_samples = max(1, min(10, end_frame - start_frame))
 
                 # Sample frames from clip (max 10 frames)
-                frame_indices = np.linspace(start_frame, end_frame, min(10, end_frame - start_frame), dtype=int)
+                # BUG-081 FIX: Ensure num is at least 1 to avoid crash/empty array
+                frame_indices = np.linspace(start_frame, end_frame, num_samples, dtype=int)
 
                 frames = []
                 for frame_idx in frame_indices:
@@ -422,8 +424,11 @@ class VideoSpecialist:
             if clip.embedding is None:
                 continue
 
-            # Compute similarity
-            sim = np.dot(query_embedding, clip.embedding)
+            # BUG-073 FIX: Normalize vectors before dot product for proper cosine similarity
+            q_norm = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
+            c_norm = clip.embedding / (np.linalg.norm(clip.embedding) + 1e-8)
+            
+            sim = np.dot(q_norm, c_norm)
             sim = float((sim + 1.0) / 2.0)  # Convert to [0, 1]
 
             if sim >= min_score:

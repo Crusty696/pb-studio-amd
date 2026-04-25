@@ -12,7 +12,7 @@ AMD-Version: Rein CPU-basiert mit librosa.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import librosa
@@ -70,7 +70,8 @@ class AnchorFeatureExtractor:
 
             # 1. Spektral-Features (8 means + 8 variances = 16 Features)
             spectral = self._get_spectral_analyzer()
-            spectral_result = spectral.analyze(audio_path, duration=duration, offset=offset)
+            # BUG-096 FIX: Nutze bereits geladenes Audio-Array (y) statt erneutem Disk-Zugriff
+            spectral_result = spectral.analyze_from_array(y, sr)
 
             band_means = spectral.get_band_means(spectral_result)
             band_vars = spectral.get_band_variances(spectral_result)

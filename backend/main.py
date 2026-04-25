@@ -25,10 +25,20 @@ from .config import config
 from .middleware.gpu_lock import GPULockMiddleware
 
 # Logging Setup
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / "backend.log"
+
+handlers = [
+    logging.StreamHandler(sys.stdout),
+    logging.FileHandler(str(log_file), encoding="utf-8")
+]
+
 logging.basicConfig(
     level=getattr(logging, config.log_level.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=handlers
 )
 logger = logging.getLogger("pb_studio.backend")
 
@@ -76,7 +86,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
     yield
 
+    # BUG-099 FIX: Expliziter Cleanup beim Shutdown
     logger.info("PB Studio AMD Backend wird heruntergefahren...")
+    try:
+        from pb_studio.ai.smart_director import SmartDirector
+        SmartDirector.reset_instance()
+        logger.info("  AI Director Ressourcen freigegeben")
+    except Exception as e:
+        logger.debug(f"Director shutdown cleanup skipped: {e}")
 
 
 # FastAPI App erstellen
@@ -113,6 +130,12 @@ async def health_check() -> dict[str, Any]:
         "uptime_seconds": round(get_uptime(), 1),
         "gpu_available": _check_gpu_available(),
     }
+
+
+@app.get("/health/heartbeat")
+async def heartbeat() -> dict[str, Any]:
+    """Leichtgewichtiger Herzschlag für UI-Resilienz."""
+    return {"status": "alive", "timestamp": time.time()}
 
 
 @app.get("/gpu/status")

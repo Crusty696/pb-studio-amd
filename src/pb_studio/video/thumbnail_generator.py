@@ -81,7 +81,8 @@ def batch_generate_thumbnails(
     for clip in video_clips:
         clip_id = clip.get("id")
         file_path = clip.get("file_path")
-        if not clip_id or not file_path:
+        # BUG-097 FIX: clip_id=0 is a valid ID
+        if clip_id is None or not file_path:
             continue
         tp = generate_clip_thumbnail(file_path, clip_id, project_root)
         if tp:

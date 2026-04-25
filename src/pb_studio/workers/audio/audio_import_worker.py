@@ -12,7 +12,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from ..base_worker import BaseWorker
 from ...models.audio import AudioMetadata
@@ -77,29 +77,38 @@ class AudioImportWorker(BaseWorker):
         self.emit_progress(30, "Converting to WAV...")
         self._check_cancelled()
 
-        # Convert to WAV
-        self.temp_wav_path = self._convert_to_wav()
+        try:
+            # Convert to WAV
+            self.temp_wav_path = self._convert_to_wav()
 
-        self.emit_progress(90, "Validating output...")
-        self._check_cancelled()
+            self.emit_progress(90, "Validating output...")
+            self._check_cancelled()
 
-        # Validate output
-        if not Path(self.temp_wav_path).exists():
-            raise RuntimeError("WAV conversion failed: output file not created")
+            # Validate output
+            if not Path(self.temp_wav_path).exists():
+                raise RuntimeError("WAV conversion failed: output file not created")
 
-        output_size = Path(self.temp_wav_path).stat().st_size
-        if output_size == 0:
-            raise RuntimeError("WAV conversion failed: output file is empty")
+            output_size = Path(self.temp_wav_path).stat().st_size
+            if output_size == 0:
+                raise RuntimeError("WAV conversion failed: output file is empty")
 
-        logger.info(f"Audio import complete: {self.temp_wav_path} ({output_size} bytes)")
-        self.emit_progress(100, "Import complete")
+            logger.info(f"Audio import complete: {self.temp_wav_path} ({output_size} bytes)")
+            self.emit_progress(100, "Import complete")
 
-        return AudioImportResult(
-            metadata=metadata,
-            temp_wav_path=self.temp_wav_path,
-            original_path=self.file_path,
-            project_id=self.project_id
-        )
+            return AudioImportResult(
+                metadata=metadata,
+                temp_wav_path=self.temp_wav_path,
+                original_path=self.file_path,
+                project_id=self.project_id
+            )
+        except Exception:
+            # BUG-087 FIX: Cleanup temp file on error/cancel
+            if self.temp_wav_path and Path(self.temp_wav_path).exists():
+                try:
+                    os.remove(self.temp_wav_path)
+                except Exception as e:
+                    logger.debug(f"Could not delete temp WAV: {e}")
+            raise
 
     def _probe_audio_metadata(self) -> AudioMetadata:
         """

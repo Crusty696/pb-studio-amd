@@ -1,8 +1,8 @@
 import queue
 import logging
-from enum import IntEnum, auto
+from enum import IntEnum
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 

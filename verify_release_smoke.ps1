@@ -19,21 +19,12 @@ function Step($name, [scriptblock]$action) {
 }
 
 function Convert-JsonResponse($response) {
-    if ($null -eq $response) {
-        return $null
-    }
-
-    $content = $response.Content
-    if ([string]::IsNullOrWhiteSpace($content)) {
-        return $null
-    }
-
-    return $content | ConvertFrom-Json -NoEnumerate
+    return $response
 }
 
 function Get-Json($url) {
-    $response = Invoke-WebRequest -Uri ($BaseUrl + $url) -Method Get -TimeoutSec 60
-    return Convert-JsonResponse $response
+    $response = Invoke-RestMethod -Uri ($BaseUrl + $url) -Method Get -TimeoutSec 60 -UseBasicParsing
+    return $response
 }
 
 function Post-Json($url, $body) {
@@ -41,8 +32,8 @@ function Post-Json($url, $body) {
 
     for ($attempt = 1; $attempt -le 2; $attempt++) {
         try {
-            $response = Invoke-WebRequest -Uri ($BaseUrl + $url) -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 300
-            return Convert-JsonResponse $response
+            $response = Invoke-RestMethod -Uri ($BaseUrl + $url) -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 300 -UseBasicParsing
+            return $response
         }
         catch {
             if ($attempt -ge 2) {
@@ -59,9 +50,13 @@ function Post-Json($url, $body) {
 
 function Test-Health {
     try {
-        $health = Get-Json '/health'
+        $url = '/health'
+        Write-Host "  DEBUG: testing health at $($BaseUrl + $url)"
+        $health = Get-Json $url
+        Write-Host "  DEBUG: health status = $($health.status)"
         return $health.status -eq 'ok'
     } catch {
+        Write-Host "  DEBUG: health check error: $_"
         return $false
     }
 }
@@ -121,7 +116,7 @@ function Ensure-Backend {
 
         Write-Host '  restarting existing backend for isolated smoke run'
         try {
-            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
         }
         catch { }
 
@@ -250,8 +245,17 @@ try {
     }
 
     Step 'Load audio/video clip lists' {
-        $audio = @(Get-Json '/audio/clips?page=1&limit=50')
-        $video = @(Get-Json '/video/clips?page=1&limit=50')
+        $audio = @()
+        $video = @()
+        
+        for ($i = 0; $i -lt 10; $i++) {
+            $audio = @(Get-Json "/audio/clips?page=1&limit=50")
+            $video = @(Get-Json "/video/clips?page=1&limit=50")
+            if ($audio.Count -ge 1 -and $video.Count -ge 2) { break }
+            Write-Host "  waiting for clips to appear in DB (attempt $($i+1)/10)..."
+            Start-Sleep -Seconds 1
+        }
+
         if (-not $audio -or $audio.Count -lt 1) { throw 'No audio clips available' }
         if (-not $video -or $video.Count -lt 2) { throw 'Need at least 2 video clips' }
 
@@ -381,7 +385,7 @@ try {
 finally {
     if ($script:StartedBackend -and $script:BackendProcess -and -not $script:BackendProcess.HasExited) {
         try {
-            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
             Start-Sleep -Seconds 2
         } catch {}
         if (-not $script:BackendProcess.HasExited) {

@@ -108,6 +108,7 @@ public partial class App : Application
         // KEIN AddSingleton<ApiClient>() -- würde AddHttpClient<ApiClient> überschreiben (BaseAddress-Bug)
         services.AddSingleton<IApiClient>(sp => sp.GetRequiredService<ApiClient>());
         services.AddSingleton<SSEClient>();
+        services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<NavigationService>();
         services.AddSingleton<ProjectService>();
         services.AddSingleton<TimelineStateService>();
@@ -116,6 +117,7 @@ public partial class App : Application
 
         // ViewModels (Transient — jeder Tab bekommt seine eigene Instanz via Ioc.Default)
         services.AddTransient<MainViewModel>();
+        services.AddTransient<ProjectOverviewViewModel>();
         services.AddTransient<MediaIngestViewModel>();
         services.AddTransient<AudioLibraryViewModel>();
         services.AddTransient<VideoLibraryViewModel>();

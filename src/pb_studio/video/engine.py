@@ -1,7 +1,6 @@
 import logging
 import random
 import subprocess
-import json
 import uuid
 import numpy as np
 import shutil
@@ -79,7 +78,13 @@ class VideoGenerator:
 
             # Get Energy Profile (Librosa)
             import librosa
-            y, sr = librosa.load(master_audio, sr=22050, mono=True)
+            try:
+                # BUG-088 FIX: Handle potential librosa load errors
+                y, sr = librosa.load(master_audio, sr=22050, mono=True)
+            except Exception as e:
+                logger.error(f"Failed to load master audio {master_audio}: {e}")
+                raise RuntimeError(f"Audio loading failed: {e}")
+                
             duration = librosa.get_duration(y=y, sr=sr)
             rms = librosa.feature.rms(y=y)[0]
             # Normalize RMS
@@ -292,7 +297,7 @@ class VideoGenerator:
 
         # If hardware encoding failed, try software fallback
         if result.returncode != 0 and encoder_config.is_hardware:
-            logger.warning(f"Hardware encoding failed, trying software fallback")
+            logger.warning("Hardware encoding failed, trying software fallback")
             fallback_config = get_encoder_config(
                 codec="h264",
                 quality="speed",
@@ -322,9 +327,11 @@ class VideoGenerator:
 
         # Create concat file
         list_path = segments[0].parent / "list.txt"
-        with open(list_path, "w") as f:
+        with open(list_path, "w", encoding="utf-8") as f:
             for seg in segments:
-                f.write(f"file '{seg.name}'\n")
+                # BUG-055 FIX: Nutze absolute Pfade
+                safe_path = str(seg.absolute()).replace("\\", "/")
+                f.write(f"file '{safe_path}'\n")
 
         # Get export encoder for final output
         encoder_config = get_export_encoder(

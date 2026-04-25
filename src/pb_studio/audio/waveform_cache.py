@@ -71,22 +71,27 @@ class WaveformCache:
             # Retrieve cached entry
             entry = self.cache[abs_path]
 
-            # Verify file hasn't changed (if hash is enabled)
-            if self.use_file_hash:
-                current_hash = self._compute_hash(abs_path)
-                if current_hash != entry['hash']:
-                    # File changed - invalidate cache
-                    logger.info(f"Cache INVALID (file changed): {Path(audio_path).name}")
-                    del self.cache[abs_path]
-                    self.misses += 1
-                    return None
+        # BUG-089 FIX: Disk-I/O außerhalb des Locks
+        # Verify file hasn't changed (if hash is enabled)
+        if self.use_file_hash:
+            current_hash = self._compute_hash(abs_path)
+            if current_hash != entry['hash']:
+                # File changed - invalidate cache
+                logger.info(f"Cache INVALID (file changed): {Path(audio_path).name}")
+                with self._lock:
+                    if abs_path in self.cache:
+                        del self.cache[abs_path]
+                self.misses += 1
+                return None
 
+        with self._lock:
             # Cache HIT - move to end (most recently used)
-            self.cache.move_to_end(abs_path)
-            self.hits += 1
-
-            logger.debug(f"Cache HIT: {Path(audio_path).name}")
-            return entry['waveform']
+            if abs_path in self.cache:
+                self.cache.move_to_end(abs_path)
+                self.hits += 1
+                logger.debug(f"Cache HIT: {Path(audio_path).name}")
+                return self.cache[abs_path]['waveform']
+            return None
 
     def put(self, audio_path: str, waveform: Dict[str, np.ndarray]):
         """

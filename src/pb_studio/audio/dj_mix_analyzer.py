@@ -88,7 +88,8 @@ class DJMixAnalyzer:
 
             for i in range(0, len(y_ds), window_frames * hop_length):
                 window = y_ds[i:i + window_frames * hop_length]
-                if len(window) > sr_a:
+                # BUG-058 FIX: Konsistente Mindestlaenge (1s) fuer alle Fenster-Analysen
+                if len(window) >= sr_a:
                     chroma = librosa.feature.chroma_cqt(y=window, sr=sr_a)
                     chroma_windows.append(np.mean(chroma, axis=1))
                     chroma_times.append(i / sr_a)
@@ -105,7 +106,8 @@ class DJMixAnalyzer:
             rms_windows = []
             for i in range(0, len(rms), window_frames):
                 w = rms[i:i + window_frames]
-                if len(w) > 0:
+                # BUG-058 FIX: Nutze dieselbe Bedingung wie bei Chroma (Mapping-Integritaet)
+                if len(w) >= window_frames:
                     rms_windows.append(np.mean(w))
 
             energy_changes = []

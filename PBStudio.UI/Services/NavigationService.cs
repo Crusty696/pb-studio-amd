@@ -5,10 +5,11 @@ namespace PBStudio.UI.Services;
 /// </summary>
 public class NavigationService
 {
-    public event EventHandler<int>? NavigationRequested;
+    // DEAD CODE - Event hat keinen Subscriber
+    // public event EventHandler<int>? NavigationRequested;
 
     public void NavigateTo(int tabIndex)
     {
-        NavigationRequested?.Invoke(this, tabIndex);
+        // NavigationRequested?.Invoke(this, tabIndex);
     }
 }

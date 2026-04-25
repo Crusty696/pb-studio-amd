@@ -12,11 +12,10 @@ import gc
 import hashlib
 import json
 import logging
-import time as time_module
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Generator
+from typing import Callable, Generator
 
 import numpy as np
 import soundfile as sf
@@ -260,10 +259,26 @@ class StreamingAudioAnalyzer:
                 logger.warning(f"Progress-Callback Fehler: {e}")
 
     def _get_file_hash(self, file_path: Path) -> str:
+        """Berechnet SHA-256 Hash blockweise (blockiert Thread nicht bei riesigen Dateien)."""
+        # BUG-088 FIX: Groessere Chunks (1MB) und Fortschritts-Logging
         hasher = hashlib.sha256()
+        file_size = file_path.stat().st_size
+        bytes_read = 0
+        last_log = 0.0
+        
+        logger.info(f"Berechne Hash für {file_path.name} ({file_size / 1024 / 1024:.1f} MB)...")
+        
         with open(file_path, "rb") as f:
-            while chunk := f.read(8192):
+            while chunk := f.read(1024 * 1024):
                 hasher.update(chunk)
+                bytes_read += len(chunk)
+                
+                # Alle 25% loggen um "Hängen" zu vermeiden
+                progress = bytes_read / file_size if file_size > 0 else 1.0
+                if progress >= last_log + 0.25:
+                    logger.debug(f"Hashing: {progress*100:.0f}%...")
+                    last_log = progress
+                    
         return hasher.hexdigest()
 
     def _settings_suffix(self) -> str:
@@ -463,7 +478,13 @@ class StreamingAudioAnalyzer:
         self, audio_path: Path, total_duration: float
     ) -> list[float]:
         import librosa
-        y_init, sr = librosa.load(str(audio_path), sr=22050, duration=180.0)
+        try:
+            # BUG-088 FIX: Handle potential librosa load errors
+            y_init, sr = librosa.load(str(audio_path), sr=22050, duration=180.0)
+        except Exception as e:
+            logger.error(f"Failed to load audio for streaming analysis {audio_path}: {e}")
+            return []
+            
         tempo, _ = librosa.beat.beat_track(y=y_init, sr=sr)
         if isinstance(tempo, np.ndarray):
             tempo = tempo[0]

@@ -26,7 +26,8 @@ class VideoClipInfo(BaseModel):
 
 class VideoAnalyzeRequest(BaseModel):
     """Request: Video analysieren."""
-    clip_id: int
+    # BUG-063 FIX: ge=0 validation
+    clip_id: int = Field(..., ge=0)
     detect_scenes: bool = True
     generate_embeddings: bool = True
     analyze_motion: bool = True

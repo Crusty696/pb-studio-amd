@@ -101,9 +101,14 @@ class TestAudioRouter:
         assert list(fresh_state.audio_clips.keys()) == [1]
 
     def test_import_datei_nicht_gefunden_404(self, client):
-        r = client.post("/audio/import", json={"path": "/nicht/vorhanden/audio.mp3"})
+        r = client.post("/audio/import", json={"path": r"C:\nicht\vorhanden\audio.mp3"})
         assert r.status_code == 404
         assert "nicht gefunden" in r.json()["detail"].lower()
+
+    def test_import_relativer_pfad_400(self, client):
+        r = client.post("/audio/import", json={"path": "../../../etc/passwd"})
+        assert r.status_code == 400
+        assert "absolut" in r.json()["detail"].lower()
 
     def test_import_ungueltiges_format_400(self, client, tmp_path):
         txt = tmp_path / "audio.txt"

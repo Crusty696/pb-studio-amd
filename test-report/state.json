@@ -1,153 +1,167 @@
 {
-  "timestamp": "2026-03-16T05:13:33.931883",
+  "timestamp": "2026-03-29T03:47:23.976877",
   "backend_status": "running",
-  "project_path": "C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio\\AutoQA-051308",
+  "project_path": "C:\\Users\\david\\OneDrive\\Dokumente\\PBStudio\\AutoQA-034723",
   "audio_id": 1,
   "video_ids": [
     1,
     2
   ],
   "results": {
-    "project/create_project": {
+    "health/check": {
       "passed": true,
-      "details": "status=200 name=AutoQA-051308"
+      "details": "status=200 gpu=True"
     },
-    "project/project_info": {
+    "health/gpu_status": {
       "passed": true,
-      "details": "status=200 name=AutoQA-051308"
+      "details": "status=200 gpu=AMD Radeon RX 7800 XT vram=1661.0/16368.0MB"
     },
-    "project/save_project": {
-      "passed": true,
-      "details": "status=200 success=True"
-    },
-    "project/close_project": {
+    "health/gpu_cleanup": {
       "passed": true,
       "details": "status=200"
     },
-    "project/open_project": {
+    "project/create": {
       "passed": true,
-      "details": "status=200 name=AutoQA-051308"
+      "details": "status=200 body={\"name\":\"AutoQA-034723\",\"path\":\"C:\\\\Users\\\\david\\\\OneDrive\\\\Dokumente\\\\PBStudio\\\\AutoQA-034723\",\"db_project_id\":75,\"audio_count\":0,\"video_count\":0,\"has_timeline\":false,\"created_at\":\"2026-03-29T01:47:2"
     },
-    "media/import_audio": {
+    "project/info": {
       "passed": true,
-      "details": "status=200 id=1 duration=60.0s"
+      "details": "status=200 body={\"name\":\"AutoQA-034723\",\"path\":\"C:\\\\Users\\\\david\\\\OneDrive\\\\Dokumente\\\\PBStudio\\\\AutoQA-034723\",\"db_project_id\":75,\"audio_count\":0,\"video_count\":0,\"has_timeline\":false,\"created_at\":\"2026-03-29T01:47:2"
     },
-    "media/import_video1": {
+    "project/save": {
       "passed": true,
-      "details": "status=200 id=1"
+      "details": "status=200"
     },
-    "media/import_video2": {
+    "project/close": {
       "passed": true,
-      "details": "status=200 id=2"
+      "details": "status=200"
     },
-    "media/list_audio_clips": {
+    "project/open": {
       "passed": true,
-      "details": "status=200 count=1"
+      "details": "status=200 body={\"name\":\"AutoQA-034723\",\"path\":\"C:\\\\Users\\\\david\\\\OneDrive\\\\Dokumente\\\\PBStudio\\\\AutoQA-034723\",\"db_project_id\":75,\"audio_count\":0,\"video_count\":0,\"has_timeline\":false,\"created_at\":\"2026-03-29T01:47:2"
     },
-    "media/list_video_clips": {
+    "audio/import": {
       "passed": true,
-      "details": "status=200 count=2"
+      "details": "status=200 body={\"id\":1,\"name\":\"test_audio_music_60s\",\"path\":\"C:\\\\Users\\\\david\\\\Videos\\\\test_audio_music_60s.wav\",\"duration_seconds\":60.0,\"sample_rate\":48000,\"channels\":2,\"format\":\"wav\",\"bpm\":0.0,\"key\":null,\"beat_cou"
     },
-    "audio/analyze_audio": {
+    "audio/list_clips": {
       "passed": true,
-      "details": "status=200 bpm=123.0 key=E minor beats=122"
+      "details": "status=200 body=[{\"id\":1,\"name\":\"test_audio_music_60s\",\"path\":\"C:\\\\Users\\\\david\\\\Videos\\\\test_audio_music_60s.wav\",\"duration_seconds\":60.0,\"sample_rate\":48000,\"channels\":2,\"format\":\"wav\",\"bpm\":0.0,\"key\":null,\"beat_co"
     },
-    "audio/get_beats": {
+    "audio/analyze": {
       "passed": true,
-      "details": "status=200 count=122"
+      "details": "bpm=123.04687499999972 key=E minor beats=122 struct_segs=3"
     },
-    "audio/get_waveform": {
+    "audio/beats": {
       "passed": true,
-      "details": "status=200 bands=3 samples=1033"
+      "details": "count=122"
     },
-    "audio/get_structure": {
+    "audio/waveform": {
       "passed": true,
-      "details": "status=200 segments=3"
+      "details": "status=200 len=61108"
     },
-    "audio/get_spectral": {
+    "audio/structure": {
       "passed": true,
-      "details": "status=200 bands_available=True"
+      "details": "segments=3"
     },
-    "video/analyze_video": {
+    "audio/spectral": {
       "passed": true,
-      "details": "status=200 scenes=0 avg_motion=80.85"
+      "details": "status=200 len=343957"
     },
-    "video/get_thumbnail": {
+    "video/import": {
       "passed": true,
-      "details": "status=200 size=12733 bytes"
+      "details": "status=200 body=[{\"id\":1,\"name\":\"1 (1)\",\"path\":\"C:\\\\Users\\\\david\\\\Videos\\\\Music-Video_Clips\\\\AV\\\\Video\\\\1 (1).mp4\",\"duration_seconds\":5.366667,\"width\":1280,\"height\":720,\"fps\":30.0,\"codec\":\"h264\",\"thumbnail_available\""
     },
-    "video/get_scenes": {
+    "video/list_clips": {
       "passed": true,
-      "details": "status=200 count=0"
+      "details": "status=200 body=[{\"id\":1,\"name\":\"1 (1)\",\"path\":\"C:\\\\Users\\\\david\\\\Videos\\\\Music-Video_Clips\\\\AV\\\\Video\\\\1 (1).mp4\",\"duration_seconds\":5.366667,\"width\":1280,\"height\":720,\"fps\":30.0,\"codec\":\"h264\",\"thumbnail_available\""
     },
-    "video/get_motion": {
+    "video/analyze": {
       "passed": true,
-      "details": "status=200 avg_motion=80.84647369384766"
+      "details": "scenes=0 motion=18.62283794615002"
     },
-    "pacing/generate_cutlist": {
+    "video/thumbnail": {
       "passed": true,
-      "details": "status=200 cuts=31 total_duration=60.1s"
+      "details": "status=200 size=12733bytes"
     },
-    "pacing/get_timeline": {
+    "video/scenes": {
       "passed": true,
-      "details": "status=200 entries=31 total_duration=60.1s"
+      "details": "status=200 body=[]"
     },
-    "render/start_render": {
+    "video/motion": {
       "passed": true,
-      "details": "status=200 task_id=714da3ba"
+      "details": "status=200 body={\"clip_id\":1,\"avg_motion\":18.62283794615002,\"motion_curve\":[18.841477298736567,21.57028646469116,22.08957748413085,12.444374084472653,16.5773604393005"
     },
-    "render/render_status": {
+    "pacing/generate": {
+      "passed": true,
+      "details": "cuts=31 duration=60.0"
+    },
+    "pacing/timeline": {
+      "passed": true,
+      "details": "entries=31"
+    },
+    "render/start": {
+      "passed": true,
+      "details": "task_id=b65f218d"
+    },
+    "render/status": {
       "passed": true,
       "details": "final_status=completed percent=100.0%"
     },
-    "sse/gpu_sse_stream": {
+    "render/cancel": {
       "passed": true,
-      "details": "received 395 bytes, has gpu_status=True"
+      "details": "status=200 body={\"cancelled\":false,\"task_id\":\"b65f218d\",\"status\":\"completed\"}"
     },
-    "sse/progress_sse_connect": {
+    "sse/gpu_stream": {
       "passed": true,
-      "details": "status_line present=True"
+      "details": "received 148 bytes"
     },
-    "persistence/close_before_reopen": {
+    "sse/progress": {
       "passed": true,
       "details": "status=200"
     },
-    "persistence/reopen_project": {
+    "sse/log": {
       "passed": true,
-      "details": "status=200 name=AutoQA-051308"
+      "details": "status=200"
     },
-    "persistence/audio_clips_persist": {
+    "persist/close": {
       "passed": true,
-      "details": "count_after_reopen=1"
+      "details": "status=200"
     },
-    "persistence/video_clips_persist": {
+    "persist/reopen": {
       "passed": true,
-      "details": "count_after_reopen=2"
+      "details": "status=200"
+    },
+    "persist/audio_clips": {
+      "passed": true,
+      "details": "count=1"
+    },
+    "persist/video_clips": {
+      "passed": true,
+      "details": "count=2"
+    },
+    "edge/invalid_clip_id": {
+      "passed": true,
+      "details": "status=404"
+    },
+    "edge/path_traversal": {
+      "passed": true,
+      "details": "status=400"
+    },
+    "edge/empty_body": {
+      "passed": true,
+      "details": "status=422"
+    },
+    "edge/nonexistent_file": {
+      "passed": true,
+      "details": "status=404"
     }
   },
   "bugs": [],
   "summary": {
-    "total": 29,
-    "passed": 29,
+    "total": 37,
+    "passed": 37,
     "failed": 0
   },
-  "cleanup": {
-    "timestamp": "2026-03-16T05:15:25.904149",
-    "projects_deleted": [
-      "AutoQA-050113",
-      "AutoQA-050506",
-      "AutoQA-051146",
-      "AutoQA-051308"
-    ],
-    "db_projects_after": 69,
-    "db_media_after": 305,
-    "temp_files_deleted": [
-      "test_audio_30s.wav",
-      "test_audio_beats_30s.wav"
-    ],
-    "test_files_kept": [
-      "test_audio_music_60s.wav"
-    ]
-  },
-  "final_status": "COMPLETE - 29/29 PASS"
+  "final_status": "COMPLETE - 37/37 PASS"
 }

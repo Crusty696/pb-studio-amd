@@ -36,15 +36,19 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
     """Extrahiert den Clip-Pfad als String (Top-Level und metadata)."""
     for key in ("clip_path", "file_path", "path", "video_path"):
         val = clip.get(key)
-        if val and Path(val).exists():
-            return str(val)
+        if val:
+            exists = Path(val).exists()
+            if exists:
+                return str(val)
     # Auch in metadata suchen (Pacing-Engine speichert Pfade dort)
     meta = clip.get("metadata", {})
     if meta:
         for key in ("file_path", "clip_path", "path", "video_path"):
             val = meta.get(key)
-            if val and Path(val).exists():
-                return str(val)
+            if val:
+                exists = Path(val).exists()
+                if exists:
+                    return str(val)
     return None
 
 
@@ -166,11 +170,16 @@ class RenderService:
                 eta_seconds=0.0,
             )
 
-            self._run_ffmpeg_render(
+            last_telemetry = self._run_ffmpeg_render(
                 concat_list_path, audio_path, final_output,
                 bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
                 audio_dur=audio_dur,
             )
+
+            elapsed = max(time.monotonic() - render_start, 0.0)
+            final_fps = last_telemetry.get("fps", 0.0) if last_telemetry else 0.0
+            if final_fps <= 0 and elapsed > 0:
+                final_fps = total_frames / elapsed
 
             self._emit_progress(
                 progress_callback,
@@ -178,8 +187,8 @@ class RenderService:
                 100,
                 total_frames=total_frames,
                 current_frame=total_frames,
-                fps=0.0,
-                elapsed_seconds=max(time.monotonic() - render_start, 0.0),
+                fps=final_fps,
+                elapsed_seconds=elapsed,
                 eta_seconds=0.0,
             )
             logger.info(f"Rendering erfolgreich: {final_output}")
@@ -347,12 +356,14 @@ class RenderService:
                 if not p:
                     continue
                 p_str = str(Path(p).absolute()).replace("\\", "/")
-                f.write(f'file "{p_str}"\n')
+                # FFmpeg concat protocol: single quotes required (double quotes treated as literal chars)
+                p_escaped = p_str.replace("'", "'\\''")
+                f.write(f"file '{p_escaped}'\n")
                 f.write(f"inpoint {in_pt:.3f}\n")
                 f.write(f"outpoint {out_pt:.3f}\n")
 
     def _run_ffmpeg_render(
-        self, list_path: Path, audio_path: str, output_path: Path,
+        self, list_path: Path, audio_path: Optional[str], output_path: Path,
         bitrate: str, preset: str, audio_offset: float,
         total_duration: float,
         target_fps: float,
@@ -360,8 +371,9 @@ class RenderService:
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
         audio_dur: Optional[float] = None,
-    ):
+    ) -> dict[str, Any]:
         """Finaler Render mit Echtzeit-Progress."""
+        # BUG-070 FIX: Guard gegen Path(None)
         if audio_path and not Path(audio_path).exists():
             raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
         cmd = [
@@ -400,11 +412,9 @@ class RenderService:
             "-stats_period", "0.5",
         ])
 
-        # R19/LOW-019-3: Reuse audio_dur passed from render_timeline — avoids a
-        # second ffprobe subprocess call for the same file.
         if audio_dur is None:
             audio_dur = self._get_audio_duration(audio_path)
-        # Render-Dauer: kürzere von Audio und Timeline (nicht gesamte Audio bei kurzer Timeline)
+        
         render_dur = total_duration
         if audio_dur and audio_dur > 0:
             render_dur = min(audio_dur, total_duration) if total_duration > 0 else audio_dur
@@ -414,7 +424,6 @@ class RenderService:
 
         cmd.append(str(output_path))
 
-        # Windows: Konsole verstecken
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
@@ -425,7 +434,7 @@ class RenderService:
         )
 
         try:
-            self._parse_ffmpeg_progress(
+            return self._parse_ffmpeg_progress(
                 process,
                 total_duration,
                 target_fps,
@@ -455,16 +464,29 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]],
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
-    ):
+    ) -> dict[str, Any]:
         """Liest FFmpeg stderr und verfolgt Fortschritt."""
         stderr_queue: queue.Queue = queue.Queue()
         stderr_lines: list = []
 
         def enqueue_stderr(pipe, q, lines_list):
             try:
-                for line in iter(pipe.readline, ""):
-                    q.put(line)
-                    lines_list.append(line)
+                buffer = []
+                while True:
+                    char = pipe.read(1)
+                    if not char:
+                        if buffer:
+                            line = "".join(buffer)
+                            q.put(line)
+                            lines_list.append(line)
+                        break
+                    
+                    buffer.append(char)
+                    if char in ('\r', '\n'):
+                        line = "".join(buffer)
+                        q.put(line)
+                        lines_list.append(line)
+                        buffer.clear()
             except Exception:
                 pass
 
@@ -482,15 +504,23 @@ class RenderService:
         last_progress = 60
         last_publish_at = 0.0
         last_frame = 0
+        last_fps = 0.0
+        last_elapsed = 0.0
 
-        while process.poll() is None:
-            if cancel_callback and cancel_callback():
-                process.kill()
-                process.wait(timeout=5)
-                raise RenderCancelledError("Rendering cancelled during ffmpeg encode")
+        while True:
+            # Check if process is still running
+            running = process.poll() is None
+            
             try:
-                line = stderr_queue.get(timeout=1.0)
+                # Use shorter timeout when not running to drain quickly
+                line = stderr_queue.get(timeout=0.1 if running else 0.005)
             except queue.Empty:
+                if not running:
+                    break
+                if cancel_callback and cancel_callback():
+                    process.kill()
+                    process.wait(timeout=5)
+                    raise RenderCancelledError("Rendering cancelled during ffmpeg encode")
                 continue
 
             stripped = line.strip()
@@ -513,9 +543,13 @@ class RenderService:
                         (time.monotonic() - render_start_time) if render_start_time is not None else time_sec,
                         0.0,
                     )
+                    last_elapsed = elapsed_seconds
+                    
                     effective_fps = parsed_fps
                     if effective_fps <= 0.0 and elapsed_seconds > 0 and current_frame > 0:
                         effective_fps = current_frame / elapsed_seconds
+                    last_fps = effective_fps
+
                     remaining_frames = max(total_frames - current_frame, 0) if total_frames > 0 else 0
                     eta_seconds = (remaining_frames / effective_fps) if effective_fps > 0.0 else 0.0
 
@@ -544,8 +578,6 @@ class RenderService:
                 except (ValueError, IndexError):
                     pass
 
-        # R05 Fix: communicate() würde mit dem stderr-Daemon-Thread rasen.
-        # process.wait() wartet nur auf den Exit-Code ohne Pipes zu lesen.
         try:
             process.wait(timeout=60)
         except subprocess.TimeoutExpired:
@@ -553,14 +585,36 @@ class RenderService:
             process.wait()
             raise RuntimeError("FFmpeg Finalisierung Timeout")
         finally:
-            # R14/CRITICAL-002: Daemon-Thread kurz joinen, damit noch ausstehende
-            # stderr-Zeilen in stderr_lines geschrieben werden, bevor wir sie lesen.
             stderr_thread.join(timeout=5)
 
         stderr = "".join(stderr_lines)
         if process.returncode != 0:
             logger.error(f"FFmpeg stderr: {stderr}")
-            raise RuntimeError(f"FFmpeg Error (Code {process.returncode}): {stderr[:500]}")
+            return self._handle_ffmpeg_error(process.returncode, stderr)
+        
+        return {
+            "fps": last_fps,
+            "current_frame": last_frame,
+            "total_frames": total_frames,
+            "elapsed_seconds": last_elapsed,
+        }
+
+    def _handle_ffmpeg_error(self, returncode: int, stderr: str) -> dict[str, Any]:
+        """Extrahiert Fehlermeldungen aus FFmpeg stderr."""
+        # Wichtige Fehlermeldungen suchen
+        error_msg = "Unbekannter FFmpeg-Fehler"
+        if "AMF_ERROR_ALLOC_FAILED" in stderr:
+            error_msg = "AMD AMF: VRAM-Speichermangel"
+        elif "AMF_ERROR_INVALID_ARG" in stderr:
+            error_msg = "AMD AMF: Ungültige Parameter (Codec-Mismatch?)"
+        elif "No such file or directory" in stderr:
+            error_msg = "Datei nicht gefunden"
+        elif "Permission denied" in stderr:
+            error_msg = "Zugriff verweigert"
+        
+        err_tail = stderr.strip()[-1000:] if len(stderr) > 1000 else stderr.strip()
+        full_msg = f"FFmpeg Error (Code {returncode}): {error_msg}\n\nStderr Tail:\n{err_tail}"
+        raise RuntimeError(full_msg)
 
     @staticmethod
     def _format_time(seconds: float) -> str:
@@ -605,8 +659,6 @@ class RenderService:
     def _cleanup_temp(self, normalized_clips: List[Dict]):
         for clip in normalized_clips:
             if clip.get("is_temp", False):
-                # R19/LOW-019-2: unlink(missing_ok=True) avoids FileNotFoundError
-                # if the temp file was already cleaned up elsewhere.
                 Path(clip["clip_path"]).unlink(missing_ok=True)
         try:
             (self.temp_dir / "concat_list.txt").unlink(missing_ok=True)

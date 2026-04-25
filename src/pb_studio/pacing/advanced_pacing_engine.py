@@ -19,7 +19,7 @@ AMD-Anpassung v2:
 
 import logging
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -262,7 +262,13 @@ class AdvancedPacingEngine:
 
             # High energy -> shorter clips (faster pacing)
             # Low energy -> longer clips (slower pacing)
-            speed_factor = pacing_bias - (local_energy * energy_factor * 0.5)
+            # BUG-066 FIX: pacing_bias kann 0.0 sein bei pacing=5. 
+            # Wir nutzen eine Basis-Modulation, die nicht komplett auf 0 klammert.
+            speed_factor = pacing_bias - (local_energy * energy_factor * 0.4)
+            # Offset hinzufügen, damit Energy auch bei pacing=5 (bias=0) einen Bereich abdeckt
+            if pacing_bias < 0.2:
+                speed_factor += 0.1 * (1.0 - local_energy)
+            
             speed_factor = max(0.0, min(1.0, speed_factor))
 
             target_dur = (self.config.min_clip_length +
@@ -275,6 +281,7 @@ class AdvancedPacingEngine:
                         (self.config.max_clip_length - self.config.min_clip_length)
                 target_dur += jitter
 
+            # BUG-068 FIX: Re-clamp after jitter to ensure limits
             target_dur = max(self.config.min_clip_length,
                            min(self.config.max_clip_length, target_dur))
 
@@ -295,16 +302,22 @@ class AdvancedPacingEngine:
                 snap_window = 2.0 * precision_factor
 
                 if distance < snap_window:
-                    # Check if it's a downbeat (stronger alignment)
-                    if self.config.prefer_downbeats and nearest_beat in downbeats:
-                        proposed_end = nearest_beat
-                        beat_aligned = True
-                        beat_strength = 1.0
-                    elif precision_factor > 0.5:  # Only snap to regular beats with high precision
-                        proposed_end = nearest_beat
-                        beat_aligned = True
-                        beat_strength = 0.7
+                    # S02/GUARD: Only snap if the beat is strictly AFTER current_time
+                    if nearest_beat > current_time + 0.1:
+                        # Check if it's a downbeat (stronger alignment)
+                        if self.config.prefer_downbeats and nearest_beat in downbeats:
+                            proposed_end = nearest_beat
+                            beat_aligned = True
+                            beat_strength = 1.0
+                        elif precision_factor > 0.5:  # Only snap to regular beats with high precision
+                            proposed_end = nearest_beat
+                            beat_aligned = True
+                            beat_strength = 0.7
 
+            # S02b/GUARD: Final forward-progress guarantee
+            if proposed_end <= current_time + 0.1:
+                proposed_end = current_time + self.config.min_clip_length
+            
             final_dur = proposed_end - current_time
 
             # Safety check: No zero-length clips
@@ -800,7 +813,7 @@ class AdvancedPacingEngine:
         Returns:
             Liste von PacingCut-Objekten
         """
-        from .pacing_models import PacingCut, TriggerSettings
+        from .pacing_models import TriggerSettings
         import json
 
         # TriggerSettings initialisieren falls noch nicht vorhanden
@@ -1005,6 +1018,10 @@ class AdvancedPacingEngine:
                     strength=strength,
                 ))
 
+        # S03/GUARD: Ensure a start trigger exists at 0.0
+        if not triggers or (triggers[0].time > 0.5):
+            triggers.insert(0, PacingCut(time=0.0, trigger_type="start", strength=0.8))
+
         if onset_times and energy_curve:
             triggers.extend(
                 self._build_triggers_from_cache(onset_times, energy_curve, bpm)
@@ -1142,7 +1159,13 @@ class AdvancedPacingEngine:
         filtered = self._enforce_minimum_interval(all_triggers, min_cut_interval)
 
         ts = self.trigger_settings
-        duration = filtered[-1].time if filtered else 0.0
+        # BUG-067 FIX: Nutze die tatsächliche Audio-Dauer statt des letzten Triggers
+        import librosa
+        try:
+            duration = librosa.get_duration(path=audio_path)
+        except:
+            duration = filtered[-1].time if filtered else 0.0
+
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
             min_length=ts.min_clip_length,

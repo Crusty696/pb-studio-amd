@@ -1,16 +1,18 @@
 """Pacing-bezogene Schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Any
 
 
-class TriggerSettingsSchema(BaseModel):
-    """Trigger-Einstellungen für Pacing.
+class PreviewRequest(BaseModel):
+    """Request: Timeline-Preview generieren."""
+    # BUG-062 FIX: ge=0.0 validation
+    start_sec: float = Field(0.0, ge=0.0)
+    duration: float = Field(10.0, gt=0.0)
 
-    Feldnamen muessen mit TriggerSettings-Dataclass uebereinstimmen
-    (src/pb_studio/pacing/pacing_models.py), sonst werden sie von
-    advanced_pacing_engine.py:150 per hasattr() stillschweigend ignoriert.
-    """
+
+class TriggerSettingsSchema(BaseModel):
+    """Trigger-Einstellungen für Pacing."""
     beat_weight: float = Field(1.0, ge=0.0, le=2.0)
     onset_weight: float = Field(0.5, ge=0.0, le=2.0)
     kick_weight: float = Field(1.2, ge=0.0, le=2.0)
@@ -22,6 +24,13 @@ class TriggerSettingsSchema(BaseModel):
     max_clip_length: float = Field(8.0, ge=0.5)
     onset_sensitivity: float = Field(0.5, ge=0.0, le=1.0)
 
+    @field_validator("max_clip_length")
+    @classmethod
+    def max_must_be_ge_min(cls, v: float, info: Any) -> float:
+        # BUG-064 FIX: Validation logic
+        if "min_clip_length" in info.data and v < info.data["min_clip_length"]:
+            raise ValueError(f"max_clip_length ({v}) muss >= min_clip_length ({info.data['min_clip_length']}) sein")
+        return v
 
 class PacingConfigSchema(BaseModel):
     """Request: Pacing-Konfiguration."""
@@ -30,6 +39,7 @@ class PacingConfigSchema(BaseModel):
     expected_bpm: float = 120.0
     trigger_settings: Optional[TriggerSettingsSchema] = None
     use_motion_matching: bool = False
+    use_semantic_matching: bool = False
     use_structure_awareness: bool = False
     duration_limit: Optional[float] = None
     min_cut_interval: float = 0.5
@@ -75,10 +85,9 @@ class TimelineResponse(BaseModel):
     audio_path: Optional[str] = None
 
 
-class PreviewRequest(BaseModel):
-    """Request: Timeline-Preview generieren."""
-    start_sec: float = 0.0
-    duration: float = 10.0
+class TimelineUpdateRequest(BaseModel):
+    """Request: Timeline manuell aktualisieren."""
+    entries: list[TimelineEntrySchema]
 
 
 class PreviewResponse(BaseModel):

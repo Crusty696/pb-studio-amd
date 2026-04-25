@@ -1,3 +1,5 @@
+using PBStudio.UI.Models;
+
 namespace PBStudio.UI.Services;
 
 /// <summary>
@@ -7,6 +9,7 @@ namespace PBStudio.UI.Services;
 public interface IApiClient : IDisposable
 {
     void BeginShutdown();
+    Task<T?> GetAsync<T>(string url, CancellationToken ct = default) where T : class;
 
     // --- Health ---
     Task<HealthStatus?> GetHealthAsync();
@@ -43,6 +46,7 @@ public interface IApiClient : IDisposable
     // --- Pacing ---
     Task<CutListResponse?> GenerateCutListAsync(PacingConfig config);
     Task<TimelineResponse?> GetTimelineAsync();
+    Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries);
 
     // --- Render ---
     Task<RenderProgress?> StartRenderAsync(RenderRequest request);

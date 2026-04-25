@@ -1,0 +1,110 @@
+<UserControl x:Class="PBStudio.UI.Views.ProjectOverviewView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             Background="{StaticResource AbletonBg}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            
+            <!-- ══════ Header / Banner ══════ -->
+            <md:Card Style="{StaticResource AbletonCard}" Padding="20,16" Margin="0,0,0,24">
+                <DockPanel>
+                    <icon:PackIconMaterial Kind="CubeOutline" Width="32" Height="32" 
+                                           Foreground="{StaticResource AbletonAccent}" 
+                                           VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ProjectName}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource AbletonText}"/>
+                        <TextBlock Text="{Binding ProjectPath}" FontSize="12" Foreground="{StaticResource AbletonTextDim}"/>
+                    </StackPanel>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding RefreshCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonAccent}">
+                        <icon:PackIconMaterial Kind="Sync" Width="16" Height="16"/>
+                    </Button>
+                </DockPanel>
+            </md:Card>
+
+            <TextBlock Text="PROJEKTÜBERSICHT" Style="{StaticResource SectionHeader}" Margin="0,0,0,12"/>
+
+            <!-- ══════ Stats Grid ══════ -->
+            <UniformGrid Columns="3" Margin="0,0,0,24">
+                
+                <!-- Audio Stat -->
+                <md:Card Style="{StaticResource AbletonCard}" Padding="16" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="AUDIO-MATERIAL" Style="{StaticResource ParamLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <icon:PackIconMaterial Kind="MusicNote" Width="20" Height="20" Foreground="{StaticResource AbletonGreen}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding AudioCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AbletonText}"/>
+                            <TextBlock Text=" Clips" FontSize="13" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
+                        </StackPanel>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- Video Stat -->
+                <md:Card Style="{StaticResource AbletonCard}" Padding="16" Margin="4,0,4,0">
+                    <StackPanel>
+                        <TextBlock Text="VIDEO-BIBLIOTHEK" Style="{StaticResource ParamLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <icon:PackIconMaterial Kind="VideoOutline" Width="20" Height="20" Foreground="{StaticResource AbletonBlue}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding VideoCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AbletonText}"/>
+                            <TextBlock Text=" Clips" FontSize="13" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
+                        </StackPanel>
+                    </StackPanel>
+                </md:Card>
+
+                <!-- Duration Stat -->
+                <md:Card Style="{StaticResource AbletonCard}" Padding="16" Margin="8,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="GESAMTDAUER" Style="{StaticResource ParamLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <icon:PackIconMaterial Kind="ClockOutline" Width="20" Height="20" Foreground="{StaticResource AbletonYellow}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock FontSize="28" FontWeight="Bold" Foreground="{StaticResource AbletonText}">
+                                <Run Text="{Binding TotalDuration, StringFormat={}{0:F1}, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Text=" Sek." FontSize="13" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
+                        </StackPanel>
+                    </StackPanel>
+                </md:Card>
+                
+            </UniformGrid>
+
+            <!-- ══════ Workflow Assistant ══════ -->
+            <TextBlock Text="KI-WORKFLOW STATUS" Style="{StaticResource SectionHeader}" Margin="0,0,0,12"/>
+            
+            <md:Card Style="{StaticResource AbletonCard}" Padding="16">
+                <StackPanel>
+                    <!-- Row: Timeline Status -->
+                    <DockPanel Margin="0,0,0,12">
+                        <icon:PackIconMaterial Kind="CheckCircle" Width="18" Height="18" Foreground="{StaticResource AbletonGreen}" 
+                                               Visibility="{Binding HasTimeline, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <icon:PackIconMaterial Kind="AlertCircleOutline" Width="18" Height="18" Foreground="{StaticResource AbletonYellow}" 
+                                               Visibility="{Binding HasTimeline, Converter={StaticResource InverseBooleanConverter}}"
+                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <TextBlock Text="Video Timeline generiert" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource AbletonText}"/>
+                        
+                        <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Foreground="{StaticResource AbletonAccent}" Content="Jetzt generieren"
+                                Visibility="{Binding HasTimeline, Converter={StaticResource InverseBooleanConverter}}"
+                                Padding="12,2" Height="28" FontSize="11" HorizontalAlignment="Right"/>
+                    </DockPanel>
+
+                    <Separator Background="{StaticResource AbletonBorder}" Margin="0,8"/>
+
+                    <!-- Row: Analysis Status -->
+                    <DockPanel Margin="0,8,0,0">
+                        <icon:PackIconMaterial Kind="Pulse" Width="18" Height="18" Foreground="{StaticResource AbletonAccent}" 
+                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <TextBlock Text="KI-Engine Status" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource AbletonText}"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" VerticalAlignment="Center" 
+                                   Foreground="{StaticResource AbletonAccent}" HorizontalAlignment="Right"/>
+                    </DockPanel>
+                </StackPanel>
+            </md:Card>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

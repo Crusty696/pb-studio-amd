@@ -58,17 +58,30 @@ class AudioStemWorker(BaseWorker):
         Returns:
             StemResult with paths to separated stems
         """
+        # C1/HIGH: Reserve VRAM before starting (MDX models need ~4GB)
+        from ...core.system_monitor import get_system_monitor
+        from ...core.vram_arbiter import VRAMArbiter
+        
+        monitor = get_system_monitor()
+        arbiter = VRAMArbiter(monitor)
+        
+        model_id = f"Stem_{Path(self.file_path).stem}"
+        # MDX Models are heavy
+        vram_reserved = arbiter.reserve(4000, model_id=model_id)
+
         self.emit_progress(0, "Initializing stem separator...")
         self._check_cancelled()
 
         # Validate input file
         if not Path(self.file_path).exists():
+            if vram_reserved: arbiter.release(model_id=model_id)
             raise FileNotFoundError(f"Input file not found: {self.file_path}")
 
         # Initialize separator
         self._separator = StemSeparator()
 
         if self._separator.separator is None:
+            if vram_reserved: arbiter.release(model_id=model_id)
             raise RuntimeError("Stem separator failed to initialize. Check audio-separator installation.")
 
         self.emit_progress(10, f"Loading model: {self.model_name}...")
@@ -83,6 +96,13 @@ class AudioStemWorker(BaseWorker):
         self._check_cancelled()
 
         try:
+            if vram_reserved:
+                arbiter.commit(model_id)
+
+            # Custom progress callback to capture percentage from logs
+            def progress_cb(msg, pct):
+                self.emit_progress(20 + int(pct * 0.7), msg)
+
             # Run separation
             result = self._separator.separate(self.file_path, self.model_name)
 
@@ -103,13 +123,14 @@ class AudioStemWorker(BaseWorker):
             return stem_result
 
         finally:
-            # VRAM IMMER freigeben - auch nach Erfolg (KRITISCH fuer lange Sessions)
-            if self._separator is not None and hasattr(self._separator, 'unload'):
+            if vram_reserved:
+                arbiter.release(model_id=model_id)
+            # VRAM IMMER freigeben
+            if self._separator is not None:
                 try:
                     self._separator.unload()
-                    logger.debug("Separator VRAM freigegeben")
-                except Exception as e:
-                    logger.warning(f"Separator unload error: {e}")
+                except Exception:
+                    pass
                 self._separator = None
 
     def _parse_stem_outputs(self, stem_paths: list) -> StemResult:

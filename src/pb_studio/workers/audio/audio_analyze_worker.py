@@ -6,7 +6,7 @@ VRAM Budget: 0 MB (CPU-only operation)
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from ..base_worker import BaseWorker
 from ...audio.analyzer import AudioAnalyzer

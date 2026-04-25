@@ -42,9 +42,12 @@ public class PythonBridgeService : IDisposable
 
     public async Task StartAsync()
     {
+        if (_isStopping) return;
+
         await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (_isStopping) return;
             _isStopping = false;
 
             if (_isRunning) return;

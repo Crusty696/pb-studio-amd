@@ -1,14 +1,13 @@
 # Core
 numpy==1.26.4
-PyQt6==6.8.0
-qt-material>=2.14
 psutil>=5.9.0
 
 # AI / ML (AMD / DirectML)
-onnxruntime-directml>=1.16.0,<1.20.0
-torch==2.4.1+cpu
-torchaudio==2.4.1+cpu
+onnxruntime-directml==1.19.2
+torch
+torchaudio
 transformers>=4.48.0
+huggingface_hub>=0.28.0
 pillow>=10.0.0
 
 # Audio Processing
@@ -32,7 +31,7 @@ python-dotenv>=1.0.0
 scenedetect[opencv]>=0.6.3
 opencv-python==4.9.0.80
 pythonnet>=3.0.0
-audio-separator>=0.17.0
+audio-separator[dml]>=0.17.0
 scikit-learn>=1.3.0
-faiss-cpu>=1.7.0
+faiss-cpu==1.7.4
 sentencepiece>=0.2.0

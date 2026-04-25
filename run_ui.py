@@ -1,78 +1,39 @@
 """
-PB Studio AMD - Main UI Launcher
-
-Starts the PyQt6 GUI application with all workers registered.
+PB Studio AMD - Main Launcher (Production Version)
+Starts the C# WPF Production UI.
 """
-
 import os
+import subprocess
 import sys
+import time
 import logging
 from pathlib import Path
 
-# src/ zum Python-Pfad hinzufuegen (konsistent mit PYTHONPATH=src)
-_SRC_DIR = str(Path(__file__).parent / "src")
-if _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-
-from PyQt6.QtWidgets import QApplication
-from pb_studio.ui.main_window import MainWindow
-from pb_studio.utils.logging_setup import setup_logging
-
-# FFmpeg zum PATH hinzufuegen (liegt unter tools/ffmpeg/bin/)
-_PROJECT_ROOT = Path(__file__).parent
-_FFMPEG_BIN = _PROJECT_ROOT / "tools" / "ffmpeg" / "bin"
-if _FFMPEG_BIN.exists() and str(_FFMPEG_BIN) not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = str(_FFMPEG_BIN) + os.pathsep + os.environ.get("PATH", "")
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("Launcher")
 
 def main():
-    setup_logging("gui_run")
-    logger = logging.getLogger("Launcher")
-
-    # Environment Check
-    try:
-        import verify_env_v2
-        if not verify_env_v2.verify():
-            logger.critical("Environment Check Failed. See console/logs.")
-            # In Dev mode we might want to exit, but let's try to continue with warning for now
-            # or strictly exit to force user to read it.
-            # sys.exit(1)
-    except ImportError:
-        logger.warning("verify_env_v2 module not found. Skipping check.")
-
-    # Initialize Worker Registry
-    try:
-        from pb_studio.workers import setup_worker_registry
-        registry = setup_worker_registry()
-        logger.info(f"Worker registry initialized: {len(registry.list_workers())} workers registered")
-    except Exception as e:
-        logger.error(f"Failed to initialize worker registry: {e}")
-        # Continue anyway - workers will be loaded on-demand
-
-    app = QApplication(sys.argv)
+    root = Path(__file__).parent.resolve()
+    # Pfad zur Release-EXE (von uns gerade erfolgreich gebaut)
+    ui_exe = root / "PBStudio.UI" / "bin" / "Release" / "net9.0-windows" / "PBStudio.UI.exe"
     
-    # Apply qt-material Theme (Pro Tool Look)
-    try:
-        from qt_material import apply_stylesheet
-        # Options: dark_teal.xml, dark_cyan.xml, dark_red.xml, dark_pink.xml, dark_purple.xml
-        # We start with 'dark_teal.xml' for that "Hacker/Pro" vibe
-        apply_stylesheet(app, theme='dark_teal.xml', css_file=str(_PROJECT_ROOT / 'src' / 'pb_studio' / 'ui' / 'custom_overrides.css'))
-        logger.info("Applied qt-material theme: dark_teal.xml")
-    except Exception as e:
-        logger.warning(f"Failed to apply qt-material theme: {e}. Falling back to Fusion.")
-        app.setStyle("Fusion")
+    if not ui_exe.exists():
+        logger.error(f"UI Executable nicht gefunden unter: {ui_exe}")
+        logger.info("Versuche Debug-Fallback...")
+        ui_exe = root / "PBStudio.UI" / "bin" / "Debug" / "net9.0-windows" / "PBStudio.UI.exe"
 
-    logger.info("Initializing Main Window...")
-    try:
-        window = MainWindow()
-        window.show()
-
-        logger.info("UI Started. Event loop running...")
-        sys.exit(app.exec())
-    except Exception as e:
-        logger.critical(f"UI Crash: {e}", exc_info=True)
+    if not ui_exe.exists():
+        logger.error("Keine PBStudio.UI.exe gefunden. Bitte zuerst build.ps1 ausfuehren.")
         sys.exit(1)
 
+    logger.info(f"Starte PB Studio UI: {ui_exe}")
+    try:
+        # Startet das Frontend (das Frontend startet das Python-Backend selbst via PythonBridgeService)
+        subprocess.Popen([str(ui_exe)], cwd=str(root))
+        logger.info("PB Studio Prozess gestartet.")
+    except Exception as e:
+        logger.error(f"Fehler beim Starten der UI: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

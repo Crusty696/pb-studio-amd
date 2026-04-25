@@ -79,6 +79,16 @@
 
                 <!-- Batch actions -->
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Command="{Binding ImportAudioCommand}" Style="{StaticResource BatchBtn}"
+                            ToolTip="Neue Audio-Dateien zur Bibliothek hinzufügen"
+                            Foreground="{StaticResource AbletonAccent}">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Plus" Width="12" Height="12"
+                                                   Margin="0,0,4,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Importieren" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>
                     <Button Command="{Binding SelectAllCommand}" Style="{StaticResource BatchBtn}"
                             Content="Alle"/>
                     <Button Command="{Binding DeselectAllCommand}" Style="{StaticResource BatchBtn}"
@@ -132,14 +142,10 @@
                     BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
                     CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
                 <DockPanel>
-                    <ProgressBar DockPanel.Dock="Left" Width="160" Height="4"
-                                 Value="{Binding AnalysisProgress}" Margin="0,0,12,0"
-                                 Foreground="{StaticResource AbletonAccent}"
-                                 Background="{StaticResource AbletonBorder}"
-                                 Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <ProgressBar DockPanel.Dock="Left" Width="100" Height="4"
-                                 IsIndeterminate="True" Margin="0,0,12,0"
+                                 Value="{Binding AnalysisProgress}" Margin="0,0,12,0"
                                  Foreground="{StaticResource AbletonYellow}"
+                                 Background="{StaticResource AbletonBorder}"
                                  Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
                                FontSize="11" VerticalAlignment="Center"/>

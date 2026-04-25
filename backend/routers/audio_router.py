@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..app_state import AppState, get_app_state
+from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..schemas.audio_schemas import (
     AudioImportRequest, AudioClipInfo,
@@ -64,8 +65,16 @@ async def import_audio(
 ) -> AudioClipInfo:
     """Importiert eine Audio-Datei."""
     audio_path = Path(request.path)
-    if not audio_path.exists():
-        raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {request.path}")
+
+    # SEC-001: Nur absolute Pfade erlauben (Path-Traversal-Schutz)
+    if not audio_path.is_absolute():
+        raise HTTPException(status_code=400, detail="Nur absolute Pfade erlaubt")
+
+    try:
+        if not audio_path.exists():
+            raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {request.path}")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Zugriff verweigert")
 
     if audio_path.suffix.lower() not in {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"}:
         raise HTTPException(status_code=400, detail=f"Nicht unterstütztes Format: {audio_path.suffix}")
@@ -258,6 +267,41 @@ async def get_beats(
 
 
 @router.get(
+    "/onsets/{clip_id}",
+    response_model=list[float],
+    summary="Onset-Zeitpunkte abrufen",
+    description="Gibt die detektierten Onset-Zeitpunkte (Einsätze) für einen zuvor analysierten Clip zurück.",
+)
+async def get_onsets(
+    clip_id: int,
+    state: AppState = Depends(get_app_state),
+) -> list[float]:
+    """Gibt Onset-Daten für einen Clip zurück (Thread-safe)."""
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+    
+    # Onsets werden aus der Energy-Curve extrahiert
+    energy = analysis.get("energy_curve", [])
+    if not energy:
+        return []
+    
+    # C1/FIX: Offload heavy math to threadpool
+    from fastapi.concurrency import run_in_threadpool
+    return await run_in_threadpool(_calculate_onsets_sync, energy)
+
+
+def _calculate_onsets_sync(energy: list[float]) -> list[float]:
+    """Synchronous math for onset detection."""
+    from scipy.signal import find_peaks
+    
+    # 512 hop_length bei 22050 Hz -> ~0.023s per point
+    fps = 22050 / 512
+    peaks, _ = find_peaks(energy, height=0.3, distance=int(0.1 * fps))
+    return (peaks / fps).tolist()
+
+
+@router.get(
     "/waveform/{clip_id}",
     response_model=WaveformData,
     summary="Waveform-Daten abrufen",
@@ -369,7 +413,7 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
     import json
     import subprocess
     cmd = [
-        "ffprobe", "-v", "error",
+        str(config.ffprobe_path), "-v", "error",
         "-show_entries", "format=duration",
         "-show_entries", "stream=sample_rate,channels",
         "-select_streams", "a:0",

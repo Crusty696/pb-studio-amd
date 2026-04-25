@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -6,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.Mvvm.Messaging.Messages;
+using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
 
@@ -17,6 +19,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private readonly IApiClient _api;
     private readonly VideoLibraryStateService _videoLibraryState;
+    private readonly SSEClient _sseClient;
+    private readonly IDialogService _dialogService;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private readonly Dictionary<int, BitmapImage> _thumbnailCache = [];
     private readonly HashSet<int> _thumbnailFailureCache = [];
@@ -36,13 +40,20 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _analyzeAllProgress;
     [ObservableProperty] private bool _isLoadingThumbnails;
     [ObservableProperty] private bool _isLoadingClips;
+    [ObservableProperty] private bool _isLoadingScenes;
+    [ObservableProperty] private string _videoImportPath = string.Empty;
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
+    public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
 
-    public VideoLibraryViewModel(IApiClient api, VideoLibraryStateService videoLibraryState)
+    public VideoLibraryViewModel(IApiClient api, VideoLibraryStateService videoLibraryState, SSEClient sseClient, IDialogService dialogService)
     {
         _api = api;
         _videoLibraryState = videoLibraryState;
+        _sseClient = sseClient;
+        _dialogService = dialogService;
+
+        _sseClient.ProgressReceived += OnSseProgressReceived;
 
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
@@ -52,10 +63,164 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             if (message.Value is "video-imported" or "video-library-refresh" or "media-library-refresh" or "project-opened")
                 _ = RequestClipReloadAsync();
             else if (message.Value is "project-closing" or "project-closed")
+            {
+                VideoImportPath = string.Empty;
                 ClearClips();
+            }
             else if (message.Value is "app-shutdown")
                 BeginShutdown();
         });
+    }
+
+    partial void OnSelectedClipChanged(VideoClipModel? value)
+    {
+        SelectedClipScenes.Clear();
+        if (value != null && value.IsAnalyzed)
+        {
+            _ = LoadScenesAsync(value.Id);
+        }
+    }
+
+    private async Task LoadScenesAsync(int clipId)
+    {
+        try
+        {
+            IsLoadingScenes = true;
+            var scenes = await _api.GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}");
+            if (scenes != null)
+            {
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    foreach (var s in scenes) SelectedClipScenes.Add(s);
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Fehler beim Laden der Szenen: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingScenes = false;
+        }
+    }
+
+    [RelayCommand]
+    private void BrowseVideoPath()
+    {
+        var files = _dialogService.OpenFiles(
+            "Video-Pfade auswählen",
+            "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv|Alle Dateien|*.*"
+        );
+
+        if (files.Count > 0)
+        {
+            VideoImportPath = string.Join(";", files);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportVideoFromPathAsync()
+    {
+        if (string.IsNullOrWhiteSpace(VideoImportPath)) return;
+
+        var paths = VideoImportPath.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(p => p.Trim())
+                                  .Where(p => !string.IsNullOrEmpty(p))
+                                  .ToList();
+
+        if (paths.Count == 0) return;
+
+        IsAnalyzingAll = true;
+        StatusText = $"Importiere {paths.Count} Videos von Pfad...";
+
+        try
+        {
+            var result = await _api.ImportVideosAsync(paths);
+            if (result != null)
+            {
+                StatusText = $"{result.Count} Videos erfolgreich importiert";
+                VideoImportPath = string.Empty;
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
+                await LoadClipsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Fehler beim Pfad-Import: {ex.Message}";
+        }
+        finally
+        {
+            IsAnalyzingAll = false;
+        }
+    }
+
+    private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
+    {
+        if (e.EventType is "analysis_progress" or "import_progress")
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StatusText = e.Message;
+            });
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportVideosAsync()
+    {
+        var files = _dialogService.OpenFiles(
+            "Videos zur Bibliothek hinzufügen",
+            "Video-Dateien|*.mp4;*.avi;*.mkv;*.mov;*.webm;*.wmv|Alle Dateien|*.*"
+        );
+
+        if (files.Count == 0) return;
+
+        IsAnalyzingAll = true;
+        StatusText = $"Bereite Import von {files.Count} Dateien vor...";
+
+        var validFiles = new List<string>();
+        foreach (var file in files)
+        {
+            try
+            {
+                using var fs = File.OpenRead(file);
+                validFiles.Add(file);
+            }
+            catch { /* Datei gesperrt oder nicht lesbar */ }
+        }
+
+        if (validFiles.Count == 0)
+        {
+            StatusText = "Import abgebrochen: Dateien konnten nicht gelesen werden.";
+            IsAnalyzingAll = false;
+            return;
+        }
+
+        try
+        {
+            StatusText = $"Importiere {validFiles.Count} Videos...";
+            var result = await _api.ImportVideosAsync(validFiles);
+
+            if (result != null)
+            {
+                StatusText = $"{result.Count} Videos erfolgreich importiert";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
+                await LoadClipsAsync();
+            }
+            else
+            {
+                StatusText = "Import fehlgeschlagen (Backend meldet Fehler)";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Kritischer Import-Fehler: {ex.Message}";
+        }
+        finally
+        {
+            IsAnalyzingAll = false;
+        }
     }
 
     [RelayCommand]
@@ -69,11 +234,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         using var loadCts = ReplaceActiveLoadCts();
         var cancellationToken = loadCts.Token;
 
+        bool acquired = false;
         if (!await _loadGate.WaitAsync(0, cancellationToken))
         {
             _reloadQueued = true;
             return;
         }
+        acquired = true;
 
         try
         {
@@ -129,7 +296,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         finally
         {
             IsLoadingClips = false;
-            if (_loadGate.CurrentCount == 0)
+            if (acquired)
                 _loadGate.Release();
 
             ClearActiveLoadCts(loadCts);
@@ -348,6 +515,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _sseClient.ProgressReceived -= OnSseProgressReceived;
         WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
         BeginShutdown();
         _loadGate.Dispose();

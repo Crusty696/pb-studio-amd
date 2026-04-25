@@ -1,5 +1,18 @@
 # PB Studio – Worklog
 
+## 2026-03-29
+
+### Grand Audit Implementation (BUG-051 bis BUG-099)
+- **Fokus:** Systematische Behebung aller 52 identifizierten Schwachstellen aus dem Audit-Report.
+- **Kern-Verbesserungen:**
+  - **Thread-Safety:** Kritische Locks in C# (SSEClient, ViewModel) und Python (VRAMBudget, WorkerRegistry, WaveformCache) eingeführt.
+  - **Stabilität:** Import-Guards, Null-Checks und Try/Except-Blöcke um ML-Ladevorgänge (CLAP, Moondream, librosa) ergänzt.
+  - **Logik:** Pacing-Interpolation, Video-ID-Generierung und SMPTE-Timecode-Drift bei 29.97fps behoben.
+  - **Windows-Kompatibilität:** Pfad-Escaping für FFmpeg concat und WMI-Treibererkennung implementiert.
+  - **Ressourcen:** COM-Memory-Leaks und temporäre Datei-Leaks im Audio-Import geschlossen.
+- **Bereinigung:** MCP-Server Deinstallation (ComputerUse, extension-browser, Custom MCPs) erfolgreich durchgeführt.
+- **Dokumentation:** Vollständiges Update des CHANGELOG.md und WORKLOG.md.
+
 ## 2026-03-10
 
 ### Baseline established
@@ -434,3 +447,37 @@
 
 ### Next work block
 - Practical WPF click-path verification and remaining product-polish gaps
+
+## 2026-04-24
+
+### Environment Restoration & WPF E2E Verification
+- **Issue:** Environment was found broken (missing .NET 9 Runtime/SDK, missing Python 3.11, broken .venv).
+- **Restoration:**
+  - Installed .NET 9 Desktop Runtime & SDK via winget.
+  - Installed Python 3.11 via winget.
+  - Rebuilt .venv with Python 3.11 and locked Numpy to 1.26.4 (required for BeatNet).
+  - Resolved dependency conflict between opencv-python and numpy by downgrading opencv-python to 4.8.1.78.
+- **E2E Verification (9 Views):**
+  - Created `test_9_views.py` using pywinauto.
+  - Successfully verified all 8 tabs (AUDIO, VIDEO, IMPORT, ANCHORS, DIRECTOR, TIMELINE, PRODUKTION, SETTINGS) and the MainWindow container.
+  - Screenshots of all 9 views captured and stored in `test_reports/screenshots`.
+  - Confirmed backend startup and successful GPU/SSE initialization during the E2E run.
+- **Render Telemetry Gap Patched:**
+  - Fixed `_parse_ffmpeg_progress` loop to fully drain the stderr queue, ensuring final stats are captured even if the process finishes quickly.
+  - Modified `_run_ffmpeg_render` and `_parse_ffmpeg_progress` to return the final telemetry snapshot.
+  - Patched `render_timeline` to calculate and emit the actual final FPS instead of hardcoded 0.0.
+  - Verified telemetry flow (FPS/ETA/Frames) via 60s render mock with successful SSE event reception.
+- **Autonomous QA & Test Fixes:**
+  - Fixed `test_backend_config.py` where mock for `ctypes.windll` was incomplete, causing an unhandled exception and fallback to `C:/Users/david/Documents` instead of the mocked directory.
+  - Fixed `test_vector_store.py` by adding missing `from typing import Optional` import.
+  - Removed outdated legacy test `test_video_vision_worker_reports_pytorch_for_analyzer_fallback` which still depended on the removed `PyQt6` architecture.
+  - All 197 Python tests now pass (or explicitly skip missing models).
+  - WPF Frontend build (`dotnet build`) verified completely clean (0 warnings, 0 errors).
+  - The comprehensive backend integration script `verify_all.py` passes 100% (35/35 checks).
+- **Full Pipeline & Intelligence Restoration:**
+  - **SSE Real-Time Feedback:** Wired Audio, Video, and Director ViewModels to the SSE event stream. Progress bars now show real-time KI-steps ("Extracting features...", "Beat analysis...") instead of jumping between files.
+  - **Semantic Data-Link:** Reconnected the Pacing Engine to the FAISS VectorStore. Injected mood-based prompt generation into the clip selector. The AI Director now "sees" content and matches it to music mood.
+  - **SigLIP PyTorch Fallback:** Implemented a robust `transformers`-based fallback for the missing `siglip_text.onnx` model. AI semantic search is now fully functional on CPU if GPU models are absent.
+  - **Interactive Editor (Option C) Finalized:** Completed the wiring of the Canvas-based timeline. Drag & Drop and Trimming now sync back to the backend EDL via debounced POST requests.
+
+

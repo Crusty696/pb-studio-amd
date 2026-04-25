@@ -6,9 +6,9 @@ Optimized for performance with DirectML-accelerated audio analysis.
 """
 import logging
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional
 from pathlib import Path
-from scipy.signal import butter, sosfilt, sosfiltfilt
+from scipy.signal import butter, sosfiltfilt
 import librosa
 
 logger = logging.getLogger(__name__)

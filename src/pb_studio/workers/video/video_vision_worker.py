@@ -6,7 +6,7 @@ Generates captions for video scenes using Moondream vision-language model.
 
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -74,15 +74,28 @@ class VideoVisionWorker(BaseWorker):
             - file_path: Original file path
             - model_type: 'ONNX' or 'PyTorch'
         """
+        # C1/HIGH: Reserve VRAM before starting
+        from ...core.system_monitor import get_system_monitor
+        from ...core.vram_arbiter import VRAMArbiter
+        
+        monitor = get_system_monitor()
+        arbiter = VRAMArbiter(monitor)
+        
+        # Model needs approx 2.5GB
+        model_id = f"Moondream_{Path(self.file_path).stem}"
+        vram_reserved = arbiter.reserve(2500, model_id=model_id)
+
         self.emit_status(f"Analyzing video content: {Path(self.file_path).name}")
         self.emit_progress(5, "Initializing vision model...")
 
         # Validate file exists
         video_path = Path(self.file_path)
         if not video_path.exists():
+            if vram_reserved: arbiter.release(model_id=model_id)
             raise FileNotFoundError(f"Video file not found: {self.file_path}")
 
         if not self.scenes:
+            if vram_reserved: arbiter.release(model_id=model_id)
             logger.warning("No scenes provided for vision analysis")
             return {
                 "captions": {},
@@ -94,6 +107,9 @@ class VideoVisionWorker(BaseWorker):
 
         # Initialize vision model (try ONNX first, then PyTorch)
         model_type = self._init_vision_model()
+        
+        if vram_reserved:
+            arbiter.commit(model_id)
 
         self.emit_progress(15, f"Using Moondream ({model_type})...")
 

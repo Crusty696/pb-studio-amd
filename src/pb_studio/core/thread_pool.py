@@ -1,7 +1,8 @@
 import traceback
 import sys
 import logging
-from PyQt6.QtCore import QRunnable, QThreadPool, pyqtSlot, QObject
+import threading
+from PyQt6.QtCore import QRunnable, QThreadPool, pyqtSlot
 from pb_studio.core.worker_signals import WorkerSignals
 
 logger = logging.getLogger(__name__)
@@ -27,10 +28,17 @@ class Worker(QRunnable):
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
-        # Add the callback to our kwargs
-        # This allows the worker function to emit signals locally if it accepts 'progress_callback' or 'status_callback'
-        kwargs['progress_callback'] = self.signals.progress
-        kwargs['status_callback'] = self.signals.status
+        # BUG-085 FIX: Injiziere Callbacks nur, wenn die Funktion sie akzeptiert
+        import inspect
+        try:
+            sig = inspect.signature(fn)
+            if 'progress_callback' in sig.parameters:
+                kwargs['progress_callback'] = self.signals.progress
+            if 'status_callback' in sig.parameters:
+                kwargs['status_callback'] = self.signals.status
+        except (ValueError, TypeError):
+            # Fallback for built-ins or functions without signature
+            pass
 
     @pyqtSlot()
     def run(self):
@@ -50,11 +58,15 @@ class Worker(QRunnable):
 
 class ThreadPoolManager:
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
+        # BUG-099 FIX: Thread-safe singleton
         if cls._instance is None:
-            cls._instance = super(ThreadPoolManager, cls).__new__(cls)
-            cls._instance._init_pool()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(ThreadPoolManager, cls).__new__(cls)
+                    cls._instance._init_pool()
         return cls._instance
 
     def _init_pool(self):

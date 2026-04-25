@@ -20,5 +20,18 @@ class CrashHandler:
         # erfolgt via logging.critical (oben) und SSE-Event falls Backend läuft.
         logger.critical("CRITICAL ERROR CAUGHT. See logs for details.")
         
+        # BUG-079 FIX: Windows Event Log Integration (optional)
+        try:
+            import win32evtlogutil
+            import win32evtlog
+            win32evtlogutil.ReportEvent(
+                "PB Studio Backend",
+                1001,
+                eventType=win32evtlog.EVENTLOG_ERROR_TYPE,
+                strings=[error_msg[:2000]] # Limit string length
+            )
+        except Exception:
+            pass
+        
         # Determine if fatal
         # sys.exit(1) 
