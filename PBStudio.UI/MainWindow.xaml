@@ -94,6 +94,9 @@
                 <TabItem Header="EXPORT">
                     <views:ProductionView/>
                 </TabItem>
+                <TabItem Header="HIRN">
+                    <views:BrainView/>
+                </TabItem>
                 <TabItem Header="SETTINGS">
                     <views:SettingsView/>
                 </TabItem>

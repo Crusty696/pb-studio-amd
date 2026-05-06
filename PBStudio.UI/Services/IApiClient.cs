@@ -53,4 +53,12 @@ public interface IApiClient : IDisposable
     Task<RenderProgress?> GetRenderStatusAsync(string taskId);
     Task CancelRenderAsync(string taskId);
     Task ShutdownAsync();
+
+    // --- Brain ---
+    Task<BrainSuggestResponse?> BrainSuggestAsync(int audioClipId, List<int> videoClipIds, int topN = 20);
+    Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating);
+    Task<BrainLearningSessionResponse?> BrainLearningSessionAsync();
+    Task<BrainStatsResponse?> BrainStatsAsync();
+    Task<BrainResetResponse?> BrainResetRequestAsync();
+    Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken);
 }

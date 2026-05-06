@@ -219,6 +219,7 @@ from .routers.video_router import router as video_router
 from .routers.pacing_router import router as pacing_router
 from .routers.render_router import router as render_router
 from .routers.events_router import router as events_router
+from .routers.brain_router import router as brain_router
 
 app.include_router(project_router)
 app.include_router(audio_router)
@@ -226,6 +227,7 @@ app.include_router(video_router)
 app.include_router(pacing_router)
 app.include_router(render_router)
 app.include_router(events_router)
+app.include_router(brain_router)
 
 
 if __name__ == "__main__":

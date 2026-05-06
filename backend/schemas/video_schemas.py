@@ -22,6 +22,8 @@ class VideoClipInfo(BaseModel):
     thumbnail_available: bool = False
     tags: list[str] = []
     is_analyzed: bool = False
+    video_hash: Optional[str] = None
+    has_video_embedding: bool = False
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -41,10 +43,16 @@ class VideoAnalysisResult(BaseModel):
     avg_motion: float = 0.0
     dominant_colors: list[str] = []
     tags: list[str] = []
+    mood_tags: list[str] = []
+    style_tags: list[str] = []
+    object_tags: list[str] = []
     embedding_dim: int = 0  # SigLIP; 0 = kein Embedding vorhanden
     has_embedding: bool = False
     scenes: list["SceneInfo"] = []
     motion: Optional["MotionData"] = None
+    brightness_curve: list[float] = []
+    saturation_curve: list[float] = []
+    color_temp_curve: list[float] = []
 
 
 class SceneInfo(BaseModel):

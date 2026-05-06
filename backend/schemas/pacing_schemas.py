@@ -23,6 +23,10 @@ class TriggerSettingsSchema(BaseModel):
     min_clip_length: float = Field(1.0, ge=0.1)
     max_clip_length: float = Field(8.0, ge=0.5)
     onset_sensitivity: float = Field(0.5, ge=0.0, le=1.0)
+    clip_length_variation: float = Field(0.0, ge=0.0, le=1.0)
+    min_cut_interval: float = Field(0.5, ge=0.0)
+    max_cut_interval: float = Field(10.0, gt=0.0)
+    beat_trigger_mode: str = Field("all", pattern="^(all|downbeat_only|strong_only)$")
 
     @field_validator("max_clip_length")
     @classmethod
@@ -43,6 +47,9 @@ class PacingConfigSchema(BaseModel):
     use_structure_awareness: bool = False
     duration_limit: Optional[float] = None
     min_cut_interval: float = 0.5
+    # Plan Phase 4: brain integration toggles
+    use_brain: bool = False
+    brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0)
 
 
 class CutListEntrySchema(BaseModel):
