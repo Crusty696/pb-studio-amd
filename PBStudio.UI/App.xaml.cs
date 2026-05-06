@@ -126,6 +126,7 @@ public partial class App : Application
         services.AddTransient<TimelineViewModel>();
         services.AddTransient<ProductionViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<BrainViewModel>();
 
         // Windows
         services.AddTransient<MainWindow>();

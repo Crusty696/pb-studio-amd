@@ -232,6 +232,35 @@ public class ApiClient : IApiClient
         }
     }
 
+    // --- Brain (Plan Phase 5) ---
+
+    public Task<BrainSuggestResponse?> BrainSuggestAsync(int audioClipId, List<int> videoClipIds, int topN = 20)
+        => PostAsync<BrainSuggestResponse>("/brain/suggest", new
+        {
+            audio_clip_id = audioClipId,
+            video_clip_ids = videoClipIds,
+            top_n = topN,
+        });
+
+    public Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
+        => PostAsync<BrainFeedbackResponse>("/brain/feedback", new
+        {
+            cut_id = cutId,
+            rating,
+        });
+
+    public Task<BrainLearningSessionResponse?> BrainLearningSessionAsync()
+        => PostAsync<BrainLearningSessionResponse>("/brain/learning_session", null);
+
+    public Task<BrainStatsResponse?> BrainStatsAsync()
+        => GetAsync<BrainStatsResponse>("/brain/stats");
+
+    public Task<BrainResetResponse?> BrainResetRequestAsync()
+        => PostAsync<BrainResetResponse>("/brain/reset", null);
+
+    public Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken)
+        => PostAsync<BrainResetResponse>("/brain/reset", new { confirmation_token = confirmationToken });
+
     // --- Generische Helfer ---
 
     public async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken = default) where T : class
@@ -316,8 +345,16 @@ public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null);
-public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null);
-public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5);
+public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0);
+public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5, double ClipLengthVariation = 0.0, double MaxCutInterval = 10.0, string BeatTriggerMode = "all");
+
+public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
+public record BrainSuggestResponse(List<BrainSuggestion> Suggestions);
+public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks);
+public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
+public record BrainStatsBucket(string Axis, int ContextLevel, string ContextKey, double PositiveCount, double NegativeCount, double Posterior);
+public record BrainStatsResponse(int TotalClicks, int ColdStartAxes, int LearnedAxes, List<BrainStatsBucket> TopPositive, List<BrainStatsBucket> TopNegative);
+public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory);

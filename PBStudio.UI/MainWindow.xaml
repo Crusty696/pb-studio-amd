@@ -284,6 +284,16 @@
                 <TabItem>
                     <TabItem.Header>
                         <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="HeadCog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="HIRN" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <views:BrainView/>
+                </TabItem>
+
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Cog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock Text="SETTINGS" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
                         </StackPanel>
