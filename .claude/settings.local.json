@@ -18,7 +18,9 @@
       "mcp__filesystem__read_text_file",
       "Bash(wc -l \"C:\\\\Users\\\\david\\\\Dokumente\\\\Pb_studio_AMD_version/backend\"/*.py)",
       "Bash(PYTHONPATH=src .venv/Scripts/python.exe -m pytest Tests/ -v --tb=short)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rmdir cache *)",
+      "Bash(rm -rf temp/* exports/* artifacts/* logs/*.log)"
     ]
   },
   "enableAllProjectMcpServers": false,

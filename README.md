@@ -55,7 +55,7 @@ models/               ML-Modelle
 data/                 Laufzeitdaten / Outputs
 logs/                 Log-Dateien
 Tests/                Python-Tests
-plans/                Arbeits-/Ausführungspläne
+archive/              Historische Pläne / Audits / Reports / Setup-Skripte (read-only)
 STATUS_MATRIX.md      verifizierter Status je Bereich
 WORKLOG.md            laufender Projektbericht
 ```
@@ -83,7 +83,15 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 
 ## Entwickler-Setup
 
-### Python-Umgebung
+### One-Shot Setup (empfohlen)
+
+```powershell
+.\setup_pb_studio.ps1
+```
+
+Installiert Python-Venv, FFmpeg, LibreHardwareMonitor, AMD-DirectML-Stack inkl. Brain-Modul (torch-directml + transformers 4.49 + sqlite-vec + librosa) und richtet Pre-commit-Hook ein.
+
+### Manuell
 
 ```powershell
 python -m venv .venv
