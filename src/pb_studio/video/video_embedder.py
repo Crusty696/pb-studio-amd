@@ -64,7 +64,9 @@ class VideoEmbedder:
             if self._model is not None:
                 return
             import torch
-            from transformers import AutoModel, AutoProcessor
+            # Vision-Tower only -> AutoImageProcessor avoids text tokenizer issues
+            # (Siglip2Tokenizer registration not robust in transformers 4.49).
+            from transformers import AutoImageProcessor, AutoModel
 
             if self.prefer_directml:
                 try:
@@ -80,7 +82,7 @@ class VideoEmbedder:
                 self._device = torch.device("cpu")
                 self._dtype = torch.float32
 
-            self._processor = AutoProcessor.from_pretrained(self.model_name)
+            self._processor = AutoImageProcessor.from_pretrained(self.model_name)
             full = AutoModel.from_pretrained(self.model_name, torch_dtype=self._dtype)
             self._model = getattr(full, "vision_model", full)
             self._model.eval()

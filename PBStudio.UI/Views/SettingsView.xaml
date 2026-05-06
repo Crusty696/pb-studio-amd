@@ -185,6 +185,42 @@
                 </StackPanel>
             </md:Card>
 
+            <!-- ══ License Attribution (Plan Phase 6) ══ -->
+            <md:Card Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="LIZENZEN &amp; ATTRIBUTION" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+
+                    <TextBlock Foreground="{StaticResource AbletonText}" Margin="0,0,0,4" TextWrapping="Wrap">
+                        <Run Text="Audio-Embedding by " FontWeight="Bold"/>
+                        <Run Text="LAION CLAP" Foreground="{StaticResource AbletonAccent}"/>
+                        <Run Text=" (laion/larger_clap_music) — CC-BY-4.0"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
+                               Text="https://creativecommons.org/licenses/by/4.0/"/>
+
+                    <TextBlock Foreground="{StaticResource AbletonText}" Margin="0,0,0,4" TextWrapping="Wrap">
+                        <Run Text="Video-Embedding by " FontWeight="Bold"/>
+                        <Run Text="Google SigLIP-2" Foreground="{StaticResource AbletonAccent}"/>
+                        <Run Text=" (google/siglip2-base-patch16-384) — Apache 2.0"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
+                               Text="https://www.apache.org/licenses/LICENSE-2.0"/>
+
+                    <TextBlock Foreground="{StaticResource AbletonText}" Margin="0,0,0,4" TextWrapping="Wrap">
+                        <Run Text="Hardware Encoding by " FontWeight="Bold"/>
+                        <Run Text="FFmpeg" Foreground="{StaticResource AbletonAccent}"/>
+                        <Run Text=" (LGPL/GPL, dynamisch verlinkt)"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonText}" Margin="0,0,0,4" TextWrapping="Wrap">
+                        <Run Text="Stem-Separation by " FontWeight="Bold"/>
+                        <Run Text="UVR-MDX-NET" Foreground="{StaticResource AbletonAccent}"/>
+                        <Run Text=" — MIT"/>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Text="Volle Lizenztexte: LICENSES.md im Projekt-Root."/>
+                </StackPanel>
+            </md:Card>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

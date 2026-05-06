@@ -17,6 +17,7 @@
             <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <conv:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <conv:ConfidenceToBrushConverter x:Key="ConfidenceToBrushConverter"/>
 
             <!-- ══════ Ableton-Palette (custom brushes) ══════ -->
             <SolidColorBrush x:Key="AbletonBg"          Color="#1A1A1E"/>

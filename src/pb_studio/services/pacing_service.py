@@ -182,6 +182,19 @@ class PacingService:
         # VectorStore für semantische Auswahl injizieren
         pacing_engine.clip_selector.vector_store = vstore
         pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+
+        # Plan Phase 4 deep hook: BrainReranker an clip_selector binden, wenn use_brain=true.
+        # Pro Cut wird vom Caller context_keys + audio/video features gesetzt.
+        if pacing_config.get("use_brain", False):
+            try:
+                from pb_studio.brain.brain_service import BrainService
+                svc = BrainService.get()
+                pacing_engine.clip_selector.brain_reranker = svc.reranker
+                # Default-Kontext (level-0 only, übersteuert pro Cut wenn vorhanden):
+                pacing_engine.clip_selector.brain_context_keys = [""]
+                logger.info("Brain reranker an clip_selector gebunden (deep hook)")
+            except Exception as e:
+                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
         
         target_duration = duration_limit or total_duration
 

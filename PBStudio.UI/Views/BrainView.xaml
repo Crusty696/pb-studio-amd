@@ -157,10 +157,14 @@
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                         <TextBlock Text="LERN-SESSION"
                                    Style="{StaticResource SectionHeader}"/>
-                        <Button DockPanel.Dock="Right"
-                                Content="Laden"
-                                Command="{Binding LoadLearningSessionCommand}"
-                                Padding="10,2"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="Liste"
+                                    Command="{Binding LoadLearningSessionCommand}"
+                                    Padding="10,2" Margin="0,0,4,0"/>
+                            <Button Content="▶ Walkthrough"
+                                    Command="{Binding OpenLearningSessionDialogCommand}"
+                                    Padding="10,2"/>
+                        </StackPanel>
                     </DockPanel>
                     <ListBox ItemsSource="{Binding LearningSessionCuts}"
                              Background="Transparent"

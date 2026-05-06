@@ -83,6 +83,9 @@ class TimelineEntrySchema(BaseModel):
     trigger_type: str = ""
     trigger_strength: float = 0.0
     segment_type: Optional[str] = None
+    # Plan Phase 5: brain confidence + DB cut id (when use_brain=true)
+    brain_confidence: float = 0.0
+    cut_id: Optional[int] = None
 
 
 class TimelineResponse(BaseModel):

@@ -105,6 +105,18 @@ public partial class BrainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task OpenLearningSessionDialogAsync()
+    {
+        var vm = CommunityToolkit.Mvvm.DependencyInjection.Ioc.Default
+            .GetRequiredService<LearningSessionViewModel>();
+        var dialog = new Views.LearningSessionDialog(vm);
+        await vm.LoadAsync();
+        dialog.Owner = System.Windows.Application.Current.MainWindow;
+        dialog.ShowDialog();
+        await RefreshStatsAsync();
+    }
+
+    [RelayCommand]
     public async Task ResetRequestAsync()
     {
         var resp = await _api.BrainResetRequestAsync();

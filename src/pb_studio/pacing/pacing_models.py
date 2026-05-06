@@ -47,6 +47,7 @@ class SelectedClip:
     score: float
     motion_score: float = 0.5
     motion_profile: Optional[List[float]] = None
+    metadata: Optional[Dict[str, Any]] = None  # Plan Phase 4: brain_scores etc.
 
     def get_motion_at_time(self, t: float, duration: float = 0.0) -> float:
         """

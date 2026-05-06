@@ -201,6 +201,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                         TriggerType = entry.TriggerType,
                         TriggerStrength = entry.TriggerStrength,
                         SegmentType = entry.SegmentType,
+                        BrainConfidence = entry.BrainConfidence,
+                        CutId = entry.CutId ?? 0,
                     });
                 }
 

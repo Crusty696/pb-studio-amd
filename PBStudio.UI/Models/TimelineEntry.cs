@@ -17,6 +17,12 @@ public partial class TimelineEntryModel : ObservableObject
     /// <summary>Optionaler Segment-Typ aus dem Pacing-Engine (z.B. "intro", "verse", "chorus").</summary>
     [ObservableProperty] private string? _segmentType;
 
+    /// <summary>Plan Phase 5: Brain-Final-Score 0..1 (rot..grün Confidence-Balken).</summary>
+    [ObservableProperty] private double _brainConfidence;
+
+    /// <summary>Optionaler DB-Cut-ID (gesetzt wenn use_brain=true persistiert hat).</summary>
+    [ObservableProperty] private int _cutId;
+
     public double Duration => EndTime - StartTime;
     public string TimeRangeText => $"{TimeSpan.FromSeconds(StartTime):mm\\:ss} - {TimeSpan.FromSeconds(EndTime):mm\\:ss}";
 

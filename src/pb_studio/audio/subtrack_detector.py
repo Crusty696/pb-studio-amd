@@ -131,16 +131,28 @@ class SubtrackDetector:
     def _foote_novelty(
         self, y: np.ndarray, sr: int
     ) -> tuple[np.ndarray, np.ndarray]:
-        """SSM + Foote-Kernel novelty curve."""
+        """SSM + Foote-Kernel novelty curve.
+
+        Aggregates chroma to ~1 frame/sec for 2h-mix to keep SSM ~7200x7200
+        (200 MB) instead of 309k x 309k (75 GB).
+        """
         import librosa
-        from scipy.signal import convolve2d
 
         chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
-        ssm = self._cosine_ssm(chroma.T)
+        # Aggregate chroma into ~1-sec bins so SSM stays bounded.
+        frames_per_sec = sr / self.hop_length
+        bin_frames = max(1, int(round(frames_per_sec)))  # 1 second
+        n_chroma = chroma.shape[1]
+        n_bins = max(1, n_chroma // bin_frames)
+        if bin_frames > 1 and n_bins >= 2:
+            trim = n_bins * bin_frames
+            agg = chroma[:, :trim].reshape(chroma.shape[0], n_bins, bin_frames).mean(axis=2)
+        else:
+            agg = chroma
+        ssm = self._cosine_ssm(agg.T)
 
-        kernel_size = 64
+        kernel_size = min(64, max(8, ssm.shape[0] // 4))
         kernel = self._foote_kernel(kernel_size)
-        # diag novelty = sum over kernel-sized window along the diagonal
         nov = np.zeros(ssm.shape[0], dtype=np.float32)
         half = kernel_size // 2
         padded = np.pad(ssm, ((half, half), (half, half)), mode="edge")
@@ -149,8 +161,9 @@ class SubtrackDetector:
             nov[i] = float(np.sum(block * kernel))
 
         nov = np.maximum(nov, 0.0)
+        bin_hop = bin_frames * self.hop_length if bin_frames > 1 else self.hop_length
         t_axis = librosa.frames_to_time(
-            np.arange(nov.size), sr=sr, hop_length=self.hop_length
+            np.arange(nov.size), sr=sr, hop_length=bin_hop
         )
         return nov, t_axis
 
@@ -182,9 +195,11 @@ class SubtrackDetector:
         # per-stem absolute first difference, summed
         diffs = np.abs(np.diff(stacked, axis=-1))
         stem_signal = np.sum(diffs, axis=0)
-        # pad to match t_axis length
+        # pad/truncate to match t_axis length
         out = np.zeros(t_axis.size, dtype=np.float32)
-        out[: stem_signal.size] = stem_signal
+        if stem_signal.size and out.size:
+            n = min(stem_signal.size, out.size)
+            out[:n] = stem_signal[:n]
         return out
 
     def _tempo_drift(

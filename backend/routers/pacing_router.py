@@ -74,10 +74,14 @@ async def generate_cut_list(
     video_analysis_snapshot = state.get_video_analysis_snapshot() if config.use_motion_matching else {}
 
     try:
+        import time as _time
+        _t_pacing_start = _time.perf_counter()
         cuts = await asyncio.to_thread(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
             cached_analysis, video_analysis_snapshot,
         )
+        _t_pacing_elapsed_ms = (_time.perf_counter() - _t_pacing_start) * 1000.0
+        _t_brain_elapsed_ms = 0.0
 
         # Plan Phase 4: brain post-processor — annotates and persists cuts
         if getattr(config, "use_brain", False):
@@ -91,6 +95,7 @@ async def generate_cut_list(
                 for vid_id, va in video_analysis_snapshot.items():
                     vab[f"clip_{vid_id}"] = va
 
+                _t_brain_start = _time.perf_counter()
                 cuts = await asyncio.to_thread(
                     annotate_cuts_with_brain,
                     cuts,
@@ -104,6 +109,15 @@ async def generate_cut_list(
                     persist_to_state_conn=svc.state_conn,
                     min_confidence=float(getattr(config, "brain_min_confidence", 0.0)),
                 )
+                _t_brain_elapsed_ms = (_time.perf_counter() - _t_brain_start) * 1000.0
+                logger.info(
+                    "Pacing performance: pacing=%.1fms brain=%.1fms cuts=%d",
+                    _t_pacing_elapsed_ms, _t_brain_elapsed_ms, len(cuts),
+                )
+                if _t_brain_elapsed_ms > 500.0:
+                    logger.warning(
+                        "Brain overhead %.1fms > 500ms target", _t_brain_elapsed_ms
+                    )
             except Exception as brain_e:
                 logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
 
@@ -180,6 +194,8 @@ async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResp
             trigger_type=meta.get("trigger_type", ""),
             trigger_strength=meta.get("trigger_strength", 0.0),
             segment_type=meta.get("segment_type"),
+            brain_confidence=float(meta.get("brain_final_score", 0.0) or 0.0),
+            cut_id=meta.get("cut_id"),
         ))
 
     total = entries[-1].end_time if entries else 0.0
@@ -318,6 +334,9 @@ def _run_pacing_generation(
         "use_semantic_matching": config.use_semantic_matching,
         "use_structure_awareness": config.use_structure_awareness,
         "min_cut_interval": config.min_cut_interval,
+        # Plan Phase 4 deep-hook: forward brain flags to PacingService
+        "use_brain": getattr(config, "use_brain", False),
+        "brain_min_confidence": getattr(config, "brain_min_confidence", 0.0),
     }
 
     cut_list = service.generate_cut_list(

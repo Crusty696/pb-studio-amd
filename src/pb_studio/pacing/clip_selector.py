@@ -173,6 +173,12 @@ class ClipSelector:
         self.vector_store = vector_store
         self.clip_cache: Dict[int, ClipMetadata] = {}
 
+        # Plan Phase 4 deep-hook: brain reranker (set externally by PacingService)
+        self.brain_reranker = None
+        self.brain_context_keys: Optional[list[str]] = None
+        self.brain_audio_features: dict = {}
+        self.brain_video_features_by_clip: dict = {}
+
     # =========================================================================
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
@@ -212,15 +218,24 @@ class ClipSelector:
         if not candidates:
             candidates = available_clips
 
-        # Strategie anwenden
-        if self.use_semantic or self.strategy == "semantic":
-            selected = self._select_semantic(candidates, trigger_strength, trigger_type)
-        elif self.strategy == "random":
-            selected = self._select_random(candidates)
-        elif self.strategy == "round_robin":
-            selected = self._select_round_robin(candidates)
-        else:  # motion oder default
-            selected = self._select_by_motion(candidates, trigger_strength, trigger_type)
+        # Plan Phase 4: brain reranker delegate (deep hook).
+        # Wenn reranker + context_keys gesetzt, scoret Brain alle Kandidaten und
+        # picked den höchsten — Strategy bleibt als Tiebreak-Fallback.
+        if self.brain_reranker is not None and self.brain_context_keys:
+            try:
+                selected = self._select_via_brain(
+                    candidates, trigger_strength, trigger_type
+                )
+                # Blacklist + Roter Faden updates passieren am Funktions-Ende.
+            except Exception as e:
+                logger.warning(f"Brain reranker failed, fallback strategy: {e}")
+                selected = self._fallback_select(
+                    candidates, trigger_strength, trigger_type
+                )
+        else:
+            selected = self._fallback_select(
+                candidates, trigger_strength, trigger_type
+            )
 
         # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
         self._recently_used.append(selected.clip_id)
@@ -232,6 +247,75 @@ class ClipSelector:
         self._last_clip_path = selected.clip_path
 
         return selected
+
+    def _fallback_select(
+        self,
+        candidates: List[dict],
+        trigger_strength: float,
+        trigger_type: str,
+    ) -> "SelectedClip":
+        """Original strategy selection — used when no brain reranker available."""
+        if self.use_semantic or self.strategy == "semantic":
+            return self._select_semantic(candidates, trigger_strength, trigger_type)
+        elif self.strategy == "random":
+            return self._select_random(candidates)
+        elif self.strategy == "round_robin":
+            return self._select_round_robin(candidates)
+        else:
+            return self._select_by_motion(candidates, trigger_strength, trigger_type)
+
+    def _select_via_brain(
+        self,
+        candidates: List[dict],
+        trigger_strength: float,
+        trigger_type: str,
+    ) -> "SelectedClip":
+        """Brain reranker scores every candidate, returns highest. Plan Phase 4 deep hook."""
+        from pb_studio.brain.bridge_dimensions import CandidateFeatures
+
+        af = self.brain_audio_features or {}
+        vf_by_id = self.brain_video_features_by_clip or {}
+
+        rerank_inputs = []
+        for clip in candidates:
+            cid = str(clip.get("id", ""))
+            vf = vf_by_id.get(cid) or vf_by_id.get(f"clip_{cid}") or {}
+            feats = CandidateFeatures(
+                trigger_type=trigger_type,
+                trigger_strength=float(trigger_strength),
+                audio_energy=float(af.get("audio_energy", 0.5)),
+                audio_centroid=float(af.get("audio_centroid", 0.5)),
+                motion_score=float(vf.get("avg_motion") or 0.0),
+                scene_distance_sec=float(vf.get("scene_distance_sec", 0.5)),
+                brightness=float(vf.get("avg_brightness") or 0.5),
+                saturation=float(vf.get("avg_saturation") or 0.5),
+                color_temp=float(vf.get("avg_color_temp") or 0.0),
+                pace_class_score=float(vf.get("pace_class_score", 0.5)),
+                mood_tags=list(vf.get("mood_tags") or []),
+                audio_mood_tags=list(af.get("mood_tags") or []),
+                cut_duration_sec=float(af.get("cut_duration_sec", 1.0)),
+            )
+            from pb_studio.brain.reranker import RerankInput
+            rerank_inputs.append(RerankInput(candidate=clip, features=feats))
+
+        scored = self.brain_reranker.rerank(
+            rerank_inputs, context_keys=self.brain_context_keys,
+        )
+        if not scored:
+            return self._fallback_select(candidates, trigger_strength, trigger_type)
+
+        top = scored[0]
+        clip = top.candidate
+        clip_path = str(clip.get("file_path", ""))
+        clip_id = str(clip.get("id", ""))
+
+        return SelectedClip(
+            clip_id=clip_id,
+            clip_path=clip_path,
+            score=float(top.final_score),
+            motion_score=float((vf_by_id.get(clip_id) or {}).get("avg_motion") or 0.0),
+            metadata={"brain_scores": top.brain_scores},
+        )
 
     def reset(self) -> None:
         """NV-kompatibel: Setzt den gesamten Zustand zurück (neue Session)."""
