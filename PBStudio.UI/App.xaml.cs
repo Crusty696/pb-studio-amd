@@ -53,11 +53,13 @@ public partial class App : Application
         ConfigureServices(services);
         _serviceProvider = services.BuildServiceProvider();
 
-        // KRITISCH: Ioc.Default konfigurieren — Views nutzen Ioc.Default.GetRequiredService<T>()
-        // für DataContext-Auflösung ohne XAML-Instantiierung
         Ioc.Default.ConfigureServices(_serviceProvider);
 
-        // Python Backend asynchron starten — UI blockiert nicht beim Backend-Start.
+        // MainWindow SOFORT zeigen
+        var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+        mainWindow.Show();
+
+        // Erst danach Backend-Start triggern
         var bridge = _serviceProvider.GetRequiredService<PythonBridgeService>();
         _ = Task.Run(async () =>
         {
@@ -71,10 +73,6 @@ public partial class App : Application
                 logger?.LogError(ex, "Python Backend konnte nicht gestartet werden");
             }
         });
-
-        // MainWindow mit DI
-        var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
-        mainWindow.Show();
     }
 
     private static void ConfigureServices(IServiceCollection services)

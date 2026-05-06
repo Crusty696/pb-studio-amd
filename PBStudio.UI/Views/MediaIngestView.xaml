@@ -7,19 +7,6 @@
              Background="{StaticResource AbletonBg}">
 
     <UserControl.Resources>
-        <!-- Flat toolbar button -->
-        <Style x:Key="ToolbarBtn" TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
-            <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Padding" Value="12,0"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
         <!-- Compact GridView column header -->
         <Style TargetType="GridViewColumnHeader">
             <Setter Property="Background" Value="{StaticResource AbletonPanel}"/>
@@ -58,9 +45,7 @@
         </Grid.RowDefinitions>
 
         <!-- ── Top Toolbar ── -->
-        <Border Grid.Row="0" Background="{StaticResource AbletonPanel}"
-                BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
-                CornerRadius="2" Padding="4,2" Margin="0,0,0,12">
+        <Border Grid.Row="0" Style="{StaticResource AbletonToolbar}" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal">
                 <Button Command="{Binding ImportAudioCommand}" Style="{StaticResource ToolbarBtn}"
                         ToolTip="Audio-Datei(en) importieren (WAV, MP3, FLAC)">

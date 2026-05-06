@@ -36,138 +36,38 @@
                     Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}"
                     BorderThickness="0,0,0,1">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Height="36"
-                            Background="{StaticResource AbletonPanel}"
-                            BorderBrush="{StaticResource AbletonBorder}"
-                            BorderThickness="0,0,0,1">
-                        <DockPanel Margin="12,0">
-                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="PB STUDIO"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource AbletonTextDim}"/>
-                                <TextBlock Text="  •  " Foreground="{StaticResource AbletonTextDim}"/>
-                                <TextBlock Text="{Binding CurrentProjectName}"
-                                           FontSize="11"
-                                           Foreground="{StaticResource AbletonAccent}"
-                                           ToolTip="Aktuell geöffnetes Projekt"/>
-                            </StackPanel>
+                <DockPanel Height="36">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                        <TextBlock Text="PB STUDIO" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AbletonTextDim}"/>
+                        <TextBlock Text="  •  " Foreground="{StaticResource AbletonTextDim}"/>
+                        <TextBlock Text="{Binding CurrentProjectName}" FontSize="11" Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
 
-                            <StackPanel DockPanel.Dock="Right"
-                                        Orientation="Horizontal"
-                                        VerticalAlignment="Center">
-                                <Button Command="{Binding CreateProjectCommand}"
-                                        Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="{StaticResource AbletonAccent}"
-                                        Padding="8,2" Height="26" Margin="0,0,6,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <icon:PackIconMaterial Kind="FolderPlus" Width="12" Height="12" Margin="0,0,4,0"/>
-                                        <TextBlock Text="Neu" FontSize="11"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Command="{Binding OpenProjectCommand}"
-                                        Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="{StaticResource AbletonAccent}"
-                                        Padding="8,2" Height="26" Margin="0,0,6,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <icon:PackIconMaterial Kind="FolderOpen" Width="12" Height="12" Margin="0,0,4,0"/>
-                                        <TextBlock Text="Öffnen" FontSize="11"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Command="{Binding SaveProjectCommand}"
-                                        IsEnabled="{Binding HasProject}"
-                                        Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="{StaticResource AbletonAccent}"
-                                        Padding="8,2" Height="26" Margin="0,0,6,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <icon:PackIconMaterial Kind="ContentSave" Width="12" Height="12" Margin="0,0,4,0"/>
-                                        <TextBlock Text="Speichern" FontSize="11"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Command="{Binding CloseProjectCommand}"
-                                        IsEnabled="{Binding HasProject}"
-                                        Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="{StaticResource AbletonRed}"
-                                        Padding="8,2" Height="26" Margin="0,0,12,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <icon:PackIconMaterial Kind="FolderRemove" Width="12" Height="12" Margin="0,0,4,0"/>
-                                        <TextBlock Text="Schließen" FontSize="11"/>
-                                    </StackPanel>
-                                </Button>
-
-                                <StackPanel Orientation="Horizontal"
-                                            ToolTip="GPU-Auslastung und VRAM"
-                                            Margin="0,0,16,0">
-                                    <icon:PackIconMaterial Kind="Memory"
-                                                           Width="12" Height="12"
-                                                           VerticalAlignment="Center"
-                                                           Foreground="{StaticResource AbletonTextDim}"
-                                                           Margin="0,0,5,0"/>
-                                    <TextBlock Text="{Binding GpuStatusText}"
-                                               VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="{StaticResource AbletonTextDim}"/>
-                                </StackPanel>
-
-                                <StackPanel Orientation="Horizontal"
-                                            ToolTip="Backend-Verbindungsstatus">
-                                    <Ellipse Width="7" Height="7"
-                                             Fill="{Binding BackendStatusColor}"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,5,0"/>
-                                    <TextBlock Text="{Binding BackendStatusText}"
-                                               VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="{StaticResource AbletonTextDim}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </DockPanel>
-                    </Border>
-
-                    <TextBlock DockPanel.Dock="Bottom"
-                               Text="{Binding CurrentProjectPath}"
-                               Margin="12,4,12,8"
-                               FontSize="10"
-                               Foreground="{StaticResource AbletonTextDim}"
-                               TextTrimming="CharacterEllipsis"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                            <icon:PackIconMaterial Kind="Memory" Width="12" Height="12" VerticalAlignment="Center" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding GpuStatusText}" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource AbletonTextDim}"/>
+                        </StackPanel>
+                        <Ellipse Width="7" Height="7" Fill="{Binding BackendStatusColor}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding BackendStatusText}" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource AbletonTextDim}"/>
+                    </StackPanel>
                 </DockPanel>
             </Border>
 
             <!-- ── Main Tabs Area ── -->
-            <TabControl Grid.Row="1"
-                        SelectedIndex="{Binding SelectedTabIndex}"
-                        Background="{StaticResource AbletonBg}"
-                        BorderThickness="0">
+            <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Background="{StaticResource AbletonBg}" BorderThickness="0">
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="BorderThickness" Value="0"/>
                         <Setter Property="Padding" Value="14,8"/>
-                        <Setter Property="Cursor" Value="Hand"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="TabItem">
-                                    <Border x:Name="TabBorder"
-                                            Background="Transparent"
-                                            Padding="{TemplateBinding Padding}"
-                                            BorderThickness="0,0,0,2"
-                                            BorderBrush="Transparent">
-                                        <ContentPresenter x:Name="ContentSite"
-                                                          ContentSource="Header"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center"/>
+                                    <Border x:Name="TabBorder" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent">
+                                        <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="{TemplateBinding Padding}"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="TabBorder"
-                                                    Property="BorderBrush"
-                                                    Value="{StaticResource AbletonAccent}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="TabBorder"
-                                                    Property="Background"
-                                                    Value="#15FFFFFF"/>
+                                            <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -176,158 +76,32 @@
                     </Style>
                 </TabControl.Resources>
 
-                <TabControl.Template>
-                    <ControlTemplate TargetType="TabControl">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0"
-                                    Background="{StaticResource AbletonPanel}"
-                                    BorderBrush="{StaticResource AbletonBorder}"
-                                    BorderThickness="0,0,0,1">
-                                <TabPanel IsItemsHost="True"
-                                          Margin="4,0,0,0"/>
-                            </Border>
-                            <Border Grid.Row="1"
-                                    Background="{StaticResource AbletonBg}">
-                                <ContentPresenter x:Name="PART_SelectedContentHost"
-                                                  ContentSource="SelectedContent">
-                                    <ContentPresenter.RenderTransform>
-                                        <TranslateTransform X="0" Y="0"/>
-                                    </ContentPresenter.RenderTransform>
-                                </ContentPresenter>
-                            </Border>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="SelectionChanged">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="PART_SelectedContentHost"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         From="0.5" To="1" Duration="0:0:0.25"/>
-                                        <DoubleAnimation Storyboard.TargetName="PART_SelectedContentHost"
-                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                         From="10" To="0" Duration="0:0:0.25">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </TabControl.Template>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="Home" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="PROJEKT" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="PROJEKT">
                     <views:ProjectOverviewView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="MusicNote" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="AUDIO" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="AUDIO">
                     <views:AudioLibraryView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="Video" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="VIDEO" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="VIDEO">
                     <views:VideoLibraryView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="Brain" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="KI-REGIE" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="KI-REGIE">
                     <views:DirectorView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="MovieEdit" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="TIMELINE" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="TIMELINE">
                     <views:TimelineView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="VideoOutput" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="EXPORT" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="EXPORT">
                     <views:ProductionView/>
                 </TabItem>
-
-                <TabItem>
-                    <TabItem.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <icon:PackIconMaterial Kind="Cog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="SETTINGS" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </TabItem.Header>
+                <TabItem Header="SETTINGS">
                     <views:SettingsView/>
                 </TabItem>
             </TabControl>
 
             <!-- ── Status Bar ── -->
-            <Border Grid.Row="2" Height="24"
-                    Background="{StaticResource AbletonPanel}"
-                    BorderBrush="{StaticResource AbletonBorder}"
-                    BorderThickness="0,1,0,0">
-                <DockPanel Margin="10,0">
-                    <TextBlock Text="{Binding StatusMessage}"
-                               DockPanel.Dock="Left"
-                               VerticalAlignment="Center"
-                               FontSize="10"
-                               Foreground="{StaticResource AbletonTextDim}"/>
-
-                    <ProgressBar DockPanel.Dock="Right"
-                                 Width="180" Height="3"
-                                 VerticalAlignment="Center"
-                                 Margin="8,0,0,0"
-                                 Value="{Binding GlobalProgress}"
-                                 Visibility="{Binding IsProgressVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                 Background="{StaticResource AbletonBorder}"
-                                 Foreground="{StaticResource AbletonAccent}"
-                                 BorderThickness="0"/>
-                </DockPanel>
-            </Border>
-
-            <!-- ── Connection Lost Overlay ── -->
-            <Border Grid.RowSpan="3" Background="#AA000000" IsHitTestVisible="True" Panel.ZIndex="1000"
-                    Visibility="{Binding IsBackendConnected, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
-                <md:Card UniformCornerRadius="8" Padding="24" MaxWidth="400" VerticalAlignment="Center" HorizontalAlignment="Center" Background="{StaticResource AbletonPanel}">
-                    <StackPanel HorizontalAlignment="Center">
-                        <icon:PackIconMaterial Kind="WifiOff" Width="48" Height="48" Foreground="{StaticResource AbletonYellow}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                        <TextBlock Text="Verbindung unterbrochen" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <TextBlock Text="Die Verbindung zum Python-Backend wurde unterbrochen. PB Studio versucht automatisch wieder zu verbinden..." 
-                                   TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,0,20"/>
-                        <ProgressBar IsIndeterminate="True" Height="4" Foreground="{StaticResource AbletonYellow}" Background="{StaticResource AbletonBorder}" Margin="0,10,0,0"/>
-                    </StackPanel>
-                </md:Card>
+            <Border Grid.Row="2" Height="24" Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0">
+                <TextBlock Text="{Binding StatusMessage}" Margin="10,0" VerticalAlignment="Center" FontSize="10" Foreground="{StaticResource AbletonTextDim}"/>
             </Border>
         </Grid>
     </md:DialogHost>
