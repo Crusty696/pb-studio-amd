@@ -1,5 +1,5 @@
 # PB Studio - Full Autonomous Test Suite (Robust Version)
-# Koordiniert den Start der App und wartet aktiv auf das UI-Fenster
+# Koordiniert pytest + UI-Test. Brain-Modul integriert (239 Tests Stand 2026-05-06).
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -8,6 +8,17 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 
 $python = ".\.venv\Scripts\python.exe"
+
+# 0. Pytest-Suite (inkl. Brain-Modul + Storage + Recovery + Backup)
+Write-Host "[0/3] Pytest-Suite ausführen..." -ForegroundColor Yellow
+$env:PYTHONPATH = "src"
+& $python -m pytest Tests/ -q --tb=short
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[FAIL] Pytest fehlgeschlagen - UI-Test übersprungen." -ForegroundColor Red
+    exit 1
+}
+Write-Host "[OK] Pytest grün." -ForegroundColor Green
+Write-Host ""
 
 # 1. Start der GUI
 Write-Host "[1/3] Starte PB Studio GUI via Launcher..." -ForegroundColor Yellow

@@ -1,19 +1,32 @@
+# =============================================================================
+# PB Studio AMD Edition — Master Requirements
+# Updated: 2026-05-06 — Brain-Modul integriert
+# Python: 3.11.x
+# =============================================================================
+
 # Core
 numpy==1.26.4
 psutil>=5.9.0
 
-# AI / ML (AMD / DirectML)
+# AI / ML — AMD DirectML stack
 onnxruntime-directml==1.19.2
-torch
+torch==2.4.1
+torchvision==0.19.1
 torchaudio
-transformers>=4.48.0
+torch-directml>=0.2.5,<0.3.0     # AMD GPU via DirectML for Brain CLAP+SigLIP
+transformers==4.49.0             # PIN: lower blocks CLAP (CVE-2025-32434),
+                                  # higher breaks SigLIP-2 tokenizer
 huggingface_hub>=0.28.0
 pillow>=10.0.0
 
+# Brain — Vector store + audio/video embedders
+sqlite-vec>=0.1.6                # KNN virtual table for embeddings.db
+sentencepiece>=0.2.0
+
 # Audio Processing
 BeatNet==1.1.1
-librosa>=0.10.1
-scipy>=1.10.0
+librosa>=0.11.0                  # Brain Sub-Track-Detection (Foote-Novelty)
+scipy>=1.13.0
 soundfile>=0.12.1
 pydub>=0.25.1
 demucs>=4.0.0
@@ -34,4 +47,3 @@ pythonnet>=3.0.0
 audio-separator[dml]>=0.17.0
 scikit-learn>=1.3.0
 faiss-cpu==1.7.4
-sentencepiece>=0.2.0

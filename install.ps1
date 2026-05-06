@@ -302,7 +302,7 @@ Write-Info "Removing conflicting ONNX packages..."
 
 $requirementsPath = Join-Path (Get-Location) "requirements.txt"
 if (Test-Path $requirementsPath) {
-    Write-Info "Installing from requirements.txt..."
+    Write-Info "Installing from requirements.txt (incl. Brain stack)..."
     & $venvPip install -r $requirementsPath
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Dependencies installed from requirements.txt"
@@ -313,7 +313,12 @@ if (Test-Path $requirementsPath) {
     Write-Warn "requirements.txt not found - installing core packages..."
     $corePackages = @(
         "numpy==1.26.4",
-        "PyQt6>=6.8.0",
+        "torch==2.4.1",
+        "torchvision==0.19.1",
+        "torch-directml>=0.2.5,<0.3.0",
+        "transformers==4.49.0",
+        "sqlite-vec>=0.1.6",
+        "librosa>=0.11.0",
         "onnxruntime-directml>=1.16.0"
     )
     foreach ($pkg in $corePackages) {
@@ -322,6 +327,13 @@ if (Test-Path $requirementsPath) {
 }
 
 Write-Success "Dependencies installation completed"
+
+# Brain pre-commit hook (idempotent)
+$preCommitInstaller = Join-Path (Get-Location) "scripts\install_pre_commit.ps1"
+if (Test-Path $preCommitInstaller) {
+    Write-Info "Installing Brain schema-drift pre-commit hook..."
+    & $preCommitInstaller
+}
 
 # =============================================================================
 # STEP 5: Check FFmpeg with AMF
@@ -362,11 +374,20 @@ print(f"Python: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_i
 try:
     import onnxruntime as ort
     providers = ort.get_available_providers()
-    dml = 'DmlExecutionProvider' in providers
+    dml = "DmlExecutionProvider" in providers
     print(f"ONNX Runtime: {ort.__version__}")
     print(f"DirectML: {'OK' if dml else 'NOT Available'}")
 except Exception as e:
     print(f"ONNX Runtime: Error - {e}")
+
+# Brain stack
+for mod in ("torch", "torch_directml", "transformers", "sqlite_vec", "librosa"):
+    try:
+        m = __import__(mod)
+        v = getattr(m, "__version__", "OK")
+        print(f"{mod}: {v}")
+    except Exception as e:
+        print(f"{mod}: Error - {e}")
 '@
     & $venvPython -c $validationCode
 }
@@ -382,8 +403,14 @@ Write-Host ""
 Write-Host "  1. Activate the virtual environment:" -ForegroundColor White
 Write-Host "     .\.venv\Scripts\Activate.ps1" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  2. Start PB Studio:" -ForegroundColor White
-Write-Host "     python run_ui.py" -ForegroundColor Cyan
+Write-Host "  2. Start backend:" -ForegroundColor White
+Write-Host "     `$env:PYTHONPATH = 'src'; python -m uvicorn backend.main:app --port 8765" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Documentation: README.md" -ForegroundColor Gray
+Write-Host "  3. Start WPF UI:" -ForegroundColor White
+Write-Host "     dotnet run --project PBStudio.UI" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  4. Brain hardware verify:" -ForegroundColor White
+Write-Host "     siehe docs/HARDWARE_VERIFY_GUIDE.md" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Documentation: README.md, docs/BRAIN_USER_GUIDE.md" -ForegroundColor Gray
 Write-Host ""

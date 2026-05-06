@@ -4,6 +4,7 @@ PB Studio AMD ist die Windows-/AMD-orientierte Hybrid-Version von PB Studio mit:
 - **WPF-Frontend** (`PBStudio.UI`)
 - **FastAPI-Backend** (`backend/`)
 - **Python-Core** für Audio-, Video- und Render-Pipelines (`src/pb_studio/`)
+- **Brain-Modul** lernfähiger Audio-zu-Video-Reranker (`src/pb_studio/brain/`)
 
 Der aktuelle Produktpfad ist **nicht mehr die alte PyQt-UI**. Die aktive Desktop-Oberfläche ist die WPF-Anwendung.
 
@@ -17,6 +18,9 @@ Die App deckt heute bereits zentrale Kernpfade ab:
 - Pacing / Timeline-Erzeugung
 - Render start / status / cancel
 - Projekt save / open / close / reopen
+- **Brain-Modul** (online-Lernen via Beta-Bernoulli, 17 Bridge-Achsen,
+  CLAP+SigLIP-2 via torch-directml, sqlite-vec KNN, 5 REST-Endpoints,
+  WPF HIRN-Tab + Lern-Session-Walkthrough + Confidence-Balken)
 
 Wichtiger Hinweis:
 - Die Architektur befindet sich in einer laufenden Hybrid-Migration.
@@ -172,6 +176,9 @@ Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Proj
 - `STATUS_MATRIX.md` — Ampel-/Verifikationsstand
 - `WORKLOG.md` — zuletzt erledigte Blöcke
 - `PYQT_MIGRATION_CLASSIFICATION.md` — Alt-UI-zu-WPF-Klassifikation
+- `docs/BRAIN_USER_GUIDE.md` — Brain-Modul für End-User
+- `docs/HARDWARE_VERIFY_GUIDE.md` — DirectML-Hardware-Verifikation
+- `LICENSES.md` — Lizenz-Attribution (CC-BY-4.0 für CLAP-Modell)
 
 ---
 

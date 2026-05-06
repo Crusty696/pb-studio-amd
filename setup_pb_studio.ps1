@@ -1,8 +1,6 @@
 <#
 .SYNOPSIS
-    PB Studio One-Click Installer (AMD Premium Edition) - FINAL EXPERT v9 (No-Compile)
-    Automates Setup: VS Build Tools (Safety), Python, FFmpeg, LibreHardwareMonitor, AMD-ML Stack.
-    Now uses Moondream ONNX (DirectML) to guarantee 100% installation success without Vulkan SDK.
+    PB Studio One-Click Installer (AMD Premium Edition) - v10 (Brain-Modul integriert)
 
 .DESCRIPTION
     1. Enforces TLS 1.2 & User-Agent for secure downloads.
@@ -11,9 +9,13 @@
     4. Downloads LibreHardwareMonitor (GitHub) -> ./tools/LibreHardwareMonitor.
     5. UNBLOCKS downloaded DLLs (Zone.Identifier security fix).
     6. Sets up Python 3.11 Venv.
-    7. Installs PyTorch CPU (No Nvidia Bloat).
-    8. Installs Unified DirectML Stack (ONNX Runtime).
-    9. Forces Strict Dependency Order (Numpy<2.0, OpenCV-GUI).
+    7. Installs full requirements.txt (AMD-ML Stack + Brain-Modul):
+       torch 2.4.1 + torch-directml 0.2.5 (CLAP/SigLIP-2 GPU)
+       transformers PIN 4.49.0 (CVE + SigLIP2-Tokenizer Constraint)
+       sqlite-vec >=0.1.6 (KNN-Search im Embeddings-Store)
+       librosa >=0.11 (Foote-SSM Sub-Track-Detector)
+    8. Installs Brain pre-commit hook (Schema-Drift-Check).
+    9. Optional: wöchentliches Brain-Backup als Windows Task einrichten.
 
     RUN AS ADMINISTRATOR REQUIRED!
 #>
@@ -150,7 +152,7 @@ if (-not (Test-Path $venvPath)) {
 }
 $pip = "$venvPath\Scripts\pip.exe"
 
-Write-Host ">>> Installing Dependencies (AMD Optimized v9 - STRICT)..." -ForegroundColor Cyan
+Write-Host ">>> Installing Dependencies (AMD + Brain - STRICT)..." -ForegroundColor Cyan
 
 # A. Upgrade Pip (Crucial for proper dependency resolution)
 & $pip install --upgrade pip setuptools wheel
@@ -159,26 +161,68 @@ Write-Host ">>> Installing Dependencies (AMD Optimized v9 - STRICT)..." -Foregro
 Write-Host "    Locking Numpy 1.26.4..." -ForegroundColor Gray
 & $pip install "numpy==1.26.4"
 
-# B. PyTorch CPU (No Nvidia Bloat)
-Write-Host "    Installing PyTorch (CPU)..." -ForegroundColor Gray
-& $pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# B. Master requirements (single source of truth - incl. Brain stack)
+$reqFile = Join-Path $PSScriptRoot "requirements.txt"
+if (Test-Path $reqFile) {
+    Write-Host "    Installing requirements.txt (AMD + Brain)..." -ForegroundColor Gray
+    & $pip install -r $reqFile
+} else {
+    Write-Warning "requirements.txt missing - installing core only"
+    & $pip install torch==2.4.1 torchvision==0.19.1 "torch-directml>=0.2.5"
+    & $pip install transformers==4.49.0 huggingface_hub pythonnet
+    & $pip install faiss-cpu==1.7.4 onnxruntime-directml==1.19.2
+    & $pip install sqlite-vec
+    & $pip install opencv-python
+    & $pip install "audio-separator[dml]>=0.17.0" "librosa>=0.11.0" soundfile pydub ffmpeg-python
+    & $pip install scenedetect fastapi uvicorn[standard] pydantic pydantic-settings httpx colorlog python-dotenv
+}
 
-# C. Transformers & PythonNet
-& $pip install transformers huggingface_hub pythonnet
+# C. Brain post-install hooks (idempotent)
+$venvPython = "$venvPath\Scripts\python.exe"
+$preCommitScript = Join-Path $PSScriptRoot "scripts\install_pre_commit.ps1"
+if (Test-Path $preCommitScript) {
+    Write-Host "    Installing brain pre-commit hook..." -ForegroundColor Gray
+    & $preCommitScript
+}
 
-# D. Core AMD ML (Unified DirectML Stack)
-& $pip install faiss-cpu==1.7.4
-& $pip install onnxruntime-directml==1.19.2
-# Note: Moondream ONNX runs on this stack. No extra pip package needed besides transformers/ort.
+# D. Optional: weekly brain backup scheduled task
+$backupInstaller = Join-Path $PSScriptRoot "scripts\install_brain_backup_task.ps1"
+if (Test-Path $backupInstaller) {
+    $resp = Read-Host "Wöchentliches Brain-Backup einrichten? (y/N)"
+    if ($resp -match "^[Yy]") {
+        & $backupInstaller
+    } else {
+        Write-Host "    Skipped - install later with: scripts\install_brain_backup_task.ps1" -ForegroundColor Gray
+    }
+}
 
-# EXPERT FIX: Install OpenCV-Python BEFORE Scenedetect to avoid headless
-& $pip install opencv-python
-
-# E. Audio, Video & Backend
-& $pip install "audio-separator[dml]>=0.17.0" librosa soundfile pydub ffmpeg-python
-& $pip install scenedetect fastapi uvicorn[standard] pydantic pydantic-settings httpx colorlog python-dotenv
+# E. Smoke verification (no GPU runs - just imports)
+Write-Host ">>> Smoke verifying imports..." -ForegroundColor Cyan
+$smoke = @'
+import sys
+errors = []
+def check(mod):
+    try:
+        __import__(mod)
+        print(f"  OK  {mod}")
+    except Exception as e:
+        errors.append((mod, str(e)))
+        print(f"  FAIL {mod}: {e}")
+for m in ["numpy","torch","torch_directml","transformers","sqlite_vec",
+         "librosa","onnxruntime","cv2","fastapi","uvicorn"]:
+    check(m)
+sys.exit(1 if errors else 0)
+'@
+& $venvPython -c $smoke
+if ($LASTEXITCODE -ne 0) { Write-Warning "Some imports failed - check above." }
 
 Write-Host ">>> SETUP COMPLETE <<<" -ForegroundColor Green
-Write-Host "Unified AMD Stack (DirectML) Ready."
-Write-Host "FFmpeg & LHM are in ./tools"
+Write-Host "Unified AMD Stack (DirectML) + Brain-Modul ready." -ForegroundColor Green
+Write-Host "FFmpeg & LHM unter ./tools"
+Write-Host ""
+Write-Host "Nächste Schritte:" -ForegroundColor Yellow
+Write-Host "  1. Backend:  .venv\Scripts\activate; `$env:PYTHONPATH='src'; python -m uvicorn backend.main:app --port 8765"
+Write-Host "  2. WPF UI:   dotnet run --project PBStudio.UI"
+Write-Host "  3. Tests:    .\run_full_test.ps1"
+Write-Host "  4. Brain Verify: docs\HARDWARE_VERIFY_GUIDE.md"
 Read-Host "Done. Press Enter."

@@ -57,27 +57,41 @@ function Setup-Venv {
             return
         }
     }
-    
+
     Write-Status "Erstelle Python venv..."
     & $PythonExe -m venv $VenvPath
-    
+
     Write-Status "Aktiviere venv und installiere Dependencies..."
     $activateScript = Join-Path $VenvPath "Scripts\Activate.ps1"
     & $activateScript
-    
+
     Write-Status "pip upgrade..."
     & pip install --upgrade pip --quiet
-    
-    Write-Status "Installiere Backend-Dependencies..."
+
+    Write-Status "Installiere Backend + Brain-Dependencies..."
     $requirementsPath = Join-Path $ProjectRoot "requirements.txt"
     if (Test-Path $requirementsPath) {
         & pip install -r $requirementsPath --quiet
     } else {
-        Write-Status "requirements.txt nicht gefunden — installiere Basis-Packages" "Yellow"
-        & pip install fastapi uvicorn pydantic pydantic-settings --quiet
+        Write-Status "requirements.txt nicht gefunden - installiere Brain-Basis" "Yellow"
+        $brainPkgs = @(
+            "fastapi", "uvicorn", "pydantic", "pydantic-settings",
+            "torch==2.4.1", "torch-directml>=0.2.5",
+            "transformers==4.49.0", "sqlite-vec", "librosa>=0.11.0",
+            "onnxruntime-directml==1.19.2"
+        )
+        & pip install --quiet @brainPkgs
     }
-    
+
     Write-Status "venv fertig!" "Green"
+}
+
+function Setup-BrainHooks {
+    $hookInstaller = Join-Path $ProjectRoot "scripts\install_pre_commit.ps1"
+    if (Test-Path $hookInstaller) {
+        Write-Status "Brain pre-commit hook installieren..."
+        & $hookInstaller
+    }
 }
 
 function Setup-DotNet {
@@ -101,9 +115,11 @@ Test-DotNet
 
 Setup-Venv
 Setup-DotNet
+Setup-BrainHooks
 
 Write-Status "=== Setup abgeschlossen ===" "Green"
 Write-Status "Nächste Schritte:" "Cyan"
 Write-Status "  1. . .\.venv\Scripts\Activate.ps1  (venv aktivieren)"
 Write-Status "  2. .\build.ps1                     (Frontend kompilieren)"
 Write-Status "  3. .\launch.ps1                    (App starten)"
+Write-Status "  4. docs\HARDWARE_VERIFY_GUIDE.md   (Brain GPU verifizieren)"
