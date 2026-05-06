@@ -20,10 +20,9 @@ if %errorLevel% NEQ 0 (
 cd /d "%~dp0"
 if not exist "logs" mkdir logs
 
-REM Timestamp via wmic for log filename
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set dt=%%I
-set TS=%dt:~0,8%_%dt:~8,6%
-if "%TS%"=="_" set TS=run
+REM Timestamp via PowerShell (wmic deprecated auf Win11 24H2+)
+for /f "delims=" %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%I
+if "%TS%"=="" set TS=run
 
 set LOGFILE=logs\setup_run_%TS%.log
 
