@@ -69,7 +69,9 @@ class EmbeddingRepository:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self._ensure_schema()
-        self.conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        self.conn = sqlite3.connect(
+            str(self.db_path), isolation_level=None, check_same_thread=False
+        )
         init_connection(self.conn)
         self._load_vec(self.conn)
 

@@ -47,6 +47,9 @@ class PacingConfigSchema(BaseModel):
     use_structure_awareness: bool = False
     duration_limit: Optional[float] = None
     min_cut_interval: float = 0.5
+    # Plan Phase 4: brain integration toggles
+    use_brain: bool = False
+    brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0)
 
 
 class CutListEntrySchema(BaseModel):

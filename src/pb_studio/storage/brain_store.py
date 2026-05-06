@@ -51,12 +51,17 @@ class BrainStore:
         self._ensure_or_recover(self.patterns_path, _MIG_ROOT / "patterns")
 
         self.weights_conn = sqlite3.connect(
-            str(self.weights_path), isolation_level=None
+            str(self.weights_path),
+            isolation_level=None,
+            check_same_thread=False,
         )
         init_connection(self.weights_conn)
+        self._weights_lock = __import__("threading").Lock()
 
         self.patterns_conn = sqlite3.connect(
-            str(self.patterns_path), isolation_level=None
+            str(self.patterns_path),
+            isolation_level=None,
+            check_same_thread=False,
         )
         init_connection(self.patterns_conn)
 

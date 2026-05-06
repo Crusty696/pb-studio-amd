@@ -44,7 +44,9 @@ class EmbeddingCache:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._migrate()
 
-        self.conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        self.conn = sqlite3.connect(
+            str(self.db_path), isolation_level=None, check_same_thread=False
+        )
         init_connection(self.conn)
 
     def _migrate(self) -> None:

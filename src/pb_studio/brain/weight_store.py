@@ -45,7 +45,9 @@ class WeightStore:
 
         mig_dir = Path(__file__).parent.parent / "storage" / "migrations" / "weights"
         migrate(db_path, mig_dir)
-        conn = sqlite3.connect(db_path, isolation_level=None)
+        conn = sqlite3.connect(
+            db_path, isolation_level=None, check_same_thread=False
+        )
         init_connection(conn)
         return cls(conn, cold_start_defaults=cold_start_defaults)
 

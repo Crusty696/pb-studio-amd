@@ -34,6 +34,20 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _bind_brain_to_project(project_path: Path) -> None:
+    """Plan Phase 4: bind brain singleton to this project's state.db.
+
+    Brain failure must not block project open. Logs and continues.
+    """
+    try:
+        from .._brain_singleton import set_project_state
+        state_db = project_path / "state.db"
+        set_project_state(state_db)
+        logger.info(f"Brain bound to {state_db}")
+    except Exception as e:
+        logger.warning(f"Brain bind fehlgeschlagen: {e}")
+
+
 def _project_meta_path(project_path: Path) -> Path:
     return project_path / _PROJECT_META_FILE
 
@@ -184,6 +198,7 @@ async def create_project(
     # Sonst übernimmt ein frisch erstelltes Projekt Clips/Timeline/Render-Tasks aus dem vorherigen Projekt.
     state.reset()
     state.current_project = project_data
+    _bind_brain_to_project(project_path)
     logger.info(f"Projekt erstellt: {project_path}")
     return ProjectInfo(**project_data)
 
@@ -233,6 +248,7 @@ async def open_project(
         "modified_at": meta.get("modified_at"),
     }
     state.current_project = project_data
+    _bind_brain_to_project(project_path)
     logger.info(f"Projekt geöffnet: {project_path}")
     return ProjectInfo(**project_data)
 

@@ -79,6 +79,34 @@ async def generate_cut_list(
             cached_analysis, video_analysis_snapshot,
         )
 
+        # Plan Phase 4: brain post-processor — annotates and persists cuts
+        if getattr(config, "use_brain", False):
+            try:
+                from pb_studio.brain.brain_service import BrainService
+                from pb_studio.brain.post_processor import annotate_cuts_with_brain
+
+                svc = BrainService.get()
+                # video analysis indexed by clip_id (str)
+                vab: dict[str, dict] = {}
+                for vid_id, va in video_analysis_snapshot.items():
+                    vab[f"clip_{vid_id}"] = va
+
+                cuts = await asyncio.to_thread(
+                    annotate_cuts_with_brain,
+                    cuts,
+                    weight_store=svc.weights,
+                    audio_analysis=cached_analysis,
+                    video_analysis_by_clip=vab,
+                    audio_clip_id=config.audio_clip_id,
+                    audio_path=audio_clips_snapshot.get(
+                        config.audio_clip_id, {}
+                    ).get("path"),
+                    persist_to_state_conn=svc.state_conn,
+                    min_confidence=float(getattr(config, "brain_min_confidence", 0.0)),
+                )
+            except Exception as brain_e:
+                logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
+
         # Timeline validieren
         audio_dur = audio_clips_snapshot.get(config.audio_clip_id, {}).get("duration_seconds")
         timeline_warnings, timeline_errors = validate_timeline(cuts, audio_duration=audio_dur)
