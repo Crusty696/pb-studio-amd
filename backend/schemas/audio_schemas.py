@@ -23,6 +23,17 @@ class AudioClipInfo(BaseModel):
     key: Optional[str] = None
     beat_count: int = 0
     is_analyzed: bool = False
+    audio_hash: Optional[str] = None
+    has_audio_embedding: bool = False
+
+
+class SubtrackSegment(BaseModel):
+    """Ein erkannter Sub-Track innerhalb eines DJ-Mixes."""
+    start_time: float
+    end_time: float
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
+    sub_bpm: Optional[float] = None
+    sub_key: Optional[str] = None
 
 
 class AudioAnalyzeRequest(BaseModel):
@@ -52,6 +63,8 @@ class AudioAnalysisResult(BaseModel):
     energy_curve: list[float] = []
     structure_segments: list["StructureSegment"] = []
     spectral_data: Optional["SpectralData"] = None
+    subtrack_segments: list[SubtrackSegment] = []
+    tempo_curve: list[float] = []
 
 
 class WaveformRequest(BaseModel):

@@ -84,6 +84,14 @@ async def import_audio(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio-Info nicht ermittelbar: {e}")
 
+    # Plan Phase 1 #1: streaming sha256 hash for embedding-cache reuse.
+    from pb_studio.core.media_hash import media_hash
+    try:
+        audio_hash_value = await asyncio.to_thread(media_hash, str(audio_path))
+    except Exception as e:
+        logger.warning(f"media_hash fehlgeschlagen für {audio_path}: {e}")
+        audio_hash_value = None
+
     clip = state.register_audio_clip({
         "name": audio_path.stem,
         "path": str(audio_path.absolute()),
@@ -95,7 +103,32 @@ async def import_audio(
         "key": None,
         "beat_count": 0,
         "is_analyzed": False,
+        "audio_hash": audio_hash_value,
+        "has_audio_embedding": False,
     })
+
+    # Plan Phase 1 #6: synchronous sub-track-detection during mix-import.
+    # Skip for short clips (< 60s) — sub-tracks meaningless there.
+    if probe_info["duration"] >= 60.0:
+        try:
+            from pb_studio.audio.subtrack_detector import SubtrackDetector
+            detector = SubtrackDetector()
+            result = await asyncio.to_thread(detector.detect, str(audio_path))
+            clip["subtrack_segments"] = [
+                {
+                    "start_time": s, "end_time": e, "confidence": c,
+                    "sub_bpm": None, "sub_key": None,
+                }
+                for (s, e, c) in result.segments
+            ]
+            clip["tempo_curve"] = result.tempo_curve
+        except Exception as e:
+            logger.warning(f"Sub-Track-Detection fehlgeschlagen: {e}")
+            clip["subtrack_segments"] = []
+            clip["tempo_curve"] = []
+    else:
+        clip["subtrack_segments"] = []
+        clip["tempo_curve"] = []
 
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
     await publish_log(

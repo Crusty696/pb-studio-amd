@@ -270,3 +270,4 @@ gui_screenshots/
 
 # Git worktrees
 .worktrees/
+.pytest_tmp2/

@@ -72,6 +72,14 @@ async def import_videos(
             logger.error(f"Video-Info fehlgeschlagen: {video_path.name}: {e}")
             continue
 
+        # Plan Phase 1 #1: streaming sha256 hash for embedding-cache reuse.
+        from pb_studio.core.media_hash import media_hash
+        try:
+            video_hash_value = await asyncio.to_thread(media_hash, str(video_path))
+        except Exception as e:
+            logger.warning(f"media_hash fehlgeschlagen für {video_path}: {e}")
+            video_hash_value = None
+
         clip = state.register_video_clip({
             "name": video_path.stem,
             "path": str(video_path.absolute()),
@@ -82,6 +90,8 @@ async def import_videos(
             "codec": info.get("codec", ""),
             "thumbnail_available": False,
             "tags": [],
+            "video_hash": video_hash_value,
+            "has_video_embedding": False,
         })
         imported.append(VideoClipInfo(**clip))
 
