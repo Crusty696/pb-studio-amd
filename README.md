@@ -83,11 +83,30 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 
 ## Entwickler-Setup
 
-### One-Shot Setup (empfohlen)
+### One-Shot Setup für Endanwender (Doppelklick)
+
+`setup.bat` doppelklicken — fragt automatisch nach Admin-Rechten und installiert alles.
+
+| Datei      | Zweck                                                  |
+|------------|--------------------------------------------------------|
+| `setup.bat`| Komplette Installation (Python venv, Brain-Stack, FFmpeg, .NET, Pre-commit-Hook) |
+| `start.bat`| App starten (Backend + WPF)                            |
+| `test.bat` | Pytest-Suite + UI-Test                                 |
+
+### One-Shot Setup (PowerShell-direkt)
 
 ```powershell
 .\setup_pb_studio.ps1
 ```
+
+Optionen:
+- `-SkipBuildTools`     VS Build Tools install ueberspringen
+- `-SkipBackupPrompt`   keine Frage fuer Auto-Backup-Task
+- `-SkipModelPrecache`  CLAP+SigLIP Download (~1.8 GB) skippen
+- `-SkipGpuVerify`      DirectML-Verify-Run skippen
+- `-SkipPytest`         pytest am Ende skippen
+- `-NoPause`            Kein "Press Enter" am Ende
+- `-Force`              venv neu anlegen (statt re-use)
 
 Installiert Python-Venv, FFmpeg, LibreHardwareMonitor, AMD-DirectML-Stack inkl. Brain-Modul (torch-directml + transformers 4.49 + sqlite-vec + librosa) und richtet Pre-commit-Hook ein.
 
