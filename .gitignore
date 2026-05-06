@@ -267,3 +267,6 @@ gui_screenshots/
 .pytest_tmp2/test_vram_usage_clap_activecurrent
 .pytest_tmp2/test_vram_usage_no_modelcurrent
 .pytest_tmp2/test_waveform_nicht_gefunden_4current
+
+# Git worktrees
+.worktrees/
