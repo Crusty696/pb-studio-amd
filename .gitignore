@@ -271,3 +271,9 @@ gui_screenshots/
 # Git worktrees
 .worktrees/
 .pytest_tmp2/
+cache/
+exports/
+VerifyProject_*/
+debug_output*.txt
+trace_log*.txt
+desktop.ini
