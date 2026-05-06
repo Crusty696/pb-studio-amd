@@ -1,6 +1,8 @@
 @echo off
 REM PB Studio AMD - One-Shot Setup Wrapper (Doppelklick-faehig)
 REM Hebt sich selbst auf Admin-Rechte falls noetig.
+REM Loggt komplette Konsolen-Ausgabe nach logs\setup_run_<ts>.log
+REM (PS1-Skript loggt zusaetzlich nach logs\setup_log_<ts>.txt + setup_transcript_<ts>.txt)
 setlocal enabledelayedexpansion
 
 REM Self-elevate to Admin via vbs trick.
@@ -16,31 +18,51 @@ if %errorLevel% NEQ 0 (
 )
 
 cd /d "%~dp0"
+if not exist "logs" mkdir logs
+
+REM Timestamp via wmic for log filename
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set dt=%%I
+set TS=%dt:~0,8%_%dt:~8,6%
+if "%TS%"=="_" set TS=run
+
+set LOGFILE=logs\setup_run_%TS%.log
 
 echo.
 echo ============================================================
 echo   PB Studio AMD - One-Shot Setup
 echo ============================================================
 echo.
-echo Dieses Skript installiert / aktualisiert:
+echo Installiert / aktualisiert:
 echo   - Python 3.11 venv
 echo   - Brain-Stack (torch-directml, transformers, sqlite-vec, librosa)
 echo   - FFmpeg + LibreHardwareMonitor in tools\
 echo   - .NET 9 SDK falls fehlt
 echo   - Pre-commit Hook
 echo.
+echo Log-Datei: %LOGFILE%
 echo Dauer beim ersten Lauf: 5-15 Minuten (je nach Internet).
 echo.
 pause
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup_pb_studio.ps1" %*
+REM Tee-Object faengt stdout+stderr ab und schreibt parallel ins Log.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+  "& '%~dp0setup_pb_studio.ps1' %* *>&1 | Tee-Object -FilePath '%~dp0%LOGFILE%'"
 set RC=%ERRORLEVEL%
 
 echo.
+echo ============================================================
 if %RC% EQU 0 (
-    echo Setup erfolgreich. Druecke Taste um Fenster zu schliessen.
+    echo Setup erfolgreich.
 ) else (
-    echo Setup mit Fehlern beendet ^(Exit-Code %RC%^). Siehe logs\setup_log_*.txt.
+    echo Setup mit Fehlern beendet ^(Exit-Code %RC%^).
 )
-pause
+echo.
+echo Log-Dateien:
+echo   %~dp0%LOGFILE%
+echo   %~dp0logs\setup_log_*.txt
+echo   %~dp0logs\setup_transcript_*.txt
+echo ============================================================
+echo.
+echo Druecke beliebige Taste um Fenster zu schliessen.
+pause >nul
 exit /b %RC%

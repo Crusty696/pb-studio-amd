@@ -93,6 +93,31 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 | `start.bat`| App starten (Backend + WPF)                            |
 | `test.bat` | Pytest-Suite + UI-Test                                 |
 
+**Logs:** Alle drei `.bat`-Wrapper schreiben Konsolen-Output zusätzlich nach
+`logs\<name>_<ts>.log`, damit du nach einem Crash auch ohne offenes Fenster die
+ganze Ausgabe rekonstruieren kannst. Plus `logs\setup_log_<ts>.txt` und
+`logs\setup_transcript_<ts>.txt` aus dem PS1-Skript selbst (Stack-Traces, Native
+exe stderr, alles erfasst).
+
+### Test in Windows Sandbox (sauberer Frischer-PC-Test)
+
+1. **Windows Sandbox aktivieren** (einmalig, mit Admin):
+   ```powershell
+   Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM
+   ```
+   Dann Reboot.
+
+2. **`pb_studio_sandbox.wsb` doppelklicken.** Sandbox startet, mountet das
+   Repo read-only nach `C:\PB_studio_host` und kopiert es beim Login nach
+   `C:\PB_studio` (writable). Internet + GPU-Sharing sind aktiv.
+
+3. **In der Sandbox:** Im geöffneten Explorer-Fenster `setup.bat`
+   doppelklicken. Setup loggt alles in `C:\PB_studio\logs\` (innerhalb Sandbox).
+   Wenn Sandbox crasht: vorher `logs\` per Drag-and-Drop ins Host-Clipboard
+   kopieren, oder Setup-Logs manuell rauskopieren.
+
+4. **Nach Setup-Lauf:** `start.bat` → App-Test. `test.bat` → pytest-Suite.
+
 ### One-Shot Setup (PowerShell-direkt)
 
 ```powershell

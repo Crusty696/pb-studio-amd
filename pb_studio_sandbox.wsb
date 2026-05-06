@@ -1,0 +1,39 @@
+<Configuration>
+    <!--
+        PB Studio AMD - Windows Sandbox Config
+        Doppelklick zum Starten. Sandbox bekommt:
+          - Repo-Verzeichnis read-only gemountet als C:\PB_studio_host (frische Sicht)
+          - Kopiert beim Start nach C:\PB_studio (writable Workdir)
+          - Internet on
+          - GPU-Sharing aktiv (DirectML braucht es)
+          - Networking on
+        Nach Start: setup.bat im Sandbox-Explorer doppelklicken.
+    -->
+
+    <Networking>Default</Networking>
+
+    <ProtectedClient>Disable</ProtectedClient>
+
+    <vGPU>Enable</vGPU>
+
+    <ClipboardRedirection>true</ClipboardRedirection>
+
+    <PrinterRedirection>Disable</PrinterRedirection>
+
+    <AudioInput>Disable</AudioInput>
+    <VideoInput>Disable</VideoInput>
+
+    <MemoryInMB>16384</MemoryInMB>
+
+    <MappedFolders>
+        <MappedFolder>
+            <HostFolder>C:\Users\david\Documents\Pb_studio_AMD_version</HostFolder>
+            <SandboxFolder>C:\PB_studio_host</SandboxFolder>
+            <ReadOnly>true</ReadOnly>
+        </MappedFolder>
+    </MappedFolders>
+
+    <LogonCommand>
+        <Command>cmd.exe /c "robocopy C:\PB_studio_host C:\PB_studio /E /COPY:DAT /R:1 /W:1 /NFL /NDL /XJ &amp; explorer C:\PB_studio"</Command>
+    </LogonCommand>
+</Configuration>

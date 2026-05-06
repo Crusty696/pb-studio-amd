@@ -83,10 +83,35 @@ $REQUIRED_DOTNET = "9.0"
 $MIN_DISK_GB = 20
 $MIN_RAM_GB = 8
 
+if (-not (Test-Path $LOGS_DIR)) { New-Item -ItemType Directory -Path $LOGS_DIR | Out-Null }
+$ts = Get-Date -Format "yyyyMMdd_HHmmss"
 if (-not $LogFile) {
-    if (-not (Test-Path $LOGS_DIR)) { New-Item -ItemType Directory -Path $LOGS_DIR | Out-Null }
-    $ts = Get-Date -Format "yyyyMMdd_HHmmss"
     $LogFile = Join-Path $LOGS_DIR "setup_log_$ts.txt"
+}
+$TranscriptFile = Join-Path $LOGS_DIR "setup_transcript_$ts.txt"
+
+# Transcript faengt ALLES ab - auch unhandled Exceptions, Native exe stderr,
+# Stack-Traces. Ueberlebt Window-Close (File-Flush ist sync).
+try { Stop-Transcript | Out-Null } catch {}
+try {
+    Start-Transcript -Path $TranscriptFile -Append -Force | Out-Null
+} catch {
+    Write-Host "WARN: Transcript konnte nicht gestartet werden ($_)" -ForegroundColor Yellow
+}
+
+# Globaler Trap fuer unbehandelte Exceptions - schreibt Stack-Trace ins Log.
+trap {
+    $err = $_
+    $msg = "UNHANDLED: $($err.Exception.Message)`n$($err.ScriptStackTrace)`n$($err.InvocationInfo.PositionMessage)"
+    Add-Content -Path $LogFile -Value "[$(Get-Date -Format HH:mm:ss)] [CRASH] $msg" -Encoding utf8
+    Write-Host ""
+    Write-Host "  [CRASH] Unbehandelter Fehler - Stack-Trace siehe $LogFile" -ForegroundColor Red
+    Write-Host "  $($err.Exception.Message)" -ForegroundColor Red
+    try { Stop-Transcript | Out-Null } catch {}
+    if (-not $NoPause) {
+        Read-Host "Press Enter to exit"
+    }
+    exit 99
 }
 
 # =============================================================================
@@ -634,10 +659,15 @@ Write-Host "    3. Brain Verify Guide: docs\HARDWARE_VERIFY_GUIDE.md"
 Write-Host "    4. Brain User Guide:   docs\BRAIN_USER_GUIDE.md"
 Write-Host ""
 
+Write-Host "  Transcript: $TranscriptFile" -ForegroundColor Gray
+Write-Host ""
+
 if ($global:Issues.Count -gt 0) {
+    try { Stop-Transcript | Out-Null } catch {}
     if (-not $NoPause) { Read-Host "Press Enter to exit (mit Fehlern)" }
     exit 1
 }
 
 Write-Host "  Setup erfolgreich abgeschlossen." -ForegroundColor Green
+try { Stop-Transcript | Out-Null } catch {}
 if (-not $NoPause) { Read-Host "Press Enter" }
