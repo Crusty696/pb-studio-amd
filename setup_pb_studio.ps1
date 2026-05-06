@@ -21,7 +21,9 @@
 #>
 
 param (
-    [switch]$SkipBuildTools = $false
+    [switch]$SkipBuildTools = $false,
+    [switch]$SkipBackupPrompt = $false,
+    [switch]$NoPause = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -188,11 +190,15 @@ if (Test-Path $preCommitScript) {
 # D. Optional: weekly brain backup scheduled task
 $backupInstaller = Join-Path $PSScriptRoot "scripts\install_brain_backup_task.ps1"
 if (Test-Path $backupInstaller) {
-    $resp = Read-Host "Wöchentliches Brain-Backup einrichten? (y/N)"
-    if ($resp -match "^[Yy]") {
-        & $backupInstaller
+    if ($SkipBackupPrompt) {
+        Write-Host "    Skipped (--SkipBackupPrompt) - run scripts\install_brain_backup_task.ps1 to install later" -ForegroundColor Gray
     } else {
-        Write-Host "    Skipped - install later with: scripts\install_brain_backup_task.ps1" -ForegroundColor Gray
+        $resp = Read-Host "Wöchentliches Brain-Backup einrichten? (y/N)"
+        if ($resp -match "^[Yy]") {
+            & $backupInstaller
+        } else {
+            Write-Host "    Skipped - install later with: scripts\install_brain_backup_task.ps1" -ForegroundColor Gray
+        }
     }
 }
 
@@ -225,4 +231,4 @@ Write-Host "  1. Backend:  .venv\Scripts\activate; `$env:PYTHONPATH='src'; pytho
 Write-Host "  2. WPF UI:   dotnet run --project PBStudio.UI"
 Write-Host "  3. Tests:    .\run_full_test.ps1"
 Write-Host "  4. Brain Verify: docs\HARDWARE_VERIFY_GUIDE.md"
-Read-Host "Done. Press Enter."
+if (-not $NoPause) { Read-Host "Done. Press Enter." }
