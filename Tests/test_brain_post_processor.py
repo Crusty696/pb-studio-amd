@@ -103,3 +103,76 @@ def test_min_confidence_filters_low_scores(brain_svc, tmp_path: Path):
         assert out == []
     finally:
         state.close()
+
+
+# ----------------------------------------------------------------------------
+# R-Brain-01/02/09: Tests fuer die neuen Helper (centroid Normalisierung,
+# nearest-scene-distance, NaN-guard cosine, weight-store variance defensiv)
+# ----------------------------------------------------------------------------
+
+def test_normalize_centroid_curve_handles_empty_and_nan():
+    from pb_studio.brain.post_processor import _normalize_centroid_curve
+
+    assert _normalize_centroid_curve([]) == []
+    assert _normalize_centroid_curve(None) == []
+    # all-zero -> empty (kein Signal)
+    assert _normalize_centroid_curve([0.0, 0.0, 0.0]) == []
+    # NaN/Inf werden zu 0.0
+    arr = [float("nan"), float("inf"), 4000.0, 8000.0]
+    out = _normalize_centroid_curve(arr)
+    assert all(0.0 <= v <= 1.0 for v in out)
+    # Cap auf [0,1] gilt fuer alle Werte
+    out = _normalize_centroid_curve([1000.0] * 20 + [99999.0])
+    assert max(out) == 1.0
+
+
+def test_nearest_scene_distance_dict_and_tuple():
+    from pb_studio.brain.post_processor import _nearest_scene_distance
+
+    # leere Liste
+    assert _nearest_scene_distance(5.0, []) == 1.0
+
+    # dict mit start_time/end_time
+    scenes_dict = [
+        {"start_time": 0.0, "end_time": 2.5},
+        {"start_time": 2.5, "end_time": 5.0},
+        {"start_time": 5.0, "end_time": 7.5},
+    ]
+    # cut bei 2.6 -> naechste scene-grenze ist 2.5 (dist 0.1)
+    assert abs(_nearest_scene_distance(2.6, scenes_dict) - 0.1) < 0.001
+
+    # tuple-Format (start, end)
+    scenes_tup = [(0.0, 1.0), (3.0, 4.5)]
+    assert abs(_nearest_scene_distance(0.5, scenes_tup) - 0.5) < 0.001
+
+    # Cap auf 10.0 fuer absurd weite Distanzen
+    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 10.0
+
+
+def test_cosine_zero_one_handles_nan_inf_inputs():
+    """R-Brain-09: NaN/Inf in embeddings darf nicht NaN propagieren."""
+    from pb_studio.brain.bridge_dimensions import _cosine_zero_one
+    import numpy as np
+
+    a = np.array([1.0, 0.0, float("nan"), 1.0], dtype=np.float32)
+    b = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    val = _cosine_zero_one(a, b)
+    assert val == val  # nicht NaN
+    assert 0.0 <= val <= 1.0
+
+    # Empty
+    assert _cosine_zero_one(np.array([]), np.array([])) == 0.5
+
+
+def test_weight_store_variance_zero_alpha_beta(tmp_path):
+    """R-Brain-07: defensiv -- get_variance bei (0,0) gibt Cold-Start variance."""
+    from pb_studio.brain.weight_store import WeightStore
+
+    db = tmp_path / "wt.db"
+    ws = WeightStore.from_path(str(db))
+    # explicit (0, 0) bucket einfuegen via direct UPDATE
+    ws.update("beat_weight", 0, "", alpha_delta=0.0, beta_delta=0.0)
+    var = ws.get_variance("beat_weight", [""])
+    assert 0.0 <= var <= 0.5
+    # NaN nicht propagiert
+    assert var == var

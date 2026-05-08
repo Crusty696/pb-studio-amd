@@ -1,11 +1,13 @@
 import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from pb_studio.config_manager import ConfigManager
 from pb_studio.data.database_core import DatabaseCore
+from pb_studio.data.repositories import media_repository as media_repository_module
 from pb_studio.data.repositories.media_repository import MediaRepository
 from pb_studio.services.media_service import MediaService
 
@@ -222,6 +224,237 @@ def test_concurrent_reimport_returns_single_canonical_row(tmp_path, monkeypatch)
     assert len(rows) == 1
     assert len(guard_rows) == 1
     assert rows[0]["id"] == guard_rows[0]["media_id"]
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+# ---------------------------------------------------------------------------
+# Idempotency hardening: retry on transient SQLite "database is locked"
+# errors with exponential backoff (50ms / 100ms / 200ms / 400ms / 800ms).
+# ---------------------------------------------------------------------------
+
+
+def test_add_media_retries_on_database_locked_with_exponential_backoff(tmp_path, monkeypatch):
+    """add_media() retries on transient ``database is locked`` errors and
+    eventually succeeds. Verifies the exponential backoff schedule
+    (50ms, 100ms, 200ms, 400ms, 800ms) is applied in order."""
+    db_path = tmp_path / "media_lock_retry.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    sleep_calls: list = []
+    monkeypatch.setattr(
+        media_repository_module.time, "sleep", lambda d: sleep_calls.append(d)
+    )
+
+    db = DatabaseCore()
+    real_transaction = db.transaction
+    call_counter = {"count": 0}
+
+    @contextmanager
+    def flaky_transaction(*args, **kwargs):
+        call_counter["count"] += 1
+        if call_counter["count"] <= 2:
+            raise sqlite3.OperationalError("database is locked")
+        with real_transaction(*args, **kwargs) as conn:
+            yield conn
+
+    monkeypatch.setattr(db, "transaction", flaky_transaction)
+
+    media_id = repo.add_media(1, str(media_file), "hash-retry", 1.0, {"clip_type": "audio"})
+
+    assert media_id is not None and media_id > 0
+    # 1 initial + 2 retries = 3 calls total.
+    assert call_counter["count"] == 3
+    # Exponential backoff: only the two retries should have slept (50ms, 100ms).
+    assert sleep_calls == [0.05, 0.10]
+
+    persisted = repo.get_by_id(media_id)
+    assert persisted is not None
+    assert persisted["file_hash"] == "hash-retry"
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+def test_add_media_does_not_retry_on_non_lock_operational_error(tmp_path, monkeypatch):
+    """A non-lock ``OperationalError`` (e.g. ``no such table``) is a real
+    bug and must propagate immediately without retry/backoff."""
+    db_path = tmp_path / "media_no_retry.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    sleep_calls: list = []
+    monkeypatch.setattr(
+        media_repository_module.time, "sleep", lambda d: sleep_calls.append(d)
+    )
+
+    db = DatabaseCore()
+    call_counter = {"count": 0}
+
+    @contextmanager
+    def broken_transaction(*args, **kwargs):
+        call_counter["count"] += 1
+        raise sqlite3.OperationalError("no such table: bogus")
+        yield  # pragma: no cover - keeps the function a generator
+
+    monkeypatch.setattr(db, "transaction", broken_transaction)
+
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        repo.add_media(1, str(media_file), "hash-broken", 1.0)
+
+    assert call_counter["count"] == 1
+    assert sleep_calls == []
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+def test_add_media_exhausts_retries_when_lock_persists(tmp_path, monkeypatch):
+    """If the lock is held longer than the entire backoff budget the
+    underlying ``OperationalError`` is propagated after 5 retries."""
+    db_path = tmp_path / "media_lock_exhaust.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    sleep_calls: list = []
+    monkeypatch.setattr(
+        media_repository_module.time, "sleep", lambda d: sleep_calls.append(d)
+    )
+
+    db = DatabaseCore()
+    call_counter = {"count": 0}
+
+    @contextmanager
+    def always_locked(*args, **kwargs):
+        call_counter["count"] += 1
+        raise sqlite3.OperationalError("database is locked")
+        yield  # pragma: no cover - keeps the function a generator
+
+    monkeypatch.setattr(db, "transaction", always_locked)
+
+    with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+        repo.add_media(1, str(media_file), "hash-stuck", 1.0)
+
+    # 1 initial + 5 retries == 6 attempts.
+    assert call_counter["count"] == 6
+    assert sleep_calls == [0.05, 0.10, 0.20, 0.40, 0.80]
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+def test_update_status_also_retries_on_database_locked(tmp_path, monkeypatch):
+    """The retry policy also covers other write methods (update_status)."""
+    db_path = tmp_path / "media_update_retry.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    media_id = repo.add_media(1, str(media_file), "hash-a", 1.0)
+    assert media_id is not None and media_id > 0
+
+    sleep_calls: list = []
+    monkeypatch.setattr(
+        media_repository_module.time, "sleep", lambda d: sleep_calls.append(d)
+    )
+
+    db = DatabaseCore()
+    real_transaction = db.transaction
+    call_counter = {"count": 0}
+
+    @contextmanager
+    def flaky_transaction(*args, **kwargs):
+        call_counter["count"] += 1
+        if call_counter["count"] == 1:
+            raise sqlite3.OperationalError("database table is locked")
+        with real_transaction(*args, **kwargs) as conn:
+            yield conn
+
+    monkeypatch.setattr(db, "transaction", flaky_transaction)
+
+    repo.update_status(media_id, "ready")
+
+    assert call_counter["count"] == 2
+    assert sleep_calls == [0.05]
+
+    row = repo.get_by_id(media_id)
+    assert row["status"] == "ready"
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+def test_add_media_retries_on_real_concurrent_database_lock(tmp_path, monkeypatch):
+    """End-to-end: a side-thread holds an EXCLUSIVE write transaction on the
+    same DB file. The main connection's busy_timeout is set to 0 so
+    ``BEGIN IMMEDIATE`` fails fast with ``database is locked``. A timer
+    releases the side lock during the retry window and the operation
+    must ultimately succeed."""
+    db_path = tmp_path / "media_real_lock.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    # Force the main thread's connection to fail fast on BEGIN IMMEDIATE so
+    # the retry path (rather than busy_timeout) handles the lock.
+    main_conn = DatabaseCore().get_connection()
+    main_conn.execute("PRAGMA busy_timeout=0")
+
+    lock_acquired = threading.Event()
+    release_lock = threading.Event()
+    holder_done = threading.Event()
+
+    def lock_holder():
+        side_conn = sqlite3.connect(str(db_path), timeout=30.0)
+        try:
+            side_conn.execute("PRAGMA busy_timeout=30000")
+            side_conn.execute("BEGIN IMMEDIATE")
+            # Actual write upgrades the lock to RESERVED -> blocks BEGIN IMMEDIATE on others.
+            side_conn.execute("INSERT INTO projects (name) VALUES (?)", ("locker",))
+            lock_acquired.set()
+            release_lock.wait(timeout=5)
+            side_conn.rollback()
+        finally:
+            side_conn.close()
+            holder_done.set()
+
+    holder = threading.Thread(target=lock_holder, daemon=True)
+    holder.start()
+    assert lock_acquired.wait(timeout=5), "lock-holder thread failed to acquire write lock"
+
+    # Release during retry window. With schedule (50,100,200,400,800ms) the 4th
+    # attempt at t=350ms is comfortably past the 300ms release.
+    threading.Timer(0.3, release_lock.set).start()
+
+    media_id = repo.add_media(1, str(media_file), "hash-real", 1.5, {"src": "real"})
+
+    assert media_id is not None and media_id > 0
+    holder.join(timeout=5)
+    assert holder_done.is_set()
+
+    persisted = repo.get_by_id(media_id)
+    assert persisted is not None
+    assert persisted["file_hash"] == "hash-real"
 
     DatabaseCore().shutdown()
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)

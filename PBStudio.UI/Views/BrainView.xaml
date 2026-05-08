@@ -16,6 +16,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -92,8 +93,44 @@
             </StackPanel>
         </md:Card>
 
+        <!-- Cold-Start-Achsen (welche Achsen brauchen mehr Klicks?) -->
+        <md:Card Grid.Row="2" Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="COLD-START ACHSEN (&lt; 10 Samples)"
+                           Style="{StaticResource SectionHeader}"
+                           Margin="0,0,0,6"/>
+                <TextBlock DockPanel.Dock="Bottom"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="10" Margin="0,4,0,0"
+                           Text="Diese Achsen ziehen die Confidence aus Defaults statt aus Daten — bewerte Cuts, in denen sie auftauchen, um sie aufzuwärmen."
+                           TextWrapping="Wrap"/>
+                <ItemsControl ItemsSource="{Binding ColdStartAxesList}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource AbletonSurface}"
+                                    BorderBrush="{StaticResource AbletonBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="8,3"
+                                    Margin="0,0,6,4">
+                                <TextBlock Text="{Binding}"
+                                           Foreground="{StaticResource AbletonText}"
+                                           FontSize="11"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
+        </md:Card>
+
         <!-- Top Buckets + Learning Session -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -114,9 +151,13 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding Axis}" FontWeight="Bold"
                                                Foreground="{StaticResource AbletonText}"/>
-                                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                                        <Run Text="α="/><Run Text="{Binding PositiveCount}"/>
-                                        <Run Text="  β="/><Run Text="{Binding NegativeCount}"/>
+                                    <TextBlock Foreground="{StaticResource AbletonAccent}" FontSize="11" FontWeight="SemiBold">
+                                        <Run Text="post="/><Run Text="{Binding Posterior, StringFormat={}{0:P0}, Mode=OneWay}"/>
+                                        <Run Text="  var="/><Run Text="{Binding PosteriorVariance, StringFormat={}{0:F4}, Mode=OneWay}"/>
+                                    </TextBlock>
+                                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="10">
+                                        <Run Text="α="/><Run Text="{Binding PositiveCount, StringFormat={}{0:F0}}"/>
+                                        <Run Text="  β="/><Run Text="{Binding NegativeCount, StringFormat={}{0:F0}}"/>
                                         <Run Text="  L="/><Run Text="{Binding ContextLevel}"/>
                                     </TextBlock>
                                 </StackPanel>
@@ -140,9 +181,13 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding Axis}" FontWeight="Bold"
                                                Foreground="{StaticResource AbletonText}"/>
-                                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                                        <Run Text="α="/><Run Text="{Binding PositiveCount}"/>
-                                        <Run Text="  β="/><Run Text="{Binding NegativeCount}"/>
+                                    <TextBlock Foreground="{StaticResource AbletonAccent}" FontSize="11" FontWeight="SemiBold">
+                                        <Run Text="post="/><Run Text="{Binding Posterior, StringFormat={}{0:P0}, Mode=OneWay}"/>
+                                        <Run Text="  var="/><Run Text="{Binding PosteriorVariance, StringFormat={}{0:F4}, Mode=OneWay}"/>
+                                    </TextBlock>
+                                    <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="10">
+                                        <Run Text="α="/><Run Text="{Binding PositiveCount, StringFormat={}{0:F0}}"/>
+                                        <Run Text="  β="/><Run Text="{Binding NegativeCount, StringFormat={}{0:F0}}"/>
                                         <Run Text="  L="/><Run Text="{Binding ContextLevel}"/>
                                     </TextBlock>
                                 </StackPanel>
@@ -190,7 +235,7 @@
         </Grid>
 
         <!-- Reset + Status -->
-        <md:Card Grid.Row="3" Style="{StaticResource AbletonCard}" Padding="14" Margin="0,8,0,0">
+        <md:Card Grid.Row="4" Style="{StaticResource AbletonCard}" Padding="14" Margin="0,8,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

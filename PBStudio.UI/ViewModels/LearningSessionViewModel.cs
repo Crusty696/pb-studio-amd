@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
@@ -137,13 +138,16 @@ public partial class LearningSessionViewModel : ObservableObject
             Status = "Kein cut_id verfügbar.";
             return;
         }
-        var resp = await _api.BrainFeedbackAsync(c.CutId.Value, rating);
+        var cutId = c.CutId.Value;
+        var resp = await _api.BrainFeedbackAsync(cutId, rating);
         if (resp == null)
         {
             Status = "Feedback fehlgeschlagen.";
             return;
         }
         Status = $"OK — {resp.UpdatedBuckets} buckets, total={resp.TotalClicks}. → next";
+        // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
+        WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
         Next();
     }
 

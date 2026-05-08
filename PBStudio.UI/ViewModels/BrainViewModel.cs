@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
@@ -11,6 +12,8 @@ namespace PBStudio.UI.ViewModels;
 public partial class BrainViewModel : ObservableObject
 {
     private readonly IApiClient _api;
+    private readonly ProjectService? _projectService;
+    private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
 
     [ObservableProperty] private int _totalClicks;
@@ -23,11 +26,14 @@ public partial class BrainViewModel : ObservableObject
 
     public ObservableCollection<BrainStatsBucket> TopPositive { get; } = new();
     public ObservableCollection<BrainStatsBucket> TopNegative { get; } = new();
+    public ObservableCollection<string> ColdStartAxesList { get; } = new();
     public ObservableCollection<BrainSuggestion> LearningSessionCuts { get; } = new();
 
-    public BrainViewModel(IApiClient api)
+    public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
         _api = api;
+        _projectService = projectService;
+        _timelineState = timelineState;
         _ = RefreshStatsAsync();
     }
 
@@ -50,6 +56,11 @@ public partial class BrainViewModel : ObservableObject
             foreach (var b in stats.TopPositive) TopPositive.Add(b);
             TopNegative.Clear();
             foreach (var b in stats.TopNegative) TopNegative.Add(b);
+            ColdStartAxesList.Clear();
+            if (stats.ColdStartAxesList != null)
+            {
+                foreach (var ax in stats.ColdStartAxesList) ColdStartAxesList.Add(ax);
+            }
             Status = $"{TotalClicks} Klicks gesamt, {LearnedAxes}/{LearnedAxes + ColdStartAxes} Achsen gelernt.";
         }
         finally
@@ -74,13 +85,16 @@ public partial class BrainViewModel : ObservableObject
             Status = "Bitte zuerst einen Cut auswählen.";
             return;
         }
-        var resp = await _api.BrainFeedbackAsync(SelectedCutId, rating);
+        var cutId = SelectedCutId;
+        var resp = await _api.BrainFeedbackAsync(cutId, rating);
         if (resp == null)
         {
             Status = "Feedback fehlgeschlagen.";
             return;
         }
         Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
+        // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
+        WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
         await RefreshStatsAsync();
     }
 
@@ -110,10 +124,45 @@ public partial class BrainViewModel : ObservableObject
         var vm = CommunityToolkit.Mvvm.DependencyInjection.Ioc.Default
             .GetRequiredService<LearningSessionViewModel>();
         var dialog = new Views.LearningSessionDialog(vm);
-        await vm.LoadAsync();
+
+        // Pfade aus aktuellem Projekt + Timeline ableiten, sonst bleibt der Walkthrough
+        // ohne Audio-/Video-Preview (siehe Audit C3).
+        var (audioPath, videoBase) = await ResolveSessionPathsAsync();
+        await vm.LoadAsync(audioPath, videoBase);
+
         dialog.Owner = System.Windows.Application.Current.MainWindow;
         dialog.ShowDialog();
         await RefreshStatsAsync();
+    }
+
+    private async Task<(string? audioPath, string? videoBase)> ResolveSessionPathsAsync()
+    {
+        // Audio: aktuelle Timeline-Response liefert audio_path.
+        string? audioPath = _timelineState?.CurrentTimeline?.AudioPath;
+        if (string.IsNullOrEmpty(audioPath))
+        {
+            try
+            {
+                var refreshed = _timelineState != null
+                    ? await _timelineState.RefreshAsync()
+                    : await _api.GetTimelineAsync();
+                audioPath = refreshed?.AudioPath;
+            }
+            catch
+            {
+                // Best-effort — Walkthrough fällt auf "kein Audio" zurück.
+            }
+        }
+
+        // Video-Base: Projekt-Root\videos\ falls vorhanden, sonst Projekt-Root.
+        string? videoBase = null;
+        var projectPath = _projectService?.CurrentProjectPath;
+        if (!string.IsNullOrEmpty(projectPath))
+        {
+            var videosDir = System.IO.Path.Combine(projectPath, "videos");
+            videoBase = System.IO.Directory.Exists(videosDir) ? videosDir : projectPath;
+        }
+        return (audioPath, videoBase);
     }
 
     [RelayCommand]

@@ -1,14 +1,16 @@
-"""Brain Router (Plan Phase 4) — 5 Endpoints.
+"""Brain Router (Plan Phase 4 + R-Brain-09) -- 6 Endpoints.
 
-POST /brain/suggest             — Top-N Cut-Vorschläge mit brain_scores
-POST /brain/feedback            — 4-Klick-Event verarbeiten
-POST /brain/learning_session    — 15 unsicherste Cuts (Bayes-Varianz)
-GET  /brain/stats               — Diagnostik
-POST /brain/reset               — mit Confirmation
+POST /brain/suggest             -- Top-N Cut-Vorschlaege mit brain_scores
+POST /brain/feedback            -- 4-Klick-Event verarbeiten
+POST /brain/learning_session    -- 15 unsicherste Cuts (Bayes-Varianz)
+GET  /brain/stats               -- Diagnostik
+POST /brain/reset               -- mit Confirmation
+GET  /brain/explain/{cut_id}    -- UX: warum diese Confidence? (R-Brain-09)
 """
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import secrets
 from typing import Optional
@@ -16,6 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from ..schemas.brain_schemas import (
+    BrainAxisContribution, BrainExplainResponse,
     BrainFeedbackRequest, BrainFeedbackResponse,
     BrainLearningSessionResponse, BrainResetRequest, BrainResetResponse,
     BrainStatsBucket, BrainStatsResponse, BrainSuggestRequest,
@@ -26,18 +29,12 @@ from .._brain_singleton import get_brain_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/brain", tags=["Brain"])
 
-# In-memory reset confirmation tokens (1-step TTL).
 _pending_reset_tokens: set[str] = set()
 
 
 @router.post("/suggest", response_model=BrainSuggestResponse)
 async def suggest(req: BrainSuggestRequest) -> BrainSuggestResponse:
-    """Sub-set of /pacing/generate — Brain-Reranker only.
-
-    Currently returns the cuts of the latest timeline filtered to the
-    requested clip ids. Full pacing-engine integration läuft über
-    /pacing/generate?use_brain=true (Plan Phase 4 Verifikation).
-    """
+    """Top-N cuts der aktuellen Timeline mit brain_scores."""
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
@@ -51,13 +48,9 @@ async def suggest(req: BrainSuggestRequest) -> BrainSuggestResponse:
     ).fetchall()
 
     out: list[BrainSuggestion] = []
-    import json as _json
     for r in rows:
         scores = _json.loads(r[4]) if r[4] else {}
-        final = (
-            sum(scores.values()) / len(scores)
-            if scores else 0.0
-        )
+        final = sum(scores.values()) / len(scores) if scores else 0.0
         out.append(BrainSuggestion(
             cut_id=int(r[0]),
             clip_id=str(r[1]),
@@ -82,11 +75,14 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
     if row is None:
         raise HTTPException(status_code=404, detail=f"Cut {req.cut_id} not found")
 
-    import json as _json
     metadata = _json.loads(row[1]) if row[1] else {}
     context_keys = metadata.get("context_keys")
     if not context_keys or not isinstance(context_keys, list):
-        # Cold-start: fall back to global-only key
+        logger.warning(
+            "Cut %d hat keine context_keys in metadata; Feedback wird nur in Level-0 "
+            "gebucht. Pacing muss zuerst mit use_brain=true laufen fuer vollen 5-Level "
+            "Backoff.", req.cut_id
+        )
         context_keys = [""]
 
     bumps = svc.feedback_logger.log_feedback(
@@ -103,12 +99,11 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
 
 @router.post("/learning_session", response_model=BrainLearningSessionResponse)
 async def learning_session() -> BrainLearningSessionResponse:
-    """Returns top-15 cuts ranked by Bayes variance."""
+    """Top-15 Cuts ranked by Bayes variance (R-Brain-06 stratified)."""
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
 
-    import json as _json
     from pb_studio.brain.smart_sampler import CutForSampling
 
     rows = svc.state_conn.execute(
@@ -145,33 +140,37 @@ async def learning_session() -> BrainLearningSessionResponse:
 async def stats() -> BrainStatsResponse:
     svc = get_brain_service()
 
+    def _bucket(r) -> BrainStatsBucket:
+        # Beta-Bernoulli mit Laplace-Prior (alpha0=beta0=1).
+        a = float(r[3]) + 1.0
+        b = float(r[4]) + 1.0
+        n = a + b
+        posterior = a / n
+        # Var(Beta(a,b)) = a*b / ((a+b)^2 * (a+b+1)).
+        variance = (a * b) / (n * n * (n + 1.0))
+        return BrainStatsBucket(
+            axis=r[0],
+            context_level=int(r[1]),
+            context_key=r[2],
+            positive_count=float(r[3]),
+            negative_count=float(r[4]),
+            posterior=posterior,
+            posterior_variance=variance,
+        )
+
     rows = svc.brain.weights_conn.execute(
         "SELECT axis, context_level, context_key, positive_count, "
         "negative_count FROM axis_weights "
         "ORDER BY (positive_count - negative_count) DESC LIMIT 5"
     ).fetchall()
-    top_pos = [
-        BrainStatsBucket(
-            axis=r[0], context_level=int(r[1]), context_key=r[2],
-            positive_count=float(r[3]), negative_count=float(r[4]),
-            posterior=(float(r[3]) + 1) / (float(r[3]) + float(r[4]) + 2),
-        )
-        for r in rows
-    ]
+    top_pos = [_bucket(r) for r in rows]
 
     rows = svc.brain.weights_conn.execute(
         "SELECT axis, context_level, context_key, positive_count, "
         "negative_count FROM axis_weights "
         "ORDER BY (negative_count - positive_count) DESC LIMIT 5"
     ).fetchall()
-    top_neg = [
-        BrainStatsBucket(
-            axis=r[0], context_level=int(r[1]), context_key=r[2],
-            positive_count=float(r[3]), negative_count=float(r[4]),
-            posterior=(float(r[3]) + 1) / (float(r[3]) + float(r[4]) + 2),
-        )
-        for r in rows
-    ]
+    top_neg = [_bucket(r) for r in rows]
 
     from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
     learned = set()
@@ -180,20 +179,21 @@ async def stats() -> BrainStatsResponse:
         "WHERE positive_count + negative_count >= 10"
     ).fetchall():
         learned.add(r[0])
-    cold = len([a for a in BRIDGE_AXES if a not in learned])
+    cold_list = [a for a in BRIDGE_AXES if a not in learned]
 
     return BrainStatsResponse(
         total_clicks=svc.weights.total_clicks(),
-        cold_start_axes=cold,
+        cold_start_axes=len(cold_list),
         learned_axes=len(learned),
         top_positive=top_pos,
         top_negative=top_neg,
+        cold_start_axes_list=cold_list,
     )
 
 
 @router.post("/reset", response_model=BrainResetResponse)
 async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
-    """Two-step confirmation reset: 1st call returns token, 2nd call with token resets."""
+    """Two-step confirmation reset: 1st call returns token, 2nd resets."""
     svc = get_brain_service()
     if req is None or req.confirmation_token is None:
         token = secrets.token_urlsafe(16)
@@ -207,3 +207,91 @@ async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
     _pending_reset_tokens.discard(req.confirmation_token)
     svc.weights.reset()
     return BrainResetResponse(status="reset_complete")
+
+
+# ---------- R-Brain-09: /brain/explain/{cut_id} ----------
+
+@router.get("/explain/{cut_id}", response_model=BrainExplainResponse)
+async def explain(cut_id: int, top_n: int = 3) -> BrainExplainResponse:
+    """Erklaert die Confidence eines Cuts: Top-/Bottom-N contributing axes
+    mit ihrer (bridge_value, posterior, score)-Aufschluesselung.
+
+    UX: Tooltip beim Hover ueber den Confidence-Balken in der Timeline.
+    """
+    if top_n < 1 or top_n > 17:
+        raise HTTPException(status_code=400, detail="top_n must be 1..17")
+
+    svc = get_brain_service()
+    if svc.state_conn is None:
+        raise HTTPException(status_code=409, detail="No project bound")
+
+    row = svc.state_conn.execute(
+        "SELECT id, clip_id, start_time, end_time, segment_type, "
+        "brain_scores_json, metadata_json "
+        "FROM timeline_cuts WHERE id = ?",
+        (int(cut_id),),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Cut {cut_id} not found")
+
+    scores: dict[str, float] = _json.loads(row[5]) if row[5] else {}
+    metadata: dict = _json.loads(row[6]) if row[6] else {}
+    context_keys: list[str] = metadata.get("context_keys") or [""]
+
+    # Pro Achse: posterior aus weight_store rekonstruieren.
+    # score (gespeichert) = bridge_value * posterior, daher
+    # bridge_value = score / posterior (mit safe-divide).
+    contributions: list[BrainAxisContribution] = []
+    cold_start: list[str] = []
+
+    for axis, score in scores.items():
+        posterior = float(svc.weights.get_posterior_mean(axis, context_keys))
+        # rekonstruiere bridge_value
+        if posterior > 1e-9:
+            bridge_value = max(0.0, min(1.0, float(score) / posterior))
+        else:
+            bridge_value = 0.0
+        n_samples = _n_samples_at_most_specific(svc, axis, context_keys)
+        if n_samples < 10:
+            cold_start.append(axis)
+        contributions.append(BrainAxisContribution(
+            axis=axis,
+            bridge_value=round(bridge_value, 6),
+            posterior=round(posterior, 6),
+            score=round(max(0.0, min(1.0, float(score))), 6),
+            n_samples=n_samples,
+        ))
+
+    contributions.sort(key=lambda c: c.score, reverse=True)
+    top_axes = contributions[:top_n]
+    bottom_axes = contributions[-top_n:][::-1] if len(contributions) >= top_n else []
+
+    final_score = (
+        sum(scores.values()) / len(scores) if scores else 0.0
+    )
+
+    return BrainExplainResponse(
+        cut_id=int(row[0]),
+        clip_id=str(row[1]),
+        start_time=float(row[2]),
+        end_time=float(row[3]),
+        segment_type=str(row[4]) if row[4] else None,
+        final_score=round(float(final_score), 6),
+        context_keys=context_keys,
+        top_axes=top_axes,
+        bottom_axes=bottom_axes,
+        cold_start_axes=cold_start,
+    )
+
+
+def _n_samples_at_most_specific(svc, axis: str, context_keys: list[str]) -> int:
+    """Wie viele Klicks sind in den spezifischsten verfuegbaren Bucket fuer
+    (axis, context) geflossen? Spiegelt WeightStore.get_posterior_mean Backoff.
+    """
+    for level in range(len(context_keys) - 1, -1, -1):
+        row = svc.weights.get_alpha_beta(axis, level, context_keys[level])
+        if row is None:
+            continue
+        alpha, beta = row
+        return int(round(alpha + beta))
+    return 0
