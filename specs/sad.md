@@ -140,4 +140,5 @@ Project state is stored in a `project.json` file per project. Media metadata and
 - Offline-first: Cannot rely on cloud services for AI inference.
 
 ## Project Context Baseline Updates
-- [None yet]
+- **WPF Virtualization**: For time-based UIs, `VirtualizingPanel.ScrollUnit="Pixel"` and `VirtualizationMode="Recycling"` are the baseline for performance with high item counts.
+- **Interaction Logic**: Client-side snapping and state management should utilize `VisualStateManager` and `CompositionTarget.Rendering` for sub-100ms visual feedback.

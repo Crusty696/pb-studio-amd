@@ -107,4 +107,5 @@ Internal alpha testing with professional DJ mixes, followed by a framework-depen
 - **Critical constraints**: Hardware acceleration must prioritize AMD via DirectML.
 
 ## Project Context Baseline Updates
-- [None yet]
+- **UX Precision**: Professional editing requires magnetic snapping thresholds of 5-10px and visual snap feedback (Snap Lines) to ensure rhythmic perfection.
+- **UI Performance**: High-density timelines (>1000 items) must utilize pixel-based UI virtualization to maintain 60fps responsiveness.

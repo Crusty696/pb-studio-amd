@@ -22,8 +22,8 @@
 
 - [X] E006 [P1] [PRODUCT] {PRD:CAP-005} AMD Export Pipeline — Hardware-accelerated video rendering.
 - [X] E007 [P2] [TECHNICAL] {STATUS:ReleaseReadiness} Release Hardening & UX Polish — Native dialogs, VRAM stress tests, and final UI refinements.
-- [ ] E008 [P2] [PRODUCT] Deeper UX & Timeline Polish — Magnetic snapping, smooth scrolling, and UI transitions.
-- [ ] E009 [P2] [TECHNICAL] Audio/Video Data Depth — Visualization of song sections, spectral data, and refined scene detection.
+- [X] E008 [P2] [PRODUCT] Deeper UX & Timeline Polish — Magnetic snapping, smooth scrolling, and UI transitions.
+- [X] E009 [P2] [TECHNICAL] Audio/Video Data Depth — Visualization of song sections, spectral data, and refined scene detection.
 - [ ] E010 [P2] [TECHNICAL] Resilience & Edge-Cases — Reconnect stress tests and extreme VRAM pressure validation.
 
 ## Dependency Diagram
@@ -60,9 +60,19 @@ graph LR
 - **Priority**: P2
 - **Source**: {STATUS:UX}
 - **Acceptance criteria**:
-    - [ ] Smooth scrolling in TimelineView.
-    - [ ] Enhanced magnetic snapping (including onset markers).
-    - [ ] Consistent hover and selection states across all views.
+    - [X] Smooth scrolling in TimelineView.
+    - [X] Enhanced magnetic snapping (including onset markers).
+    - [X] Consistent hover and selection states across all views.
+
+### E009 — Audio/Video Data Depth
+- **Category**: TECHNICAL
+- **Priority**: P2
+- **Source**: {STATUS:Refinement}
+- **Acceptance criteria**:
+    - [X] Automated song section detection (Intro, Chorus, Verse, etc.).
+    - [X] Spectral centroid and RMS energy visualization on the timeline.
+    - [X] Refined video scene detection using AdaptiveDetector.
+    - [X] Persistent depth metadata storage in SQLite media cache.
 
 ### E010 — Resilience & Edge-Cases
 - **Category**: TECHNICAL
