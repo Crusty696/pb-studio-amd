@@ -20,9 +20,16 @@
                         <TextBlock Text="{Binding ProjectPath}" FontSize="12" Foreground="{StaticResource AbletonTextDim}"/>
                     </StackPanel>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding RefreshCommand}"
-                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonAccent}">
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonAccent}"
+                            Margin="0,0,0,0">
                         <icon:PackIconMaterial Kind="Sync" Width="16" Height="16"/>
                     </Button>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding OpenProjectCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonText}"
+                            Margin="0,0,8,0" Content="Projekt öffnen"/>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding CreateProjectCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonBg}" Background="{StaticResource AbletonAccent}"
+                            Margin="0,0,8,0" Content="Neues Projekt"/>
                 </DockPanel>
             </md:Card>
 
@@ -88,6 +95,7 @@
                         
                         <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignOutlinedButton}" 
                                 Foreground="{StaticResource AbletonAccent}" Content="Jetzt generieren"
+                                Command="{Binding GoToDirectorCommand}"
                                 Visibility="{Binding HasTimeline, Converter={StaticResource InverseBooleanConverter}}"
                                 Padding="12,2" Height="28" FontSize="11" HorizontalAlignment="Right"/>
                     </DockPanel>

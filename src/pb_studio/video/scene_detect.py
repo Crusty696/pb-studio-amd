@@ -20,10 +20,11 @@ class SceneDetector:
             video = open_video(video_path)
             scene_manager = SceneManager()
             
-            # BUG-073 FIX: Versuche AdaptiveDetector für bessere Resultate, Fallback auf ContentDetector
+            # ADAPTIVE: Use AdaptiveDetector to ignore gradual light changes and motion
             try:
                 from scenedetect.detectors import AdaptiveDetector
-                scene_manager.add_detector(AdaptiveDetector(adaptive_threshold=self.threshold))
+                # adaptive_threshold scale is slightly different from content threshold
+                scene_manager.add_detector(AdaptiveDetector(adaptive_threshold=self.threshold, min_scene_len=15))
             except ImportError:
                 scene_manager.add_detector(ContentDetector(threshold=self.threshold))
 

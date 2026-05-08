@@ -99,22 +99,51 @@
             <md:Card Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
                 <StackPanel>
                     <TextBlock Text="HARDWARE KONFIGURATION" Style="{StaticResource SectionHeader}" Margin="0,0,0,12"/>
-                    
+
+                    <!-- VRAM Cap Slider -->
                     <StackPanel Margin="0,0,0,16">
                         <DockPanel Margin="0,0,0,6">
                             <TextBlock Text="VRAM Limit" Style="{StaticResource ParamLabel}"/>
-                            <TextBlock Text="{Binding VramLimitMb, StringFormat={}{0} MB}" 
-                                       Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonAccent}" 
+                            <TextBlock Text="{Binding VramLimitMb, StringFormat={}{0} MB}"
+                                       Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonAccent}"
                                        HorizontalAlignment="Right"/>
                         </DockPanel>
-                        <Slider Minimum="2048" Maximum="16384" TickFrequency="512" 
-                                Value="{Binding VramLimitMb}" 
+                        <Slider Minimum="2048" Maximum="32768" TickFrequency="512"
+                                Value="{Binding VramLimitMb}"
+                                IsSnapToTickEnabled="True"
                                 ToolTip="Maximaler Speicher den PB Studio auf der GPU reservieren darf."/>
-                        <TextBlock Text="Bestimmt wann der Arbiter Modelle auslagert oder Anfragen ablehnt." 
-                                   FontSize="10" Foreground="{StaticResource AbletonTextDim}" Margin="0,4,0,0"/>
+                        <DockPanel Margin="0,2,0,0">
+                            <TextBlock Text="Bestimmt wann der Arbiter Modelle auslagert oder Anfragen ablehnt."
+                                       FontSize="10" Foreground="{StaticResource AbletonTextDim}"/>
+                            <TextBlock HorizontalAlignment="Right" FontSize="10"
+                                       Foreground="{StaticResource AbletonTextDim}"
+                                       ToolTip="Aktuell vom Backend gemeldetes echtes Gesamt-VRAM">
+                                <Run Text="echt: "/><Run Text="{Binding VramTotal, Mode=OneWay, StringFormat={}{0} MB}"/>
+                            </TextBlock>
+                        </DockPanel>
                     </StackPanel>
 
-                    <Button Command="{Binding SaveSettingsCommand}" 
+                    <!-- Forced VRAM (env-var PB_STUDIO_FORCED_VRAM) -->
+                    <StackPanel Margin="0,0,0,16">
+                        <DockPanel Margin="0,0,0,4">
+                            <CheckBox IsChecked="{Binding ForceVramEnabled}"
+                                      Content="VRAM erzwingen (PB_STUDIO_FORCED_VRAM)"
+                                      Foreground="{StaticResource AbletonText}" FontSize="11"
+                                      ToolTip="Setzt die Env-Var für den NÄCHSTEN Backend-Start. Wird vererbt auf den Python-Child-Prozess."/>
+                            <TextBlock Text="{Binding ForcedVramMb, StringFormat={}{0} MB}"
+                                       Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonYellow}"
+                                       HorizontalAlignment="Right" Margin="8,0,0,0"/>
+                        </DockPanel>
+                        <Slider Minimum="2048" Maximum="32768" TickFrequency="512"
+                                Value="{Binding ForcedVramMb}"
+                                IsSnapToTickEnabled="True"
+                                IsEnabled="{Binding ForceVramEnabled}"
+                                ToolTip="Erzwingt einen VRAM-Wert für Tests / kleinere Karten. Greift erst beim Re-Start des Backends."/>
+                        <TextBlock Text="Greift erst nach Backend-Restart. Nützlich für Tests auf kleineren GPUs."
+                                   FontSize="10" Foreground="{StaticResource AbletonTextDim}" Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <Button Command="{Binding SaveSettingsCommand}"
                             Background="{StaticResource AbletonAccent}" BorderThickness="0"
                             Height="32" Content="Einstellungen übernehmen">
                         <Button.Style>
@@ -127,6 +156,89 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                </StackPanel>
+            </md:Card>
+
+            <!-- ══ FFmpeg Configuration Card ══ -->
+            <md:Card Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="FFMPEG KONFIGURATION" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="Pfad zur ffmpeg.exe (leer = PATH/Auto-Detect)"
+                               Style="{StaticResource ParamLabel}" Margin="0,0,0,4"/>
+
+                    <DockPanel Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right" Margin="6,0,0,0"
+                                Command="{Binding BrowseFfmpegCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Foreground="{StaticResource AbletonAccent}"
+                                Padding="8,4" Height="28"
+                                ToolTip="Datei auswählen...">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="FolderOpen" Width="14" Height="14"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Text="Browse" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button DockPanel.Dock="Right" Margin="4,0,0,0"
+                                Command="{Binding ProbeFfmpegCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Foreground="{StaticResource AbletonGreen}"
+                                Padding="8,4" Height="28"
+                                ToolTip="Version mit 'ffmpeg -version' prüfen">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Check" Width="14" Height="14"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Text="Probe" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBox Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
+                                 Foreground="{StaticResource AbletonText}"
+                                 Background="{StaticResource AbletonPanel}"
+                                 BorderBrush="{StaticResource AbletonBorder}"
+                                 Height="28" VerticalContentAlignment="Center" Padding="6,2"
+                                 ToolTip="Vollständiger Pfad zu ffmpeg.exe"/>
+                    </DockPanel>
+
+                    <!-- Inline Validation Error -->
+                    <TextBlock Text="{Binding FfmpegPathError}"
+                               Foreground="{StaticResource AbletonRed}"
+                               FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"
+                               Visibility="{Binding FfmpegPathError, Converter={StaticResource NullToVisibilityConverter}}"/>
+
+                    <!-- Probed Version -->
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                                Visibility="{Binding FfmpegVersion, Converter={StaticResource NullToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="CheckCircle" Width="12" Height="12"
+                                               VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Foreground="{StaticResource AbletonGreen}"/>
+                        <TextBlock VerticalAlignment="Center" FontSize="11"
+                                   Foreground="{StaticResource AbletonGreen}">
+                            <Run Text="Version: "/><Run Text="{Binding FfmpegVersion, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Probe in progress indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                                Visibility="{Binding IsProbingFfmpeg, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="Prüfe FFmpeg-Version..." FontSize="11"
+                                   Foreground="{StaticResource AbletonTextDim}"/>
+                    </StackPanel>
+                </StackPanel>
+            </md:Card>
+
+            <!-- ══ Settings File Path (Info) ══ -->
+            <md:Card Style="{StaticResource AbletonCard}" Padding="10" Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal">
+                    <icon:PackIconMaterial Kind="ContentSaveOutline" Width="14" Height="14"
+                                           VerticalAlignment="Center" Margin="0,0,6,0"
+                                           Foreground="{StaticResource AbletonTextDim}"/>
+                    <TextBlock VerticalAlignment="Center" FontSize="10"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding SettingsFilePath}">
+                        <Run Text="Settings-Datei: "/><Run Text="{Binding SettingsFilePath, Mode=OneWay}"/>
+                    </TextBlock>
                 </StackPanel>
             </md:Card>
 

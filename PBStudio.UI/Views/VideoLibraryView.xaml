@@ -40,6 +40,15 @@
                         </StackPanel>
                     </Button>
                     
+                    <Button Command="{Binding ImportFolderCommand}" Style="{StaticResource ToolbarBtn}"
+                            ToolTip="Ganzen Ordner importieren" Margin="4,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="FolderPlus" Width="14" Height="14"
+                                                   Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Ordner importieren" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                     <Button Command="{Binding AnalyzeSelectedCommand}" Style="{StaticResource ToolbarBtn}"

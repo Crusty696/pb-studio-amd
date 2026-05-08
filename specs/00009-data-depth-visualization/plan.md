@@ -1,118 +1,126 @@
-# Implementation Plan: Audio/Video Data Depth Visualization
+---
+feature_branch: "00009-data-depth-visualization"
+created: "2026-05-07"
+spec_path: "specs/00009-data-depth-visualization/spec.md"
+---
 
-**Branch**: `00009-data-depth-visualization` | **Date**: 2026-04-25 | **Spec**: [spec.md](spec.md)
+# Technical Plan: Audio/Video Data Depth
 
-## Summary
-
-**Goal**: Transform invisible backend analytical data into actionable visual insights for the user.  
-**Approach**: Implement a segmented colored ruler for song structure and a dedicated scene inspector in the Video Tab.  
-**Key Constraint**: Visualization must be lightweight to prevent UI lag on long DJ mixes.
+**Feature Branch**: `00009-data-depth-visualization`  
+**Created**: 2026-05-07  
+**Spec Maturity**: clarified
 
 ## Technical Context
 
-**Language/Version**: C# (.NET 9) / Python 3.11  
-**Primary Dependencies**: WPF, CommunityToolkit.Mvvm, MaterialDesignInXaml  
-**Storage**: N/A (Visualizing existing analysis)  
-**Testing**: Unit tests for Segment-to-Pixel math; Manual UX audit  
-**Target Platform**: Windows 10/11 Desktop
-**Project Type**: single-user desktop
-**Project Mode**: brownfield
-**Performance Goals**: Sub-10ms render time for ruler segments.
-**Constraints**: Local-only; Hardware-agnostic UI rendering.
+- **Language/Version**: C# (.NET 9), Python 3.11
+- **Primary Frameworks**: WPF, FastAPI, Librosa, NumPy
+- **Project Mode**: Brownfield (extending existing `PBStudio.UI` and `backend`)
+- **UI Platform**: Windows Desktop
+- **Performance Mandates**: 60fps UI, <0.5x analysis speed
 
-## Instructions Check
+## Architecture Decisions
 
-- **AMD DirectML First**: ✅ PASS. Rendering logic is CPU-side (WPF DrawingContext).
-- **Offline First**: ✅ PASS. No external data sources.
-- **Quality Over Speed**: ✅ PASS. Focus on clarity and visual professionality.
-- **Agent Output Style**: ✅ PASS.
+| ID | Decision | Rationale |
+|----|----------|-----------|
+| AD-001 | Librosa MSA Pipeline | Librosa is the industry standard for Python MSA. It provides robust SSM and chroma extraction for section detection. |
+| AD-002 | Compressed Spectral Cache | Spectral data can reach several megabytes for long tracks. Compression in `media_cache` prevents `project.json` bloat (STF-002). |
+| AD-003 | DrawingVisual Rendering | `DrawingVisual` is significantly more performant than `Path` or `Polyline` elements for rendering high-density data curves (TR-001). |
+| AD-004 | Dynamic Downsampling | Viewport-aware downsampling in the ViewModel ensures that we only process/draw relevant data points for the current zoom level (STF-001). |
 
 ## Architecture
 
 ```mermaid
 C4Container
     title Container View - Data Depth Visualization
-    Person(user, "DJ / Content Creator")
-    System_Boundary(system, "PB Studio") {
-        Container(wpf, "WPF UI", "C# / .NET 9", "RulerCanvas & SceneListView")
-        Container(api, "FastAPI Backend", "Python 3.11", "Analysis Provider")
+    Person(user, "User", "Views media depth")
+    System_Boundary(pb, "PB Studio") {
+        Container(wpf, "WPF UI", "C# / .NET 9", "Renders depth overlays")
+        Container(api, "FastAPI Backend", "Python 3.11", "Analysis Engine")
+        ContainerDb(cache, "Media Cache", "Compressed JSON/Binary", "Persistent depth metadata")
     }
-    Rel(user, wpf, "Inspects song sections & scenes")
-    Rel(wpf, api, "Fetches /audio/structure and /video/scenes")
+    Rel(user, wpf, "Interacts")
+    Rel(wpf, api, "Fetches Depth Data")
+    Rel(api, cache, "Reads/Writes")
 ```
-
-## Architecture Decisions
-
-| ID | Decision | Options Considered | Chosen | Rationale |
-|----|----------|--------------------|--------|-----------|
-| AD-001 | Ruler Rendering | ItemsControl vs. Custom Drawing | Custom Drawing (DrawingContext) | Much higher performance for hundreds of small segments. |
-| AD-002 | Color Palette | Dynamic vs. Fixed StaticResource | Fixed StaticResource (Ableton Theme) | Ensures visual consistency with the existing dashboard. |
-| AD-003 | Scene List | DataGrid vs. ListBox with Template | ListBox with Template | Easier to style for "Modern Desktop" look; supports custom graphs. |
 
 ## Data Model Summary
 
-N/A — no persistent data changes.
+### SongSegment (Backend & Frontend)
+- `StartTime`: double (seconds)
+- `EndTime`: double (seconds)
+- `Label`: string (Intro, Chorus, etc.)
+- `EnergyScore`: double (0.0 - 1.0)
+
+### SpectralData (Backend & Frontend)
+- `Timestamps`: double[]
+- `CentroidValues`: double[]
+- `EnergyValues`: double[]
 
 ## API Surface Summary
 
-- `GET /audio/structure/{id}` (Already exists)
-- `GET /video/scenes/{id}` (Already exists)
-- `GET /audio/onsets/{id}` (Implemented in E008)
+### GET /audio/depth/{media_id}
+Returns `SongSegments` and `SpectralData` for a specific audio file.
+
+### POST /audio/analyze-depth/{media_id}
+Triggers high-resolution depth analysis (MSA + Spectral).
+
+## Source Code Structure
+
+```text
+backend/
+├── routers/
+│   └── audio_router.py          ~ (Add depth analysis endpoints)
+├── schemas/
+│   └── audio_schemas.py        + (Add SongSegment, SpectralData models)
+└── logic/
+    └── music_analysis.py       + (New: Librosa MSA & Spectral extraction)
+
+PBStudio.UI/
+├── ViewModels/
+│   └── TimelineViewModel.cs     ~ (Add Depth collections, downsampling logic)
+├── Views/
+│   └── TimelineView.xaml        ~ (Add DepthLayer Canvas)
+└── Controls/
+    └── DepthRenderer.cs         + (New: Custom drawing for spectral curves)
+```
 
 ## Testing Strategy
 
 | Tier | Tool | Scope | Mock Boundary | Install |
 |------|------|-------|---------------|---------|
-| Unit | dotnet test | Structure-to-Pixel mapping | Mock Project State | configured |
-| Integration | pywinauto | Verify view switching updates | Real backend | configured |
-| Security | N/A | — | — | — |
-| Coverage | N/A | — | — | — |
+| Unit | pytest | MSA logic, Spectral extraction | Librosa mock | configured |
+| Unit | xUnit | Downsampling logic | N/A | configured |
+| UI/Manual | Manual | Overlay alignment, FPS check | Backend mock | N/A |
 
 ## Error Handling Strategy
+- **Backend**: Wrap Librosa calls in try-except; return `HTTP 500` with detailed logs if analysis fails.
+- **Frontend**: Handle `null` depth data by hiding overlays and showing a status indicator.
 
-| Error Category | Pattern | Response | Retry |
-|----------------|---------|----------|-------|
-| Missing Analysis | Empty State | Show "Analyse erforderlich" placeholder | no |
-| Data Mismatch | Filter valid | Render only segments within total duration | yes, auto |
+## Integration Points
+- **Media Cache**: Depth data must be indexed by `media_hash` for fast lookup.
+- **Zoom Property**: `TimelineViewModel.Zoom` must trigger re-downsampling of spectral curves.
 
 ## Risk Mitigation
 
-| Risk (from spec) | Likelihood | Impact | Mitigation | Owner |
-|-------------------|------------|--------|------------|-------|
-| Visual Overload | Medium | Low | Use low-opacity backgrounds for segments to keep ruler readable. | Frontend |
-| Scene List Lag | Low | Medium | Use `VirtualizingStackPanel` for the scene list. | Frontend |
+| Risk | Mitigation |
+|------|------------|
+| Memory Overload | Perform Librosa analysis in chunks of 5 minutes. |
+| UI Jitter | Use `CompositionTarget.Rendering` for smooth scroll-sync of overlays. |
+| Model Size | Use small, pre-trained MSA models (if deep learning is used) or stay with feature-based MSA. |
 
 ## Requirement Coverage Map
 
-| Req ID | Component(s) | File Path(s) | Notes |
-|--------|--------------|--------------|-------|
-| TR-001 | TimelineView | PBStudio.UI/Views/TimelineView.xaml.cs | Render structure in RulerCanvas |
-| TR-002 | VideoLibraryView | PBStudio.UI/Views/VideoLibraryView.xaml | Scene inspector implementation |
-| TR-003 | TimelineView | PBStudio.UI/Views/TimelineView.xaml | ToolTip bindings for segments |
-
-## Project Structure
-
-### Source Code
-
-```text
-~ PBStudio.UI/
-  ~ Views/
-    ~ TimelineView.xaml.cs (Structure rendering)
-    ~ VideoLibraryView.xaml (Scene Inspector)
-  ~ ViewModels/
-    ~ TimelineViewModel.cs (Structure loading)
-    ~ VideoLibraryViewModel.cs (Scene loading)
-```
+| ID | Description | Component(s) | File Path(s) |
+|----|-------------|--------------|--------------|
+| FR-001 | Spectral Extraction | Backend Analysis | `backend/logic/music_analysis.py` |
+| FR-002 | Song Section Detection | Backend MSA | `backend/logic/music_analysis.py` |
+| FR-003 | Section Rendering | TimelineView | `PBStudio.UI/Views/TimelineView.xaml` |
+| FR-004 | Adaptive Scene Detection | Backend Video | `backend/logic/video_analysis.py` |
+| FR-005 | Metadata Persistence | Media Cache | `backend/logic/storage.py` |
+| TR-001 | DrawingVisual Performance | DepthRenderer | `PBStudio.UI/Controls/DepthRenderer.cs` |
+| TR-002 | Chunked Analysis | Backend Analysis | `backend/logic/music_analysis.py` |
 
 ## Implementation Hints
-
-- **[HINT-001]** UI: Map "Chorus" -> `AbletonAccent`, "Intro/Outro" -> `AbletonTextDim`, "Verse" -> `AbletonBlue`.
-- **[HINT-002]** Geometry: Use `RectangleGeometry` combined in a `GeometryGroup` for the structure background.
-- **[HINT-003]** Perf: Only re-render `RulerCanvas` when the project duration or zoom level changes.
-
-## Compliance Check
-
-- **AMD DirectML First**: ✅ PASS.
-- **Offline First**: ✅ PASS.
-- **Quality Over Speed**: ✅ PASS.
-- **Agent Output Style**: ✅ PASS.
+- **[HINT-001]** Use `librosa.effects.remix` or similar to handle silence at song boundaries during MSA.
+- **[HINT-002]** In WPF, `VisualTreeHelper.HitTest` might be needed if depth overlays need to be interactive (e.g. clicking a segment to seek).
+- **[HINT-003]** Use `System.IO.Compression` on the C# side if reading raw binary spectral caches.

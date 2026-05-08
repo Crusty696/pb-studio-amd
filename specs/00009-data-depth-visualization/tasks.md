@@ -1,58 +1,64 @@
 ---
-description: "Task list for Audio/Video Data Depth Visualization"
+feature_branch: "00009-data-depth-visualization"
+created: "2026-05-07"
+spec_path: "specs/00009-data-depth-visualization/spec.md"
+plan_path: "specs/00009-data-depth-visualization/plan.md"
 ---
 
-# Tasks: Audio/Video Data Depth Visualization
+# Tasks: Audio/Video Data Depth
 
-**Input**: Design documents from `specs/00009-data-depth-visualization/`
-**Prerequisites**: `plan.md`, `spec.md`
+## Work Item Checklist
 
-## Project Mode
+### Backend — Foundation & Logic
+- [ ] T001 [P1] Create `audio_schemas.py` depth models (SongSegment, SpectralData). (FR-001, FR-002)
+- [ ] T002 [P1] Implement `music_analysis.py` logic for Librosa MSA (Section Detection). (FR-002, TR-002)
+- [ ] T003 [P1] Implement `music_analysis.py` logic for Spectral extraction (Centroid, RMS). (FR-001, TR-002)
+- [ ] T004 [P1] Implement adaptive threshold logic in `video_analysis.py` (FR-004, TR-003).
 
-`Brownfield`
+### Backend — API & Storage
+- [ ] T005 [P1] Implement `GET /audio/depth/{media_id}` and `POST /audio/analyze-depth/{media_id}` endpoints. (FR-001, FR-002) [COMPLETES FR-001, FR-002]
+- [ ] T006 [P1] Extend `storage.py` to handle compressed depth metadata in `media_cache` (FR-005, AD-002).
 
-## Epic / Capability Map
+### Frontend — ViewModel & Foundation
+- [ ] T007 [P1] Update `TimelineViewModel.cs` with `SongSegments` and `SpectralData` collections.
+- [ ] T008 [P1] Implement dynamic downsampling logic in `TimelineViewModel.cs` (AD-004, STF-001).
 
-- `[OBJ1]` → Structure Visualization (STATUS:DataDepth)
-- `[OBJ2]` → Scene Inspector (STATUS:DataDepth)
+### Frontend — UI & Rendering
+- [ ] T009 [P1] Create `DepthRenderer.cs` using `DrawingVisual` for high-performance curves (TR-001).
+- [ ] T010 [P1] Add `DepthLayer` and `SongSectionLayer` to `TimelineView.xaml` (FR-003).
 
-## Brownfield Notes
+## Task Details
 
-- Existing ViewModels to expand: `TimelineViewModel.cs`, `VideoLibraryViewModel.cs`
-- Existing Views to modify: `TimelineView.xaml.cs`, `VideoLibraryView.xaml`
+### T002 — Librosa MSA Logic
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-002, TR-002
+- **Description**: Use `librosa.segment.recurrence_matrix` or chroma clustering to detect Intro, Verse, Chorus, Outro. Ensure chunked processing for memory safety.
 
-## Phase 1: Foundational (Data Loading)
+### T006 — Compressed Metadata Storage
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-005, AD-002
+- **Description**: Implement zlib compression for spectral arrays before saving to `.cache` files. Index by media hash.
 
-- [ ] T001 [OBJ1] {TR-001} Update `TimelineViewModel.cs` to fetch song structure from `/audio/structure/{id}`
-- [ ] T002 [OBJ2] {TR-002} Update `VideoLibraryViewModel.cs` to fetch scene analysis from `/video/scenes/{id}`
+### T009 — DrawingVisual Renderer
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: TR-001
+- **Description**: Override `OnRender` in a custom WPF control to draw the energy curve using `DrawingContext.DrawGeometry`. Use `StreamGeometry` for performance.
 
----
+## Dependency Graph
 
-## Phase 2: Work Item 1 - Song Structure Ruler (Priority: P1)
-
-- [ ] T003 [OBJ1] {TR-001} Implement `DrawStructure` method in `TimelineView.xaml.cs` using `DrawingContext`
-- [ ] T004 [OBJ1] {TR-003} [COMPLETES TR-001, TR-003] Add ToolTip support for segment labels in the ruler area
-
----
-
-## Phase 3: Work Item 2 - Scene Detail Inspector (Priority: P2)
-
-- [ ] T005 [P] [OBJ2] {TR-002} Define `SceneInspector` UI layout in `VideoLibraryView.xaml` (Details Panel)
-- [ ] T006 [OBJ2] {TR-002} [COMPLETES TR-002] Implement `SceneListView` with motion intensity bar markers
-
----
-
-## Phase 4: Final Polishing
-
-- [ ] T007 [P] Verify structure colors match the "Ableton" professional palette
-- [ ] T008 [P] Perform manual verification of scene list updates on video selection
-
----
-
-## Dependencies
-
-Foundational (Phase 1) → Work Items (Phase 2/3) → Polishing (Phase 4)
-
-- T003 depends on T001.
-- T006 depends on T002 and T005.
-- Tasks marked `[P]` can run in parallel.
+```mermaid
+graph TD
+    T001 --> T005
+    T002 --> T005
+    T003 --> T005
+    T004 --> T005
+    T005 --> T006
+    T001 --> T007
+    T006 --> T007
+    T007 --> T008
+    T008 --> T009
+    T009 --> T010
+```

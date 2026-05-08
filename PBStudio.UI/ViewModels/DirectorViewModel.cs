@@ -38,6 +38,11 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _useMotionMatching;
     [ObservableProperty] private bool _useSemanticMatching;
     [ObservableProperty] private bool _useStructureAwareness;
+    // Brain-Wiring: UseBrain aktiviert das Reranker-/Lern-System im Backend (pacing_router.py:87
+    // → BrainReranker → cut_id-Persistenz). Ohne diese beiden Felder bleibt /brain/explain,
+    // /brain/feedback und die Lern-Session funktional tot — siehe pacing_schemas.py:51-52.
+    [ObservableProperty] private bool _useBrain;
+    [ObservableProperty] private double _brainMinConfidence;
     [ObservableProperty] private double? _durationLimit;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty]
@@ -51,6 +56,11 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     public ObservableCollection<AudioClipModel> AvailableAudioClips { get; } = [];
     public ObservableCollection<SelectableVideoClip> AvailableVideoClips { get; } = [];
     public ObservableCollection<TimelineEntryModel> CutList { get; } = [];
+    public ObservableCollection<BrainSuggestionViewItem> BrainSuggestions { get; } = [];
+
+    [ObservableProperty] private int _brainSuggestTopN = 20;
+    [ObservableProperty] private bool _isLoadingSuggestions;
+    [ObservableProperty] private string _suggestionsStatus = "";
 
     public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState, SSEClient sseClient)
     {
@@ -233,7 +243,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     MinClipLength: MinClipLength,
                     MaxClipLength: MaxClipLength,
                     OnsetSensitivity: OnsetSensitivity
-                )
+                ),
+                UseBrain: UseBrain,
+                BrainMinConfidence: BrainMinConfidence
             );
 
             var result = await _api.GenerateCutListAsync(config);
@@ -282,6 +294,47 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         finally
         {
             IsGenerating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoadBrainSuggestionsAsync()
+    {
+        if (SelectedAudioClip == null)
+        {
+            SuggestionsStatus = "Kein Audio-Clip ausgewählt.";
+            return;
+        }
+
+        var videoIds = AvailableVideoClips.Where(c => c.IsSelected).Select(c => c.Id).ToList();
+
+        IsLoadingSuggestions = true;
+        SuggestionsStatus = "Lade Top-N Vorschläge…";
+        try
+        {
+            var resp = await _api.BrainSuggestAsync(SelectedAudioClip.Id, videoIds, BrainSuggestTopN);
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                BrainSuggestions.Clear();
+                if (resp?.Suggestions == null || resp.Suggestions.Count == 0)
+                {
+                    SuggestionsStatus = "Keine Vorschläge — Pacing zuerst mit Brain (Lern-Modus) laufen lassen.";
+                    return;
+                }
+                foreach (var s in resp.Suggestions.OrderByDescending(s => s.FinalScore))
+                {
+                    BrainSuggestions.Add(new BrainSuggestionViewItem(s));
+                }
+                SuggestionsStatus = $"{BrainSuggestions.Count} Vorschläge.";
+            });
+        }
+        catch (Exception ex)
+        {
+            SuggestionsStatus = "Fehler: " + ex.Message;
+        }
+        finally
+        {
+            IsLoadingSuggestions = false;
         }
     }
 
@@ -355,4 +408,29 @@ public partial class SelectableVideoClip : ObservableObject
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
 
     [ObservableProperty] private bool _isSelected;
+}
+
+/// <summary>Read-only View für /brain/suggest-Antworten in der Director-UI.</summary>
+public class BrainSuggestionViewItem
+{
+    public BrainSuggestionViewItem(BrainSuggestion s)
+    {
+        CutId = s.CutId ?? 0;
+        ClipId = s.ClipId ?? "";
+        StartTime = s.StartTime;
+        EndTime = s.EndTime;
+        FinalScore = s.FinalScore;
+        BrainScores = s.BrainScores ?? new Dictionary<string, double>();
+    }
+
+    public int CutId { get; }
+    public string ClipId { get; }
+    public double StartTime { get; }
+    public double EndTime { get; }
+    public double FinalScore { get; }
+    public Dictionary<string, double> BrainScores { get; }
+
+    public string TimeRangeText => $"{TimeSpan.FromSeconds(StartTime):mm\\:ss\\.ff} → {TimeSpan.FromSeconds(EndTime):mm\\:ss\\.ff}";
+    public double Duration => Math.Max(0.0, EndTime - StartTime);
+    public string ScorePercentText => (FinalScore * 100).ToString("F0") + " %";
 }

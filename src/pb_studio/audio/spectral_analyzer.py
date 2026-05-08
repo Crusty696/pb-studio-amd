@@ -68,6 +68,9 @@ class SpectralAnalyzer:
                 np.arange(S.shape[1]), sr=sr, hop_length=self.hop_length
             )
 
+            # Spectral Centroid berechnen
+            centroids = librosa.feature.spectral_centroid(S=S, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length)[0]
+
             band_energies: Dict[str, Any] = {}
             band_means: Dict[str, float] = {}
             band_variances: Dict[str, float] = {}
@@ -89,6 +92,7 @@ class SpectralAnalyzer:
             return {
                 "times": times.tolist(),
                 "band_energies": {k: v.tolist() for k, v in band_energies.items()},
+                "centroids": centroids.tolist(),
                 "band_means": band_means,
                 "band_variances": band_variances,
                 "events": events,

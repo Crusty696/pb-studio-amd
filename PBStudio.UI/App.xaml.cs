@@ -98,7 +98,7 @@ public partial class App : Application
         services.AddHttpClient<ApiClient>(client =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:8765");
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromMinutes(10);
         });
 
         // Services (Singleton für Desktop-App)
@@ -126,6 +126,7 @@ public partial class App : Application
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<BrainViewModel>();
         services.AddTransient<LearningSessionViewModel>();
+        services.AddTransient<VramTelemetryViewModel>();
 
         // Windows
         services.AddTransient<MainWindow>();

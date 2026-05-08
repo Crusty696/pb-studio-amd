@@ -37,6 +37,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _gpuStatusText = "GPU: Unbekannt";
 
+    [ObservableProperty]
+    private int _selectedTabIndex = 0;
+
     public string? CurrentProjectName => _projects.CurrentProjectName;
     public string? CurrentProjectPath => _projects.CurrentProjectPath;
     public bool HasProject => _projects.HasProject;
@@ -64,6 +67,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (m.Value == "backend-ready")
             {
                 _ = InitializeAsync();
+            }
+            else if (m.Value == "navigate-director")
+            {
+                SelectedTabIndex = 3; // Index 3 is KI-REGIE (Director)
             }
         });
 
@@ -152,7 +159,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     BackendStatusColor = Brushes.LimeGreen;
                     _sse.StartListening();
                     await RefreshGpuStatusAsync();
-                    await _projects.RefreshProjectInfoAsync();
+                    if (await _projects.RefreshProjectInfoAsync())
+                    {
+                        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
+                    }
                     return;
                 }
 

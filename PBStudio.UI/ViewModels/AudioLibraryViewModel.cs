@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -86,6 +87,43 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         if (files.Count == 0) return;
 
+        await ProcessAudioImportAsync(files);
+    }
+
+    [RelayCommand]
+    private async Task ImportFolderAsync()
+    {
+        var folder = _dialogService.OpenFolder("Audio-Ordner importieren");
+        if (string.IsNullOrEmpty(folder)) return;
+
+        StatusText = $"Scanne Ordner: {folder}...";
+        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"
+        };
+
+        try
+        {
+            var files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories)
+                .Where(f => supported.Contains(Path.GetExtension(f)))
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                StatusText = "Keine unterstützten Audio-Dateien im Ordner gefunden.";
+                return;
+            }
+
+            await ProcessAudioImportAsync(files);
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Fehler beim Scannen des Ordners: " + ex.Message;
+        }
+    }
+
+    private async Task ProcessAudioImportAsync(List<string> files)
+    {
         IsAnalyzing = true;
         StatusText = $"Importiere {files.Count} Dateien...";
 
@@ -103,6 +141,10 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"{imported} Audio-Dateien erfolgreich importiert";
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
                 await LoadAudioClipsAsync();
+            }
+            else
+            {
+                StatusText = "Keine Dateien importiert.";
             }
         }
         catch (Exception ex)

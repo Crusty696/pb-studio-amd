@@ -324,6 +324,14 @@ class StructureAnalyzer:
 
             segments = []
             for i in range(len(boundaries) - 1):
+                start_sample = int(boundaries[i] * sr)
+                end_sample = int(boundaries[i + 1] * sr)
+                segment_audio = y[start_sample:end_sample]
+                if len(segment_audio) > 0:
+                    energy_score = float(np.mean(librosa.feature.rms(y=segment_audio)))
+                else:
+                    energy_score = 0.0
+
                 segments.append({
                     "segment_id": i + 1,
                     "start_time": float(boundaries[i]),
@@ -331,7 +339,8 @@ class StructureAnalyzer:
                     "duration": float(boundaries[i + 1] - boundaries[i]),
                     "label": named_labels[i],
                     "cluster": int(cluster_labels[i]) if i < len(cluster_labels) else 0,
-                    "confidence": 0.7
+                    "confidence": 0.7,
+                    "energy_score": energy_score
                 })
 
             result = {"total_segments": len(segments), "segments": segments}

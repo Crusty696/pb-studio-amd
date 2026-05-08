@@ -85,7 +85,16 @@
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Plus" Width="12" Height="12"
                                                    Margin="0,0,4,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Importieren" VerticalAlignment="Center"/>
+                            <TextBlock Text="Dateien" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ImportFolderCommand}" Style="{StaticResource BatchBtn}"
+                            ToolTip="Ganzen Ordner importieren"
+                            Foreground="{StaticResource AbletonAccent}" Margin="2,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="FolderPlus" Width="12" Height="12"
+                                                   Margin="0,0,4,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Ordner" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>

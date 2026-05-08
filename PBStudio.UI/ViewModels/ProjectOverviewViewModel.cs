@@ -90,6 +90,53 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    private async Task CreateProjectAsync()
+    {
+        var name = PromptDialog.Show("Neues Projekt", "Projektname:");
+        if (string.IsNullOrEmpty(name)) return;
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Basisverzeichnis für Projekt wählen",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            StatusText = "Erstelle Projekt...";
+            var success = await _projectService.CreateProjectAsync(name, dialog.FolderName);
+            if (!success)
+            {
+                StatusText = "Fehler: Projekt konnte nicht erstellt werden. Prüfen Sie den Pfad (muss in Documents/PBStudio liegen).";
+                return;
+            }
+            await RefreshAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenProjectAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Projektordner öffnen",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            StatusText = "Öffne Projekt...";
+            var success = await _projectService.OpenProjectAsync(dialog.FolderName);
+            if (!success)
+            {
+                StatusText = "Fehler: Projekt konnte nicht geöffnet werden.";
+                return;
+            }
+            await RefreshAsync();
+        }
+    }
+
     private void ResetState()
     {
         ProjectName = "Kein Projekt";
@@ -99,6 +146,12 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         TotalDuration = 0;
         HasTimeline = false;
         StatusText = "Bereit für ein neues Projekt";
+    }
+
+    [RelayCommand]
+    private void GoToDirector()
+    {
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("navigate-director"));
     }
 
     public void Dispose()

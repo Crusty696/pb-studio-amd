@@ -1,3 +1,4 @@
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -6,30 +7,64 @@ using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
 
-/// <summary>ViewModel für die Einstellungen.</summary>
+/// <summary>
+/// ViewModel für die Einstellungen. Verwaltet GPU-Status, VRAM-Cap-Slider,
+/// FFmpeg-Pfad-Picker (mit Validation + Version-Probe) und PB_STUDIO_FORCED_VRAM
+/// Env-Var. Persistenz via <see cref="ISettingsService"/> nach %APPDATA%\PBStudio\settings.json.
+/// </summary>
 public partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private readonly IDialogService _dialogs;
+    private readonly ISettingsService _settings;
+    private CancellationTokenSource? _probeCts;
     private bool _disposed;
 
+    // ── GPU Status ────────────────────────────────────────────────────────
     [ObservableProperty] private string _gpuName = "Wird geladen...";
     [ObservableProperty] private double _vramTotal;
     [ObservableProperty] private double _vramUsed;
     [ObservableProperty] private double _temperature;
-    [ObservableProperty] private int _vramLimitMb = 8192; // Default 8GB
     [ObservableProperty] private string _driverVersion = "";
-    [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _backendOnline;
-    [ObservableProperty] private bool _isSaving;
 
-    public SettingsViewModel(IApiClient api)
+    // ── VRAM Cap (Slider, persistiert) ────────────────────────────────────
+    [ObservableProperty] private int _vramLimitMb = 8192;
+
+    // ── FFmpeg Path Picker ────────────────────────────────────────────────
+    [ObservableProperty] private string _ffmpegPath = "";
+    [ObservableProperty] private string? _ffmpegPathError;
+    [ObservableProperty] private string? _ffmpegVersion;   // null = nicht geprüft (NullToVisibility blendet aus)
+    [ObservableProperty] private bool _isProbingFfmpeg;
+
+    // ── Forced VRAM (Env-Var für nächsten Backend-Start) ──────────────────
+    [ObservableProperty] private bool _forceVramEnabled;
+    [ObservableProperty] private int _forcedVramMb = 8192;
+
+    // ── UI State ──────────────────────────────────────────────────────────
+    [ObservableProperty] private string _statusText = "";
+    [ObservableProperty] private bool _isSaving;
+    [ObservableProperty] private string _settingsFilePath = "";
+
+    public SettingsViewModel(IApiClient api, IDialogService dialogs)
+        : this(api, dialogs, new SettingsService())
+    {
+    }
+
+    /// <summary>Test-Konstruktor: erlaubt Mocken aller Dependencies.</summary>
+    public SettingsViewModel(IApiClient api, IDialogService dialogs, ISettingsService settings)
     {
         _api = api;
+        _dialogs = dialogs;
+        _settings = settings;
         StatusText = "Backend: Startet...";
 
-        // Initiales Laden der VRAM Config
-        _ = LoadConfigAsync();
+        SettingsFilePath = _settings.ConfigFilePath;
 
+        // 1. Persistierte Settings laden (vor allen async Calls)
+        LoadPersistedSettings();
+
+        // 2. Initiales Laden des Backend-Status
         WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
         {
             if (message.Value == "backend-ready")
@@ -39,21 +74,123 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         });
 
         _ = RefreshAsync();
+
+        // 3. Initial-Probe falls FFmpeg-Pfad bereits gesetzt
+        if (!string.IsNullOrWhiteSpace(FfmpegPath))
+            _ = ProbeFfmpegAsync();
     }
 
-    private async Task LoadConfigAsync()
+    private void LoadPersistedSettings()
     {
+        _settings.Load();
+        var s = _settings.Current;
+
+        FfmpegPath = s.FfmpegPath ?? "";
+        VramLimitMb = s.VramCapMb > 0 ? s.VramCapMb : 8192;
+
+        // FFmpeg-Pfad sofort als Env-Var setzen, damit Backend beim ERSTEN Start
+        // den persistierten Pfad nutzt (analog SetForcedVramEnvVar unten).
+        PythonBridgeService.SetFfmpegPathEnvVar(FfmpegPath);
+
+        if (s.ForcedVramMb.HasValue && s.ForcedVramMb.Value > 0)
+        {
+            ForceVramEnabled = true;
+            ForcedVramMb = s.ForcedVramMb.Value;
+            // Setze sofort die Env-Var beim App-Start, damit ein
+            // Re-Start des Backends den persistierten Wert nutzt.
+            PythonBridgeService.SetForcedVramEnvVar(s.ForcedVramMb.Value);
+        }
+        else
+        {
+            ForceVramEnabled = false;
+            ForcedVramMb = 8192;
+            PythonBridgeService.SetForcedVramEnvVar(null);
+        }
+
+        // Initiale Pfad-Validation (ohne async Probe)
+        _settings.ValidateFFmpegPath(FfmpegPath, out var err);
+        FfmpegPathError = err;
+    }
+
+    // Live-Validation bei jeder Änderung des FFmpeg-Pfads
+    partial void OnFfmpegPathChanged(string value)
+    {
+        _settings.ValidateFFmpegPath(value, out var err);
+        FfmpegPathError = err;
+        FfmpegVersion = null; // Version invalidieren bis erneut geprüft
+    }
+
+    [RelayCommand]
+    private void BrowseFfmpeg()
+    {
+        var initial = !string.IsNullOrWhiteSpace(FfmpegPath) && System.IO.File.Exists(FfmpegPath)
+            ? System.IO.Path.GetDirectoryName(FfmpegPath)
+            : null;
+
+        var picked = _dialogs.OpenFile(
+            title: "FFmpeg-Executable auswählen",
+            filter: "FFmpeg Executable (ffmpeg.exe)|ffmpeg.exe|Alle Dateien (*.*)|*.*",
+            initialDirectory: initial);
+
+        if (string.IsNullOrEmpty(picked))
+            return;
+
+        FfmpegPath = picked;
+        _ = ProbeFfmpegAsync();
+    }
+
+    [RelayCommand]
+    private async Task ProbeFfmpegAsync()
+    {
+        // Re-validate first
+        if (!_settings.ValidateFFmpegPath(FfmpegPath, out var err))
+        {
+            FfmpegPathError = err;
+            FfmpegVersion = null;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(FfmpegPath))
+        {
+            FfmpegVersion = null;
+            return;
+        }
+
+        // Cancel laufende Probe
+        _probeCts?.Cancel();
+        _probeCts = new CancellationTokenSource();
+        var ct = _probeCts.Token;
+
+        IsProbingFfmpeg = true;
         try
         {
-            // Wir nutzen GetGpuStatusAsync um auch das aktuelle Limit zu erfahren
-            // (Falls das Backend dieses Feld erweitert hat)
-            var gpu = await _api.GetGpuStatusAsync();
-            if (gpu != null)
+            var version = await _settings.ProbeFFmpegVersionAsync(FfmpegPath, ct).ConfigureAwait(true);
+            if (ct.IsCancellationRequested) return;
+
+            if (!string.IsNullOrEmpty(version))
             {
-                // VramLimitMb = ... (falls vom API geliefert)
+                FfmpegVersion = version;
+                FfmpegPathError = null;
+            }
+            else
+            {
+                FfmpegVersion = null;
+                FfmpegPathError = "Version konnte nicht ermittelt werden.";
             }
         }
-        catch { /* fail silently on load */ }
+        catch (OperationCanceledException)
+        {
+            // Erwartet bei Re-Probe / Dispose
+        }
+        catch (Exception ex)
+        {
+            FfmpegPathError = "Probe fehlgeschlagen: " + ex.Message;
+            FfmpegVersion = null;
+        }
+        finally
+        {
+            IsProbingFfmpeg = false;
+        }
     }
 
     [RelayCommand]
@@ -61,14 +198,33 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         if (IsSaving) return;
         IsSaving = true;
-        StatusText = "Speichere Hardware-Konfiguration...";
+        StatusText = "Speichere Einstellungen...";
 
         try
         {
-            // Wir senden das neue VRAM-Limit ans Backend
-            // (Endpoint POST /gpu/config muss eventuell noch erstellt werden)
-            await Task.Delay(500); // UI Feedback
-            StatusText = "Einstellungen erfolgreich übernommen";
+            // 1. Validierung FFmpeg-Pfad - kein hard-stop, nur Hinweis
+            if (!_settings.ValidateFFmpegPath(FfmpegPath, out var ffErr))
+            {
+                FfmpegPathError = ffErr;
+                StatusText = "Warnung: FFmpeg-Pfad ungültig - andere Settings wurden gespeichert.";
+            }
+
+            // 2. In-Memory-Settings updaten und persistieren
+            _settings.Current.FfmpegPath = FfmpegPath ?? "";
+            _settings.Current.VramCapMb = VramLimitMb;
+            _settings.Current.ForcedVramMb = ForceVramEnabled && ForcedVramMb > 0
+                ? ForcedVramMb
+                : null;
+            _settings.Save();
+
+            // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
+            PythonBridgeService.SetForcedVramEnvVar(_settings.Current.ForcedVramMb);
+            PythonBridgeService.SetFfmpegPathEnvVar(_settings.Current.FfmpegPath);
+
+            // 4. Subtle UI-feedback
+            await Task.Delay(150).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(FfmpegPathError))
+                StatusText = "Einstellungen gespeichert: " + _settings.ConfigFilePath;
         }
         catch (Exception ex)
         {
@@ -94,6 +250,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             VramUsed = gpu.VramUsedMb;
             Temperature = gpu.TemperatureC;
             DriverVersion = gpu.DriverVersion;
+
+            // Slider-Maximum auf echte VRAM-Größe ziehen, falls bekannt
+            if (gpu.VramTotalMb > 0)
+            {
+                var totalInt = (int)Math.Round(gpu.VramTotalMb);
+                if (VramLimitMb > totalInt) VramLimitMb = totalInt;
+                if (ForcedVramMb > totalInt) ForcedVramMb = totalInt;
+            }
         }
         StatusText = BackendOnline ? "Backend: Online" : "Backend: Offline";
     }
@@ -110,6 +274,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        try { _probeCts?.Cancel(); } catch { /* ignore */ }
+        _probeCts?.Dispose();
         WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
     }
 }

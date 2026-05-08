@@ -100,6 +100,9 @@
                 <TabItem Header="SETTINGS">
                     <views:SettingsView/>
                 </TabItem>
+                <TabItem Header="PERFORMANCE">
+                    <views:VramTelemetryView/>
+                </TabItem>
             </TabControl>
 
             <!-- ── Status Bar ── -->

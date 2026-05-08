@@ -320,6 +320,31 @@
                                   ToolTip="Audio-Struktur (Verse, Chorus, Bridge) für Clip-Auswahl berücksichtigen">
                             <TextBlock Text="Struktur-Erkennung" FontSize="12" Foreground="{StaticResource AbletonText}"/>
                         </CheckBox>
+
+                        <!-- Brain (Plan Phase 5): aktiviert Reranker + cut_id-Persistenz.
+                             Ohne UseBrain=true bleibt /brain/explain, /brain/feedback und die
+                             Lern-Session leer (pacing_router.py:87, brain_router.py:83). -->
+                        <CheckBox IsChecked="{Binding UseBrain}"
+                                  Style="{StaticResource AbletonCheckBox}"
+                                  ToolTip="Brain-Reranker aktivieren — schreibt cut_id, füllt Confidence-Balken und ermöglicht /brain/explain + /brain/feedback">
+                            <TextBlock Text="Brain (Lern-Modus)" FontSize="12" Foreground="{StaticResource AbletonText}"/>
+                        </CheckBox>
+
+                        <!-- Min-Confidence-Filter (nur sichtbar wenn Brain aktiv) -->
+                        <StackPanel Visibility="{Binding UseBrain, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <DockPanel Margin="0,2,0,0">
+                                <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                    <Run Text="Brain Min-Confidence:"/>
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                           HorizontalAlignment="Right"
+                                           Text="{Binding BrainMinConfidence, StringFormat={}{0:F2}}"/>
+                            </DockPanel>
+                            <Slider Value="{Binding BrainMinConfidence}"
+                                    Style="{StaticResource CompactSlider}"
+                                    Minimum="0" Maximum="1"
+                                    ToolTip="Cuts unter dieser Confidence werden verworfen (0=alles, 1=nur sichere)"/>
+                        </StackPanel>
                     </StackPanel>
                 </md:Card>
 
@@ -386,6 +411,8 @@
         <!-- ═══════════════════════════════════════════ -->
         <Grid Grid.Column="2" Background="{StaticResource AbletonBg}">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
@@ -465,13 +492,98 @@
                 </ListView.ItemContainerStyle>
             </ListView>
 
-            <!-- Status bar -->
+            <!-- Brain-Suggest Header -->
             <Border Grid.Row="2" Background="{StaticResource AbletonPanel}"
+                    BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,1"
+                    Padding="14,8">
+                <DockPanel>
+                    <TextBlock Text="KI-VORSCHLÄGE (TOP-N)" Style="{StaticResource SectionHeader}"
+                               DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="Top-N:" VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,4,0"/>
+                        <TextBox Width="48"
+                                 Text="{Binding BrainSuggestTopN, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ParamTextBox}"
+                                 Margin="0,0,8,0"
+                                 ToolTip="Anzahl der zu ladenden Vorschläge (1..200)"/>
+                        <Button Content="↻ Vorschläge laden"
+                                Command="{Binding LoadBrainSuggestionsCommand}"
+                                IsEnabled="{Binding IsLoadingSuggestions, Converter={StaticResource InverseBooleanConverter}}"
+                                Padding="10,4"
+                                ToolTip="POST /brain/suggest — liest cuts mit brain_scores aus timeline_cuts"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Suggestions-List -->
+            <ListView Grid.Row="3"
+                      ItemsSource="{Binding BrainSuggestions}"
+                      Background="{StaticResource AbletonBg}"
+                      Foreground="{StaticResource AbletonText}"
+                      BorderThickness="0"
+                      FontSize="12"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListView.View>
+                    <GridView>
+                        <GridView.ColumnHeaderContainerStyle>
+                            <Style TargetType="GridViewColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Padding" Value="8,5"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                            </Style>
+                        </GridView.ColumnHeaderContainerStyle>
+
+                        <GridViewColumn Header="CUT" Width="60"
+                                        DisplayMemberBinding="{Binding CutId}"/>
+                        <GridViewColumn Header="CLIP" Width="160"
+                                        DisplayMemberBinding="{Binding ClipId}"/>
+                        <GridViewColumn Header="ZEITRAUM" Width="180"
+                                        DisplayMemberBinding="{Binding TimeRangeText}"/>
+                        <GridViewColumn Header="DAUER" Width="80"
+                                        DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
+                        <GridViewColumn Header="SCORE" Width="80"
+                                        DisplayMemberBinding="{Binding ScorePercentText}"/>
+                    </GridView>
+                </ListView.View>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="4,3"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListView.ItemContainerStyle>
+            </ListView>
+
+            <!-- Status bar -->
+            <Border Grid.Row="4" Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0"
                     Padding="14,6">
-                <TextBlock Text="{Binding StatusText}"
-                           Foreground="{StaticResource AbletonTextDim}"
-                           FontSize="11"/>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="{Binding StatusText}"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               FontSize="11"/>
+                    <TextBlock DockPanel.Dock="Right"
+                               HorizontalAlignment="Right"
+                               Text="{Binding SuggestionsStatus}"
+                               Foreground="{StaticResource AbletonAccent}"
+                               FontSize="11"/>
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>
