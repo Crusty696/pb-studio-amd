@@ -8,6 +8,8 @@ Endpoints:
 """
 
 import asyncio
+import hashlib
+import json
 import logging
 import threading
 import time
@@ -26,7 +28,67 @@ from ..schemas.render_schemas import (
 )
 from ..schemas.common import TaskStatus
 
+# Aufgabe I: Render-Queue-Persistenz — minimal-invasive Anbindung.
+# Der in-memory render_tasks-State bleibt Source-of-Truth für Live-Progress;
+# zusätzlich spiegeln wir die Lifecycle-Übergänge (queued → running → terminal)
+# in die persistente RenderQueue, damit Jobs einen Backend-Crash überleben.
+from pb_studio.rendering.render_queue import (
+    STATE_QUEUED as _RQ_QUEUED,
+    STATE_RUNNING as _RQ_RUNNING,
+    STATE_COMPLETED as _RQ_COMPLETED,
+    STATE_FAILED as _RQ_FAILED,
+    get_render_queue as _get_render_queue,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def _compute_render_media_hash(audio_path: str, timeline: list[dict[str, Any]]) -> str:
+    """Stabiler Identitäts-Hash über die Render-Eingaben.
+
+    Zweck: Grundlage für die Idempotency der RenderQueue. Zwei /render/start
+    Requests mit demselben Audio + identischer Timeline + identischem Output
+    erzeugen denselben job_hash und daher nur einen einzigen Queue-Eintrag.
+    """
+    try:
+        canonical = json.dumps(
+            {
+                "audio_path": str(audio_path or ""),
+                "timeline": timeline or [],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+    except (TypeError, ValueError):
+        canonical = f"audio={audio_path};timeline_len={len(timeline or [])}"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _request_settings_dict(request: RenderRequest) -> dict[str, Any]:
+    """Render-Settings als reines Dict für die Queue-Persistenz."""
+    return {
+        "resolution_width": request.resolution_width,
+        "resolution_height": request.resolution_height,
+        "fps": request.fps,
+        "bitrate_mbps": request.bitrate_mbps,
+        "encoder": request.encoder.value if request.encoder is not None else None,
+        "include_audio": request.include_audio,
+        "quality": request.quality.value if request.quality is not None else None,
+    }
+
+
+def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) -> None:
+    """Update der persistenten Queue, das niemals den Render-Task crasht."""
+    if not queue_job_id:
+        return
+    try:
+        _get_render_queue().update_status(queue_job_id, status, **kwargs)
+    except Exception as exc:  # pragma: no cover - logging only
+        logger.warning(
+            "RenderQueue.update_status fehlgeschlagen für %s (%s): %s",
+            queue_job_id, status, exc,
+        )
 router = APIRouter(prefix="/render", tags=["Render"])
 
 
@@ -74,6 +136,22 @@ async def start_render(
     estimated_total_seconds = max(timeline_total_seconds, 0.0)
     estimated_total_frames = max(int(round(estimated_total_seconds * max(request.fps, 0.0))), 0)
 
+    # Aufgabe I: Job in der persistenten Queue idempotent registrieren.
+    # Bei Crash bleibt der Eintrag erhalten; Resume-on-Startup im Lifespan
+    # überführt 'running' → 'interrupted'. Fehler hier werden nicht hochgereicht
+    # (in-memory Render-Lifecycle ist die Source-of-Truth für die HTTP-Antwort).
+    queue_job_id: Optional[str] = None
+    try:
+        media_hash = _compute_render_media_hash(request.audio_path, timeline_snapshot)
+        queue_job = _get_render_queue().enqueue(
+            media_hash=media_hash,
+            output_path=request.output_path,
+            settings=_request_settings_dict(request),
+        )
+        queue_job_id = queue_job.job_id
+    except Exception as exc:  # pragma: no cover - logging only
+        logger.warning("RenderQueue.enqueue fehlgeschlagen (unkritisch): %s", exc)
+
     task_data = {
         "task_id": task_id,
         "status": TaskStatus.PENDING.value,
@@ -85,6 +163,7 @@ async def start_render(
         "eta_seconds": 0.0,
         "output_path": request.output_path,
         "error": None,
+        "queue_job_id": queue_job_id,
     }
     state.set_render_task(task_id, task_data)
     state.set_cancel_flag(task_id, False)
@@ -106,6 +185,8 @@ async def start_render(
                 })
             except Exception:
                 pass
+            # Auch in der persistenten Queue als failed markieren.
+            _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
 
     task.add_done_callback(_on_task_done)
 
@@ -197,6 +278,10 @@ async def _run_render_task(
     State gelesen (R14/HIGH-004: Race zwischen Snapshot-Check und Task-Start vermeiden).
     """
     state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
+    # Persistente Queue parallel auf 'running' setzen (Aufgabe I).
+    _task_meta = state.get_render_task(task_id) or {}
+    queue_job_id: Optional[str] = _task_meta.get("queue_job_id")
+    _safe_queue_update(queue_job_id, _RQ_RUNNING)
     start_time = time.monotonic()
 
     # Record the output file's mtime BEFORE the render starts.
@@ -233,6 +318,7 @@ async def _run_render_task(
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
         })
+        _safe_queue_update(queue_job_id, _RQ_COMPLETED)
 
         await publish_event("render_progress", {
             "task_id": task_id,
@@ -255,6 +341,10 @@ async def _run_render_task(
             "status": TaskStatus.CANCELLED.value,
             "elapsed_seconds": round(elapsed, 1),
         })
+        # Cancelled wird in der persistenten Queue als 'failed' mit Cancel-Hinweis markiert.
+        # (Die RenderQueue-Schemata wären strenger; failed deckt 'nicht erfolgreich abgeschlossen'
+        #  korrekt ab und blockiert Auto-Retry — exakt was wir bei einem User-Cancel wollen.)
+        _safe_queue_update(queue_job_id, _RQ_FAILED, error="cancelled")
         # Temp-Files aufräumen (schützt vorherige Outputs durch mtime-Check)
         _cleanup_render_temps(request.output_path, _output_mtime_before)
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
@@ -281,6 +371,7 @@ async def _run_render_task(
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
         })
+        _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
         logger.error(f"Render {task_id} fehlgeschlagen: {e}", exc_info=True)
 
         await publish_event("render_progress", {
