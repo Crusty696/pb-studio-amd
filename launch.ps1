@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#!
 .SYNOPSIS
-    PB Studio AMD – Launcher Script
+    PB Studio AMD - Launcher Script
 .DESCRIPTION
     Startet das Python FastAPI Backend und das C# WPF Frontend.
     Backend: localhost:8765 (Python + FastAPI + Uvicorn)
@@ -12,12 +12,37 @@ param(
     [switch]$BackendOnly,
     [switch]$FrontendOnly,
     [switch]$Debug,
+    [switch]$NoPause,
     [string]$PublishedDir,
     [ValidateSet('framework', 'selfcontained', 'singlefile')]
     [string]$PreferredPublishMode
 )
 
-$ErrorActionPreference = 'Stop'
+# Continue: native exe stderr (uvicorn Startup-Msgs etc.) darf nicht abbrechen.
+# Kritische Fehler werden via explizite exit-Aufrufe behandelt.
+$ErrorActionPreference = 'Continue'
+
+$LogsDir = Join-Path $PSScriptRoot 'logs'
+if (-not (Test-Path $LogsDir)) { New-Item -ItemType Directory -Path $LogsDir -Force | Out-Null }
+$LaunchLog = Join-Path $LogsDir ("launch_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
+
+function Append-Log([string]$msg) {
+    Add-Content -Path $LaunchLog -Value "[$(Get-Date -Format HH:mm:ss)] $msg" -Encoding utf8
+}
+
+# Globaler Trap: schreibt Fehler ins Log und haelt Fenster offen
+trap {
+    $err = $_
+    $msg = "FATAL: $($err.Exception.Message)`n$($err.ScriptStackTrace)"
+    Append-Log $msg
+    Write-Host ""
+    Write-Host "  [FATAL] Unbehandelter Fehler - Log: $LaunchLog" -ForegroundColor Red
+    Write-Host "  $($err.Exception.Message)" -ForegroundColor Red
+    if (-not $NoPause) { Read-Host "Press Enter to exit" }
+    exit 99
+}
+
+Append-Log "launch.ps1 gestartet"
 $ProjectRoot = $PSScriptRoot
 $BackendPort = 8765
 $BackendHost = '127.0.0.1'
@@ -28,7 +53,7 @@ $backendProcess = $null
 $backendWasAlreadyRunning = $false
 $previousExternalBackendFlag = $env:PBSTUDIO_BACKEND_MANAGED_EXTERNALLY
 $previousBackendDir = $env:PBSTUDIO_BACKEND_DIR
-$LogsDir = Join-Path $ProjectRoot 'logs'
+# $LogsDir already set above; $BackendStdOutLog + $BackendStdErrLog follow
 $BackendStdOutLog = Join-Path $LogsDir 'backend_live.out.log'
 $BackendStdErrLog = Join-Path $LogsDir 'backend_live.err.log'
 

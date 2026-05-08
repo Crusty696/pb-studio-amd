@@ -24,21 +24,43 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import config
 from .middleware.gpu_lock import GPULockMiddleware
 
-# Logging Setup
+# --------------------------------------------------------------------------
+# Logging Setup (Aufgabe J: Rotation + Retention)
+# - 10 MB pro File, gzip-Compression rotierter Logs
+# - 7-Tage-Retention für rotierte Files
+# - Konsolen-Output zusätzlich auf stdout
+# Konfiguration zentral in pb_studio.utils.log_rotation
+# --------------------------------------------------------------------------
+from pb_studio.utils.log_rotation import (  # noqa: E402
+    DEFAULT_DATE_FORMAT,
+    DEFAULT_LOG_FORMAT,
+    setup_rotating_logging,
+)
+
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
 log_file = log_dir / "backend.log"
 
-handlers = [
-    logging.StreamHandler(sys.stdout),
-    logging.FileHandler(str(log_file), encoding="utf-8")
-]
+_log_level = getattr(logging, config.log_level.upper(), logging.INFO)
+
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setLevel(_log_level)
+_console_handler.setFormatter(
+    logging.Formatter(DEFAULT_LOG_FORMAT, datefmt=DEFAULT_DATE_FORMAT)
+)
+
+_file_handler = setup_rotating_logging(
+    log_file=log_file,
+    level=_log_level,
+    fmt=DEFAULT_LOG_FORMAT,
+    datefmt=DEFAULT_DATE_FORMAT,
+)
 
 logging.basicConfig(
-    level=getattr(logging, config.log_level.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-    handlers=handlers
+    level=_log_level,
+    format=DEFAULT_LOG_FORMAT,
+    datefmt=DEFAULT_DATE_FORMAT,
+    handlers=[_console_handler, _file_handler],
 )
 logger = logging.getLogger("pb_studio.backend")
 
@@ -84,6 +106,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Kein automatischer Medien-Restore beim Startup:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
+
+    # Render-Queue Resume-on-Startup (Aufgabe I): Jobs, die beim letzten Crash
+    # 'running' waren, werden auf 'interrupted' überführt und damit re-queued.
+    try:
+        from .app_state import get_app_state
+        get_app_state().restore_render_queue_on_startup()
+    except Exception as e:
+        logger.warning(f"  Render-Queue Restore-on-Startup übersprungen: {e}")
+
     yield
 
     # BUG-099 FIX: Expliziter Cleanup beim Shutdown
@@ -220,6 +251,7 @@ from .routers.pacing_router import router as pacing_router
 from .routers.render_router import router as render_router
 from .routers.events_router import router as events_router
 from .routers.brain_router import router as brain_router
+from .routers.health_router import router as health_router
 
 app.include_router(project_router)
 app.include_router(audio_router)
@@ -228,6 +260,7 @@ app.include_router(pacing_router)
 app.include_router(render_router)
 app.include_router(events_router)
 app.include_router(brain_router)
+app.include_router(health_router)
 
 
 if __name__ == "__main__":

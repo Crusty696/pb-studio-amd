@@ -547,10 +547,13 @@ if (-not $SkipModelPrecache) {
 }
 
 # B.11 Auto-Backup Task
+# SkipBackupPrompt = true  -> skip
+# NoPause = true           -> nicht-interaktiver Modus (Doppelklick via .bat) -> skip
+# sonst: Read-Host
 $backupInst = Join-Path $REPO_ROOT "scripts\install_brain_backup_task.ps1"
 if (Test-Path $backupInst) {
-    if ($SkipBackupPrompt) {
-        Step "Brain-Backup-Task uebersprungen (--SkipBackupPrompt)"
+    if ($SkipBackupPrompt -or $NoPause) {
+        Step "Brain-Backup-Task uebersprungen (nicht-interaktiver Modus oder --SkipBackupPrompt)"
     } else {
         $resp = Read-Host "Woechentliches Brain-Backup als Windows Task einrichten? (y/N)"
         if ($resp -match "^[Yy]") {

@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
 
 namespace PBStudio.UI.Services;
 
@@ -32,6 +34,7 @@ public class ProjectService
 
         CurrentProject = project;
         ProjectChanged?.Invoke(this, CurrentProject);
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
         _logger.LogInformation("Projekt erstellt: {Name} ({Path})", project.Name, project.Path);
         return true;
     }
@@ -44,6 +47,7 @@ public class ProjectService
 
         CurrentProject = project;
         ProjectChanged?.Invoke(this, CurrentProject);
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
         _logger.LogInformation("Projekt geöffnet: {Path}", path);
         return true;
     }
@@ -65,6 +69,10 @@ public class ProjectService
         var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
         CurrentProject = project;
         ProjectChanged?.Invoke(this, CurrentProject);
+        
+        if (project != null)
+            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
+            
         return project != null;
     }
 
@@ -73,6 +81,7 @@ public class ProjectService
         await _api.CloseProjectAsync().ConfigureAwait(false);
         CurrentProject = null;
         ProjectChanged?.Invoke(this, null);
+        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-closed"));
         _logger.LogInformation("Projekt geschlossen");
     }
 }

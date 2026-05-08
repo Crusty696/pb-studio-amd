@@ -207,6 +207,13 @@ public class ApiClient : IApiClient
         return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
     }
 
+    public async Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default)
+        => await PostAsync<PacingPreviewResponse>("/pacing/preview", new
+        {
+            start_sec = startSec,
+            duration,
+        }).ConfigureAwait(false);
+
     // --- Render ---
 
     public async Task<RenderProgress?> StartRenderAsync(RenderRequest request)
@@ -260,6 +267,23 @@ public class ApiClient : IApiClient
 
     public Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken)
         => PostAsync<BrainResetResponse>("/brain/reset", new { confirmation_token = confirmationToken });
+
+    // R-Brain-09: Erklaerung fuer Confidence-Balken in der Timeline.
+    public Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, CancellationToken ct = default)
+        => GetAsync<BrainExplainResponse>($"/brain/explain/{cutId}?top_n={topN}", ct);
+
+    #region VRAM Telemetry
+    // GET /health/vram[?model_id=...] — Histogramm-basierte Performance-Telemetrie pro model_id.
+    // Bei modelId=null: Multi-Model-Snapshot (Telemetry.Summary + Telemetry.Models).
+    // Bei modelId gesetzt: Single-Entry-Shape (Telemetry.ModelId/Count/DurationMs/...).
+    public Task<VramTelemetryResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default)
+    {
+        var url = string.IsNullOrWhiteSpace(modelId)
+            ? "/health/vram"
+            : $"/health/vram?model_id={Uri.EscapeDataString(modelId)}";
+        return GetAsync<VramTelemetryResponse>(url, ct);
+    }
+    #endregion
 
     // --- Generische Helfer ---
 
@@ -334,8 +358,8 @@ public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, doub
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
-public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0);
-public record SpectralData(int ClipId, Dictionary<string, List<float>> Bands, Dictionary<string, double[]>? FrequencyRanges = null);
+public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
+public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
@@ -350,10 +374,25 @@ public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5,
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
 public record BrainSuggestResponse(List<BrainSuggestion> Suggestions);
+public record PacingPreviewResponse(string PreviewPath, double Duration, string Resolution);
 public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks);
 public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
-public record BrainStatsBucket(string Axis, int ContextLevel, string ContextKey, double PositiveCount, double NegativeCount, double Posterior);
-public record BrainStatsResponse(int TotalClicks, int ColdStartAxes, int LearnedAxes, List<BrainStatsBucket> TopPositive, List<BrainStatsBucket> TopNegative);
+public record BrainStatsBucket(
+    string Axis,
+    int ContextLevel,
+    string ContextKey,
+    double PositiveCount,
+    double NegativeCount,
+    double Posterior,
+    double PosteriorVariance = 0.0);
+
+public record BrainStatsResponse(
+    int TotalClicks,
+    int ColdStartAxes,
+    int LearnedAxes,
+    List<BrainStatsBucket> TopPositive,
+    List<BrainStatsBucket> TopNegative,
+    List<string>? ColdStartAxesList = null);
 public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);

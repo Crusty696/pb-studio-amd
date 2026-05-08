@@ -95,6 +95,18 @@ async def generate_cut_list(
                 for vid_id, va in video_analysis_snapshot.items():
                     vab[f"clip_{vid_id}"] = va
 
+                # R-Brain-03: collect media-hashes fuer EmbeddingCache lookups
+                audio_clip_meta = audio_clips_snapshot.get(config.audio_clip_id, {})
+                audio_hash_value = (
+                    audio_clip_meta.get("audio_hash")
+                    or audio_clip_meta.get("media_hash")
+                )
+                video_hashes_by_clip: dict[str, str] = {}
+                for vid_id, vmeta in video_clips_snapshot.items():
+                    h = vmeta.get("video_hash") or vmeta.get("media_hash")
+                    if h:
+                        video_hashes_by_clip[f"clip_{vid_id}"] = h
+
                 _t_brain_start = _time.perf_counter()
                 cuts = await asyncio.to_thread(
                     annotate_cuts_with_brain,
@@ -103,11 +115,12 @@ async def generate_cut_list(
                     audio_analysis=cached_analysis,
                     video_analysis_by_clip=vab,
                     audio_clip_id=config.audio_clip_id,
-                    audio_path=audio_clips_snapshot.get(
-                        config.audio_clip_id, {}
-                    ).get("path"),
+                    audio_path=audio_clip_meta.get("path"),
                     persist_to_state_conn=svc.state_conn,
                     min_confidence=float(getattr(config, "brain_min_confidence", 0.0)),
+                    embedding_cache=svc.brain.cache,
+                    audio_hash=audio_hash_value,
+                    video_hashes_by_clip=video_hashes_by_clip,
                 )
                 _t_brain_elapsed_ms = (_time.perf_counter() - _t_brain_start) * 1000.0
                 logger.info(

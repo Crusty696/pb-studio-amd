@@ -110,12 +110,15 @@ class StructureSegment(BaseModel):
     end_time: float
     label: str
     confidence: float = 0.0
+    energy_score: float = 0.0
 
 
 class SpectralData(BaseModel):
     """Response: Spektral-Analyse Daten."""
     clip_id: int
+    times: list[float] = []
     bands: dict[str, list[float]] = {}  # Band-Name → Amplitude-Werte
+    centroids: list[float] = []
     frequency_ranges: dict[str, list[float]] = {}
 
 

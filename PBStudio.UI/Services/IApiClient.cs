@@ -47,6 +47,7 @@ public interface IApiClient : IDisposable
     Task<CutListResponse?> GenerateCutListAsync(PacingConfig config);
     Task<TimelineResponse?> GetTimelineAsync();
     Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries);
+    Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default);
 
     // --- Render ---
     Task<RenderProgress?> StartRenderAsync(RenderRequest request);
@@ -61,4 +62,12 @@ public interface IApiClient : IDisposable
     Task<BrainStatsResponse?> BrainStatsAsync();
     Task<BrainResetResponse?> BrainResetRequestAsync();
     Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken);
+    Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, CancellationToken ct = default);
+
+    #region VRAM Telemetry
+    // GET /health/vram — Histogramm-basierte Performance-Telemetrie pro model_id.
+    // Gibt bei modelId=null das Multi-Model-Snapshot zurück (Summary + Models),
+    // bei gesetztem modelId die single-entry Shape.
+    Task<VramTelemetryResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
+    #endregion
 }

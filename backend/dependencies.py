@@ -6,6 +6,7 @@ GPU-Lock, DB-Session, Config — alles was Router brauchen.
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -32,11 +33,12 @@ async def with_gpu_task(
 ) -> Any:
     """
     Führt eine GPU-Funktion thread-sicher unter dem globalen GPU-Lock aus.
-    Integrierte VRAM-Budget-Verwaltung (Reserve -> Commit -> Release).
+    Integrierte VRAM-Budget-Verwaltung (Reserve -> Commit -> Release) plus
+    Telemetrie (Histogram über Dauer + VRAM-Peak pro model_id).
     """
     manager = None
     vram_reserved = False
-    
+
     # VRAM-Reservierung (vor dem Lock-Erwerb)
     if model_id:
         try:
@@ -45,7 +47,7 @@ async def with_gpu_task(
             # C1/FIX: Echte Reservierung triggern (inkl. Eviction falls nötig)
             if manager.reserve(model_id, force=True):
                 vram_reserved = True
-                logger.debug(f"VRAM-Budget reserviert fÃ¼r: {model_id}")
+                logger.debug(f"VRAM-Budget reserviert fuer: {model_id}")
         except Exception as e:
             logger.warning(f"VRAM-Reservierung fehlgeschlagen (ignoriert): {e}")
 
@@ -53,27 +55,71 @@ async def with_gpu_task(
     if timeout_seconds is None:
         timeout_seconds = config.gpu_timeout_seconds
 
+    # Telemetrie auch ohne erfolgreiche VRAM-Reservierung erfassen
+    if manager is None:
+        try:
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+            manager = get_vram_manager()
+        except Exception as e:  # pragma: no cover — defensiv, Manager sollte verfuegbar sein
+            logger.debug(f"VRAM-Manager fuer Telemetrie nicht verfuegbar: {e}")
+
     async with gpu_lock:
         if vram_reserved and manager:
             manager.commit(model_id)
 
-        logger.debug(f"GPU-Lock erworben fÃ¼r: {func.__name__}")
+        logger.debug(f"GPU-Lock erworben fuer: {func.__name__}")
+
+        start_ts = time.perf_counter()
+        # Snapshot zu Beginn — committed_mb ist unter Lock konstant fuer dieses Modell
+        vram_baseline_mb = float(manager.total_committed_mb) if manager else 0.0
+        success = False
+        error_payload: dict[str, Any] | None = None
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 asyncio.to_thread(func, *args, **kwargs),
                 timeout=timeout_seconds,
             )
+            success = True
+            return result
         except asyncio.TimeoutError:
             logger.error(f"GPU-Task '{func.__name__}' Timeout nach {timeout_seconds}s!")
-            await publish_event("gpu_error", {
+            error_payload = {
+                "type": "TimeoutError",
                 "message": f"GPU-Task Timeout: {func.__name__} ({timeout_seconds}s)",
+                "task": func.__name__,
+            }
+            await publish_event("gpu_error", {
+                "message": error_payload["message"],
                 "task": func.__name__,
             })
             raise TimeoutError(f"GPU-Task '{func.__name__}' Timeout")
+        except Exception as exc:
+            error_payload = {
+                "type": type(exc).__name__,
+                "message": str(exc),
+                "task": func.__name__,
+            }
+            raise
         finally:
+            duration_ms = (time.perf_counter() - start_ts) * 1000.0
+            # VRAM-Peak: groesserer Wert aus Anfangs-Snapshot und aktuellem committed_mb
+            if manager:
+                vram_now_mb = float(manager.total_committed_mb)
+                vram_peak_mb = max(vram_baseline_mb, vram_now_mb)
+                try:
+                    manager.record_task_observation(
+                        model_id=model_id,
+                        duration_ms=duration_ms,
+                        vram_peak_mb=vram_peak_mb,
+                        success=success,
+                        error=error_payload,
+                    )
+                except Exception as obs_err:  # pragma: no cover — Telemetrie darf Task nie kippen
+                    logger.debug(f"Telemetrie-Update fehlgeschlagen: {obs_err}")
+
             if vram_reserved and manager:
                 manager.release(model_id)
-            logger.debug(f"GPU-Lock freigegeben fÃ¼r: {func.__name__}")
+            logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
 
 
 # SSE Event Queue für Progress-Updates

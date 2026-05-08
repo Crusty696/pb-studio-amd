@@ -5,26 +5,27 @@ REM Loggt komplette Konsolen-Ausgabe nach logs\setup_run_<ts>.log
 REM (PS1-Skript loggt zusaetzlich nach logs\setup_log_<ts>.txt + setup_transcript_<ts>.txt)
 setlocal enabledelayedexpansion
 
-REM Self-elevate to Admin via vbs trick.
+REM -----------------------------------------------------------------------
+REM Self-elevate to Admin via PowerShell Start-Process -Verb RunAs.
+REM MUSS vor allem anderen stehen. Net-session-Check verhindert Loop.
+REM -----------------------------------------------------------------------
 net session >nul 2>&1
-if %errorLevel% NEQ 0 (
+if %ERRORLEVEL% NEQ 0 (
     echo Admin-Rechte werden angefordert ...
-    set _vbs=%TEMP%\pb_setup_elevate.vbs
-    > "!_vbs!" echo Set UAC = CreateObject^("Shell.Application"^)
-    >>"!_vbs!" echo UAC.ShellExecute "cmd.exe", "/c """%~f0"" %*", "%~dp0", "runas", 1
-    cscript //nologo "!_vbs!"
-    del "!_vbs!" >nul 2>&1
-    exit /b
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+      "Start-Process cmd.exe -Verb RunAs -ArgumentList '/c \"\"%~f0\"\" %*' -WorkingDirectory '%~dp0'"
+    exit /b 0
 )
 
 cd /d "%~dp0"
+REM logs-Verzeichnis MUSS vor dem Tee-Object-Pipe existieren
 if not exist "logs" mkdir logs
 
 REM Timestamp via PowerShell (wmic deprecated auf Win11 24H2+)
 for /f "delims=" %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%I
-if "%TS%"=="" set TS=run
+if "!TS!"=="" set TS=run
 
-set LOGFILE=logs\setup_run_%TS%.log
+set LOGFILE=logs\setup_run_!TS!.log
 
 echo.
 echo ============================================================
@@ -41,19 +42,28 @@ echo.
 echo Log-Datei: %LOGFILE%
 echo Dauer beim ersten Lauf: 5-15 Minuten (je nach Internet).
 echo.
-pause
+if not defined NOPAUSE (
+    echo Druecke beliebige Taste um Setup zu starten (oder Fenster schliessen zum Abbruch^) ...
+    pause >nul
+)
 
-REM Tee-Object faengt stdout+stderr ab und schreibt parallel ins Log.
+REM Streaming-Tee: stdout+stderr auf Konsole UND utf8-Log (PS5.1 kompatibel).
+REM Alle Skip-Flags werden an PS1 weitergereicht (%*).
+set "_PS1=%~dp0setup_pb_studio.ps1"
+set "_LF=%~dp0%LOGFILE%"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "& '%~dp0setup_pb_studio.ps1' %* *>&1 | Tee-Object -FilePath '%~dp0%LOGFILE%'"
-set RC=%ERRORLEVEL%
+  "$lf='!_LF!'; $ps1='!_PS1!'; & $ps1 %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }"
+set RC=!ERRORLEVEL!
 
+REM ABORT-on-Error: Immer Exit-Code und Log-Pfad ausgeben
 echo.
 echo ============================================================
-if %RC% EQU 0 (
+if !RC! EQU 0 (
     echo Setup erfolgreich.
 ) else (
-    echo Setup mit Fehlern beendet ^(Exit-Code %RC%^).
+    echo ABORT: Setup mit Fehlern beendet ^(Exit-Code !RC!^).
+    echo ABORT: Logdatei: %~dp0%LOGFILE%
+    echo ABORT: Weitere Logs: %~dp0logs\setup_log_*.txt + setup_transcript_*.txt
 )
 echo.
 echo Log-Dateien:
@@ -64,4 +74,4 @@ echo ============================================================
 echo.
 echo Druecke beliebige Taste um Fenster zu schliessen.
 pause >nul
-exit /b %RC%
+exit /b !RC!

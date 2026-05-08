@@ -402,6 +402,18 @@ class AppState:
             if spectral_data is not None:
                 ai_data["spectral_data"] = spectral_data
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            
+            # In-Memory Cache ebenfalls aktualisieren
+            with self._state_lock:
+                if clip_id in self.audio_analysis_cache:
+                    self.audio_analysis_cache[clip_id].update(ai_data)
+                else:
+                    self.audio_analysis_cache[clip_id] = {
+                        "clip_id": clip_id,
+                        **ai_data,
+                        "duration_seconds": clip.get("duration_seconds", 0.0)
+                    }
+
             logger.debug(f"Audio-Analyse für Clip {clip_id} in DB persistiert (bpm={bpm:.1f}, key={key})")
         except Exception as e:
             logger.warning(f"Audio-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
@@ -682,6 +694,41 @@ class AppState:
 
         except Exception as e:
             logger.warning(f"DB-Load fehlgeschlagen (unkritisch — leerer State): {e}")
+
+    # =========================================================================
+    # Render-Queue-Persistenz (Resume on startup)
+    # =========================================================================
+
+    def restore_render_queue_on_startup(self) -> list[str]:
+        """Resume on startup: alle persistierten Render-Jobs mit Status 'running'
+        werden auf 'interrupted' gesetzt und damit re-queued.
+
+        Wird einmal aus dem FastAPI-Lifespan-Startup aufgerufen, BEVOR neue
+        Render-Requests angenommen werden. Idempotent: leerer Restore (keine
+        running-Zeilen) ist OK; Fehler werden nur geloggt, das Backend startet
+        immer.
+
+        Returns:
+            Liste der job_ids, die von 'running' nach 'interrupted' überführt
+            wurden (kann leer sein).
+        """
+        try:
+            from pb_studio.rendering.render_queue import get_render_queue
+            queue = get_render_queue()
+            requeued = queue.restore_running_as_interrupted()
+            if requeued:
+                logger.info(
+                    "Render-Queue Restore: %d Job(s) als 'interrupted' requeued: %s",
+                    len(requeued), requeued,
+                )
+            else:
+                logger.debug("Render-Queue Restore: keine 'running' Jobs vorhanden")
+            return requeued
+        except Exception as e:
+            logger.warning(
+                "Render-Queue Restore-on-Startup fehlgeschlagen (unkritisch): %s", e,
+            )
+            return []
 
 
 # Prozess-weiter Singleton

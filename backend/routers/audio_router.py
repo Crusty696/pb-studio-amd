@@ -558,7 +558,9 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
             spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
             spectral_data = {
                 "clip_id": clip_id,
+                "times": spec_result.get("times", []),
                 "bands": spec_result.get("band_energies", {}),
+                "centroids": spec_result.get("centroids", []),
                 "frequency_ranges": {k: list(v) for k, v in FREQUENCY_BANDS.items()},
             }
         except Exception as e:

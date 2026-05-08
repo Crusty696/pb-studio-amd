@@ -27,6 +27,35 @@ public class PythonBridgeService : IDisposable
     private const int StartupTimeoutMs = 30_000;
     private const int HealthCheckIntervalMs = 500;
 
+    /// <summary>
+    /// Setzt die PB_STUDIO_FORCED_VRAM Env-Var auf Process-Ebene. Diese wird vom
+    /// Python-Backend beim NÄCHSTEN Start gelesen (vererbt sich auf den Child-Prozess).
+    /// mb=null entfernt die Variable.
+    /// </summary>
+    public static void SetForcedVramEnvVar(int? mb)
+    {
+        const string key = "PB_STUDIO_FORCED_VRAM";
+        if (mb.HasValue && mb.Value > 0)
+            Environment.SetEnvironmentVariable(key, mb.Value.ToString(), EnvironmentVariableTarget.Process);
+        else
+            Environment.SetEnvironmentVariable(key, null, EnvironmentVariableTarget.Process);
+    }
+
+    /// <summary>
+    /// Setzt die PBSTUDIO_FFMPEG_PATH Env-Var auf Process-Ebene. Backend liest sie
+    /// via pydantic-settings (env_prefix=PBSTUDIO_) automatisch in
+    /// <c>ServerConfig.ffmpeg_path</c> beim Backend-Start. Leerer/null Pfad entfernt
+    /// die Variable, sodass der Default aus config.py gilt.
+    /// </summary>
+    public static void SetFfmpegPathEnvVar(string? path)
+    {
+        const string key = "PBSTUDIO_FFMPEG_PATH";
+        if (!string.IsNullOrWhiteSpace(path))
+            Environment.SetEnvironmentVariable(key, path, EnvironmentVariableTarget.Process);
+        else
+            Environment.SetEnvironmentVariable(key, null, EnvironmentVariableTarget.Process);
+    }
+
     public bool IsRunning => _isRunning;
     public event EventHandler<bool>? StatusChanged;
 

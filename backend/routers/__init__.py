@@ -6,6 +6,7 @@ from .video_router import router as video_router
 from .pacing_router import router as pacing_router
 from .render_router import router as render_router
 from .events_router import router as events_router
+from .health_router import router as health_router
 
 __all__ = [
     "project_router",
@@ -14,4 +15,5 @@ __all__ = [
     "pacing_router",
     "render_router",
     "events_router",
+    "health_router",
 ]
