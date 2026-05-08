@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    PB Studio AMD – Build Script
+    PB Studio AMD - Build Script
 .DESCRIPTION
-    Kompiliert das C# WPF Frontend und prüft Python-Abhängigkeiten.
+    Kompiliert das C# WPF Frontend und prueft Python-Abhaengigkeiten.
 #>
 
 param(
@@ -13,7 +13,7 @@ param(
     [switch]$PythonOnly
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $ProjectRoot = $PSScriptRoot
 $PythonExe = "C:\Users\david\AppData\Local\Programs\Python\Python311\python.exe"
 
@@ -24,14 +24,14 @@ function Write-Status($msg, $color = "Cyan") {
 
 Write-Status "=== PB Studio AMD Build ===" "Yellow"
 
-# === Python-Abhängigkeiten prüfen ===
-Write-Status "Prüfe Python-Abhängigkeiten..."
+# === Python-Abhaengigkeiten pruefen ===
+Write-Status "Pruefe Python-Abhaengigkeiten..."
 
 $requiredPackages = @("fastapi", "uvicorn", "pydantic", "pydantic-settings")
 foreach ($pkg in $requiredPackages) {
     $installed = & $PythonExe -c "import $($pkg.Replace('-','_')); print('OK')" 2>&1
     if ($installed -ne "OK") {
-        Write-Status "  FEHLT: $pkg — Installiere..." "Yellow"
+        Write-Status "  FEHLT: $pkg - Installiere..." "Yellow"
         & $PythonExe -m pip install $pkg --quiet
     } else {
         Write-Status "  OK: $pkg" "Green"
@@ -50,7 +50,7 @@ if (-not (Test-Path $csprojPath)) {
     exit 1
 }
 
-# .NET SDK prüfen
+# .NET SDK pruefen
 $dotnetVersion = & dotnet --version 2>&1
 Write-Status ".NET SDK: $dotnetVersion"
 
@@ -61,13 +61,14 @@ if ($Clean) {
 
 Write-Status "Kompiliere: $Configuration..."
 & dotnet build $csprojPath -c $Configuration --nologo
+$buildExit = $LASTEXITCODE
 
-if ($LASTEXITCODE -eq 0) {
+if ($buildExit -eq 0) {
     Write-Status "Build erfolgreich!" "Green"
     $outputDir = Join-Path $ProjectRoot "PBStudio.UI\bin\$Configuration\net9.0-windows"
     Write-Status "Output: $outputDir"
 } else {
-    Write-Status "Build fehlgeschlagen!" "Red"
+    Write-Status "Build fehlgeschlagen! Exit-Code: $buildExit" "Red"
     exit 1
 }
 

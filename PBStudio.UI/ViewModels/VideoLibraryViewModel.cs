@@ -141,8 +141,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             {
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
                 VideoImportPath = string.Empty;
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
                 await LoadClipsAsync();
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
             }
         }
         catch (Exception ex)
@@ -176,6 +176,43 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
         if (files.Count == 0) return;
 
+        await ProcessVideoImportAsync(files);
+    }
+
+    [RelayCommand]
+    private async Task ImportFolderAsync()
+    {
+        var folder = _dialogService.OpenFolder("Video-Ordner importieren");
+        if (string.IsNullOrEmpty(folder)) return;
+
+        StatusText = $"Scanne Ordner: {folder}...";
+        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv",
+        };
+
+        try
+        {
+            var files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories)
+                .Where(f => supported.Contains(Path.GetExtension(f)))
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                StatusText = "Keine unterstützten Video-Dateien im Ordner gefunden.";
+                return;
+            }
+
+            await ProcessVideoImportAsync(files);
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Fehler beim Scannen des Ordners: " + ex.Message;
+        }
+    }
+
+    private async Task ProcessVideoImportAsync(List<string> files)
+    {
         IsAnalyzingAll = true;
         StatusText = $"Bereite Import von {files.Count} Dateien vor...";
 
@@ -205,8 +242,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             if (result != null)
             {
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
                 await LoadClipsAsync();
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
             }
             else
             {
@@ -483,8 +520,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             _activeLoadCts = next;
         }
 
-        previous?.Cancel();
-        previous?.Dispose();
+        if (previous != null)
+        {
+            try { previous.Cancel(); } catch (ObjectDisposedException) { }
+            try { previous.Dispose(); } catch (ObjectDisposedException) { }
+        }
         return next;
     }
 
@@ -498,8 +538,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             _activeLoadCts = null;
         }
 
-        active?.Cancel();
-        active?.Dispose();
+        if (active != null)
+        {
+            try { active.Cancel(); } catch (ObjectDisposedException) { }
+            try { active.Dispose(); } catch (ObjectDisposedException) { }
+        }
     }
 
     private void ClearActiveLoadCts(CancellationTokenSource loadCts)

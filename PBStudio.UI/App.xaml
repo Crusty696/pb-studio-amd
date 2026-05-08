@@ -19,19 +19,33 @@
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <conv:ConfidenceToBrushConverter x:Key="ConfidenceToBrushConverter"/>
 
-            <!-- ══════ Ableton-Palette (custom brushes) ══════ -->
-            <SolidColorBrush x:Key="AbletonBg"          Color="#1A1A1E"/>
-            <SolidColorBrush x:Key="AbletonPanel"       Color="#232326"/>
-            <SolidColorBrush x:Key="AbletonSurface"     Color="#2D2D31"/>
-            <SolidColorBrush x:Key="AbletonBorder"      Color="#3A3A3F"/>
-            <SolidColorBrush x:Key="AbletonAccent"      Color="#FF764D"/>
-            <SolidColorBrush x:Key="AbletonAccentDim"   Color="#CC5E3D"/>
-            <SolidColorBrush x:Key="AbletonText"        Color="#D4D4D8"/>
-            <SolidColorBrush x:Key="AbletonTextDim"     Color="#8A8A90"/>
-            <SolidColorBrush x:Key="AbletonGreen"       Color="#87C96B"/>
-            <SolidColorBrush x:Key="AbletonYellow"      Color="#E5C07B"/>
-            <SolidColorBrush x:Key="AbletonRed"         Color="#E06C75"/>
-            <SolidColorBrush x:Key="AbletonBlue"        Color="#61AFEF"/>
+            <!-- ══════ Ableton-Palette (Colors, fuer Storyboards/Animationen) ══════ -->
+            <Color x:Key="AbletonBgColor">#1A1A1E</Color>
+            <Color x:Key="AbletonPanelColor">#232326</Color>
+            <Color x:Key="AbletonSurfaceColor">#2D2D31</Color>
+            <Color x:Key="AbletonBorderColor">#3A3A3F</Color>
+            <Color x:Key="AbletonAccentColor">#FF764D</Color>
+            <Color x:Key="AbletonAccentDimColor">#CC5E3D</Color>
+            <Color x:Key="AbletonTextColor">#D4D4D8</Color>
+            <Color x:Key="AbletonTextDimColor">#8A8A90</Color>
+            <Color x:Key="AbletonGreenColor">#87C96B</Color>
+            <Color x:Key="AbletonYellowColor">#E5C07B</Color>
+            <Color x:Key="AbletonRedColor">#E06C75</Color>
+            <Color x:Key="AbletonBlueColor">#61AFEF</Color>
+
+            <!-- ══════ Ableton-Palette (Brushes) ══════ -->
+            <SolidColorBrush x:Key="AbletonBg"          Color="{StaticResource AbletonBgColor}"/>
+            <SolidColorBrush x:Key="AbletonPanel"       Color="{StaticResource AbletonPanelColor}"/>
+            <SolidColorBrush x:Key="AbletonSurface"     Color="{StaticResource AbletonSurfaceColor}"/>
+            <SolidColorBrush x:Key="AbletonBorder"      Color="{StaticResource AbletonBorderColor}"/>
+            <SolidColorBrush x:Key="AbletonAccent"      Color="{StaticResource AbletonAccentColor}"/>
+            <SolidColorBrush x:Key="AbletonAccentDim"   Color="{StaticResource AbletonAccentDimColor}"/>
+            <SolidColorBrush x:Key="AbletonText"        Color="{StaticResource AbletonTextColor}"/>
+            <SolidColorBrush x:Key="AbletonTextDim"     Color="{StaticResource AbletonTextDimColor}"/>
+            <SolidColorBrush x:Key="AbletonGreen"       Color="{StaticResource AbletonGreenColor}"/>
+            <SolidColorBrush x:Key="AbletonYellow"      Color="{StaticResource AbletonYellowColor}"/>
+            <SolidColorBrush x:Key="AbletonRed"         Color="{StaticResource AbletonRedColor}"/>
+            <SolidColorBrush x:Key="AbletonBlue"        Color="{StaticResource AbletonBlueColor}"/>
 
             <!-- ══════ Global Overrides ══════ -->
             <!-- Flat card style (no elevation, sharp corners) -->
@@ -84,6 +98,17 @@
                         <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
                     </Trigger>
                 </Style.Triggers>
+            </Style>
+
+            <!-- Video-Thumbnail-Card im Grid (VideoLibraryView). Wieder global definiert, nachdem
+                 commit 6dbf895 die lokalen Styles entfernt hatte ohne sie nach App.xaml zu migrieren. -->
+            <Style x:Key="VideoThumbCard" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource AbletonSurface}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="2"/>
+                <Setter Property="Width" Value="200"/>
+                <Setter Property="Margin" Value="4"/>
             </Style>
         </ResourceDictionary>
     </Application.Resources>
