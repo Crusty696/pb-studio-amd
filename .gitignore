@@ -277,3 +277,6 @@ VerifyProject_*/
 debug_output*.txt
 trace_log*.txt
 desktop.ini
+
+# Auto-QA-Loop generated reports
+test-report/
