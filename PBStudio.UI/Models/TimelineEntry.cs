@@ -23,6 +23,17 @@ public partial class TimelineEntryModel : ObservableObject
     /// <summary>Optionaler DB-Cut-ID (gesetzt wenn use_brain=true persistiert hat).</summary>
     [ObservableProperty] private int _cutId;
 
+    /// <summary>R-Brain-09: lazy-geladener Tooltip-Text fuer den Confidence-Balken.
+    /// null = noch nicht geladen, "" = wird geladen / Platzhalter, sonst formatierter Inhalt.</summary>
+    [ObservableProperty] private string? _brainExplainTooltip;
+
+    /// <summary>R-Brain-09: zeigt an, ob /brain/explain gerade laeuft (UI-Spinner).</summary>
+    [ObservableProperty] private bool _isBrainExplainLoading;
+
+    /// <summary>R-Brain-09: true sobald /brain/explain einmal erfolgreich oder per Fehler beantwortet wurde.
+    /// Wird auf false zurueckgesetzt, wenn Feedback fuer diesen Cut eingeht (Cache-Invalidate).</summary>
+    public bool IsBrainExplainLoaded { get; set; }
+
     public double Duration => EndTime - StartTime;
     public string TimeRangeText => $"{TimeSpan.FromSeconds(StartTime):mm\\:ss} - {TimeSpan.FromSeconds(EndTime):mm\\:ss}";
 

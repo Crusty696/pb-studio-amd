@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -32,10 +33,76 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isLoadingWaveform;
     [ObservableProperty] private TimelineEntryModel? _selectedEntry;
     [ObservableProperty] private double _selectedTimelinePosition;
-    [ObservableProperty] private double _pixelsPerSecond = 100.0; // Standard Zoom: 1 Sekunde = 100 Pixel
+    [ObservableProperty] private double _pixelsPerSecond = 100.0;
     [ObservableProperty] private double _horizontalOffset = 0.0;
 
+    // /pacing/preview — Backend rendert 640×360 Slice der aktuellen Timeline.
+    [ObservableProperty] private double _previewStartSec = 0.0;
+    [ObservableProperty] private double _previewDurationSec = 10.0;
+    [ObservableProperty] private bool _isGeneratingPreview;
+    [ObservableProperty] private string? _previewVideoPath;
+    [ObservableProperty] private string _previewStatus = "";
+
+    public event Action<string>? PreviewReady;
+
+    private SpectralDataModel? _rawSpectralData;
+    public ObservableCollection<Point> SpectralPoints { get; } = [];
+
     public double TimelineWidth => TotalDuration * PixelsPerSecond;
+
+    partial void OnPixelsPerSecondChanged(double value)
+    {
+        OnPropertyChanged(nameof(TimelineWidth));
+        UpdateSpectralPoints();
+    }
+
+    private void UpdateSpectralPoints()
+    {
+        if (_rawSpectralData == null || _rawSpectralData.Centroids == null || _rawSpectralData.Centroids.Count == 0)
+        {
+            SpectralPoints.Clear();
+            return;
+        }
+
+        // Dynamisches Downsampling basierend auf PixelsPerSecond (PPS)
+        // Ziel: ca. 1 Punkt pro 2 Pixel
+        double targetDensity = 0.5; // Punkte pro Pixel
+        int targetPoints = (int)(TimelineWidth * targetDensity);
+        int rawCount = _rawSpectralData.Centroids.Count;
+
+        if (targetPoints >= rawCount)
+        {
+            // Alle Punkte anzeigen
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                SpectralPoints.Clear();
+                for (int i = 0; i < rawCount; i++)
+                {
+                    SpectralPoints.Add(new Point(_rawSpectralData.Times[i], _rawSpectralData.Centroids[i]));
+                }
+            });
+        }
+        else
+        {
+            // Downsampling via Mittelwert
+            int step = rawCount / Math.Max(1, targetPoints);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                SpectralPoints.Clear();
+                for (int i = 0; i < rawCount; i += step)
+                {
+                    double sumCentroid = 0;
+                    int count = 0;
+                    for (int j = 0; j < step && (i + j) < rawCount; j++)
+                    {
+                        sumCentroid += _rawSpectralData.Centroids[i + j];
+                        count++;
+                    }
+                    SpectralPoints.Add(new Point(_rawSpectralData.Times[i], sumCentroid / count));
+                }
+            });
+        }
+    }
 
     public ObservableCollection<TimelineEntryModel> TimelineEntries { get; } = [];
     public ObservableCollection<WaveformBarModel> WaveformBars { get; } = [];
@@ -58,6 +125,14 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 _timelineState.Clear();
                 ResetTimelineState();
             }
+        });
+
+        // R-Brain-09: Confidence-Balken + Tooltip live aktualisieren, wenn ein
+        // 4-Klick-Feedback irgendwo (BrainViewModel oder LearningSessionViewModel)
+        // gesendet wurde. Greift gezielt nur den betroffenen Cut.
+        WeakReferenceMessenger.Default.Register<BrainFeedbackAppliedMessage>(this, (_, message) =>
+        {
+            _ = OnBrainFeedbackAppliedAsync(message.CutId);
         });
     }
 
@@ -237,6 +312,47 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    public async Task GeneratePreviewAsync()
+    {
+        if (IsGeneratingPreview) return;
+        if (TimelineEntries.Count == 0)
+        {
+            PreviewStatus = "Keine Timeline — generiere zuerst eine Cut-Liste.";
+            return;
+        }
+
+        IsGeneratingPreview = true;
+        PreviewStatus = $"Rendere Preview ({PreviewDurationSec:F0}s ab {PreviewStartSec:F1}s)…";
+        try
+        {
+            var resp = await _api.GenerateTimelinePreviewAsync(PreviewStartSec, PreviewDurationSec);
+            if (resp == null || string.IsNullOrEmpty(resp.PreviewPath))
+            {
+                PreviewStatus = "Preview fehlgeschlagen — Backend lieferte keinen Pfad.";
+                return;
+            }
+
+            if (!File.Exists(resp.PreviewPath))
+            {
+                PreviewStatus = $"Preview-Datei nicht gefunden: {resp.PreviewPath}";
+                return;
+            }
+
+            PreviewVideoPath = resp.PreviewPath;
+            PreviewStatus = $"Preview bereit: {resp.Resolution} · {resp.Duration:F1}s";
+            PreviewReady?.Invoke(resp.PreviewPath);
+        }
+        catch (Exception ex)
+        {
+            PreviewStatus = "Fehler: " + ex.Message;
+        }
+        finally
+        {
+            IsGeneratingPreview = false;
+        }
+    }
+
+    [RelayCommand]
     public async Task SyncTimelineAsync()
     {
         try
@@ -278,6 +394,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             var beats = await _api.GetBeatsAsync(audioClip.Id);
             var onsets = await _api.GetOnsetsAsync(audioClip.Id);
             var structure = await _api.GetAsync<List<SongSegmentModel>>($"/audio/structure/{audioClip.Id}");
+            var spectral = await _api.GetAsync<SpectralDataModel>($"/audio/spectral/{audioClip.Id}");
 
             if (waveform == null || seq != _waveformSequence) return;
 
@@ -287,10 +404,16 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 BeatMarkers.Clear();
                 SnapMarkers.Clear();
                 SongSegments.Clear();
+                _rawSpectralData = spectral;
 
                 if (structure != null)
                 {
                     foreach (var seg in structure) SongSegments.Add(seg);
+                }
+
+                if (spectral != null)
+                {
+                    UpdateSpectralPoints();
                 }
 
                 if (beats != null)
@@ -349,6 +472,168 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         await RefreshTimelineAsync();
     }
 
+    // ---------- R-Brain-09: Brain-Explain Tooltip + Live-Refresh ----------
+
+    /// <summary>
+    /// Lazy-Load des /brain/explain/{cut_id} Inhalts fuer den Confidence-Tooltip.
+    /// Wird von der View beim ToolTipOpening aufgerufen. Cached pro Eintrag.
+    /// </summary>
+    public async Task LoadBrainExplainAsync(TimelineEntryModel entry, CancellationToken ct = default)
+    {
+        if (entry == null) return;
+        if (entry.IsBrainExplainLoaded || entry.IsBrainExplainLoading) return;
+
+        if (entry.CutId <= 0)
+        {
+            // Cut ist nicht in der DB persistiert (z.B. Pacing ohne use_brain).
+            entry.BrainExplainTooltip = "Erklärung nicht verfügbar (kein cut_id).";
+            entry.IsBrainExplainLoaded = true;
+            return;
+        }
+
+        entry.IsBrainExplainLoading = true;
+        entry.BrainExplainTooltip = "Lade Erklärung…";
+
+        try
+        {
+            var explain = await _api.BrainExplainAsync(entry.CutId, topN: 3, ct).ConfigureAwait(false);
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                entry.BrainExplainTooltip = explain == null
+                    ? "Erklärung nicht verfügbar."
+                    : FormatExplainTooltip(explain);
+                entry.IsBrainExplainLoaded = true;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Schluck — User hat den Hover beendet, oder App schliesst.
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"BrainExplain fuer Cut {entry.CutId} fehlgeschlagen: {ex.Message}");
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                entry.BrainExplainTooltip = "Erklärung nicht verfügbar.";
+                entry.IsBrainExplainLoaded = true;
+            });
+        }
+        finally
+        {
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                entry.IsBrainExplainLoading = false;
+            });
+        }
+    }
+
+    /// <summary>
+    /// Reagiert auf BrainFeedbackAppliedMessage: invalidiert den Tooltip-Cache fuer den
+    /// betroffenen Cut und laedt /brain/explain neu — final_score aktualisiert auch
+    /// den Confidence-Balken (BrainConfidence).
+    /// </summary>
+    private async Task OnBrainFeedbackAppliedAsync(int cutId)
+    {
+        if (cutId <= 0) return;
+
+        var entry = TimelineEntries.FirstOrDefault(e => e.CutId == cutId);
+        if (entry == null) return;
+
+        // Cache invalidieren, damit der naechste Hover (oder die jetzige Re-Fetch) frische Daten zieht.
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            entry.IsBrainExplainLoaded = false;
+            entry.BrainExplainTooltip = null;
+        });
+
+        try
+        {
+            var explain = await _api.BrainExplainAsync(cutId, topN: 3).ConfigureAwait(false);
+            if (explain == null) return;
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                // BrainConfidence aktualisiert den Balken (rot..gruen) live.
+                entry.BrainConfidence = explain.FinalScore;
+                entry.BrainExplainTooltip = FormatExplainTooltip(explain);
+                entry.IsBrainExplainLoaded = true;
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Live-Refresh fuer Cut {cutId} fehlgeschlagen: {ex.Message}");
+        }
+    }
+
+    private static string FormatExplainTooltip(BrainExplainResponse e)
+    {
+        var sb = new StringBuilder();
+        sb.Append("Brain-Confidence: ").Append((e.FinalScore * 100).ToString("F0")).AppendLine(" %");
+        if (!string.IsNullOrEmpty(e.SegmentType))
+            sb.Append("Segment: ").AppendLine(e.SegmentType);
+
+        sb.AppendLine();
+        sb.AppendLine("Top-Achsen:");
+        if (e.TopAxes != null && e.TopAxes.Count > 0)
+        {
+            foreach (var ax in e.TopAxes.Take(3))
+            {
+                sb.Append("  • ")
+                  .Append(ax.Axis)
+                  .Append(": ")
+                  .Append((ax.Score * 100).ToString("F0"))
+                  .Append(" %  (post=")
+                  .Append((ax.Posterior * 100).ToString("F0"))
+                  .Append(" %, bridge=")
+                  .Append((ax.BridgeValue * 100).ToString("F0"))
+                  .Append(" %, n=")
+                  .Append(ax.NSamples)
+                  .AppendLine(")");
+            }
+        }
+        else
+        {
+            sb.AppendLine("  (keine Daten)");
+        }
+
+        if (e.BottomAxes != null && e.BottomAxes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Bottom-Achsen (ziehen Score):");
+            foreach (var ax in e.BottomAxes.Take(3))
+            {
+                sb.Append("  • ")
+                  .Append(ax.Axis)
+                  .Append(": ")
+                  .Append((ax.Score * 100).ToString("F0"))
+                  .Append(" %  (post=")
+                  .Append((ax.Posterior * 100).ToString("F0"))
+                  .Append(" %, n=")
+                  .Append(ax.NSamples)
+                  .AppendLine(")");
+            }
+        }
+
+        if (e.ColdStartAxes != null && e.ColdStartAxes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.Append("Cold-Start (< 10 Samples): ").AppendLine(string.Join(", ", e.ColdStartAxes.Take(6)));
+            if (e.ColdStartAxes.Count > 6)
+                sb.Append("  … +").Append(e.ColdStartAxes.Count - 6).AppendLine(" weitere");
+        }
+
+        if (e.ContextKeys != null && e.ContextKeys.Count > 0)
+        {
+            sb.AppendLine();
+            sb.Append("Kontexte: ");
+            // Leere Strings (Level-0 global) als "global" anzeigen, sonst original.
+            var keys = e.ContextKeys.Select(k => string.IsNullOrEmpty(k) ? "global" : k);
+            sb.AppendLine(string.Join(" → ", keys));
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
     private void ResetTimelineState()
     {
         TimelineEntries.Clear();
@@ -374,6 +659,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.Unregister<BrainFeedbackAppliedMessage>(this);
         _loadGate.Dispose();
     }
 }

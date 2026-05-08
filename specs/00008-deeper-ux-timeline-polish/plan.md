@@ -1,117 +1,113 @@
-# Implementation Plan: Deeper UX & Timeline Polish
+---
+feature_branch: "00008-deeper-ux-timeline-polish"
+created: "2026-05-07"
+spec_path: "specs/00008-deeper-ux-timeline-polish/spec.md"
+---
 
-**Branch**: `00008-deeper-ux-timeline-polish` | **Date**: 2026-04-25 | **Spec**: [spec.md](spec.md)
+# Technical Plan: Deeper UX & Timeline Polish
 
-## Summary
-
-**Goal**: Elevate the interactive timeline with professional precision through enhanced snapping and smooth playhead scrolling.  
-**Approach**: Implement onset-aware magnetic snapping in the Canvas interaction logic and GPU-accelerated follow-playhead scrolling using RenderTransforms.  
-**Key Constraint**: Zero impact on UI responsiveness during long-mix playback.
+**Feature Branch**: `00008-deeper-ux-timeline-polish`  
+**Created**: 2026-05-07  
+**Spec Maturity**: clarified
 
 ## Technical Context
 
-**Language/Version**: C# (.NET 9) / Python 3.11  
-**Primary Dependencies**: WPF, CommunityToolkit.Mvvm, MaterialDesignInXaml, DirectML<br>
-**Storage**: JSON (Project State)  
-**Testing**: dotnet test, pywinauto (E2E), ruff (Linting)<br>
-**Target Platform**: Windows 10/11 Desktop
-**Project Type**: single-user desktop
-**Project Mode**: brownfield
-**Performance Goals**: 60 FPS UI transitions; sub-frame snap precision.
-**Constraints**: local-only; AMD DirectML priority.
+- **Language/Version**: C# (.NET 9), Python 3.11
+- **Primary Frameworks**: WPF, CommunityToolkit.Mvvm, MaterialDesignInXaml
+- **Project Mode**: Brownfield (extending existing `PBStudio.UI`)
+- **UI Platform**: Windows Desktop (Desktop-native)
+- **Performance Mandates**: 60fps scrolling, <100ms interaction feedback
 
-## Instructions Check
+## Architecture Decisions
 
-- **AMD DirectML First**: ✅ PASS. UI is decoupled from hardware details.
-- **Offline First**: ✅ PASS. No cloud dependencies.
-- **Quality Over Speed**: ✅ PASS. Focus on rhythmically perfect editing feel.
-- **Agent Output Style**: ✅ PASS. Plan is concise and structured.
+| ID | Decision | Rationale |
+|----|----------|-----------|
+| AD-001 | Pixel-Based UI Virtualization | `VirtualizingPanel.ScrollUnit="Pixel"` is required for smooth, non-jumping navigation in long media projects. |
+| AD-002 | VSM-Driven Interaction States | Using `VisualStateManager` ensures hardware-accelerated transitions and clean separation of UI states (Hover, Selection). |
+| AD-003 | Client-Side SnapEngine | Logic for magnetic snapping must reside in the UI layer for sub-10ms responsiveness. |
+| AD-004 | Cached Ruler Drawing | Procedural drawing of the ruler on a `DrawingVisual` or cached `Canvas` prevents UI freezes during zoom/scroll. |
 
 ## Architecture
 
 ```mermaid
 C4Container
-    title Container View - Timeline Polish
-    Person(user, "DJ / Content Creator")
-    System_Boundary(system, "PB Studio") {
-        Container(wpf, "WPF UI", "C# / .NET 9", "TimelineView & ViewModels")
-        Container(api, "FastAPI Backend", "Python 3.11", "Pacing & Onset Logic")
+    title Container View - Timeline UX Refinement
+    Person(user, "User", "Edits timeline")
+    System_Boundary(pb, "PB Studio") {
+        Container(wpf, "WPF UI", "C# / .NET 9", "Primary interface")
+        Container(vm, "TimelineViewModel", "C# / CommunityToolkit", "State management")
+        Container(view, "TimelineView", "WPF / XAML", "Interactive timeline component")
+        Container(snap, "SnapEngine", "C# Helper", "Magnetic logic & snapping lines")
+        Container(ruler, "RulerRenderer", "C# Helper", "Optimized ruler drawing")
     }
-    Rel(user, wpf, "Performs drag/trim with snapping")
-    Rel(wpf, api, "Fetches onset/beat data")
+    Rel(user, view, "Interacts (Drag, Scroll, Hover)")
+    Rel(view, vm, "Data Bindings")
+    Rel(view, snap, "Calculates Snap")
+    Rel(view, ruler, "Triggers Draw")
 ```
 
-## Architecture Decisions
-
-| ID | Decision | Options Considered | Chosen | Rationale |
-|----|----------|--------------------|--------|-----------|
-| AD-001 | Snapping Priority | Beat-only vs. Multi-Trigger | Multi-Trigger (Beat + Onset) | Provides much higher creative precision for non-quantized audio. |
-| AD-002 | Auto-Scrolling | ScrollViewer.ScrollToHorizontalOffset vs. RenderTransform | RenderTransform with Easing | Prevents jittery layout passes; smoother for high-zoom levels. |
-| AD-003 | Snap Feedback | Tooltip vs. Visual Glow | Visual Glow (Border change) | Instant non-intrusive feedback without obscuring the clip content. |
-
 ## Data Model Summary
-
-N/A — no persistent data changes.
+N/A — no new persistent data entities; uses existing `TimelineEntryModel`.
 
 ## API Surface Summary
+N/A — UI-only refinement; no new backend API endpoints required.
 
-N/A — uses existing /audio/waveform and /pacing/timeline.
+## Source Code Structure
+
+**Brownfield Notes**: Enhancing `PBStudio.UI/Views/TimelineView.xaml` and related logic.
+
+```text
+PBStudio.UI/
+├── Views/
+│   ├── TimelineView.xaml        ~ (Virtualization, Ruler, Snap Overlay)
+│   └── TimelineView.xaml.cs     ~ (SnapEngine integration, VSM triggers)
+├── ViewModels/
+│   └── TimelineViewModel.cs     ~ (Snapping threshold config, snap markers)
+└── Helpers/
+    ├── SnapEngine.cs            + (New: Snapping calculation logic)
+    └── RulerRenderer.cs         + (New: Optimized ruler drawing)
+```
 
 ## Testing Strategy
 
 | Tier | Tool | Scope | Mock Boundary | Install |
 |------|------|-------|---------------|---------|
-| Unit | dotnet test | Snap logic math | Mock TimelineEntry | configured |
-| Integration | pywinauto | Auto-scroll behavior | Real backend | configured |
-| Security | N/A | — | — | — |
-| Coverage | N/A | — | — | — |
+| Unit | xUnit | SnapEngine logic, ViewModel state | N/A | configured |
+| UI/Manual | Manual | Scrolling fluidity, VSM transitions | Backend (use mock) | N/A |
+| E2E | pywinauto | Selection consistency across views | Full App | configured |
 
 ## Error Handling Strategy
+N/A — UI-only refinement; errors in snapping logic result in fallback to free-dragging (non-critical).
 
-| Error Category | Pattern | Response | Retry |
-|----------------|---------|----------|-------|
-| Missing Onsets | Graceful Fallback | Disable onset snapping for clip | no |
-| Scroll Overflow | Boundary Check | Clamp playhead to timeline width | yes, auto |
+## Integration Points
+
+| Integration | Approach |
+|-------------|----------|
+| Beat/Onset Markers | Consumed from `TimelineViewModel.SnapMarkers` provided by backend analysis. |
+| Zoom (PPS) | Unified via `TimelineState` service for consistent scaling across components. |
 
 ## Risk Mitigation
 
-| Risk (from spec) | Likelihood | Impact | Mitigation | Owner |
-|-------------------|------------|--------|------------|-------|
-| Scroll Jitter | Medium | Medium | Use `CompositionTarget.Rendering` for sub-pixel smooth scrolling. | Frontend |
-| Snap Interference | Low | Low | Prioritize user-drag position when velocity is high to allow "breaking" the snap. | Frontend |
+| Risk | Mitigation |
+|------|------------|
+| Virtualization Jitter | Use `VirtualizingPanel.CacheLength` to pre-render clips near the viewport. |
+| Snap Priority Conflict | Explicit priority order: Playhead > Beat > Onset > Edge (STF-001). |
+| Binding Bottleneck | Minimize MultiBindings; calculate pixel positions in `SnapEngine` if needed. |
 
 ## Requirement Coverage Map
 
-| Req ID | Component(s) | File Path(s) | Notes |
-|--------|--------------|--------------|-------|
-| FR-001 | TimelineView.xaml.cs | PBStudio.UI/Views/TimelineView.xaml.cs | Onset-aware snap logic |
-| FR-002 | TimelineView.xaml.cs | PBStudio.UI/Views/TimelineView.xaml.cs | RenderTransform scrolling |
-| FR-003 | TimelineView.xaml | PBStudio.UI/Views/TimelineView.xaml | Visual snap-state styles |
-
-## Project Structure
-
-### Source Code
-
-```text
-~ PBStudio.UI/
-  ~ Views/
-    ~ TimelineView.xaml
-    ~ TimelineView.xaml.cs
-  ~ ViewModels/
-    ~ TimelineViewModel.cs
-```
-
-**Brownfield Notes**: Enhancing the `Clip_MouseMove` logic added in E005.
+| ID | Description | Component(s) | File Path(s) |
+|----|-------------|--------------|--------------|
+| FR-001 | Pixel scrolling | TimelineView | `PBStudio.UI/Views/TimelineView.xaml` |
+| FR-002 | UI Recycling | TimelineView | `PBStudio.UI/Views/TimelineView.xaml` |
+| FR-003 | Snap Threshold | SnapEngine | `PBStudio.UI/Helpers/SnapEngine.cs` |
+| FR-004 | Snap Line | TimelineView | `PBStudio.UI/Views/TimelineView.xaml` |
+| FR-005 | SHIFT Override | TimelineView | `PBStudio.UI/Views/TimelineView.xaml.cs` |
+| FR-006 | Cached Ruler | RulerRenderer | `PBStudio.UI/Helpers/RulerRenderer.cs` |
+| FR-007 | VSM States | TimelineView | `PBStudio.UI/Views/TimelineView.xaml` |
 
 ## Implementation Hints
 
-- **[HINT-001]** UI: Use `VisualStateManager` to handle the transition between normal and snapped clip states.
-- **[HINT-002]** Snap: Implement a "Magnetic Threshold" (e.g., 10-15px) that decreases as the user zooms in for finer control.
-- **[HINT-003]** Animation: Apply `CubicEase` to the follow-playhead translation for a premium feel.
-
-## Compliance Check
-
-- **AMD DirectML First**: ✅ PASS.
-- **Offline First**: ✅ PASS.
-- **Quality Over Speed**: ✅ PASS.
-- **Agent Output Style**: ✅ PASS.
+- **[HINT-001]** Performance: Set `VirtualizingPanel.VirtualizationMode="Recycling"` on the `ItemsControl` hosting clips.
+- **[HINT-002]** UX: Vertical snap lines should be rendered on a separate `Canvas` layer above clips for clear visibility.
+- **[HINT-003]** Logic: The `SnapEngine` should use the current Zoom factor (PixelsPerSecond) to convert pixel thresholds to time thresholds.

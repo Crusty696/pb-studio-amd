@@ -6,6 +6,7 @@
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
              xmlns:models="clr-namespace:PBStudio.UI.Models"
              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
+             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              Background="{StaticResource AbletonBg}">
 
     <UserControl.Resources>
@@ -34,13 +35,54 @@
                     
                     <!-- Zoom Controls -->
                     <icon:PackIconMaterial Kind="MagnifyMinus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <Slider Width="120" Minimum="10" Maximum="500" Value="{Binding PixelsPerSecond}" 
+                    <Slider Width="120" Minimum="10" Maximum="500" Value="{Binding PixelsPerSecond}"
                             VerticalAlignment="Center" ToolTip="Horizontaler Zoom (Pixel/Sekunde)"/>
                     <icon:PackIconMaterial Kind="MagnifyPlus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
+
+                    <!-- Preview rendern (POST /pacing/preview) -->
+                    <TextBlock Text="ab" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Width="44" Height="22" Padding="4,2"
+                             Text="{Binding PreviewStartSec, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:F1}}"
+                             Background="{StaticResource AbletonSurface}"
+                             Foreground="{StaticResource AbletonText}"
+                             BorderBrush="{StaticResource AbletonBorder}"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Start-Sekunde für Preview"/>
+                    <TextBlock Text="s · " Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="2,0,4,0"/>
+                    <TextBlock Text="Dauer" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Width="44" Height="22" Padding="4,2"
+                             Text="{Binding PreviewDurationSec, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:F0}}"
+                             Background="{StaticResource AbletonSurface}"
+                             Foreground="{StaticResource AbletonText}"
+                             BorderBrush="{StaticResource AbletonBorder}"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Preview-Länge in Sekunden"/>
+                    <TextBlock Text="s" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="2,0,8,0"/>
+                    <Button Command="{Binding GeneratePreviewCommand}"
+                            IsEnabled="{Binding IsGeneratingPreview, Converter={StaticResource InverseBooleanConverter}}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonAccent}"
+                            ToolTip="Preview-Video aus aktueller Timeline rendern (640×360)"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="MovieOpenPlay" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Preview rendern" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <ProgressBar Width="40" Height="4" Margin="6,0,0,0" VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 Foreground="{StaticResource AbletonAccent}"
+                                 Background="Transparent"
+                                 Visibility="{Binding IsGeneratingPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </StackPanel>
 
                 <!-- Stats -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding PreviewStatus}"
+                               Foreground="{StaticResource AbletonAccent}"
+                               FontSize="10" VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <icon:PackIconMaterial Kind="ClockOutline" Width="12" Height="12" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,4,0" VerticalAlignment="Center"/>
                     <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0">
                         <Run Text="Dauer: "/><Run Text="{Binding TotalDuration, StringFormat={}{0:F1}s, Mode=OneWay}"/>
@@ -169,11 +211,76 @@
                     </Border>
 
                     <!-- Scrollable Track Area -->
-                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled">
+                    <ScrollViewer Grid.Row="1" 
+                                  HorizontalScrollBarVisibility="Visible" 
+                                  VerticalScrollBarVisibility="Disabled"
+                                  CanContentScroll="True"
+                                  VirtualizingPanel.ScrollUnit="Pixel">
                         <Grid Width="{Binding TimelineWidth}" Background="#111111" PreviewMouseDown="TimelineGrid_MouseDown">
                             
+                            <!-- Song Sections Layer (Background) -->
+                            <ItemsControl ItemsSource="{Binding SongSegments}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="StartTime"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Height="500" Opacity="0.08">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="chorus">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonAccent}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="verse">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonBlue}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="intro">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonTextDim}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="outro">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonTextDim}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    <Setter Property="Background" Value="{StaticResource AbletonBorder}"/>
+                                                </Style>
+                                            </Border.Style>
+                                            <Border.Width>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="Duration"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Border.Width>
+                                            <TextBlock Text="{Binding Label}" Foreground="{StaticResource AbletonText}" FontSize="9" Margin="4,2" VerticalAlignment="Top"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Spectral Depth Layer -->
+                            <controls:DepthRenderer Points="{Binding SpectralPoints}" 
+                                                   PixelsPerSecond="{Binding PixelsPerSecond}"
+                                                   LineBrush="Cyan" Opacity="0.3"
+                                                   VerticalAlignment="Top" Height="50" Margin="0,5,0,0"/>
+
                             <!-- Waveform Layer (Background) -->
-                            <ItemsControl ItemsSource="{Binding WaveformBars}">
+                            <ItemsControl ItemsSource="{Binding WaveformBars}"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
@@ -295,8 +402,28 @@
                                                 PreviewMouseMove="Clip_MouseMove"
                                                 PreviewMouseUp="Clip_MouseUp">
                                             <VisualStateManager.VisualStateGroups>
-                                                <VisualStateGroup x:Name="SnapStates">
+                                                <VisualStateGroup x:Name="InteractionStates">
                                                     <VisualState x:Name="Normal"/>
+                                                    <VisualState x:Name="MouseOver">
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0.9" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Selected">
+                                                        <Storyboard>
+                                                            <ColorAnimation Storyboard.TargetName="ClipBorder" 
+                                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                                            To="{StaticResource AbletonYellowColor}" Duration="0:0:0.1"/>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="BorderThickness"
+                                                                             To="2" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                </VisualStateGroup>
+                                                <VisualStateGroup x:Name="SnapStates">
+                                                    <VisualState x:Name="NormalSnap"/>
                                                     <VisualState x:Name="Snapped">
                                                         <Storyboard>
                                                             <ColorAnimation Storyboard.TargetName="ClipBorder" 
@@ -304,7 +431,7 @@
                                                                             To="White" Duration="0:0:0.1"/>
                                                             <DoubleAnimation Storyboard.TargetName="ClipBorder"
                                                                              Storyboard.TargetProperty="BorderThickness"
-                                                                             To="2" Duration="0:0:0.1"/>
+                                                                             To="3" Duration="0:0:0.1"/>
                                                         </Storyboard>
                                                     </VisualState>
                                                 </VisualStateGroup>
@@ -330,13 +457,27 @@
                                                            TextTrimming="CharacterEllipsis"
                                                            Margin="4"/>
 
-                                                <!-- Plan Phase 5: Confidence-Balken (rot..grün aus brain_final_score) -->
+                                                <!-- Plan Phase 5 + R-Brain-09: Confidence-Balken mit lazy-loaded Brain-Explain Tooltip -->
                                                 <Rectangle Grid.Row="1"
                                                            Height="4"
                                                            HorizontalAlignment="Stretch"
                                                            VerticalAlignment="Bottom"
                                                            Fill="{Binding BrainConfidence, Converter={StaticResource ConfidenceToBrushConverter}}"
-                                                           ToolTip="Brain-Confidence (rot=unsicher, grün=sicher)"/>
+                                                           ToolTipService.InitialShowDelay="450"
+                                                           ToolTipService.ShowDuration="20000"
+                                                           ToolTipOpening="ConfidenceBar_ToolTipOpening">
+                                                    <Rectangle.ToolTip>
+                                                        <ToolTip MaxWidth="320">
+                                                            <StackPanel>
+                                                                <!-- Binding via PlacementTarget — robust gegen DataContext-Inheritance-Quirks im ToolTip-Popup -->
+                                                                <TextBlock Text="{Binding PlacementTarget.DataContext.BrainExplainTooltip, RelativeSource={RelativeSource AncestorType=ToolTip}, TargetNullValue='Brain-Confidence (rot=unsicher, grün=sicher) — hover für Details', FallbackValue='Brain-Confidence (rot=unsicher, grün=sicher)'}"
+                                                                           FontFamily="Consolas"
+                                                                           FontSize="11"
+                                                                           TextWrapping="Wrap"/>
+                                                            </StackPanel>
+                                                        </ToolTip>
+                                                    </Rectangle.ToolTip>
+                                                </Rectangle>
 
                                                 <!-- Drag Handles for Trimming -->
                                                 <Rectangle Grid.Row="0" Grid.RowSpan="2" Width="4" HorizontalAlignment="Left" Fill="{StaticResource AbletonAccent}" Cursor="SizeWE" Opacity="0.5"/>
@@ -359,6 +500,15 @@
                                                 </MultiBinding>
                                             </TranslateTransform.X>
                                         </TranslateTransform>
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Canvas>
+
+                            <!-- Snap Line Overlay -->
+                            <Canvas HorizontalAlignment="Left" Width="{Binding TimelineWidth}">
+                                <Border x:Name="SnapLine" Width="1" Background="Cyan" Height="500" Visibility="Collapsed">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="SnapLineTransform"/>
                                     </Border.RenderTransform>
                                 </Border>
                             </Canvas>

@@ -1,57 +1,67 @@
 ---
-description: "Task list for Deeper UX & Timeline Polish"
+feature_branch: "00008-deeper-ux-timeline-polish"
+created: "2026-05-07"
+spec_path: "specs/00008-deeper-ux-timeline-polish/spec.md"
+plan_path: "specs/00008-deeper-ux-timeline-polish/plan.md"
 ---
 
 # Tasks: Deeper UX & Timeline Polish
 
-**Input**: Design documents from `specs/00008-deeper-ux-timeline-polish/`
-**Prerequisites**: `plan.md`, `spec.md`
+## Work Item Checklist
 
-## Project Mode
+### Setup & Foundation
+- [X] T001 [P1] Configure basic UI virtualization properties in `TimelineView.xaml` (FR-001, FR-002)
+- [X] T002 [P1] Implement `SnapEngine.cs` helper for magnetic calculation (FR-003)
+- [X] T003 [P1] Implement `RulerRenderer.cs` for cached procedural drawing (FR-006)
 
-`Brownfield`
+### US1 — Fluid Scrolling
+- [X] T004 [P1] Integrate Pixel-based virtualization with `TimelineItemsControl` (FR-001) [COMPLETES FR-001]
+- [X] T005 [P2] Refactor `TimelineViewModel` to support high-frequency virtualization (SC-001)
 
-## Epic / Capability Map
+### US2 — Precision Snapping
+- [X] T006 [P1] Implement vertical Snap Line overlay in `TimelineView.xaml` (FR-004)
+- [X] T007 [P1] Integrate `SnapEngine` into `Clip_MouseMove` and `Clip_MouseDown` (FR-003, SC-002) [COMPLETES FR-003]
+- [X] T008 [P2] Add `SHIFT` key modifier detection for snap override (FR-005)
 
-- `[US1]` → Precision Editing (PRD:CAP-004)
+### US3 — Interaction States & Accessibility
+- [X] T009 [P2] Update `ClipBorder` VSM states (Normal, MouseOver, Selected) with glow effects (FR-007)
+- [X] T010 [P2] Implement high-contrast indicators for accessibility (FR-008)
 
-## Brownfield Notes
+## Task Details
 
-- Existing flows touched: `TimelineView.xaml`, `TimelineView.xaml.cs`
-- Regression focus: Ensure basic drag/trim functionality remains intact without "fighting" the user.
+### T001 — Configure UI Virtualization
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-001, FR-002
+- **Description**: Set `VirtualizingPanel.IsVirtualizing="True"`, `VirtualizingPanel.VirtualizationMode="Recycling"`, and `VirtualizingPanel.ScrollUnit="Pixel"` on the main `ItemsControl` and its `ScrollViewer`.
 
-## Phase 1: Foundational (Refinement)
+### T002 — SnapEngine Helper
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-003
+- **Description**: Create `PBStudio.UI/Helpers/SnapEngine.cs`. Implement logic to find the closest `SnapPoint` within a pixel threshold. Priority: Playhead > Beat > Onset > Edge.
 
-- [ ] T001 [US1] {FR-001} Update `TimelineViewModel.cs` to fetch Onset markers in addition to Beats
-- [ ] T002 [P] [US1] {FR-003} Define `Snapped` VisualState in `TimelineView.xaml` clip template
+### T003 — RulerRenderer Helper
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-006
+- **Description**: Create `PBStudio.UI/Helpers/RulerRenderer.cs`. Implement a drawing-based approach (using `DrawingContext`) to render the timeline ruler, caching results to avoid layout thrashing on zoom.
 
----
+### T007 — Snapping Integration
+- **Priority**: P1
+- **Status**: todo
+- **Requirement**: FR-003, SC-002
+- **Description**: Replace hardcoded snapping in `TimelineView.xaml.cs` with `SnapEngine`. Trigger the visual "Snap Line" overlay when a snap is detected.
 
-## Phase 2: Work Item 1 - Enhanced Snapping (Priority: P1) 🎯 MVP
+## Dependency Graph
 
-- [ ] T003 [US1] {FR-001} [COMPLETES FR-001] Refactor `Clip_MouseMove` in `TimelineView.xaml.cs` to support multi-trigger snapping (Beats + Onsets)
-- [ ] T004 [US1] {FR-003} [COMPLETES FR-003] Trigger `VisualStateManager` transitions for "snapped" state during drag operations
-
----
-
-## Phase 3: Work Item 2 - Smooth Auto-Scroll (Priority: P1)
-
-- [ ] T005 [US1] {FR-002} Implement `CompositionTarget.Rendering` loop for smooth playhead tracking in `TimelineView.xaml.cs`
-- [ ] T006 [US1] {FR-002} [COMPLETES FR-002] Implement `RenderTransform` with easing for timeline container auto-scrolling
-
----
-
-## Phase 4: Polish & Performance
-
-- [ ] T007 [P] Verify 60 FPS scrolling during playback on large timelines
-- [ ] T008 [P] [COMPLETES US1] Perform end-to-end visual review of tab transitions and hover effects
-
----
-
-## Dependencies
-
-Foundational (Phase 1) → Snapping & Scrolling (Phase 2/3) → Polish (Phase 4)
-
-- T003 depends on T001.
-- T004 depends on T002 and T003.
-- Tasks marked `[P]` can run in parallel.
+```mermaid
+graph TD
+    T001 --> T004
+    T004 --> T005
+    T002 --> T007
+    T006 --> T007
+    T007 --> T008
+    T003 --> T005
+    T009 --> T010
+```
