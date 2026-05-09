@@ -31,6 +31,9 @@ class PacingService:
         # Audit A3: Test-Hint — wurde cached structure_segments in den Engine injiziert
         # (statt redundanter librosa-Re-Analyse via analyze_song_structure)?
         self._last_skipped_structure_reanalyze: bool = False
+        # Audit E2: Test-Hint — wurde cached spectral_data["bands"]["low"] (bass_curve)
+        # in den Engine injiziert (fuer drop-section trigger weighting)?
+        self._last_used_cached_bass: bool = False
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -249,6 +252,30 @@ class PacingService:
             self._last_used_cached_energy = True
         else:
             self._last_used_cached_energy = False
+
+        # Audit E2: inject cached bass_curve fuer drop-section trigger weighting.
+        # cached_analysis["spectral_data"]["bands"]["low"] enthaelt das Bass-Frequenzband
+        # (vom SpectralAnalyzer 3-Band Output). Engine nutzt es ueber
+        # _bass_weight_at_time() als Multiplikator (1.0..2.0) auf Trigger-Strengths
+        # in Drop-Sektionen — verstaerkt Cuts an basslastigen Momenten.
+        spectral = cached_analysis.get("spectral_data") if cached_analysis else None
+        if spectral and isinstance(spectral, dict):
+            bands = spectral.get("bands", {})
+            low_band = bands.get("low") if isinstance(bands, dict) else None
+            if low_band and len(low_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_bass_curve = _np.array(low_band, dtype=_np.float32)
+                # Duration sicherstellen (fuer time->index mapping in _bass_weight_at_time)
+                if not hasattr(pacing_engine, "_pre_cached_duration") or \
+                        getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
+                    cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
+                    if cached_dur > 0:
+                        pacing_engine._pre_cached_duration = cached_dur
+                self._last_used_cached_bass = True
+            else:
+                self._last_used_cached_bass = False
+        else:
+            self._last_used_cached_bass = False
 
         # Audit E1: use_key_matching — Camelot-Wheel key compatibility scoring.
         # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector

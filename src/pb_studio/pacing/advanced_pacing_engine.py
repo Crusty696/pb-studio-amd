@@ -1134,6 +1134,38 @@ class AdvancedPacingEngine:
         logger.info(f"Cut-Liste: {len(filtered)} Schnitte")
         return filtered
 
+    def _bass_weight_at_time(self, time_sec: float) -> float:
+        """
+        Audit E2: Multiplier fuer Trigger-Strength basierend auf cached bass_curve.
+
+        Wird von PacingService via spectral_data["bands"]["low"] injiziert
+        (_pre_cached_bass_curve) und liefert einen Multiplikator im Bereich
+        1.0..2.0 (= 1.0 + bass_normalized), der in Drop-Sektionen auf
+        Trigger-Stärken angewendet werden kann (siehe _apply_structure_weights).
+
+        Mapping time_sec -> Index erfolgt linear ueber _pre_cached_duration:
+            pos = clamp(time_sec / duration, 0..1)
+            idx = int(pos * (len(curve) - 1))
+
+        Returns:
+            float in [1.0, 2.0]. Genau 1.0 wenn keine bass_curve injiziert,
+            keine Duration verfuegbar oder bass-Wert == 0.0.
+        """
+        curve = getattr(self, "_pre_cached_bass_curve", None)
+        if curve is None:
+            return 1.0
+        if len(curve) == 0:
+            return 1.0
+        duration = float(getattr(self, "_pre_cached_duration", 0.0) or 0.0)
+        if duration <= 0:
+            return 1.0
+        pos = max(0.0, min(1.0, float(time_sec) / duration))
+        idx = int(pos * (len(curve) - 1))
+        bass_val = float(curve[idx])
+        # bass_val sollte normalisiert in [0..1] vom SpectralAnalyzer kommen,
+        # defensive clamp falls nicht.
+        return 1.0 + max(0.0, min(1.0, bass_val))
+
     def _apply_structure_weights(
         self,
         triggers: List["PacingCut"],
@@ -1147,6 +1179,10 @@ class AdvancedPacingEngine:
             - Chorus / Drop  (energy_level ~1.2–1.5) → stärker → überleben min-interval
             - Intro / Outro  (energy_level ~0.5–0.6) → schwächer → fallen raus
             - Verse           (energy_level ~0.8)     → leicht gedämpft
+
+        Audit E2: In Drop-Sektionen (section.name == "drop" oder energy_level > 0.8)
+        wird zusaetzlich _bass_weight_at_time() als Multiplier angewendet —
+        verstaerkt Cuts an basslastigen Momenten innerhalb des Drops.
 
         Args:
             triggers: Ungefilterte, unsortierte PacingCut-Liste
@@ -1162,6 +1198,12 @@ class AdvancedPacingEngine:
         # Sektionen nach start_time sortieren (Invariante für Bereichs-Suche)
         sorted_sections = sorted(song_sections, key=lambda s: s.start_time)
         modified = 0
+        bass_boosted = 0
+        # Audit E2: bass_curve injiziert? Nur dann ueberhaupt boost-fuehlen.
+        has_bass_curve = (
+            getattr(self, "_pre_cached_bass_curve", None) is not None
+            and len(getattr(self, "_pre_cached_bass_curve", []) or []) > 0
+        )
 
         for cut in triggers:
             # Passende Sektion suchen (Zeitpunkt liegt im Intervall [start, end))
@@ -1177,15 +1219,30 @@ class AdvancedPacingEngine:
                 # energy_level is already in [0.0, 1.0], so the product can never
                 # exceed 1.0. The old 1.5 cap was unreachable and contradicted the
                 # model invariant.
-                cut.strength = min(cut.strength * section.energy_level, 1.0)
+                new_strength = cut.strength * section.energy_level
+
+                # Audit E2: Bass-Multiplier in Drop-Sektionen anwenden.
+                # Drop = explicit "drop"-label ODER energy_level > 0.8 (chorus/drop range).
+                is_drop_like = (
+                    str(getattr(section, "name", "")).lower() == "drop"
+                    or float(getattr(section, "energy_level", 0.0)) > 0.8
+                )
+                if has_bass_curve and is_drop_like:
+                    bass_mult = self._bass_weight_at_time(cut.time)
+                    if bass_mult > 1.0:
+                        new_strength *= bass_mult
+                        bass_boosted += 1
+
+                cut.strength = min(new_strength, 1.0)
                 if abs(cut.strength - original_strength) > 0.01:
                     modified += 1
 
         logger.info(
             "_apply_structure_weights: %d/%d Trigger angepasst "
-            "(Sektionen: %s)",
+            "(Bass-Boosts in Drops: %d, Sektionen: %s)",
             modified,
             len(triggers),
+            bass_boosted,
             {s.name: round(s.energy_level, 2) for s in sorted_sections},
         )
         return triggers
