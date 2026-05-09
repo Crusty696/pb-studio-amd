@@ -193,15 +193,44 @@ class StemSeparator:
             gc.collect()
             logger.info("StemSeparator VRAM released")
 
-    def separate(self, file_path: str, model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx", callback=None):
+    def separate(
+        self,
+        file_path: str,
+        model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx",
+        callback=None,
+        on_progress=None,
+    ):
         """
         Separates audio into stems.
 
         Args:
             file_path: Path to audio file.
             model_name: Name of the model to use.
-            callback: Optional function(message, percent) for progress.
+            callback: Legacy alias for on_progress (kept for backwards compat).
+            on_progress: Optional callable(percent: float) emitting stage progress.
+                Stages: 0% init, 10% loading_model, 30% running_inference,
+                90% saving_stems, 100% complete. Audit C2 — feeds the
+                ``stem_progress`` SSE channel during multi-minute Demucs/MDX runs.
         """
+        # Legacy `callback` kept as alias — prefer `on_progress` (Audit C2)
+        progress_cb = on_progress if on_progress is not None else callback
+
+        def _emit(pct: float, stage: str = "") -> None:
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(float(pct))
+            except TypeError:
+                # Legacy callback(message, percent) signature support
+                try:
+                    progress_cb(stage, float(pct))
+                except Exception:
+                    logger.debug("on_progress callback raised — ignoring", exc_info=True)
+            except Exception:
+                logger.debug("on_progress callback raised — ignoring", exc_info=True)
+
+        _emit(0.0, "init")
+
         if not self.separator:
             return {"error": "Separator not initialized"}
 
@@ -212,18 +241,16 @@ class StemSeparator:
         self._apply_directml_patch()
         try:
             logger.info(f"Loading model: {model_name}")
+            _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
-            
-            # Hook into audio-separator progress if possible
-            if callback:
-                # Custom monkeypatch for audio-separator logging if needed, 
-                # or use its internal progress tracker if version supports it.
-                pass
 
             logger.info(f"Starting separation for: {file_path}")
-            output_files = self.separator.separate(file_path)
+            _emit(30.0, "running_inference")
+            output_files = self._run_inference(file_path)
 
+            _emit(90.0, "saving_stems")
             logger.info(f"Separation complete. Files: {output_files}")
+            _emit(100.0, "complete")
             return {"stems": output_files}
 
         except Exception as e:
@@ -231,6 +258,14 @@ class StemSeparator:
             return {"error": str(e)}
         finally:
             self._restore_directml_patch()
+
+    def _run_inference(self, file_path: str):
+        """Internal seam: runs the underlying audio-separator inference call.
+
+        Extracted so tests (and future progress hooks into audio-separator
+        internals) can patch a single boundary instead of the whole separate().
+        """
+        return self.separator.separate(file_path)
 
     def list_models(self):
         """Returns available models grouped by type."""

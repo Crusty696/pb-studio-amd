@@ -445,9 +445,28 @@ async def separate_stems(
         raise HTTPException(status_code=404, detail=f"Clip {request.clip_id} nicht gefunden")
     logger.info(f"Starte Stem-Separation: {clip['name']} mit {request.model.value}")
 
+    # Audit C2: per-stage stem_progress SSE callback (init/loading/inference/saving/complete).
+    _loop = asyncio.get_running_loop()
+    _clip_id = request.clip_id
+
+    def _stem_progress(pct: float) -> None:
+        if _loop is None:
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                publish_event("stem_progress", {
+                    "clip_id": _clip_id,
+                    "percent": float(pct),
+                    "message": f"Stem-Separation: {float(pct):.0f}%",
+                }),
+                _loop,
+            )
+        except Exception:
+            pass
+
     try:
         result = await with_gpu_task(
-            _run_stem_separation, clip["path"], request.model.value,
+            _run_stem_separation, clip["path"], request.model.value, _stem_progress,
             model_id="mdx_net_inst",  # VRAM-Budget-Check via VRAMBudgetManager
         )
         return StemResult(clip_id=request.clip_id, **result)
@@ -685,12 +704,12 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
         return []
 
 
-def _run_stem_separation(audio_path: str, model_name: str) -> dict[str, Any]:
+def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> dict[str, Any]:
     """Führt Stem-Separation durch (blockierend, GPU)."""
     from pb_studio.audio.separator import StemSeparator
 
     separator = StemSeparator()
-    result = separator.separate(audio_path, model_name=model_name)
+    result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
 
     # Fehler vom Separator prüfen
     if "error" in result:
