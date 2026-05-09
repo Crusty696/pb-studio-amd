@@ -1166,6 +1166,39 @@ class AdvancedPacingEngine:
         # defensive clamp falls nicht.
         return 1.0 + max(0.0, min(1.0, bass_val))
 
+    def _subtrack_boundary_anchors(self) -> List[float]:
+        """
+        Audit E3: Liefert sortierte unique cut-anchors aus injizierten subtrack_segments.
+
+        Wird von PacingService via cached_analysis["subtrack_segments"] injiziert
+        (_pre_cached_subtracks). Pro Subtrack ist das end_time die Grenze zum
+        naechsten — und damit ein perfekter "harter Schnitt"-Punkt fuer Video.
+
+        Verwendung (Cut-Selection): Nach final cut-list, fuer jeden Anker t pruefen
+        ob ein Cut im Fenster [t-0.5, t+0.5] existiert. Ja -> snap dorthin
+        (zeit ueberschreiben). Nein -> insert cut bei t mit type="subtrack",
+        strength=1.0. (Snap-to-subtrack ist heute noch TODO; Helper-API ready.)
+
+        Returns:
+            Sortierte Liste eindeutiger end_time-Werte aus _pre_cached_subtracks.
+            Leer wenn keine Subtracks injiziert oder alle end_times fehlen/<=0.
+        """
+        subtracks = getattr(self, "_pre_cached_subtracks", None)
+        if not subtracks:
+            return []
+        anchors: List[float] = []
+        for s in subtracks:
+            if isinstance(s, dict):
+                t = s.get("end_time")
+                if t is not None:
+                    try:
+                        tf = float(t)
+                    except (TypeError, ValueError):
+                        continue
+                    if tf > 0:
+                        anchors.append(tf)
+        return sorted(set(anchors))
+
     def _apply_structure_weights(
         self,
         triggers: List["PacingCut"],

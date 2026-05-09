@@ -34,6 +34,9 @@ class PacingService:
         # Audit E2: Test-Hint — wurde cached spectral_data["bands"]["low"] (bass_curve)
         # in den Engine injiziert (fuer drop-section trigger weighting)?
         self._last_used_cached_bass: bool = False
+        # Audit E3: Test-Hint — wurde cached subtrack_segments in den Engine injiziert
+        # (fuer subtrack-aware cut generation / boundary-anchors)?
+        self._last_used_cached_subtracks: bool = False
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -276,6 +279,24 @@ class PacingService:
                 self._last_used_cached_bass = False
         else:
             self._last_used_cached_bass = False
+
+        # Audit E3: inject cached subtrack_segments fuer subtrack-aware cut generation.
+        # SubtrackDetector erzeugt Segmente fuer Mixe >60s mit start_time/end_time/
+        # confidence; tempo_curve ergaenzt das Bild. Engine nutzt
+        # _subtrack_boundary_anchors() um cut-anchors an subtrack-grenzen zu
+        # platzieren (snap-to-subtrack). Heute reicht: Liste injizieren + Flag
+        # setzen, Helper-API ist ready fuer cut-selection-Integration.
+        subtracks = cached_analysis.get("subtrack_segments") if cached_analysis else None
+        if subtracks and isinstance(subtracks, list) and len(subtracks) > 0:
+            pacing_engine._pre_cached_subtracks = subtracks
+            self._last_used_cached_subtracks = True
+            logger.info(
+                "Audit E3: %d cached subtrack_segments injiziert "
+                "(boundary-anchors verfuegbar via _subtrack_boundary_anchors())",
+                len(subtracks),
+            )
+        else:
+            self._last_used_cached_subtracks = False
 
         # Audit E1: use_key_matching — Camelot-Wheel key compatibility scoring.
         # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector
