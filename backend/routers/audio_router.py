@@ -594,8 +594,17 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
         try:
             # Use module-level singleton to avoid re-initializing on every call
             detector = _get_beat_detector()
+
+            # Per-stage progress: detect_beats emittiert pct in [0..100],
+            # mappen auf overall [15..45] (beats-Phase im Audio-Pipeline).
+            def _beat_progress(pct: float) -> None:
+                overall = 15.0 + (max(0.0, min(100.0, pct)) / 100.0) * 30.0
+                _emit_analysis_progress(
+                    _loop, "beat_chunk", overall, f"BeatNet inference {pct:.1f}%"
+                )
+
             # detect_beats gibt list[float] zurück — BeatNet oder Librosa-Fallback
-            beat_times = detector.detect_beats(audio_path)
+            beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
             if beat_times:
                 arr = np.asarray(beat_times, dtype=np.float64)
                 for t in arr:

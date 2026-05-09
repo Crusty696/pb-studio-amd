@@ -119,42 +119,78 @@ class BeatDetector:
                 return False
         return True
 
+    @staticmethod
+    def _safe_emit(on_progress, pct: float) -> None:
+        """Ruft on_progress(pct) auf, schluckt Exceptions."""
+        if on_progress is None:
+            return
+        try:
+            on_progress(float(pct))
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"on_progress callback Fehler: {e}")
+
     def detect_beats(
         self,
         audio_path: str | Path,
         duration: float | None = None,
         progress_callback: ProgressCallback = None,
+        on_progress: Callable[[float], None] | None = None,
     ) -> List[float]:
+        """Detect beats und emit Progress (0..100) via on_progress.
+
+        Args:
+            audio_path: Pfad zum Audio.
+            duration: Optionale Limit-Dauer (Sekunden).
+            progress_callback: Legacy-Callback (phase: str, progress: float in [0..1]).
+            on_progress: Neuer Callback (pct: float in [0..100]).
+                Wird bei Stage-Transitions aufgerufen — sowohl im
+                BeatNet- als auch im librosa-Fallback-Pfad.
+
+        Returns:
+            Liste von Beat-Zeitpunkten (Sekunden).
+        """
         if progress_callback:
             self.set_progress_callback(progress_callback)
         audio_path = str(audio_path)
+
+        # Stage 0/4: Start
+        self._safe_emit(on_progress, 0.0)
 
         # BeatNet hängt bei langen Dateien (>600s) - direkt librosa nutzen
         total_dur = librosa.get_duration(path=audio_path)
         if total_dur > 600:
             logger.info(f"Lange Datei ({total_dur:.0f}s) -> direkt Librosa")
-            return self._detect_beats_librosa(audio_path, duration=duration)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
 
         if not BEATNET_AVAILABLE:
-            return self._detect_beats_librosa(audio_path, duration=duration)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
         if not self._init_estimator():
-            return self._detect_beats_librosa(audio_path, duration=duration)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
 
         try:
             logger.info(f"Starte BeatNet Analysis: {Path(audio_path).name}")
             self._report_progress("beatnet_start", 0.1)
+            # Stage 1/4: Probe done, BeatNet ready -> beginnt Inferenz
+            self._safe_emit(on_progress, 30.0)
+
             output = self._estimator.process(audio_path)
+
+            # Stage 2/4: TCN inference fertig
+            self._safe_emit(on_progress, 90.0)
             self._report_progress("beatnet_done", 1.0)
 
             if output is None or len(output) == 0:
-                return self._detect_beats_librosa(audio_path)
+                return self._detect_beats_librosa(audio_path, on_progress=on_progress)
 
             beat_times = output[:, 0].tolist()
             logger.info(f"BeatNet: {len(beat_times)} Beats erkannt")
+
+            # Stage 3/4: Beats extrahiert
+            self._safe_emit(on_progress, 100.0)
             return beat_times
         except Exception as e:
             logger.error(f"BeatNet Error: {e}")
-            return self._detect_beats_librosa(audio_path)
+            return self._detect_beats_librosa(audio_path, on_progress=on_progress)
 
     def get_downbeats(self, audio_path: str | Path) -> List[float]:
         audio_path = str(audio_path)
@@ -205,22 +241,37 @@ class BeatDetector:
             return None
         return float(60.0 / median_interval)
 
-    def _detect_beats_librosa(self, audio_path: str, duration: float | None = None) -> List[float]:
+    def _detect_beats_librosa(
+        self,
+        audio_path: str,
+        duration: float | None = None,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> List[float]:
         try:
             # BUG-088 FIX: Move get_duration inside try block
             total_dur = librosa.get_duration(path=audio_path)
             load_dur = duration if duration else total_dur
             logger.info(f"Librosa Fallback: {Path(audio_path).name} ({load_dur:.0f}s von {total_dur:.0f}s)")
-            
+
+            # Stage: vor Audio-Load (librosa-Pfad ist single-shot)
+            self._safe_emit(on_progress, 30.0)
             y, sr = librosa.load(audio_path, sr=22050, duration=load_dur)
+
+            # Stage: nach Load, vor beat_track
+            self._safe_emit(on_progress, 60.0)
             tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             beat_times = librosa.frames_to_time(beat_frames, sr=sr)
             logger.info(f"Librosa: {len(beat_times)} Beats ({float(np.atleast_1d(tempo)[0]):.1f} BPM)")
             del y
             gc.collect()
+
+            # Stage: fertig
+            self._safe_emit(on_progress, 100.0)
             return beat_times.tolist()
         except Exception as e:
             logger.error(f"Librosa Fallback failed: {e}")
+            # Auch im Fehlerfall: 100% emittieren, damit der Caller-SSE-Stream nicht hängt.
+            self._safe_emit(on_progress, 100.0)
             return []
 
 
