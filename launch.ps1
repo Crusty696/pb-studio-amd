@@ -355,16 +355,27 @@ function Resolve-FrontendExe {
         }
     }
 
+    # FIX 2026-05-09: Sammle ALLE Kandidaten, waehle die NEUESTE per LastWriteTime
+    # statt erste-gefunden-Logik. Verhindert dass alte artifacts/publish/ EXE
+    # ueber frisches bin/Release/ Build geladen wird (typischer dev-loop bug).
     $candidates += @(
         (Join-Path $ProjectRoot 'PBStudio.UI\bin\Release\net9.0-windows\PBStudio.UI.exe'),
         (Join-Path $ProjectRoot 'PBStudio.UI\bin\Debug\net9.0-windows\PBStudio.UI.exe')
     )
 
     foreach ($mode in @('framework', 'selfcontained', 'singlefile')) {
-        $candidate = Get-LatestPublishedExe -BaseDir (Join-Path $ProjectRoot (Join-Path 'artifacts\publish' $mode))
-        if ($candidate) {
-            return $candidate
+        $publishedExe = Get-LatestPublishedExe -BaseDir (Join-Path $ProjectRoot (Join-Path 'artifacts\publish' $mode))
+        if ($publishedExe) {
+            $candidates += $publishedExe
         }
+    }
+
+    # Pick NEWEST candidate by LastWriteTimeUtc
+    $existing = $candidates | Where-Object { Test-Path $_ } | ForEach-Object { Get-Item $_ -ErrorAction SilentlyContinue }
+    $newest = $existing | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if ($newest) {
+        Write-Status "Resolved Frontend (newest by mtime): $($newest.FullName)" 'DarkGray'
+        return $newest.FullName
     }
 
     foreach ($candidate in $candidates) {
