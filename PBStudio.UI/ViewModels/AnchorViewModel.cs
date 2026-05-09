@@ -49,7 +49,8 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
-        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
     }
 
     partial void OnSelectedAudioClipChanged(AudioClipModel? value)

@@ -52,7 +52,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
         WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
         WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
-        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
     }
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)

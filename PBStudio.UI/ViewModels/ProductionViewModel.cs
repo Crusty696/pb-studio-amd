@@ -50,10 +50,16 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
         {
-            HasProject = true;
-            StartRenderCommand.NotifyCanExecuteChanged();
+            // Send() kann von Background-Thread kommen (ProjectService.OpenProjectAsync).
+            // NotifyCanExecuteChanged + Observable-Property-Sets brauchen UI-Thread.
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                HasProject = true;
+                StartRenderCommand.NotifyCanExecuteChanged();
+            });
         });
-        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
 
         if (HasProject)
         {

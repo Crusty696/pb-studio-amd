@@ -33,8 +33,10 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
         _api = api;
         _dialogService = dialogService;
 
-        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
-        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(this, (_, _) => ResetProjectState());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
     }
 
     private void ResetProjectState()

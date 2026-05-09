@@ -89,7 +89,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
         {
             if (_isShuttingDown) return;
-            ResetProjectState();
+            // Send() kann von Background-Thread (ProjectService) - UI-Touches via Dispatcher
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState);
         });
     }
 
