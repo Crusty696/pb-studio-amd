@@ -107,7 +107,6 @@ public partial class App : Application
         services.AddSingleton<IApiClient>(sp => sp.GetRequiredService<ApiClient>());
         services.AddSingleton<SSEClient>();
         services.AddSingleton<IDialogService, DialogService>();
-        services.AddSingleton<NavigationService>();
         services.AddSingleton<ProjectService>();
         services.AddSingleton<TimelineStateService>();
         services.AddSingleton<AudioLibraryStateService>();
