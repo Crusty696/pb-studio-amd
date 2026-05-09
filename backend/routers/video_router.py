@@ -200,6 +200,15 @@ async def analyze_video(
         detail=f"clip_id={request.clip_id}",
     )
 
+    # BUG-204 Fix: SSE analysis_progress events emittieren damit C# UI Live-Status
+    # waehrend RAFT/SigLIP-Analyse anzeigen kann (Audio + Pacing Router emittieren bereits).
+    await publish_event("analysis_progress", {
+        "clip_id": request.clip_id,
+        "step": "start",
+        "percent": 5.0,
+        "message": f"Starte Video-Analyse: {clip['name']}",
+    })
+
     try:
         result = await with_gpu_task(
             _run_video_analysis, clip["path"], request.clip_id, request,
@@ -226,6 +235,17 @@ async def analyze_video(
             source="video.analyze",
             detail=f"clip_id={request.clip_id} scenes={int(result.get('scene_count', 0) or 0)} avg_motion={float(result.get('avg_motion', 0.0) or 0.0):.2f}",
         )
+
+        # BUG-204 Fix: Final-Event mit Ergebnis-Daten fuer UI-Status
+        await publish_event("analysis_progress", {
+            "clip_id": request.clip_id,
+            "step": "complete",
+            "percent": 100.0,
+            "message": (
+                f"Video-Analyse fertig: {int(result.get('scene_count', 0) or 0)} Szenen, "
+                f"Motion {float(result.get('avg_motion', 0.0) or 0.0):.1f}"
+            ),
+        })
         return VideoAnalysisResult(**result)
     except Exception as e:
         logger.error(f"Video-Analyse fehlgeschlagen: {e}", exc_info=True)
@@ -235,6 +255,13 @@ async def analyze_video(
             source="video.analyze",
             detail=str(e),
         )
+        # BUG-204 Fix: Error-Event so UI nicht ewig im "Loading" haengt
+        await publish_event("analysis_progress", {
+            "clip_id": request.clip_id,
+            "step": "error",
+            "percent": 0.0,
+            "message": f"Video-Analyse fehlgeschlagen: {clip['name']} ({type(e).__name__})",
+        })
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
 
 
