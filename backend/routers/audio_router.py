@@ -150,6 +150,16 @@ async def import_audio(
         clip["subtrack_segments"] = []
         clip["tempo_curve"] = []
 
+    # L-K1: Cache befuellen damit PacingService die Subtracks lesen kann.
+    # Vorher landeten subtrack_segments + tempo_curve nur im in-memory clip-dict
+    # und nie im audio_analysis_cache — _pre_cached_subtracks (Audit E3) wurde
+    # nie sinnvoll aufgerufen.
+    state.update_audio_analysis(
+        clip_id=clip["id"],
+        subtrack_segments=clip["subtrack_segments"],
+        tempo_curve=clip["tempo_curve"],
+    )
+
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
     await publish_log(
         f"Audio importiert: {audio_path.name}",

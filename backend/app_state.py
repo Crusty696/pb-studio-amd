@@ -395,18 +395,26 @@ class AppState:
     def update_audio_analysis(
         self,
         clip_id: int,
-        bpm: float,
-        key: Optional[str],
-        beat_count: int,
-        beats_json: str,
-        is_analyzed: bool,
+        bpm: Optional[float] = None,
+        key: Optional[str] = None,
+        beat_count: Optional[int] = None,
+        beats_json: Optional[str] = None,
+        is_analyzed: bool = False,
         energy_curve=None,
         structure_segments=None,
         spectral_data=None,
+        subtrack_segments=None,  # L-K1: Sub-Track-Segmente (Mix-Import)
+        tempo_curve=None,        # L-K1: Tempo-Verlauf ueber den Mix
     ) -> None:
         """
         Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
-        StructureSegments, SpectralData) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
+        StructureSegments, SpectralData, SubtrackSegments, TempoCurve) in der
+        ai_data_json-Spalte des zugehörigen media-Eintrags.
+
+        Alle Felder sind optional — nur tatsaechlich uebergebene Werte ueberschreiben
+        bestehende DB-/Cache-Eintraege. Das erlaubt partielle Updates (z.B. nur
+        Subtracks aus dem Import-Pfad, ohne BPM/Beats zu loeschen).
+
         Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
         """
         try:
@@ -423,42 +431,90 @@ class AppState:
             if row is None:
                 logger.warning(f"update_audio_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
                 return
-            # beats_json is already a serialised JSON string — parse it back to a list
-            # so that the surrounding json.dumps() in the repository layer does not
-            # double-encode it into a string-of-a-string.
-            try:
-                beats_list = json.loads(beats_json) if beats_json else []
-            except (json.JSONDecodeError, TypeError):
-                beats_list = []
-                logger.warning("update_audio_analysis: beats_json konnte nicht geparst werden; leere Liste verwendet")
 
-            ai_data = {
-                "bpm": bpm,
-                "key": key,
-                "beat_count": beat_count,
-                "beats_json": beats_list,
-                "is_analyzed": is_analyzed,
-            }
+            # Existing ai_data laden — partielle Updates muessen vorhandene Felder
+            # bewahren (z.B. nur Subtracks setzen, ohne BPM/Beats zu loeschen).
+            try:
+                existing_ai = json.loads(row.get("ai_data_json") or "{}")
+                if not isinstance(existing_ai, dict):
+                    existing_ai = {}
+            except (json.JSONDecodeError, TypeError):
+                existing_ai = {}
+
+            ai_data: dict = dict(existing_ai)
+            # Nur Felder ueberschreiben, die explizit uebergeben wurden.
+            if bpm is not None:
+                ai_data["bpm"] = bpm
+            if key is not None:
+                ai_data["key"] = key
+            if beat_count is not None:
+                ai_data["beat_count"] = beat_count
+            if beats_json is not None:
+                # beats_json kann serialisierter JSON-String sein — parse zu Liste,
+                # damit json.dumps() in der Repository-Schicht nicht doppelt encoded.
+                try:
+                    beats_list = json.loads(beats_json) if beats_json else []
+                except (json.JSONDecodeError, TypeError):
+                    beats_list = []
+                    logger.warning("update_audio_analysis: beats_json konnte nicht geparst werden; leere Liste verwendet")
+                ai_data["beats_json"] = beats_list
+            # is_analyzed: True ueberschreibt; False respektiert vorhandenen True-Wert.
+            if is_analyzed:
+                ai_data["is_analyzed"] = True
+            elif "is_analyzed" not in ai_data:
+                ai_data["is_analyzed"] = False
             if energy_curve is not None:
                 ai_data["energy_curve"] = energy_curve
             if structure_segments is not None:
                 ai_data["structure_segments"] = structure_segments
             if spectral_data is not None:
                 ai_data["spectral_data"] = spectral_data
+            if subtrack_segments is not None:
+                ai_data["subtrack_segments"] = subtrack_segments
+            if tempo_curve is not None:
+                ai_data["tempo_curve"] = tempo_curve
+
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
-            
+
+            # Diff dictionary fuer den In-Memory-Cache (nur tatsaechlich gesetzte Felder).
+            cache_update: dict = {}
+            if bpm is not None:
+                cache_update["bpm"] = bpm
+            if key is not None:
+                cache_update["key"] = key
+            if beat_count is not None:
+                cache_update["beat_count"] = beat_count
+            if beats_json is not None:
+                cache_update["beats_json"] = ai_data["beats_json"]
+            if is_analyzed:
+                cache_update["is_analyzed"] = True
+            if energy_curve is not None:
+                cache_update["energy_curve"] = energy_curve
+            if structure_segments is not None:
+                cache_update["structure_segments"] = structure_segments
+            if spectral_data is not None:
+                cache_update["spectral_data"] = spectral_data
+            if subtrack_segments is not None:
+                cache_update["subtrack_segments"] = subtrack_segments
+            if tempo_curve is not None:
+                cache_update["tempo_curve"] = tempo_curve
+
             # In-Memory Cache ebenfalls aktualisieren
             with self._state_lock:
                 if clip_id in self.audio_analysis_cache:
-                    self.audio_analysis_cache[clip_id].update(ai_data)
+                    self.audio_analysis_cache[clip_id].update(cache_update)
                 else:
                     self.audio_analysis_cache[clip_id] = {
                         "clip_id": clip_id,
-                        **ai_data,
-                        "duration_seconds": clip.get("duration_seconds", 0.0)
+                        **cache_update,
+                        "duration_seconds": clip.get("duration_seconds", 0.0),
                     }
 
-            logger.debug(f"Audio-Analyse für Clip {clip_id} in DB persistiert (bpm={bpm:.1f}, key={key})")
+            bpm_str = f"{bpm:.1f}" if isinstance(bpm, (int, float)) else "—"
+            logger.debug(
+                f"Audio-Analyse für Clip {clip_id} in DB persistiert "
+                f"(bpm={bpm_str}, key={key}, subtracks={'yes' if subtrack_segments is not None else '—'})"
+            )
         except Exception as e:
             logger.warning(f"Audio-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
 
