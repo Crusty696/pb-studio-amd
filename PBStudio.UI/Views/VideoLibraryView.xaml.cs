@@ -4,14 +4,19 @@ using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI.Views;
 
-/// <summary>VideoLibraryView — DataContext wird via Ioc.Default aufgelöst (kein XAML-Instantiierung).</summary>
+/// <summary>VideoLibraryView — DataContext wird via Ioc.Default aufgelöst.</summary>
 public partial class VideoLibraryView : UserControl
 {
     public VideoLibraryView()
     {
         InitializeComponent();
-        // KORREKTUR: DataContext via DI auflösen, nicht über XAML <vm:VideoLibraryViewModel/>
-        // XAML kann keinen Konstruktor mit Parametern aufrufen → Ioc.Default
         DataContext = Ioc.Default.GetRequiredService<VideoLibraryViewModel>();
+    }
+
+    /// <summary>Multi-Select Sync: ListBox.SelectedItems -> VM.SelectedClips.</summary>
+    private void VideoClipList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is VideoLibraryViewModel vm && sender is ListBox list)
+            vm.UpdateSelectedClips(list.SelectedItems);
     }
 }

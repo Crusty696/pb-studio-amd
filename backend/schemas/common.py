@@ -11,6 +11,17 @@ class StatusResponse(BaseModel):
     message: str = ""
 
 
+class BatchDeleteRequest(BaseModel):
+    """Batch-Delete Request: Liste von Clip-IDs."""
+    clip_ids: list[int] = Field(..., min_length=1, description="IDs der zu loeschenden Clips")
+
+
+class DeleteResponse(BaseModel):
+    """Antwort eines Delete-Calls (single oder batch)."""
+    deleted_count: int = Field(..., description="Anzahl tatsaechlich geloeschter Clips")
+    not_found_ids: list[int] = Field(default_factory=list, description="IDs die nicht gefunden wurden")
+
+
 class ErrorResponse(BaseModel):
     """Fehler-Antwort."""
     error: str

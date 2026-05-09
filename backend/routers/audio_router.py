@@ -28,6 +28,7 @@ from ..schemas.audio_schemas import (
     StemSeparateRequest, StemResult,
     StructureSegment, SpectralData,
 )
+from ..schemas.common import BatchDeleteRequest, DeleteResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
@@ -171,6 +172,47 @@ async def list_clips(
         items.append(AudioClipInfo(**merged))
 
     return items
+
+
+@router.delete(
+    "/clips/{clip_id}",
+    response_model=DeleteResponse,
+    summary="Audio-Clip loeschen (single)",
+)
+async def delete_clip(
+    clip_id: int,
+    state: AppState = Depends(get_app_state),
+) -> DeleteResponse:
+    """Loescht einen einzelnen Audio-Clip aus In-Memory + SQLite."""
+    if state.delete_audio_clip(clip_id):
+        await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
+        return DeleteResponse(deleted_count=1, not_found_ids=[])
+    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+
+
+@router.delete(
+    "/clips",
+    response_model=DeleteResponse,
+    summary="Audio-Clips batch-loeschen",
+)
+async def delete_clips_batch(
+    request: BatchDeleteRequest,
+    state: AppState = Depends(get_app_state),
+) -> DeleteResponse:
+    """Batch-Delete: loescht alle in clip_ids aufgefuehrten Audio-Clips."""
+    deleted = 0
+    not_found = []
+    for cid in request.clip_ids:
+        if state.delete_audio_clip(cid):
+            deleted += 1
+        else:
+            not_found.append(cid)
+    if deleted:
+        await publish_log(
+            f"{deleted} Audio-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
+            level="info", source="audio.delete",
+        )
+    return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
 
 
 @router.post(

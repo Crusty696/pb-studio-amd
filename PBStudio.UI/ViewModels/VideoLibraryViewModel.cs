@@ -42,9 +42,17 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isLoadingClips;
     [ObservableProperty] private bool _isLoadingScenes;
     [ObservableProperty] private string _videoImportPath = string.Empty;
+    [ObservableProperty] private bool _isDeleting;
+    [ObservableProperty] private string _currentStep = "";
+    [ObservableProperty] private int _currentStepIndex;
+    [ObservableProperty] private int _currentStepTotal;
+    [ObservableProperty] private double _currentClipProgress;
+    [ObservableProperty] private int _analyzedCount;
+    [ObservableProperty] private int _pendingCount;
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
     public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
+    public ObservableCollection<VideoClipModel> SelectedClips { get; } = [];
 
     public VideoLibraryViewModel(IApiClient api, VideoLibraryStateService videoLibraryState, SSEClient sseClient, IDialogService dialogService)
     {
@@ -162,8 +170,113 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             Application.Current.Dispatcher.Invoke(() =>
             {
                 StatusText = e.Message;
+                if (e.Percent >= 0)
+                    CurrentClipProgress = e.Percent;
+                if (!string.IsNullOrEmpty(e.Step))
+                    CurrentStep = e.Step;
+                if (e.StepIndex > 0) CurrentStepIndex = e.StepIndex;
+                if (e.StepTotal > 0) CurrentStepTotal = e.StepTotal;
             });
         }
+    }
+
+    [RelayCommand]
+    private async Task DeleteSelectedAsync()
+    {
+        if (SelectedClips.Count == 0 || IsDeleting) return;
+        IsDeleting = true;
+        try
+        {
+            var ids = SelectedClips.Select(c => c.Id).ToList();
+            StatusText = $"Loesche {ids.Count} Video-Clips...";
+            var resp = ids.Count == 1
+                ? await _api.DeleteVideoClipAsync(ids[0])
+                : await _api.DeleteVideoClipsBatchAsync(ids);
+            if (resp != null)
+            {
+                StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
+                _videoLibraryState.Clear();
+                await LoadClipsAsync();
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+            }
+            else StatusText = "Delete fehlgeschlagen.";
+        }
+        finally { IsDeleting = false; }
+    }
+
+    [RelayCommand]
+    private async Task DeleteAllVideosAsync()
+    {
+        if (VideoClips.Count == 0 || IsDeleting) return;
+        IsDeleting = true;
+        try
+        {
+            var ids = VideoClips.Select(c => c.Id).ToList();
+            StatusText = $"Loesche ALLE {ids.Count} Video-Clips...";
+            var resp = await _api.DeleteVideoClipsBatchAsync(ids);
+            if (resp != null)
+            {
+                StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
+                _videoLibraryState.Clear();
+                await LoadClipsAsync();
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+            }
+            else StatusText = "Delete-All fehlgeschlagen.";
+        }
+        finally { IsDeleting = false; }
+    }
+
+    [RelayCommand]
+    private void SelectAllVideos()
+    {
+        SelectedClips.Clear();
+        foreach (var c in VideoClips) SelectedClips.Add(c);
+    }
+
+    [RelayCommand]
+    private async Task AnalyzeMarkedAsync()
+    {
+        if (SelectedClips.Count == 0 || IsAnalyzing) return;
+        var clips = SelectedClips.ToList();
+        IsAnalyzingAll = true;
+        IsAnalyzing = true;
+        var total = clips.Count;
+        var done = 0;
+        try
+        {
+            foreach (var clip in clips)
+            {
+                if (clip.IsAnalyzed) { done++; continue; }
+                StatusText = $"Markierte: Analysiere {done + 1}/{total}: {clip.Name}...";
+                AnalyzeAllProgress = (double)done / total * 100.0;
+                var result = await _api.AnalyzeVideoAsync(clip.Id);
+                if (result != null) clip.IsAnalyzed = true;
+                done++;
+            }
+            AnalyzeAllProgress = 100.0;
+            StatusText = $"Markierte fertig: {total} Clips.";
+            UpdateAnalyzedCounts();
+        }
+        finally
+        {
+            IsAnalyzingAll = false;
+            IsAnalyzing = false;
+        }
+    }
+
+    public void UpdateSelectedClips(System.Collections.IList selectedItems)
+    {
+        SelectedClips.Clear();
+        foreach (var o in selectedItems)
+            if (o is VideoClipModel m) SelectedClips.Add(m);
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        AnalyzeMarkedCommand.NotifyCanExecuteChanged();
+    }
+
+    private void UpdateAnalyzedCounts()
+    {
+        AnalyzedCount = VideoClips.Count(c => c.IsAnalyzed);
+        PendingCount = VideoClips.Count - AnalyzedCount;
     }
 
     [RelayCommand]

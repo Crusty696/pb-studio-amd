@@ -6,6 +6,7 @@
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
              xmlns:models="clr-namespace:PBStudio.UI.Models"
              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
+             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              Background="{StaticResource AbletonBg}">
 
     <UserControl.Resources>
@@ -70,6 +71,52 @@
                             <TextBlock Text="Alle analysieren" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+
+                    <Button Command="{Binding AnalyzeMarkedCommand}" Style="{StaticResource ToolbarBtn}"
+                            ToolTip="Nur die markierten Clips analysieren">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
+                                                   Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Markierte analysieren" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
+
+                    <Button Command="{Binding SelectAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
+                            Content="Alle markieren"/>
+
+                    <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ToolbarBtn}"
+                            ToolTip="Markierte Clips loeschen (DB + Memory + Analyse-Cache)">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"
+                                                   Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Markierte loeschen" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding DeleteAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
+                            ToolTip="ALLE Video-Clips loeschen">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="DeleteSweep" Width="14" Height="14"
+                                                   Margin="0,0,6,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource AbletonRed}"/>
+                            <TextBlock Text="Alle loeschen" VerticalAlignment="Center"
+                                       Foreground="{StaticResource AbletonRed}"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
+
+                    <!-- Analysed-counts indicator -->
+                    <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
+                               Foreground="{StaticResource AbletonGreen}" FontSize="11">
+                        <Run Text="✓ "/><Run Text="{Binding AnalyzedCount, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
+                               Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                        <Run Text="Offen: "/><Run Text="{Binding PendingCount, Mode=OneWay}"/>
+                    </TextBlock>
                 </StackPanel>
 
                 <!-- Thumbnail loading indicator -->
@@ -85,9 +132,12 @@
             </DockPanel>
         </Border>
 
-        <!-- ── Thumbnail Grid ── -->
-        <ListBox Grid.Row="1" Grid.Column="0" ItemsSource="{Binding VideoClips}"
+        <!-- ── Thumbnail Grid (Multi-Select) ── -->
+        <ListBox x:Name="VideoClipList"
+                 Grid.Row="1" Grid.Column="0" ItemsSource="{Binding VideoClips}"
                  SelectedItem="{Binding SelectedClip}"
+                 SelectionMode="Extended"
+                 SelectionChanged="VideoClipList_SelectionChanged"
                  Background="Transparent" BorderThickness="0"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -115,9 +165,18 @@
                                 </Grid>
                             </Border>
                             <StackPanel Margin="8,6,8,8">
-                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
-                                           Foreground="{StaticResource AbletonText}"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <DockPanel>
+                                    <!-- Feature-3: IsAnalyzed-Badge -->
+                                    <icon:PackIconMaterial DockPanel.Dock="Right"
+                                                           Kind="CheckCircle" Width="11" Height="11"
+                                                           Margin="4,0,0,0" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource AbletonGreen}"
+                                                           ToolTip="Bereits analysiert"
+                                                           Visibility="{Binding IsAnalyzed, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
+                                               Foreground="{StaticResource AbletonText}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                     <TextBlock Text="{Binding DurationText}"
                                                Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
@@ -209,20 +268,32 @@
             </DockPanel>
         </md:Card>
 
-        <!-- ── Status Bar ── -->
+        <!-- ── Status Bar mit Step-Indicator + ProgressBarWithLabel (Feature-1+3) ── -->
         <Border Grid.Row="2" Grid.ColumnSpan="2" Background="{StaticResource AbletonPanel}"
                 BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
                 CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
             <DockPanel>
-                <ProgressBar DockPanel.Dock="Left" Width="180" Height="4"
-                             Value="{Binding AnalyzeAllProgress}" Margin="0,0,12,0"
-                             Foreground="{StaticResource AbletonAccent}"
-                             Background="{StaticResource AbletonBorder}"
-                             Visibility="{Binding IsAnalyzingAll, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <ProgressBar DockPanel.Dock="Left" Width="80" Height="4"
-                             IsIndeterminate="True" Margin="0,0,12,0"
-                             Foreground="{StaticResource AbletonYellow}"
-                             Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Batch-Progress (alle markierten/alle Clips) -->
+                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="180"
+                                               Percent="{Binding AnalyzeAllProgress}"
+                                               Margin="0,0,12,0" VerticalAlignment="Center"
+                                               Visibility="{Binding IsAnalyzingAll, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Per-Clip Progress (current step within current clip) -->
+                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="160"
+                                               Percent="{Binding CurrentClipProgress}"
+                                               Margin="0,0,12,0" VerticalAlignment="Center"
+                                               Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Step-Indicator (Feature-3) -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,12,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock Text="Schritt " Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
+                    <TextBlock Text="{Binding CurrentStepIndex}" Foreground="{StaticResource AbletonAccent}" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock Text="/" Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
+                    <TextBlock Text="{Binding CurrentStepTotal}" Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
+                    <TextBlock Text=": " Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
+                    <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonText}" FontSize="11" FontStyle="Italic"/>
+                </StackPanel>
                 <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
                            FontSize="11" VerticalAlignment="Center"/>
             </DockPanel>

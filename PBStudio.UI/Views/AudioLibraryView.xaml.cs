@@ -4,14 +4,19 @@ using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI.Views;
 
-/// <summary>AudioLibraryView — DataContext wird via Ioc.Default aufgelöst (kein XAML-Instantiierung).</summary>
+/// <summary>AudioLibraryView — DataContext wird via Ioc.Default aufgelöst.</summary>
 public partial class AudioLibraryView : UserControl
 {
     public AudioLibraryView()
     {
         InitializeComponent();
-        // KORREKTUR: DataContext via DI auflösen, nicht über XAML <vm:AudioLibraryViewModel/>
-        // XAML kann keinen Konstruktor mit Parametern aufrufen → Ioc.Default
         DataContext = Ioc.Default.GetRequiredService<AudioLibraryViewModel>();
+    }
+
+    /// <summary>Multi-Select Sync: ListBox.SelectedItems -> VM.SelectedClips.</summary>
+    private void AudioClipList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is AudioLibraryViewModel vm && sender is ListBox list)
+            vm.UpdateSelectedClips(list.SelectedItems);
     }
 }

@@ -4,6 +4,7 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              Background="{StaticResource AbletonBg}">
 
     <UserControl.Resources>
@@ -99,9 +100,28 @@
                     </Button>
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>
                     <Button Command="{Binding SelectAllCommand}" Style="{StaticResource BatchBtn}"
-                            Content="Alle"/>
+                            Content="Alle markieren"/>
                     <Button Command="{Binding DeselectAllCommand}" Style="{StaticResource BatchBtn}"
                             Content="Keine" Margin="2,0"/>
+                    <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>
+                    <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource BatchBtn}"
+                            ToolTip="Markierte Clips loeschen (DB + Memory)">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="DeleteOutline" Width="12" Height="12"
+                                                   Margin="0,0,4,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Markierte loeschen" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding DeleteAllCommand}" Style="{StaticResource BatchBtn}"
+                            ToolTip="ALLE Audio-Clips loeschen" Margin="2,0">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="DeleteSweep" Width="12" Height="12"
+                                                   Margin="0,0,4,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource AbletonRed}"/>
+                            <TextBlock Text="Alle loeschen" VerticalAlignment="Center"
+                                       Foreground="{StaticResource AbletonRed}"/>
+                        </StackPanel>
+                    </Button>
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>
                     <Button Command="{Binding AnalyzeAllCommand}" Style="{StaticResource BatchBtn}"
                             IsEnabled="{Binding IsAnalyzing, Converter={StaticResource InverseBooleanConverter}}">
@@ -113,9 +133,12 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Clip list -->
-                <ListBox ItemsSource="{Binding AudioClips}"
+                <!-- Clip list (Multi-Select fuer Delete-Operationen) -->
+                <ListBox x:Name="AudioClipList"
+                         ItemsSource="{Binding AudioClips}"
                          SelectedItem="{Binding SelectedClip}"
+                         SelectionMode="Extended"
+                         SelectionChanged="AudioClipList_SelectionChanged"
                          DisplayMemberPath="Name"
                          Background="Transparent" BorderThickness="0"/>
             </DockPanel>
@@ -146,16 +169,14 @@
                 </Button>
             </StackPanel>
 
-            <!-- Status bar at bottom -->
+            <!-- Status bar at bottom mit ProgressBarWithLabel (Feature-1) -->
             <Border DockPanel.Dock="Bottom" Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
                     CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
                 <DockPanel>
-                    <ProgressBar DockPanel.Dock="Left" Width="100" Height="4"
-                                 Value="{Binding AnalysisProgress}" Margin="0,0,12,0"
-                                 Foreground="{StaticResource AbletonYellow}"
-                                 Background="{StaticResource AbletonBorder}"
-                                 Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="220"
+                                                   Percent="{Binding AnalysisProgress}"
+                                                   Margin="0,0,12,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
                                FontSize="11" VerticalAlignment="Center"/>
                 </DockPanel>

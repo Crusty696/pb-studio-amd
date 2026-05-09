@@ -129,6 +129,50 @@ class AppState:
             # BUG-063 FIX: Deep copy
             return {k: dict(v) for k, v in self.video_clips.items()}
 
+    def delete_audio_clip(self, clip_id: int) -> bool:
+        """Loescht Audio-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht.
+
+        Cleanup: audio_clips, audio_analysis_cache, MediaRepository row.
+        Foreign-Key-Cascade entfernt vector_map-Eintraege automatisch.
+        """
+        with self._state_lock:
+            clip = self.audio_clips.pop(clip_id, None)
+            self.audio_analysis_cache.pop(clip_id, None)
+        if clip is None:
+            return False
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip["path"],
+            )
+            if row:
+                repo.delete_media(row["id"])
+        except Exception as e:
+            logger.warning("Audio-Clip DB-Delete fehlgeschlagen (in-memory war erfolgreich): %s", e)
+        return True
+
+    def delete_video_clip(self, clip_id: int) -> bool:
+        """Loescht Video-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht."""
+        with self._state_lock:
+            clip = self.video_clips.pop(clip_id, None)
+            self.video_analysis_cache.pop(clip_id, None)
+        if clip is None:
+            return False
+        try:
+            from pb_studio.data.repositories.media_repository import MediaRepository
+            repo = MediaRepository()
+            row = repo.find_by_project_and_path(
+                project_id=self.get_current_project_db_id(),
+                file_path=clip["path"],
+            )
+            if row:
+                repo.delete_media(row["id"])
+        except Exception as e:
+            logger.warning("Video-Clip DB-Delete fehlgeschlagen (in-memory war erfolgreich): %s", e)
+        return True
+
     def get_audio_analysis(self, clip_id: int) -> Optional[dict]:
         """Thread-safe Zugriff auf Audio-Analyse-Cache."""
         with self._state_lock:

@@ -145,6 +145,18 @@ public class ApiClient : IApiClient
     public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default)
         => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}", cancellationToken).ConfigureAwait(false);
 
+    public async Task<DeleteResponse?> DeleteVideoClipAsync(int clipId)
+        => await DeleteAsync<DeleteResponse>($"/video/clips/{clipId}").ConfigureAwait(false);
+
+    public async Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds)
+        => await DeleteWithBodyAsync<DeleteResponse>("/video/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+
+    public async Task<DeleteResponse?> DeleteAudioClipAsync(int clipId)
+        => await DeleteAsync<DeleteResponse>($"/audio/clips/{clipId}").ConfigureAwait(false);
+
+    public async Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds)
+        => await DeleteWithBodyAsync<DeleteResponse>("/audio/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+
     public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/video/thumbnails/{clipId}");
@@ -311,6 +323,49 @@ public class ApiClient : IApiClient
         }
     }
 
+    private async Task<T?> DeleteAsync<T>(string url) where T : class
+    {
+        try
+        {
+            using var response = await _http.DeleteAsync(url, _shutdownCts.Token).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DELETE {Url} fehlgeschlagen", url);
+            return null;
+        }
+    }
+
+    private async Task<T?> DeleteWithBodyAsync<T>(string url, object body) where T : class
+    {
+        try
+        {
+            // HttpClient.DeleteAsync supports no body; need explicit HttpRequestMessage
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url)
+            {
+                Content = JsonContent.Create(body, options: JsonOptions),
+            };
+            using var response = await _http.SendAsync(request, _shutdownCts.Token).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DELETE {Url} (with body) fehlgeschlagen", url);
+            return null;
+        }
+    }
+
     private async Task<T?> PostAsync<T>(string url, object? body) where T : class
     {
         try
@@ -364,6 +419,7 @@ public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(int Id, string Name, string Path, double DurationSeconds, int Width, int Height, double Fps, string Codec, bool ThumbnailAvailable, List<string> Tags, bool IsAnalyzed = false);
+public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
 public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);

@@ -29,8 +29,11 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _beatCount;
     [ObservableProperty] private string _key = "";
     [ObservableProperty] private double _durationSeconds;
+    [ObservableProperty] private bool _isDeleting;
+    [ObservableProperty] private string _currentStep = "";
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
+    public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
 
     public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, SSEClient sseClient, IDialogService dialogService)
     {
@@ -52,13 +55,71 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if (e.EventType == "analysis_progress" && IsAnalyzing)
+        if (e.EventType == "analysis_progress" && (IsAnalyzing || IsSeparating))
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
                 StatusText = e.Message;
+                if (e.Percent >= 0)
+                    AnalysisProgress = e.Percent;
+                if (!string.IsNullOrEmpty(e.Step))
+                    CurrentStep = e.Step;
             });
         }
+    }
+
+    [RelayCommand]
+    private async Task DeleteSelectedAsync()
+    {
+        if (SelectedClips.Count == 0 || IsDeleting) return;
+        IsDeleting = true;
+        try
+        {
+            var ids = SelectedClips.Select(c => c.Id).ToList();
+            StatusText = $"Loesche {ids.Count} Audio-Clips...";
+            var resp = ids.Count == 1
+                ? await _api.DeleteAudioClipAsync(ids[0])
+                : await _api.DeleteAudioClipsBatchAsync(ids);
+            if (resp != null)
+            {
+                StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+            }
+            else StatusText = "Delete fehlgeschlagen.";
+        }
+        finally { IsDeleting = false; }
+    }
+
+    [RelayCommand]
+    private async Task DeleteAllAsync()
+    {
+        if (AudioClips.Count == 0 || IsDeleting) return;
+        IsDeleting = true;
+        try
+        {
+            var ids = AudioClips.Select(c => c.Id).ToList();
+            StatusText = $"Loesche ALLE {ids.Count} Audio-Clips...";
+            var resp = await _api.DeleteAudioClipsBatchAsync(ids);
+            if (resp != null)
+            {
+                StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+            }
+            else StatusText = "Delete-All fehlgeschlagen.";
+        }
+        finally { IsDeleting = false; }
+    }
+
+
+    /// <summary>Wird vom View aufgerufen wenn ListBox-Selection aendert (CanExecute fuer Delete).</summary>
+    public void UpdateSelectedClips(System.Collections.IList selectedItems)
+    {
+        SelectedClips.Clear();
+        foreach (var o in selectedItems)
+            if (o is AudioClipModel m) SelectedClips.Add(m);
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedClipChanged(AudioClipModel? value)
@@ -199,15 +260,21 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectAll()
     {
-        if (AudioClips.Count > 0)
-            SelectedClip = AudioClips[0];
-        StatusText = $"{AudioClips.Count} Clips verfügbar";
+        // Markiert ALLE Clips fuer Multi-Operation (Delete-Selected etc.).
+        // Befuellt SelectedClips-Collection, View pickt das via behavior auf.
+        SelectedClips.Clear();
+        foreach (var c in AudioClips) SelectedClips.Add(c);
+        if (AudioClips.Count > 0) SelectedClip = AudioClips[0];
+        StatusText = $"{AudioClips.Count} Clips markiert";
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     private void DeselectAll()
     {
+        SelectedClips.Clear();
         SelectedClip = null;
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     private bool CanAnalyzeAll() => AudioClips.Count > 0 && !IsAnalyzing;

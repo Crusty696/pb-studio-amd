@@ -241,6 +241,10 @@ public class SSEClient : IDisposable
                         EtaSeconds = TryGetDouble(root, "eta_seconds"),
                         OutputPath = TryGetString(root, "output_path"),
                         Error = TryGetString(root, "error"),
+                        Step = TryGetString(root, "step"),
+                        StepIndex = TryGetInt(root, "step_index"),
+                        StepTotal = TryGetInt(root, "step_total"),
+                        ClipId = TryGetInt(root, "clip_id"),
                     });
                     break;
 
@@ -349,7 +353,7 @@ public class SSEClient : IDisposable
 public class ProgressEventArgs : EventArgs
 {
     public string EventType { get; init; } = "";
-    public double Percent { get; init; }
+    public double Percent { get; init; } = -1.0; // -1 = nicht gesetzt (0 ist gueltig)
     public string Message { get; init; } = "";
     public string TaskId { get; init; } = "";
     public string Status { get; init; } = "";
@@ -359,6 +363,10 @@ public class ProgressEventArgs : EventArgs
     public double EtaSeconds { get; init; }
     public string OutputPath { get; init; } = "";
     public string Error { get; init; } = "";
+    public string Step { get; init; } = "";       // Feature-3: phase-Identifier
+    public int StepIndex { get; init; }            // 1-based current step
+    public int StepTotal { get; init; }            // total steps in pipeline
+    public int ClipId { get; init; }               // betroffenen Clip-ID
 }
 
 public class LogEventArgs : EventArgs

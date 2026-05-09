@@ -26,6 +26,7 @@ from ..schemas.video_schemas import (
     VideoAnalyzeRequest, VideoAnalysisResult,
     SceneInfo, MotionData,
 )
+from ..schemas.common import BatchDeleteRequest, DeleteResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
@@ -167,6 +168,47 @@ async def get_thumbnail(
         raise HTTPException(status_code=500, detail=f"Thumbnail-Generierung fehlgeschlagen: {e}")
 
 
+@router.delete(
+    "/clips/{clip_id}",
+    response_model=DeleteResponse,
+    summary="Video-Clip loeschen (single)",
+)
+async def delete_clip(
+    clip_id: int,
+    state: AppState = Depends(get_app_state),
+) -> DeleteResponse:
+    """Loescht einen einzelnen Video-Clip aus In-Memory + SQLite + FAISS-Cache."""
+    if state.delete_video_clip(clip_id):
+        await publish_log(f"Video-Clip {clip_id} geloescht", level="info", source="video.delete")
+        return DeleteResponse(deleted_count=1, not_found_ids=[])
+    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+
+
+@router.delete(
+    "/clips",
+    response_model=DeleteResponse,
+    summary="Video-Clips batch-loeschen",
+)
+async def delete_clips_batch(
+    request: BatchDeleteRequest,
+    state: AppState = Depends(get_app_state),
+) -> DeleteResponse:
+    """Batch-Delete: loescht alle in clip_ids aufgefuehrten Video-Clips."""
+    deleted = 0
+    not_found = []
+    for cid in request.clip_ids:
+        if state.delete_video_clip(cid):
+            deleted += 1
+        else:
+            not_found.append(cid)
+    if deleted:
+        await publish_log(
+            f"{deleted} Video-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
+            level="info", source="video.delete",
+        )
+    return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
+
+
 @router.post(
     "/analyze",
     response_model=VideoAnalysisResult,
@@ -200,16 +242,36 @@ async def analyze_video(
         detail=f"clip_id={request.clip_id}",
     )
 
-    # BUG-204 Fix: SSE analysis_progress events emittieren damit C# UI Live-Status
-    # waehrend RAFT/SigLIP-Analyse anzeigen kann (Audio + Pacing Router emittieren bereits).
+    # BUG-204/Feature-3: Multi-step SSE events fuer fein-granularen UI-Fortschritt.
+    # Coarse 4-phase view (init/scenes/motion+embed/finalize) bis _run_video_analysis
+    # mit progress_callback instrumentiert ist (TODO).
     await publish_event("analysis_progress", {
         "clip_id": request.clip_id,
-        "step": "start",
-        "percent": 5.0,
+        "step": "init",
+        "step_index": 1,
+        "step_total": 4,
+        "percent": 1.0,
         "message": f"Starte Video-Analyse: {clip['name']}",
     })
 
+    await publish_event("analysis_progress", {
+        "clip_id": request.clip_id,
+        "step": "scenes",
+        "step_index": 2,
+        "step_total": 4,
+        "percent": 15.0,
+        "message": f"Scene-Detection laeuft: {clip['name']}",
+    })
+
     try:
+        await publish_event("analysis_progress", {
+            "clip_id": request.clip_id,
+            "step": "motion_embedding",
+            "step_index": 3,
+            "step_total": 4,
+            "percent": 35.0,
+            "message": f"Motion + Embedding (RAFT/SigLIP) laeuft: {clip['name']}",
+        })
         result = await with_gpu_task(
             _run_video_analysis, clip["path"], request.clip_id, request,
             model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
@@ -236,10 +298,22 @@ async def analyze_video(
             detail=f"clip_id={request.clip_id} scenes={int(result.get('scene_count', 0) or 0)} avg_motion={float(result.get('avg_motion', 0.0) or 0.0):.2f}",
         )
 
+        # Feature-3: finalize-Event vor complete (DB-Persistenz schon passiert oben)
+        await publish_event("analysis_progress", {
+            "clip_id": request.clip_id,
+            "step": "finalize",
+            "step_index": 4,
+            "step_total": 4,
+            "percent": 90.0,
+            "message": f"Persistiere Ergebnisse: {clip['name']}",
+        })
+
         # BUG-204 Fix: Final-Event mit Ergebnis-Daten fuer UI-Status
         await publish_event("analysis_progress", {
             "clip_id": request.clip_id,
             "step": "complete",
+            "step_index": 4,
+            "step_total": 4,
             "percent": 100.0,
             "message": (
                 f"Video-Analyse fertig: {int(result.get('scene_count', 0) or 0)} Szenen, "

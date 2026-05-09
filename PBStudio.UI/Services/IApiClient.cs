@@ -29,6 +29,8 @@ public interface IApiClient : IDisposable
     Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId);
     Task<List<BeatData>?> GetBeatsAsync(int clipId);
     Task<StemResult?> SeparateStemsAsync(int clipId, string model = "UVR-MDX-NET-Inst_HQ_3.onnx");
+    Task<DeleteResponse?> DeleteAudioClipAsync(int clipId);
+    Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds);
 
     // --- Audio (Erweitert) ---
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
@@ -42,6 +44,8 @@ public interface IApiClient : IDisposable
     Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
+    Task<DeleteResponse?> DeleteVideoClipAsync(int clipId);
+    Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds);
 
     // --- Pacing ---
     Task<CutListResponse?> GenerateCutListAsync(PacingConfig config);
