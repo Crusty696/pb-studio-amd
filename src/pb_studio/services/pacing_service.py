@@ -298,23 +298,35 @@ class PacingService:
         else:
             self._last_used_cached_subtracks = False
 
-        # Audit E1: use_key_matching — Camelot-Wheel key compatibility scoring.
+        # Audit E1 + L-K4: use_key_matching — Camelot-Wheel key compatibility scoring.
         # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector
         # nutzt _key_compatibility_score(audio_key, video_key) zur Score-Anpassung.
-        # Da Video-Clips aktuell KEIN audio_key Feld haben (Audit E1 follow-up TODO),
-        # ist die Wirkung heute no-op — Flag-Pipeline ist trotzdem voll funktional und getestet.
+        # L-K4: Video-Clips haben jetzt audio_key Feld (via audio_key_detector) -> echter
+        # Effekt statt 0.5-Neutral. video_keys: {clip_id: audio_key_str} pro Clip.
         if pacing_config.get("use_key_matching", False):
             pacing_engine.clip_selector.use_key_matching = True
             cached_audio_key = cached_analysis.get("key") if cached_analysis else None
             pacing_engine.clip_selector.audio_key = cached_audio_key
+            # L-K4: Map clip_id -> audio_key fuer Per-Clip Compatibility-Score.
+            # Nur Clips mit nicht-leerem audio_key — None/missing wirkt im Score
+            # als neutral (0.5) statt Penalty.
+            video_keys_map: Dict[Any, str] = {}
+            for c in clips:
+                cid = c.get("id")
+                ak = c.get("audio_key")
+                if cid is not None and ak:
+                    video_keys_map[cid] = ak
+            pacing_engine.clip_selector.video_keys = video_keys_map
             logger.info(
-                "Audit E1: use_key_matching aktiviert (audio_key=%r) — "
-                "Camelot-Wheel Score wird in clip_selector._key_compatibility_score genutzt",
-                cached_audio_key,
+                "Audit E1 + L-K4: use_key_matching aktiviert (audio_key=%r, "
+                "%d/%d video_keys verfuegbar) — Camelot-Wheel Score in "
+                "clip_selector._key_compatibility_score wirksam",
+                cached_audio_key, len(video_keys_map), len(clips),
             )
         else:
             pacing_engine.clip_selector.use_key_matching = False
             pacing_engine.clip_selector.audio_key = None
+            pacing_engine.clip_selector.video_keys = {}
 
         try:
             # Entscheide welche Generierungsmethode genutzt wird

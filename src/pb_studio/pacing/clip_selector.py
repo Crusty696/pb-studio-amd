@@ -179,6 +179,16 @@ class ClipSelector:
         self.brain_audio_features: dict = {}
         self.brain_video_features_by_clip: dict = {}
 
+        # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
+        # use_key_matching: Master-Switch (vom PacingService gesetzt).
+        # audio_key: Tonart des Audio-Tracks (vom AudioAnalyzer KeyDetector).
+        # video_keys: {clip_id: video_audio_key} per Clip — vom audio_key_detector
+        # via _run_video_analysis erzeugt. Wirkt in _select_by_motion als
+        # multiplicativer Score-Bonus (0.3..1.0) auf die Motion-Selektion.
+        self.use_key_matching: bool = False
+        self.audio_key: Optional[str] = None
+        self.video_keys: Dict = {}
+
     # =========================================================================
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
@@ -410,6 +420,15 @@ class ClipSelector:
         best_clip = None
         best_score = -1.0
 
+        # L-K4: Lazy-Import um Zirkular-Import zu vermeiden.
+        _key_score_fn = None
+        if self.use_key_matching and self.audio_key:
+            try:
+                from .advanced_pacing_engine import _key_compatibility_score
+                _key_score_fn = _key_compatibility_score
+            except Exception:
+                _key_score_fn = None
+
         for clip in clips:
             clip_motion = clip.get("motion_score", 0.5)
             motion_diff = abs(target_motion - clip_motion)
@@ -423,6 +442,18 @@ class ClipSelector:
                 continuity_bonus = motion_continuity * self._continuity_weight * 0.5
 
             total_score = motion_score + continuity_bonus
+
+            # L-K4: Tonart-Bonus (Camelot-Wheel). Multiplicativer Faktor 0.3..1.0
+            # auf die Motion-Selektion. Clips ohne audio_key (None) ergeben 0.5
+            # (neutral) — kein Penalty wenn Detection fehlgeschlagen ist.
+            if _key_score_fn is not None:
+                clip_id = clip.get("id")
+                video_key = self.video_keys.get(clip_id) if clip_id is not None else None
+                if video_key is None:
+                    # Fallback: clip selbst kann audio_key Feld tragen (Test-Pfad).
+                    video_key = clip.get("audio_key")
+                key_score = _key_score_fn(self.audio_key, video_key)
+                total_score *= key_score
 
             if total_score > best_score:
                 best_score = total_score

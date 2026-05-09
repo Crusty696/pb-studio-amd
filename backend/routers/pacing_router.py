@@ -342,6 +342,7 @@ def _run_pacing_generation(
                 clip_data["dominant_colors"] = va.get("dominant_colors", [])  # A4
                 clip_data["tags"] = va.get("tags", [])  # A4
                 clip_data["has_embedding"] = bool(va.get("has_embedding", False))  # A4
+                clip_data["audio_key"] = va.get("audio_key")  # L-K4
             clips.append(clip_data)
 
     pacing_config = {

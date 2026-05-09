@@ -529,11 +529,16 @@ class AppState:
         motion=None,
         dominant_colors=None,
         tags=None,
+        audio_key: Optional[str] = None,
     ) -> None:
         """
         Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding, scenes,
-        motion, dominant_colors, tags) in der ai_data_json-Spalte des zugehörigen media-Eintrags.
-        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
+        motion, dominant_colors, tags, audio_key) in der ai_data_json-Spalte des zugehörigen
+        media-Eintrags. Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den
+        Analyseworkflow).
+
+        L-K4: audio_key (Tonart des Video-Audio-Tracks) wird persistiert damit
+        UseKeyMatching im Pacing nach Reload des Projekts weiterhin wirkt.
         """
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
@@ -563,6 +568,8 @@ class AppState:
                 ai_data["dominant_colors"] = dominant_colors
             if tags is not None:
                 ai_data["tags"] = tags
+            if audio_key is not None:
+                ai_data["audio_key"] = audio_key
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
             logger.debug(f"Video-Analyse für Clip {clip_id} in DB persistiert (scenes={scene_count}, motion={avg_motion:.2f})")
         except Exception as e:

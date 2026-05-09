@@ -316,6 +316,7 @@ async def analyze_video(
             motion=result.get("motion"),
             dominant_colors=result.get("dominant_colors"),
             tags=result.get("tags"),
+            audio_key=result.get("audio_key"),  # L-K4
         )
 
         await publish_log(
@@ -732,6 +733,20 @@ def _run_video_analysis(
     else:
         result["dominant_colors"] = []
         result["tags"] = []
+
+    # 5. L-K4: Audio-Track Key-Detection (fuer use_key_matching im Pacing).
+    # Vorher waren Video-Clips keinen audio_key zugeordnet -> _key_compatibility_score
+    # (audio_key, video_key) lieferte stets 0.5 (neutral) -> UseKeyMatching no-op.
+    # ffmpeg extract 30s mono WAV + KeyDetector (Krumhansl-Kessler) -> Key-String oder None.
+    try:
+        from pb_studio.video.audio_key_detector import detect_video_audio_key
+        audio_key = detect_video_audio_key(video_path)
+        result["audio_key"] = audio_key  # str oder None
+        if audio_key:
+            logger.info(f"L-K4: Video-Audio-Key fuer clip {clip_id}: {audio_key}")
+    except Exception as e:
+        logger.warning(f"L-K4 audio_key extract failed: {e}")
+        result["audio_key"] = None
 
     return result
 

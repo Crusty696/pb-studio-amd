@@ -53,6 +53,10 @@ class VideoAnalysisResult(BaseModel):
     brightness_curve: list[float] = []
     saturation_curve: list[float] = []
     color_temp_curve: list[float] = []
+    # L-K4: Tonart des Audio-Tracks (vom Video extrahiert via ffmpeg + Krumhansl-Kessler).
+    # None wenn Video keinen Audio-Track hat oder Detection fehlschlaegt.
+    # Wird im Pacing fuer use_key_matching (Camelot-Wheel Compatibility) genutzt.
+    audio_key: Optional[str] = None
 
 
 class SceneInfo(BaseModel):
