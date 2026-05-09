@@ -397,6 +397,41 @@ class ClipSelector:
             motion_score=clip.get("motion_score", 0.5),
         )
 
+    def _motion_curve_score(
+        self,
+        clip_motion_curve,
+        clip_duration: float,
+        audio_intensity_at_time: float,
+    ) -> float:
+        """L-M3: Score basierend auf motion-curve mean vs. audio intensity.
+
+        Engine-seitig forwarded pacing_router seit Audit A4 motion_curve in clip_data
+        durch — dieser Helper vergleicht den Bewegungs-Mittelwert eines Clips mit der
+        aktuellen Audio-Intensität, sodass actionreiche Clips an energiereichen Stellen
+        bevorzugt werden.
+
+        Args:
+            clip_motion_curve: Liste von Frame-Motion-Werten (typisch 0..50 für RAFT).
+            clip_duration: Dauer des Clips in Sekunden (aktuell unbenutzt, behalten
+                für künftige zeitlich segmentierte Bewertung).
+            audio_intensity_at_time: Audio-Intensität an dieser Position (0..1).
+
+        Returns:
+            0.0..1.0 — höher wenn Clip-Motion-Mean zur Audio-Intensität passt.
+        """
+        if not clip_motion_curve or len(clip_motion_curve) == 0:
+            return 0.5  # neutral
+        import statistics
+        try:
+            motion_mean = statistics.fmean(clip_motion_curve)
+        except (TypeError, statistics.StatisticsError):
+            return 0.5
+        # Normiere Motion (typischer max ~30 für action) auf 0..1
+        motion_norm = max(0.0, min(1.0, motion_mean / 30.0))
+        intensity = max(0.0, min(1.0, audio_intensity_at_time))
+        diff = abs(motion_norm - intensity)
+        return 1.0 - diff
+
     def _select_by_motion(
         self,
         clips: List[dict],
@@ -433,6 +468,18 @@ class ClipSelector:
             clip_motion = clip.get("motion_score", 0.5)
             motion_diff = abs(target_motion - clip_motion)
             motion_score = 1.0 - min(motion_diff / (self.motion_tolerance + 0.01), 1.0)
+
+            # L-M3: motion_curve-aware boost. trigger_strength dient als Proxy für
+            # die aktuelle Audio-Intensität (energy-curve nicht direkt im Selector
+            # verfügbar — bewusst keine position-aware-Logic hardcodet).
+            mc = clip.get("motion_curve") if isinstance(clip, dict) else None
+            if mc:
+                motion_curve_boost = self._motion_curve_score(
+                    mc,
+                    float(clip.get("duration", 1.0) or 1.0),
+                    float(target_motion),
+                )
+                motion_score = (motion_score + motion_curve_boost) / 2.0
 
             # Roter Faden: Continuity-Bonus für ähnliche Motion zum letzten Clip
             continuity_bonus = 0.0
