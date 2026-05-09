@@ -1166,6 +1166,34 @@ class AdvancedPacingEngine:
         # defensive clamp falls nicht.
         return 1.0 + max(0.0, min(1.0, bass_val))
 
+    def _tempo_at_time(self, time_sec: float) -> float:
+        """
+        Audit L-M1: Liefert lokale BPM zum Zeitpunkt time_sec via cached tempo_curve.
+
+        Wird von PacingService via cached_analysis["tempo_curve"] injiziert
+        (_pre_cached_tempo_curve) — kommt vom SubtrackDetector (DJ-Tempo-
+        Variation pro Subtrack). Hilfreich bei Mixen mit varying BPM.
+
+        Mapping time_sec -> Index erfolgt linear ueber _pre_cached_duration:
+            pos = clamp(time_sec / duration, 0..1)
+            idx = int(pos * (len(curve) - 1))
+
+        Returns:
+            float BPM-Wert. 120.0 als Default wenn keine tempo_curve injiziert
+            oder leer. Erster Wert der Curve falls duration fehlt/<=0.
+        """
+        curve = getattr(self, "_pre_cached_tempo_curve", None)
+        if curve is None:
+            return 120.0
+        if len(curve) == 0:
+            return 120.0
+        duration = float(getattr(self, "_pre_cached_duration", 0.0) or 0.0)
+        if duration <= 0:
+            return float(curve[0])
+        pos = max(0.0, min(1.0, float(time_sec) / duration))
+        idx = int(pos * (len(curve) - 1))
+        return float(curve[idx])
+
     def _subtrack_boundary_anchors(self) -> List[float]:
         """
         Audit E3: Liefert sortierte unique cut-anchors aus injizierten subtrack_segments.

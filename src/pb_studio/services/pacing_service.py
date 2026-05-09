@@ -37,6 +37,9 @@ class PacingService:
         # Audit E3: Test-Hint — wurde cached subtrack_segments in den Engine injiziert
         # (fuer subtrack-aware cut generation / boundary-anchors)?
         self._last_used_cached_subtracks: bool = False
+        # Audit L-M1: Test-Hint — wurde cached tempo_curve (SubtrackDetector
+        # DJ-Tempo-Variation) in den Engine injiziert (fuer varying-BPM mixes)?
+        self._last_used_cached_tempo: bool = False
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -122,13 +125,14 @@ class PacingService:
         generate_cut_list_with_stems wrappers can re-use it.
 
         Injects pre_cached_beats, _pre_cached_bpm, _pre_cached_duration,
-        _pre_cached_energy, _pre_cached_bass_curve, _pre_cached_subtracks
-        (mirrors what generate_cut_list does in-line).
+        _pre_cached_energy, _pre_cached_bass_curve, _pre_cached_subtracks,
+        _pre_cached_tempo_curve (mirrors what generate_cut_list does in-line).
         """
         if not cached_analysis:
             self._last_used_cached_energy = False
             self._last_used_cached_bass = False
             self._last_used_cached_subtracks = False
+            self._last_used_cached_tempo = False
             return
 
         # Beats + BPM + Duration
@@ -183,6 +187,26 @@ class PacingService:
             self._last_used_cached_subtracks = True
         else:
             self._last_used_cached_subtracks = False
+
+        # L-M1: tempo_curve injection (SubtrackDetector DJ-Tempo-Variation)
+        # Hilft bei Mixen mit varying BPM — Engine kann _tempo_at_time(t) abfragen.
+        tempo_curve = cached_analysis.get("tempo_curve")
+        if tempo_curve and len(tempo_curve) > 0:
+            import numpy as _np
+            pacing_engine._pre_cached_tempo_curve = _np.array(
+                tempo_curve, dtype=_np.float32
+            )
+            # Duration sicherstellen (fuer time->index mapping in _tempo_at_time)
+            if not hasattr(pacing_engine, "_pre_cached_duration") or \
+                    getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
+                cached_dur = float(
+                    cached_analysis.get("duration_seconds", 0.0) or 0.0
+                )
+                if cached_dur > 0:
+                    pacing_engine._pre_cached_duration = cached_dur
+            self._last_used_cached_tempo = True
+        else:
+            self._last_used_cached_tempo = False
 
     def generate_cut_list_with_stems(
         self,
@@ -506,6 +530,34 @@ class PacingService:
             )
         else:
             self._last_used_cached_subtracks = False
+
+        # Audit L-M1: inject cached tempo_curve fuer varying-BPM-Mixe.
+        # cached_analysis["tempo_curve"] kommt vom SubtrackDetector (DJ-Tempo-
+        # Variation pro Subtrack). Engine nutzt es via _tempo_at_time(t) ->
+        # liefert lokale BPM zum Zeitpunkt t (lineares mapping). Heute reicht:
+        # Curve injizieren + Flag setzen, Helper-API ist ready.
+        tempo_curve = cached_analysis.get("tempo_curve") if cached_analysis else None
+        if tempo_curve and len(tempo_curve) > 0:
+            import numpy as _np
+            pacing_engine._pre_cached_tempo_curve = _np.array(
+                tempo_curve, dtype=_np.float32
+            )
+            # Duration sicherstellen (fuer time->index mapping in _tempo_at_time)
+            if not hasattr(pacing_engine, "_pre_cached_duration") or \
+                    getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
+                cached_dur = float(
+                    cached_analysis.get("duration_seconds", 0.0) or 0.0
+                )
+                if cached_dur > 0:
+                    pacing_engine._pre_cached_duration = cached_dur
+            self._last_used_cached_tempo = True
+            logger.info(
+                "Audit L-M1: tempo_curve injiziert (%d Werte) — "
+                "Helper _tempo_at_time(t) verfuegbar fuer varying-BPM-Pacing",
+                len(tempo_curve),
+            )
+        else:
+            self._last_used_cached_tempo = False
 
         # Audit E1 + L-K4: use_key_matching — Camelot-Wheel key compatibility scoring.
         # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector
