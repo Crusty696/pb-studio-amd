@@ -31,6 +31,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _durationSeconds;
     [ObservableProperty] private bool _isDeleting;
     [ObservableProperty] private string _currentStep = "";
+    [ObservableProperty] private bool _isImporting;
+    [ObservableProperty] private double _importProgress;
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
     public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
@@ -185,16 +187,22 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private async Task ProcessAudioImportAsync(List<string> files)
     {
+        IsImporting = true;
         IsAnalyzing = true;
+        ImportProgress = 0.0;
         StatusText = $"Importiere {files.Count} Dateien...";
 
         var imported = 0;
+        var total = files.Count;
         try
         {
-            foreach (var file in files)
+            for (int i = 0; i < total; i++)
             {
+                var file = files[i];
+                StatusText = $"Importiere {i + 1}/{total}: {System.IO.Path.GetFileName(file)}";
                 var result = await _api.ImportAudioAsync(file);
                 if (result != null) imported++;
+                ImportProgress = (i + 1) * 100.0 / total;
             }
 
             if (imported > 0)
@@ -215,6 +223,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         finally
         {
             IsAnalyzing = false;
+            IsImporting = false;
         }
     }
 

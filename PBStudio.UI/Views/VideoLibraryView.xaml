@@ -307,13 +307,18 @@
                 BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
                 CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
             <DockPanel>
-                <!-- Batch-Progress (alle markierten/alle Clips) -->
-                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="180"
+                <!-- Import-Progress (sichtbar waehrend IsImporting) -->
+                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="200"
+                                               Percent="{Binding ImportProgress}"
+                                               Margin="0,0,12,0" VerticalAlignment="Center"
+                                               Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Batch-Analyse-Progress (alle markierten/alle Clips) -->
+                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="200"
                                                Percent="{Binding AnalyzeAllProgress}"
                                                Margin="0,0,12,0" VerticalAlignment="Center"
                                                Visibility="{Binding IsAnalyzingAll, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <!-- Per-Clip Progress (current step within current clip) -->
-                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="160"
+                <!-- Per-Clip Analyse-Progress (current step within current clip) -->
+                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="180"
                                                Percent="{Binding CurrentClipProgress}"
                                                Margin="0,0,12,0" VerticalAlignment="Center"
                                                Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>

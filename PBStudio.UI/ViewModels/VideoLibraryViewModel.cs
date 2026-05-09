@@ -49,6 +49,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _currentClipProgress;
     [ObservableProperty] private int _analyzedCount;
     [ObservableProperty] private int _pendingCount;
+    [ObservableProperty] private bool _isImporting;
+    [ObservableProperty] private double _importProgress;
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
     public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
@@ -140,6 +142,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         if (paths.Count == 0) return;
 
         IsAnalyzingAll = true;
+        IsImporting = true;
+        ImportProgress = 0.0;
         StatusText = $"Importiere {paths.Count} Videos von Pfad...";
 
         try
@@ -160,6 +164,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         finally
         {
             IsAnalyzingAll = false;
+            IsImporting = false;
         }
     }
 
@@ -171,7 +176,12 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             {
                 StatusText = e.Message;
                 if (e.Percent >= 0)
-                    CurrentClipProgress = e.Percent;
+                {
+                    if (e.EventType == "import_progress")
+                        ImportProgress = e.Percent;
+                    else
+                        CurrentClipProgress = e.Percent;
+                }
                 if (!string.IsNullOrEmpty(e.Step))
                     CurrentStep = e.Step;
                 if (e.StepIndex > 0) CurrentStepIndex = e.StepIndex;
@@ -327,6 +337,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private async Task ProcessVideoImportAsync(List<string> files)
     {
         IsAnalyzingAll = true;
+        IsImporting = true;
+        ImportProgress = 0.0;
         StatusText = $"Bereite Import von {files.Count} Dateien vor...";
 
         var validFiles = new List<string>();
@@ -344,12 +356,15 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         {
             StatusText = "Import abgebrochen: Dateien konnten nicht gelesen werden.";
             IsAnalyzingAll = false;
+            IsImporting = false;
             return;
         }
 
         try
         {
             StatusText = $"Importiere {validFiles.Count} Videos...";
+            // Backend emittiert per-file import_progress events - OnSseProgressReceived
+            // setzt ImportProgress automatisch waehrend ImportVideosAsync laeuft.
             var result = await _api.ImportVideosAsync(validFiles);
 
             if (result != null)
@@ -370,6 +385,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         finally
         {
             IsAnalyzingAll = false;
+            IsImporting = false;
         }
     }
 

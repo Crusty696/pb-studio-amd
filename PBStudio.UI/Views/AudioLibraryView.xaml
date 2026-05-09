@@ -172,13 +172,20 @@
             <!-- Status bar at bottom mit ProgressBarWithLabel (Feature-1) -->
             <Border DockPanel.Dock="Bottom" Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
-                    CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
+                    CornerRadius="2" Padding="10,8" Margin="0,12,0,0">
                 <DockPanel>
-                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="220"
+                    <!-- Import-Progress (sichtbar waehrend IsImporting) -->
+                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="240"
+                                                   Percent="{Binding ImportProgress}"
+                                                   Margin="0,0,12,0" VerticalAlignment="Center"
+                                                   Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <!-- Analyse-Progress (sichtbar waehrend IsAnalyzing OHNE Import) -->
+                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="240"
                                                    Percent="{Binding AnalysisProgress}"
-                                                   Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                                   Margin="0,0,12,0" VerticalAlignment="Center"
+                                                   Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11" VerticalAlignment="Center"/>
+                               FontSize="12" VerticalAlignment="Center"/>
                 </DockPanel>
             </Border>
 
