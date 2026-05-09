@@ -208,8 +208,11 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             if (imported > 0)
             {
                 StatusText = $"{imported} Audio-Dateien erfolgreich importiert";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
                 await LoadAudioClipsAsync();
+                // Cross-VM refresh: Director, MediaIngest, ProjectOverview hoeren auf diese Keys
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
             }
             else
             {

@@ -78,8 +78,8 @@
                 <TextBlock DockPanel.Dock="Top" Text="AUDIO-CLIPS"
                            Style="{StaticResource SectionHeader}"/>
 
-                <!-- Batch actions -->
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                <!-- Batch actions (WrapPanel damit Delete-Buttons in schmaler Spalte sichtbar) -->
+                <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
                     <Button Command="{Binding ImportAudioCommand}" Style="{StaticResource BatchBtn}"
                             ToolTip="Neue Audio-Dateien zur Bibliothek hinzufügen"
                             Foreground="{StaticResource AbletonAccent}">
@@ -131,7 +131,7 @@
                             <TextBlock Text="Alle analysieren" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                </StackPanel>
+                </WrapPanel>
 
                 <!-- Clip list (Multi-Select fuer Delete-Operationen) -->
                 <ListBox x:Name="AudioClipList"
@@ -169,24 +169,24 @@
                 </Button>
             </StackPanel>
 
-            <!-- Status bar at bottom mit ProgressBarWithLabel (Feature-1) -->
+            <!-- Status-Bereich: Bar BREIT (full row), darunter Status-Text -->
             <Border DockPanel.Dock="Bottom" Background="{StaticResource AbletonPanel}"
                     BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
-                    CornerRadius="2" Padding="10,8" Margin="0,12,0,0">
-                <DockPanel>
-                    <!-- Import-Progress (sichtbar waehrend IsImporting) -->
-                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="240"
-                                                   Percent="{Binding ImportProgress}"
-                                                   Margin="0,0,12,0" VerticalAlignment="Center"
-                                                   Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                    <!-- Analyse-Progress (sichtbar waehrend IsAnalyzing OHNE Import) -->
-                    <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="240"
-                                                   Percent="{Binding AnalysisProgress}"
-                                                   Margin="0,0,12,0" VerticalAlignment="Center"
-                                                   Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    CornerRadius="2" Padding="12,10" Margin="0,12,0,0">
+                <StackPanel>
+                    <!-- Import-Progress (full-width, sichtbar waehrend IsImporting) -->
+                    <controls:ProgressBarWithLabel
+                        Percent="{Binding ImportProgress}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                        Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <!-- Stem-Separation Progress -->
+                    <controls:ProgressBarWithLabel
+                        Percent="{Binding AnalysisProgress}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                        Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="12" VerticalAlignment="Center"/>
-                </DockPanel>
+                               FontSize="12" HorizontalAlignment="Left" Margin="2,2,0,0"/>
+                </StackPanel>
             </Border>
 
             <!-- Section header -->

@@ -155,6 +155,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 VideoImportPath = string.Empty;
                 await LoadClipsAsync();
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
             }
         }
         catch (Exception ex)
@@ -372,6 +374,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
                 await LoadClipsAsync();
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
             }
             else
             {

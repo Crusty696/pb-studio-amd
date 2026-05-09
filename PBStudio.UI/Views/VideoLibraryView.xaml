@@ -302,40 +302,39 @@
             </DockPanel>
         </md:Card>
 
-        <!-- ── Status Bar mit Step-Indicator + ProgressBarWithLabel (Feature-1+3) ── -->
+        <!-- ── Status-Bereich: Bars BREIT (full row), darunter Step + Status -->
         <Border Grid.Row="2" Grid.ColumnSpan="2" Background="{StaticResource AbletonPanel}"
                 BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1"
-                CornerRadius="2" Padding="10,6" Margin="0,12,0,0">
-            <DockPanel>
-                <!-- Import-Progress (sichtbar waehrend IsImporting) -->
-                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="200"
-                                               Percent="{Binding ImportProgress}"
-                                               Margin="0,0,12,0" VerticalAlignment="Center"
-                                               Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <!-- Batch-Analyse-Progress (alle markierten/alle Clips) -->
-                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="200"
-                                               Percent="{Binding AnalyzeAllProgress}"
-                                               Margin="0,0,12,0" VerticalAlignment="Center"
-                                               Visibility="{Binding IsAnalyzingAll, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <!-- Per-Clip Analyse-Progress (current step within current clip) -->
-                <controls:ProgressBarWithLabel DockPanel.Dock="Left" Width="180"
-                                               Percent="{Binding CurrentClipProgress}"
-                                               Margin="0,0,12,0" VerticalAlignment="Center"
-                                               Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <!-- Step-Indicator (Feature-3) -->
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,12,0"
-                            VerticalAlignment="Center"
+                CornerRadius="2" Padding="12,10" Margin="0,12,0,0">
+            <StackPanel>
+                <!-- Import-Progress (full-width) -->
+                <controls:ProgressBarWithLabel
+                    Percent="{Binding ImportProgress}"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                    Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Batch-Analyse-Progress (full-width) -->
+                <controls:ProgressBarWithLabel
+                    Percent="{Binding AnalyzeAllProgress}"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                    Visibility="{Binding IsAnalyzingAll, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Per-Clip Analyse-Progress (full-width) -->
+                <controls:ProgressBarWithLabel
+                    Percent="{Binding CurrentClipProgress}"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                    Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Step-Indicator -->
+                <StackPanel Orientation="Horizontal" Margin="2,4,0,0"
                             Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <TextBlock Text="Schritt " Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
-                    <TextBlock Text="{Binding CurrentStepIndex}" Foreground="{StaticResource AbletonAccent}" FontSize="11" FontWeight="Bold"/>
-                    <TextBlock Text="/" Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
-                    <TextBlock Text="{Binding CurrentStepTotal}" Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
-                    <TextBlock Text=": " Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
-                    <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonText}" FontSize="11" FontStyle="Italic"/>
+                    <TextBlock Text="Schritt " Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
+                    <TextBlock Text="{Binding CurrentStepIndex}" Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="Bold"/>
+                    <TextBlock Text="/" Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
+                    <TextBlock Text="{Binding CurrentStepTotal}" Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
+                    <TextBlock Text=": " Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
+                    <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonText}" FontSize="12" FontStyle="Italic"/>
                 </StackPanel>
                 <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                           FontSize="11" VerticalAlignment="Center"/>
-            </DockPanel>
+                           FontSize="12" Margin="2,4,0,0"/>
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>
