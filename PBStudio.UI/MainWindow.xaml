@@ -59,16 +59,35 @@
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
                         <Setter Property="Padding" Value="14,8"/>
+                        <Setter Property="FontSize" Value="11"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <!-- Tab-Header Farbe (User-Wunsch 2026-05-09):
+                             aktiv = Accent-Orange (#FF764D), inaktiv = TextDim (#8A8A90),
+                             Hover = AbletonText (#D4D4D8). Ersetzt das Default-MaterialDesign-Weiss/Grau
+                             auf dunklem AbletonBg, das schwer lesbar war. -->
+                        <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="TabItem">
                                     <Border x:Name="TabBorder" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent">
-                                        <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="{TemplateBinding Padding}"/>
+                                        <ContentPresenter x:Name="ContentSite" ContentSource="Header"
+                                                          Margin="{TemplateBinding Padding}"
+                                                          TextBlock.Foreground="{TemplateBinding Foreground}"
+                                                          TextBlock.FontSize="{TemplateBinding FontSize}"
+                                                          TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
                                             <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
                                         </Trigger>
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                <Condition Property="IsSelected" Value="False"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonText}"/>
+                                        </MultiTrigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
