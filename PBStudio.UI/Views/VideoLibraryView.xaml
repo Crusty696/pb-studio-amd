@@ -243,6 +243,42 @@
                             <TextBlock Text="{Binding SelectedClip.Fps, StringFormat={}{0:F2}}" Foreground="{StaticResource AbletonText}"/>
                         </StackPanel>
                     </UniformGrid>
+
+                    <!-- L-M4: MOTION-Card. Zeigt avg/peak/category aus video_router.list_clips
+                         (Backend: app_state.video_analysis_cache[clip].motion).
+                         AvgMotion null = noch nicht analysiert -> "Keine Motion-Daten" Fallback. -->
+                    <Border Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}"
+                            BorderThickness="1" CornerRadius="3" Margin="0,12,0,0" Padding="10,8">
+                        <StackPanel>
+                            <TextBlock Text="MOTION" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                            <Grid Visibility="{Binding SelectedClip.AvgMotion, Converter={StaticResource NullToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="DURCHSCHNITT" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedClip.AvgMotion, StringFormat={}{0:F1}}"
+                                               FontSize="14" FontWeight="Bold" Foreground="{StaticResource AbletonText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="PEAK" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedClip.PeakMotion, StringFormat={}{0:F1}, FallbackValue=—, TargetNullValue=—}"
+                                               FontSize="14" FontWeight="Bold" Foreground="{StaticResource AbletonText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="KATEGORIE" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                                    <TextBlock Text="{Binding SelectedClip.MotionCategoryDisplay, FallbackValue=N/A, TargetNullValue=N/A}"
+                                               FontSize="13" FontWeight="Bold" Foreground="{StaticResource AbletonAccent}"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="Keine Motion-Daten (Clip nicht analysiert)"
+                                       Visibility="{Binding SelectedClip.AvgMotion, Converter={StaticResource InverseNullToVisibilityConverter}}"
+                                       FontSize="11" Foreground="{StaticResource AbletonTextDim}" FontStyle="Italic"/>
+                        </StackPanel>
+                    </Border>
+
                     <Separator Background="{StaticResource AbletonBorder}" Margin="0,12"/>
                 </StackPanel>
 

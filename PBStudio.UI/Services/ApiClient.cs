@@ -418,7 +418,22 @@ public record SpectralData(int ClipId, List<double> Times, Dictionary<string, Li
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
-public record VideoClipInfo(int Id, string Name, string Path, double DurationSeconds, int Width, int Height, double Fps, string Codec, bool ThumbnailAvailable, List<string> Tags, bool IsAnalyzed = false);
+public record VideoClipInfo(
+    int Id,
+    string Name,
+    string Path,
+    double DurationSeconds,
+    int Width,
+    int Height,
+    double Fps,
+    string Codec,
+    bool ThumbnailAvailable,
+    List<string> Tags,
+    bool IsAnalyzed = false,
+    // L-M4: Motion-Felder fuer Detail-Card (null falls nicht analysiert oder kein motion-Block).
+    double? AvgMotion = null,
+    double? PeakMotion = null,
+    string? MotionCategory = null);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
 public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);

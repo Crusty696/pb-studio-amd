@@ -453,6 +453,10 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         Tags = c.Tags,
                         IsAnalyzed = c.IsAnalyzed,
                         ThumbnailAvailable = c.ThumbnailAvailable,
+                        // L-M4: Motion-Felder fuer Detail-Card (null falls nicht analysiert).
+                        AvgMotion = c.AvgMotion,
+                        PeakMotion = c.PeakMotion,
+                        MotionCategory = c.MotionCategory,
                     };
 
                     if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))

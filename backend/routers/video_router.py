@@ -13,7 +13,7 @@ Endpoints:
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -164,7 +164,50 @@ async def list_clips(
     clips = list(clips_snap.values())
     start = (page - 1) * limit
     end = start + limit
-    return [VideoClipInfo(**c, is_analyzed=c["id"] in analysis_snap) for c in clips[start:end]]
+
+    result: list[VideoClipInfo] = []
+    for c in clips[start:end]:
+        clip_id = c["id"]
+        is_analyzed = clip_id in analysis_snap
+        # L-M4: Motion-Daten aus analysis_cache extrahieren fuer UI-Detail-Card.
+        # Falls Clip noch nicht analysiert oder kein motion-Block vorhanden -> None.
+        avg_motion: Optional[float] = None
+        peak_motion: Optional[float] = None
+        motion_category: Optional[str] = None
+        if is_analyzed:
+            va = analysis_snap.get(clip_id) or {}
+            motion = va.get("motion") or {}
+            if motion:
+                _avg = motion.get("avg_motion")
+                _peak = motion.get("peak_motion")
+                _cat = motion.get("motion_category")
+                if _avg is not None:
+                    try:
+                        avg_motion = float(_avg)
+                    except (TypeError, ValueError):
+                        avg_motion = None
+                if _peak is not None:
+                    try:
+                        peak_motion = float(_peak)
+                    except (TypeError, ValueError):
+                        peak_motion = None
+                if _cat:
+                    motion_category = str(_cat)
+                # Falls motion_category fehlt aber avg_motion vorhanden ist,
+                # ueber _classify_motion ableiten (static/low/medium/high).
+                elif avg_motion is not None:
+                    motion_category = _classify_motion(avg_motion)
+
+        result.append(
+            VideoClipInfo(
+                **c,
+                is_analyzed=is_analyzed,
+                avg_motion=avg_motion,
+                peak_motion=peak_motion,
+                motion_category=motion_category,
+            )
+        )
+    return result
 
 
 @router.get(

@@ -24,6 +24,11 @@ class VideoClipInfo(BaseModel):
     is_analyzed: bool = False
     video_hash: Optional[str] = None
     has_video_embedding: bool = False
+    # L-M4: Motion-Felder fuer UI-Detail-Panel (None falls noch nicht analysiert).
+    # Quelle: app_state.video_analysis_cache[clip_id]['motion'].
+    avg_motion: Optional[float] = None
+    peak_motion: Optional[float] = None
+    motion_category: Optional[str] = None
 
 
 class VideoAnalyzeRequest(BaseModel):
