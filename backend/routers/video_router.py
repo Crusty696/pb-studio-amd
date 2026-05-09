@@ -687,6 +687,47 @@ def _run_video_analysis(
             logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")
             result["has_embedding"] = False
 
+    # 4. L-K2: Dominant Colors (KMeans) + Tags (Moondream optional, lazy ONNX).
+    # Vorher waren beide Felder NIE in result -> Audit E4 Helper-API
+    # (tags_overlap_score, dominant_color_similarity in semantic_matcher) nutzlos
+    # weil Daten leer. Mid-frame als reprasentative Probe; KMeans ist billig
+    # (~50ms), Moondream nur wenn ONNX-Modell + DirectML verfuegbar.
+    if request.generate_captions:
+        try:
+            import cv2
+            from pb_studio.video.moondream_wrapper import (
+                extract_dominant_colors,
+                extract_tags_via_moondream,
+            )
+
+            cap = cv2.VideoCapture(video_path)
+            try:
+                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                mid = max(0, total // 2)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                ret, frame = cap.read()
+            finally:
+                cap.release()
+
+            if ret and frame is not None:
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                result["dominant_colors"] = extract_dominant_colors(frame_rgb, k=5)
+                result["tags"] = extract_tags_via_moondream(frame_rgb)
+                logger.info(
+                    f"L-K2: {len(result['dominant_colors'])} colors, "
+                    f"{len(result['tags'])} tags fuer clip {clip_id}"
+                )
+            else:
+                result["dominant_colors"] = []
+                result["tags"] = []
+        except Exception as e:
+            logger.warning(f"Moondream/Color-Extract fehlgeschlagen (unkritisch): {e}")
+            result["dominant_colors"] = []
+            result["tags"] = []
+    else:
+        result["dominant_colors"] = []
+        result["tags"] = []
+
     return result
 
 
