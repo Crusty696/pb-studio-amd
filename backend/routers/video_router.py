@@ -487,13 +487,15 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             import cv2
             from pb_studio.video.raft import MotionAnalyzer
 
-            # Frames gleichmäßig samplen — temporal-dichte (~2 Frames/s), min 2, max 30
+            # User-Anforderung 2026-05-09: jeder Analyse-Schritt MUSS volle Datei-Laenge
+            # abdecken (kein Sampling-Cap). Cap min(30,...) entfernt. 2 Frames/s Grid
+            # ueber GESAMTES Video. Lange Videos brauchen entsprechend laenger.
             cap = cv2.VideoCapture(video_path)
             try:
                 total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
                 duration_sec = total / max(fps, 1.0)
-                n_frames = min(30, max(2, int(duration_sec * 2)))  # ~2 Samples/s
+                n_frames = max(2, int(duration_sec * 2))  # 2 Samples/s, KEIN cap
                 step = max(1, total // n_frames)
 
                 frames = []
@@ -549,44 +551,63 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             wrapper = SigLIPWrapper(lazy_load=False)
             try:
                 if wrapper.is_ready:
-                    # Repräsentatives Frame aus Mitte des Videos
+                    # User-Anforderung 2026-05-09: jeder Schritt muss volle Datei-Laenge
+                    # abdecken. Statt 1 Frame aus Mitte: N Frames gleichmaessig verteilt
+                    # ueber Gesamt-Dauer, dann Embedding-Mittelwert (L2-normalisiert).
+                    import numpy as _np
+                    from PIL import Image as _PILImage
+
                     cap = cv2.VideoCapture(video_path)
+                    embeddings_collected: list = []
                     try:
                         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                        mid = max(0, total_frames // 2)
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                        ret, frame = cap.read()
+                        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                        duration_sec = total_frames / max(fps, 1.0)
+                        # 1 Sample / 5s ueber GESAMTES Video, min 3 Samples
+                        n_emb_samples = max(3, int(duration_sec / 5.0))
+                        sample_step = max(1, total_frames // n_emb_samples)
+                        for i in range(0, max(total_frames - sample_step, 1), sample_step):
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                            ret, frame = cap.read()
+                            if not ret or frame is None:
+                                continue
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            pil_img = _PILImage.fromarray(frame_rgb)
+                            emb = wrapper.encode_image(pil_img)
+                            if emb is not None:
+                                embeddings_collected.append(emb)
+                            if len(embeddings_collected) >= n_emb_samples:
+                                break
                     finally:
                         cap.release()
 
-                    if ret:
-                        import numpy as _np
-                        from PIL import Image as _PILImage
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        pil_img = _PILImage.fromarray(frame_rgb)
-                        embedding = wrapper.encode_image(pil_img)
-
-                        if embedding is not None:
-                            raw_norm = float(_np.linalg.norm(embedding))
-                            if raw_norm < 1e-3:
-                                logger.warning(
-                                    f"SigLIP near-zero embedding (norm={raw_norm:.2e}) für clip {clip_id} "
-                                    "— FAISS-Insert übersprungen"
-                                )
-                                result["has_embedding"] = False
-                            else:
-                                # FAISS VectorStore speichern (index "video_index")
-                                vs = VectorStore(index_name="video_index")
-                                vs.add_embedding(embedding.astype(_np.float32), {
-                                    "clip_id": clip_id,
-                                    "path": video_path,
-                                    "scene_id": f"clip_{clip_id}_mid",
-                                    "duration": result.get("duration_seconds", 0.0),
-                                })
-                                result["has_embedding"] = True
-                                result["embedding_dim"] = len(embedding)
-                                logger.info(f"SigLIP Embedding gespeichert für Clip {clip_id} (dim={len(embedding)})")
+                    if embeddings_collected:
+                        stacked = _np.stack(embeddings_collected, axis=0)
+                        embedding = stacked.mean(axis=0)
+                        # L2-normalisieren damit Mittelwert wieder Unit-Vector ist
+                        norm = float(_np.linalg.norm(embedding))
+                        if norm > 1e-3:
+                            embedding = embedding / norm
+                            vs = VectorStore(index_name="video_index")
+                            vs.add_embedding(embedding.astype(_np.float32), {
+                                "clip_id": clip_id,
+                                "path": video_path,
+                                "scene_id": f"clip_{clip_id}_full",
+                                "duration": result.get("duration_seconds", 0.0),
+                                "samples": len(embeddings_collected),
+                            })
+                            result["has_embedding"] = True
+                            result["embedding_dim"] = len(embedding)
+                            result["embedding_samples"] = len(embeddings_collected)
+                            logger.info(
+                                f"SigLIP Embedding (Mittelwert ueber {len(embeddings_collected)} Frames) "
+                                f"gespeichert fuer Clip {clip_id} (dim={len(embedding)})"
+                            )
                         else:
+                            logger.warning(
+                                f"SigLIP near-zero mean embedding (norm={norm:.2e}) fuer clip {clip_id} "
+                                "- FAISS-Insert uebersprungen"
+                            )
                             result["has_embedding"] = False
                     else:
                         result["has_embedding"] = False

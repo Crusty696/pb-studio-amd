@@ -179,13 +179,24 @@
                         Percent="{Binding ImportProgress}"
                         HorizontalAlignment="Stretch" Margin="0,0,0,6"
                         Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <!-- Audio-Analyse Progress (BPM/Key/Structure/Spectral - jede Phase volle Datei) -->
+                    <controls:ProgressBarWithLabel
+                        Percent="{Binding AnalysisProgress}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,6"
+                        Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <!-- Stem-Separation Progress -->
                     <controls:ProgressBarWithLabel
                         Percent="{Binding AnalysisProgress}"
                         HorizontalAlignment="Stretch" Margin="0,0,0,6"
                         Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <!-- Step-Indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="2,4,0,0"
+                                Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="Schritt: " Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
+                        <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="Bold"/>
+                    </StackPanel>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="12" HorizontalAlignment="Left" Margin="2,2,0,0"/>
+                               FontSize="12" HorizontalAlignment="Left" Margin="2,4,0,0"/>
                 </StackPanel>
             </Border>
 

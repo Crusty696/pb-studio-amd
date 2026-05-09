@@ -189,8 +189,9 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         IsImporting = true;
         IsAnalyzing = true;
-        ImportProgress = 0.0;
+        ImportProgress = 0.01;  // sichtbarer Start
         StatusText = $"Importiere {files.Count} Dateien...";
+        await Task.Delay(120).ConfigureAwait(true);  // UI render bevor Schleife
 
         var imported = 0;
         var total = files.Count;
@@ -200,10 +201,14 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             {
                 var file = files[i];
                 StatusText = $"Importiere {i + 1}/{total}: {System.IO.Path.GetFileName(file)}";
+                // Progress VOR call (zeigt Start des Files)
+                ImportProgress = i * 100.0 / total;
                 var result = await _api.ImportAudioAsync(file);
                 if (result != null) imported++;
                 ImportProgress = (i + 1) * 100.0 / total;
             }
+            // Halte 100% kurz sichtbar damit User Erfolg sieht
+            await Task.Delay(450).ConfigureAwait(true);
 
             if (imported > 0)
             {
@@ -295,6 +300,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private async Task AnalyzeAllAsync()
     {
         IsAnalyzing = true;
+        AnalysisProgress = 0.01;  // sichtbarer Start
+        CurrentStep = "init";
         var total = AudioClips.Count;
         var done = 0;
 
@@ -346,6 +353,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
 
         IsAnalyzing = true;
+        AnalysisProgress = 0.01;  // sichtbarer Start (0.00% Label)
+        CurrentStep = "init";
         StatusText = $"Analysiere: {SelectedClip.Name}...";
 
         try

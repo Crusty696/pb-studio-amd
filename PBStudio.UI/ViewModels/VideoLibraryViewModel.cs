@@ -365,6 +365,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         try
         {
             StatusText = $"Importiere {validFiles.Count} Videos...";
+            ImportProgress = 0.01;  // sichtbarer Start (0.00% Label)
+            await Task.Delay(120).ConfigureAwait(true);  // UI render bevor Backend-Call
             // Backend emittiert per-file import_progress events - OnSseProgressReceived
             // setzt ImportProgress automatisch waehrend ImportVideosAsync laeuft.
             var result = await _api.ImportVideosAsync(validFiles);
@@ -372,6 +374,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             if (result != null)
             {
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
+                ImportProgress = 100.0;
+                await Task.Delay(450).ConfigureAwait(true);  // 100% kurz halten
                 await LoadClipsAsync();
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
                 WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
