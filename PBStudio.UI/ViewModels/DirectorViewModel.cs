@@ -43,6 +43,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     // /brain/feedback und die Lern-Session funktional tot — siehe pacing_schemas.py:51-52.
     [ObservableProperty] private bool _useBrain;
     [ObservableProperty] private double _brainMinConfidence;
+    // Audit E1: Tonart-Matching aktiviert Camelot-Wheel-basierte Key-Compatibility
+    // im Pacing-Engine-clip_selector. Backend-Schema: use_key_matching (default false).
+    [ObservableProperty] private bool _useKeyMatching;
     [ObservableProperty] private double? _durationLimit;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty]
@@ -253,7 +256,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     OnsetSensitivity: OnsetSensitivity
                 ),
                 UseBrain: UseBrain,
-                BrainMinConfidence: BrainMinConfidence
+                BrainMinConfidence: BrainMinConfidence,
+                UseKeyMatching: UseKeyMatching
             );
 
             var result = await _api.GenerateCutListAsync(config);

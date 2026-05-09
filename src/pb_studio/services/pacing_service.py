@@ -250,6 +250,24 @@ class PacingService:
         else:
             self._last_used_cached_energy = False
 
+        # Audit E1: use_key_matching — Camelot-Wheel key compatibility scoring.
+        # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector
+        # nutzt _key_compatibility_score(audio_key, video_key) zur Score-Anpassung.
+        # Da Video-Clips aktuell KEIN audio_key Feld haben (Audit E1 follow-up TODO),
+        # ist die Wirkung heute no-op — Flag-Pipeline ist trotzdem voll funktional und getestet.
+        if pacing_config.get("use_key_matching", False):
+            pacing_engine.clip_selector.use_key_matching = True
+            cached_audio_key = cached_analysis.get("key") if cached_analysis else None
+            pacing_engine.clip_selector.audio_key = cached_audio_key
+            logger.info(
+                "Audit E1: use_key_matching aktiviert (audio_key=%r) — "
+                "Camelot-Wheel Score wird in clip_selector._key_compatibility_score genutzt",
+                cached_audio_key,
+            )
+        else:
+            pacing_engine.clip_selector.use_key_matching = False
+            pacing_engine.clip_selector.audio_key = None
+
         try:
             # Entscheide welche Generierungsmethode genutzt wird
             use_advanced = (

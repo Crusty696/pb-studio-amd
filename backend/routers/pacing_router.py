@@ -350,6 +350,8 @@ def _run_pacing_generation(
         "use_motion_matching": config.use_motion_matching,
         "use_semantic_matching": config.use_semantic_matching,
         "use_structure_awareness": config.use_structure_awareness,
+        # Audit E1: Forward Tonart-Matching flag to PacingService → AdvancedPacingEngine.
+        "use_key_matching": getattr(config, "use_key_matching", False),
         "min_cut_interval": config.min_cut_interval,
         # Plan Phase 4 deep-hook: forward brain flags to PacingService
         "use_brain": getattr(config, "use_brain", False),

@@ -45,6 +45,10 @@ class PacingConfigSchema(BaseModel):
     use_motion_matching: bool = False
     use_semantic_matching: bool = False
     use_structure_awareness: bool = False
+    # Audit E1: Tonart-Matching (Camelot-Wheel) — bevorzugt Cuts mit harmonisch
+    # kompatiblen Tonarten (relative_minor + perfect_fifth). Backwards-compat:
+    # default False → bestehende Calls bleiben unveraendert.
+    use_key_matching: bool = False
     duration_limit: Optional[float] = None
     min_cut_interval: float = 0.5
     # Plan Phase 4: brain integration toggles

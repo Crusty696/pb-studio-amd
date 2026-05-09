@@ -322,6 +322,16 @@
                             <TextBlock Text="Struktur-Erkennung" FontSize="12" Foreground="{StaticResource AbletonText}"/>
                         </CheckBox>
 
+                        <!-- Audit E1: Tonart-Matching (Camelot-Wheel) — bevorzugt harmonisch
+                             kompatible Keys (relative_minor + perfect_fifth). Backend-Schema:
+                             use_key_matching. Wirkt erst voll, wenn Video-Clips eigene
+                             audio_key haben — Score-Funktion ist bereits ready. -->
+                        <CheckBox IsChecked="{Binding UseKeyMatching}"
+                                  Style="{StaticResource AbletonCheckBox}"
+                                  ToolTip="Bevorzugt Cut-Übergänge mit harmonisch kompatiblen Tonarten (Camelot-Wheel)">
+                            <TextBlock Text="Tonart-Matching" FontSize="12" Foreground="{StaticResource AbletonText}"/>
+                        </CheckBox>
+
                         <!-- Brain (Plan Phase 5): aktiviert Reranker + cut_id-Persistenz.
                              Ohne UseBrain=true bleibt /brain/explain, /brain/feedback und die
                              Lern-Session leer (pacing_router.py:87, brain_router.py:83). -->

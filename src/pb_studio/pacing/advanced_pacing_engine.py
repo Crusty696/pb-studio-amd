@@ -50,6 +50,73 @@ ENERGY_PHASE_MULTIPLIERS = {
     "plateau": 0.8
 }
 
+# =============================================================================
+# Audit E1: Camelot-Wheel Key Compatibility (Tonart-Matching)
+# =============================================================================
+# Pro Tonart sind kompatibel:
+#   - Same key (perfect match)
+#   - Relative minor/major (1A <-> 1B im Camelot-Wheel)
+#   - Perfect fifth up + down (Quintenzirkel)
+#
+# Score-Schema (in _key_compatibility_score):
+#   1.0 = same key
+#   0.7 = relative + perfect fifth (in KEY_COMPATIBLE-Set)
+#   0.3 = unrelated
+#   0.5 = neutral (None-Input → kein Penalty)
+#
+# Einsatzort: AdvancedPacingEngine.clip_selector nutzt diese Funktion sobald
+# Video-Clips ein audio_key-Feld haben. Aktuell heuristisch, wirkt als no-op
+# weil Video-Analyse keinen Key extrahiert — Flag-Pipeline ist trotzdem getestet.
+KEY_COMPATIBLE: Dict[str, set] = {
+    # major: relative_minor + perfect_fifth_up + perfect_fifth_down
+    "C major":  {"C major", "A minor", "G major", "F major"},
+    "G major":  {"G major", "E minor", "D major", "C major"},
+    "D major":  {"D major", "B minor", "A major", "G major"},
+    "A major":  {"A major", "F# minor", "E major", "D major"},
+    "E major":  {"E major", "C# minor", "B major", "A major"},
+    "B major":  {"B major", "G# minor", "F# major", "E major"},
+    "F# major": {"F# major", "D# minor", "C# major", "B major"},
+    "F major":  {"F major", "D minor", "C major", "Bb major"},
+    "Bb major": {"Bb major", "G minor", "F major", "Eb major"},
+    "Eb major": {"Eb major", "C minor", "Bb major", "Ab major"},
+    "Ab major": {"Ab major", "F minor", "Eb major", "Db major"},
+    "Db major": {"Db major", "Bb minor", "Ab major", "F# major"},
+    # minor: relative_major + perfect_fifth_up + perfect_fifth_down
+    "A minor":  {"A minor", "C major", "E minor", "D minor"},
+    "E minor":  {"E minor", "G major", "B minor", "A minor"},
+    "B minor":  {"B minor", "D major", "F# minor", "E minor"},
+    "F# minor": {"F# minor", "A major", "C# minor", "B minor"},
+    "C# minor": {"C# minor", "E major", "G# minor", "F# minor"},
+    "G# minor": {"G# minor", "B major", "D# minor", "C# minor"},
+    "D# minor": {"D# minor", "F# major", "A# minor", "G# minor"},
+    "D minor":  {"D minor", "F major", "A minor", "G minor"},
+    "G minor":  {"G minor", "Bb major", "D minor", "C minor"},
+    "C minor":  {"C minor", "Eb major", "G minor", "F minor"},
+    "F minor":  {"F minor", "Ab major", "C minor", "Bb minor"},
+    "Bb minor": {"Bb minor", "Db major", "F minor", "Eb minor"},
+}
+
+
+def _key_compatibility_score(
+    audio_key: Optional[str],
+    video_key: Optional[str],
+) -> float:
+    """Audit E1: Score for harmonic compatibility (Camelot-Wheel).
+
+    Returns:
+        1.0  if audio_key == video_key (perfect match)
+        0.7  if video_key in KEY_COMPATIBLE[audio_key] (relative minor/major or fifth)
+        0.3  if unrelated keys
+        0.5  if either input is None/empty (neutral — no penalty)
+    """
+    if not audio_key or not video_key:
+        return 0.5
+    if audio_key == video_key:
+        return 1.0
+    if video_key in KEY_COMPATIBLE.get(audio_key, set()):
+        return 0.7
+    return 0.3
+
 
 class SyncMode(Enum):
     """Synchronization strategies for video cuts."""
