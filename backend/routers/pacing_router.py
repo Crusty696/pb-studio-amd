@@ -337,7 +337,11 @@ def _run_pacing_generation(
                 clip_data["avg_motion"] = motion.get("avg_motion", 0.0) if motion else 0.0
                 clip_data["peak_motion"] = motion.get("peak_motion", 0.0) if motion else 0.0
                 clip_data["peak_frames"] = motion.get("peak_frames", []) if motion else []
+                clip_data["motion_curve"] = motion.get("motion_curve", []) if motion else []  # A4
                 clip_data["scene_changes"] = va.get("scenes", [])
+                clip_data["dominant_colors"] = va.get("dominant_colors", [])  # A4
+                clip_data["tags"] = va.get("tags", [])  # A4
+                clip_data["has_embedding"] = bool(va.get("has_embedding", False))  # A4
             clips.append(clip_data)
 
     pacing_config = {
