@@ -190,6 +190,14 @@ class SystemMonitor:
             if wmi_total > 0:
                 stats["gpu_memory_total"] = wmi_total
 
+        # BUG-205 Phase 2: VRAM-Used via Windows Performance Counter
+        # "\GPU Process Memory(*)\Local Usage" - summiert ueber alle Prozesse.
+        # Verifiziert per powershell test 2026-05-09: liefert ~1760 MB live.
+        if stats["gpu_memory_used"] == 0.0:
+            counter_used = self._counter_query_vram_used()
+            if counter_used > 0:
+                stats["gpu_memory_used"] = counter_used
+
         return stats
 
     def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
@@ -234,6 +242,33 @@ class SystemMonitor:
                 return mb_total
         except Exception as e:
             logger.warning("Registry VRAM-Fallback fehlgeschlagen: %s", e)
+        return 0.0
+
+    def _counter_query_vram_used(self) -> float:
+        """Fallback: VRAM-Used via Windows Performance Counter.
+
+        \\\\GPU Process Memory(*)\\\\Local Usage liefert per-process bytes.
+        Summe ueber alle Instanzen ist Total-Used.
+        Returns MB. 0.0 bei Fehler.
+        """
+        try:
+            import subprocess
+            ps_script = (
+                "$samples = (Get-Counter '\\GPU Process Memory(*)\\Local Usage' "
+                "-ErrorAction SilentlyContinue).CounterSamples; "
+                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Sum).Sum } "
+                "else { 0 }"
+            )
+            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+            if res.returncode == 0 and res.stdout.strip():
+                bytes_used = float(res.stdout.strip())
+                mb_used = bytes_used / (1024 * 1024)
+                if mb_used > 0:
+                    logger.debug("Counter VRAM-Used fallback: %.0f MB", mb_used)
+                return mb_used
+        except Exception as e:
+            logger.warning("Counter VRAM-Used-Fallback fehlgeschlagen: %s", e)
         return 0.0
 
     def close(self):

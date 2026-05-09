@@ -1,12 +1,12 @@
 <UserControl x:Class="PBStudio.UI.Controls.ProgressBarWithLabel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:PBStudio.UI.Converters"
              x:Name="Root">
-    <Grid Height="24" MinWidth="80">
-        <Border Background="#1F1F22" BorderBrush="{StaticResource AbletonBorder}"
-                BorderThickness="1" CornerRadius="3" Padding="0"/>
-        <ProgressBar x:Name="Pb" Margin="1"
+    <!-- Verdoppelte Hoehe + grosse Schrift damit % gut lesbar (User-Feedback 2026-05-09). -->
+    <Grid Height="48" MinWidth="160">
+        <Border Background="#101013" BorderBrush="{StaticResource AbletonAccent}"
+                BorderThickness="2" CornerRadius="6"/>
+        <ProgressBar x:Name="Pb" Margin="3"
                      Minimum="0" Maximum="100"
                      Value="{Binding Percent, ElementName=Root}"
                      IsIndeterminate="{Binding IsIndeterminate, ElementName=Root}"
@@ -15,14 +15,14 @@
                      BorderThickness="0"
                      SmallChange="0.01"
                      LargeChange="1.0"/>
-        <!-- Outline-Trick: doppelter TextBlock fuer dunkle Lesbarkeit auf orange Bar -->
+        <!-- Outline-Trick: dunkle Schatten-Kopie + helle Front fuer Lesbarkeit ueberall -->
         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
-                   FontSize="12" FontWeight="Bold"
-                   Foreground="Black" Opacity="0.6"
-                   Margin="1,1,0,0"
+                   FontSize="22" FontWeight="Bold"
+                   Foreground="Black" Opacity="0.85"
+                   Margin="2,2,0,0"
                    Text="{Binding LabelText, ElementName=Root}"/>
         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
-                   FontSize="12" FontWeight="Bold"
+                   FontSize="22" FontWeight="Bold"
                    Foreground="White"
                    Text="{Binding LabelText, ElementName=Root}"/>
     </Grid>

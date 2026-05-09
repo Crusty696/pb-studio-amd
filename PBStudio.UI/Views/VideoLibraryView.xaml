@@ -164,57 +164,53 @@
                                                            Visibility="{Binding Thumbnail, Converter={StaticResource InverseNullToVisibilityConverter}}"/>
                                 </Grid>
                             </Border>
-                            <StackPanel Margin="8,6,8,8">
-                                <DockPanel>
-                                    <!-- Feature-3: 2-State Status-Badge (analysiert vs nicht-analysiert) -->
-                                    <Border DockPanel.Dock="Right" Margin="4,0,0,0" Padding="4,1"
-                                            CornerRadius="2" VerticalAlignment="Center">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#3387C96B"/>
+                            <!-- Feature-3: STATUS-STRIP ueber Card (Top) - IMMER sichtbar.
+                                 GRUEN+CHECK = analysiert, GELB+CLOCK = offen. -->
+                            <Border DockPanel.Dock="Top" Padding="6,3" CornerRadius="2,2,0,0">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#FF87C96B"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAnalyzed}" Value="False">
+                                                <Setter Property="Background" Value="#FFE5C07B"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <icon:PackIconMaterial Width="14" Height="14"
+                                                           VerticalAlignment="Center" Margin="0,0,5,0"
+                                                           Foreground="Black">
+                                        <icon:PackIconMaterial.Style>
+                                            <Style TargetType="icon:PackIconMaterial">
+                                                <Setter Property="Kind" Value="CheckCircle"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsAnalyzed}" Value="False">
-                                                        <Setter Property="Background" Value="#33E5C07B"/>
+                                                        <Setter Property="Kind" Value="ClockOutline"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </Border.Style>
-                                        <StackPanel Orientation="Horizontal">
-                                            <icon:PackIconMaterial Width="10" Height="10"
-                                                                   VerticalAlignment="Center" Margin="0,0,3,0">
-                                                <icon:PackIconMaterial.Style>
-                                                    <Style TargetType="icon:PackIconMaterial">
-                                                        <Setter Property="Kind" Value="CheckCircle"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsAnalyzed}" Value="False">
-                                                                <Setter Property="Kind" Value="ClockOutline"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AbletonYellow}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </icon:PackIconMaterial.Style>
-                                            </icon:PackIconMaterial>
-                                            <TextBlock FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Text" Value="OK"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsAnalyzed}" Value="False">
-                                                                <Setter Property="Text" Value="OFFEN"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AbletonYellow}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </Border>
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
-                                               Foreground="{StaticResource AbletonText}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
+                                        </icon:PackIconMaterial.Style>
+                                    </icon:PackIconMaterial>
+                                    <TextBlock FontSize="11" FontWeight="Bold" Foreground="Black"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="ANALYSIERT"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAnalyzed}" Value="False">
+                                                        <Setter Property="Text" Value="NICHT ANALYSIERT"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Margin="8,6,8,8">
+                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
+                                           Foreground="{StaticResource AbletonText}"
+                                           TextTrimming="CharacterEllipsis"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                     <TextBlock Text="{Binding DurationText}"
                                                Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
