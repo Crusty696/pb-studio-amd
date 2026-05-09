@@ -585,7 +585,8 @@ class MotionAnalyzer:
     def analyze_video_segment(
         self,
         frames: List[np.ndarray],
-        stride: int = 1
+        stride: int = 1,
+        on_progress=None
     ) -> Dict[str, Any]:
         """
         Analyze motion patterns in a video segment.
@@ -593,6 +594,9 @@ class MotionAnalyzer:
         Args:
             frames: List of consecutive frames
             stride: Process every N-th frame pair
+            on_progress: Optional callable(float) — wird nach jedem analysierten
+                         Frame-Pair aufgerufen. Argument ist 0..100 Percent.
+                         Exceptions im Callback werden geschluckt (never break analysis).
 
         Returns:
             Dictionary with segment analysis:
@@ -615,6 +619,12 @@ class MotionAnalyzer:
         motions = []
         scene_changes = []
 
+        # Audit C1: total_pairs fuer Per-Frame Progress-Callback berechnen.
+        # Anzahl Iterationen = ceil((len(frames) - 1) / stride) — entspricht
+        # range(0, len(frames) - 1, stride). max(1,...) verhindert Division durch 0.
+        total_pairs = max(1, (len(frames) - 1 + stride - 1) // stride)
+        processed = 0
+
         for i in range(0, len(frames) - 1, stride):
             frame1 = frames[i]
             frame2 = frames[min(i + stride, len(frames) - 1)]
@@ -628,6 +638,16 @@ class MotionAnalyzer:
                     "frame_index": i,
                     "confidence": confidence
                 })
+
+            # Audit C1: Per-Frame Progress an Callback emittieren (z.B. video_router
+            # mappt das auf SSE analysis_progress events). Exceptions schlucken — der
+            # Callback darf die Analyse nicht crashen koennen.
+            processed += 1
+            if on_progress is not None:
+                try:
+                    on_progress(processed * 100.0 / total_pairs)
+                except Exception:
+                    pass
 
         return {
             "frame_motions": motions,

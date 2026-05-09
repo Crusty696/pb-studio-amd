@@ -295,8 +295,12 @@ async def analyze_video(
             "percent": 35.0,
             "message": f"Motion + Embedding (RAFT/SigLIP) laeuft: {clip['name']}",
         })
+        # Audit C1: _loop an _run_video_analysis durchreichen, damit der RAFT
+        # on_progress callback per-frame SSE-Events publishen kann (asyncio
+        # run_coroutine_threadsafe braucht den Event-Loop des FastAPI-Workers).
+        _loop = asyncio.get_running_loop()
         result = await with_gpu_task(
-            _run_video_analysis, clip["path"], request.clip_id, request,
+            _run_video_analysis, clip["path"], request.clip_id, request, _loop,
             model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
         )
         state.set_video_analysis(request.clip_id, result)
@@ -481,8 +485,18 @@ def _generate_thumbnail(video_path: str) -> bytes:
         tmp_path.unlink(missing_ok=True)
 
 
-def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequest) -> dict[str, Any]:
-    """Führt Video-Analyse durch (blockierend, GPU)."""
+def _run_video_analysis(
+    video_path: str,
+    clip_id: int,
+    request: VideoAnalyzeRequest,
+    _loop=None,
+) -> dict[str, Any]:
+    """Führt Video-Analyse durch (blockierend, GPU).
+
+    Audit C1: optionaler _loop Parameter ermöglicht per-frame SSE-Events aus
+    dem RAFT MotionAnalyzer.analyze_video_segment on_progress callback heraus.
+    None-default für Tests / Sync-Aufrufe ohne Event-Loop.
+    """
     result: dict = {"clip_id": clip_id, "scene_count": 0, "avg_motion": 0.0}
 
     # 1. Scene-Detection via PySceneDetect
@@ -535,7 +549,32 @@ def _run_video_analysis(video_path: str, clip_id: int, request: VideoAnalyzeRequ
             if len(frames) >= 2:
                 motion_analyzer = MotionAnalyzer()
                 try:
-                    motion_result = motion_analyzer.analyze_video_segment(frames, stride=1)
+                    # Audit C1: per-frame SSE Progress callback. Mappe RAFT-internes
+                    # 0..100% auf 35..65% (motion-Phase im Pipeline-Pipeline:
+                    # init=0..15, scenes=15..35, motion=35..65, embedding=65..90,
+                    # finalize=90..100).
+                    def _motion_progress(pct: float) -> None:
+                        if _loop is None:
+                            return
+                        overall = 35.0 + (pct / 100.0) * 30.0
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                publish_event("analysis_progress", {
+                                    "clip_id": clip_id,
+                                    "step": "motion_frame",
+                                    "step_index": 3,
+                                    "step_total": 4,
+                                    "percent": overall,
+                                    "message": f"RAFT frame {pct:.2f}%",
+                                }),
+                                _loop,
+                            )
+                        except Exception:
+                            pass
+
+                    motion_result = motion_analyzer.analyze_video_segment(
+                        frames, stride=1, on_progress=_motion_progress
+                    )
 
                     # Übersetze Sample-Indizes zu echten Video-Frame-Nummern
                     translated_scene_changes = [

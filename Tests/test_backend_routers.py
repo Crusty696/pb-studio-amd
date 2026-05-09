@@ -282,7 +282,9 @@ class TestVideoRouter:
         video_mod = _get_module("backend.routers.video_router")
         orig_run = video_mod._run_video_analysis
 
-        def fake_run(video_path, clip_id, request):
+        def fake_run(video_path, clip_id, request, _loop=None):
+            # Audit C1: _run_video_analysis hat jetzt optionalen _loop Param fuer
+            # per-frame RAFT progress callback (analysis_progress SSE).
             return {
                 "clip_id": clip_id,
                 "scene_count": 1,
