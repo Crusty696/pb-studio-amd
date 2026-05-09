@@ -25,7 +25,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 1. Read this file completely.
 2. Acknowledge the current task.
 3. Verify that your proposed solution respects the IRON RULES.
-4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-05-08"
+4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-05-09"
 
 ---
 
@@ -50,11 +50,11 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-08
+- **Date:** 2026-05-09
 - **Phase:** Production / Verified + Brain-Modul Phase 6 integriert
-- **Status:** Pipeline-Level Audit abgeschlossen 2026-05-08 (siehe `STATUS_REPORT_2026-05-08.md`). Tests: 239 passed, 8 skipped, 0 failures (Brain-Phase-6, Commit `eb18dc5`). 5 Bugs am 2026-05-08 gefixt (BUG-200..204).
-- **Next Task:** Backend-Restart für BUG-204-Fix-Aktivierung, dann End-to-End-GUI-Test mit echtem Video-Import, dann `auto-qa-loop` über alle 12 Views.
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..204 gefixt 2026-05-08: CTS-Race VideoLibrary, fehlende XAML-Resources VideoThumbCard + AbletonYellowColor, Launcher Auto-Rebuild, fehlende SSE analysis_progress Events bei Video-Analyse)
+- **Status:** Pipeline-Level Audit abgeschlossen 2026-05-08 (siehe `STATUS_REPORT_2026-05-08.md`). Tests: 239 passed, 8 skipped, 0 failures (Brain-Phase-6, Commit `eb18dc5`). 5 Bugs am 2026-05-08 gefixt (BUG-200..204). Audit Data-Flow 2026-05-09: 5/8 Audio + 3/5 Video Felder werden persistiert ohne dass Pacing sie konsumiert (siehe `AUDIT_DATA_FLOW_2026-05-09.md`). Plan zur Behebung in `~/.claude/plans/cozy-marinating-pike.md` (Phase A-F).
+- **Next Task:** Verbleibende Plan-Phasen B (GUI-Tests), D-F (Settings/Engine/Cleanup) abarbeiten. Phase A (Pacing-Workflow) abgeschlossen Commits 6f4de96..5b05915.
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..204 gefixt 2026-05-08: CTS-Race VideoLibrary, fehlende XAML-Resources VideoThumbCard + AbletonYellowColor, Launcher Auto-Rebuild, fehlende SSE analysis_progress Events bei Video-Analyse, BUG-205 gefixt 2026-05-09 (Settings VRAM Total via Registry-Fallback wenn LHM-Sensors leer; Used via GPU Process Memory Counter))
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
