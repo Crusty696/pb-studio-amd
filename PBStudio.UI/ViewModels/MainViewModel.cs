@@ -3,9 +3,9 @@ using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -62,16 +62,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.GpuStatusReceived += OnGpuStatusReceived;
         _projects.ProjectChanged += OnProjectChanged;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (r, m) =>
+        WeakReferenceMessenger.Default.Register<BackendReadyMessage>(this, (_, _) => _ = InitializeAsync());
+        WeakReferenceMessenger.Default.Register<NavigateDirectorMessage>(this, (_, _) =>
         {
-            if (m.Value == "backend-ready")
-            {
-                _ = InitializeAsync();
-            }
-            else if (m.Value == "navigate-director")
-            {
-                SelectedTabIndex = 3; // Index 3 is KI-REGIE (Director)
-            }
+            SelectedTabIndex = 3; // Index 3 is KI-REGIE (Director)
         });
 
         _ = InitializeAsync();
@@ -161,7 +155,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     await RefreshGpuStatusAsync();
                     if (await _projects.RefreshProjectInfoAsync())
                     {
-                        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("project-opened"));
+                        WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
                     }
                     return;
                 }
@@ -245,6 +239,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.ProgressReceived -= OnProgressReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
         _projects.ProjectChanged -= OnProjectChanged;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

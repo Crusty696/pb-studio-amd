@@ -2,8 +2,8 @@ using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -65,13 +65,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         LoadPersistedSettings();
 
         // 2. Initiales Laden des Backend-Status
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
-        {
-            if (message.Value == "backend-ready")
-                _ = RefreshAsync();
-            else if (message.Value == "app-shutdown")
-                BackendOnline = false;
-        });
+        WeakReferenceMessenger.Default.Register<BackendReadyMessage>(this, (_, _) => _ = RefreshAsync());
+        WeakReferenceMessenger.Default.Register<AppShutdownMessage>(this, (_, _) => BackendOnline = false);
 
         _ = RefreshAsync();
 
@@ -276,6 +271,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _disposed = true;
         try { _probeCts?.Cancel(); } catch { /* ignore */ }
         _probeCts?.Dispose();
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

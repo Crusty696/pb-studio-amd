@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -33,11 +33,8 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
         _api = api;
         _dialogService = dialogService;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
-        {
-            if (message.Value is "project-closed" or "project-closing")
-                ResetProjectState();
-        });
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
+        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(this, (_, _) => ResetProjectState());
     }
 
     private void ResetProjectState()
@@ -120,8 +117,8 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
 
             if (importedCount > 0)
             {
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new AudioImportedMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
 
             var totalFailed = failedPrecheck + failedImport;
@@ -271,8 +268,8 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
 
                 if (results.Count > 0)
                 {
-                    WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
-                    WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                    WeakReferenceMessenger.Default.Send(new VideoImportedMessage());
+                    WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
                     VideoImportPath = string.Empty;
                 }
 
@@ -329,6 +326,6 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

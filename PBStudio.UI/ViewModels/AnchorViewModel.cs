@@ -4,9 +4,9 @@ using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -45,13 +45,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         _api = api;
         _audioLibraryState = audioLibraryState;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
-        {
-            if (message.Value is "audio-library-refresh" or "audio-imported" or "media-library-refresh" or "project-opened")
-                _ = RequestAudioReloadAsync();
-            else if (message.Value == "project-closed")
-                ResetProjectState();
-        });
+        WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
     }
 
     partial void OnSelectedAudioClipChanged(AudioClipModel? value)
@@ -392,7 +390,7 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
         _shutdownCts.Cancel();
         _shutdownCts.Dispose();
         _loadGate.Dispose();

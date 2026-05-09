@@ -3,10 +3,10 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using System.Text.Json;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -76,15 +76,20 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        void HandleReload()
         {
-            if (_isShuttingDown)
-                return;
+            if (_isShuttingDown) return;
+            _ = RequestClipReloadAsync();
+        }
 
-            if (message.Value is "project-opened" or "audio-library-refresh" or "video-library-refresh" or "media-library-refresh")
-                _ = RequestClipReloadAsync();
-            else if (message.Value is "project-closed")
-                ResetProjectState();
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<VideoLibraryRefreshMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+        {
+            if (_isShuttingDown) return;
+            ResetProjectState();
         });
     }
 
@@ -286,7 +291,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     TotalDuration = result.TotalDuration;
                 });
                 StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("timeline-refresh"));
+                WeakReferenceMessenger.Default.Send(new TimelineRefreshMessage());
             }
             else
             {
@@ -408,7 +413,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         _disposed = true;
         _isShuttingDown = true;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
         _loadGate.Dispose();
     }
 }

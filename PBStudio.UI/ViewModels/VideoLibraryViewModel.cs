@@ -6,10 +6,10 @@ using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -65,21 +65,26 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        void HandleReload()
         {
-            if (_isShuttingDown)
-                return;
+            if (_isShuttingDown) return;
+            _ = RequestClipReloadAsync();
+        }
 
-            if (message.Value is "video-imported" or "video-library-refresh" or "media-library-refresh" or "project-opened")
-                _ = RequestClipReloadAsync();
-            else if (message.Value is "project-closing" or "project-closed")
-            {
-                VideoImportPath = string.Empty;
-                ClearClips();
-            }
-            else if (message.Value is "app-shutdown")
-                BeginShutdown();
-        });
+        void HandleProjectEnd()
+        {
+            if (_isShuttingDown) return;
+            VideoImportPath = string.Empty;
+            ClearClips();
+        }
+
+        WeakReferenceMessenger.Default.Register<VideoImportedMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<VideoLibraryRefreshMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => HandleReload());
+        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(this, (_, _) => HandleProjectEnd());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => HandleProjectEnd());
+        WeakReferenceMessenger.Default.Register<AppShutdownMessage>(this, (_, _) => BeginShutdown());
     }
 
     partial void OnSelectedClipChanged(VideoClipModel? value)
@@ -154,9 +159,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
                 VideoImportPath = string.Empty;
                 await LoadClipsAsync();
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new VideoImportedMessage());
+                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
         }
         catch (Exception ex)
@@ -209,7 +214,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
                 _videoLibraryState.Clear();
                 await LoadClipsAsync();
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             }
             else StatusText = "Delete fehlgeschlagen.";
         }
@@ -231,7 +236,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
                 _videoLibraryState.Clear();
                 await LoadClipsAsync();
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             }
             else StatusText = "Delete-All fehlgeschlagen.";
         }
@@ -377,9 +382,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 ImportProgress = 100.0;
                 await Task.Delay(450).ConfigureAwait(true);  // 100% kurz halten
                 await LoadClipsAsync();
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-imported"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("video-library-refresh"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new VideoImportedMessage());
+                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else
             {
@@ -697,7 +702,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
         BeginShutdown();
         _loadGate.Dispose();
     }

@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -36,13 +36,11 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         _audioState = audioState;
         _videoState = videoState;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, m) =>
-        {
-            if (m.Value is "project-opened" or "project-closed" or "media-library-refresh" or "video-imported" or "audio-imported")
-            {
-                _ = RefreshAsync();
-            }
-        });
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RefreshAsync());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => _ = RefreshAsync());
+        WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = RefreshAsync());
+        WeakReferenceMessenger.Default.Register<VideoImportedMessage>(this, (_, _) => _ = RefreshAsync());
+        WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = RefreshAsync());
 
         _ = RefreshAsync();
     }
@@ -151,13 +149,13 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void GoToDirector()
     {
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("navigate-director"));
+        WeakReferenceMessenger.Default.Send(new NavigateDirectorMessage());
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

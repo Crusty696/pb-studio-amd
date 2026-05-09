@@ -4,10 +4,10 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Win32;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -48,13 +48,11 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
-        {
-            if (message.Value is "project-opened" or "audio-imported" or "audio-library-refresh" or "media-library-refresh")
-                _ = LoadAudioClipsAsync();
-            else if (message.Value is "project-closed")
-                ResetProjectState();
-        });
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
+        WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
+        WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
+        WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
     }
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
@@ -102,8 +100,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else StatusText = "Delete fehlgeschlagen.";
         }
@@ -123,8 +121,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else StatusText = "Delete-All fehlgeschlagen.";
         }
@@ -235,10 +233,10 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             {
                 StatusText = $"{imported} Audio-Dateien erfolgreich importiert";
                 await LoadAudioClipsAsync();
-                // Cross-VM refresh: Director, MediaIngest, ProjectOverview hoeren auf diese Keys
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-imported"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("media-library-refresh"));
+                // Cross-VM refresh: Director, MediaIngest, ProjectOverview hoeren auf diese Records
+                WeakReferenceMessenger.Default.Send(new AudioImportedMessage());
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else
             {
@@ -347,7 +345,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
             AnalysisProgress = 100;
             StatusText = $"Alle {total} Clips analysiert";
-            WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+            WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
         }
         catch (Exception ex)
         {
@@ -390,7 +388,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 BeatCount = result.BeatCount;
                 Key = result.Key ?? "";
                 StatusText = $"Analyse fertig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
-                WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("audio-library-refresh"));
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
             }
             else
             {
@@ -455,6 +453,6 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

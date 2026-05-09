@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI;
@@ -29,7 +29,7 @@ public partial class MainWindow : Window
             return;
 
         _shutdownStarted = true;
-        WeakReferenceMessenger.Default.Send(new ValueChangedMessage<string>("app-shutdown"));
+        WeakReferenceMessenger.Default.Send(new AppShutdownMessage());
         _api.BeginShutdown();
     }
 }

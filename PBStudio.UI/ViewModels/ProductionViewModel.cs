@@ -2,9 +2,9 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using Microsoft.Win32;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -48,18 +48,12 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         _sse.GpuStatusReceived += OnGpuStatusReceived;
         _timelineState.TimelineChanged += OnTimelineChanged;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
         {
-            if (message.Value == "project-opened")
-            {
-                HasProject = true;
-                StartRenderCommand.NotifyCanExecuteChanged();
-            }
-            else if (message.Value == "project-closed")
-            {
-                ResetProjectState();
-            }
+            HasProject = true;
+            StartRenderCommand.NotifyCanExecuteChanged();
         });
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => ResetProjectState());
 
         if (HasProject)
         {
@@ -393,6 +387,6 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         _sse.LogReceived -= OnLogReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
         _timelineState.TimelineChanged -= OnTimelineChanged;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

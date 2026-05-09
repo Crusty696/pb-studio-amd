@@ -7,9 +7,9 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using CommunityToolkit.Mvvm.Messaging.Messages;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -116,15 +116,12 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         _audioLibraryState = audioLibraryState;
         _api = api;
 
-        WeakReferenceMessenger.Default.Register<ValueChangedMessage<string>>(this, (_, message) =>
+        WeakReferenceMessenger.Default.Register<TimelineRefreshMessage>(this, (_, _) => _ = RequestTimelineRefreshAsync());
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestTimelineRefreshAsync());
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
         {
-            if (message.Value is "timeline-refresh" or "project-opened")
-                _ = RequestTimelineRefreshAsync();
-            else if (message.Value == "project-closed")
-            {
-                _timelineState.Clear();
-                ResetTimelineState();
-            }
+            _timelineState.Clear();
+            ResetTimelineState();
         });
 
         // R-Brain-09: Confidence-Balken + Tooltip live aktualisieren, wenn ein
@@ -658,8 +655,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        WeakReferenceMessenger.Default.Unregister<ValueChangedMessage<string>>(this);
-        WeakReferenceMessenger.Default.Unregister<BrainFeedbackAppliedMessage>(this);
+        WeakReferenceMessenger.Default.UnregisterAll(this);
         _loadGate.Dispose();
     }
 }
