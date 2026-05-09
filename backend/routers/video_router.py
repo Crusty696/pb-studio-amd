@@ -74,9 +74,32 @@ async def import_videos(
             continue
 
         # Plan Phase 1 #1: streaming sha256 hash for embedding-cache reuse.
+        # User-Anforderung 2026-05-09: 0.01% per-chunk SSE-Progress.
         from pb_studio.core.media_hash import media_hash
+        _loop = asyncio.get_running_loop()
+        _vname = video_path.name
+        _file_idx = len(imported) + 1
+        _file_total = len(request.paths)
+
+        def _hash_progress(pct: float) -> None:
+            try:
+                # Map per-file 0..100% auf overall (file_idx-1 + pct/100) / total * 100
+                overall = ((_file_idx - 1) + pct / 100.0) * 100.0 / _file_total
+                asyncio.run_coroutine_threadsafe(
+                    publish_event("import_progress", {
+                        "step": "hash",
+                        "percent": overall,
+                        "message": f"Hash {_file_idx}/{_file_total} {_vname}: {pct:.2f}%",
+                    }),
+                    _loop,
+                )
+            except Exception:
+                pass
+
         try:
-            video_hash_value = await asyncio.to_thread(media_hash, str(video_path))
+            video_hash_value = await asyncio.to_thread(
+                media_hash, str(video_path), _hash_progress
+            )
         except Exception as e:
             logger.warning(f"media_hash fehlgeschlagen für {video_path}: {e}")
             video_hash_value = None

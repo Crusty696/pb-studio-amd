@@ -189,11 +189,14 @@
                         Percent="{Binding AnalysisProgress}"
                         HorizontalAlignment="Stretch" Margin="0,0,0,6"
                         Visibility="{Binding IsSeparating, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                    <!-- Step-Indicator -->
+                    <!-- Step-Indicator (nur sichtbar wenn IsAnalyzing UND CurrentStep gesetzt) -->
                     <StackPanel Orientation="Horizontal" Margin="2,4,0,0"
                                 Visibility="{Binding IsAnalyzing, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <TextBlock Text="Schritt: " Foreground="{StaticResource AbletonTextDim}" FontSize="12"/>
                         <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="Bold"/>
+                        <TextBlock Text=" " FontSize="12"/>
+                        <TextBlock Text="{Binding AnalysisProgress, StringFormat={}{0:0.00} %}"
+                                   Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="Bold"/>
                     </StackPanel>
                     <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
                                FontSize="12" HorizontalAlignment="Left" Margin="2,4,0,0"/>

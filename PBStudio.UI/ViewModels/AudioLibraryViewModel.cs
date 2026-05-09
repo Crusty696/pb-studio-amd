@@ -33,6 +33,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _currentStep = "";
     [ObservableProperty] private bool _isImporting;
     [ObservableProperty] private double _importProgress;
+    private int _currentImportFileIdx;
+    private int _totalImportFiles;
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
     public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
@@ -66,6 +68,21 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     AnalysisProgress = e.Percent;
                 if (!string.IsNullOrEmpty(e.Step))
                     CurrentStep = e.Step;
+            });
+        }
+        else if (e.EventType == "import_progress" && IsImporting)
+        {
+            // Backend liefert 0..100 fuer aktuelles File. VM mappt auf overall:
+            // overall = ((file_idx-1) + per_file/100) / total * 100
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StatusText = e.Message;
+                if (e.Percent >= 0 && _totalImportFiles > 0)
+                {
+                    var basePct = (_currentImportFileIdx - 1) * 100.0 / _totalImportFiles;
+                    var perFileFraction = e.Percent / 100.0;
+                    ImportProgress = basePct + perFileFraction * (100.0 / _totalImportFiles);
+                }
             });
         }
     }
@@ -188,26 +205,30 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private async Task ProcessAudioImportAsync(List<string> files)
     {
         IsImporting = true;
-        IsAnalyzing = true;
+        // Wichtig: NICHT IsAnalyzing setzen waehrend Import - sonst beide Bars sichtbar.
         ImportProgress = 0.01;  // sichtbarer Start
+        CurrentStep = "";
         StatusText = $"Importiere {files.Count} Dateien...";
         await Task.Delay(120).ConfigureAwait(true);  // UI render bevor Schleife
 
         var imported = 0;
         var total = files.Count;
+        _totalImportFiles = total;
         try
         {
             for (int i = 0; i < total; i++)
             {
                 var file = files[i];
+                _currentImportFileIdx = i + 1;
                 StatusText = $"Importiere {i + 1}/{total}: {System.IO.Path.GetFileName(file)}";
-                // Progress VOR call (zeigt Start des Files)
-                ImportProgress = i * 100.0 / total;
+                // Backend emittiert per-byte hash-progress 0..100 fuer dieses File.
+                // OnSseProgressReceived mappt auf overall ((idx-1)+pct/100)/total*100.
+                ImportProgress = i * 100.0 / total;  // base position
                 var result = await _api.ImportAudioAsync(file);
                 if (result != null) imported++;
                 ImportProgress = (i + 1) * 100.0 / total;
             }
-            // Halte 100% kurz sichtbar damit User Erfolg sieht
+            ImportProgress = 100.0;
             await Task.Delay(450).ConfigureAwait(true);
 
             if (imported > 0)
@@ -230,7 +251,6 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsAnalyzing = false;
             IsImporting = false;
         }
     }

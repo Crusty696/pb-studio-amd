@@ -86,9 +86,28 @@ async def import_audio(
         raise HTTPException(status_code=500, detail=f"Audio-Info nicht ermittelbar: {e}")
 
     # Plan Phase 1 #1: streaming sha256 hash for embedding-cache reuse.
+    # User-Anforderung 2026-05-09: feingranulares 0.01% Progress per chunk SSE.
     from pb_studio.core.media_hash import media_hash
+    _loop = asyncio.get_running_loop()
+    _file_name = audio_path.name
+
+    def _hash_progress(pct: float) -> None:
+        try:
+            asyncio.run_coroutine_threadsafe(
+                publish_event("import_progress", {
+                    "step": "hash",
+                    "percent": pct,
+                    "message": f"Hashing {_file_name}: {pct:.2f}%",
+                }),
+                _loop,
+            )
+        except Exception:
+            pass
+
     try:
-        audio_hash_value = await asyncio.to_thread(media_hash, str(audio_path))
+        audio_hash_value = await asyncio.to_thread(
+            media_hash, str(audio_path), _hash_progress
+        )
     except Exception as e:
         logger.warning(f"media_hash fehlgeschlagen für {audio_path}: {e}")
         audio_hash_value = None
