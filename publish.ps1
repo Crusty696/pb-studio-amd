@@ -1,9 +1,9 @@
 #Requires -Version 5.1
-<#!
+<#
 .SYNOPSIS
-    PB Studio AMD – Publish Script
+    PB Studio AMD - Publish Script
 .DESCRIPTION
-    Erstellt reproduzierbare WPF-Publish-Artefakte für verschiedene Deployment-Modi.
+    Erstellt reproduzierbare WPF-Publish-Artefakte fuer verschiedene Deployment-Modi.
 #>
 
 param(
@@ -14,10 +14,11 @@ param(
     [string]$Runtime = 'win-x64',
     [string]$OutputRoot = '.\artifacts\publish',
     [switch]$FlatOutput,
-    [string]$VersionTag
+    [string]$VersionTag,
+    [switch]$NoPause
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $ProjectRoot = $PSScriptRoot
 $ProjectFile = Join-Path $ProjectRoot 'PBStudio.UI\PBStudio.UI.csproj'
 $publishBaseDir = Join-Path $ProjectRoot (Join-Path $OutputRoot $Mode)
@@ -117,12 +118,19 @@ function Test-LegacyFlatArtifacts {
     return $null -ne $newerVersionedExe
 }
 
+# --- Pre-flight checks ---
 if (-not (Test-Path $ProjectFile)) {
-    throw "Project file not found: $ProjectFile"
+    Write-Status "FATAL: Project file not found: $ProjectFile" 'Red'
+    exit 1
 }
 
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+$null = New-Item -ItemType Directory -Force -Path $OutputDir
+if (-not (Test-Path $OutputDir)) {
+    Write-Status "FATAL: Could not create output directory: $OutputDir" 'Red'
+    exit 1
+}
 
+# --- Build publishArgs ---
 $publishArgs = @(
     'publish',
     $ProjectFile,
@@ -148,19 +156,24 @@ switch ($Mode) {
     }
 }
 
-Write-Status "Mode: $Mode"
+Write-Status "Mode:          $Mode"
 Write-Status "Configuration: $Configuration"
-Write-Status "Runtime: $Runtime"
-Write-Status "Output: $OutputDir"
+Write-Status "Runtime:       $Runtime"
+Write-Status "Output:        $OutputDir"
 if (-not $FlatOutput) {
-    Write-Status "Version tag: $safeVersionTag"
+    Write-Status "Version tag:   $safeVersionTag"
 }
 
+# --- dotnet publish ---
+Write-Status "Running: dotnet $($publishArgs -join ' ')"
 & dotnet @publishArgs
-if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE"
+$publishExit = $LASTEXITCODE
+if ($publishExit -ne 0) {
+    Write-Status "FATAL: dotnet publish failed with exit code $publishExit" 'Red'
+    exit $publishExit
 }
 
+# --- Post-publish ---
 $resolvedOutputDir = (Resolve-Path $OutputDir).Path
 Write-LatestPointer -BaseDir $publishBaseDir -ResolvedOutputDir $resolvedOutputDir
 
@@ -178,3 +191,5 @@ if (Test-Path $exe) {
 } else {
     Write-Status 'Publish completed, but PBStudio.UI.exe was not found in output directory.' 'Yellow'
 }
+
+if (-not $NoPause) { Read-Host 'Press Enter to close' }
