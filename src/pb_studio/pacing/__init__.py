@@ -9,7 +9,6 @@ Key Components:
 - AdvancedPacingEngine: Musical intelligence for cut timing and sequencing
 - PacingConfig: Configuration dataclass for pacing parameters
 - SemanticMatcher: Intelligente Clip-Auswahl via Embeddings
-- PacingSmartDirector: Koordiniert Pacing + Matching für Timeline-Generierung
 - MoodGenerator: Energy-basierte Mood-Text-Generierung
 - MotionPreferenceCalculator: Motion-Präferenz basierend auf Struktur/Spektral
 - AnchorManager: Few-Shot Learning via User-definierte Audio-Video-Anchors
