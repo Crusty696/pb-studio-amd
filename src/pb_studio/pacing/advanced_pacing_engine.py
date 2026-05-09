@@ -1166,6 +1166,50 @@ class AdvancedPacingEngine:
         # defensive clamp falls nicht.
         return 1.0 + max(0.0, min(1.0, bass_val))
 
+    def _curve_weight(self, curve, time_sec: float) -> float:
+        """
+        Audit L-M2: Generic curve->weight mapper analog _bass_weight_at_time.
+
+        Mapping time_sec -> Index erfolgt linear ueber _pre_cached_duration:
+            pos = clamp(time_sec / duration, 0..1)
+            idx = int(pos * (len(curve) - 1))
+
+        Returns:
+            float in [1.0, 2.0]. 1.0 wenn keine curve, leere curve, keine
+            Duration verfuegbar oder Wert == 0.0. Sonst 1.0 + clamp(val, 0..1).
+        """
+        if curve is None or len(curve) == 0:
+            return 1.0
+        duration = float(getattr(self, "_pre_cached_duration", 0.0) or 0.0)
+        if duration <= 0:
+            return 1.0
+        pos = max(0.0, min(1.0, float(time_sec) / duration))
+        idx = int(pos * (len(curve) - 1))
+        val = float(curve[idx])
+        return 1.0 + max(0.0, min(1.0, val))
+
+    def _mid_weight_at_time(self, time_sec: float) -> float:
+        """
+        Audit L-M2: Multiplier fuer Trigger-Strength via cached mid_curve.
+
+        Wird von PacingService via spectral_data["bands"]["mid"] injiziert
+        (_pre_cached_mid_curve). Liefert 1.0..2.0 (= 1.0 + mid_normalized).
+        Mid-Frequenzen (~250Hz-2kHz) korrelieren mit Vocals/Lead-Instrumenten —
+        Cuts an mid-lastigen Stellen koennen verstaerkt werden.
+        """
+        return self._curve_weight(getattr(self, "_pre_cached_mid_curve", None), time_sec)
+
+    def _high_weight_at_time(self, time_sec: float) -> float:
+        """
+        Audit L-M2: Multiplier fuer Trigger-Strength via cached high_curve.
+
+        Wird von PacingService via spectral_data["bands"]["high"] injiziert
+        (_pre_cached_high_curve). Liefert 1.0..2.0 (= 1.0 + high_normalized).
+        High-Frequenzen (~2kHz+) korrelieren mit Hi-Hats/Cymbals/Air —
+        Cuts an high-energy-Stellen koennen verstaerkt werden.
+        """
+        return self._curve_weight(getattr(self, "_pre_cached_high_curve", None), time_sec)
+
     def _tempo_at_time(self, time_sec: float) -> float:
         """
         Audit L-M1: Liefert lokale BPM zum Zeitpunkt time_sec via cached tempo_curve.

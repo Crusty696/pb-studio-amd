@@ -177,6 +177,24 @@ class PacingService:
                 self._last_used_cached_bass = True
             else:
                 self._last_used_cached_bass = False
+
+            # L-M2: mid + high curves analog bass.
+            # spectral_data.bands.mid + .high werden vom SpectralAnalyzer 3-Band
+            # Output gleich neben .low persistiert. Engine nutzt sie via
+            # _mid_weight_at_time() / _high_weight_at_time() — heute kein
+            # automatischer Apply-Punkt im Strength-Adjust, aber Helper-API ready.
+            mid_band = bands.get("mid") if isinstance(bands, dict) else None
+            if mid_band and len(mid_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_mid_curve = _np.array(
+                    mid_band, dtype=_np.float32
+                )
+            high_band = bands.get("high") if isinstance(bands, dict) else None
+            if high_band and len(high_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_high_curve = _np.array(
+                    high_band, dtype=_np.float32
+                )
         else:
             self._last_used_cached_bass = False
 
@@ -510,6 +528,34 @@ class PacingService:
                 self._last_used_cached_bass = True
             else:
                 self._last_used_cached_bass = False
+
+            # Audit L-M2: inject mid + high curves analog bass.
+            # spectral_data.bands.mid + .high werden vom SpectralAnalyzer 3-Band
+            # Output gleich neben .low persistiert. Engine nutzt sie via
+            # _mid_weight_at_time() / _high_weight_at_time() — Helper-API ready
+            # fuer Strength-Multiplikator-Anwendung in Cut-Selection.
+            mid_band = bands.get("mid") if isinstance(bands, dict) else None
+            if mid_band and len(mid_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_mid_curve = _np.array(
+                    mid_band, dtype=_np.float32
+                )
+                logger.info(
+                    "Audit L-M2: mid_curve injiziert (%d Werte) — "
+                    "Helper _mid_weight_at_time(t) verfuegbar",
+                    len(mid_band),
+                )
+            high_band = bands.get("high") if isinstance(bands, dict) else None
+            if high_band and len(high_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_high_curve = _np.array(
+                    high_band, dtype=_np.float32
+                )
+                logger.info(
+                    "Audit L-M2: high_curve injiziert (%d Werte) — "
+                    "Helper _high_weight_at_time(t) verfuegbar",
+                    len(high_band),
+                )
         else:
             self._last_used_cached_bass = False
 
