@@ -193,7 +193,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         !IsGenerating && SelectedAudioClip != null && SelectedVideoClipCount > 0;
 
     partial void OnSelectedAudioClipChanged(AudioClipModel? value)
-        => GenerateCutListCommand.NotifyCanExecuteChanged();
+    {
+        if (value != null && value.Bpm > 0)
+        {
+            ExpectedBpm = value.Bpm;
+        }
+        GenerateCutListCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnSelectedVideoClipCountChanged(int value)
         => GenerateCutListCommand.NotifyCanExecuteChanged();
