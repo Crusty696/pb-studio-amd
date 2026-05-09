@@ -206,6 +206,14 @@ class SystemMonitor:
             if alt_temp > 0:
                 stats["gpu_temp"] = alt_temp
 
+        # Audit D2: GPU Load Fallback wenn LHM 0 liefert
+        # (gleiches Pattern wie BUG-205: AMD Adrenalin blockiert Load-Sensor).
+        # Fallback ueber Windows Performance Counter \GPU Engine(*)\Utilization.
+        if stats["gpu_load"] == 0.0:
+            alt_load = self._query_load_alternative()
+            if alt_load > 0:
+                stats["gpu_load"] = alt_load
+
         return stats
 
     def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
@@ -345,6 +353,36 @@ class SystemMonitor:
         except Exception as e:
             logger.debug("Thermal-Zone-Temp-Fallback fehlgeschlagen: %s", e)
 
+        return 0.0
+
+    def _query_load_alternative(self) -> float:
+        r"""Audit D2 Fallback: GPU Load via Windows Performance Counter wenn LHM
+        0 liefert (gleiches Problem wie BUG-205: AMD Adrenalin blockiert
+        Load-Sensor fuer dedicated GPU).
+
+        \GPU Engine(*engtype_3D)\Utilization Percentage liefert per-engine load.
+        Sum ueber alle Engines = total GPU 3D-Load.
+        Returns Percent (0..100). 0.0 bei Fehler.
+        """
+        try:
+            import subprocess
+            ps_script = (
+                "$samples = (Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' "
+                "-ErrorAction SilentlyContinue).CounterSamples; "
+                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Sum).Sum } "
+                "else { 0 }"
+            )
+            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+            if res.returncode == 0 and res.stdout.strip():
+                load = float(res.stdout.strip())
+                # Cap auf 100 (multi-engine kann technisch ueber 100 summieren)
+                load = min(100.0, max(0.0, load))
+                if load > 0:
+                    logger.debug("Counter GPU Load fallback: %.1f%%", load)
+                return load
+        except Exception as e:
+            logger.warning("Counter GPU-Load-Fallback fehlgeschlagen: %s", e)
         return 0.0
 
     def close(self):
