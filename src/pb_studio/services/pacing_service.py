@@ -112,6 +112,215 @@ class PacingService:
             cut_list.append(cut)
         return cut_list
 
+    def _inject_cached_into_engine(
+        self,
+        pacing_engine: AdvancedPacingEngine,
+        audio_path: str,
+        cached_analysis: Dict | None,
+    ) -> None:
+        """L-K5: Extracted pre-cached injection logic so both generate_cut_list and
+        generate_cut_list_with_stems wrappers can re-use it.
+
+        Injects pre_cached_beats, _pre_cached_bpm, _pre_cached_duration,
+        _pre_cached_energy, _pre_cached_bass_curve, _pre_cached_subtracks
+        (mirrors what generate_cut_list does in-line).
+        """
+        if not cached_analysis:
+            self._last_used_cached_energy = False
+            self._last_used_cached_bass = False
+            self._last_used_cached_subtracks = False
+            return
+
+        # Beats + BPM + Duration
+        pre_cached_beats: List[float] = []
+        for b in cached_analysis.get("beats", []):
+            if isinstance(b, dict):
+                pre_cached_beats.append(b.get("time", 0.0))
+            else:
+                pre_cached_beats.append(float(b))
+        pre_cached_bpm = cached_analysis.get("bpm") or None
+        if pre_cached_beats:
+            pacing_engine._cached_audio_path = audio_path
+            pacing_engine._pre_cached_beats = pre_cached_beats
+            if pre_cached_bpm:
+                pacing_engine._pre_cached_bpm = pre_cached_bpm
+            cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
+            if cached_dur > 0:
+                pacing_engine._pre_cached_duration = cached_dur
+
+        # Energy
+        cached_energy = cached_analysis.get("energy_curve")
+        if cached_energy:
+            import numpy as _np
+            pacing_engine._pre_cached_energy = _np.array(cached_energy, dtype=_np.float32)
+            self._last_used_cached_energy = True
+        else:
+            self._last_used_cached_energy = False
+
+        # Bass-curve from spectral_data.bands.low
+        spectral = cached_analysis.get("spectral_data")
+        if spectral and isinstance(spectral, dict):
+            bands = spectral.get("bands", {})
+            low_band = bands.get("low") if isinstance(bands, dict) else None
+            if low_band and len(low_band) > 0:
+                import numpy as _np
+                pacing_engine._pre_cached_bass_curve = _np.array(low_band, dtype=_np.float32)
+                if not hasattr(pacing_engine, "_pre_cached_duration") or \
+                        getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
+                    cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
+                    if cached_dur > 0:
+                        pacing_engine._pre_cached_duration = cached_dur
+                self._last_used_cached_bass = True
+            else:
+                self._last_used_cached_bass = False
+        else:
+            self._last_used_cached_bass = False
+
+        # Subtracks
+        subtracks = cached_analysis.get("subtrack_segments")
+        if subtracks and isinstance(subtracks, list) and len(subtracks) > 0:
+            pacing_engine._pre_cached_subtracks = subtracks
+            self._last_used_cached_subtracks = True
+        else:
+            self._last_used_cached_subtracks = False
+
+    def generate_cut_list_with_stems(
+        self,
+        audio_path: str,
+        stems: Dict[str, str],
+        clips: list,
+        pacing_config: dict,
+        total_duration: float,
+        duration_limit: float | None = None,
+        cached_analysis: Dict | None = None,
+    ) -> List[CutListEntry]:
+        """L-K5: Stem-basiertes Pacing.
+
+        Wrapper um AdvancedPacingEngine.generate_cut_list_with_stems().
+        Nutzt dieselbe pre-cached-injection wie generate_cut_list (Beats/BPM/Energy/
+        Bass/Subtracks), generiert dann Cuts via Demucs-Stems (drums/bass) und
+        weist Clips per ClipSelector zu (Round-Robin als simple-fallback).
+        """
+        if not audio_path:
+            raise ValueError("Audio-Pfad erforderlich.")
+        if not clips:
+            logger.warning("Keine Video-Clips vorhanden.")
+            return []
+        if not stems:
+            logger.warning("L-K5: stems leer -> fallback auf generate_cut_list (no-stems)")
+            return self.generate_cut_list(
+                audio_path=audio_path,
+                clips=clips,
+                pacing_config=pacing_config,
+                total_duration=total_duration,
+                duration_limit=duration_limit,
+                cached_analysis=cached_analysis,
+            )
+
+        from pb_studio.data.vector_store import VectorStore
+        vstore = VectorStore()
+
+        if (not total_duration or total_duration <= 0) and audio_path:
+            try:
+                total_duration = self._get_clip_duration(audio_path)
+            except Exception as e:
+                logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
+                total_duration = 30.0
+
+        pacing_engine = AdvancedPacingEngine(
+            trigger_settings=pacing_config["trigger_settings"]
+        )
+        pacing_engine.clip_selector.vector_store = vstore
+        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+
+        # Brain reranker hook (gleich wie generate_cut_list)
+        if pacing_config.get("use_brain", False):
+            try:
+                from pb_studio.brain.brain_service import BrainService
+                svc = BrainService.get()
+                pacing_engine.clip_selector.brain_reranker = svc.reranker
+                pacing_engine.clip_selector.brain_context_keys = [""]
+            except Exception as e:
+                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
+
+        # Key-matching hook (E1 + L-K4) — auch fuer stem-pacing relevant
+        if pacing_config.get("use_key_matching", False):
+            pacing_engine.clip_selector.use_key_matching = True
+            cached_audio_key = cached_analysis.get("key") if cached_analysis else None
+            pacing_engine.clip_selector.audio_key = cached_audio_key
+            video_keys_map: Dict[Any, str] = {}
+            for c in clips:
+                cid = c.get("id")
+                ak = c.get("audio_key")
+                if cid is not None and ak:
+                    video_keys_map[cid] = ak
+            pacing_engine.clip_selector.video_keys = video_keys_map
+        else:
+            pacing_engine.clip_selector.use_key_matching = False
+            pacing_engine.clip_selector.audio_key = None
+            pacing_engine.clip_selector.video_keys = {}
+
+        # Pre-cached injection (Beats/Energy/Bass/Subtracks)
+        self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
+
+        target_duration = duration_limit or total_duration
+        min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
+        expected_bpm = pacing_config.get("expected_bpm", 120)
+
+        logger.info(
+            f"L-K5 Stem-Pacing: stems={list(stems.keys())} target={target_duration:.2f}s"
+        )
+
+        try:
+            pacing_cuts = pacing_engine.generate_cut_list_with_stems(
+                audio_path=audio_path,
+                stems=stems,
+                expected_bpm=expected_bpm,
+                min_cut_interval=min_cut_interval,
+            )
+
+            # Clip-Zuweisung via clip_selector (mit semantic prompt falls aktiv)
+            song_mood = "energetic music"
+            if pacing_config.get("use_semantic_matching", False):
+                try:
+                    from pb_studio.ai.smart_director import SmartDirector
+                    director = SmartDirector.get_instance()
+                    song_mood = director.get_dominant_mood(audio_path)
+                except Exception as e:
+                    logger.warning(f"SmartDirector mood-detection failed: {e}")
+
+            cut_with_clips = []
+            for cut in pacing_cuts:
+                prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                if prompt and hasattr(cut, "segment_type") and cut.segment_type:
+                    prompt = f"{cut.segment_type} {prompt}"
+                sel = pacing_engine.clip_selector.select_clip(
+                    clips, cut.strength, cut.trigger_type, prompt=prompt
+                )
+                cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+
+            if not cut_with_clips:
+                logger.warning("L-K5 Stem-generation lieferte 0 Cuts -> fallback round-robin.")
+                return self._generate_simple_round_robin(
+                    pacing_engine, audio_path, clips,
+                    expected_bpm, target_duration,
+                    min_cut_interval=min_cut_interval,
+                )
+
+            return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+        except Exception as e:
+            logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
+            try:
+                return self._generate_simple_round_robin(
+                    pacing_engine, audio_path, clips,
+                    expected_bpm, target_duration,
+                    min_cut_interval=min_cut_interval,
+                )
+            except Exception as final_e:
+                raise RuntimeError(
+                    f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
+                ) from e
+
     def generate_cut_list(
         self,
         audio_path: str,

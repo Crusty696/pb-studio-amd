@@ -49,6 +49,10 @@ class PacingConfigSchema(BaseModel):
     # kompatiblen Tonarten (relative_minor + perfect_fifth). Backwards-compat:
     # default False → bestehende Calls bleiben unveraendert.
     use_key_matching: bool = False
+    # L-K5: Stem-basiertes Pacing — wenn True und audio_clip stems_paths hat
+    # (drums/bass via Demucs), wird AdvancedPacingEngine.generate_cut_list_with_stems
+    # aufgerufen. Default False -> bestehende Calls bleiben unveraendert.
+    use_stem_pacing: bool = False
     duration_limit: Optional[float] = None
     min_cut_interval: float = 0.5
     # Plan Phase 4: brain integration toggles

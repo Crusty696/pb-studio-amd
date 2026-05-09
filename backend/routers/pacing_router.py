@@ -359,14 +359,50 @@ def _run_pacing_generation(
         "brain_min_confidence": getattr(config, "brain_min_confidence", 0.0),
     }
 
-    cut_list = service.generate_cut_list(
-        audio_path=audio_path,
-        clips=clips,
-        pacing_config=pacing_config,
-        total_duration=audio_dur,
-        duration_limit=config.duration_limit,
-        cached_analysis=cached_analysis,
-    )
+    # L-K5: Stem-Pacing Branch — wenn UI use_stem_pacing=True und audio_clip
+    # stems_paths hat (Demucs-Stems vorhanden), dann zur generate_cut_list_with_stems
+    # routen. Sonst (oder als fallback bei fehlenden Stems) Standard-Pfad.
+    use_stem_pacing = bool(getattr(config, "use_stem_pacing", False))
+    stems: dict[str, str] = {}
+    if use_stem_pacing:
+        ac_data = audio_clips.get(config.audio_clip_id, {})
+        raw_stems = ac_data.get("stems_paths") or {}
+        # stems_paths kann JSON-String oder dict sein -> normalisieren
+        if isinstance(raw_stems, str):
+            try:
+                import json as _json
+                raw_stems = _json.loads(raw_stems)
+            except Exception:
+                logger.warning("L-K5 stems_paths JSON ungueltig fuer clip %s", config.audio_clip_id)
+                raw_stems = {}
+        if isinstance(raw_stems, dict):
+            stems = {str(k): str(v) for k, v in raw_stems.items() if v}
+
+    if use_stem_pacing and stems:
+        logger.info("L-K5 Stem-Pacing aktiviert, stems=%s", list(stems.keys()))
+        cut_list = service.generate_cut_list_with_stems(
+            audio_path=audio_path,
+            stems=stems,
+            clips=clips,
+            pacing_config=pacing_config,
+            total_duration=audio_dur,
+            duration_limit=config.duration_limit,
+            cached_analysis=cached_analysis,
+        )
+    else:
+        if use_stem_pacing and not stems:
+            logger.warning(
+                "L-K5 use_stem_pacing=True aber keine stems_paths fuer clip %s -- "
+                "fallback Standard-Pacing", config.audio_clip_id,
+            )
+        cut_list = service.generate_cut_list(
+            audio_path=audio_path,
+            clips=clips,
+            pacing_config=pacing_config,
+            total_duration=audio_dur,
+            duration_limit=config.duration_limit,
+            cached_analysis=cached_analysis,
+        )
 
     return [
         {

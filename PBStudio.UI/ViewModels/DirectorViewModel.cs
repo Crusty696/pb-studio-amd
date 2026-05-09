@@ -46,6 +46,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     // Audit E1: Tonart-Matching aktiviert Camelot-Wheel-basierte Key-Compatibility
     // im Pacing-Engine-clip_selector. Backend-Schema: use_key_matching (default false).
     [ObservableProperty] private bool _useKeyMatching;
+    // L-K5: Stem-basiertes Pacing — nutzt Demucs-Stems (drums/bass) als
+    // Cut-Trigger. Backend-Schema: use_stem_pacing (default false).
+    [ObservableProperty] private bool _useStemPacing;
     [ObservableProperty] private double? _durationLimit;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty]
@@ -263,7 +266,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 ),
                 UseBrain: UseBrain,
                 BrainMinConfidence: BrainMinConfidence,
-                UseKeyMatching: UseKeyMatching
+                UseKeyMatching: UseKeyMatching,
+                UseStemPacing: UseStemPacing
             );
 
             var result = await _api.GenerateCutListAsync(config);
