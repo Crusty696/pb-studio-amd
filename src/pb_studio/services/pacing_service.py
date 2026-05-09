@@ -26,6 +26,8 @@ class PacingService:
         # R18/HIGH-018-2: Cache ffprobe results — avoids 2 subprocess calls per cut
         # for the same file (once inside _get_random_clip_start, once for out-point check).
         self._duration_cache: Dict[str, float] = {}
+        # Audit A2: Test-Hint — wurde cached energy_curve in den Engine injiziert?
+        self._last_used_cached_energy: bool = False
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -232,6 +234,18 @@ class PacingService:
             cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
             if cached_dur > 0:
                 pacing_engine._pre_cached_duration = cached_dur
+
+        # Audit A2: inject cached energy_curve damit Engine RMS-Neuberechnung skippen kann.
+        # cached_analysis["energy_curve"] wird in audio_router.py persistiert
+        # (state.update_audio_analysis(...energy_curve=...)) — pacing_service liest es
+        # ab jetzt und injiziert in pacing_engine._pre_cached_energy.
+        cached_energy = cached_analysis.get("energy_curve") if cached_analysis else None
+        if cached_energy:
+            import numpy as _np
+            pacing_engine._pre_cached_energy = _np.array(cached_energy, dtype=_np.float32)
+            self._last_used_cached_energy = True
+        else:
+            self._last_used_cached_energy = False
 
         try:
             # Entscheide welche Generierungsmethode genutzt wird

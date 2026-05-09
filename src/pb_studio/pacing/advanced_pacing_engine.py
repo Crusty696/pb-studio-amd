@@ -176,6 +176,15 @@ class AdvancedPacingEngine:
             rms: RMS energy array from librosa
             times: Corresponding time values for RMS array
         """
+        # Audit A2: prefer injected cached energy if available (skip RMS-Neuberechnung).
+        # PacingService injiziert _pre_cached_energy aus cached_analysis["energy_curve"]
+        # — vermeidet redundanten librosa.feature.rms()-Call (~200ms Overhead).
+        if (
+            hasattr(self, "_pre_cached_energy")
+            and self._pre_cached_energy is not None
+            and len(self._pre_cached_energy) > 0
+        ):
+            rms = self._pre_cached_energy
         self.audio_analysis = analysis
 
         # Smooth energy curve
@@ -1343,7 +1352,16 @@ class AdvancedPacingEngine:
             y, sr = librosa.load(stem_path, sr=22050)
             frames = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length, units="frames")
             times = librosa.frames_to_time(frames, sr=sr, hop_length=hop_length)
-            rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+            # Audit A2 follow-up: prefer injected cached energy if available
+            # (skip redundant librosa.feature.rms recompute, ~150-200ms overhead).
+            if (
+                hasattr(self, "_pre_cached_energy")
+                and self._pre_cached_energy is not None
+                and len(self._pre_cached_energy) > 0
+            ):
+                rms = self._pre_cached_energy
+            else:
+                rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
             rms_norm = rms / (np.max(rms) + 1e-10)
 
             for frame, t in zip(frames, times):
@@ -1464,7 +1482,16 @@ class AdvancedPacingEngine:
             logger.warning(f"Drum-Detection fehlgeschlagen: {e}")
 
         if ts.energy_weight > 0:
-            rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+            # Audit A2 follow-up: prefer injected cached energy if available
+            # (skip redundant librosa.feature.rms recompute, ~150-200ms overhead).
+            if (
+                hasattr(self, "_pre_cached_energy")
+                and self._pre_cached_energy is not None
+                and len(self._pre_cached_energy) > 0
+            ):
+                rms = self._pre_cached_energy
+            else:
+                rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
             rms_norm = rms / (np.max(rms) + 1e-10)
             peaks = np.where(rms_norm > ts.energy_threshold)[0]
             if len(peaks) > 0:
