@@ -642,6 +642,14 @@ User-gemeldetes Symptom: Nach Video-Import zeigt VIDEO-Tab keine Clips, Status-T
 - **Pattern:** Trust-Incident hat gezeigt dass "Source geändert + Build OK" nicht reicht — Deployment-Step (Release-Build, abhängige Wrapper-Updates, Validierung) muss autonom passieren ohne User-Aufforderung.
 - **R9-Regel:** Nach JEDER Aufgabe die Code/Scripts/Configs ändert die Deployment brauchen → Deployment AUTONOM ausführen. Niemals "Source geändert, fertig" als Endmeldung.
 
+### 15.6 BUG-204: Fehlende SSE `analysis_progress` Events bei Video-Analyse
+- **Datei:** `backend/routers/video_router.py` `analyze_video()`
+- **Pattern:** Audio-Router + Pacing-Router emittieren `publish_event("analysis_progress", ...)` während Analyse. Video-Router emittierte NIE. C# `VideoLibraryViewModel.OnSseProgressReceived` lauscht auf `analysis_progress` für StatusText-Updates → keine Live-Status-Updates während mehrminütiger RAFT/SigLIP-Analyse.
+- **Beweis:** `grep -r "publish_event.*analysis_progress" backend/` → 4 Treffer audio_router, 1 Treffer pacing_router, 0 Treffer video_router. Auto-QA-Loop F-4.6 SSE-Test: 0 events received während POST /video/analyze.
+- **Fix:** 3× `publish_event("analysis_progress", ...)` in `analyze_video()` (start 5%, complete 100% mit scene_count+avg_motion, error 0%).
+- **Status:** Code committed in `9203caa`. Erfordert Backend-Restart für Aktivierung. Re-Test F-4.6 nach Restart.
+- **Severity:** MITTEL — UX-Verschlechterung (keine Live-Progress), nicht funktional-blockierend (Endergebnis kommt via HTTP-Response).
+
 ---
 
 ## 14. Quellen / Methodik

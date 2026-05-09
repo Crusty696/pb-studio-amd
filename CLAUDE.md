@@ -52,9 +52,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-05-08
 - **Phase:** Production / Verified + Brain-Modul Phase 6 integriert
-- **Status:** Pipeline-Level Audit abgeschlossen 2026-05-08 (siehe `STATUS_REPORT_2026-05-08.md`). Tests: 239 passed, 8 skipped, 0 failures (Brain-Phase-6, Commit `eb18dc5`). 4 Bugs am 2026-05-08 gefixt (BUG-200..203).
-- **Next Task:** End-to-End-GUI-Test mit echtem Video-Import nach Restart prüfen, dann `auto-qa-loop` über alle 12 Views.
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..203 gefixt 2026-05-08: CTS-Race VideoLibrary, fehlende XAML-Resources VideoThumbCard + AbletonYellowColor, Launcher Auto-Rebuild)
+- **Status:** Pipeline-Level Audit abgeschlossen 2026-05-08 (siehe `STATUS_REPORT_2026-05-08.md`). Tests: 239 passed, 8 skipped, 0 failures (Brain-Phase-6, Commit `eb18dc5`). 5 Bugs am 2026-05-08 gefixt (BUG-200..204).
+- **Next Task:** Backend-Restart für BUG-204-Fix-Aktivierung, dann End-to-End-GUI-Test mit echtem Video-Import, dann `auto-qa-loop` über alle 12 Views.
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..204 gefixt 2026-05-08: CTS-Race VideoLibrary, fehlende XAML-Resources VideoThumbCard + AbletonYellowColor, Launcher Auto-Rebuild, fehlende SSE analysis_progress Events bei Video-Analyse)
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
