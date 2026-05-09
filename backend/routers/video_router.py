@@ -587,10 +587,15 @@ def _run_video_analysis(
                         if isinstance(sc, dict)
                     ]
 
+                    # L-K3: peak_motion aus motion_curve max berechnen
+                    motion_curve_vals = motion_result.get("frame_motions", [])
+                    peak_motion_value = float(max(motion_curve_vals)) if motion_curve_vals else 0.0
+
                     result["motion"] = {
                         "clip_id": clip_id,
                         "avg_motion": float(motion_result.get("avg_motion", 0.0)),
-                        "motion_curve": [float(v) for v in motion_result.get("frame_motions", [])],
+                        "peak_motion": peak_motion_value,  # L-K3 NEU
+                        "motion_curve": [float(v) for v in motion_curve_vals],
                         "peak_frames": translated_scene_changes,
                         "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
                     }
