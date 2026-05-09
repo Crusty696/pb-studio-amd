@@ -16,8 +16,9 @@ AMD-Anpassung: FAISS VectorStore statt ChromaDB.
 """
 
 import logging
+import math
 import numpy as np
-from typing import List, Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 from collections import deque
 
 from .constants import (
@@ -30,6 +31,98 @@ from .constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Tag-Overlap & Dominant-Color helpers (Audit E4)
+# ---------------------------------------------------------------------------
+# Diese Helpers konsumieren die Moondream-Outputs (`tags`) und Frame-Analyzer-
+# Outputs (`dominant_colors`), die via A4-Fix ans pacing_router clip_data
+# weitergereicht werden. Ready-to-use als optionale Boosts in der semantic-
+# scoring pipeline.
+
+
+def _tags_overlap_score(
+    audio_mood_tags: Optional[List[str]],
+    video_tags: Optional[List[str]],
+) -> float:
+    """Jaccard-Similarity zwischen Audio-mood- und Video-tag-Sets.
+
+    Args:
+        audio_mood_tags: Stimmungs-Tags der Audio-Spur (z.B. ["happy", "energetic"]).
+        video_tags: Tags des Video-Clips (z.B. Moondream-Output).
+
+    Returns:
+        0.0..1.0. None/empty Inputs → 0.5 (neutral, kein boost, kein penalty).
+    """
+    if not audio_mood_tags or not video_tags:
+        return 0.5
+    a = {t.lower().strip() for t in audio_mood_tags if t}
+    b = {t.lower().strip() for t in video_tags if t}
+    if not a or not b:
+        return 0.5
+    intersection = a & b
+    union = a | b
+    if not union:
+        return 0.5
+    return len(intersection) / len(union)
+
+
+def _color_distance(c1: str, c2: str) -> float:
+    """Euclidean distance zwischen zwei RGB-Hex-Farben, normalisiert.
+
+    Args:
+        c1, c2: RGB-Hex-Strings, z.B. "#FF0000" oder "FF0000".
+
+    Returns:
+        0.0..1.0 Similarity-Score (1.0 = identisch). Bei ungültigem Hex → 0.5 fallback.
+    """
+    try:
+        h1 = c1.lstrip("#")
+        h2 = c2.lstrip("#")
+        if len(h1) < 6 or len(h2) < 6:
+            return 0.5
+        r1 = int(h1[0:2], 16) / 255.0
+        g1 = int(h1[2:4], 16) / 255.0
+        b1 = int(h1[4:6], 16) / 255.0
+        r2 = int(h2[0:2], 16) / 255.0
+        g2 = int(h2[2:4], 16) / 255.0
+        b2 = int(h2[4:6], 16) / 255.0
+    except (ValueError, IndexError, AttributeError):
+        return 0.5
+
+    dist = math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2)
+    # max distance is sqrt(3) ≈ 1.732 (black ↔ white)
+    similarity = max(0.0, 1.0 - dist / 1.732)
+    return similarity
+
+
+def _color_similarity_score(
+    prev_clip_colors: Optional[List[str]],
+    next_clip_colors: Optional[List[str]],
+) -> float:
+    """Maximum pairwise Similarity zwischen den dominantesten Farben zweier Clips.
+
+    Vergleicht die Top-3 dominantesten Farben und gibt das Maximum zurück.
+    Sinnvoll als sekundärer Tie-Breaker zwischen Top-K Kandidaten.
+
+    Args:
+        prev_clip_colors: Dominant-Hex-Farben des vorherigen Cuts (sortiert).
+        next_clip_colors: Dominant-Hex-Farben des Kandidaten-Cuts (sortiert).
+
+    Returns:
+        0.0..1.0. None/empty → 0.5 (neutral).
+    """
+    if not prev_clip_colors or not next_clip_colors:
+        return 0.5
+    max_sim = 0.0
+    # Nur die Top-3 dominantesten Farben vergleichen (Performance + Relevanz)
+    for c1 in prev_clip_colors[:3]:
+        for c2 in next_clip_colors[:3]:
+            sim = _color_distance(c1, c2)
+            if sim > max_sim:
+                max_sim = sim
+    return max_sim
 
 
 class SemanticMatcher:
