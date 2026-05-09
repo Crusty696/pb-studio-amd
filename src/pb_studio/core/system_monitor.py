@@ -198,6 +198,14 @@ class SystemMonitor:
             if counter_used > 0:
                 stats["gpu_memory_used"] = counter_used
 
+        # Audit D1: GPU Temperature Fallback wenn dedicated GPU 0 liefert
+        # (gleiches Pattern wie BUG-205: AMD Adrenalin blockiert Temperature-Sensors).
+        # Versuch via iGPU im selben Package - kein perfekter Proxy aber besser als 0.
+        if stats["gpu_temp"] == 0.0:
+            alt_temp = self._query_temperature_alternative()
+            if alt_temp > 0:
+                stats["gpu_temp"] = alt_temp
+
         return stats
 
     def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
@@ -269,6 +277,74 @@ class SystemMonitor:
                 return mb_used
         except Exception as e:
             logger.warning("Counter VRAM-Used-Fallback fehlgeschlagen: %s", e)
+        return 0.0
+
+    def _query_temperature_alternative(self) -> float:
+        r"""Audit D1 Fallback: GPU temp via alternative sources wenn LHM fuer
+        dedicated GPU 0 liefert (AMD Adrenalin blockiert Sensor-Zugriff).
+
+        Strategie (in Reihenfolge, kein extra-dependency):
+        1. iGPU temperature aus LHM (gleicher Hardware-Loop, anderes GPU-Device).
+           iGPU + dGPU sitzen oft im selben Thermal-Package - iGPU temp ist
+           ein akzeptabler Proxy (besser als 0).
+        2. PowerShell Get-Counter "\Thermal Zone Information(*)\Temperature"
+           (System-Thermal, last-resort heuristic).
+
+        Returns Celsius (float). 0.0 bei Fehler / wenn nichts gefunden.
+        """
+        # Versuch 1: iGPU/anderes GPU-Device temperature aus LHM
+        if self.computer:
+            try:
+                for hardware in self.computer.Hardware:
+                    h_type_str = str(hardware.HardwareType)
+                    if not h_type_str.startswith("Gpu"):
+                        continue
+                    if hardware == self.gpu_sensor:
+                        # Dedicated wurde bereits oben abgefragt - 0 sensors
+                        continue
+                    hardware.Update()
+                    for s in hardware.Sensors:
+                        if str(s.SensorType) != "Temperature":
+                            continue
+                        name = (s.Name or "").lower()
+                        if "core" in name or "edge" in name or "gpu" in name:
+                            val = s.Value or 0.0
+                            if val and val > 0:
+                                logger.debug(
+                                    "GPU temp Fallback ueber alternatives GPU-Device "
+                                    "'%s' (sensor=%s): %.1f C",
+                                    hardware.Name, s.Name, float(val),
+                                )
+                                return float(val)
+            except Exception as e:
+                logger.debug("iGPU-Temp-Fallback fehlgeschlagen: %s", e)
+
+        # Versuch 2: PowerShell Thermal Zone Information (System-thermal heuristic).
+        # Kelvin*10 -> Celsius via /10 - 273.15. Nimm hoechste Zone als Proxy
+        # (GPU thermal-zone ist typischerweise hottest unter Last).
+        try:
+            import subprocess
+            ps_script = (
+                "$samples = (Get-Counter '\\Thermal Zone Information(*)\\Temperature' "
+                "-ErrorAction SilentlyContinue).CounterSamples; "
+                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Maximum).Maximum } "
+                "else { 0 }"
+            )
+            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                kelvin = float(res.stdout.strip())
+                if kelvin > 200:  # plausibel (>200K = >-73C)
+                    celsius = kelvin - 273.15
+                    if 20.0 <= celsius <= 150.0:  # plausibel range
+                        logger.debug(
+                            "GPU temp Fallback ueber Thermal-Zone-Max: %.1f C",
+                            celsius,
+                        )
+                        return float(celsius)
+        except Exception as e:
+            logger.debug("Thermal-Zone-Temp-Fallback fehlgeschlagen: %s", e)
+
         return 0.0
 
     def close(self):
