@@ -435,6 +435,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 }
             });
             StatusText = $"{VideoClips.Count} Clips geladen";
+            UpdateAnalyzedCounts();
 
             await LoadAllThumbnailsAsync(version, cancellationToken);
         }

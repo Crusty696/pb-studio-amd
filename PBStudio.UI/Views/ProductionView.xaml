@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
              Background="{StaticResource AbletonBg}">
 
@@ -138,12 +139,9 @@
                     </Button>
                 </DockPanel>
 
-                <!-- Progress Bar -->
-                <ProgressBar Value="{Binding RenderProgress}" Minimum="0" Maximum="100"
-                             Height="8" Foreground="{StaticResource AbletonAccent}"
-                             Background="{StaticResource AbletonPanel}"
-                             BorderThickness="0"
-                             Visibility="{Binding IsRendering, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <!-- Progress Bar (Feature-1: zentriertes %) -->
+                <controls:ProgressBarWithLabel Percent="{Binding RenderProgress}"
+                                               Visibility="{Binding IsRendering, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                 <!-- Status + ETA -->
                 <DockPanel Margin="0,6,0,0">

@@ -3,22 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
              x:Name="Root">
-    <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-    </UserControl.Resources>
-    <Grid Height="22">
-        <ProgressBar x:Name="Pb"
+    <Grid Height="24" MinWidth="80">
+        <Border Background="#1F1F22" BorderBrush="{StaticResource AbletonBorder}"
+                BorderThickness="1" CornerRadius="3" Padding="0"/>
+        <ProgressBar x:Name="Pb" Margin="1"
                      Minimum="0" Maximum="100"
                      Value="{Binding Percent, ElementName=Root}"
                      IsIndeterminate="{Binding IsIndeterminate, ElementName=Root}"
                      Foreground="{StaticResource AbletonAccent}"
-                     Background="{StaticResource AbletonBorder}"
+                     Background="Transparent"
                      BorderThickness="0"
                      SmallChange="0.01"
                      LargeChange="1.0"/>
+        <!-- Outline-Trick: doppelter TextBlock fuer dunkle Lesbarkeit auf orange Bar -->
         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
-                   FontSize="11" FontWeight="SemiBold"
-                   Foreground="{StaticResource AbletonText}"
+                   FontSize="12" FontWeight="Bold"
+                   Foreground="Black" Opacity="0.6"
+                   Margin="1,1,0,0"
+                   Text="{Binding LabelText, ElementName=Root}"/>
+        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontSize="12" FontWeight="Bold"
+                   Foreground="White"
                    Text="{Binding LabelText, ElementName=Root}"/>
     </Grid>
 </UserControl>

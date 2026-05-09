@@ -61,6 +61,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _brainSuggestTopN = 20;
     [ObservableProperty] private bool _isLoadingSuggestions;
     [ObservableProperty] private string _suggestionsStatus = "";
+    [ObservableProperty] private double _generationProgress;
+    [ObservableProperty] private string _currentStep = "";
 
     public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState, SSEClient sseClient)
     {
@@ -384,6 +386,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             Application.Current.Dispatcher.Invoke(() =>
             {
                 StatusText = e.Message;
+                if (e.Percent >= 0) GenerationProgress = e.Percent;
+                if (!string.IsNullOrEmpty(e.Step)) CurrentStep = e.Step;
             });
         }
     }

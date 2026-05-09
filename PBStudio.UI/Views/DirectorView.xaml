@@ -6,6 +6,7 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="1200"
              Background="{StaticResource AbletonBg}">
@@ -382,14 +383,11 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Progress bar when generating -->
-                <ProgressBar IsIndeterminate="True"
-                             Height="3"
-                             Margin="0,0,0,4"
-                             Foreground="{StaticResource AbletonAccent}"
-                             Background="{StaticResource AbletonSurface}">
-                    <ProgressBar.Style>
-                        <Style TargetType="ProgressBar">
+                <!-- Progress bar with % when generating (Feature-1) -->
+                <controls:ProgressBarWithLabel Percent="{Binding GenerationProgress}"
+                                               Margin="0,0,0,4">
+                    <controls:ProgressBarWithLabel.Style>
+                        <Style TargetType="controls:ProgressBarWithLabel">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsGenerating}" Value="True">
@@ -397,8 +395,8 @@
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </ProgressBar.Style>
-                </ProgressBar>
+                    </controls:ProgressBarWithLabel.Style>
+                </controls:ProgressBarWithLabel>
 
             </StackPanel>
         </ScrollViewer>
