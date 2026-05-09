@@ -28,6 +28,9 @@ class PacingService:
         self._duration_cache: Dict[str, float] = {}
         # Audit A2: Test-Hint — wurde cached energy_curve in den Engine injiziert?
         self._last_used_cached_energy: bool = False
+        # Audit A3: Test-Hint — wurde cached structure_segments in den Engine injiziert
+        # (statt redundanter librosa-Re-Analyse via analyze_song_structure)?
+        self._last_skipped_structure_reanalyze: bool = False
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -260,7 +263,28 @@ class PacingService:
                     pacing_engine.enable_motion_matching(True)
                 
                 if pacing_config.get("use_structure_awareness", False):
-                    pacing_engine.analyze_song_structure(audio_path)
+                    # Audit A3: structure_segments wird in audio_router persistiert
+                    # (state.update_audio_analysis(...structure_segments=...)) — wenn
+                    # vorhanden, direkt in Engine injizieren statt redundanter librosa-
+                    # Re-Analyse (~5s Overhead bei generate_cut_list_with_structure).
+                    cached_segments = (
+                        cached_analysis.get("structure_segments")
+                        if cached_analysis else None
+                    )
+                    if cached_segments and len(cached_segments) > 0:
+                        # Direct-inject: generate_cut_list_with_structure liest
+                        # self.song_structure und überspringt analyze_song_structure.
+                        pacing_engine.song_structure = cached_segments
+                        self._last_skipped_structure_reanalyze = True
+                        logger.info(
+                            "Audit A3: Cached structure_segments injiziert "
+                            f"({len(cached_segments)} Sektionen) — librosa-Re-Analyse skipped"
+                        )
+                    else:
+                        # Fallback: keine cached_segments verfügbar → normale Analyse.
+                        # generate_cut_list_with_structure ruft analyze_song_structure
+                        # selbst auf, also ist hier kein doppelter Call nötig.
+                        self._last_skipped_structure_reanalyze = False
                     pacing_cuts = pacing_engine.generate_cut_list_with_structure(
                         audio_path=audio_path,
                         expected_bpm=pacing_config.get("expected_bpm", 120),

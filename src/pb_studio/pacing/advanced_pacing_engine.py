@@ -141,6 +141,10 @@ class AdvancedPacingEngine:
         self.audio_analysis: Optional[Dict] = None
         self.energy_curve: Optional[np.ndarray] = None
         self.timeline: List[CutPoint] = []
+        # Audit A3: Optional pre-injected song structure (cached_analysis["structure_segments"]).
+        # Wenn gesetzt (Liste von Dicts oder SongSection), überspringt
+        # generate_cut_list_with_structure die librosa-Re-Analyse.
+        self.song_structure: Optional[List[Any]] = None
 
         # NV-kompatibel: trigger_settings als Dict oder TriggerSettings-Objekt
         if trigger_settings is not None:
@@ -1203,25 +1207,81 @@ class AdvancedPacingEngine:
         Sektionen bekommen höhere Stärke → überleben min-interval-Filter öfter
         → mehr Cuts in energiereichen Teilen. Intro/Bridge/Outro → weniger Cuts.
 
+        Audit A3: Wenn self.song_structure (cached structure_segments aus
+        audio_router) gesetzt ist, wird analyze_song_structure() übersprungen
+        und die cached Segmente werden in SongSection-Objekte konvertiert
+        (~5s librosa-Re-Analyse vermieden).
+
         NV-Kompatibilität: Wird von PacingService aufgerufen wenn
         use_motion_matching=True UND use_structure_awareness=True.
 
         Returns:
             Liste von PacingCut-Objekten mit strukturbewussten Stärken
         """
-        song_sections = self.analyze_song_structure(audio_path)
-        logger.info(
-            "generate_cut_list_with_structure: %d Sektionen erkannt "
-            "(Labels: %s) — übergebe an generate_cut_list",
-            len(song_sections),
-            [s.name for s in song_sections],
-        )
+        # Audit A3: cached song_structure bevorzugen (skip librosa-Re-Analyse).
+        if self.song_structure:
+            song_sections = self._coerce_song_structure(self.song_structure)
+            logger.info(
+                "generate_cut_list_with_structure: %d Sektionen aus cached "
+                "structure_segments (Labels: %s) — analyze_song_structure SKIPPED",
+                len(song_sections),
+                [s.name for s in song_sections],
+            )
+        else:
+            song_sections = self.analyze_song_structure(audio_path)
+            logger.info(
+                "generate_cut_list_with_structure: %d Sektionen erkannt "
+                "(Labels: %s) — übergebe an generate_cut_list",
+                len(song_sections),
+                [s.name for s in song_sections],
+            )
         return self.generate_cut_list(
             audio_track=audio_path,
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval,
             song_sections=song_sections,
         )
+
+    def _coerce_song_structure(self, raw: List[Any]) -> List["SongSection"]:
+        """
+        Audit A3: Konvertiert cached structure_segments (Dicts aus audio_router /
+        StructureAnalyzer) zu SongSection-Objekten — kompatibel zur Ausgabe von
+        analyze_song_structure().
+
+        Akzeptiert auch bereits konvertierte SongSection-Listen (Idempotenz).
+
+        Mapping (parallel zu analyze_song_structure):
+            dict["label"]      → SongSection.name
+            dict["start_time"] → SongSection.start_time
+            dict["end_time"]   → SongSection.end_time
+            STRUCTURE_INTENSITY_MULTIPLIERS[label] → SongSection.energy_level
+              (energy_score aus dem Analyzer wird bewusst NICHT übernommen, da
+              die Engine konsistent intensity-multiplier nutzt — siehe
+              analyze_song_structure)
+        """
+        from .pacing_models import SongSection
+
+        sections: List[SongSection] = []
+        for item in raw:
+            if isinstance(item, SongSection):
+                sections.append(item)
+                continue
+            if not isinstance(item, dict):
+                logger.warning(
+                    "_coerce_song_structure: Ignoriere unbekannten Eintrag %r", type(item)
+                )
+                continue
+            label = item.get("label") or item.get("name") or "verse"
+            energy_level = STRUCTURE_INTENSITY_MULTIPLIERS.get(label, 0.8)
+            sections.append(SongSection(
+                name=label,
+                start_time=float(item.get("start_time", 0.0) or 0.0),
+                end_time=float(item.get("end_time", 0.0) or 0.0),
+                energy_level=energy_level,
+            ))
+        # Mirror analyze_song_structure side effect for downstream consistency
+        self._song_sections_nv = sections
+        return sections
 
     def generate_cut_list_with_clips(
         self,
