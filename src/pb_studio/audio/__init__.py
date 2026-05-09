@@ -59,7 +59,7 @@ except ImportError:
     pass
 
 try:
-    from .streaming_analyzer import StreamingAudioAnalyzer, AudioStreamLoader
+    from .streaming_analyzer import StreamingAudioAnalyzer, StreamingAnalysisResult
 except ImportError:
     pass
 
@@ -80,5 +80,5 @@ __all__ = [
     'StructureAnalyzer',
     'SEGMENT_LABELS',
     'StreamingAudioAnalyzer',
-    'AudioStreamLoader',
+    'StreamingAnalysisResult',
 ]
