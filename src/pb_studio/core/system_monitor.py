@@ -181,7 +181,60 @@ class SystemMonitor:
                         # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
                         stats["gpu_memory_total"] = s.Value or 0.0
 
+        # BUG-205 Fix: Wenn LibreHardwareMonitor fuer dedicated GPU 0 sensors liefert
+        # (AMD Adrenalin/Treiber blockiert manchmal Sensor-Zugriff fuer dedicated GPUs),
+        # fallback via WMI Win32_VideoController.AdapterRAM fuer mindestens VRAM-Total.
+        # Verifiziert via debug_gpu_stats3.py: RX 7800 XT zeigt sensors=0, iGPU=18.
+        if stats["gpu_memory_total"] == 0.0:
+            wmi_total = self._wmi_query_vram_total(stats["gpu_name"])
+            if wmi_total > 0:
+                stats["gpu_memory_total"] = wmi_total
+
         return stats
+
+    def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
+        """Fallback: query GPU-VRAM via Registry HardwareInformation.qwMemorySize.
+
+        Win32_VideoController.AdapterRAM ist UInt32 (max 4GB-1) - bei modernen
+        GPUs wie RX 7800 XT (16GB) liefert WMI 4095 MB statt 16370 MB.
+        Registry-Pfad HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-...}\\NNNN
+        hat REG_QWORD HardwareInformation.qwMemorySize mit 64-bit Wert (verifiziert
+        per debug 2026-05-09: RX 7800 XT qwSize=17163091968 = 16370 MB).
+
+        Filtert auf DriverDesc match falls gpu_name_hint gegeben; sonst nimmt grosste
+        Karte (dedicated > iGPU). Returns MB. 0.0 bei Fehler.
+        """
+        try:
+            import subprocess
+            ps_script = (
+                "$keys = Get-ChildItem "
+                "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' "
+                "-ErrorAction SilentlyContinue;"
+                "$result = $null;"
+                "foreach ($k in $keys) {"
+                "  if ($k.Name -match '\\\\\\d{4}$') {"
+                "    $p = Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue;"
+                "    if ($p.'HardwareInformation.qwMemorySize') {"
+                "      $obj = [PSCustomObject]@{ Name=$p.DriverDesc; Bytes=$p.'HardwareInformation.qwMemorySize' };"
+                "      if ($null -eq $result -or $obj.Bytes -gt $result.Bytes) { $result = $obj }"
+                "    }"
+                "  }"
+                "};"
+                "if ($result) { Write-Output $result.Bytes }"
+            )
+            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                bytes_total = int(res.stdout.strip())
+                mb_total = bytes_total / (1024 * 1024)
+                logger.info(
+                    "Registry VRAM-Total fallback fuer %r: %.0f MB (LHM lieferte 0 sensors)",
+                    gpu_name_hint, mb_total,
+                )
+                return mb_total
+        except Exception as e:
+            logger.warning("Registry VRAM-Fallback fehlgeschlagen: %s", e)
+        return 0.0
 
     def close(self):
         if self.computer:
