@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -281,6 +282,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         IsAnalyzed = clipInfo.IsAnalyzed,
                         // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
                         AudioHash = clipInfo.AudioHash,
+                        // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
+                        StemsPaths = clipInfo.StemsPaths,
                     });
                 }
                 if (previousId.HasValue)
@@ -423,9 +426,23 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _api.SeparateStemsAsync(SelectedClip.Id);
-            StatusText = result != null
-                ? $"Stems getrennt: {result.ModelUsed}"
-                : "Stem-Separation fehlgeschlagen oder Timeout/Backend-Fehler";
+            if (result != null)
+            {
+                // L-N4: stems_paths sofort auf dem Model setzen damit STEMS-Badge
+                // + Open-Folder-Button ohne Reload sichtbar werden.
+                var stems = new Dictionary<string, string>();
+                if (!string.IsNullOrEmpty(result.VocalsPath)) stems["vocals"] = result.VocalsPath!;
+                if (!string.IsNullOrEmpty(result.InstrumentalPath)) stems["instrumental"] = result.InstrumentalPath!;
+                if (!string.IsNullOrEmpty(result.DrumsPath)) stems["drums"] = result.DrumsPath!;
+                if (!string.IsNullOrEmpty(result.BassPath)) stems["bass"] = result.BassPath!;
+                if (!string.IsNullOrEmpty(result.OtherPath)) stems["other"] = result.OtherPath!;
+                if (stems.Count > 0) SelectedClip.StemsPaths = stems;
+                StatusText = $"Stems getrennt: {result.ModelUsed}";
+            }
+            else
+            {
+                StatusText = "Stem-Separation fehlgeschlagen oder Timeout/Backend-Fehler";
+            }
         }
         catch (Exception ex)
         {
@@ -434,6 +451,32 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         finally
         {
             IsSeparating = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenStemsFolder(AudioClipModel? clip)
+    {
+        // L-N4: Stems-Ordner im Windows Explorer oeffnen.
+        // Akzeptiert clip-Parameter (vom Button gebunden) oder fallback auf SelectedClip.
+        var target = clip ?? SelectedClip;
+        if (target?.StemsFolderPath is { } path && Directory.Exists(path))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
+                {
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Stems-Ordner kann nicht geoeffnet werden: {ex.Message}";
+            }
+        }
+        else
+        {
+            StatusText = "Stems-Ordner existiert nicht oder kein Clip ausgewaehlt.";
         }
     }
 

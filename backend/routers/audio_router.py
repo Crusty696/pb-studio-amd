@@ -198,6 +198,18 @@ async def list_clips(
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
         merged["is_analyzed"] = analysis is not None or bool(clip.get("is_analyzed", False))
+        # L-N4: stems_paths kann JSON-String oder dict sein (pacing_router-Logik analog).
+        # Pydantic-Schema erwartet Dict[str,str] -> normalisieren.
+        raw_stems = merged.get("stems_paths")
+        if isinstance(raw_stems, str):
+            try:
+                import json as _json
+                parsed = _json.loads(raw_stems)
+                merged["stems_paths"] = parsed if isinstance(parsed, dict) else None
+            except Exception:
+                merged["stems_paths"] = None
+        elif raw_stems is not None and not isinstance(raw_stems, dict):
+            merged["stems_paths"] = None
         items.append(AudioClipInfo(**merged))
 
     return items
@@ -479,6 +491,20 @@ async def separate_stems(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,
             model_id="mdx_net_inst",  # VRAM-Budget-Check via VRAMBudgetManager
         )
+
+        # L-N4: stems_paths in audio_clip persistieren — pacing_router liest das
+        # via audio_clips.get("stems_paths") fuer den Stem-Pacing-Branch.
+        # Mapping: result-Keys (vocals_path/drums_path/...) -> stems-dict-Keys
+        # (vocals/drums/...). Nur nicht-leere Eintraege uebernehmen.
+        stems_paths: dict[str, str] = {}
+        for stem_name in ("vocals", "instrumental", "drums", "bass", "other"):
+            p = result.get(f"{stem_name}_path")
+            if p:
+                stems_paths[stem_name] = p
+        if stems_paths:
+            clip["stems_paths"] = stems_paths
+            state.set_audio_clip(request.clip_id, clip)
+
         return StemResult(clip_id=request.clip_id, **result)
     except Exception as e:
         logger.error(f"Stem-Separation fehlgeschlagen: {e}", exc_info=True)

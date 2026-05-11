@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PBStudio.UI.Models;
@@ -18,10 +20,22 @@ public partial class AudioClipModel : ObservableObject
     [ObservableProperty] private bool _isAnalyzed;
     // L-N2: Content-Hash vom Backend; HasCacheHash treibt CACHED-Badge im View.
     [ObservableProperty] private string? _audioHash;
+    // L-N4: Stem-Separation Outputs vom Backend (vocals/drums/bass/other -> path).
+    // HasStems treibt STEMS-Badge + Open-Folder-Button im View.
+    [ObservableProperty] private Dictionary<string, string>? _stemsPaths;
 
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public bool HasCacheHash => !string.IsNullOrWhiteSpace(AudioHash);
+    public bool HasStems => StemsPaths != null && StemsPaths.Count > 0;
+    public string? StemsFolderPath => HasStems
+        ? System.IO.Path.GetDirectoryName(StemsPaths!.Values.First())
+        : null;
 
     partial void OnDurationSecondsChanged(double value) => OnPropertyChanged(nameof(DurationText));
     partial void OnAudioHashChanged(string? value) => OnPropertyChanged(nameof(HasCacheHash));
+    partial void OnStemsPathsChanged(Dictionary<string, string>? value)
+    {
+        OnPropertyChanged(nameof(HasStems));
+        OnPropertyChanged(nameof(StemsFolderPath));
+    }
 }

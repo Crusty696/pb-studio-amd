@@ -427,7 +427,11 @@ public record AudioClipInfo(
     // L-N2: Content-Hash fuer Cache-Hit-Badge auf der AudioClip-Card.
     // Persisted im Backend nach Streaming-Hash beim Import; signalisiert
     // dass Embedding/Analyse aus Cache wiederverwendbar sind.
-    string? AudioHash = null);
+    string? AudioHash = null,
+    // L-N4: Stem-Separation Outputs — Dict {vocals|instrumental|drums|bass|other -> path}.
+    // Gesetzt nach POST /audio/stems/separate. UI rendert STEMS-Badge und
+    // "Stems-Ordner oeffnen"-Button wenn nicht null und nicht-leer.
+    Dictionary<string, string>? StemsPaths = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
 public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);

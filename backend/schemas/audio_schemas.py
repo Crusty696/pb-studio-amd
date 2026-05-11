@@ -1,7 +1,7 @@
 """Audio-bezogene Schemas."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 from enum import Enum
 
 
@@ -25,6 +25,10 @@ class AudioClipInfo(BaseModel):
     is_analyzed: bool = False
     audio_hash: Optional[str] = None
     has_audio_embedding: bool = False
+    # L-N4: Stem-Separation Outputs — gesetzt nach POST /audio/stems/separate.
+    # Dict {vocals|instrumental|drums|bass|other -> file-path}. UI rendert
+    # STEMS-Badge wenn nicht None und nicht-leer.
+    stems_paths: Optional[Dict[str, str]] = None
 
 
 class SubtrackSegment(BaseModel):
