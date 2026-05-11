@@ -11,7 +11,7 @@ import logging
 import random
 import subprocess
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Callable, Optional
 
 from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
 from pb_studio.pacing.pacing_models import CutListEntry
@@ -235,6 +235,7 @@ class PacingService:
         total_duration: float,
         duration_limit: float | None = None,
         cached_analysis: Dict | None = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List[CutListEntry]:
         """L-K5: Stem-basiertes Pacing.
 
@@ -242,6 +243,10 @@ class PacingService:
         Nutzt dieselbe pre-cached-injection wie generate_cut_list (Beats/BPM/Energy/
         Bass/Subtracks), generiert dann Cuts via Demucs-Stems (drums/bass) und
         weist Clips per ClipSelector zu (Round-Robin als simple-fallback).
+
+        Args:
+            on_progress: Audit L-M7 — Callback(pct: float in [0..100]) wird
+                         waehrend der Cut-Generation gefeuert (siehe Engine).
         """
         if not audio_path:
             raise ValueError("Audio-Pfad erforderlich.")
@@ -257,6 +262,7 @@ class PacingService:
                 total_duration=total_duration,
                 duration_limit=duration_limit,
                 cached_analysis=cached_analysis,
+                on_progress=on_progress,
             )
 
         from pb_studio.data.vector_store import VectorStore
@@ -319,6 +325,7 @@ class PacingService:
                 stems=stems,
                 expected_bpm=expected_bpm,
                 min_cut_interval=min_cut_interval,
+                on_progress=on_progress,
             )
 
             # Clip-Zuweisung via clip_selector (mit semantic prompt falls aktiv)
@@ -347,6 +354,7 @@ class PacingService:
                     pacing_engine, audio_path, clips,
                     expected_bpm, target_duration,
                     min_cut_interval=min_cut_interval,
+                    on_progress=on_progress,
                 )
 
             return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
@@ -357,6 +365,7 @@ class PacingService:
                     pacing_engine, audio_path, clips,
                     expected_bpm, target_duration,
                     min_cut_interval=min_cut_interval,
+                    on_progress=on_progress,
                 )
             except Exception as final_e:
                 raise RuntimeError(
@@ -373,8 +382,15 @@ class PacingService:
         sequencer_cuts: List[CutListEntry] | None = None,
         rule_engine: Any | None = None,
         cached_analysis: Dict | None = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List[CutListEntry]:
-        """Haupteinstiegspunkt für Cut-List-Generierung."""
+        """Haupteinstiegspunkt für Cut-List-Generierung.
+
+        Args:
+            on_progress: Audit L-M7 — Callback(pct: float in [0..100]) wird waehrend
+                         der Cut-Generation gefeuert (incremental, alle ~5%) damit
+                         SSE-Subscriber bei langen Mixen Progress sehen.
+        """
         if not audio_path:
             raise ValueError("Audio-Pfad erforderlich.")
         if not clips:
@@ -674,12 +690,14 @@ class PacingService:
                         audio_path=audio_path,
                         expected_bpm=pacing_config.get("expected_bpm", 120),
                         min_cut_interval=min_cut_interval,
+                        on_progress=on_progress,
                     )
                 else:
                     pacing_cuts_raw = pacing_engine.generate_cut_list(
                         audio_track=audio_path,
                         expected_bpm=pacing_config.get("expected_bpm", 120),
                         min_cut_interval=min_cut_interval,
+                        on_progress=on_progress,
                     )
                     # Konvertiere rohe CutPoints in das erwartete Format für die weitere Verarbeitung
                     pacing_cuts = pacing_cuts_raw
@@ -709,6 +727,7 @@ class PacingService:
                         pacing_engine, audio_path, clips,
                         pacing_config.get("expected_bpm", 120), target_duration,
                         min_cut_interval=min_cut_interval,
+                        on_progress=on_progress,
                     )
 
                 return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
@@ -717,6 +736,7 @@ class PacingService:
                     pacing_engine, audio_path, clips,
                     pacing_config.get("expected_bpm", 120), target_duration,
                     min_cut_interval=min_cut_interval,
+                    on_progress=on_progress,
                 )
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
@@ -726,6 +746,7 @@ class PacingService:
                     pacing_engine, audio_path, clips,
                     pacing_config.get("expected_bpm", 120), target_duration,
                     min_cut_interval=min_cut_interval,
+                    on_progress=on_progress,
                 )
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
@@ -733,13 +754,16 @@ class PacingService:
     def _generate_simple_round_robin(
         self, engine, audio_path, clips, bpm, target_duration,
         min_cut_interval: float = 0.5,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List[CutListEntry]:
         """Einfache Round-Robin Clip-Zuweisung."""
         if not clips:
             raise ValueError("Mindestens ein Clip erforderlich.")
 
         pacing_cuts = engine.generate_cut_list(
-            audio_track=audio_path, expected_bpm=bpm, min_cut_interval=min_cut_interval
+            audio_track=audio_path, expected_bpm=bpm,
+            min_cut_interval=min_cut_interval,
+            on_progress=on_progress,
         )
 
         cut_list = []

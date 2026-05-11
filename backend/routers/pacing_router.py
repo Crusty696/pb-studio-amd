@@ -76,9 +76,11 @@ async def generate_cut_list(
     try:
         import time as _time
         _t_pacing_start = _time.perf_counter()
+        # Audit L-M7: event-loop fuer SSE progress events aus Worker-Thread reichen.
+        _loop = asyncio.get_running_loop()
         cuts = await asyncio.to_thread(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
-            cached_analysis, video_analysis_snapshot,
+            cached_analysis, video_analysis_snapshot, _loop,
         )
         _t_pacing_elapsed_ms = (_time.perf_counter() - _t_pacing_start) * 1000.0
         _t_brain_elapsed_ms = 0.0
@@ -298,17 +300,46 @@ async def generate_preview(
 
 # --- Private Hilfsfunktionen ---
 
+def _emit_pacing_progress(loop, pct: float) -> None:
+    """Audit L-M7: Sendet ein pacing_progress SSE-Event aus dem Worker-Thread
+    (fire-and-forget). loop ist der asyncio-Event-Loop des Request-Handlers.
+    """
+    if loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(
+            publish_event("pacing_progress", {
+                "percent": float(pct),
+                "message": f"Pacing {pct:.1f}%",
+            }),
+            loop,
+        )
+    except Exception as e:
+        logger.debug(f"L-M7 SSE pacing_progress emit fail: {e}")
+
+
 def _run_pacing_generation(
     config: PacingConfigSchema,
     audio_clips: dict[int, dict[str, Any]],
     video_clips: dict[int, dict[str, Any]],
     cached_analysis: dict[str, Any] | None = None,
     video_analysis_cache: dict[int, dict[str, Any]] | None = None,
+    loop: Any | None = None,
 ) -> list[dict[str, Any]]:
-    """Generiert Cut-Liste via PacingService (blockierend)."""
+    """Generiert Cut-Liste via PacingService (blockierend).
+
+    Args:
+        loop: Audit L-M7 — asyncio.AbstractEventLoop. Wenn gesetzt, wird
+              on_progress an PacingService weitergegeben, das pro
+              ~5%-Schritt SSE pacing_progress events emittet.
+    """
     from pb_studio.services.pacing_service import PacingService
 
     service = PacingService()
+
+    # Audit L-M7: on_progress callback fuer Engine -> Router -> SSE.
+    def _on_pacing_progress(pct: float) -> None:
+        _emit_pacing_progress(loop, pct)
 
     audio_path = ""
     audio_dur = 0.0
@@ -388,6 +419,7 @@ def _run_pacing_generation(
             total_duration=audio_dur,
             duration_limit=config.duration_limit,
             cached_analysis=cached_analysis,
+            on_progress=_on_pacing_progress,
         )
     else:
         if use_stem_pacing and not stems:
@@ -402,6 +434,7 @@ def _run_pacing_generation(
             total_duration=audio_dur,
             duration_limit=config.duration_limit,
             cached_analysis=cached_analysis,
+            on_progress=_on_pacing_progress,
         )
 
     return [

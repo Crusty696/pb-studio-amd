@@ -380,7 +380,9 @@ class TestPacingRouter:
 
         async def fake_pub(*a, **kw): pass
 
-        def fake_run(config, audio_clips, video_clips, cached_analysis=None, video_analysis_cache=None):
+        def fake_run(config, audio_clips, video_clips, cached_analysis=None, video_analysis_cache=None, loop=None):
+            # Audit L-M7: _run_pacing_generation hat jetzt optionalen loop Param fuer
+            # per-iteration pacing_progress callback (SSE).
             # Überprüfung: Snapshots wurden korrekt übergeben
             assert 1 in audio_clips
             assert 1 in video_clips

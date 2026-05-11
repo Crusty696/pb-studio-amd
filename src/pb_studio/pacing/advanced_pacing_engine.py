@@ -19,7 +19,7 @@ AMD-Anpassung v2:
 
 import logging
 import numpy as np
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -873,6 +873,7 @@ class AdvancedPacingEngine:
         min_cut_interval: float = 0.5,
         energy_sensitivity: float = 0.5,
         song_sections: Optional[List[Any]] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
         NV-kompatible Methode: Generiert eine Schnittliste aus Audio-Triggern.
@@ -889,6 +890,11 @@ class AdvancedPacingEngine:
                            strukturbewusstes Pacing (aus analyze_song_structure()).
                            Wenn gesetzt, skaliert _apply_structure_weights() die
                            Trigger-Stärken anhand der Sektions-Energie-Multiplikatoren.
+            on_progress: Audit L-M7 — Optionaler Callback(pct: float in [0..100]),
+                         der inkrementell während der Cut-Generierung gefeuert wird
+                         (alle ~5%). Hilft bei langen Mixen für UX-Progress in SSE.
+                         Exceptions im Callback werden geschluckt — generation laeuft
+                         normal weiter.
 
         Returns:
             Liste von PacingCut-Objekten
@@ -940,6 +946,7 @@ class AdvancedPacingEngine:
                             stems=stems_dict,
                             expected_bpm=expected_bpm,
                             min_cut_interval=min_cut_interval,
+                            on_progress=on_progress,
                         )
                 except (json.JSONDecodeError, Exception) as e:
                     logger.warning(f"Stems-JSON ungültig: {e}")
@@ -950,6 +957,7 @@ class AdvancedPacingEngine:
                 expected_bpm=expected_bpm,
                 min_cut_interval=min_cut_interval,
                 song_sections=song_sections,
+                on_progress=on_progress,
             )
 
         finally:
@@ -963,6 +971,7 @@ class AdvancedPacingEngine:
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
         song_sections: Optional[List[Any]] = None,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
         Interne Methode: Generiert Cuts aus Audio-Analyse.
@@ -971,11 +980,37 @@ class AdvancedPacingEngine:
         Args:
             song_sections: Wenn gesetzt, werden Trigger-Stärken strukturbewusst
                            skaliert (Chorus/Drop → stärker, Intro/Outro → schwächer).
+            on_progress: Audit L-M7 — Callback(pct: float) gefeuert an Phase-
+                         Grenzen (load, beats, triggers, structure, filter, final).
+                         Errors werden geschluckt.
         """
         from .pacing_models import PacingCut
         import librosa
 
         logger.info(f"Generiere Cut-Liste für: {audio_path}")
+
+        # Audit L-M7: Progress-Helper. Errors aus dem Callback werden geschluckt,
+        # damit Generation niemals durch fehlerhafte SSE-Emission abbricht. Throttle
+        # via last_pct: nur emit wenn neuer Wert mindestens 5% groesser ist (oder
+        # endgueltige 100%-Stoppmarke).
+        _last_pct = [0.0]
+
+        def _emit(pct: float, *, force: bool = False) -> None:
+            if on_progress is None:
+                return
+            try:
+                pct = max(0.0, min(100.0, float(pct)))
+            except (TypeError, ValueError):
+                return
+            if not force and (pct - _last_pct[0]) < 5.0 and pct < 100.0:
+                return
+            _last_pct[0] = pct
+            try:
+                on_progress(pct)
+            except Exception as cb_err:
+                logger.debug(f"L-M7 on_progress callback error (geschluckt): {cb_err}")
+
+        _emit(5.0, force=True)
 
         # --- Cache-Check: SessionManager ---
         cached_audio_data = None
@@ -1083,6 +1118,9 @@ class AdvancedPacingEngine:
 
         logger.info(f"BPM: {bpm:.1f}, Dauer: {duration:.1f}s")
 
+        # Audit L-M7: Beats/BPM ermittelt -> ca. 30%
+        _emit(30.0, force=True)
+
         # --- Triggers sammeln ---
         triggers: List[PacingCut] = []
         ts = self.trigger_settings
@@ -1109,6 +1147,9 @@ class AdvancedPacingEngine:
         elif y is not None:
             triggers.extend(self._extract_other_triggers(y, sr, bpm))
 
+        # Audit L-M7: Trigger-Pool steht -> ca. 60%
+        _emit(60.0, force=True)
+
         # --- Struktur-Gewichtung anwenden (WARN-03 FIX) ---
         # Muss VOR sort/enforce_minimum_interval laufen, damit stärkere Chorus-Trigger
         # den min-interval-Filter überleben und schwache Intro/Outro-Trigger herausfallen.
@@ -1118,18 +1159,26 @@ class AdvancedPacingEngine:
         triggers.sort(key=lambda x: x.time)
         filtered = self._enforce_minimum_interval(triggers, min_cut_interval)
 
+        # Audit L-M7: Filter angewendet -> ca. 80%
+        _emit(80.0, force=True)
+
         # Song-Ende als finalen Trigger
         if filtered and filtered[-1].time < duration:
             filtered.append(PacingCut(time=duration, trigger_type="end", strength=1.0))
 
-        # Clip-Längen erzwingen
+        # Clip-Längen erzwingen — durchlauf-Emit pro Iteration (alle ~5%) damit
+        # bei sehr langen Mixen UI nicht 20s blockt.
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
             min_length=ts.min_clip_length,
             max_length=ts.max_clip_length,
             audio_duration=duration,
             variation=ts.clip_length_variation,
+            on_progress=lambda local_pct: _emit(80.0 + (local_pct / 100.0) * 20.0),
         )
+
+        # Audit L-M7: Generation komplett -> 100%
+        _emit(100.0, force=True)
 
         logger.info(f"Cut-Liste: {len(filtered)} Schnitte")
         return filtered
@@ -1358,6 +1407,7 @@ class AdvancedPacingEngine:
         stems: Dict[str, str],
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
         NV-kompatible Methode: Generiert Cut-Liste unter Verwendung von Demucs-Stems.
@@ -1367,6 +1417,8 @@ class AdvancedPacingEngine:
             stems: {"drums": "/path/drums.wav", "bass": "/path/bass.wav", ...}
             expected_bpm: Erwartetes BPM
             min_cut_interval: Minimaler Abstand zwischen Cuts
+            on_progress: Audit L-M7 — Callback(pct: float in [0..100]) waehrend
+                         der Cut-Generierung. Fehler im Callback werden geschluckt.
 
         Returns:
             Liste von PacingCut-Objekten
@@ -1375,12 +1427,36 @@ class AdvancedPacingEngine:
 
         logger.info(f"Generiere Cut-Liste mit Stems: {list(stems.keys())}")
 
-        # Basis-Cuts aus Original-Audio (größerer min_interval für Basis)
+        # Audit L-M7: throttled emit-Helper (analog _generate_cut_list_from_audio).
+        _last_pct = [0.0]
+
+        def _emit(pct: float, *, force: bool = False) -> None:
+            if on_progress is None:
+                return
+            try:
+                pct = max(0.0, min(100.0, float(pct)))
+            except (TypeError, ValueError):
+                return
+            if not force and (pct - _last_pct[0]) < 5.0 and pct < 100.0:
+                return
+            _last_pct[0] = pct
+            try:
+                on_progress(pct)
+            except Exception as cb_err:
+                logger.debug(f"L-M7 on_progress callback error (geschluckt): {cb_err}")
+
+        _emit(5.0, force=True)
+
+        # Basis-Cuts aus Original-Audio (größerer min_interval für Basis).
+        # Inner progress 0..40 mappen auf 5..40.
         base_cuts = self._generate_cut_list_from_audio(
             audio_path=audio_path,
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval * 2,
+            on_progress=lambda p: _emit(5.0 + (p / 100.0) * 35.0),
         )
+
+        _emit(45.0, force=True)
 
         # Stem-Trigger extrahieren
         stem_triggers: List[PacingCut] = []
@@ -1388,17 +1464,21 @@ class AdvancedPacingEngine:
         if "drums" in stems:
             drum_triggers = self._extract_drum_triggers_from_stem(stems["drums"])
             stem_triggers.extend(drum_triggers)
+            _emit(60.0, force=True)
 
         if "bass" in stems:
             bass_triggers = self._extract_bass_triggers_from_stem(stems["bass"])
             for t in bass_triggers:
                 t.strength *= 0.7
             stem_triggers.extend(bass_triggers)
+            _emit(75.0, force=True)
 
         all_triggers = base_cuts + stem_triggers
         all_triggers.sort(key=lambda x: x.time)
 
         filtered = self._enforce_minimum_interval(all_triggers, min_cut_interval)
+
+        _emit(85.0, force=True)
 
         ts = self.trigger_settings
         # BUG-067 FIX: Nutze die tatsächliche Audio-Dauer statt des letzten Triggers
@@ -1414,7 +1494,10 @@ class AdvancedPacingEngine:
             max_length=ts.max_clip_length,
             audio_duration=duration,
             variation=ts.clip_length_variation,
+            on_progress=lambda local_pct: _emit(85.0 + (local_pct / 100.0) * 15.0),
         )
+
+        _emit(100.0, force=True)
 
         logger.info(
             f"Cut-Liste mit Stems: {len(filtered)} Cuts "
@@ -1427,6 +1510,7 @@ class AdvancedPacingEngine:
         audio_path: str,
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
         Generiert Cut-Liste MIT Song-Struktur-Bewusstsein.
@@ -1440,6 +1524,8 @@ class AdvancedPacingEngine:
         audio_router) gesetzt ist, wird analyze_song_structure() übersprungen
         und die cached Segmente werden in SongSection-Objekte konvertiert
         (~5s librosa-Re-Analyse vermieden).
+
+        Audit L-M7: on_progress wird durchgereicht an generate_cut_list.
 
         NV-Kompatibilität: Wird von PacingService aufgerufen wenn
         use_motion_matching=True UND use_structure_awareness=True.
@@ -1469,6 +1555,7 @@ class AdvancedPacingEngine:
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval,
             song_sections=song_sections,
+            on_progress=on_progress,
         )
 
     def _coerce_song_structure(self, raw: List[Any]) -> List["SongSection"]:
@@ -1823,10 +1910,16 @@ class AdvancedPacingEngine:
         max_length: float,
         audio_duration: float,
         variation: float = 0.0,
+        on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
         Stellt sicher, dass Clip-Längen innerhalb der Grenzen liegen.
         Fügt Auto-Split-Cuts ein wenn ein Clip zu lang wäre.
+
+        Args:
+            on_progress: Audit L-M7 — Callback(local_pct: float in [0..100]) wird
+                         pro Iteration über filtered cuts gefeuert. Throttling +
+                         Error-Swallowing erfolgt im Caller (_emit).
         """
         from .pacing_models import PacingCut
         import random
@@ -1837,6 +1930,7 @@ class AdvancedPacingEngine:
         # Min-Länge: Nutze enforce_minimum_interval
         filtered = self._enforce_minimum_interval(cuts, min_length)
 
+        total = max(1, len(filtered))
         result: List[PacingCut] = []
         for i, cut in enumerate(filtered):
             result.append(cut)
@@ -1865,6 +1959,13 @@ class AdvancedPacingEngine:
                             strength=0.5,
                             segment_type=cut.segment_type,
                         ))
+
+            # Audit L-M7: Per-iteration progress. Throttling im Caller-_emit.
+            if on_progress is not None:
+                try:
+                    on_progress((i + 1) * 100.0 / total)
+                except Exception:
+                    pass  # callback errors duerfen Generation nicht brechen
 
         return sorted(result, key=lambda c: c.time)
 
