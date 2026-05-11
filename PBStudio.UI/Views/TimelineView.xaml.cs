@@ -34,6 +34,15 @@ public partial class TimelineView : UserControl
     private Point _lastMousePosition;
     private TimelineEntryModel? _draggedEntry;
 
+    // L-TI-2: Trim-Origin-Werte zum Zeitpunkt von MouseDown.
+    // _dragStartX wird auch fuer Trim als Referenz benoetigt, weil Trim deltaX
+    // gegen die Originalposition rechnet (nicht inkrementell wie Drag).
+    private double _dragStartX;
+    private double _originalStartTime;
+    private double _originalEndTime;
+    private double _originalClipStart;
+    private const double MinClipDuration = 0.1;
+
     public TimelineView()
     {
         InitializeComponent();
@@ -271,6 +280,15 @@ public partial class TimelineView : UserControl
             else if (hitPosition > element.ActualWidth - 10) _isTrimmingRight = true;
             else _isDragging = true;
 
+            // L-TI-2: Trim-Origin festhalten (deltaX gegen Original, nicht inkrementell)
+            if (_isTrimmingLeft || _isTrimmingRight)
+            {
+                _dragStartX = _lastMousePosition.X;
+                _originalStartTime = entry.StartTime;
+                _originalEndTime = entry.EndTime;
+                _originalClipStart = entry.ClipStart;
+            }
+
             element.CaptureMouse();
             e.Handled = true;
         }
@@ -311,8 +329,83 @@ public partial class TimelineView : UserControl
                 _draggedEntry.StartTime = newStart;
                 _draggedEntry.EndTime = newStart + dur;
             }
-            // (Trimming left/right omitted for brevity in this replace call, 
-            // but logic follows same SnapEngine pattern)
+            // L-TI-2: Trim-Left — bewegt die linke Kante. EndTime bleibt fix,
+            // StartTime + ClipStart (source-offset) shiften synchron um deltaSec.
+            // Damit zeigt der Clip nicht ploetzlich neues Source-Material — er
+            // wird nur gekuerzt/verlaengert vom Start-Ende.
+            else if (_isTrimmingLeft)
+            {
+                var totalDeltaX = currentPos.X - _dragStartX;
+                var deltaSec = totalDeltaX / _viewModel.PixelsPerSecond;
+
+                var newStart = _originalStartTime + deltaSec;
+                var newClipStart = _originalClipStart + deltaSec;
+
+                // SHIFT deaktiviert Snap (gleiche Konvention wie Drag)
+                if (Keyboard.Modifiers != ModifierKeys.Shift)
+                {
+                    var allSnapPoints = GetAvailableSnapPoints();
+                    var snapped = _snapEngine.FindSnapPoint(newStart, allSnapPoints);
+                    if (snapped != null)
+                    {
+                        var snapDelta = snapped.Time - newStart;
+                        newStart = snapped.Time;
+                        newClipStart += snapDelta;
+                        snapTime = snapped.Time;
+                        isSnapped = true;
+                    }
+                }
+
+                // Constraints: StartTime >= 0, ClipStart >= 0, min Dauer
+                if (newStart < 0)
+                {
+                    newClipStart -= newStart; // newStart is negativ -> addiert
+                    newStart = 0;
+                }
+                if (newClipStart < 0)
+                {
+                    newStart -= newClipStart;
+                    newClipStart = 0;
+                }
+                if (_originalEndTime - newStart < MinClipDuration)
+                {
+                    var maxStart = _originalEndTime - MinClipDuration;
+                    var clamp = maxStart - newStart;
+                    newStart = maxStart;
+                    newClipStart += clamp;
+                }
+
+                _draggedEntry.StartTime = newStart;
+                _draggedEntry.EndTime = _originalEndTime;
+                _draggedEntry.ClipStart = newClipStart;
+            }
+            // L-TI-2: Trim-Right — bewegt die rechte Kante. StartTime + ClipStart
+            // bleiben fix, nur EndTime aendert sich (= Duration aendert sich).
+            else if (_isTrimmingRight)
+            {
+                var totalDeltaX = currentPos.X - _dragStartX;
+                var deltaSec = totalDeltaX / _viewModel.PixelsPerSecond;
+
+                var newEnd = _originalEndTime + deltaSec;
+
+                if (Keyboard.Modifiers != ModifierKeys.Shift)
+                {
+                    var allSnapPoints = GetAvailableSnapPoints();
+                    var snapped = _snapEngine.FindSnapPoint(newEnd, allSnapPoints);
+                    if (snapped != null)
+                    {
+                        newEnd = snapped.Time;
+                        snapTime = snapped.Time;
+                        isSnapped = true;
+                    }
+                }
+
+                // Min-Dauer enforce: EndTime - StartTime >= MIN
+                if (newEnd - _originalStartTime < MinClipDuration)
+                    newEnd = _originalStartTime + MinClipDuration;
+
+                _draggedEntry.EndTime = newEnd;
+            }
 
             // Visual Feedback: Snap Line
             if (isSnapped)
@@ -371,6 +464,7 @@ public partial class TimelineView : UserControl
         if (_draggedEntry != null)
         {
             if (sender is FrameworkElement element) element.ReleaseMouseCapture();
+            bool wasDragging = _isDragging;
             _isDragging = _isTrimmingLeft = _isTrimmingRight = false;
             _draggedEntry = null;
             _syncTimer.Stop();
@@ -381,6 +475,13 @@ public partial class TimelineView : UserControl
             if (_viewModel != null)
             {
                 _viewModel.StatusText = "Schnitt angepasst";
+
+                // Audit L-TI-4: nach Drag-Commit Collection-Index = Zeit-Reihenfolge wiederherstellen
+                // (sonst NextCut/PreviousCut + Render chronologisch verworren).
+                if (wasDragging)
+                {
+                    _viewModel.SortEntriesByTime();
+                }
             }
         }
     }

@@ -684,6 +684,46 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>
+    /// Audit L-TI-4: re-sortiert <see cref="TimelineEntries"/> nach <see cref="TimelineEntryModel.StartTime"/>
+    /// aufsteigend. Wird nach einem Drag-Commit (MouseUp in TimelineView) aufgerufen, weil Drag die
+    /// zeitliche Position ändert ohne den Collection-Index zu aktualisieren — sonst divergiert
+    /// Index- von Zeit-Reihenfolge (NextCut/PreviousCut, Render-Order broken).
+    /// In-place via ObservableCollection.Move um Bindings/Selection nicht zu verlieren.
+    /// </summary>
+    public void SortEntriesByTime()
+    {
+        if (TimelineEntries == null || TimelineEntries.Count < 2) return;
+
+        var sorted = TimelineEntries.OrderBy(e => e.StartTime).ToList();
+
+        // Early-out wenn bereits sortiert (kein Move-Event-Spam an Bindings).
+        bool needsResort = false;
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            if (!ReferenceEquals(sorted[i], TimelineEntries[i]))
+            {
+                needsResort = true;
+                break;
+            }
+        }
+        if (!needsResort) return;
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            int currentIdx = TimelineEntries.IndexOf(sorted[i]);
+            if (currentIdx != i)
+            {
+                TimelineEntries.Move(currentIdx, i);
+            }
+        }
+
+        // Selection-Index-Anzeige & Nav-Commands aktualisieren (Index hat sich evtl. geaendert).
+        OnPropertyChanged(nameof(SelectionIndexText));
+        PreviousCutCommand.NotifyCanExecuteChanged();
+        NextCutCommand.NotifyCanExecuteChanged();
+    }
+
     private void ResetTimelineState()
     {
         TimelineEntries.Clear();
