@@ -1950,15 +1950,26 @@ class AdvancedPacingEngine:
                 for j in range(num_splits):
                     jitter = split_duration * random.uniform(-variation * 0.2, variation * 0.2) if variation > 0 else 0.0
                     split_time = cut.time + (split_duration * (j + 1)) + jitter
-                    prev_time = result[-1].time
 
-                    if (split_time > prev_time + min_length) and (split_time < audio_duration - 0.1):
-                        result.append(PacingCut(
-                            time=split_time,
-                            trigger_type="auto_split",
-                            strength=0.5,
-                            segment_type=cut.segment_type,
-                        ))
+                    # L-TI-6: Strict bounds check gegen prev UND next.
+                    # prev = letzter platzierter Cut/Split (result[-1])
+                    # next = entweder der naechste echte Cut (next_time) ODER end-of-audio,
+                    #        je nachdem was naeher liegt.
+                    prev_time = result[-1].time
+                    next_boundary = min(next_time, audio_duration)
+                    dist_prev = split_time - prev_time
+                    dist_next = next_boundary - split_time
+
+                    if dist_prev < min_length or dist_next < min_length:
+                        # Split wuerde min_length verletzen -> skip
+                        continue
+
+                    result.append(PacingCut(
+                        time=split_time,
+                        trigger_type="auto_split",
+                        strength=0.5,
+                        segment_type=cut.segment_type,
+                    ))
 
             # Audit L-M7: Per-iteration progress. Throttling im Caller-_emit.
             if on_progress is not None:
