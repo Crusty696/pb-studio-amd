@@ -25,7 +25,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 1. Read this file completely.
 2. Acknowledge the current task.
 3. Verify that your proposed solution respects the IRON RULES.
-4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-05-09"
+4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-05-11"
 
 ---
 
@@ -47,15 +47,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
    - Setup-Script-Änderung → `requirements.txt`/Dependency-Listen synchron halten
    - End-Report MUSS explizit zeigen: was gebaut, welche Binaries/Scripts aktualisiert, welche validiert.
    - **Hintergrund:** 2026-05-08 Trust-Incident — Bug-Fix in C# war im Source aber Release-Binary nicht gebaut → User testete altes Binary und verlor Vertrauen. Diese Regel verhindert Wiederholung.
+11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: `mcp__obsidian__*` (update_frontmatter, append_to_note, replace_in_note). **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
 
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-09
-- **Phase:** Production / Verified + Brain-Modul Phase 6 integriert
-- **Status:** Pipeline-Level Audit abgeschlossen 2026-05-08 (siehe `STATUS_REPORT_2026-05-08.md`). Tests: 239 passed, 8 skipped, 0 failures (Brain-Phase-6, Commit `eb18dc5`). 5 Bugs am 2026-05-08 gefixt (BUG-200..204). Audit Data-Flow 2026-05-09: 5/8 Audio + 3/5 Video Felder werden persistiert ohne dass Pacing sie konsumiert (siehe `AUDIT_DATA_FLOW_2026-05-09.md`). Plan zur Behebung in `~/.claude/plans/cozy-marinating-pike.md` (Phase A-F).
-- **Next Task:** Verbleibende Plan-Phasen B (GUI-Tests), D-F (Settings/Engine/Cleanup) abarbeiten. Phase A (Pacing-Workflow) abgeschlossen Commits 6f4de96..5b05915.
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..204 gefixt 2026-05-08: CTS-Race VideoLibrary, fehlende XAML-Resources VideoThumbCard + AbletonYellowColor, Launcher Auto-Rebuild, fehlende SSE analysis_progress Events bei Video-Analyse, BUG-205 gefixt 2026-05-09 (Settings VRAM Total via Registry-Fallback wenn LHM-Sensors leer; Used via GPU Process Memory Counter))
+- **Date:** 2026-05-11
+- **Phase:** Production / Verified + Brain-Modul Phase 6 + Pipeline-Lueken Plan abgeschlossen + Timeline-Integrity Audit/Fixes + Deep-Audit Sweep laufend
+- **Status:** Tests 503 passed / 8 skipped / 0 failed (vorher 239 → 264 neue durch K+M+N+TI). Session 2026-05-11 21+ commits. Plan `~/.claude/plans/2026-05-09-pipeline-luecken-fix.md` vollstaendig: Phase K 5/5, M 8/8, N 7/8 (N1 user-skipped → TI-Audit stattdessen), Timeline-Integrity-Audit 12 Findings (1 CRITICAL, 4 HIGH) — alle 7 priorisierten Fixes deployed. **Wurzel des "chaotischen Pacing"-User-Konzerns:** L-TI-1 — `ClipSelector.select_clip(prompt=...)` crashte live → Pacing fiel auf round-robin → 14 cuts statt 2184. Fix `700fedd`.
+- **Next Task:** Deep-Audit Sweep konsolidieren (6 parallele Reports: Audio/Video/Render/Frontend/State+DB+Cache/GPU+Threading) → Priorisierte Fix-Liste → Plan.
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
