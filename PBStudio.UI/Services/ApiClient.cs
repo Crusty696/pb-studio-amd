@@ -412,7 +412,22 @@ public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailabl
 public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
-public record AudioClipInfo(int Id, string Name, string Path, double DurationSeconds, int SampleRate, int Channels, string Format, double Bpm = 0.0, string? Key = null, int BeatCount = 0, bool IsAnalyzed = false);
+public record AudioClipInfo(
+    int Id,
+    string Name,
+    string Path,
+    double DurationSeconds,
+    int SampleRate,
+    int Channels,
+    string Format,
+    double Bpm = 0.0,
+    string? Key = null,
+    int BeatCount = 0,
+    bool IsAnalyzed = false,
+    // L-N2: Content-Hash fuer Cache-Hit-Badge auf der AudioClip-Card.
+    // Persisted im Backend nach Streaming-Hash beim Import; signalisiert
+    // dass Embedding/Analyse aus Cache wiederverwendbar sind.
+    string? AudioHash = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
 public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);

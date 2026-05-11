@@ -134,13 +134,43 @@
                 </WrapPanel>
 
                 <!-- Clip list (Multi-Select fuer Delete-Operationen) -->
+                <!-- L-N2: Custom ItemTemplate mit CACHED-Badge wenn AudioHash vorhanden. -->
                 <ListBox x:Name="AudioClipList"
                          ItemsSource="{Binding AudioClips}"
                          SelectedItem="{Binding SelectedClip}"
                          SelectionMode="Extended"
                          SelectionChanged="AudioClipList_SelectionChanged"
-                         DisplayMemberPath="Name"
-                         Background="Transparent" BorderThickness="0"/>
+                         Background="Transparent" BorderThickness="0"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding Name}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <!-- L-N2: CACHED-Badge — sichtbar wenn AudioHash gesetzt. -->
+                                <Border Grid.Column="1"
+                                        Background="{StaticResource AbletonAccent}"
+                                        CornerRadius="2"
+                                        Padding="4,1"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding HasCacheHash, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        ToolTip="Cache-Hash vorhanden - Analyse/Embedding wiederverwendbar">
+                                    <TextBlock Text="CACHED"
+                                               FontSize="9"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource AbletonBg}"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
         </md:Card>
 

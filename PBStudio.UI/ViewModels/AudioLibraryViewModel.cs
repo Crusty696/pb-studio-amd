@@ -279,6 +279,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         Key = clipInfo.Key ?? "",
                         BeatCount = clipInfo.BeatCount,
                         IsAnalyzed = clipInfo.IsAnalyzed,
+                        // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
+                        AudioHash = clipInfo.AudioHash,
                     });
                 }
                 if (previousId.HasValue)

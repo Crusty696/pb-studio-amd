@@ -16,8 +16,12 @@ public partial class AudioClipModel : ObservableObject
     [ObservableProperty] private string _key = "";
     [ObservableProperty] private int _beatCount;
     [ObservableProperty] private bool _isAnalyzed;
+    // L-N2: Content-Hash vom Backend; HasCacheHash treibt CACHED-Badge im View.
+    [ObservableProperty] private string? _audioHash;
 
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
+    public bool HasCacheHash => !string.IsNullOrWhiteSpace(AudioHash);
 
     partial void OnDurationSecondsChanged(double value) => OnPropertyChanged(nameof(DurationText));
+    partial void OnAudioHashChanged(string? value) => OnPropertyChanged(nameof(HasCacheHash));
 }
