@@ -68,9 +68,13 @@ data/
 media/
 assets/
 
-# Test-Temporärverzeichnisse
+# Test-Temporärverzeichnisse (pytest tmpdir basetemp variants)
 .pytest_tmp/
 .pytest_tmp_local/
+.pytest_tmp*/
+
+# Claude Code runtime artefacts
+.claude/scheduled_tasks.lock
 
 # Sonstiges
 nul
