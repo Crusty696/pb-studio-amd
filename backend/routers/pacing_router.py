@@ -248,6 +248,13 @@ async def update_timeline(
             }
         })
 
+    # L-TI-3: clip_start + duration gegen Source-Video-Laenge cappen.
+    # Auto-Pfad hat diesen Cap in pacing_service._process_pacing_cuts_to_cutlist
+    # (R12b/SEV-004) — manueller Update-Endpoint war ungeschuetzt:
+    # User-Drag konnte Dauer > source_duration setzen -> Render erzeugte
+    # truncated frames / FFmpeg-Errors.
+    internal_cuts = _cap_entries_against_source(internal_cuts, state)
+
     audio_dur = 0.0
     if state.current_audio_path:
         from pb_studio.rendering.render_service import RenderService
@@ -259,7 +266,7 @@ async def update_timeline(
 
     state.set_timeline(internal_cuts)
     logger.info(f"Timeline manuell aktualisiert: {len(internal_cuts)} Schnitte")
-    
+
     return StatusResponse(
         success=True,
         message=f"Timeline mit {len(internal_cuts)} Schnitten aktualisiert"
@@ -299,6 +306,87 @@ async def generate_preview(
 
 
 # --- Private Hilfsfunktionen ---
+
+def _cap_entries_against_source(
+    entries: list[dict[str, Any]],
+    state: AppState,
+) -> list[dict[str, Any]]:
+    """L-TI-3: Cappt clip_start + (end_time - start_time) gegen
+    Source-Video-Dauer fuer jeden Timeline-Eintrag.
+
+    Repliziert die R12b/SEV-004-Cap-Logik aus
+    pacing_service._process_pacing_cuts_to_cutlist (Auto-Pfad) fuer den
+    manuellen Update-Pfad (POST /pacing/timeline). Ohne diesen Cap konnten
+    User via UI-Drag eine Cut-Dauer setzen, die ueber source_video_duration
+    hinausgeht — Renderer produzierte truncated frames / FFmpeg-Crash.
+
+    Strategie:
+      - Wenn clip_start > source_duration: clip_start auf source_duration cappen
+        (mit 0.1s Headroom, damit duration >= 0 bleibt).
+      - Wenn duration > (source_duration - clip_start): duration auf available cappen.
+      - Bei unbekannter clip_id (kein Video-Clip im State) oder source<=0:
+        entry unveraendert lassen (kein Crash, kein Cap moeglich).
+
+    Mutiert die Entries in-place und gibt die gleiche Liste zurueck.
+    """
+    for entry in entries:
+        clip_id_raw = entry.get("clip_id", "")
+        # clip_id Format aus _process_pacing_cuts_to_cutlist: "clip_<int>"
+        if not isinstance(clip_id_raw, str) or not clip_id_raw.startswith("clip_"):
+            continue
+        try:
+            video_id = int(clip_id_raw[5:])
+        except (ValueError, TypeError):
+            continue
+
+        video_clip = state.get_video_clip(video_id)
+        if video_clip is None:
+            continue
+
+        try:
+            source_duration = float(video_clip.get("duration_seconds", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            source_duration = 0.0
+        if source_duration <= 0.0:
+            continue
+
+        metadata = entry.setdefault("metadata", {})
+        try:
+            clip_start = float(metadata.get("clip_start", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            clip_start = 0.0
+
+        # Cap clip_start damit min. 0.1s lesbar bleiben.
+        max_start = max(0.0, source_duration - 0.1)
+        if clip_start > max_start:
+            logger.warning(
+                "L-TI-3: clip_start %.3f > source %.3f (clip_id=%s) — capped",
+                clip_start, source_duration, clip_id_raw,
+            )
+            clip_start = max_start
+            metadata["clip_start"] = clip_start
+
+        # Cap duration auf verfuegbaren Bereich.
+        try:
+            start_time = float(entry.get("start_time", 0.0))
+            end_time = float(entry.get("end_time", 0.0))
+        except (TypeError, ValueError):
+            continue
+        duration = end_time - start_time
+        if duration <= 0.0:
+            continue
+
+        available = source_duration - clip_start
+        if duration > available:
+            new_duration = max(0.1, available)
+            logger.warning(
+                "L-TI-3: duration %.3f > available %.3f (clip_id=%s) — capped to %.3f",
+                duration, available, clip_id_raw, new_duration,
+            )
+            entry["end_time"] = start_time + new_duration
+
+    return entries
+
 
 def _emit_pacing_progress(loop, pct: float) -> None:
     """Audit L-M7: Sendet ein pacing_progress SSE-Event aus dem Worker-Thread
