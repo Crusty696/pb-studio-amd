@@ -267,7 +267,15 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100.0;
                 var result = await _api.AnalyzeVideoAsync(clip.Id);
-                if (result != null) clip.IsAnalyzed = true;
+                if (result != null)
+                {
+                    clip.IsAnalyzed = true;
+                    // L-M6: Auto-Reload scenes wenn der analysierte Clip aktuell selektiert ist.
+                    if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                    {
+                        await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                    }
+                }
                 done++;
             }
             AnalyzeAllProgress = 100.0;
@@ -505,6 +513,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             {
                 SelectedClip.IsAnalyzed = true;
                 StatusText = $"Analyse fertig: {result.SceneCount} Scenes | Motion: {result.AvgMotion:F1}";
+
+                // L-M6: Auto-Reload scenes nach Analyse - OnSelectedClipChanged triggert
+                // nur bei Selection-Wechsel, nicht bei IsAnalyzed-Update der aktuellen Selection.
+                if (SelectedClip != null && SelectedClip.IsAnalyzed)
+                {
+                    await LoadScenesAsync(SelectedClip.Id).ConfigureAwait(false);
+                }
             }
             else
             {
@@ -544,6 +559,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 if (result != null)
                 {
                     clip.IsAnalyzed = true;
+                    // L-M6: Auto-Reload scenes wenn der analysierte Clip aktuell selektiert ist.
+                    if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                    {
+                        await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                    }
                 }
                 done++;
             }
