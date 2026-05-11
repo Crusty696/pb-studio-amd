@@ -18,6 +18,7 @@
             <conv:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <conv:ConfidenceToBrushConverter x:Key="ConfidenceToBrushConverter"/>
+            <conv:MotionToHeightConverter x:Key="MotionToHeightConverter"/>
 
             <!-- ══════ Ableton-Palette (Colors, fuer Storyboards/Animationen) ══════ -->
             <Color x:Key="AbletonBgColor">#1A1A1E</Color>

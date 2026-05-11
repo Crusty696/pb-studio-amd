@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -42,6 +43,11 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isGeneratingPreview;
     [ObservableProperty] private string? _previewVideoPath;
     [ObservableProperty] private string _previewStatus = "";
+
+    // Audit L-M5: Motion-Curve Sparkline-Overlay fuer den selektierten Timeline-Entry.
+    // Wird per SelectedEntry-Wechsel asynchron von GET /video/motion/{id} geladen.
+    [ObservableProperty] private ObservableCollection<double>? _motionCurve;
+    private int _motionLoadSequence;
 
     public event Action<string>? PreviewReady;
 
@@ -179,6 +185,53 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectionIndexText));
         PreviousCutCommand.NotifyCanExecuteChanged();
         NextCutCommand.NotifyCanExecuteChanged();
+
+        // Audit L-M5: Motion-Curve fuer selektierten Entry (fire-and-forget).
+        // ClipId ist string (z.B. "42") -> int.TryParse; bei Fehler -> Curve clearen.
+        if (value != null && int.TryParse(value.ClipId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cid))
+        {
+            _ = LoadMotionCurveAsync(cid);
+        }
+        else
+        {
+            MotionCurve = null;
+        }
+    }
+
+    /// <summary>
+    /// Audit L-M5: Laedt motion_curve via GET /video/motion/{id} und mappt sie auf
+    /// die UI-ObservableCollection. Sequence-Token verhindert Race wenn der User
+    /// rasch durch Cuts klickt. Bei nicht-analysiertem Clip oder leerer Curve -> null.
+    /// </summary>
+    private async Task LoadMotionCurveAsync(int clipId)
+    {
+        var seq = Interlocked.Increment(ref _motionLoadSequence);
+        try
+        {
+            var data = await _api.GetMotionAsync(clipId).ConfigureAwait(false);
+            if (seq != _motionLoadSequence) return;
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (seq != _motionLoadSequence) return;
+                if (data?.MotionCurve != null && data.MotionCurve.Count > 0)
+                {
+                    MotionCurve = new ObservableCollection<double>(data.MotionCurve.Select(f => (double)f));
+                }
+                else
+                {
+                    MotionCurve = null;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"MotionCurve-Load fehlgeschlagen fuer clip {clipId}: {ex.Message}");
+            if (seq == _motionLoadSequence)
+            {
+                await Application.Current.Dispatcher.InvokeAsync(() => MotionCurve = null);
+            }
+        }
     }
 
     partial void OnSelectedTimelinePositionChanged(double value)
@@ -639,6 +692,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         AudioPath = null;
         SelectedEntry = null;
         SelectedTimelinePosition = 0;
+        MotionCurve = null;
         IsLoading = false;
         StatusText = "Kein Projekt geöffnet";
         OnPropertyChanged(nameof(HasTimeline));

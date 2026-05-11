@@ -94,6 +94,45 @@
             </DockPanel>
         </md:Card>
 
+        <!-- ══ Motion-Curve Sparkline (Audit L-M5) ══
+             Konsument fuer GET /video/motion/{id}. Zeigt motion_curve des aktuell
+             selektierten Timeline-Entries als kompakte Bar-Sparkline (Hoehe 36px).
+             Visible nur wenn MotionCurve != null (i.e. Clip ist analysiert und hat curve). -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{StaticResource AbletonPanel}"
+                BorderBrush="{StaticResource AbletonBorder}"
+                BorderThickness="0,1,0,1"
+                Height="36"
+                Margin="0,4,0,0"
+                Visibility="{Binding MotionCurve, Converter={StaticResource NullToVisibilityConverter}}">
+            <Grid>
+                <TextBlock Text="MOTION"
+                           FontSize="9"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Top"
+                           Margin="6,2,0,0"/>
+                <ItemsControl ItemsSource="{Binding MotionCurve}"
+                              Margin="60,12,6,4">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Rectangle Fill="{StaticResource AbletonAccent}"
+                                       Width="2"
+                                       Margin="0.5,0"
+                                       VerticalAlignment="Bottom"
+                                       Height="{Binding Converter={StaticResource MotionToHeightConverter}}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
         <!-- ══ Preview + Details Panel (Fixed at Bottom) ══ -->
         <md:Card DockPanel.Dock="Bottom" Style="{StaticResource AbletonCard}" Padding="12" Margin="0,8,0,0">
             <Grid Height="280">
