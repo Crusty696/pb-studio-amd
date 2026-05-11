@@ -117,6 +117,25 @@ class AppState:
         with self._state_lock:
             self.video_clips[clip_id] = clip
 
+    def update_video_clip(self, clip_id: int, **kwargs) -> None:
+        """L-N7: Thread-safe Update von in-memory Video-Clip-Feldern.
+
+        Aktuell genutzt fuer thumbnail_available (gesetzt nach erfolgreichem
+        /video/thumbnails/{id}). Unbekannte clip_ids werden ignoriert (kein
+        Crash) — der Caller (video_router) soll ohne explizite Existenz-Pruefung
+        flags setzen koennen.
+
+        Nicht persistent: aenderungen bleiben im in-memory state. thumbnail_available
+        wird beim load_from_db wieder auf False gesetzt (siehe Audit-Begruendung:
+        Thumbnails werden on-demand neu generiert wenn die UI sie anfordert).
+        """
+        with self._state_lock:
+            clip = self.video_clips.get(clip_id)
+            if clip is None:
+                return
+            for key, value in kwargs.items():
+                clip[key] = value
+
     def get_audio_clips_snapshot(self) -> dict[int, dict]:
         """Thread-safe Snapshot aller Audio-Clips (deep copy of dicts)."""
         with self._state_lock:
@@ -333,6 +352,13 @@ class AppState:
                         "sample_rate": meta.get("sample_rate", clip_data.get("sample_rate", 44100)),
                         "channels": meta.get("channels", clip_data.get("channels", 2)),
                         "format": meta.get("format", clip_data.get("format", "")),
+                        # L-N2: audio_hash mit-uebernehmen — wenn schon persisted dann nutzen,
+                        # sonst Wert aus Import (frisches hashing) behalten.
+                        "audio_hash": (
+                            meta.get("audio_hash")
+                            or row.get("file_hash")
+                            or clip_data.get("audio_hash")
+                        ),
                     }
                     self.set_audio_clip(clip_id, clip)
                     with self._lock:
@@ -673,11 +699,14 @@ class AppState:
                 "sample_rate": clip.get("sample_rate", 44100),
                 "channels": clip.get("channels", 2),
                 "format": clip.get("format", ""),
+                # L-N2: audio_hash in Metadata persistieren damit Reload den
+                # Cache-Hash sieht (UI-Badge + EmbeddingCache-Lookup).
+                "audio_hash": clip.get("audio_hash"),
             }
             repo.add_media(
                 project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
-                file_hash="",
+                file_hash=clip.get("audio_hash") or "",
                 duration=clip.get("duration_seconds", 0.0),
                 meta=meta,
             )
@@ -805,6 +834,9 @@ class AppState:
                         "key": ai_data.get("key"),
                         "beat_count": int(ai_data.get("beat_count", 0) or 0),
                         "is_analyzed": is_analyzed,
+                        # L-N2: audio_hash aus Meta (oder Legacy file_hash) zurueck
+                        # ins In-Memory-Dict damit UI-Badge + Pacing-Cache funktionieren.
+                        "audio_hash": meta.get("audio_hash") or row.get("file_hash") or None,
                     }
                     tmp_audio[clip_id] = clip
                     max_audio_id = max(max_audio_id, clip_id)

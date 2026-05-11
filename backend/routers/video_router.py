@@ -169,6 +169,10 @@ async def list_clips(
     for c in clips[start:end]:
         clip_id = c["id"]
         is_analyzed = clip_id in analysis_snap
+        # L-N3: video_hash aus in-memory state (None falls Hashing fehlgeschlagen
+        # oder Clip aus aelterer DB-Persistenz ohne Hash-Spalte geladen wurde).
+        # UI rendert daraus einen "CACHED"-Badge auf der VideoClip-Card.
+        video_hash_value = c.get("video_hash")
         # L-M4: Motion-Daten aus analysis_cache extrahieren fuer UI-Detail-Card.
         # Falls Clip noch nicht analysiert oder kein motion-Block vorhanden -> None.
         avg_motion: Optional[float] = None
@@ -216,10 +220,14 @@ async def list_clips(
                     embedding_samples = None
             has_embedding = bool(va.get("has_embedding", False))
 
+        # L-N3: video_hash separat extrahieren damit es nicht doppelt via **c
+        # an VideoClipInfo gereicht wird (TypeError "multiple values for keyword").
+        c_payload = {k: v for k, v in c.items() if k != "video_hash"}
         result.append(
             VideoClipInfo(
-                **c,
+                **c_payload,
                 is_analyzed=is_analyzed,
+                video_hash=video_hash_value,
                 avg_motion=avg_motion,
                 peak_motion=peak_motion,
                 motion_category=motion_category,
@@ -250,6 +258,12 @@ async def get_thumbnail(
         raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
     try:
         jpeg_bytes = await asyncio.to_thread(_generate_thumbnail, clip["path"])
+        # L-N7: in-memory Flag setzen damit list_clips den korrekten Wert liefert.
+        # Update darf nie crashen (best-effort).
+        try:
+            state.update_video_clip(clip_id=clip_id, thumbnail_available=True)
+        except Exception as ex:
+            logger.debug(f"L-N7 thumbnail_available update fehlgeschlagen (unkritisch): {ex}")
         return Response(content=jpeg_bytes, media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Thumbnail-Generierung fehlgeschlagen: {e}")
