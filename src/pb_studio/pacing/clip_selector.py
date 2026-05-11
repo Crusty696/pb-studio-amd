@@ -189,6 +189,10 @@ class ClipSelector:
         self.audio_key: Optional[str] = None
         self.video_keys: Dict = {}
 
+        # L-TI-1: Per-call prompt override (set by select_clip), consumed
+        # by _select_semantic. None = use TRIGGER_PROMPTS default.
+        self._current_prompt_override: Optional[str] = None
+
     # =========================================================================
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
@@ -199,6 +203,8 @@ class ClipSelector:
         trigger_strength: float = 0.5,
         trigger_type: str = "beat",
         previous_clip_id: Optional[str] = None,
+        prompt: Optional[str] = None,
+        **_unused,
     ) -> SelectedClip:
         """
         NV-kompatible Methode: Wählt den besten Clip für einen Schnitt.
@@ -208,6 +214,12 @@ class ClipSelector:
             trigger_strength: Stärke des Audio-Triggers (0.0-1.0)
             trigger_type: Typ des Triggers (beat, onset, kick, etc.)
             previous_clip_id: ID des vorherigen Clips (für Kontinuität)
+            prompt: Optionaler semantischer Override-Prompt (L-TI-1). Wenn gesetzt,
+                aktiviert er den FAISS-Semantic-Pfad und ueberschreibt den Default-
+                TRIGGER_PROMPTS-Eintrag fuer diesen Cut. None = klassischer Pfad
+                (motion/random/round_robin/semantic je nach self.strategy).
+            **_unused: Forward-kompatibler Catch-all fuer kuenftige Kwargs (verhindert
+                Wiederholung von L-TI-1 wenn neue Caller weitere optionale Args senden).
 
         Returns:
             SelectedClip mit dem gewählten Clip
@@ -215,6 +227,13 @@ class ClipSelector:
         if not available_clips:
             logger.warning("Keine Clips verfügbar")
             return SelectedClip(clip_id="none", clip_path="", score=0.0)
+
+        # L-TI-1: Wenn caller einen expliziten Prompt liefert, semantic Pfad aktivieren.
+        # Backward-compat: prompt=None / "" laesst self.strategy unveraendert.
+        if prompt:
+            self._current_prompt_override = prompt
+        else:
+            self._current_prompt_override = None
 
         # Dynamische Blacklist-Größe
         calculated_size = int(len(available_clips) * self.blacklist_percentage)
@@ -265,7 +284,9 @@ class ClipSelector:
         trigger_type: str,
     ) -> "SelectedClip":
         """Original strategy selection — used when no brain reranker available."""
-        if self.use_semantic or self.strategy == "semantic":
+        # L-TI-1: Expliziter Caller-Prompt aktiviert semantic Pfad auch ohne
+        # globalen use_semantic-Switch (z.B. pacing_service uebergibt song_mood).
+        if self._current_prompt_override or self.use_semantic or self.strategy == "semantic":
             return self._select_semantic(candidates, trigger_strength, trigger_type)
         elif self.strategy == "random":
             return self._select_random(candidates)
@@ -526,9 +547,15 @@ class ClipSelector:
         FAISS-basierte semantische Auswahl.
         Nutzt TRIGGER_PROMPTS für Text→Embedding Query.
         Fallback auf motion-basierte Auswahl wenn FAISS nicht verfügbar.
+
+        L-TI-1: Wenn select_clip einen expliziten prompt-Override geliefert hat,
+        wird dieser bevorzugt verwendet (z.B. mood-aware song-prompt aus
+        pacing_service). Sonst Default-Trigger-Prompt.
         """
-        # Prompt für diesen Trigger-Typ holen
-        prompt = TRIGGER_PROMPTS.get(trigger_type, DEFAULT_PROMPT)
+        # Prompt für diesen Trigger-Typ holen (Override-aware)
+        prompt = self._current_prompt_override or TRIGGER_PROMPTS.get(
+            trigger_type, DEFAULT_PROMPT
+        )
 
         # FAISS-Suche via SigLIP Embedding
         try:
