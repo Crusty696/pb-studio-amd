@@ -28,6 +28,9 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _fps = 30.0;
     // L-N5: Bitrate-Slider (4-50 Mbps, default 12). Wird an /render/start als bitrate_mbps geschickt.
     [ObservableProperty] private int _bitrateMbps = 12;
+    // L-N6: Encoder-Auswahl. "auto" = Backend waehlt (h264_amf bevorzugt fuer AMD).
+    // Im Request wird null gesendet wenn "auto" gewaehlt ist.
+    [ObservableProperty] private string _encoder = "auto";
     [ObservableProperty] private string _statusText = "Bereit für Rendering";
     [ObservableProperty] private double _renderProgress;
     [ObservableProperty] private bool _isRendering;
@@ -36,6 +39,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
+    // L-N6: Verfuegbare Encoder. "auto" -> null im Request (Backend default-Logik).
+    public List<string> AvailableEncoders { get; } = ["auto", "h264_amf", "hevc_amf", "av1_amf", "libx264"];
 
     public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects, IDialogService dialogService)
     {
@@ -109,7 +114,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         RenderLogEntries.Clear();
         AppendLog("info", $"Render startet: {OutputPath}");
         AppendLog("info", $"Quelle: {AudioPath}");
-        AppendLog("info", $"Preset: {SelectedQuality} | {Width}x{Height} @ {Fps:0.##} fps | {BitrateMbps} Mbps");
+        AppendLog("info", $"Preset: {SelectedQuality} | {Width}x{Height} @ {Fps:0.##} fps | {BitrateMbps} Mbps | Encoder: {Encoder}");
 
         IsRendering = true;
         RenderProgress = 0;
@@ -118,6 +123,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         _currentTaskId = null;
         _lastGpuLogUtc = DateTime.MinValue;
 
+        // L-N6: Encoder "auto" -> null im Request (Backend default-Logik bleibt aktiv).
         var request = new RenderRequest(
             OutputPath: OutputPath,
             AudioPath: AudioPath,
@@ -125,7 +131,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             ResolutionWidth: Width,
             ResolutionHeight: Height,
             Fps: Fps,
-            BitrateMbps: BitrateMbps
+            BitrateMbps: BitrateMbps,
+            Encoder: Encoder == "auto" ? null : Encoder
         );
 
         try
