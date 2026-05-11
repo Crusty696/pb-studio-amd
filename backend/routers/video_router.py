@@ -174,6 +174,10 @@ async def list_clips(
         avg_motion: Optional[float] = None
         peak_motion: Optional[float] = None
         motion_category: Optional[str] = None
+        # L-M8: SigLIP-Embedding-Meta aus analysis_cache (0 wenn nicht analysiert).
+        embedding_dim: Optional[int] = None
+        embedding_samples: Optional[int] = None
+        has_embedding: bool = False
         if is_analyzed:
             va = analysis_snap.get(clip_id) or {}
             motion = va.get("motion") or {}
@@ -197,6 +201,20 @@ async def list_clips(
                 # ueber _classify_motion ableiten (static/low/medium/high).
                 elif avg_motion is not None:
                     motion_category = _classify_motion(avg_motion)
+            # L-M8: embedding-Meta
+            _emb_dim = va.get("embedding_dim")
+            _emb_samples = va.get("embedding_samples")
+            if _emb_dim is not None:
+                try:
+                    embedding_dim = int(_emb_dim)
+                except (TypeError, ValueError):
+                    embedding_dim = None
+            if _emb_samples is not None:
+                try:
+                    embedding_samples = int(_emb_samples)
+                except (TypeError, ValueError):
+                    embedding_samples = None
+            has_embedding = bool(va.get("has_embedding", False))
 
         result.append(
             VideoClipInfo(
@@ -205,6 +223,9 @@ async def list_clips(
                 avg_motion=avg_motion,
                 peak_motion=peak_motion,
                 motion_category=motion_category,
+                embedding_dim=embedding_dim,
+                embedding_samples=embedding_samples,
+                has_embedding=has_embedding,
             )
         )
     return result
@@ -349,6 +370,8 @@ async def analyze_video(
         state.set_video_analysis(request.clip_id, result)
 
         # P-2: Analyse-Ergebnisse in SQLite persistieren
+        # L-M8: embedding_dim + embedding_samples mit-persistieren damit
+        # Reload die SigLIP-Embedding-Metadaten zeigt (vorher 0).
         state.update_video_analysis(
             clip_id=request.clip_id,
             scene_count=int(result.get("scene_count", 0) or 0),
@@ -360,6 +383,8 @@ async def analyze_video(
             dominant_colors=result.get("dominant_colors"),
             tags=result.get("tags"),
             audio_key=result.get("audio_key"),  # L-K4
+            embedding_dim=int(result.get("embedding_dim", 0) or 0),       # L-M8
+            embedding_samples=int(result.get("embedding_samples", 0) or 0),  # L-M8
         )
 
         await publish_log(
@@ -541,7 +566,17 @@ def _run_video_analysis(
     dem RAFT MotionAnalyzer.analyze_video_segment on_progress callback heraus.
     None-default für Tests / Sync-Aufrufe ohne Event-Loop.
     """
-    result: dict = {"clip_id": clip_id, "scene_count": 0, "avg_motion": 0.0}
+    # L-M8: embedding_dim/samples standardmaessig 0 setzen damit Persistenz
+    # nach Reload deterministisch 0 zeigt (nicht None) wenn kein Embedding
+    # generiert wurde.
+    result: dict = {
+        "clip_id": clip_id,
+        "scene_count": 0,
+        "avg_motion": 0.0,
+        "embedding_dim": 0,
+        "embedding_samples": 0,
+        "has_embedding": False,
+    }
 
     # 1. Scene-Detection via PySceneDetect
     if request.detect_scenes:

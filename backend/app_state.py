@@ -521,24 +521,34 @@ class AppState:
     def update_video_analysis(
         self,
         clip_id: int,
-        scene_count: int,
-        avg_motion: float,
-        has_embedding: bool,
-        is_analyzed: bool,
+        scene_count: Optional[int] = None,
+        avg_motion: Optional[float] = None,
+        has_embedding: Optional[bool] = None,
+        is_analyzed: bool = False,
         scenes=None,
         motion=None,
         dominant_colors=None,
         tags=None,
         audio_key: Optional[str] = None,
+        embedding_dim: Optional[int] = None,   # L-M8
+        embedding_samples: Optional[int] = None,  # L-M8
     ) -> None:
         """
-        Persistiert Video-Analyse-Ergebnisse (scene_count, avg_motion, has_embedding, scenes,
-        motion, dominant_colors, tags, audio_key) in der ai_data_json-Spalte des zugehörigen
-        media-Eintrags. Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den
+        Persistiert Video-Analyse-Ergebnisse in der ai_data_json-Spalte des
+        zugehörigen media-Eintrags UND aktualisiert den In-Memory
+        video_analysis_cache (analog zu update_audio_analysis).
+
+        Alle Felder sind optional — nur tatsaechlich uebergebene Werte ueberschreiben
+        bestehende DB-/Cache-Eintraege. Das erlaubt partielle Updates (z.B. nur
+        embedding-meta nach SigLIP-Pass, ohne scene_count/avg_motion zu loeschen).
+
+        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den
         Analyseworkflow).
 
         L-K4: audio_key (Tonart des Video-Audio-Tracks) wird persistiert damit
         UseKeyMatching im Pacing nach Reload des Projekts weiterhin wirkt.
+        L-M8: embedding_dim + embedding_samples werden persistiert damit Reload
+        die SigLIP-Embedding-Metadaten wieder zeigt (vorher 0).
         """
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
@@ -551,15 +561,33 @@ class AppState:
                 project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
             )
-            if row is None:
+
+            # Existing ai_data laden — partielle Updates muessen vorhandene Felder
+            # bewahren (z.B. nur embedding-meta setzen, ohne scene_count zu loeschen).
+            if row is not None:
+                try:
+                    existing_ai = json.loads(row.get("ai_data_json") or "{}")
+                    if not isinstance(existing_ai, dict):
+                        existing_ai = {}
+                except (json.JSONDecodeError, TypeError):
+                    existing_ai = {}
+            else:
+                existing_ai = {}
                 logger.warning(f"update_video_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
-                return
-            ai_data = {
-                "scene_count": scene_count,
-                "avg_motion": avg_motion,
-                "has_embedding": has_embedding,
-                "is_analyzed": is_analyzed,
-            }
+
+            ai_data: dict = dict(existing_ai)
+
+            # Nur Felder ueberschreiben, die explizit uebergeben wurden.
+            if scene_count is not None:
+                ai_data["scene_count"] = scene_count
+            if avg_motion is not None:
+                ai_data["avg_motion"] = avg_motion
+            if has_embedding is not None:
+                ai_data["has_embedding"] = bool(has_embedding)
+            if is_analyzed:
+                ai_data["is_analyzed"] = True
+            elif "is_analyzed" not in ai_data:
+                ai_data["is_analyzed"] = False
             if scenes is not None:
                 ai_data["scenes"] = scenes
             if motion is not None:
@@ -570,8 +598,63 @@ class AppState:
                 ai_data["tags"] = tags
             if audio_key is not None:
                 ai_data["audio_key"] = audio_key
-            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
-            logger.debug(f"Video-Analyse für Clip {clip_id} in DB persistiert (scenes={scene_count}, motion={avg_motion:.2f})")
+            # L-M8: embedding-meta persistieren
+            if embedding_dim is not None:
+                ai_data["embedding_dim"] = int(embedding_dim)
+                # has_embedding aus embedding_dim ableiten (overrides expliziten Wert
+                # nur wenn embedding_dim explizit angegeben wurde).
+                ai_data["has_embedding"] = bool(int(embedding_dim) > 0)
+            if embedding_samples is not None:
+                ai_data["embedding_samples"] = int(embedding_samples)
+
+            # DB-Persist nur wenn ein passender Media-Row existiert.
+            if row is not None:
+                repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+
+            # Diff-Dictionary fuer den In-Memory-Cache (nur tatsaechlich gesetzte Felder).
+            cache_update: dict = {}
+            if scene_count is not None:
+                cache_update["scene_count"] = scene_count
+            if avg_motion is not None:
+                cache_update["avg_motion"] = avg_motion
+            if has_embedding is not None:
+                cache_update["has_embedding"] = bool(has_embedding)
+            if is_analyzed:
+                cache_update["is_analyzed"] = True
+            if scenes is not None:
+                cache_update["scenes"] = scenes
+            if motion is not None:
+                cache_update["motion"] = motion
+            if dominant_colors is not None:
+                cache_update["dominant_colors"] = dominant_colors
+            if tags is not None:
+                cache_update["tags"] = tags
+            if audio_key is not None:
+                cache_update["audio_key"] = audio_key
+            # L-M8: embedding-meta in den Cache uebernehmen
+            if embedding_dim is not None:
+                cache_update["embedding_dim"] = int(embedding_dim)
+                cache_update["has_embedding"] = bool(int(embedding_dim) > 0)
+            if embedding_samples is not None:
+                cache_update["embedding_samples"] = int(embedding_samples)
+
+            # In-Memory Cache aktualisieren (analog audio_analysis_cache).
+            with self._state_lock:
+                if clip_id in self.video_analysis_cache:
+                    self.video_analysis_cache[clip_id].update(cache_update)
+                else:
+                    self.video_analysis_cache[clip_id] = {
+                        "clip_id": clip_id,
+                        **cache_update,
+                        "duration_seconds": clip.get("duration_seconds", 0.0),
+                    }
+
+            motion_str = f"{avg_motion:.2f}" if isinstance(avg_motion, (int, float)) else "—"
+            logger.debug(
+                f"Video-Analyse für Clip {clip_id} persistiert "
+                f"(scenes={scene_count}, motion={motion_str}, "
+                f"emb_dim={embedding_dim}, emb_samples={embedding_samples})"
+            )
         except Exception as e:
             logger.warning(f"Video-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
 
@@ -775,6 +858,10 @@ class AppState:
                             "motion": ai_data.get("motion", {}),
                             "dominant_colors": ai_data.get("dominant_colors", []),
                             "tags": ai_data.get("tags", []),
+                            # L-M8: SigLIP-Embedding-Metadaten nach Reload zeigen
+                            "embedding_dim": int(ai_data.get("embedding_dim", 0) or 0),
+                            "embedding_samples": int(ai_data.get("embedding_samples", 0) or 0),
+                            "audio_key": ai_data.get("audio_key"),
                         }
 
             # Unter Lock alle Clips und Analyse-Caches atomar zuweisen

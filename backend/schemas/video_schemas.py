@@ -29,6 +29,11 @@ class VideoClipInfo(BaseModel):
     avg_motion: Optional[float] = None
     peak_motion: Optional[float] = None
     motion_category: Optional[str] = None
+    # L-M8: SigLIP-Embedding-Metadaten (0 wenn kein Embedding generiert wurde).
+    # Quelle: app_state.video_analysis_cache[clip_id]['embedding_*'].
+    embedding_dim: Optional[int] = None
+    embedding_samples: Optional[int] = None
+    has_embedding: bool = False
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -52,6 +57,7 @@ class VideoAnalysisResult(BaseModel):
     style_tags: list[str] = []
     object_tags: list[str] = []
     embedding_dim: int = 0  # SigLIP; 0 = kein Embedding vorhanden
+    embedding_samples: int = 0  # L-M8: Anzahl der gemittelten Frames
     has_embedding: bool = False
     scenes: list["SceneInfo"] = []
     motion: Optional["MotionData"] = None
