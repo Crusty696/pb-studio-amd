@@ -80,8 +80,17 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
 
     Returns:
         Tuple (warnings, errors):
-          - warnings: nicht-kritische Probleme (z.B. kurze Cuts, Überlappungen)
-          - errors:   kritische Fehler die ein Rendering verhindern (z.B. end_time <= start_time)
+          - warnings: nicht-kritische Probleme (z.B. kurze Cuts, fehlender file_path)
+          - errors:   kritische Fehler die ein Rendering blockieren:
+              * end_time <= start_time
+              * Überlappende Cuts (> 10ms Toleranz)
+              * Timeline > Audio-Dauer (> 0.5s Toleranz)
+
+    L-TI-5 (Audit Timeline-Integrity 2026-05-11): Overlap + Audio-Overflow
+    waren zuvor nur warnings. User konnte fehlerhafte Timelines rendern;
+    Renderer produzierte truncated frames / undefined FFmpeg-Behavior.
+    Beide Cases sind jetzt errors -> HTTP 400 in den drei Validation-Pfaden
+    (pacing /generate, pacing /timeline, render Pre-Render-Check).
     """
     warnings: list[str] = []
     errors: list[str] = []
@@ -99,27 +108,30 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
         if not fp:
             warnings.append(f"Cut {i}: Kein file_path")
 
-    # Überlappungs-Check
+    # Überlappungs-Check — L-TI-5: jetzt Error statt Warning.
+    # Toleranz 10ms (relaxierter als der frueher 1ms-Wert), damit Sub-
+    # Millisekunden-Float-Drift aus Beat-Berechnungen nicht zum Block fuehrt,
+    # aber echte UI-Drag-Overlaps verlaesslich erkannt werden.
     sorted_entries = sorted(entries, key=lambda e: e.get("start_time", 0.0))
     for i in range(1, len(sorted_entries)):
         prev = sorted_entries[i - 1]
         curr = sorted_entries[i]
-        
-        # BUG-092 FIX: Nutze konsistente Key-Abfrage und schärfere Toleranz (1ms)
+
         prev_end = prev.get("end_time") or prev.get("start_time", 0.0) + prev.get("duration", 0.0)
         curr_start = curr.get("start_time", 0.0)
-        
-        if curr_start < prev_end - 0.001:  # 1ms Toleranz
-            warnings.append(
+
+        if curr_start < prev_end - 0.01:  # 10ms Toleranz
+            errors.append(
                 f"Cut {i}: Überlappung mit vorherigem Cut "
                 f"(prev_end={prev_end:.3f}, curr_start={curr_start:.3f})"
             )
 
-    # Audio-Dauer-Check
+    # Audio-Dauer-Check — L-TI-5: jetzt Error statt Warning.
+    # 0.5s Toleranz erhalten (Audio-Decoding kann minimal abweichen).
     if audio_duration and audio_duration > 0 and entries:
         last_end = max(e.get("end_time", 0.0) for e in entries)
         if last_end > audio_duration + 0.5:
-            warnings.append(
+            errors.append(
                 f"Timeline ({last_end:.1f}s) überschreitet Audio-Dauer ({audio_duration:.1f}s)"
             )
 
