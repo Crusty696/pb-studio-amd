@@ -87,6 +87,21 @@
                         </StackPanel>
                     </StackPanel>
                 </Grid>
+
+                <!-- L-N5: Bitrate Slider (4-50 Mbps, default 12) -->
+                <StackPanel Margin="0,12,0,0">
+                    <DockPanel Margin="0,0,0,2">
+                        <TextBlock Text="Bitrate" Style="{StaticResource ParamLabel}" DockPanel.Dock="Left"/>
+                        <TextBlock Text="{Binding BitrateMbps, StringFormat={}{0} Mbps}"
+                                   Style="{StaticResource ParamValue}"
+                                   Foreground="{StaticResource AbletonAccent}"
+                                   HorizontalAlignment="Right"/>
+                    </DockPanel>
+                    <Slider Minimum="4" Maximum="50"
+                            Value="{Binding BitrateMbps}"
+                            TickFrequency="1" IsSnapToTickEnabled="True"
+                            ToolTip="Video-Bitrate in Mbps (höher = bessere Qualität, größere Datei). Default 12 Mbps für 1080p."/>
+                </StackPanel>
             </StackPanel>
         </md:Card>
 

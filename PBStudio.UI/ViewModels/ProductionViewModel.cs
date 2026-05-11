@@ -26,6 +26,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _width = 1920;
     [ObservableProperty] private int _height = 1080;
     [ObservableProperty] private double _fps = 30.0;
+    // L-N5: Bitrate-Slider (4-50 Mbps, default 12). Wird an /render/start als bitrate_mbps geschickt.
+    [ObservableProperty] private int _bitrateMbps = 12;
     [ObservableProperty] private string _statusText = "Bereit für Rendering";
     [ObservableProperty] private double _renderProgress;
     [ObservableProperty] private bool _isRendering;
@@ -107,7 +109,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         RenderLogEntries.Clear();
         AppendLog("info", $"Render startet: {OutputPath}");
         AppendLog("info", $"Quelle: {AudioPath}");
-        AppendLog("info", $"Preset: {SelectedQuality} | {Width}x{Height} @ {Fps:0.##} fps");
+        AppendLog("info", $"Preset: {SelectedQuality} | {Width}x{Height} @ {Fps:0.##} fps | {BitrateMbps} Mbps");
 
         IsRendering = true;
         RenderProgress = 0;
@@ -122,7 +124,8 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             Quality: SelectedQuality,
             ResolutionWidth: Width,
             ResolutionHeight: Height,
-            Fps: Fps
+            Fps: Fps,
+            BitrateMbps: BitrateMbps
         );
 
         try
