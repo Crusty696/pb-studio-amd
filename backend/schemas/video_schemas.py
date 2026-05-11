@@ -22,6 +22,9 @@ class VideoClipInfo(BaseModel):
     thumbnail_available: bool = False
     tags: list[str] = []
     is_analyzed: bool = False
+    # L-N3: SHA256 media_hash fuer Embedding-Cache-Reuse. None wenn Hashing
+    # fehlgeschlagen oder Clip aus aelterer DB ohne Hash geladen wurde.
+    # UI nutzt das Feld fuer einen "CACHED"-Badge auf der VideoClip-Card.
     video_hash: Optional[str] = None
     has_video_embedding: bool = False
     # L-M4: Motion-Felder fuer UI-Detail-Panel (None falls noch nicht analysiert).

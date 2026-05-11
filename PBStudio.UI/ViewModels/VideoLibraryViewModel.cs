@@ -465,6 +465,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         AvgMotion = c.AvgMotion,
                         PeakMotion = c.PeakMotion,
                         MotionCategory = c.MotionCategory,
+                        // L-N3: video_hash treibt HasCacheHash -> "CACHED"-Badge.
+                        VideoHash = c.VideoHash,
                     };
 
                     if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))

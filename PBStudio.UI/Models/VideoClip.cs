@@ -34,6 +34,17 @@ public partial class VideoClipModel : ObservableObject
         OnPropertyChanged(nameof(MotionCategoryDisplay));
     }
 
+    // L-N3: SHA256 media_hash aus VideoClipInfo.VideoHash. Wenn nicht null/whitespace
+    // wurde der Clip beim Import gehasht und ein Embedding kann aus Cache wiederverwendet
+    // werden. HasCacheHash treibt den "CACHED"-Badge im VideoLibraryView-Card-Template.
+    [ObservableProperty] private string? _videoHash;
+    public bool HasCacheHash => !string.IsNullOrWhiteSpace(VideoHash);
+
+    partial void OnVideoHashChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasCacheHash));
+    }
+
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public string ResolutionText => $"{Width}x{Height}";
 }
