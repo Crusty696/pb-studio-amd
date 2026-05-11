@@ -1124,17 +1124,9 @@ class AdvancedPacingEngine:
         # --- Triggers sammeln ---
         triggers: List[PacingCut] = []
         ts = self.trigger_settings
-        downbeat_set = set(downbeats)
 
         if ts.beat_weight > 0:
-            for t in beats:
-                is_downbeat = t in downbeat_set
-                strength = ts.beat_weight * (1.0 if is_downbeat else 0.7)
-                triggers.append(PacingCut(
-                    time=float(t),
-                    trigger_type="downbeat" if is_downbeat else "beat",
-                    strength=strength,
-                ))
+            triggers.extend(self._build_beat_triggers(beats, downbeats))
 
         # S03/GUARD: Ensure a start trigger exists at 0.0
         if not triggers or (triggers[0].time > 0.5):
@@ -1750,6 +1742,51 @@ class AdvancedPacingEngine:
             logger.error(f"Bass-Stem-Analyse fehlgeschlagen: {e}")
 
         return triggers
+
+    def _build_beat_triggers(
+        self,
+        beats: List[float],
+        downbeats: List[float],
+    ) -> List["PacingCut"]:
+        """Audit L-N8: Build per-beat triggers using real onset-strength
+        per beat as a multiplier (formerly a hardcoded 0.7 / 1.0 constant).
+
+        Reads ``self._pre_cached_beat_strengths`` (parallel to ``beats``)
+        when available; falls back to constant weighting otherwise so
+        legacy callers that never set the field keep working unchanged.
+        """
+        from .pacing_models import PacingCut
+
+        ts = self.trigger_settings
+        downbeat_set = set(downbeats)
+
+        # L-N8: per-beat strengths from audio_router (via pacing_service)
+        strengths = getattr(self, "_pre_cached_beat_strengths", None)
+        # Defensive: must be a list of equal length to be usable
+        if strengths is not None and len(strengths) != len(beats):
+            logger.warning(
+                f"L-N8: _pre_cached_beat_strengths length mismatch "
+                f"({len(strengths)} != {len(beats)}); fallback to constant."
+            )
+            strengths = None
+
+        out: List["PacingCut"] = []
+        for i, t in enumerate(beats):
+            is_downbeat = t in downbeat_set
+            base = 1.0 if is_downbeat else 0.7
+            if strengths is not None:
+                # Multiply by real onset-strength (0..1); preserves base
+                # downbeat boost and clamps to [0, 1].
+                multiplier = max(0.0, min(1.0, float(strengths[i])))
+                strength = ts.beat_weight * base * multiplier
+            else:
+                strength = ts.beat_weight * base
+            out.append(PacingCut(
+                time=float(t),
+                trigger_type="downbeat" if is_downbeat else "beat",
+                strength=strength,
+            ))
+        return out
 
     def _build_triggers_from_cache(
         self,

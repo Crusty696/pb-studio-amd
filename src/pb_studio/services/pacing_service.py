@@ -135,17 +135,31 @@ class PacingService:
             self._last_used_cached_tempo = False
             return
 
-        # Beats + BPM + Duration
+        # Beats + BPM + Duration (+ Audit L-N8: per-beat strength)
         pre_cached_beats: List[float] = []
+        pre_cached_beat_strengths: List[float] = []
+        has_real_strengths = False
         for b in cached_analysis.get("beats", []):
             if isinstance(b, dict):
                 pre_cached_beats.append(b.get("time", 0.0))
+                # L-N8: preserve per-beat strength. Engine uses it as
+                # trigger-weight multiplier instead of the previous
+                # hardcoded 1.0.
+                s = b.get("strength")
+                if s is None:
+                    pre_cached_beat_strengths.append(1.0)
+                else:
+                    pre_cached_beat_strengths.append(float(s))
+                    has_real_strengths = True
             else:
                 pre_cached_beats.append(float(b))
+                pre_cached_beat_strengths.append(1.0)
         pre_cached_bpm = cached_analysis.get("bpm") or None
         if pre_cached_beats:
             pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
+            if has_real_strengths:
+                pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
             if pre_cached_bpm:
                 pacing_engine._pre_cached_bpm = pre_cached_bpm
             cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
@@ -478,13 +492,23 @@ class PacingService:
 
         # Gecachte Beats aus vorheriger Audio-Analyse extrahieren
         pre_cached_beats: List[float] = []
+        pre_cached_beat_strengths: List[float] = []
+        has_real_beat_strengths = False
         pre_cached_bpm: float | None = None
         if cached_analysis:
             for b in cached_analysis.get("beats", []):
                 if isinstance(b, dict):
                     pre_cached_beats.append(b.get("time", 0.0))
+                    # Audit L-N8: per-beat strength as trigger-weight multiplier
+                    s = b.get("strength")
+                    if s is None:
+                        pre_cached_beat_strengths.append(1.0)
+                    else:
+                        pre_cached_beat_strengths.append(float(s))
+                        has_real_beat_strengths = True
                 else:
                     pre_cached_beats.append(float(b))
+                    pre_cached_beat_strengths.append(1.0)
             pre_cached_bpm = cached_analysis.get("bpm") or None
             if pre_cached_beats:
                 logger.info(
@@ -505,6 +529,9 @@ class PacingService:
         if pre_cached_beats:
             pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
+            # Audit L-N8: per-beat strength als trigger-weight multiplier
+            if has_real_beat_strengths:
+                pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
             if pre_cached_bpm:
                 pacing_engine._pre_cached_bpm = pre_cached_bpm
             cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)

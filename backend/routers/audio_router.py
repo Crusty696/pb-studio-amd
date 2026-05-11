@@ -643,10 +643,16 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
             beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
             if beat_times:
                 arr = np.asarray(beat_times, dtype=np.float64)
-                for t in arr:
+
+                # Audit L-N8: real per-beat strength via librosa.onset.onset_strength.
+                # Vorher: hardcoded 1.0 — Engine konnte beats nicht gewichten.
+                from pb_studio.audio.beat_detector import BeatDetector as _BD
+                strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
+
+                for t, s in zip(arr, strengths):
                     beats.append({
                         "time": float(t),
-                        "strength": 1.0,
+                        "strength": float(s),
                         "beat_type": "beat",
                     })
                 if len(arr) > 1:

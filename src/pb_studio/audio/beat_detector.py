@@ -129,6 +129,66 @@ class BeatDetector:
         except Exception as e:  # pragma: no cover - defensive
             logger.warning(f"on_progress callback Fehler: {e}")
 
+    @staticmethod
+    def compute_beat_strengths(
+        audio: np.ndarray, sr: int, beat_times: List[float]
+    ) -> List[float]:
+        """Audit L-N8: Compute real per-beat strength via librosa.onset.onset_strength.
+
+        Samples the normalized onset-strength envelope at each beat time.
+        Returns values in [0.0, 1.0]. Replaces the previous hardcoded constant
+        of 1.0 — gives the pacing engine a meaningful trigger-weight multiplier.
+
+        Args:
+            audio: mono audio buffer (float32/float64 array, any sample rate)
+            sr: sample rate of `audio`
+            beat_times: beat positions in seconds
+
+        Returns:
+            list of strength values (same length as ``beat_times``), each in
+            [0.0, 1.0]. Returns 1.0 fallback values on internal failure rather
+            than raising — beat detection itself succeeded; strength is a
+            "nice-to-have" multiplier.
+        """
+        if not beat_times:
+            return []
+
+        try:
+            onset_env = librosa.onset.onset_strength(y=audio, sr=sr)
+            if onset_env is None or len(onset_env) == 0:
+                return [1.0] * len(beat_times)
+
+            onset_max = float(np.max(onset_env))
+            if onset_max <= 0.0 or not np.isfinite(onset_max):
+                # Silent or degenerate audio — return neutral fallback
+                return [0.0] * len(beat_times)
+
+            onset_norm = onset_env / onset_max
+            onset_times = librosa.times_like(onset_env, sr=sr)
+
+            # Sampling-window: take max in ±50 ms around the beat to
+            # tolerate small frame-boundary misalignment between BeatNet's
+            # beat times and librosa's spectral-flux frames.
+            window_sec = 0.05
+            n_frames = len(onset_norm)
+            frame_period = float(onset_times[1] - onset_times[0]) if n_frames > 1 else 0.0
+            half_w = int(np.ceil(window_sec / frame_period)) if frame_period > 0 else 1
+
+            strengths: List[float] = []
+            for bt in beat_times:
+                center = int(np.argmin(np.abs(onset_times - float(bt))))
+                lo = max(0, center - half_w)
+                hi = min(n_frames, center + half_w + 1)
+                if lo < hi:
+                    val = float(np.max(onset_norm[lo:hi]))
+                    strengths.append(max(0.0, min(1.0, val)))
+                else:
+                    strengths.append(1.0)
+            return strengths
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"compute_beat_strengths fehlgeschlagen: {e}; fallback=1.0")
+            return [1.0] * len(beat_times)
+
     def detect_beats(
         self,
         audio_path: str | Path,
