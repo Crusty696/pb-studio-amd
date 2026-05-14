@@ -317,6 +317,14 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
         state.set_cancel_flag(task_id, True)
     # Reset BEVOR current_project = None (reset() leert alle Caches)
     state.reset()
+    # L-STATE-4: Brain-State-Connection vom alten Projekt loesen, sonst
+    # schreiben /brain/feedback Calls weiter in die alte state.db
+    # (Cross-Project-Leak). Best-effort: bricht den Close nicht ab.
+    try:
+        from backend._brain_singleton import clear_project_state
+        clear_project_state()
+    except Exception as e:
+        logger.warning("Brain-State-Unbind beim Close fehlgeschlagen: %s", e)
     logger.info(f"Projekt geschlossen: {name}")
     return StatusResponse(success=True, message=f"Projekt '{name}' geschlossen")
 

@@ -381,6 +381,20 @@ async def analyze_video(
             _run_video_analysis, clip["path"], request.clip_id, request, _loop,
             model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
         )
+
+        # Y3 / GPU-F2: L-K4 audio_key Detection OUTSIDE with_gpu_task — ffmpeg
+        # extract 30s mono WAV + Krumhansl-Kessler ist pure CPU-Arbeit und darf
+        # den GPU-Lock NICHT halten (sonst blocken parallele Stem-/Render-Tasks).
+        try:
+            from pb_studio.video.audio_key_detector import detect_video_audio_key
+            audio_key_val = await asyncio.to_thread(detect_video_audio_key, clip["path"])
+            result["audio_key"] = audio_key_val
+            if audio_key_val:
+                logger.info(f"L-K4: Video-Audio-Key fuer clip {request.clip_id}: {audio_key_val}")
+        except Exception as e:
+            logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
+            result["audio_key"] = None
+
         state.set_video_analysis(request.clip_id, result)
 
         # P-2: Analyse-Ergebnisse in SQLite persistieren
@@ -629,7 +643,10 @@ def _run_video_analysis(
                 step = max(1, total // n_frames)
 
                 frames = []
-                for i in range(0, total - step, step):
+                # L-VIDEO-5: range(0, total - step, step) liess das letzte Sample
+                # bei i=total-step ausfallen (range schliesst oberen Wert aus).
+                # Folge: Motion-Curve verpasst Outro-Frames. total statt total-step.
+                for i in range(0, total, step):
                     cap.set(cv2.CAP_PROP_POS_FRAMES, i)
                     ret, frame = cap.read()
                     if ret and frame is not None:
@@ -726,7 +743,10 @@ def _run_video_analysis(
                         # 1 Sample / 5s ueber GESAMTES Video, min 3 Samples
                         n_emb_samples = max(3, int(duration_sec / 5.0))
                         sample_step = max(1, total_frames // n_emb_samples)
-                        for i in range(0, max(total_frames - sample_step, 1), sample_step):
+                        # L-VIDEO-5: total_frames statt total_frames - sample_step
+                        # damit letztes Sample bei i=total_frames-sample_step nicht
+                        # ausgelassen wird. range schliesst oberen Wert ohnehin aus.
+                        for i in range(0, max(total_frames, 1), sample_step):
                             cap.set(cv2.CAP_PROP_POS_FRAMES, i)
                             ret, frame = cap.read()
                             if not ret or frame is None:
@@ -748,14 +768,32 @@ def _run_video_analysis(
                         norm = float(_np.linalg.norm(embedding))
                         if norm > 1e-3:
                             embedding = embedding / norm
+                            # Y6 / L-STATE-2: add_embedding_with_media_link statt
+                            # add_embedding — schreibt zusaetzlich vector_map-Row, sodass
+                            # delete_video_clip per Cascade die FAISS-IDs tombstoned
+                            # (sonst Orphan-Hits in Pacing-Semantic-Matcher).
+                            from pb_studio.data.repositories.media_repository import MediaRepository
+                            _vmr = MediaRepository()
+                            _media_row = _vmr.find_by_project_and_path(
+                                project_id=state.get_current_project_db_id(),
+                                file_path=video_path,
+                            )
+                            _media_id = _media_row["id"] if _media_row else None
                             vs = VectorStore(index_name="video_index")
-                            vs.add_embedding(embedding.astype(_np.float32), {
-                                "clip_id": clip_id,
-                                "path": video_path,
-                                "scene_id": f"clip_{clip_id}_full",
-                                "duration": result.get("duration_seconds", 0.0),
-                                "samples": len(embeddings_collected),
-                            })
+                            vs.add_embedding_with_media_link(
+                                embedding.astype(_np.float32),
+                                meta_info={
+                                    "clip_id": clip_id,
+                                    "path": video_path,
+                                    "scene_id": f"clip_{clip_id}_full",
+                                    "duration": result.get("duration_seconds", 0.0),
+                                    "samples": len(embeddings_collected),
+                                },
+                                media_id=_media_id,
+                                segment_start=0.0,
+                                segment_end=float(result.get("duration_seconds", 0.0) or 0.0),
+                                description=f"clip_{clip_id}_full",
+                            )
                             result["has_embedding"] = True
                             result["embedding_dim"] = len(embedding)
                             result["embedding_samples"] = len(embeddings_collected)
@@ -826,19 +864,12 @@ def _run_video_analysis(
         result["dominant_colors"] = []
         result["tags"] = []
 
-    # 5. L-K4: Audio-Track Key-Detection (fuer use_key_matching im Pacing).
-    # Vorher waren Video-Clips keinen audio_key zugeordnet -> _key_compatibility_score
-    # (audio_key, video_key) lieferte stets 0.5 (neutral) -> UseKeyMatching no-op.
-    # ffmpeg extract 30s mono WAV + KeyDetector (Krumhansl-Kessler) -> Key-String oder None.
-    try:
-        from pb_studio.video.audio_key_detector import detect_video_audio_key
-        audio_key = detect_video_audio_key(video_path)
-        result["audio_key"] = audio_key  # str oder None
-        if audio_key:
-            logger.info(f"L-K4: Video-Audio-Key fuer clip {clip_id}: {audio_key}")
-    except Exception as e:
-        logger.warning(f"L-K4 audio_key extract failed: {e}")
-        result["audio_key"] = None
+    # Y3 / GPU-F2: L-K4 audio_key Detection (FFmpeg+librosa, ~30s CPU) wird
+    # JETZT NICHT mehr hier ausgefuehrt — sie haelt sonst den globalen GPU-Lock
+    # blockierend fuer reine CPU-Arbeit. Der Aufrufer (analyze_video Endpoint)
+    # macht den Detection-Step NACH with_gpu_task, damit andere GPU-Tasks
+    # (Stem-Separation, Render-Preview) waehrenddessen laufen koennen.
+    result["audio_key"] = None
 
     return result
 

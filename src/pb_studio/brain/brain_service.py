@@ -85,6 +85,17 @@ class BrainService:
                 pass
         self.brain.close()
 
+    def unbind_project_state(self) -> None:
+        """L-STATE-4: Loest state_conn vom aktuellen Projekt — wird beim
+        /project/close gerufen damit /brain/feedback nicht weiter in die
+        alte state.db schreibt. brain (cold-state) bleibt erhalten."""
+        if self.state_conn is not None:
+            try:
+                self.state_conn.close()
+            except Exception:
+                pass
+            self.state_conn = None
+
     @classmethod
     def get(cls, **kwargs) -> "BrainService":
         if cls._instance is None:

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,13 +9,17 @@ namespace PBStudio.UI.ViewModels;
 
 /// <summary>
 /// Hirn-Stats-Panel + 4-Klick-Feedback (Plan Phase 5).
+/// L-FE-7: IDisposable, da AddTransient-Registrierung sonst nach jedem
+/// Dialog-Open keinen Dispose-Hook hat -> WeakReferenceMessenger-Subscriptions
+/// + Event-Handler bleiben gegen GC liegen.
 /// </summary>
-public partial class BrainViewModel : ObservableObject
+public partial class BrainViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly ProjectService? _projectService;
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
+    private bool _disposed;
 
     [ObservableProperty] private int _totalClicks;
     [ObservableProperty] private int _coldStartAxes = 17;
@@ -190,5 +195,18 @@ public partial class BrainViewModel : ObservableObject
         IsResetPending = false;
         Status = resp?.Status == "reset_complete" ? "Hirn-Reset abgeschlossen." : "Reset fehlgeschlagen.";
         await RefreshStatsAsync();
+    }
+
+    /// <summary>
+    /// L-FE-7: Subscriptions aufloesen damit GC die VM freigeben kann.
+    /// AddTransient erzeugt pro Resolve eine neue Instanz; ohne IDisposable
+    /// haengt sie an WeakReferenceMessenger-/Event-Listenern fest.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        WeakReferenceMessenger.Default.UnregisterAll(this);
+        GC.SuppressFinalize(this);
     }
 }

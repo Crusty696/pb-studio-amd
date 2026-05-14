@@ -26,3 +26,17 @@ def set_project_state(path: str | Path) -> None:
 
 def current_project_state_path() -> Optional[Path]:
     return _PROJECT_STATE_PATH
+
+
+def clear_project_state() -> None:
+    """L-STATE-4: unbind state.db nach /project/close — verhindert dass
+    /brain/feedback weiter in die alte state.db schreibt (Cross-Project-Leak).
+
+    Wird vom project_router.close_project gerufen. Best-effort: schluckt
+    Exceptions damit der App-Lifecycle nicht crashed."""
+    global _PROJECT_STATE_PATH
+    _PROJECT_STATE_PATH = None
+    try:
+        BrainService.get().unbind_project_state()
+    except Exception:
+        pass

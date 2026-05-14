@@ -126,6 +126,12 @@ public partial class TimelineView : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        // L-FE-15 (HIGH): 60Hz CompositionTarget.Rendering ist ein STATISCHES
+        // WPF-Event - jeder Tab-Wechsel erzeugt eine neue TimelineView-Instanz,
+        // deren Lambda im statischen Event verbleibt. Folge: N tote Listener
+        // tickern 60x pro Sekunde + halten View+VM gegen GC = CPU-Drain +
+        // Memory-Leak (User-Symptom: App-CPU steigt nach Tab-Wechsel).
+        CompositionTarget.Rendering -= OnCompositionTargetRendering;
         DataContextChanged -= OnDataContextChanged;
         AttachViewModel(null);
         _playbackTimer.Stop();

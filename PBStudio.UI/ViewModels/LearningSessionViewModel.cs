@@ -10,13 +10,16 @@ namespace PBStudio.UI.ViewModels;
 
 /// <summary>
 /// Lern-Session — Walkthrough über 15 unsicherste Cuts mit Preview + 4-Klick (Plan Phase 5).
+/// L-FE-7: IDisposable, da Event-Subscriptions in LearningSessionDialog.xaml.cs
+/// die VM gegen GC haengen lassen (AddTransient — kein DI-Dispose-Hook).
 /// </summary>
-public partial class LearningSessionViewModel : ObservableObject
+public partial class LearningSessionViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private List<BrainSuggestion> _cuts = new();
     private string? _projectAudioPath;
     private string? _projectVideoBasePath;
+    private bool _disposed;
 
     public event Action? RequestClose;
     public event Action? PlayRequested;
@@ -159,4 +162,21 @@ public partial class LearningSessionViewModel : ObservableObject
 
     [RelayCommand]
     public void Close() => RequestClose?.Invoke();
+
+    /// <summary>
+    /// L-FE-7: Event-Subscriptions aufloesen damit der LearningSessionDialog
+    /// nach Close korrekt GCd werden kann (Lambdas in xaml.cs capturen sonst
+    /// den Dialog via this-Reference und halten die VM lebendig).
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        RequestClose = null;
+        PlayRequested = null;
+        PauseRequested = null;
+        RestartRequested = null;
+        WeakReferenceMessenger.Default.UnregisterAll(this);
+        GC.SuppressFinalize(this);
+    }
 }
