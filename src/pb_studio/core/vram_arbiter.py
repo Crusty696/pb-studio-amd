@@ -39,13 +39,13 @@ class VRAMArbiter:
         self.max_vram = self.forced_limit or config_limit or 8192
         self.safety_buffer = 500
 
+        # Connect to Budget Manager (lazy init to avoid circular imports)
+        self._budget_manager = None
+
         if self.forced_limit > 0:
             logger.info(f"VRAM Arbiter: FORCED LIMIT ACTIVE: {self.forced_limit}MB")
             # C1/FIX: Ensure BudgetManager knows about this limit
             self.budget_manager.vram_total_mb = self.forced_limit
-
-        # Connect to Budget Manager (lazy init to avoid circular imports)
-        self._budget_manager = None
 
     @property
     def budget_manager(self):
