@@ -124,6 +124,11 @@ class SpectralData(BaseModel):
     bands: dict[str, list[float]] = {}  # Band-Name → Amplitude-Werte
     centroids: list[float] = []
     frequency_ranges: dict[str, list[float]] = {}
+    # L-AUDIO-4: SpectralAnalyzer-Aggregate + Drop/Buildup/Breakdown-Events
+    # mit-persistieren (waren zuvor im Mapping verworfen).
+    band_means: dict[str, float] = {}
+    band_variances: dict[str, float] = {}
+    events: list[dict] = []
 
 
 # Forward-References auflösen (StructureSegment/SpectralData nach AudioAnalysisResult definiert)

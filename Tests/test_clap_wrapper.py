@@ -57,26 +57,29 @@ class TestCLAPAnalyzer:
         assert sess_options.enable_mem_pattern is False
         assert sess_options.enable_cpu_mem_arena is False
 
-    def test_providers_directml_priority(self, analyzer_lazy):
-        """Test provider selection with DirectML priority"""
+    def test_providers_directml_only(self, analyzer_lazy):
+        """IRC-1: Provider-Liste enthaelt NUR DmlExecutionProvider — kein CPU-Fallback.
+
+        Vorher: ['DmlExecutionProvider', 'CPUExecutionProvider'] (silent CPU bei DML-Init-Fehler).
+        Jetzt: ['DmlExecutionProvider'] (loud RuntimeError wenn DML nicht verfuegbar).
+        IRON RULE 1: AMD DirectML ONLY."""
         with patch('pb_studio.ai.clap_wrapper.ort.get_available_providers') as mock_providers:
             # Test with DirectML available
             mock_providers.return_value = ['DmlExecutionProvider', 'CPUExecutionProvider']
             providers = analyzer_lazy._get_providers()
 
-            assert 'DmlExecutionProvider' in providers
-            assert providers[0] == 'DmlExecutionProvider'  # DirectML should be first
-            assert 'CPUExecutionProvider' in providers
+            assert providers == ['DmlExecutionProvider']
+            assert 'CPUExecutionProvider' not in providers
 
-    def test_providers_cpu_fallback(self, analyzer_lazy):
-        """Test CPU fallback when DirectML not available"""
+    def test_providers_no_cpu_fallback_raises(self, analyzer_lazy):
+        """IRC-1: Wenn DirectML nicht verfuegbar ist, MUSS RuntimeError fliegen.
+
+        Vorher: silent CPU-Fallback (langsam + unsichtbar fuer VRAMBudgetManager).
+        Jetzt: loud RuntimeError — IRON RULE 1: AMD DirectML ONLY."""
         with patch('pb_studio.ai.clap_wrapper.ort.get_available_providers') as mock_providers:
-            # Test without DirectML
             mock_providers.return_value = ['CPUExecutionProvider']
-            providers = analyzer_lazy._get_providers()
-
-            assert 'DmlExecutionProvider' not in providers
-            assert 'CPUExecutionProvider' in providers
+            with pytest.raises(RuntimeError, match="DirectML"):
+                analyzer_lazy._get_providers()
 
     def test_load_audio_resampling(self, analyzer_lazy):
         """Test audio loading and resampling"""

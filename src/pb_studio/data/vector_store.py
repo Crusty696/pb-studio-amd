@@ -12,6 +12,13 @@ from pb_studio.config_manager import ConfigManager
 logger = logging.getLogger(__name__)
 
 _vs_lock = threading.Lock()
+# L-VIDEO-1 / L-STATE-3 Sub-Fix: atexit darf NUR EINMAL pro Prozess registriert
+# werden. __new__ erlaubt index_name-Wechsel (= neue Instanz) und __init__ wuerde
+# bei jedem Wechsel atexit.register erneut aufrufen — die atexit-Liste waechst
+# unbegrenzt und triggert bei Shutdown N save-Calls. Module-Level Flag verhindert
+# das. Cleanup arbeitet weiter korrekt weil der Handler self._save_on_exit ueber
+# das aktuelle cls._instance referenziert.
+_atexit_registered: bool = False
 
 
 class VectorStore:
@@ -45,8 +52,30 @@ class VectorStore:
         self.index = None
         self.metadata = {} # Map faiss_id -> dict (media_id, desc, etc)
 
+        # Y6 / L-STATE-2: Tombstone-Set fuer "weggeloeschte" FAISS-IDs.
+        # FAISS IndexFlatIP hat keine Remove-Operation — wir filtern Hits in search()
+        # gegen diese Liste. Wird via mark_tombstoned() von delete_audio/video_clip
+        # gepflegt (cascade-driven aus vector_map).
+        self._tombstoned_ids: set[int] = set()
+
         self._load_index()
-        atexit.register(self._save_on_exit)
+        # L-VIDEO-1 Sub-Fix: nur einmal registrieren, auch bei Index-Name-Wechsel.
+        global _atexit_registered
+        if not _atexit_registered:
+            atexit.register(VectorStore._save_active_on_exit)
+            _atexit_registered = True
+
+    @staticmethod
+    def _save_active_on_exit() -> None:
+        """L-VIDEO-1 Sub-Fix: atexit-Handler greift auf aktuell aktive Instanz zu.
+        Verhindert dass N alte Instanzen ihre toten Indizes ueberschreiben."""
+        inst = VectorStore._instance
+        if inst is not None:
+            try:
+                inst._save_on_exit()
+            except Exception:
+                # atexit darf niemals werfen
+                pass
 
     def _load_index(self):
         if self.index_path.exists():
@@ -152,6 +181,52 @@ class VectorStore:
 
             return faiss_id
 
+    def add_embedding_with_media_link(
+        self,
+        embedding: np.ndarray,
+        meta_info: dict,
+        *,
+        media_id: int | None,
+        segment_start: float = 0.0,
+        segment_end: float = 0.0,
+        description: str = "",
+    ) -> int:
+        """Y6 / L-STATE-2: Wie add_embedding(), aber legt zusaetzlich vector_map-Row an.
+
+        vector_map ist FK-CASCADE-Anker fuer FAISS-Cleanup beim Media-Delete.
+        Ohne diesen Eintrag wachsen FAISS-Files unbegrenzt (Orphan-Hits).
+        Best-effort: vector_map-Insert-Failure schluckt nur Logging, embedding
+        wird trotzdem hinzugefuegt (vector_map ist Cleanup-Optimierung).
+        """
+        faiss_id = self.add_embedding(embedding, meta_info)
+        if media_id is not None:
+            try:
+                from pb_studio.data.database_core import DatabaseCore
+                db = DatabaseCore()
+                with db.transaction(immediate=True) as conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO vector_map "
+                        "(faiss_id, media_id, segment_start, segment_end, description) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (faiss_id, media_id, segment_start, segment_end, description),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "vector_map-Insert fehlgeschlagen (FAISS bleibt orphan-faehig): %s", e
+                )
+        return faiss_id
+
+    def mark_tombstoned(self, faiss_ids) -> None:
+        """Y6 / L-STATE-2: Markiert FAISS-IDs als "weggeloescht" — werden in
+        search() ausgefiltert. Wird von delete_audio_clip/delete_video_clip
+        gerufen mit den IDs aus vector_map.media_id-Cascade."""
+        with self._lock:
+            for fid in faiss_ids:
+                try:
+                    self._tombstoned_ids.add(int(fid))
+                except (TypeError, ValueError):
+                    pass
+
     def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
         """Returns list of (metadata, score). Thread-safe."""
         with self._lock:
@@ -169,7 +244,9 @@ class VectorStore:
 
             results = []
             for i, idx in enumerate(I[0]):
-                if idx != -1 and idx in self.metadata:
+                # Y6 / L-STATE-2: Tombstoned IDs (vector_map-cascade-removed)
+                # ausfiltern — sonst liefert FAISS Hits zu geloeschten Clips.
+                if idx != -1 and idx in self.metadata and int(idx) not in self._tombstoned_ids:
                     score = float(D[0][i])
                     meta = self.metadata[idx]
                     results.append((meta, score))

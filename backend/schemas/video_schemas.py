@@ -50,23 +50,23 @@ class VideoAnalyzeRequest(BaseModel):
 
 
 class VideoAnalysisResult(BaseModel):
-    """Response: Video-Analyse Ergebnis."""
+    """Response: Video-Analyse Ergebnis.
+
+    L-VIDEO-4 (HIGH): 6 ehemals leere Felder entfernt — kein Producer im
+    _run_video_analysis-Pfad, kein direkter Konsument in Pacing/Brain
+    (Brain hat eigene CandidateFeatures-Datenklasse). Entfernt: mood_tags,
+    style_tags, object_tags, brightness_curve, saturation_curve, color_temp_curve.
+    """
     clip_id: int
     scene_count: int = 0
     avg_motion: float = 0.0
     dominant_colors: list[str] = []
     tags: list[str] = []
-    mood_tags: list[str] = []
-    style_tags: list[str] = []
-    object_tags: list[str] = []
     embedding_dim: int = 0  # SigLIP; 0 = kein Embedding vorhanden
     embedding_samples: int = 0  # L-M8: Anzahl der gemittelten Frames
     has_embedding: bool = False
     scenes: list["SceneInfo"] = []
     motion: Optional["MotionData"] = None
-    brightness_curve: list[float] = []
-    saturation_curve: list[float] = []
-    color_temp_curve: list[float] = []
     # L-K4: Tonart des Audio-Tracks (vom Video extrahiert via ffmpeg + Krumhansl-Kessler).
     # None wenn Video keinen Audio-Track hat oder Detection fehlschlaegt.
     # Wird im Pacing fuer use_key_matching (Camelot-Wheel Compatibility) genutzt.
@@ -85,6 +85,10 @@ class MotionData(BaseModel):
     """Response: Motion-Analyse Daten."""
     clip_id: int
     avg_motion: float = 0.0
+    # L-VIDEO-2 (M-4 CRITICAL): peak_motion (Max aus motion_curve) — wurde
+    # von MotionData(**motion) silent gedropped weil das Feld im Schema fehlte.
+    # Bricht /video/motion/{id} REST + UI MOTION-Card PEAK-Anzeige.
+    peak_motion: float = 0.0
     motion_curve: list[float] = []
     # peak_frames: dict-Liste von MotionAnalyzer ({"frame_index": int, "confidence": float})
     peak_frames: list[dict] = []

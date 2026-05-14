@@ -302,9 +302,22 @@ async def analyze_audio(
 
     try:
         _loop = asyncio.get_running_loop()
+        # L-AUDIO-5 / Z5: Import-Pfad hat ggf. subtrack_segments + tempo_curve in
+        # den Cache geschrieben (audio_router.py:130-161). _run_audio_analysis
+        # kennt sie nicht — set_audio_analysis(result) ohne Merge wuerde sie
+        # ueberschreiben. Vorher cached-Werte sichern.
+        _pre_cached = state.get_audio_analysis(request.clip_id) or {}
+        _pre_subtracks = _pre_cached.get("subtrack_segments") or []
+        _pre_tempo_curve = _pre_cached.get("tempo_curve") or []
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request, _loop
         )
+        # L-AUDIO-5 / Z5: Subtracks + tempo_curve in result mergen wenn der
+        # Analyse-Pfad sie nicht selbst geliefert hat — sonst gehen sie verloren.
+        if not result.get("subtrack_segments"):
+            result["subtrack_segments"] = _pre_subtracks
+        if not result.get("tempo_curve"):
+            result["tempo_curve"] = _pre_tempo_curve
         state.set_audio_analysis(request.clip_id, result)
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
@@ -329,6 +342,9 @@ async def analyze_audio(
             energy_curve=result.get("energy_curve"),
             structure_segments=result.get("structure_segments"),
             spectral_data=result.get("spectral_data"),
+            # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
+            subtrack_segments=result.get("subtrack_segments"),
+            tempo_curve=result.get("tempo_curve"),
         )
 
         await publish_log(
@@ -504,6 +520,13 @@ async def separate_stems(
         if stems_paths:
             clip["stems_paths"] = stems_paths
             state.set_audio_clip(request.clip_id, clip)
+            # L-AUDIO-8 (CD-1): meta sofort in DB upserten damit Reload nach
+            # Backend-Restart die Stem-Pfade kennt - Demucs ist ~10min GPU,
+            # darf nicht silent verloren gehen.
+            try:
+                state.persist_audio_clip(clip)
+            except Exception as e:
+                logger.warning(f"stems_paths-DB-Persistierung fehlgeschlagen (unkritisch): {e}")
 
         return StemResult(clip_id=request.clip_id, **result)
     except Exception as e:
@@ -611,14 +634,60 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
 
     _emit_analysis_progress(_loop, "load", 5.0, "Audio wird geladen…")
 
-    # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
+    # L-AUDIO-1 / Y4 (M-2 CRITICAL): Streaming-Branch fuer lange Mixe (>10min) vermeidet
+    # OOM bei 90min-DJ-Mix (~480MB float32-Array). Probe Duration via get_duration
+    # (kein vollstaendiges Decoding), dann decision: Streaming oder Full-Load.
+    # Bei Streaming wird y/sr nur fuer einen 600s-Snapshot geladen (StructureAnalyzer
+    # + KeyDetector + Spectral arbeiten auf Mix-Header — Heuristik fuer DJ-Mixe).
+    _probe_dur = 0.0
     try:
-        y, sr = librosa.load(audio_path, sr=22050, mono=True)
-    except Exception as e:
-        logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
-        raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
+        _probe_dur = float(librosa.get_duration(path=audio_path))
+    except Exception:
+        try:
+            _probe_dur = float(librosa.get_duration(filename=audio_path))
+        except Exception:
+            _probe_dur = 0.0
 
-    duration = float(len(y)) / sr if sr > 0 else 0.0
+    _use_streaming = _probe_dur > 600.0  # 10min
+    _stream_beats = None
+    _stream_bpm = None
+    _stream_energy = None
+
+    if _use_streaming:
+        try:
+            from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
+            def _stream_progress(pct: float) -> None:
+                overall = 5.0 + (max(0.0, min(100.0, pct)) / 100.0) * 40.0
+                _emit_analysis_progress(
+                    _loop, "beat_chunk", overall, f"Streaming-Analyse {pct:.1f}%"
+                )
+
+            _stream_res = StreamingAudioAnalyzer().analyze(audio_path, on_progress=_stream_progress)
+            duration = _stream_res.duration_seconds
+            _stream_beats = list(_stream_res.beats)
+            _stream_bpm = float(_stream_res.bpm)
+            _stream_energy = list(_stream_res.energy_curve)
+            # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
+            y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=600.0)
+        except Exception as e:
+            logger.warning(
+                f"StreamingAudioAnalyzer-Pfad fehlgeschlagen ({e}) - fallback auf Full-Load"
+            )
+            _use_streaming = False
+            _stream_beats = None
+            _stream_bpm = None
+            _stream_energy = None
+
+    if not _use_streaming:
+        # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
+        try:
+            y, sr = librosa.load(audio_path, sr=22050, mono=True)
+        except Exception as e:
+            logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
+            raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
+        duration = float(len(y)) / sr if sr > 0 else 0.0
+
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
 
     # 1. BeatNet Beat-Detection
@@ -628,42 +697,57 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
 
     if request.detect_beats:
         try:
-            # Use module-level singleton to avoid re-initializing on every call
-            detector = _get_beat_detector()
-
-            # Per-stage progress: detect_beats emittiert pct in [0..100],
-            # mappen auf overall [15..45] (beats-Phase im Audio-Pipeline).
-            def _beat_progress(pct: float) -> None:
-                overall = 15.0 + (max(0.0, min(100.0, pct)) / 100.0) * 30.0
-                _emit_analysis_progress(
-                    _loop, "beat_chunk", overall, f"BeatNet inference {pct:.1f}%"
-                )
-
-            # detect_beats gibt list[float] zurück — BeatNet oder Librosa-Fallback
-            beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
-            if beat_times:
-                arr = np.asarray(beat_times, dtype=np.float64)
-
-                # Audit L-N8: real per-beat strength via librosa.onset.onset_strength.
-                # Vorher: hardcoded 1.0 — Engine konnte beats nicht gewichten.
+            if _use_streaming and _stream_beats is not None:
+                # L-AUDIO-1 / Y4: Streaming-Branch hat Beats + BPM + Energy bereits
+                # geliefert - keine Re-Detection auf Full-Load (waere ineffizient).
+                arr = np.asarray(_stream_beats, dtype=np.float64)
                 from pb_studio.audio.beat_detector import BeatDetector as _BD
                 strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
-
                 for t, s in zip(arr, strengths):
                     beats.append({
                         "time": float(t),
                         "strength": float(s),
                         "beat_type": "beat",
                     })
-                if len(arr) > 1:
-                    intervals = np.diff(arr)
-                    avg_interval = float(np.median(intervals))
-                    bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
+                bpm = float(_stream_bpm or 0.0)
+                energy_curve = list(_stream_energy or [])
+            else:
+                # Use module-level singleton to avoid re-initializing on every call
+                detector = _get_beat_detector()
 
-            # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
-            rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
-            rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
-            energy_curve = (rms / rms_max).tolist() if rms_max > 0 else rms.tolist()
+                # Per-stage progress: detect_beats emittiert pct in [0..100],
+                # mappen auf overall [15..45] (beats-Phase im Audio-Pipeline).
+                def _beat_progress(pct: float) -> None:
+                    overall = 15.0 + (max(0.0, min(100.0, pct)) / 100.0) * 30.0
+                    _emit_analysis_progress(
+                        _loop, "beat_chunk", overall, f"BeatNet inference {pct:.1f}%"
+                    )
+
+                # detect_beats gibt list[float] zurück - BeatNet oder Librosa-Fallback
+                beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
+                if beat_times:
+                    arr = np.asarray(beat_times, dtype=np.float64)
+
+                    # Audit L-N8: real per-beat strength via librosa.onset.onset_strength.
+                    # Vorher: hardcoded 1.0 - Engine konnte beats nicht gewichten.
+                    from pb_studio.audio.beat_detector import BeatDetector as _BD
+                    strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
+
+                    for t, s in zip(arr, strengths):
+                        beats.append({
+                            "time": float(t),
+                            "strength": float(s),
+                            "beat_type": "beat",
+                        })
+                    if len(arr) > 1:
+                        intervals = np.diff(arr)
+                        avg_interval = float(np.median(intervals))
+                        bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
+
+                # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
+                rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+                rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
+                energy_curve = (rms / rms_max).tolist() if rms_max > 0 else rms.tolist()
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
 
@@ -693,6 +777,11 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
                 "bands": spec_result.get("band_energies", {}),
                 "centroids": spec_result.get("centroids", []),
                 "frequency_ranges": {k: list(v) for k, v in FREQUENCY_BANDS.items()},
+                # L-AUDIO-4 / Z4: Drop/Buildup/Breakdown-Events + Band-Statistik
+                # mit-durchreichen (waren zuvor im Mapping verworfen).
+                "band_means": spec_result.get("band_means", {}),
+                "band_variances": spec_result.get("band_variances", {}),
+                "events": spec_result.get("events", []),
             }
         except Exception as e:
             logger.warning(f"Spektral-Analyse fehlgeschlagen: {e}")

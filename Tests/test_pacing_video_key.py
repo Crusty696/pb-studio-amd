@@ -49,7 +49,12 @@ def test_audio_key_detector_with_real_audio(tmp_path):
 
 
 def test_video_analysis_includes_audio_key_field():
-    """_run_video_analysis gibt audio_key Feld zurueck (None wenn kein Audio)."""
+    """Y3 / GPU-F2: _run_video_analysis returns audio_key=None always now —
+    Detection wurde aus with_gpu_task rausgenommen (Lock-Held-For-CPU-Bug).
+    Der analyze_video Route-Handler ruft detect_video_audio_key NACH with_gpu_task.
+
+    Dieser Test verifiziert dass das Feld VORHANDEN ist im result-dict (Schema-
+    Kontrakt) auch wenn Y3 den Wert auf None setzt."""
     from backend.routers.video_router import _run_video_analysis
     from backend.schemas.video_schemas import VideoAnalyzeRequest
     from unittest.mock import MagicMock
@@ -58,8 +63,7 @@ def test_video_analysis_includes_audio_key_field():
 
     with patch("cv2.VideoCapture") as mock_cap, \
          patch("pb_studio.video.scene_detect.SceneDetector"), \
-         patch("pb_studio.video.raft.MotionAnalyzer") as mock_motion_cls, \
-         patch("pb_studio.video.audio_key_detector.detect_video_audio_key") as mock_key:
+         patch("pb_studio.video.raft.MotionAnalyzer") as mock_motion_cls:
 
         mock_instance = MagicMock()
         mock_instance.get.side_effect = lambda *a: 100 if a[0] == 7 else 30.0
@@ -71,7 +75,6 @@ def test_video_analysis_includes_audio_key_field():
             "avg_motion": 0.0, "frame_motions": [], "scene_changes": []
         }
         mock_motion.unload = lambda: None
-        mock_key.return_value = "C major"
 
         req = VideoAnalyzeRequest(
             clip_id=1, detect_scenes=False, analyze_motion=True,
@@ -79,8 +82,10 @@ def test_video_analysis_includes_audio_key_field():
         )
         result = _run_video_analysis("/tmp/fake.mp4", 1, req)
 
-    assert "audio_key" in result
-    assert result["audio_key"] == "C major"
+    # Y3: _run_video_analysis liefert audio_key=None — Detection passiert spaeter
+    # im analyze_video Endpoint OUTSIDE with_gpu_task.
+    assert "audio_key" in result, "audio_key Feld muss im result-dict existieren"
+    assert result["audio_key"] is None, "Y3: _run_video_analysis darf audio_key NICHT mehr setzen"
 
 
 def test_video_analysis_audio_key_none_on_failure():

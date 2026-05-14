@@ -489,6 +489,9 @@ public record BrainStatsResponse(
 public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
-public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory);
+// L-VIDEO-2 / X1: PeakMotion am Ende mit Default 0.0 fuer backward compat —
+// Backend liefert es jetzt im MotionData-Response, frueher wurde es im
+// Pydantic-Schema silent gedropped.
+public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory, double PeakMotion = 0.0);
 public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true, string? Encoder = null);
 public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);

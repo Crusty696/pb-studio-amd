@@ -151,6 +151,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                             Key = clip.Key ?? "",
                             BeatCount = clip.BeatCount,
                             IsAnalyzed = clip.IsAnalyzed,
+                            // L-FE-13: AudioHash + StemsPaths durchreichen,
+                            // sonst ist SelectedAudioClip.HasStems im Director-Kontext
+                            // immer false und UseStemPacing-Toggle bleibt blind.
+                            // Backend (audio/clips) liefert beide bereits — Audit hatte
+                            // sie nur im AudioLibraryVM gemappt, nicht hier.
+                            AudioHash = clip.AudioHash,
+                            StemsPaths = clip.StemsPaths,
                         });
                     }
 

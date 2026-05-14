@@ -173,7 +173,13 @@ class AppState:
         return True
 
     def delete_video_clip(self, clip_id: int) -> bool:
-        """Loescht Video-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht."""
+        """Loescht Video-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht.
+
+        Y6 / L-STATE-2: Vor repo.delete_media werden FAISS-IDs aus vector_map gelesen
+        und in VectorStore-Tombstone-Liste geschrieben — FAISS hat keine Remove-Op,
+        deshalb filtern wir Hits zur Such-Zeit raus. Verhindert Orphan-Pacing-Matches
+        auf geloeschte Clips.
+        """
         with self._state_lock:
             clip = self.video_clips.pop(clip_id, None)
             self.video_analysis_cache.pop(clip_id, None)
@@ -187,6 +193,18 @@ class AppState:
                 file_path=clip["path"],
             )
             if row:
+                # Y6 / L-STATE-2: FAISS-Tombstone vor cascade-Delete
+                try:
+                    from pb_studio.data.database_core import DatabaseCore
+                    from pb_studio.data.vector_store import VectorStore
+                    db = DatabaseCore()
+                    with db.transaction() as conn:
+                        faiss_ids = [r[0] for r in conn.execute(
+                            "SELECT faiss_id FROM vector_map WHERE media_id = ?", (row["id"],))]
+                    if faiss_ids:
+                        VectorStore(index_name="video_index").mark_tombstoned(faiss_ids)
+                except Exception as ts_err:
+                    logger.warning("FAISS-Tombstone-Update fehlgeschlagen (unkritisch): %s", ts_err)
                 repo.delete_media(row["id"])
         except Exception as e:
             logger.warning("Video-Clip DB-Delete fehlgeschlagen (in-memory war erfolgreich): %s", e)
@@ -404,6 +422,12 @@ class AppState:
                         "codec": meta.get("codec", clip_data.get("codec", "")),
                         "thumbnail_available": False,
                         "tags": [],
+                        # L-VIDEO-3: video_hash aus DB-Meta + frischem clip_data fallback.
+                        "video_hash": (
+                            meta.get("video_hash")
+                            or row.get("file_hash")
+                            or clip_data.get("video_hash")
+                        ),
                     }
                     self.set_video_clip(clip_id, clip)
                     with self._lock:
@@ -702,6 +726,10 @@ class AppState:
                 # L-N2: audio_hash in Metadata persistieren damit Reload den
                 # Cache-Hash sieht (UI-Badge + EmbeddingCache-Lookup).
                 "audio_hash": clip.get("audio_hash"),
+                # L-AUDIO-8 (CD-1): Demucs-Stem-Pfade persistieren — sonst geht
+                # use_stem_pacing nach Backend-Restart silent kaputt
+                # (Demucs ist 10min GPU-Aufwand pro Track).
+                "stems_paths": clip.get("stems_paths"),
             }
             repo.add_media(
                 project_id=self.get_current_project_db_id(),
@@ -730,11 +758,16 @@ class AppState:
                 "height": clip.get("height", 1080),
                 "fps": clip.get("fps", 30.0),
                 "codec": clip.get("codec", ""),
+                # L-VIDEO-3 (CD-3): video_hash in Metadata persistieren — analog
+                # L-N2 audio_hash. Wird vom EmbeddingCache + CACHED-Badge gelesen.
+                "video_hash": clip.get("video_hash"),
             }
             repo.add_media(
                 project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
-                file_hash="",
+                # L-VIDEO-3: file_hash explizit setzen (vorher hardcoded "").
+                # Erlaubt EmbeddingCache-Hit nach Restart.
+                file_hash=clip.get("video_hash") or "",
                 duration=clip.get("duration_seconds", 0.0),
                 meta=meta,
             )
@@ -837,13 +870,22 @@ class AppState:
                         # L-N2: audio_hash aus Meta (oder Legacy file_hash) zurueck
                         # ins In-Memory-Dict damit UI-Badge + Pacing-Cache funktionieren.
                         "audio_hash": meta.get("audio_hash") or row.get("file_hash") or None,
+                        # L-AUDIO-8 (CD-1): Stem-Pfade restoren — pacing_router liest sie
+                        # direkt via state.audio_clips[id]["stems_paths"].
+                        # Dict {vocals|drums|bass|other -> path}.
+                        "stems_paths": meta.get("stems_paths"),
                     }
                     tmp_audio[clip_id] = clip
                     max_audio_id = max(max_audio_id, clip_id)
                     audio_count += 1
 
                     # Audio-Analyse-Cache wiederherstellen (Beats aus beats_json)
-                    if is_analyzed and ai_data:
+                    # L-AUDIO-6 (CD-4 / M-3): Cache-Restore entkoppelt von is_analyzed —
+                    # Import-Flow (subtrack-detect via librosa) schreibt subtrack_segments
+                    # und tempo_curve ohne is_analyzed=True. Diese duerfen beim Reload
+                    # nicht silent verloren gehen. Subtrack-Detection ist 15-30s CPU,
+                    # Tempo-Curve braucht audio re-load → nicht billig.
+                    if ai_data:
                         beats_raw = ai_data.get("beats_json", "[]")
                         try:
                             beats = json.loads(beats_raw) if isinstance(beats_raw, str) else beats_raw
@@ -858,6 +900,10 @@ class AppState:
                             "energy_curve": ai_data.get("energy_curve", []),
                             "structure_segments": ai_data.get("structure_segments", []),
                             "spectral_data": ai_data.get("spectral_data"),
+                            # L-AUDIO-6: Subtracks + Tempo-Curve mit-restoren
+                            "subtrack_segments": ai_data.get("subtrack_segments", []),
+                            "tempo_curve": ai_data.get("tempo_curve", []),
+                            "is_analyzed": is_analyzed,
                             "duration_seconds": row.get("duration_sec") or 0.0,
                         }
 
@@ -874,6 +920,10 @@ class AppState:
                         "codec": meta.get("codec", ""),
                         "thumbnail_available": False,
                         "tags": [],
+                        # L-VIDEO-3 (CD-3): video_hash aus Meta (oder Legacy
+                        # file_hash) zurueck ins In-Memory-Dict damit
+                        # UI-CACHED-Badge + EmbeddingCache-Lookup funktionieren.
+                        "video_hash": meta.get("video_hash") or row.get("file_hash") or None,
                     }
                     tmp_video[clip_id] = clip
                     max_video_id = max(max_video_id, clip_id)

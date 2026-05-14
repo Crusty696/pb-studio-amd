@@ -159,7 +159,11 @@ class SemanticMatcher:
         if self._vector_store is None:
             try:
                 from ..data.vector_store import VectorStore
-                self._vector_store = VectorStore(index_name="main_index")
+                # L-VIDEO-1 (CD-2 / L-STATE-3): Index-Name muss mit Writer
+                # uebereinstimmen. video_router.py:751 schreibt SigLIP-Embeddings
+                # nach "video_index" — wenn wir hier "main_index" lesen, findet
+                # Pacing-Semantic-Matching die Video-Embeddings nie.
+                self._vector_store = VectorStore(index_name="video_index")
                 logger.info(f"FAISS VectorStore geladen (Dim: {self._vector_store.dimension})")
             except Exception as e:
                 logger.error(f"VectorStore konnte nicht geladen werden: {e}")
