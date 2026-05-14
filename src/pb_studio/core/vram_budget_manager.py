@@ -68,6 +68,11 @@ KNOWN_MODEL_BUDGETS = {
     # Embeddings
     "siglip_so400m": 2500,       # SigLIP SO400M: ~2.3-2.5 GB
 
+    # Z1 / GPU-F3: Brain-Embedder (torch-directml) — vorher unsichtbar fuer
+    # VRAMBudgetManager. CLAP ~600MB, SigLIP-2 (HuggingFace) ~1GB.
+    "brain_clap": 600,           # CLAP (laion/larger_clap_music) torch-directml fp32
+    "brain_siglip2": 1100,       # SigLIP-2 Vision-Tower torch-directml fp16
+
     # Combined budgets (mehrere Modelle gleichzeitig aktiv)
     "video_analysis_full": 2900, # RAFT Small + SigLIP SO400M kombiniert
 

@@ -59,8 +59,18 @@ class SigLIPWrapper:
         return sess_options
 
     def _get_providers(self) -> List[str]:
+        """IRC-1 / IRON RULE 1: AMD DirectML ONLY — kein CPU-Fallback.
+
+        Wenn DmlExecutionProvider nicht verfuegbar ist, scheitert die
+        Initialisierung explizit (loud) statt silent in CPU-Mode zu rutschen
+        (~10x langsamer, VRAMBudgetManager sieht den Speicher nicht)."""
         available = ort.get_available_providers()
-        return ['DmlExecutionProvider', 'CPUExecutionProvider'] if 'DmlExecutionProvider' in available else ['CPUExecutionProvider']
+        if 'DmlExecutionProvider' not in available:
+            raise RuntimeError(
+                "SigLIP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
+                "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
+            )
+        return ['DmlExecutionProvider']
 
     def _init_tokenizer(self) -> bool:
         try:

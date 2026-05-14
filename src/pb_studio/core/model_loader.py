@@ -120,7 +120,11 @@ class ModelLoader:
 
         # Model storage
         self._sessions: Dict[str, Any] = {}
-        self._session_lock = threading.Lock()
+        # Z3 / M-1 (CRITICAL): RLock statt Lock — load_model(force=True) ruft
+        # _evict_for_space, das die session_lock erneut acquired. threading.Lock
+        # ist non-reentrant → Deadlock im force-reload-Pfad. RLock erlaubt
+        # mehrfaches Acquire vom selben Thread (Eviction → Load → Release).
+        self._session_lock = threading.RLock()
         self._specs: Dict[str, ModelSpec] = MODEL_SPECS.copy()
 
         # Paths

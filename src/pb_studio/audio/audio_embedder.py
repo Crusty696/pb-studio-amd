@@ -74,13 +74,17 @@ class AudioEmbedder:
             from transformers import ClapModel, ClapProcessor
 
             if self.prefer_directml:
+                # IRC-2 / IRON RULE 1: AMD DirectML ONLY — kein silent CPU-Fallback.
+                # CLAP versteckt ohne DML ~600MB VRAM vor VRAMBudgetManager.
                 try:
                     import torch_directml
                     self._device = torch_directml.device()
                     logger.info("AudioEmbedder using torch-directml device")
                 except Exception as e:
-                    logger.warning("torch-directml not available: %s — fallback CPU", e)
-                    self._device = torch.device("cpu")
+                    raise RuntimeError(
+                        f"torch-directml nicht verfuegbar: {e}. "
+                        "IRON RULE 1: AMD DirectML ONLY. Bitte torch-directml installieren."
+                    ) from e
             else:
                 self._device = torch.device("cpu")
 
@@ -90,9 +94,25 @@ class AudioEmbedder:
             try:
                 self._model.to(self._device)
             except Exception as e:
-                logger.warning("CLAP .to(device) failed: %s — staying on CPU", e)
+                # IRC-2: Im DirectML-Mode hart failen statt silent zu CPU schwenken.
+                if self.prefer_directml:
+                    raise RuntimeError(
+                        f"CLAP .to(directml) failed: {e}. IRON RULE 1: kein CPU-Fallback."
+                    ) from e
+                logger.warning("CLAP .to(device) failed: %s - staying on CPU (CPU-Mode)", e)
                 self._device = torch.device("cpu")
                 self._model.to(self._device)
+
+            # Z1 / GPU-F3: CLAP-VRAM beim VRAMBudgetManager registrieren —
+            # vorher waren ~600MB DML-VRAM unsichtbar fuer den Manager und
+            # konnten bei Stem-Separation/Render-OOM-Fehler verursachen.
+            if self.prefer_directml:
+                try:
+                    from pb_studio.core.vram_budget_manager import get_vram_manager
+                    mgr = get_vram_manager()
+                    mgr.reserve("brain_clap", force=False)
+                except Exception as ve:
+                    logger.warning("VRAM-Manager-Registrierung fehlgeschlagen (unkritisch): %s", ve)
 
     def embed_audio(
         self,

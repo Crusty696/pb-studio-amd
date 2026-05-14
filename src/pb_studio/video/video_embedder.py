@@ -69,15 +69,19 @@ class VideoEmbedder:
             from transformers import AutoImageProcessor, AutoModel
 
             if self.prefer_directml:
+                # IRC-2 / IRON RULE 1: AMD DirectML ONLY — kein silent CPU-Fallback.
+                # CPU-Mode versteckt VRAM-Druck vor VRAMBudgetManager und ist ca.
+                # 10x langsamer als DML. Wenn torch-directml fehlt, loud failen.
                 try:
                     import torch_directml
                     self._device = torch_directml.device()
                     self._dtype = torch.float16
                     logger.info("VideoEmbedder using torch-directml device (fp16)")
                 except Exception as e:
-                    logger.warning("torch-directml not available: %s — fallback CPU", e)
-                    self._device = torch.device("cpu")
-                    self._dtype = torch.float32
+                    raise RuntimeError(
+                        f"torch-directml nicht verfuegbar: {e}. "
+                        "IRON RULE 1: AMD DirectML ONLY. Bitte torch-directml installieren."
+                    ) from e
             else:
                 self._device = torch.device("cpu")
                 self._dtype = torch.float32
@@ -89,10 +93,26 @@ class VideoEmbedder:
             try:
                 self._model.to(self._device)
             except Exception as e:
-                logger.warning("SigLIP .to(device) failed: %s — CPU fallback", e)
+                # IRC-2: Im DirectML-Mode hart failen statt silent zu CPU schwenken.
+                if self.prefer_directml:
+                    raise RuntimeError(
+                        f"SigLIP .to(directml) failed: {e}. IRON RULE 1: kein CPU-Fallback."
+                    ) from e
+                logger.warning("SigLIP .to(device) failed: %s - CPU fallback (CPU-Mode)", e)
                 self._device = __import__("torch").device("cpu")
                 self._dtype = __import__("torch").float32
                 self._model.to(self._device)
+
+            # Z1 / GPU-F3: SigLIP-2-VRAM beim VRAMBudgetManager registrieren —
+            # vorher waren ~1.1GB DML-VRAM unsichtbar fuer den Manager
+            # (Brain-Embedder umging Reservation).
+            if self.prefer_directml:
+                try:
+                    from pb_studio.core.vram_budget_manager import get_vram_manager
+                    mgr = get_vram_manager()
+                    mgr.reserve("brain_siglip2", force=False)
+                except Exception as ve:
+                    logger.warning("VRAM-Manager-Registrierung fehlgeschlagen (unkritisch): %s", ve)
 
     def embed_scenes(
         self,

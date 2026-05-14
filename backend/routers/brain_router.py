@@ -85,15 +85,20 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
         )
         context_keys = [""]
 
-    bumps = svc.feedback_logger.log_feedback(
+    # Z2 / GPU-F4: log_feedback macht SQLite-INSERT + WeightStore-Math (~10-50ms).
+    # asyncio.to_thread haelt den Event-Loop frei fuer parallele SSE-Streams.
+    import asyncio as _aio
+    bumps = await _aio.to_thread(
+        svc.feedback_logger.log_feedback,
         cut_id=req.cut_id,
         rating=req.rating,
         context_keys=context_keys,
     )
+    total = await _aio.to_thread(svc.weights.total_clicks)
     return BrainFeedbackResponse(
         status="ok",
         updated_buckets=bumps,
-        total_clicks=svc.weights.total_clicks(),
+        total_clicks=total,
     )
 
 
@@ -122,7 +127,9 @@ async def learning_session() -> BrainLearningSessionResponse:
         cuts_for_samp.append(CutForSampling(cut_id=int(r[0]), context_keys=ck))
         by_id[int(r[0])] = r
 
-    selected = svc.sampler.select_uncertain(cuts_for_samp, n=15)
+    # Z2 / GPU-F4: select_uncertain ist CPU-heavy (Bayes-Variance pro Cut).
+    import asyncio as _aio
+    selected = await _aio.to_thread(svc.sampler.select_uncertain, cuts_for_samp, n=15)
     out: list[BrainSuggestion] = []
     for s in selected:
         r = by_id[s.cut_id]

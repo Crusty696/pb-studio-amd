@@ -83,8 +83,17 @@ class CLAPAnalyzer:
         return sess_options
 
     def _get_providers(self) -> List[str]:
+        """IRC-1 / IRON RULE 1: AMD DirectML ONLY — kein CPU-Fallback.
+
+        CLAP-Audio-Embeddings ohne GPU sind ca. 10x langsamer und unsichtbar
+        fuer VRAMBudgetManager. Wenn DmlExecutionProvider fehlt, loud failen."""
         available = ort.get_available_providers()
-        return ['DmlExecutionProvider', 'CPUExecutionProvider'] if 'DmlExecutionProvider' in available else ['CPUExecutionProvider']
+        if 'DmlExecutionProvider' not in available:
+            raise RuntimeError(
+                "CLAP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
+                "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
+            )
+        return ['DmlExecutionProvider']
 
     def _init_model(self) -> bool:
         if self._initialized: return True
