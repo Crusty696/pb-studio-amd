@@ -18,23 +18,23 @@ description: "Task list for Release Hardening & UX Polish"
 
 ## Phase 1: Setup & Foundational
 
-- [ ] T001 [P] [OBJ1] {TR-001} Create `IDialogService.cs` and `DialogService.cs` in `PBStudio.UI/Services/`
-- [ ] T002 [P] [OBJ1] {TR-001} Register `IDialogService` as a Singleton in `App.xaml.cs`
+- [X] T001 [P] [OBJ1] {TR-001} Create `IDialogService.cs` and `DialogService.cs` in `PBStudio.UI/Services/`
+- [X] T002 [P] [OBJ1] {TR-001} Register `IDialogService` as a Singleton in `App.xaml.cs`
 
 ---
 
 ## Phase 2: Work Item 1 - Native Dialog Migration (Priority: P1)
 
-- [ ] T003 [OBJ1] {TR-001} Migrate `VideoLibraryViewModel.cs` to use `IDialogService` (folder and file pickers)
-- [ ] T004 [OBJ1] {TR-001} Migrate `AudioLibraryViewModel.cs` to use `IDialogService` (file picker)
-- [ ] T005 [OBJ1] {TR-001} Migrate `MediaIngestViewModel.cs` to use `IDialogService` (folder picker)
-- [ ] T006 [OBJ1] {TR-001} [COMPLETES OBJ1] Migrate `ProductionViewModel.cs` to use `IDialogService` (save file picker)
+- [X] T003 [OBJ1] {TR-001} Migrate `VideoLibraryViewModel.cs` to use `IDialogService` (folder and file pickers)
+- [X] T004 [OBJ1] {TR-001} Migrate `AudioLibraryViewModel.cs` to use `IDialogService` (file picker)
+- [X] T005 [OBJ1] {TR-001} Migrate `MediaIngestViewModel.cs` to use `IDialogService` (folder picker)
+- [X] T006 [OBJ1] {TR-001} [COMPLETES OBJ1] Migrate `ProductionViewModel.cs` to use `IDialogService` (save file picker)
 
 ---
 
 ## Phase 3: Work Item 2 - Stability & Performance (Priority: P1)
 
-- [ ] T007 [P] [OBJ2] {TR-004} Audit all AI wrappers in `src/pb_studio/ai/` to ensure `enable_mem_pattern=False`
+- [X] T007 [P] [OBJ2] {TR-004} Audit all AI wrappers in `src/pb_studio/ai/` to ensure `enable_mem_pattern=False`
 - [ ] T008 [OBJ2] {TR-002} Implement `src/tools/execute_4h_stress_test.py` with `amdsmi` telemetry and batch loop
 - [ ] T009 [OBJ2] {TR-002} [COMPLETES OBJ2] Verify `VRAMArbiter` eviction logic triggers when buffer < 500MB via stress test
 

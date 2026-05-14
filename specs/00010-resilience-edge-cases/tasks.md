@@ -22,8 +22,8 @@ description: "Task list for Resilience & Edge-Cases"
 
 ## Phase 1: Foundational (Backend Hardening)
 
-- [ ] T001 [OBJ2] {TR-002} Implement forced VRAM capping logic in `vram_arbiter.py` via `PB_STUDIO_FORCED_VRAM` env var
-- [ ] T002 [OBJ1] Add a `/health/heartbeat` dummy endpoint to FastAPI to verify basic reachability (optional but recommended)
+- [X] T001 [OBJ2] {TR-002} Implement forced VRAM capping logic in `vram_arbiter.py` via `PB_STUDIO_FORCED_VRAM` env var
+- [X] T002 [OBJ1] Add a `/health/heartbeat` dummy endpoint to FastAPI to verify basic reachability (optional but recommended)
 
 ---
 
@@ -36,7 +36,7 @@ description: "Task list for Resilience & Edge-Cases"
 
 ## Phase 3: Work Item 2 - Boundary Testing (Priority: P2)
 
-- [ ] T005 [P] [OBJ2] {TR-002} Implement specialized stress test script `src/tools/verify_low_vram_resilience.py` (Capped at 4GB)
+- [X] T005 [P] [OBJ2] {TR-002} Implement specialized stress test script `src/tools/verify_low_vram_resilience.py` (Capped at 4GB)
 - [ ] T006 [OBJ2] {TR-002} [COMPLETES OBJ2] Run 4GB stress test and verify 0 OOM crashes (rejections are expected/logged)
 
 ---

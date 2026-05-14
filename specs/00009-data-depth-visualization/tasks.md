@@ -10,7 +10,7 @@ plan_path: "specs/00009-data-depth-visualization/plan.md"
 ## Work Item Checklist
 
 ### Backend — Foundation & Logic
-- [ ] T001 [P1] Create `audio_schemas.py` depth models (SongSegment, SpectralData). (FR-001, FR-002)
+- [X] T001 [P1] Create `audio_schemas.py` depth models (SongSegment, SpectralData). (FR-001, FR-002)
 - [ ] T002 [P1] Implement `music_analysis.py` logic for Librosa MSA (Section Detection). (FR-002, TR-002)
 - [ ] T003 [P1] Implement `music_analysis.py` logic for Spectral extraction (Centroid, RMS). (FR-001, TR-002)
 - [ ] T004 [P1] Implement adaptive threshold logic in `video_analysis.py` (FR-004, TR-003).
