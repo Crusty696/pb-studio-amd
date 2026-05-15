@@ -141,7 +141,9 @@
                          SelectionMode="Extended"
                          SelectionChanged="AudioClipList_SelectionChanged"
                          Background="Transparent" BorderThickness="0"
-                         HorizontalContentAlignment="Stretch">
+                         HorizontalContentAlignment="Stretch"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid>
