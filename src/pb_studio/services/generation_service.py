@@ -35,7 +35,8 @@ class GenerationService:
         else:
             run_fn = self._run_basic_generation
 
-        def run_job(progress_callback=None, status_callback=None):
+        # P3.4 vulture-clarification: status_callback ist PyQt-Legacy-Signal-Param, API-Stability.
+        def run_job(progress_callback=None, status_callback=None):  # noqa: ARG002
             """Worker-Funktion - progress_callback ist ein PyQt Signal."""
             def engine_cb(step, pct):
                 if progress_callback is not None:

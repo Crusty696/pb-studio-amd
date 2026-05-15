@@ -18,7 +18,8 @@ class AnalysisService:
         Starts analysis in background thread.
         Calls on_complete(result_dict) when done.
         """
-        def run_analysis(progress_callback=None, status_callback=None):
+        # P3.4 vulture-clarification: status_callback ist PyQt-Legacy-Signal-Param, API-Stability.
+        def run_analysis(progress_callback=None, status_callback=None):  # noqa: ARG002
             results = {}
 
             # Zwischenstatus setzen (verhindert Re-Analyse bei Crash)

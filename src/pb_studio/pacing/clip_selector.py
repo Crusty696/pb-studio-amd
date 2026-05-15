@@ -202,7 +202,8 @@ class ClipSelector:
         available_clips: List[dict],
         trigger_strength: float = 0.5,
         trigger_type: str = "beat",
-        previous_clip_id: Optional[str] = None,
+        # P3.4 vulture-clarification: Compat-Param fuer NV-API, aktuell unused, future routing-hook.
+        previous_clip_id: Optional[str] = None,  # noqa: ARG002
         prompt: Optional[str] = None,
         **_unused,
     ) -> SelectedClip:

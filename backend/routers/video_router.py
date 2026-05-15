@@ -344,8 +344,9 @@ async def analyze_video(
     )
 
     # BUG-204/Feature-3: Multi-step SSE events fuer fein-granularen UI-Fortschritt.
-    # Coarse 4-phase view (init/scenes/motion+embed/finalize) bis _run_video_analysis
-    # mit progress_callback instrumentiert ist (TODO).
+    # 4 coarse Phasen (init/scenes/motion+embed/finalize). _run_video_analysis ist
+    # via _loop + RAFT on_progress callback bereits per-frame instrumentiert
+    # (siehe _motion_progress -> 'analysis_progress' SSE event), Audit C1.
     await publish_event("analysis_progress", {
         "clip_id": request.clip_id,
         "step": "init",

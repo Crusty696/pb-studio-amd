@@ -931,7 +931,8 @@ class VRAMContext:
         self.reserved = self.manager.reserve(self.model_id, force=self.force)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    # P3.4 vulture-clarification: exc_val by Python __exit__ protocol (unused by design).
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ARG002
         # On error: cancel reservation
         if exc_type is not None and not self.committed:
             self.manager.cancel_reservation(self.model_id)

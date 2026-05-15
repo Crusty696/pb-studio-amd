@@ -1169,6 +1169,9 @@ class AdvancedPacingEngine:
             on_progress=lambda local_pct: _emit(80.0 + (local_pct / 100.0) * 20.0),
         )
 
+        # Audit E3: Snap cuts an Subtrack-Boundaries wenn injiziert (no-op sonst).
+        filtered = self._snap_cuts_to_subtrack_boundaries(filtered)
+
         # Audit L-M7: Generation komplett -> 100%
         _emit(100.0, force=True)
 
@@ -1290,7 +1293,7 @@ class AdvancedPacingEngine:
         Verwendung (Cut-Selection): Nach final cut-list, fuer jeden Anker t pruefen
         ob ein Cut im Fenster [t-0.5, t+0.5] existiert. Ja -> snap dorthin
         (zeit ueberschreiben). Nein -> insert cut bei t mit type="subtrack",
-        strength=1.0. (Snap-to-subtrack ist heute noch TODO; Helper-API ready.)
+        strength=1.0. (Implementiert in _snap_cuts_to_subtrack_boundaries.)
 
         Returns:
             Sortierte Liste eindeutiger end_time-Werte aus _pre_cached_subtracks.
@@ -1311,6 +1314,43 @@ class AdvancedPacingEngine:
                     if tf > 0:
                         anchors.append(tf)
         return sorted(set(anchors))
+
+    def _snap_cuts_to_subtrack_boundaries(
+        self,
+        cuts: List["PacingCut"],
+        window: float = 0.5,
+    ) -> List["PacingCut"]:
+        """
+        Audit E3: Snapt Cuts an Subtrack-Grenzen (harte Schnittpunkte).
+
+        Fuer jeden Anker t aus _subtrack_boundary_anchors():
+          - Existiert ein Cut im Fenster [t-window, t+window]: snap dessen
+            .time auf t (naechstgelegenen Cut waehlen).
+          - Sonst: insert PacingCut(time=t, trigger_type="subtrack",
+            strength=1.0).
+
+        No-op wenn keine Subtracks injiziert. Liefert sortierte Cut-Liste.
+        """
+        anchors = self._subtrack_boundary_anchors()
+        if not anchors or not cuts:
+            return cuts
+        snapped = list(cuts)
+        for t in anchors:
+            best_idx = -1
+            best_dist = window
+            for i, c in enumerate(snapped):
+                d = abs(c.time - t)
+                if d <= best_dist:
+                    best_dist = d
+                    best_idx = i
+            if best_idx >= 0:
+                snapped[best_idx].time = float(t)
+            else:
+                snapped.append(PacingCut(time=float(t),
+                                         trigger_type="subtrack",
+                                         strength=1.0))
+        snapped.sort(key=lambda x: x.time)
+        return snapped
 
     def _apply_structure_weights(
         self,
