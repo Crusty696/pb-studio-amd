@@ -1,5 +1,7 @@
 import logging
 import json
+import gzip
+import base64
 import sqlite3
 import time
 import functools
@@ -13,6 +15,67 @@ logger = logging.getLogger(__name__)
 # Total wall-clock budget across the 5 retries: 50+100+200+400+800 = 1550 ms.
 # After the 5th retry the original OperationalError is propagated.
 _LOCK_RETRY_DELAYS = (0.05, 0.10, 0.20, 0.40, 0.80)
+
+# Compressed depth-metadata (Spec 00009 T006, P2.2).
+# meta-JSON payloads above the threshold are gzip+base64 encoded with a
+# magic prefix so disk usage drops by ~50% on depth-heavy projects.
+# Decoding is transparent inside _row_to_dict so external callers that do
+# ``json.loads(row["metadata_json"])`` keep working unchanged. The TEXT
+# column is preserved by base64-wrapping the gzip bytes.
+_META_COMPRESS_THRESHOLD_BYTES = 10 * 1024  # 10 KB
+_META_GZIP_MAGIC = "GZ1:"
+
+
+def _serialize_meta(meta: Optional[Dict]) -> str:
+    """Encode ``meta`` for storage in the ``metadata_json`` TEXT column.
+
+    Payloads larger than :data:`_META_COMPRESS_THRESHOLD_BYTES` (10 KB) are
+    gzip-compressed and base64-encoded with the :data:`_META_GZIP_MAGIC`
+    prefix so the column remains UTF-8 TEXT-safe. Smaller payloads are
+    stored as plain JSON for cheap inspectability and migration-free
+    rollback.
+    """
+    if meta is None:
+        return "{}"
+    json_text = json.dumps(meta)
+    raw = json_text.encode("utf-8")
+    if len(raw) <= _META_COMPRESS_THRESHOLD_BYTES:
+        return json_text
+    packed = gzip.compress(raw)
+    return _META_GZIP_MAGIC + base64.b64encode(packed).decode("ascii")
+
+
+def _deserialize_meta_str(raw: Optional[str]) -> str:
+    """Return a plain JSON string for ``metadata_json`` regardless of
+    whether the row was stored compressed or plain.
+
+    External callers (e.g. ``backend/app_state.py``) do
+    ``json.loads(row["metadata_json"])`` directly, so the repository must
+    hand back a JSON-string -- not a dict. ``None``/empty maps to ``"{}"``.
+    """
+    if raw is None:
+        return "{}"
+    if not isinstance(raw, str):
+        # Defensive: sqlite3 row factory yields str for TEXT columns; if a
+        # downstream caller mutates the row to bytes, normalize here.
+        try:
+            raw = raw.decode("utf-8")  # type: ignore[union-attr]
+        except Exception:
+            return "{}"
+    if not raw:
+        return "{}"
+    if raw.startswith(_META_GZIP_MAGIC):
+        try:
+            packed = base64.b64decode(raw[len(_META_GZIP_MAGIC):].encode("ascii"))
+            return gzip.decompress(packed).decode("utf-8")
+        except Exception:
+            logger.warning(
+                "MediaRepository: failed to decode compressed metadata_json; "
+                "returning empty meta. prefix=%r", raw[:32],
+            )
+            return "{}"
+    return raw
+
 
 
 def _is_retryable_lock_error(exc: sqlite3.OperationalError) -> bool:
@@ -92,7 +155,12 @@ class MediaRepository:
 
     @staticmethod
     def _row_to_dict(row) -> Optional[Dict]:
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        if "metadata_json" in d:
+            d["metadata_json"] = _deserialize_meta_str(d.get("metadata_json"))
+        return d
 
     def find_by_project_and_path(self, project_id: int, file_path: str) -> Optional[Dict]:
         """Find the canonical media row by project and normalized path."""
@@ -120,7 +188,7 @@ class MediaRepository:
         is *not* retried.
         """
         normalized_path = self._normalize_path(file_path)
-        json_meta = json.dumps(meta) if meta else "{}"
+        json_meta = _serialize_meta(meta)
 
         try:
             with self.db.transaction(immediate=True) as conn:
@@ -180,7 +248,7 @@ class MediaRepository:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM media WHERE project_id = ? ORDER BY id DESC", (project_id,))
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     def get_by_id(self, media_id: int) -> Optional[Dict]:
         """Get a single media file by ID."""
@@ -188,7 +256,7 @@ class MediaRepository:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM media WHERE id = ?", (media_id,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row)
 
     def find_by_hash(self, file_hash: str) -> Optional[Dict]:
         """Find media by file hash (duplicate detection)."""
@@ -196,7 +264,7 @@ class MediaRepository:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM media WHERE file_hash = ?", (file_hash,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row)
 
     @_retry_on_database_lock
     def update_status(self, media_id: int, status: str, ai_data: Dict = None):
@@ -229,7 +297,7 @@ class MediaRepository:
         """Update technical metadata for a media file."""
         try:
             with self.db.transaction() as conn:
-                json_meta = json.dumps(metadata)
+                json_meta = _serialize_meta(metadata)
                 conn.execute(
                     "UPDATE media SET metadata_json = ? WHERE id = ?",
                     (json_meta, media_id)
@@ -263,7 +331,7 @@ class MediaRepository:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM media WHERE status = 'pending' ORDER BY id")
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [self._row_to_dict(row) for row in rows]
 
     @_retry_on_database_lock
     def bulk_update_status(self, media_ids: List[int], status: str):

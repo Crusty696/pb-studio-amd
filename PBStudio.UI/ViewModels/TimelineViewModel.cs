@@ -62,6 +62,12 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         UpdateSpectralPoints();
     }
 
+    /// <summary>
+    /// Spec 00009 T008 / STF-001: Dynamic Downsampling fuer SpectralPoints.
+    /// Wenn rawCount &gt; Threshold: Stride-basierte Mittelwert-Aggregation, sonst 1:1-Copy.
+    /// Performance-Ziel (AD-004): &lt;16ms downsample-time bei 1000 raw points.
+    /// Siehe specs/00009-data-depth-visualization/spec.md AD-004.
+    /// </summary>
     private void UpdateSpectralPoints()
     {
         if (_rawSpectralData == null || _rawSpectralData.Centroids == null || _rawSpectralData.Centroids.Count == 0)
