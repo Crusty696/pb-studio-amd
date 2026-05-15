@@ -26,11 +26,21 @@ public class SSEClient : IDisposable
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
     private const int MaxReconnectAttempts = 50;
+    // Spec 00010 T003 (TR-001): nach diesem Schwellwert UI per BackendReachabilityChanged
+    // benachrichtigen. Verhindert UI-Flackern bei kurzen Drops.
+    private const int NotifyUiAfterAttempts = 5;
 
     public event EventHandler<ProgressEventArgs>? ProgressReceived;
     public event EventHandler<LogEventArgs>? LogReceived;
     public event EventHandler<GpuEventArgs>? GpuStatusReceived;
     public event EventHandler<bool>? ConnectionStateChanged;
+    /// <summary>
+    /// Spec 00010 T003: Feuert true sobald Backend wieder erreichbar ist; feuert false
+    /// erst nach NotifyUiAfterAttempts (5) fehlgeschlagenen Reconnect-Versuchen.
+    /// UI bindet hier den ConnectionStatus-Overlay (T004) gegen — verhindert
+    /// UI-Flackern bei kurzen Verbindungsabbruechen.
+    /// </summary>
+    public event EventHandler<bool>? BackendReachabilityChanged;
 
     private bool _isConnected;
     public bool IsConnected
@@ -42,6 +52,21 @@ public class SSEClient : IDisposable
             {
                 _isConnected = value;
                 ConnectionStateChanged?.Invoke(this, _isConnected);
+            }
+        }
+    }
+
+    private bool _isBackendReachable = true;
+    /// <summary>Spec 00010 T003: latched reachability gegen UI-Flicker (5-Attempt-Threshold).</summary>
+    public bool IsBackendReachable
+    {
+        get => _isBackendReachable;
+        private set
+        {
+            if (_isBackendReachable != value)
+            {
+                _isBackendReachable = value;
+                BackendReachabilityChanged?.Invoke(this, _isBackendReachable);
             }
         }
     }
@@ -106,6 +131,8 @@ public class SSEClient : IDisposable
                 response.EnsureSuccessStatusCode();
 
                 IsConnected = true;
+                // Spec 00010 T003: Erfolgreicher Connect — Reachability laut markieren.
+                IsBackendReachable = true;
 
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
@@ -160,6 +187,13 @@ public class SSEClient : IDisposable
             {
                 IsConnected = false;
                 reconnectAttempts++;
+                // Spec 00010 T003 (TR-001): UI erst nach 5 fehlgeschlagenen Versuchen
+                // benachrichtigen — kurze Drops (Backend-Restart, transientes Netzproblem)
+                // werden so vor dem User versteckt.
+                if (reconnectAttempts >= NotifyUiAfterAttempts)
+                {
+                    IsBackendReachable = false;
+                }
                 if (reconnectAttempts > MaxReconnectAttempts)
                 {
                     _logger.LogError("SSE {Endpoint}: Max Reconnect-Versuche ({Attempts}) erreicht, gebe auf.", endpoint, reconnectAttempts);
