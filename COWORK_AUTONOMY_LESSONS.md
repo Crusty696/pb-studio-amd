@@ -94,3 +94,19 @@ Diese Datei wird bei JEDEM neuen Pattern erweitert. Wenn der User explizit „du
 **Lesson:** Wenn die Sandbox-FS einen Git-Repo-Recovery braucht der `rm` auf `.git/`-Files erfordert → Hard-Block für autonome Resolution. Workaround: One-Shot-Recovery-Bat schreiben, User-Doppelklick-Verifikation als einzige Verifikations-Möglichkeit.
 
 **Prevention:** Vermeide es überhaupt in diesen Zustand zu kommen — nie parallel `git add`/`git commit` aus mehreren Bash-Calls. Sequenziell only für Git-Writes.
+
+---
+
+## 2026-05-15 — Pattern #13: cmd-variable-expansion ohne setlocal enabledelayedexpansion
+
+**Situation:** In LOW-VRAM-STRESS.bat habe ich `!TESTVID!` Syntax verwendet um eine in einem `for /f`-Block gesetzte Variable zu expandieren. Stattdessen wurde der literale String `!TESTVID!` durchgereicht.
+
+**Root-Cause:** `%VAR%` expandiert beim Lesen des Batch-Files (parse-time), `!VAR!` expandiert zur Laufzeit (delayed expansion) — aber NUR wenn `setlocal enabledelayedexpansion` am Anfang der bat-Datei steht.
+
+**Fix-Pattern:** Erste Zeile jeder .bat die `!VAR!` nutzt:
+```bat
+@echo off
+setlocal enabledelayedexpansion
+```
+
+**Prevention:** Wenn .bat Variablen in Schleifen oder if-Bloecken setzt + spaeter liest → IMMER setlocal enabledelayedexpansion am Anfang.
