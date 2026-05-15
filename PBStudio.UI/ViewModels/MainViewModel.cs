@@ -34,6 +34,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isBackendConnected = true; // Default true to prevent flicker on start
 
+    // Spec 00010 T004: Latched unreachable-flag fuer ConnectionStatus-Overlay.
+    // Wird nur true wenn SSEClient nach >=5 fehlgeschlagenen Reconnect-Versuchen
+    // BackendReachabilityChanged(false) feuert. Auto-Hide bei BackendReachabilityChanged(true).
+    [ObservableProperty]
+    private bool _isBackendUnreachable = false;
+
     [ObservableProperty]
     private string _gpuStatusText = "GPU: Unbekannt";
 
@@ -60,6 +66,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _bridge.StatusChanged += OnBackendStatusChanged;
         _sse.ProgressReceived += OnProgressReceived;
         _sse.GpuStatusReceived += OnGpuStatusReceived;
+        // Spec 00010 T004: Latched-reachability fuer Overlay.
+        _sse.BackendReachabilityChanged += OnBackendReachabilityChanged;
         _projects.ProjectChanged += OnProjectChanged;
 
         WeakReferenceMessenger.Default.Register<BackendReadyMessage>(this, (_, _) => _ = InitializeAsync());
@@ -204,6 +212,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         });
     }
 
+    private void OnBackendReachabilityChanged(object? sender, bool reachable)
+    {
+        // Spec 00010 T004: invertierte Flagge — bindbar an Overlay.Visibility
+        // via BooleanToVisibilityConverter. Auf UI-Thread dispatchen.
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        {
+            IsBackendUnreachable = !reachable;
+        });
+    }
+
     private void OnProjectChanged(object? sender, ProjectInfo? e)
     {
         _ = App.Current.Dispatcher.InvokeAsync(() =>
@@ -238,6 +256,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _bridge.StatusChanged -= OnBackendStatusChanged;
         _sse.ProgressReceived -= OnProgressReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
+        _sse.BackendReachabilityChanged -= OnBackendReachabilityChanged;
         _projects.ProjectChanged -= OnProjectChanged;
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }

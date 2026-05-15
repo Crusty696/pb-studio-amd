@@ -55,7 +55,27 @@
             </Border>
 
             <!-- ── Main Tabs Area ── -->
-            <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Background="{StaticResource AbletonBg}" BorderThickness="0">
+            <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Background="{StaticResource AbletonBg}" BorderThickness="0"
+                        RenderTransformOrigin="0.5,0.05" Opacity="1.0">
+                <TabControl.RenderTransform>
+                    <!-- P2.1/Spec-00007 T010: GPU-accelerated tab swap animation.
+                         ScaleTransform animiert ueber Compositor-Thread (RenderTransform = GPU-Pfad). -->
+                    <ScaleTransform x:Name="TabContentScale" ScaleX="1.0" ScaleY="1.0"/>
+                </TabControl.RenderTransform>
+                <TabControl.Triggers>
+                    <EventTrigger RoutedEvent="TabControl.SelectionChanged">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="TabContentScale" Storyboard.TargetProperty="ScaleX"
+                                                 From="0.97" To="1.0" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetName="TabContentScale" Storyboard.TargetProperty="ScaleY"
+                                                 From="0.97" To="1.0" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 From="0.6" To="1.0" Duration="0:0:0.15"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </TabControl.Triggers>
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
                         <Setter Property="Padding" Value="14,8"/>
@@ -127,6 +147,23 @@
             <!-- ── Status Bar ── -->
             <Border Grid.Row="2" Height="24" Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0">
                 <TextBlock Text="{Binding StatusMessage}" Margin="10,0" VerticalAlignment="Center" FontSize="10" Foreground="{StaticResource AbletonTextDim}"/>
+            </Border>
+
+            <!-- ── Spec 00010 T004: ConnectionStatus Overlay ──
+                 Sichtbar nur wenn SSE >=5 Reconnect-Versuche fehlgeschlagen sind.
+                 Auto-Hide auf erfolgreichen Reconnect. Non-modal, Top-Banner.
+                 Visibility bindet an MainViewModel.IsBackendUnreachable. -->
+            <Border Grid.Row="1" VerticalAlignment="Top"
+                    Height="36"
+                    Background="#FF8B1A1A" BorderBrush="#FF5A0F0F" BorderThickness="0,0,0,1"
+                    Visibility="{Binding IsBackendUnreachable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Panel.ZIndex="1000">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <icon:PackIconMaterial Kind="WifiOff" Width="14" Height="14" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Verbindung zum Backend verloren — versuche erneut..."
+                               Foreground="White" FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
             </Border>
         </Grid>
     </md:DialogHost>
