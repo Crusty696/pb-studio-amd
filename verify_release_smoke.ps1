@@ -222,6 +222,38 @@ try {
         Write-Host "  ok | GPU available = $($health.gpu_available)"
     }
 
+    # ============================================================
+    # P1.4 Release-Smoke-Expansion (Spec 00007 T012)
+    # Erweitert um VRAM-Telemetry + Heartbeat + Brain-DB-Migration-Probes
+    # ============================================================
+
+    Step 'Heartbeat probe (Spec 00010 T002)' {
+        $hb = Get-Json '/health/heartbeat'
+        if ($hb.status -ne 'alive') { throw 'Heartbeat status not alive' }
+        if (-not $hb.timestamp) { throw 'Heartbeat missing timestamp' }
+        Write-Host "  ok | heartbeat alive @ $($hb.timestamp)"
+    }
+
+    Step 'VRAM telemetry endpoint (Spec 00010 T001 + telemetry)' {
+        $vram = Get-Json '/health/vram'
+        if (-not $vram.budget) { throw 'VRAM endpoint missing budget block' }
+        if (-not $vram.budget.max_vram_mb) { throw 'VRAM max_vram_mb missing' }
+        if ($null -eq $vram.telemetry) { throw 'VRAM telemetry block missing' }
+        Write-Host "  ok | VRAM max=$($vram.budget.max_vram_mb)MB used=$($vram.budget.committed_mb)MB models=$($vram.budget.loaded_models)"
+    }
+
+    Step 'Brain DB migration check' {
+        # Brain-Endpoints existieren nur wenn sqlite-vec + migrations OK sind
+        try {
+            $brainStats = Get-Json '/brain/stats'
+            if ($null -eq $brainStats) { throw 'Brain stats endpoint returned null' }
+            Write-Host "  ok | brain reachable, stats=$($brainStats | ConvertTo-Json -Compress -Depth 2)"
+        } catch {
+            Write-Host "  WARN | brain endpoint unreachable: $_" -ForegroundColor Yellow
+            # Nicht-blockierend — Brain-Modul ist optional
+        }
+    }
+
     Step 'Create verify project in allowed root' {
         $project = Post-Json '/project/create' @{ name = $verifyName; path = $verifyRoot }
         if (-not $project.path) { throw 'Verify project creation returned no path' }
