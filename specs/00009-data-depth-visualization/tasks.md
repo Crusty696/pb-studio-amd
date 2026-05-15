@@ -11,21 +11,21 @@ plan_path: "specs/00009-data-depth-visualization/plan.md"
 
 ### Backend — Foundation & Logic
 - [X] T001 [P1] Create `audio_schemas.py` depth models (SongSegment, SpectralData). (FR-001, FR-002)
-- [ ] T002 [P1] Implement `music_analysis.py` logic for Librosa MSA (Section Detection). (FR-002, TR-002)
-- [ ] T003 [P1] Implement `music_analysis.py` logic for Spectral extraction (Centroid, RMS). (FR-001, TR-002)
-- [ ] T004 [P1] Implement adaptive threshold logic in `video_analysis.py` (FR-004, TR-003).
+- [X] T002 [P1] Implement `music_analysis.py` logic for Librosa MSA (Section Detection). (FR-002, TR-002)
+- [X] T003 [P1] Implement `music_analysis.py` logic for Spectral extraction (Centroid, RMS). (FR-001, TR-002)
+- [X] T004 [P1] Implement adaptive threshold logic in `video_analysis.py` (FR-004, TR-003).
 
 ### Backend — API & Storage
-- [ ] T005 [P1] Implement `GET /audio/depth/{media_id}` and `POST /audio/analyze-depth/{media_id}` endpoints. (FR-001, FR-002) [COMPLETES FR-001, FR-002]
+- [X] T005 [P1] Implement `GET /audio/depth/{media_id}` and `POST /audio/analyze-depth/{media_id}` endpoints. (FR-001, FR-002) [COMPLETES FR-001, FR-002]
 - [ ] T006 [P1] Extend `storage.py` to handle compressed depth metadata in `media_cache` (FR-005, AD-002).
 
 ### Frontend — ViewModel & Foundation
-- [ ] T007 [P1] Update `TimelineViewModel.cs` with `SongSegments` and `SpectralData` collections.
+- [X] T007 [P1] Update `TimelineViewModel.cs` with `SongSegments` and `SpectralData` collections.
 - [ ] T008 [P1] Implement dynamic downsampling logic in `TimelineViewModel.cs` (AD-004, STF-001).
 
 ### Frontend — UI & Rendering
-- [ ] T009 [P1] Create `DepthRenderer.cs` using `DrawingVisual` for high-performance curves (TR-001).
-- [ ] T010 [P1] Add `DepthLayer` and `SongSectionLayer` to `TimelineView.xaml` (FR-003).
+- [X] T009 [P1] Create `DepthRenderer.cs` using `DrawingVisual` for high-performance curves (TR-001).
+- [X] T010 [P1] Add `DepthLayer` and `SongSectionLayer` to `TimelineView.xaml` (FR-003).
 
 ## Task Details
 

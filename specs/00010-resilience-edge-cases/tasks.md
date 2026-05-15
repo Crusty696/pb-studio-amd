@@ -29,8 +29,8 @@ description: "Task list for Resilience & Edge-Cases"
 
 ## Phase 2: Work Item 1 - Self-Healing SSE (Priority: P1)
 
-- [ ] T003 [OBJ1] {TR-001} Refactor `SSEClient.cs` to include exponential backoff (1s, 2s, 4s...) on connection drop
-- [ ] T004 [OBJ1] {TR-003} Implement `ConnectionStatus` overlay in `MainWindow.xaml` with auto-hide on reconnect
+- [X] T003 [OBJ1] {TR-001} Refactor `SSEClient.cs` to include exponential backoff (1s, 2s, 4s...) on connection drop
+- [X] T004 [OBJ1] {TR-003} Implement `ConnectionStatus` overlay in `MainWindow.xaml` with auto-hide on reconnect
 
 ---
 

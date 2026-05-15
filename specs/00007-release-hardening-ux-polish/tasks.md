@@ -42,8 +42,8 @@ description: "Task list for Release Hardening & UX Polish"
 ## Phase 4: Work Item 3 - UI Polish (Priority: P2)
 
 - [ ] T010 [P] {TR-005} Implement GPU-accelerated `RenderTransform` tab animations in `MainWindow.xaml`
-- [ ] T011 [P] {TR-006} Verify `VirtualizingStackPanel` is enabled and recycling for all clip list controls
-- [ ] T013 [P] {TR-003} [COMPLETES TR-003] Audit all WPF ViewModels for consistent `ObservableObject` and `[ObservableProperty]` usage
+- [X] T011 [P] {TR-006} Verify `VirtualizingStackPanel` is enabled and recycling for all clip list controls
+- [X] T013 [P] {TR-003} [COMPLETES TR-003] Audit all WPF ViewModels for consistent `ObservableObject` and `[ObservableProperty]` usage
 
 ---
 
