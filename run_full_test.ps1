@@ -1,5 +1,5 @@
 # PB Studio - Full Autonomous Test Suite (Robust Version)
-# Koordiniert pytest + UI-Test. Brain-Modul integriert (239 Tests Stand 2026-05-06).
+# Koordiniert pytest + UI-Test. Brain-Modul + P3.1 Coverage-Gap-Tests integriert (537 Tests Stand 2026-05-15).
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan

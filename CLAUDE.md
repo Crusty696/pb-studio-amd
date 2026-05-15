@@ -53,10 +53,10 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-11
-- **Phase:** Production / Verified + Brain-Modul Phase 6 + Pipeline-Lueken Plan abgeschlossen + Timeline-Integrity Audit/Fixes + Deep-Audit Sweep laufend
-- **Status:** Tests 503 passed / 8 skipped / 0 failed (vorher 239 → 264 neue durch K+M+N+TI). Session 2026-05-11 21+ commits. Plan `~/.claude/plans/2026-05-09-pipeline-luecken-fix.md` vollstaendig: Phase K 5/5, M 8/8, N 7/8 (N1 user-skipped → TI-Audit stattdessen), Timeline-Integrity-Audit 12 Findings (1 CRITICAL, 4 HIGH) — alle 7 priorisierten Fixes deployed. **Wurzel des "chaotischen Pacing"-User-Konzerns:** L-TI-1 — `ClipSelector.select_clip(prompt=...)` crashte live → Pacing fiel auf round-robin → 14 cuts statt 2184. Fix `700fedd`.
-- **Next Task:** Deep-Audit Sweep konsolidieren (6 parallele Reports: Audio/Video/Render/Frontend/State+DB+Cache/GPU+Threading) → Priorisierte Fix-Liste → Plan.
+- **Date:** 2026-05-15
+- **Phase:** Production / Verified — Cowork-Sessions 2026-05-14/15 abgeschlossen + Spec-Tasks (00007 + 00009 + 00010) zu 87% durch + Test-Coverage erweitert
+- **Status:** **537 passed / 10 skipped / 0 failed** (pytest 2026-05-15 nach Cluster-1-Dep-Update fastapi 0.136 / uvicorn 0.47 / pydantic 2.13). 36 neue Tests aus P3.1 (encoder_utils, cache_manager, model_loader). Commit-Stand: 8 Commits aus 2026-05-14 + 8 aus 2026-05-15. Spec 00007 9/13 done, 00009 8/10 done, 00010 5/8 done. AMD-Treiber 32.0.31007.1017 ✅ h264_amf runtime-verified. SSE-Overlay (Spec 00010 T003+T004) runtime-verified mit Screenshot-Beweis.
+- **Next Task:** P1.2 4GB-VRAM-Stress-Test, dann P3.2 Dep-Update-Cluster 2 (Audio/ML scipy/soundfile/sklearn/sentencepiece/sqlite-vec), dann P1.1 4h-Stress-Test mit echtem AMF-Encoder.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
