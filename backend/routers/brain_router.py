@@ -219,9 +219,19 @@ async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
 # ---------- R-Brain-09: /brain/explain/{cut_id} ----------
 
 @router.get("/explain/{cut_id}", response_model=BrainExplainResponse)
-async def explain(cut_id: int, top_n: int = 3) -> BrainExplainResponse:
+async def explain(
+    cut_id: int,
+    top_n: int = 3,
+    narrative: bool = True,
+    mode: str = "balance",
+) -> BrainExplainResponse:
     """Erklaert die Confidence eines Cuts: Top-/Bottom-N contributing axes
     mit ihrer (bridge_value, posterior, score)-Aufschluesselung.
+
+    Wenn ``narrative=true`` (Default), wird zusaetzlich eine natuerlich-
+    sprachliche Erklaerung via Ollama-LLM erzeugt. Bei Ollama-Fehler oder
+    fehlendem Modell bleibt ``narrative`` im Response auf ``None`` und die
+    strukturierten Felder werden trotzdem geliefert (Iron Rule 10).
 
     UX: Tooltip beim Hover ueber den Confidence-Balken in der Timeline.
     """
@@ -277,6 +287,35 @@ async def explain(cut_id: int, top_n: int = 3) -> BrainExplainResponse:
         sum(scores.values()) / len(scores) if scores else 0.0
     )
 
+    # ---- LLM-Narrator (optional) ----
+    narrative_text: Optional[str] = None
+    if narrative:
+        try:
+            from pb_studio.brain.llm_narrator import generate_explanation
+        except Exception as exc:  # pragma: no cover - defensive Import-Guard
+            logger.warning("LLM-Narrator import fehlgeschlagen: %s", exc)
+            generate_explanation = None  # type: ignore[assignment]
+
+        if generate_explanation is not None:
+            try:
+                narrative_text = await generate_explanation(
+                    cut_id=int(row[0]),
+                    segment_type=str(row[4]) if row[4] else None,
+                    top_axes=[a.model_dump() for a in top_axes],
+                    bottom_axes=[a.model_dump() for a in bottom_axes],
+                    cold_start_axes=cold_start,
+                    final_score=float(final_score),
+                    mode=mode,
+                )
+            except Exception as exc:
+                # Iron Rule 10: kein silent OK -- Log-Warnung + None
+                logger.warning(
+                    "LLM-Narrator: unerwarteter Fehler fuer cut %s: %s",
+                    cut_id,
+                    exc,
+                )
+                narrative_text = None
+
     return BrainExplainResponse(
         cut_id=int(row[0]),
         clip_id=str(row[1]),
@@ -288,6 +327,7 @@ async def explain(cut_id: int, top_n: int = 3) -> BrainExplainResponse:
         top_axes=top_axes,
         bottom_axes=bottom_axes,
         cold_start_axes=cold_start,
+        narrative=narrative_text,
     )
 
 
