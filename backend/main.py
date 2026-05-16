@@ -252,6 +252,7 @@ from .routers.render_router import router as render_router
 from .routers.events_router import router as events_router
 from .routers.brain_router import router as brain_router
 from .routers.health_router import router as health_router
+from .routers.models_router import router as models_router
 
 app.include_router(project_router)
 app.include_router(audio_router)
@@ -261,6 +262,7 @@ app.include_router(render_router)
 app.include_router(events_router)
 app.include_router(brain_router)
 app.include_router(health_router)
+app.include_router(models_router)
 
 
 if __name__ == "__main__":

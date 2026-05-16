@@ -836,6 +836,9 @@ def _run_video_analysis(
                 extract_dominant_colors,
                 extract_tags_via_moondream,
             )
+            from pb_studio.video.ollama_vision_wrapper import (
+                extract_tags_via_ollama,
+            )
 
             cap = cv2.VideoCapture(video_path)
             try:
@@ -849,21 +852,35 @@ def _run_video_analysis(
             if ret and frame is not None:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 result["dominant_colors"] = extract_dominant_colors(frame_rgb, k=5)
-                result["tags"] = extract_tags_via_moondream(frame_rgb)
+
+                # Primary: Ollama Auto-Selection (Vision-Modell aus Registry).
+                # Fallback: Moondream ONNX wenn Ollama down/leer ist
+                # (Iron Rule 10: keine silent fails — Tag-Quelle wird geloggt).
+                tag_source = "ollama"
+                tags = extract_tags_via_ollama(frame_rgb, mode="balance")
+                if not tags:
+                    tag_source = "moondream_fallback"
+                    tags = extract_tags_via_moondream(frame_rgb)
+                result["tags"] = tags
+                result["tag_source"] = tag_source
+
                 logger.info(
                     f"L-K2: {len(result['dominant_colors'])} colors, "
-                    f"{len(result['tags'])} tags fuer clip {clip_id}"
+                    f"{len(result['tags'])} tags ({tag_source}) fuer clip {clip_id}"
                 )
             else:
                 result["dominant_colors"] = []
                 result["tags"] = []
+                result["tag_source"] = "none"
         except Exception as e:
-            logger.warning(f"Moondream/Color-Extract fehlgeschlagen (unkritisch): {e}")
+            logger.warning(f"Tag/Color-Extract fehlgeschlagen (unkritisch): {e}")
             result["dominant_colors"] = []
             result["tags"] = []
+            result["tag_source"] = "error"
     else:
         result["dominant_colors"] = []
         result["tags"] = []
+        result["tag_source"] = "skipped"
 
     # Y3 / GPU-F2: L-K4 audio_key Detection (FFmpeg+librosa, ~30s CPU) wird
     # JETZT NICHT mehr hier ausgefuehrt — sie haelt sonst den globalen GPU-Lock
