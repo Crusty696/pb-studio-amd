@@ -28,6 +28,11 @@
                 "speed":   ["minicpm-v:8b-2.6-q4_0", "moondream:latest", "gemma4:latest"],
                 "balance": ["minicpm-v:8b-2.6-q4_0", "gemma4:latest",    "llava:13b"],
                 "quality": ["minicpm-v:8b-2.6-q4_0", "llava:34b",        "qwen2-vl:7b"]
+            },
+            "brain_explanation": {
+                "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+                "balance": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+                "quality": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"]
             }
         },
         "task_overrides": {}

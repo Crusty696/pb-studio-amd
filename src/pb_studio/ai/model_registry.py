@@ -48,6 +48,12 @@ DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
         "balance": ["llama3.1:8b",       "mistral:7b",     "gemma2:9b"],
         "quality": ["llama3.1:70b",      "qwen2.5:32b",    "llama3.1:8b"],
     },
+    # Brain-Explanation: kurzer DE-Text (1-3 Saetze) auf Basis der Achsen-Scores.
+    "brain_explanation": {
+        "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+        "balance": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+        "quality": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+    },
 }
 
 VALID_MODES = frozenset({"speed", "balance", "quality"})
