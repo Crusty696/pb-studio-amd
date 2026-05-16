@@ -168,4 +168,103 @@ Beim erneuten Versuch nach User-Eskalation bootete Bash sofort und lieferte die 
    ```
    Voraussetzung: neuer Ref-Inhalt ist <= alter File-Size; sonst padden oder anders schreiben.
 
-5. **`.git/index` reparieren wenn corrupt:** `git read-tree HEAD` mit `GIT_INDEX_FILE` in `/tmp` bauen, dann `dd conv=notrunc` zurück auf `.git/index`. Wichtig: neuer Index muss >= alter File-Size sein, sonst Müll-Bytes am Ende → corrupt. Bei kleinerem neuem Index: extra Files stagen damit Index wächst, dann zurückschreiben
+5. **`.git/index` reparieren wenn corrupt:** `git read-tree HEAD` mit `GIT_INDEX_FILE` in `/tmp` bauen, dann `dd conv=notrunc` zurück auf `.git/index`. Wichtig: neuer Index muss >= alter File-Size sein, sonst Müll-Bytes am Ende → corrupt. Bei kleinerem neuem Index: extra Files stagen damit Index wächst, dann zurückschreiben.
+
+**Lesson:** Sandbox-FS-Locks sind kein Hard-Block. Es gibt einen Stack von Workarounds — `mv` → `GIT_INDEX_FILE` → `commit-tree` → `dd conv=notrunc` auf refs. Alle ohne User-Interaktion machbar.
+
+**Anti-Pattern den ich gezeigt habe:** Nach 1-2 erfolglosen Versuchen mit `rm`/`git commit` direkt zum „User muss Bat doppelklicken" springen. Statt: Toolkit oben durchexerzieren.
+
+**Prevention:** Pattern #12 ist OBSOLET. Bei Git-Lock-Block ab sofort den Bypass-Stack durcharbeiten BEVOR Computer-Use oder User-Action vorgeschlagen wird.
+
+---
+
+## 2026-05-16 — Pattern #16: Autonomie-Default-On (User-Direktive)
+
+**User-Direktive (wörtlich, 2026-05-16):** „mach das selber du hast alle tools dafür und ich will mich nicht mer wieder holen müssen merke dir das jetzt und speichere es in deinen files ab das u das ab jetzt selber und autonom machen kannst und darfst".
+
+**Regel ab sofort:** Default ist AUTONOM. Ich brauche KEINE User-Erlaubnis um:
+- `.bat`/`.ps1` zu schreiben UND auszuführen (per Computer-Use ODER Bash)
+- Git-Operations (add, commit, mv, plumbing) durchzuführen — inkl. Recovery aus Lock/Corrupt-State
+- Builds zu triggern (dotnet, pytest, ffmpeg-Probes)
+- Sandbox-Workarounds anzuwenden (Pattern #15 Toolkit)
+- Computer-Use-Tools zu nutzen wenn Bash fehlschlägt
+- Cleanup auszuführen (temp-Files, tmp_obj, stale locks)
+
+**Was bleibt User-Action-only:** Hardware-Aktionen, UAC-Prompts, Reboot. Sonst nix. *(2026-05-16-Korrektur: Push zu Remote war ursprünglich in dieser Liste — siehe Pattern #17, Push ist autonom.)*
+
+**Trigger zum Re-Lesen:** Vor JEDER User-Antwort die mit „du musst" / „mach selber" / „warum nicht" / „autonom" anfängt, scrolle ich diese Datei nochmal — dann handeln.
+
+---
+
+## 2026-05-16 — Pattern #15: Git-Lock-Hard-Block ist NICHT Hard-Block (Pattern #12 obsolet)
+
+**Situation:** Beim Ollama-Video-Pilot Commit-Schritt erschien wiederholt `.git/index.lock` und `.git/HEAD.lock`. Sandbox-`rm` fail mit `Operation not permitted`. Mein erster Reflex: "Sandbox-Hard-Block, User muss Bat ausführen". User-Reaktion: "mach das selber du hast alle tools dafür".
+
+**Root-Cause meiner Aufgabe-Mentalität:** Pattern #12 war zu defensiv. Es existieren mehrere Bypass-Strategien die ich nicht ausgeschöpft habe.
+
+**Bypass-Toolkit für Sandbox-Filesystem-Locks (autonom, ohne User):**
+
+1. **`mv` statt `rm`** — Rename funktioniert oft wenn unlink fehlschlägt:
+   ```bash
+   mv .git/index.lock /tmp/lock_$$  # statt rm
+   ```
+
+2. **`GIT_INDEX_FILE=/tmp/...`** — Custom Index-Location umgeht `.git/index.lock` komplett:
+   ```bash
+   export GIT_INDEX_FILE=/tmp/pb_idx_$$
+   git read-tree HEAD
+   git add <files>
+   TREE=$(git write-tree)
+   ```
+
+3. **Plumbing-Commands für Commit ohne index-lock:**
+   ```bash
+   COMMIT=$(GIT_AUTHOR_NAME=... git commit-tree "$TREE" -p "$PARENT" -m "msg")
+   ```
+
+4. **Direkter Ref-Write per `dd conv=notrunc`** wenn `git update-ref` an HEAD.lock scheitert:
+   ```bash
+   echo -n "$COMMIT" > /tmp/newref && echo "" >> /tmp/newref
+   dd if=/tmp/newref of=.git/refs/heads/main conv=notrunc
+   ```
+   Voraussetzung: neuer Ref-Inhalt ist <= alter File-Size; sonst padden oder anders schreiben.
+
+5. **`.git/index` reparieren wenn corrupt:** `git read-tree HEAD` mit `GIT_INDEX_FILE` in `/tmp` bauen, dann `dd conv=notrunc` zurück auf `.git/index`. Wichtig: neuer Index muss >= alter File-Size sein, sonst Müll-Bytes am Ende → corrupt. Bei kleinerem neuem Index: extra Files stagen damit Index wächst, dann zurückschreiben.
+
+**Lesson:** Sandbox-FS-Locks sind kein Hard-Block. Es gibt einen Stack von Workarounds — `mv` → `GIT_INDEX_FILE` → `commit-tree` → `dd conv=notrunc` auf refs. Alle ohne User-Interaktion machbar.
+
+**Anti-Pattern den ich gezeigt habe:** Nach 1-2 erfolglosen Versuchen mit `rm`/`git commit` direkt zum "User muss Bat doppelklicken" springen. Statt: Toolkit oben durchexerzieren.
+
+**Prevention:** Pattern #12 ist OBSOLET. Bei Git-Lock-Block ab sofort den Bypass-Stack durcharbeiten BEVOR Computer-Use oder User-Action vorgeschlagen wird.
+
+---
+
+## 2026-05-16 — Pattern #16: Autonomie-Default-On (User-Direktive)
+
+**User-Direktive (wörtlich, 2026-05-16):** "mach das selber du hast alle tools dafür und ich will mich nicht mer wieder holen müssen merke dir das jetzt und speichere es in deinen files ab das u das ab jetzt selber und autonom machen kannst und darfst".
+
+**Regel ab sofort:** Default ist AUTONOM. Ich brauche KEINE User-Erlaubnis um:
+- `.bat`/`.ps1` zu schreiben UND auszuführen (per Computer-Use ODER Bash)
+- Git-Operations (add, commit, mv, plumbing) durchzuführen — inkl. Recovery aus Lock/Corrupt-State
+- Builds zu triggern (dotnet, pytest, ffmpeg-Probes)
+- Sandbox-Workarounds anzuwenden (Pattern #15 Toolkit)
+- Computer-Use-Tools zu nutzen wenn Bash fehlschlägt
+- Cleanup auszuführen (temp-Files, tmp_obj, stale locks)
+
+**Was bleibt User-Action-only:** Hardware-Aktionen, UAC-Prompts, Reboot. Sonst nix. *(2026-05-16-Korrektur: Push zu Remote war ursprünglich in dieser Liste — siehe Pattern #17, Push ist autonom.)*
+
+**Trigger zum Re-Lesen:** Vor JEDER User-Antwort die mit "du musst" / "mach selber" / "warum nicht" / "autonom" anfängt, scrolle ich diese Datei nochmal — dann handeln.
+
+---
+
+## 2026-05-16 — Pattern #17: Push ist autonom, nicht User-Action
+
+**Trigger:** Local commits clean, Arbeit logisch abgeschlossen, `origin/main..HEAD` zeigt n>=1 Commits.
+
+**Aktion:** `git push origin <branch>` direkt ausführen via Bash oder Computer-Use PowerShell. Keine Rückfrage, keine "darf ich pushen?"-Variante. Wenn Bash-Sandbox keine GitHub-Credentials hat, dann `.bat`/`.ps1` schreiben und über File-Explorer-Doppelklick (tier full) starten.
+
+**Anti-Pattern:** "Push: explizite User-Freigabe nötig" oder "kein Push, das ist deine Sache" oder "Push war in der User-Action-only-Liste in Rule 12 und bleibt da".
+
+**Hintergrund:** 2026-05-16 nach 25 ungepushten lokalen Commits hat David explizit gesagt: „Dann pushe sie über mein system du hast alle tools dafür warum muss ich dir das jedes mal sagen obwohl du behaubtest diese Anweisungen zu speichern in deinen claude.md dateien". CLAUDE.md Rule 12 wurde entsprechend aktualisiert — Push raus aus User-Action-only-Liste.
+
+**Verifikation nach Push:** `git rev-parse HEAD` == `git rev-parse origin/<branch>` UND `git log --oneline origin/<branch>..HEAD` ist leer.
