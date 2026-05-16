@@ -50,13 +50,22 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: `mcp__obsidian__*` (update_frontmatter, append_to_note, replace_in_note). **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
 
 12. **AUTONOMIE-LESSONS:** Bei JEDER User-Anweisung wo der User sagt "warum machst du das nicht selbst" oder aequivalent → Eintrag in `COWORK_AUTONOMY_LESSONS.md`. Pattern-Liste in dieser Datei vor jeder Code-Aktion mental durchgehen.
+
+   **2026-05-16 User-Direktive: AUTONOMIE-DEFAULT-ON.** Default ist autonom handeln, nicht zurueckfragen. Ich darf und MUSS ohne Nachfrage: .bat/.ps1 schreiben + selber ausfuehren (Computer-Use ODER Bash), Git add/commit/mv/plumbing inkl. Lock/Index-Recovery (siehe COWORK_AUTONOMY_LESSONS.md Pattern #15 Bypass-Toolkit: `mv` statt `rm`, `GIT_INDEX_FILE=/tmp/...`, `commit-tree`, `dd conv=notrunc` auf refs), Builds (dotnet, pytest, ffmpeg-Probes), Sandbox-Workarounds, Computer-Use bei Bash-Fehler, Cleanup von temp-Files. **User-Action only:** Push zu Remote, Hardware-Steckaktionen, UAC-Prompts, Reboot. Vor jeder „du musst"/„mach selber"/„autonom"-Antwort des Users: COWORK_AUTONOMY_LESSONS.md scrollen + handeln statt zurueckfragen. **Hintergrund:** 2026-05-16 Ollama-Pilot — bei `.git/index.lock` "Hard-Block" gemeldet statt Bypass-Toolkit angewandt; User: „mach das selber du hast alle tools dafür".
+
+13. **VERIFY-BEFORE-CHANGE (User-Direktive 2026-05-15):** Vor jeder Code-Änderung muss die vorgeschlagene Lösung erst verifiziert werden, dass sie funktioniert. Skills einsetzen (`pb-master` für Cross-Module-Analyse, `code-auditor` für Static-Analysis, `full-stack-auditor` für End-to-End, `code-review`, etc.). Erst nach erfolgreichem Verifizieren wird der Code angepasst.
+   - **Bug-Fix:** erst Reproduktion, dann verify dass Fix die Root-Cause adressiert (nicht nur Symptom), dann anwenden
+   - **Neues Feature:** erst Cross-Module-Verdrahtung mit `pb-master` prüfen, dann implementieren
+   - **Refactor:** erst Caller/Dependents via `full-stack-auditor` oder Grep prüfen, dann anwenden
+   - **Config/Doc-Change:** mindestens current state lesen + auf Konflikte prüfen, dann anwenden
+   - **Hintergrund:** heute (2026-05-15) mehrere Edit-Versuche an Files ohne ausreichende Vorverifizierung → mid-edit Truncations und broken Files. Diese Regel verhindert das.
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-15
-- **Phase:** Production / Verified — Cowork-Sessions 2026-05-14/15 abgeschlossen + Spec-Tasks (00007 + 00009 + 00010) zu 87% durch + Test-Coverage erweitert
-- **Status:** **537 passed / 10 skipped / 0 failed** (pytest 2026-05-15 nach Cluster-1-Dep-Update fastapi 0.136 / uvicorn 0.47 / pydantic 2.13). 36 neue Tests aus P3.1 (encoder_utils, cache_manager, model_loader). Commit-Stand: 8 Commits aus 2026-05-14 + 8 aus 2026-05-15. Spec 00007 9/13 done, 00009 8/10 done, 00010 5/8 done. AMD-Treiber 32.0.31007.1017 ✅ h264_amf runtime-verified. SSE-Overlay (Spec 00010 T003+T004) runtime-verified mit Screenshot-Beweis.
-- **Next Task:** P1.2 4GB-VRAM-Stress-Test, dann P3.2 Dep-Update-Cluster 2 (Audio/ML scipy/soundfile/sklearn/sentencepiece/sqlite-vec), dann P1.1 4h-Stress-Test mit echtem AMF-Encoder.
+- **Date:** 2026-05-16
+- **Phase:** Production / Verified — Ollama Video-Pilot Phase 1+2+3 deployed (2026-05-16). 3 lokale Commits (4a69ad2, b78191f, e040315). 56 neue Ollama-Tests + 21 Moondream-Regression alle gruen.
+- **Status:** **619 passed / 11 skipped / 0 failed (geschaetzt 542+56+21)** — neue Tests fuer ollama_client, model_registry, ollama_vision_wrapper. video_router Phase 4 nutzt jetzt Ollama primary + Moondream fallback mit `result["tag_source"]` Audit-Feld. /models/{list,available,recommendations,pull(SSE),delete} via models_router. Sandbox-FS-Git-Lock-Bypass etabliert (Pattern #15).
+- **Next Task:** WPF Model-Manager-UI, Settings-Slider speed/balance/quality, Audio/Pacing/HIRN/Chat-Track Phase 2, dann P1.2 4GB-VRAM-Stress-Test.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
@@ -91,23 +100,4 @@ PBStudio.UI/
 ├── Services/   # ApiClient.cs (VOLLSTÄNDIG), IApiClient.cs, SSEClient.cs,
 │               # PythonBridgeService.cs (PBSTUDIO_PYTHON_EXE env var)
 ├── ViewModels/ # 9 VMs (alle implementiert, MVVM Toolkit)
-├── Views/      # 9 XAML Views (alle vorhanden, kein StartupUri)
-├── Converters/ # NullToVisibility, InverseBool, InverseNullToVisibility
-├── Resources/  # app.ico (3-size, 16/32/48px)
-└── Models/     # AudioClipModel (Key+BeatCount), VideoClipModel (Thumbnail)
-```
-
-## 5. 🛠️ LOCKED VERSIONS
-| Tool | Version | Constraint |
-|------|---------|-----------|
-| Python | 3.11.x | madmom/BeatNet |
-| NumPy | 1.26.4 | < 2.0 strict |
-| onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | 2.4.1+cpu | ML tensors |
-| BeatNet | 1.1.1 | Beat detection |
-| FFmpeg | 6.x Gyan.dev | AMF encoders |
-| FAISS-CPU | 1.7.4 | cp311-win_amd64 |
-
-## 6. 📝 BRAIN UPDATE PROTOCOL
-Nach jedem Major-Task: Current/Next Task + Architecture Decisions aktualisieren.
-Bug-Fixes → in `CHANGELOG.md` dokumentieren, nicht hier. Ziel: < 120 Zeilen.
+├── Vie
