@@ -142,6 +142,12 @@
                 <TabItem Header="PERFORMANCE">
                     <views:VramTelemetryView/>
                 </TabItem>
+                <!-- Index 9: MODELLE (Ollama-Pilot Phase 4) — bewusst AM ENDE angehaengt,
+                     damit SelectedTabIndex=3 (KI-REGIE) als Default-Tab unangetastet bleibt
+                     (siehe MainViewModel.cs Zeile 76 + NavigateDirectorMessage-Handler). -->
+                <TabItem Header="MODELLE">
+                    <views:ModelManagerView/>
+                </TabItem>
             </TabControl>
 
             <!-- ── Status Bar ── -->
