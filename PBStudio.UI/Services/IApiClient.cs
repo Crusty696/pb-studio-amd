@@ -66,7 +66,7 @@ public interface IApiClient : IDisposable
     Task<BrainStatsResponse?> BrainStatsAsync();
     Task<BrainResetResponse?> BrainResetRequestAsync();
     Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken);
-    Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, CancellationToken ct = default);
+    Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, bool narrative = true, CancellationToken ct = default);
 
     #region VRAM Telemetry
     // GET /health/vram — Histogramm-basierte Performance-Telemetrie pro model_id.

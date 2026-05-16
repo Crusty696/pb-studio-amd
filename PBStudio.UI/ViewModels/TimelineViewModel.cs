@@ -624,6 +624,16 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     private static string FormatExplainTooltip(BrainExplainResponse e)
     {
         var sb = new StringBuilder();
+
+        // ---- LLM-Narrativ (falls vorhanden) zuerst, damit es prominent steht.
+        if (!string.IsNullOrWhiteSpace(e.Narrative))
+        {
+            sb.AppendLine(e.Narrative.Trim());
+            sb.AppendLine();
+            sb.AppendLine("────────────");
+            sb.AppendLine();
+        }
+
         sb.Append("Brain-Confidence: ").Append((e.FinalScore * 100).ToString("F0")).AppendLine(" %");
         if (!string.IsNullOrEmpty(e.SegmentType))
             sb.Append("Segment: ").AppendLine(e.SegmentType);

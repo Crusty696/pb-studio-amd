@@ -281,8 +281,13 @@ public class ApiClient : IApiClient
         => PostAsync<BrainResetResponse>("/brain/reset", new { confirmation_token = confirmationToken });
 
     // R-Brain-09: Erklaerung fuer Confidence-Balken in der Timeline.
-    public Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, CancellationToken ct = default)
-        => GetAsync<BrainExplainResponse>($"/brain/explain/{cutId}?top_n={topN}", ct);
+    // narrative=true (Default): Backend versucht LLM-Erklaerung via Ollama;
+    // bei Fehler bleibt response.Narrative=null und der Tooltip faellt auf die
+    // strukturierte Anzeige zurueck (kein Breaking-Change).
+    public Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, bool narrative = true, CancellationToken ct = default)
+        => GetAsync<BrainExplainResponse>(
+            $"/brain/explain/{cutId}?top_n={topN}&narrative={(narrative ? "true" : "false")}",
+            ct);
 
     #region VRAM Telemetry
     // GET /health/vram[?model_id=...] — Histogramm-basierte Performance-Telemetrie pro model_id.
