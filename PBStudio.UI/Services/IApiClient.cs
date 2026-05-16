@@ -74,4 +74,32 @@ public interface IApiClient : IDisposable
     // bei gesetztem modelId die single-entry Shape.
     Task<VramTelemetryResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
     #endregion
+
+    #region Model Manager
+    // ----------------------------------------------------------------------
+    // Ollama-Modell-Management (Phase Ollama-Pilot, Tasks #6 Roadmap-Plan).
+    // Endpoints im Backend: backend/routers/models_router.py
+    //   GET    /models/list            -> installierte Modelle
+    //   GET    /models/available       -> kuratierte Vision-Modelle + installed-Flag
+    //   POST   /models/pull            -> SSE-Stream "event: pull_progress\ndata: {...}\n\n"
+    //   DELETE /models/{name:path}     -> Modell loeschen
+    //   GET    /models/recommendations -> Auto-Selection-Empfehlung fuer Task+Mode
+    // ----------------------------------------------------------------------
+
+    /// <summary>Installierte Ollama-Modelle. Liefert null bei Transport-Fehler.</summary>
+    Task<ModelListResponse?> GetInstalledModelsAsync(CancellationToken ct = default);
+
+    /// <summary>Kuratierte Liste der von PB Studio unterstuetzten Vision-Modelle.</summary>
+    Task<AvailableModelsResponse?> GetAvailableModelsAsync(CancellationToken ct = default);
+
+    /// <summary>Streamt Pull-Progress fuer einen Modell-Download (SSE event=pull_progress).
+    /// Letztes Event setzt <see cref="PullProgressEvent.IsTerminal"/>=true (status=success ODER Error).</summary>
+    IAsyncEnumerable<PullProgressEvent> PullModelAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Loescht ein installiertes Ollama-Modell.</summary>
+    Task<bool> DeleteModelAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Empfehlung welches Modell die Auto-Selection fuer Task+Mode waehlen wuerde.</summary>
+    Task<ModelRecommendationResponse?> GetModelRecommendationAsync(string task = "video_captioning", string mode = "balance", CancellationToken ct = default);
+    #endregion
 }
