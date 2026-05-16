@@ -247,7 +247,6 @@
 
                                         <Button DockPanel.Dock="Right"
                                                 Command="{Binding DownloadCommand}"
-                                                Style="{StaticResource MaterialDesignFlatButton}"
                                                 Foreground="{StaticResource AbletonAccent}"
                                                 HorizontalAlignment="Right"
                                                 Padding="8,2" Height="28"
@@ -283,3 +282,4 @@
         </ScrollViewer>
     </Grid>
 </UserControl>
+                                                                                                  

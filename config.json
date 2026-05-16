@@ -20,14 +20,14 @@
         "default_mode": "balance",
         "task_preferences": {
             "video_captioning": {
-                "speed":   ["minicpm-v:8b-q4",  "gemma4:latest", "moondream:latest"],
-                "balance": ["gemma4:latest",    "llava:13b",     "minicpm-v:8b"],
-                "quality": ["llava:34b",        "qwen2-vl:7b",   "gemma4:latest"]
+                "speed":   ["minicpm-v:8b-2.6-q4_0", "minicpm-v:8b-q4",  "gemma4:latest", "moondream:latest"],
+                "balance": ["minicpm-v:8b-2.6-q4_0", "gemma4:latest",    "llava:13b",     "minicpm-v:8b"],
+                "quality": ["minicpm-v:8b-2.6-q4_0", "llava:34b",        "qwen2-vl:7b",   "gemma4:latest"]
             },
             "image_captioning": {
-                "speed":   ["moondream:latest", "gemma4:latest"],
-                "balance": ["gemma4:latest",    "llava:13b"],
-                "quality": ["llava:34b",        "qwen2-vl:7b"]
+                "speed":   ["minicpm-v:8b-2.6-q4_0", "moondream:latest", "gemma4:latest"],
+                "balance": ["minicpm-v:8b-2.6-q4_0", "gemma4:latest",    "llava:13b"],
+                "quality": ["minicpm-v:8b-2.6-q4_0", "llava:34b",        "qwen2-vl:7b"]
             }
         },
         "task_overrides": {}
