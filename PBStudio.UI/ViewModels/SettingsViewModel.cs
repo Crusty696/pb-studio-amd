@@ -41,6 +41,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _forceVramEnabled;
     [ObservableProperty] private int _forcedVramMb = 8192;
 
+    // ── KI-Modus (Auto-Selection-Bias fuer Vision-Modelle) ────────────────
+    // Slider mit 3 Stufen: 0 = Speed, 1 = Balance, 2 = Quality. Persistiert
+    // als String in settings.json::ki_mode. Default Balance.
+    [ObservableProperty] private int _kiModeIndex = 1;
+    [ObservableProperty] private string _kiModeLabel = "Balance";
+    [ObservableProperty] private string _kiModeDescription = "Mittlere Modellgroesse - guter Kompromiss zwischen Speed und Qualitaet.";
+    [ObservableProperty] private string _kiModeAutoSelectionText = "Wird beim naechsten Captioning ermittelt.";
+
+    private static readonly string[] KiModes = { "speed", "balance", "quality" };
+    public string KiMode => KiModes[Math.Clamp(KiModeIndex, 0, KiModes.Length - 1)];
+
     // ── UI State ──────────────────────────────────────────────────────────
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isSaving;
@@ -102,9 +113,69 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             PythonBridgeService.SetForcedVramEnvVar(null);
         }
 
+        // KI-Modus: String -> Slider-Index (speed=0, balance=1, quality=2). Default balance.
+        KiModeIndex = (s.KiMode ?? "balance").ToLowerInvariant() switch
+        {
+            "speed" => 0,
+            "quality" => 2,
+            _ => 1,
+        };
+        UpdateKiModeLabels();
+
         // Initiale Pfad-Validation (ohne async Probe)
         _settings.ValidateFFmpegPath(FfmpegPath, out var err);
         FfmpegPathError = err;
+    }
+
+    // Slider-Reaktion: Label + Beschreibung aktualisieren, Auto-Selection-Preview neu holen.
+    partial void OnKiModeIndexChanged(int value)
+    {
+        UpdateKiModeLabels();
+        _ = RefreshKiAutoSelectionAsync();
+    }
+
+    private void UpdateKiModeLabels()
+    {
+        switch (Math.Clamp(KiModeIndex, 0, 2))
+        {
+            case 0:
+                KiModeLabel = "Speed";
+                KiModeDescription = "Schnellste verfuegbare Modelle (z.B. moondream, minicpm-v). Niedrigste VRAM-Auslastung, basale Tags.";
+                break;
+            case 2:
+                KiModeLabel = "Quality";
+                KiModeDescription = "Groesstes verfuegbares Modell (z.B. llava:34b, qwen2-vl:7b). Detailreichste Captions, hoechster VRAM-Bedarf.";
+                break;
+            default:
+                KiModeLabel = "Balance";
+                KiModeDescription = "Mittlere Modellgroesse (z.B. gemma4:latest). Guter Kompromiss zwischen Speed und Qualitaet.";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Frueh-Preview: holt vom Backend, welches Modell die Auto-Selection fuer den
+    /// aktuellen KiMode aktuell waehlen wuerde. Bei Offline: leaves placeholder text.
+    /// </summary>
+    private async Task RefreshKiAutoSelectionAsync()
+    {
+        try
+        {
+            var rec = await _api.GetModelRecommendationAsync("video_captioning", KiMode).ConfigureAwait(true);
+            if (rec == null)
+            {
+                KiModeAutoSelectionText = "Backend nicht erreichbar.";
+                return;
+            }
+            if (!string.IsNullOrEmpty(rec.Model))
+                KiModeAutoSelectionText = $"Aktuell wuerde Auto-Selection: '{rec.Model}' waehlen.";
+            else
+                KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {KiMode}: {rec.Reason}";
+        }
+        catch
+        {
+            KiModeAutoSelectionText = "Auto-Selection-Preview fehlgeschlagen.";
+        }
     }
 
     // Live-Validation bei jeder Änderung des FFmpeg-Pfads
@@ -210,6 +281,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _settings.Current.ForcedVramMb = ForceVramEnabled && ForcedVramMb > 0
                 ? ForcedVramMb
                 : null;
+            _settings.Current.KiMode = KiMode;
             _settings.Save();
 
             // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
@@ -255,6 +327,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             }
         }
         StatusText = BackendOnline ? "Backend: Online" : "Backend: Offline";
+
+        if (BackendOnline)
+            await RefreshKiAutoSelectionAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]

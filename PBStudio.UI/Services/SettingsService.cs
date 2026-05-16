@@ -24,6 +24,13 @@ public class PbSettings
     /// null = Env-Var nicht setzen, Backend nutzt echtes VRAM.
     /// </summary>
     public int? ForcedVramMb { get; set; }
+
+    /// <summary>
+    /// KI-Modus fuer Auto-Selection von Vision-Modellen: "speed" | "balance" | "quality".
+    /// Default "balance". Wird beim Captioning-Call und im /models/recommendations-Query
+    /// mitgegeben. Persistiert in settings.json (snake_case: "ki_mode").
+    /// </summary>
+    public string KiMode { get; set; } = "balance";
 }
 
 /// <summary>

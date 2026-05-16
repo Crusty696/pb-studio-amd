@@ -159,6 +159,69 @@
                 </StackPanel>
             </md:Card>
 
+            <!-- ══ KI-Modus Card (Auto-Selection-Bias) ══ -->
+            <md:Card Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="KI-MODUS" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="Bestimmt welches Vision-Modell die App automatisch waehlt. Wirkt sich auf Captioning und kuenftige Audio/Pacing-Tracks aus."
+                               FontSize="11" Foreground="{StaticResource AbletonTextDim}"
+                               TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                    <!-- Slider Speed / Balance / Quality -->
+                    <DockPanel Margin="0,0,0,4">
+                        <TextBlock Text="Modus" Style="{StaticResource ParamLabel}"/>
+                        <TextBlock Text="{Binding KiModeLabel}"
+                                   Style="{StaticResource ParamValue}"
+                                   Foreground="{StaticResource AbletonAccent}"
+                                   HorizontalAlignment="Right"/>
+                    </DockPanel>
+
+                    <Slider Minimum="0" Maximum="2" TickFrequency="1"
+                            Value="{Binding KiModeIndex}"
+                            IsSnapToTickEnabled="True"
+                            TickPlacement="BottomRight"
+                            ToolTip="0 = Speed  ·  1 = Balance  ·  2 = Quality"/>
+
+                    <Grid Margin="0,2,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="SPEED"
+                                   FontSize="10" Foreground="{StaticResource AbletonTextDim}"
+                                   HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="1" Text="BALANCE"
+                                   FontSize="10" Foreground="{StaticResource AbletonTextDim}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="QUALITY"
+                                   FontSize="10" Foreground="{StaticResource AbletonTextDim}"
+                                   HorizontalAlignment="Right"/>
+                    </Grid>
+
+                    <TextBlock Text="{Binding KiModeDescription}"
+                               FontSize="11" Foreground="{StaticResource AbletonText}"
+                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                    <Border Background="{StaticResource AbletonPanel}"
+                            BorderBrush="{StaticResource AbletonBorder}"
+                            BorderThickness="1" CornerRadius="2"
+                            Padding="8,6">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="RobotOutline" Width="13" Height="13"
+                                                   Foreground="{StaticResource AbletonAccent}"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding KiModeAutoSelectionText}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource AbletonTextDim}"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </md:Card>
+
             <!-- ══ FFmpeg Configuration Card ══ -->
             <md:Card Style="{StaticResource AbletonCard}" Padding="14" Margin="0,0,0,8">
                 <StackPanel>
