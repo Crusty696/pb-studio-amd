@@ -552,7 +552,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
-            var explain = await _api.BrainExplainAsync(entry.CutId, topN: 3, ct).ConfigureAwait(false);
+            var explain = await _api.BrainExplainAsync(entry.CutId, topN: 3, ct: ct).ConfigureAwait(false);
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 entry.BrainExplainTooltip = explain == null
