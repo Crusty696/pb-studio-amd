@@ -102,4 +102,25 @@ public interface IApiClient : IDisposable
     /// <summary>Empfehlung welches Modell die Auto-Selection fuer Task+Mode waehlen wuerde.</summary>
     Task<ModelRecommendationResponse?> GetModelRecommendationAsync(string task = "video_captioning", string mode = "balance", CancellationToken ct = default);
     #endregion
+
+    #region Chat
+    // ----------------------------------------------------------------------
+    // KI-Chat-Endpoints (Ollama Tool-Use, Phase 2026-05-16).
+    // Backend: backend/routers/chat_router.py
+    //   POST   /chat/message   -> SSE-Stream (event: model|text|tool_call|tool_result|error|done)
+    //   GET    /chat/tools     -> Tool-Inventar
+    //   DELETE /chat/history   -> Server-Side History leeren
+    // ----------------------------------------------------------------------
+
+    /// <summary>Streamt ChatStreamEvents fuer eine User-Message. Mode = speed|balance|quality.</summary>
+    IAsyncEnumerable<ChatStreamEvent> SendChatMessageAsync(
+        string message,
+        IReadOnlyList<ChatMessage>? history = null,
+        string mode = "balance",
+        bool saveHistory = true,
+        CancellationToken ct = default);
+
+    /// <summary>Leert die Server-Side Chat-History.</summary>
+    Task<bool> ClearChatHistoryAsync(CancellationToken ct = default);
+    #endregion
 }

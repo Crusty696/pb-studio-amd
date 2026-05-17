@@ -148,6 +148,11 @@
                 <TabItem Header="MODELLE">
                     <views:ModelManagerView/>
                 </TabItem>
+                <!-- Index 10: KI-CHAT (Ollama Tool-Use Track 2026-05-16) — auch am ENDE,
+                     damit SelectedTabIndex=3 (KI-REGIE) unverletzt bleibt. -->
+                <TabItem Header="CHAT">
+                    <views:ChatView/>
+                </TabItem>
             </TabControl>
 
             <!-- ── Status Bar ── -->
