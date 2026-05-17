@@ -33,6 +33,16 @@
                 "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
                 "balance": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
                 "quality": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"]
+            },
+            "chat_general": {
+                "speed":   ["gemma4:latest", "llama3.2:3b", "phi3:mini"],
+                "balance": ["gemma4:latest", "llama3.1:8b", "mistral:7b"],
+                "quality": ["llama3.1:70b",  "qwen2.5:32b", "gemma4:latest"]
+            },
+            "chat_tool_use": {
+                "speed":   ["llama3.1:8b",   "mistral:7b",  "gemma4:latest"],
+                "balance": ["llama3.1:8b",   "qwen2.5:7b",  "gemma4:latest"],
+                "quality": ["llama3.1:70b",  "qwen2.5:32b", "llama3.1:8b"]
             }
         },
         "task_overrides": {}

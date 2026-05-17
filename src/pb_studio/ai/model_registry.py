@@ -48,6 +48,20 @@ DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
         "balance": ["llama3.1:8b",       "mistral:7b",     "gemma2:9b"],
         "quality": ["llama3.1:70b",      "qwen2.5:32b",    "llama3.1:8b"],
     },
+    # KI-Chat Track 2026-05-16: bilingualer Konversations-Agent (DE/EN).
+    # chat_general = freier Text-Chat ohne Tool-Use.
+    "chat_general": {
+        "speed":   ["gemma4:latest",     "llama3.2:3b",    "phi3:mini",   "gemma2:2b"],
+        "balance": ["gemma4:latest",     "llama3.1:8b",    "mistral:7b",  "gemma2:9b"],
+        "quality": ["llama3.1:70b",      "qwen2.5:32b",    "gemma4:latest"],
+    },
+    # chat_tool_use = Konversation MIT Function-Calling (Ollama tools-Parameter).
+    # Modelle ohne natives Tool-Calling werden vom ChatAgent erkannt + Fallback.
+    "chat_tool_use": {
+        "speed":   ["llama3.1:8b",       "mistral:7b",     "gemma4:latest"],
+        "balance": ["llama3.1:8b",       "qwen2.5:7b",     "mistral:7b",  "gemma4:latest"],
+        "quality": ["llama3.1:70b",      "qwen2.5:32b",    "llama3.1:8b"],
+    },
     # Brain-Explanation: kurzer DE-Text (1-3 Saetze) auf Basis der Achsen-Scores.
     "brain_explanation": {
         "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
@@ -248,6 +262,31 @@ class ModelRegistry:
                 if idx == 0:
                     reason = f"top preference fuer {mode}-mode"
                 elif idx > 0:
+                    reason = (
+                        f"fallback #{idx} — top {idx} preference(s) nicht installiert"
+                    )
+                else:
+                    reason = "keine Preferenz getroffen"
+            return {
+                "task": task,
+                "mode": mode,
+                "model": model,
+                "reason": reason,
+                "preference_list": prefs,
+                "override": override,
+                "installed": installed_names,
+            }
+        except NoSuitableModelError as exc:
+            return {
+                "task": task,
+                "mode": mode,
+                "model": None,
+                "reason": str(exc),
+                "preference_list": prefs,
+                "override": override,
+                "installed": installed_names,
+            }
+ > 0:
                     reason = (
                         f"fallback #{idx} — top {idx} preference(s) nicht installiert"
                     )
