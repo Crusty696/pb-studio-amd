@@ -275,7 +275,7 @@ class OllamaClient:
         return result
 
     # ------------------------------------------------------------------
-    # /api/chat — Chat-Completion (+ Vision)
+    # /api/chat — Chat-Completion (+ Vision + Tool-Use)
     # ------------------------------------------------------------------
     async def chat(
         self,
@@ -286,12 +286,21 @@ class OllamaClient:
         stream: bool = False,
         options: Optional[dict[str, Any]] = None,
         keep_alive: Optional[str] = None,
+        tools: Optional[list[dict[str, Any]]] = None,
+        format: Optional[str] = None,
     ) -> dict[str, Any]:
         """``POST /api/chat`` (non-streaming).
 
         ``images`` werden — falls gesetzt — an die LETZTE Message angehaengt
         (Ollama-Konvention). Vision-Modelle wie ``gemma4`` / ``llava`` lesen
         sie automatisch.
+
+        ``tools`` aktiviert Function-Calling (Ollama >= 0.3.0). Format
+        entspricht OpenAI-Style: ``[{"type": "function", "function": {
+        "name": str, "description": str, "parameters": <json-schema>}}]``.
+        Antwort enthaelt bei Tool-Use ``message.tool_calls`` Liste.
+        ``format`` kann ``"json"`` sein und erzwingt JSON-Output (fuer Modelle
+        die kein natives Tool-Calling haben — Workaround via Prompt-Engineering).
         """
         msgs = [dict(m) for m in messages]
         if images:
@@ -313,6 +322,10 @@ class OllamaClient:
             body["options"] = options
         if keep_alive is not None:
             body["keep_alive"] = keep_alive
+        if tools:
+            body["tools"] = tools
+        if format:
+            body["format"] = format
 
         response = await self._request_with_retry("POST", "/api/chat", json_body=body)
         self._raise_for_status(response, "chat")
@@ -322,6 +335,57 @@ class OllamaClient:
             raise OllamaResponseError(
                 f"chat: ungueltige JSON-Antwort: {exc}"
             ) from exc
+
+    async def chat_stream(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        *,
+        options: Optional[dict[str, Any]] = None,
+        keep_alive: Optional[str] = None,
+        tools: Optional[list[dict[str, Any]]] = None,
+        format: Optional[str] = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """``POST /api/chat`` (Streaming) — yieldet JSON-Chunks bis ``done=True``.
+
+        Jedes Event hat shape:
+          ``{"model": str, "message": {"role": str, "content": str,
+          "tool_calls": [...]?}, "done": bool}``.
+        Aufrufer muessen ``content``-Tokens selbst aggregieren. Tool-Calls
+        kommen typischerweise erst im finalen ``done=True``-Event.
+        """
+        client = await self._ensure_client()
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": [dict(m) for m in messages],
+            "stream": True,
+        }
+        if options:
+            body["options"] = options
+        if keep_alive is not None:
+            body["keep_alive"] = keep_alive
+        if tools:
+            body["tools"] = tools
+        if format:
+            body["format"] = format
+
+        try:
+            async with client.stream("POST", "/api/chat", json=body) as response:
+                self._raise_for_status(response, "chat_stream")
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        logger.debug("chat_stream: konnte Zeile nicht parsen: %r", line)
+                        continue
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            raise OllamaConnectionError(
+                f"chat_stream: Ollama nicht erreichbar: {exc}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise OllamaError(f"chat_stream: HTTP-Fehler: {exc}") from exc
 
     async def generate(
         self,
@@ -356,10 +420,11 @@ class OllamaClient:
                 f"generate: ungueltige JSON-Antwort: {exc}"
             ) from exc
 
+
     # ------------------------------------------------------------------
-    # /api/pull — Streaming-Progress
+    # /api/pull
     # ------------------------------------------------------------------
-    async def pull_model(self, name: str) -> AsyncIterator[dict[str, Any]]:
+    async def pull_model(self, name: str):
         """``POST /api/pull`` — yieldet Progress-Events bis fertig.
 
         Jedes Event ist ein dict mit Feldern wie ``status``, ``completed``,
