@@ -63,9 +63,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-05-16
-- **Phase:** Production / Verified — Ollama Video-Pilot Phase 1+2+3 deployed (2026-05-16). 3 lokale Commits (4a69ad2, b78191f, e040315). 56 neue Ollama-Tests + 21 Moondream-Regression alle gruen.
-- **Status:** **619 passed / 11 skipped / 0 failed (geschaetzt 542+56+21)** — neue Tests fuer ollama_client, model_registry, ollama_vision_wrapper. video_router Phase 4 nutzt jetzt Ollama primary + Moondream fallback mit `result["tag_source"]` Audit-Feld. /models/{list,available,recommendations,pull(SSE),delete} via models_router. Sandbox-FS-Git-Lock-Bypass etabliert (Pattern #15).
-- **Next Task:** WPF Model-Manager-UI, Settings-Slider speed/balance/quality, Audio/Pacing/HIRN/Chat-Track Phase 2, dann P1.2 4GB-VRAM-Stress-Test.
+- **Phase:** KI-Chat Track lokal fertig (2026-05-17) — 5 neue Commits (65bcef5..8f93398, HEAD=8f93398) via Pattern #15 Bypass (refs/heads/main in-place via O_WRONLY). **Push pending** — Computer-Use-Timeout, `scripts/chat_track_push_only.bat` zum Doppelklicken vorbereitet.
+- **Status:** **95 AI/Chat-Tests gruen** (39 neu: 22 tool_registry + 9 chat_agent + 8 chat_router; +56 Ollama/Moondream Regression). Chat-Backend: `src/pb_studio/ai/{tool_registry,chat_agent}.py` + `backend/routers/chat_router.py` mit POST /chat/message (SSE), GET /chat/tools, /chat/history. **27 Tools** ueber Audio/Video/Pacing/Brain/Project/Render/Models/System. ModelRegistry um `chat_general` + `chat_tool_use` Tasks erweitert. WPF: CHAT-Tab (Index 10), ChatViewModel + ChatView.xaml mit Tool-Call-Expander, ApiClient.SendChatMessageAsync IAsyncEnumerable<ChatStreamEvent> + SSE-Parser.
+- **Next Task:** Push autonom via Windows (chat_track_push_only.bat), WPF Release-Build verifizieren, Live-Test mit Ollama daemon (llama3.1:8b oder gemma4 fuer Tool-Use), Obsidian-Vault sync.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
@@ -112,11 +112,4 @@ PBStudio.UI/
 | Python | 3.11.x | madmom/BeatNet |
 | NumPy | 1.26.4 | < 2.0 strict |
 | onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | 2.4.1+cpu | ML tensors |
-| BeatNet | 1.1.1 | Beat detection |
-| FFmpeg | 6.x Gyan.dev | AMF encoders |
-| FAISS-CPU | 1.7.4 | cp311-win_amd64 |
-
-## 6. 📝 BRAIN UPDATE PROTOCOL
-Nach jedem Major-Task: Current/Next Task + Architecture Decisions aktualisieren.
-Bug-Fixes → in `CHANGELOG.md` dokumentieren, nicht hier. Ziel: < 120 Zeilen.
+| PyTorch (CPU) | 2.4.1+c
