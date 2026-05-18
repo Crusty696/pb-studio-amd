@@ -101,6 +101,51 @@ class FrameGrabber:
             if cap is not None:
                 cap.release()
 
+    def extract_thumbnail_strip(
+        self, video_path: str, n: int = 8, size: tuple = (160, 90)
+    ) -> list:
+        """Extract N evenly-spaced thumbnails across the full video.
+
+        Returns list of PIL.Image (length == n) or [] if video unreadable.
+        Used by the timeline clip template to show a frame strip a la Premiere.
+        """
+        from PIL import Image
+        import cv2
+
+        if n <= 0:
+            return []
+        if not Path(video_path).exists():
+            return []
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return []
+        try:
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            duration = total / fps if fps > 0 else 0.0
+            if total <= 0 or duration <= 0:
+                return []
+
+            # Pick n evenly-spaced time points; clamp to [0, duration-1/fps]
+            step = duration / max(1, n)
+            offsets = [min(duration - 1.0 / fps, step * i + step / 2.0) for i in range(n)]
+
+            out = []
+            for t in offsets:
+                cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    if out:
+                        out.append(out[-1])  # duplicate previous to keep length == n
+                    continue
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame_rgb).resize(size, Image.LANCZOS)
+                out.append(img)
+            return out
+        finally:
+            cap.release()
+
     def get_video_info(self, video_path: str) -> dict:
         video_path = Path(video_path)
         if not video_path.exists():
