@@ -137,6 +137,12 @@ class PacingService:
         last.end_time = audio_duration
         return cut_list
 
+    def _finalize_cut_list(self, cut_list: list, total_duration: float) -> list:
+        """Single exit-point post-processing for all auto-pacing return paths.
+        Future cut-list invariants (e.g. min-gap normalization, last-cut stretch)
+        belong here, not at each return site."""
+        return self._stretch_last_cut_to_audio(cut_list, total_duration)
+
     def _inject_cached_into_engine(
         self,
         pacing_engine: AdvancedPacingEngine,
@@ -392,12 +398,10 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                return cut_list
+                return self._finalize_cut_list(cut_list, total_duration)
 
             cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-            cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-            return cut_list
+            return self._finalize_cut_list(cut_list, total_duration)
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
@@ -407,8 +411,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                return cut_list
+                return self._finalize_cut_list(cut_list, total_duration)
             except Exception as final_e:
                 raise RuntimeError(
                     f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
@@ -784,12 +787,10 @@ class PacingService:
                         min_cut_interval=min_cut_interval,
                         on_progress=on_progress,
                     )
-                    cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                    return cut_list
+                    return self._finalize_cut_list(cut_list, total_duration)
 
                 cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                return cut_list
+                return self._finalize_cut_list(cut_list, total_duration)
             else:
                 cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
@@ -797,8 +798,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                return cut_list
+                return self._finalize_cut_list(cut_list, total_duration)
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
@@ -809,8 +809,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
-                return cut_list
+                return self._finalize_cut_list(cut_list, total_duration)
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 

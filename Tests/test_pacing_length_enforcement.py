@@ -1,6 +1,5 @@
 """Pacing-Service: letzter Cut wird auf audio_duration gestreckt."""
 import pytest
-from unittest.mock import patch, MagicMock
 
 from pb_studio.services.pacing_service import PacingService
 from pb_studio.pacing.pacing_models import CutListEntry
