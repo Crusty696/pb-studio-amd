@@ -115,6 +115,28 @@ class PacingService:
             cut_list.append(cut)
         return cut_list
 
+    def _stretch_last_cut_to_audio(
+        self, cut_list: list, audio_duration: float
+    ) -> list:
+        """Stretches the last cut so cut_list[-1].end_time == audio_duration.
+
+        Why: validate_timeline already blocks overflow (>audio_duration). Underflow
+        (timeline ends before audio) was silent — user heard music keep playing
+        after last visible frame. Premiere/Davinci force V1.length == A1.length.
+
+        No-op on empty list, on audio_duration <= 0, or if last cut already
+        reaches audio_duration.
+        """
+        if not cut_list or audio_duration <= 0.0:
+            return cut_list
+        last = cut_list[-1]
+        if last.end_time >= audio_duration - 0.001:
+            return cut_list
+
+        # Mutate end_time in-place (CutListEntry is a dataclass-like model).
+        last.end_time = audio_duration
+        return cut_list
+
     def _inject_cached_into_engine(
         self,
         pacing_engine: AdvancedPacingEngine,
@@ -364,23 +386,29 @@ class PacingService:
 
             if not cut_with_clips:
                 logger.warning("L-K5 Stem-generation lieferte 0 Cuts -> fallback round-robin.")
-                return self._generate_simple_round_robin(
+                cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
                     expected_bpm, target_duration,
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
+                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                return cut_list
 
-            return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+            cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+            cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+            return cut_list
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
-                return self._generate_simple_round_robin(
+                cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
                     expected_bpm, target_duration,
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
+                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                return cut_list
             except Exception as final_e:
                 raise RuntimeError(
                     f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
@@ -750,31 +778,39 @@ class PacingService:
                 
                 if not cut_with_clips:
                     logger.warning("Advanced generation delivered 0 cuts, falling back to simple mode.")
-                    return self._generate_simple_round_robin(
+                    cut_list = self._generate_simple_round_robin(
                         pacing_engine, audio_path, clips,
                         pacing_config.get("expected_bpm", 120), target_duration,
                         min_cut_interval=min_cut_interval,
                         on_progress=on_progress,
                     )
+                    cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                    return cut_list
 
-                return self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+                cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
+                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                return cut_list
             else:
-                return self._generate_simple_round_robin(
+                cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
                     pacing_config.get("expected_bpm", 120), target_duration,
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
+                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                return cut_list
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
             try:
-                return self._generate_simple_round_robin(
+                cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
                     pacing_config.get("expected_bpm", 120), target_duration,
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
+                cut_list = self._stretch_last_cut_to_audio(cut_list, total_duration)
+                return cut_list
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 
