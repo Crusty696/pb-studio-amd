@@ -1,6 +1,6 @@
 """KI-Chat-Agent fuer PB Studio.
 
-Orchestriert den Konversationsfluss zwischen User und LLM (Ollama) mit
+Orchestriert den Konversationsfluss zwischen User und LLM (LM Studio) mit
 Tool-Use. Der Agent:
 
 1. Nimmt eine User-Message + History entgegen.
@@ -10,16 +10,9 @@ Tool-Use. Der Agent:
 4. Tool-Results gehen als ``role=tool``-Messages zurueck ins LLM.
 5. Schleife laeuft maximal ``max_tool_turns``-mal, dann finaler Text.
 
-Events werden als ``ChatEvent``-Dataclasses geyieldet, damit der Router
-sie als SSE-Stream weitergeben kann.
-
-Sprach-Erhaltung: System-Prompt instruiert das Modell, in der Sprache der
-User-Message zu antworten. Funktioniert empirisch zuverlaessig mit
-gemma4/llama3.
-
-Iron Rule 10 (100% Honesty): Wenn das Modell kein natives Tool-Calling
-unterstuetzt, faellt der Agent NICHT silent auf einen Workaround zurueck —
-er reportet ``error``-Event mit klarer Diagnose.
+LM Studio Refactor 2026-05-17: Drop-in von ``OllamaClient`` auf
+``LMStudioClient``. Tool-Call-Format ist OpenAI-style (assistant
+``tool_calls`` array + separate ``tool`` message mit ``tool_call_id``).
 """
 from __future__ import annotations
 
@@ -33,70 +26,43 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 
 from .model_registry import ModelRegistry, ModelRegistryError, NoSuitableModelError
-from .ollama_client import OllamaClient, OllamaError
+from .lmstudio_client import LMStudioClient, LMStudioError
 from .tool_registry import ToolRegistry, build_default_registry, _get_backend_base_url
 
 logger = logging.getLogger(__name__)
 
 
-# ----------------------------------------------------------------------
-# System-Prompt
-# ----------------------------------------------------------------------
 DEFAULT_SYSTEM_PROMPT = (
-    "Du bist der KI-Assistent von PB Studio — einer Desktop-App fuer "
+    "Du bist der KI-Assistent von PB Studio - einer Desktop-App fuer "
     "DJ-Mix-Video-Editing mit KI (AMD DirectML, lokal). Du kannst per "
-    "Tool-Calls jede Funktion der App aufrufen: Audio importieren und "
-    "analysieren, Video importieren und analysieren, Pacing/Cut-List "
-    "generieren, Rendering starten, Brain (HIRN) abfragen und "
-    "trainieren, Projekte verwalten, Modelle managen.\n\n"
+    "Tool-Calls jede Funktion der App aufrufen.\n\n"
     "WICHTIG:\n"
     "- Antworte in der Sprache der Benutzeranfrage (Deutsch oder Englisch).\n"
     "- Nutze Tool-Calls statt zu raten. Wenn du Daten brauchst, hole sie via Tool.\n"
-    "- Bevor du destruktive Aktionen ausfuehrst (project.create, audio.import, "
-    "video.import, audio.separate_stems, render.start, render.cancel), bestaetige "
-    "kurz mit dem User, wenn der Kontext es nicht eindeutig macht.\n"
-    "- Wenn du keinen Clip findest, schlage 'audio.list_clips' oder 'video.list_clips' vor.\n"
+    "- Bevor du destruktive Aktionen ausfuehrst, bestaetige kurz mit dem User.\n"
     "- Halte Antworten knapp und konkret. Lange Listen kuerzen.\n"
     "- Bei Fehlern: zeige den Fehler und schlage eine Alternative vor.\n"
 )
 
 
-# ----------------------------------------------------------------------
-# Events
-# ----------------------------------------------------------------------
 @dataclass(frozen=True)
 class ChatEvent:
-    """Ein vom Agent emittiertes Event (an SSE weiterzureichen)."""
-    type: str  # "text" | "tool_call" | "tool_result" | "error" | "model" | "done"
-    payload: dict[str, Any]
+    type: str
+    payload: dict
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self):
         return {"type": self.type, **self.payload}
 
 
-# ----------------------------------------------------------------------
-# Agent
-# ----------------------------------------------------------------------
 class ChatAgent:
-    """Stateless Agent — eine Instanz pro Conversation OK, aber nicht erforderlich.
-
-    Args:
-        registry: ToolRegistry; default = build_default_registry().
-        ollama_client: optional injizierbar fuer Tests.
-        http_client: HTTP-Client fuer Backend-Calls (Tool-Handler).
-            Default = neuer httpx.AsyncClient auf ``PBSTUDIO_BACKEND_URL``
-            (env) oder localhost:8765.
-        model_registry: optional injizierbar.
-        system_prompt: ueberschreibt DEFAULT_SYSTEM_PROMPT.
-        max_tool_turns: maximale Anzahl Tool-Call-Iterationen pro Message,
-            verhindert unendliche Tool-Loops bei buggy Modellen.
-    """
+    """Stateless Agent - eine Instanz pro Conversation OK."""
 
     def __init__(
         self,
         *,
         registry: Optional[ToolRegistry] = None,
-        ollama_client: Optional[OllamaClient] = None,
+        lmstudio_client: Optional[LMStudioClient] = None,
+        ollama_client: Optional[LMStudioClient] = None,
         http_client: Optional[httpx.AsyncClient] = None,
         model_registry: Optional[ModelRegistry] = None,
         system_prompt: Optional[str] = None,
@@ -104,8 +70,9 @@ class ChatAgent:
         backend_base_url: Optional[str] = None,
     ) -> None:
         self._registry = registry or build_default_registry()
-        self._ollama: Optional[OllamaClient] = ollama_client
-        self._owned_ollama = ollama_client is None
+        injected_client = lmstudio_client if lmstudio_client is not None else ollama_client
+        self._llm: Optional[LMStudioClient] = injected_client
+        self._owned_llm = injected_client is None
         self._http: Optional[httpx.AsyncClient] = http_client
         self._owned_http = http_client is None
         self._model_registry = model_registry
@@ -131,12 +98,15 @@ class ChatAgent:
                 base_url=self._backend_base_url,
                 timeout=httpx.Timeout(60.0, connect=5.0),
             )
-        if self._ollama is None:
-            base = os.environ.get("PBSTUDIO_OLLAMA_URL", "http://localhost:11434")
-            self._ollama = OllamaClient(base_url=base)
+        if self._llm is None:
+            base = os.environ.get(
+                "PBSTUDIO_LMSTUDIO_URL",
+                os.environ.get("PBSTUDIO_OLLAMA_URL", "http://localhost:1234/v1"),
+            )
+            self._llm = LMStudioClient(base_url=base)
         if self._model_registry is None:
             ai_cfg = self._load_ai_config()
-            self._model_registry = ModelRegistry(ai_cfg, client=self._ollama)
+            self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
 
     async def aclose(self) -> None:
         if self._owned_http and self._http is not None:
@@ -144,17 +114,16 @@ class ChatAgent:
                 await self._http.aclose()
             finally:
                 self._http = None
-        if self._owned_ollama and self._ollama is not None:
+        if self._owned_llm and self._llm is not None:
             try:
-                await self._ollama.aclose()
+                await self._llm.aclose()
             finally:
-                self._ollama = None
+                self._llm = None
 
     @staticmethod
-    def _load_ai_config() -> dict[str, Any]:
+    def _load_ai_config() -> dict:
         try:
-            from pb_studio.config_manager import ConfigManager  # type: ignore
-
+            from pb_studio.config_manager import ConfigManager
             ai = ConfigManager().get("ai") or {}
             if isinstance(ai, dict):
                 return ai
@@ -162,22 +131,14 @@ class ChatAgent:
             logger.debug("AI-Config nicht ladbar fuer ChatAgent: %s", exc)
         return {}
 
-    # ------------------------------------------------------------------
-    # Modell-Auswahl
-    # ------------------------------------------------------------------
-    async def _pick_chat_model(self, mode: str) -> tuple[str, str]:
-        """Liefert (model_name, reason). Versucht erst chat_tool_use, fallback chat.
-
-        Raises:
-            NoSuitableModelError: wenn KEIN passendes Modell installiert ist.
-        """
+    async def _pick_chat_model(self, mode: str):
         await self._ensure_resources()
         assert self._model_registry is not None
         try:
             await self._model_registry.refresh()
-        except OllamaError as exc:
+        except LMStudioError as exc:
             raise NoSuitableModelError(
-                f"Ollama nicht erreichbar — Chat kann nicht laufen: {exc}"
+                f"LM Studio nicht erreichbar - Chat kann nicht laufen: {exc}"
             ) from exc
 
         for task in ("chat_tool_use", "chat_general", "chat"):
@@ -186,7 +147,6 @@ class ChatAgent:
                 return model, f"task={task}, mode={mode}"
             except (NoSuitableModelError, ModelRegistryError):
                 continue
-        # Letzter Versuch: irgendein installiertes Modell
         try:
             model = self._model_registry.select_best_for_task(
                 "chat", mode, allow_any_installed=True
@@ -197,21 +157,13 @@ class ChatAgent:
                 f"Kein chat-faehiges Modell installiert: {exc}"
             ) from exc
 
-    # ------------------------------------------------------------------
-    # Tool-Dispatch
-    # ------------------------------------------------------------------
-    async def _dispatch_tool(
-        self,
-        tool_call: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Loest einen vom LLM gewuenschten Tool-Call auf und ruft den Handler."""
+    async def _dispatch_tool(self, tool_call):
         await self._ensure_resources()
         assert self._http is not None
 
         function = tool_call.get("function") or {}
         name = function.get("name") or tool_call.get("name") or ""
         raw_args = function.get("arguments") if "arguments" in function else tool_call.get("arguments")
-        args: dict[str, Any]
         if isinstance(raw_args, dict):
             args = raw_args
         elif isinstance(raw_args, str):
@@ -231,7 +183,7 @@ class ChatAgent:
             }
         try:
             result = await tool.handler(args, http_client=self._http)
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:
             logger.exception("Tool-Handler %s failed: %s", name, exc)
             return {
                 "error": f"Tool-Handler-Exception: {exc}",
@@ -240,8 +192,7 @@ class ChatAgent:
         return result
 
     @staticmethod
-    def _truncate_tool_result(result: dict[str, Any], *, max_chars: int = 4000) -> str:
-        """Serialisiert ein Tool-Result fuer das LLM und kuerzt zu lange Outputs."""
+    def _truncate_tool_result(result, *, max_chars: int = 4000) -> str:
         try:
             text = json.dumps(result, ensure_ascii=False, default=str)
         except (TypeError, ValueError):
@@ -250,31 +201,17 @@ class ChatAgent:
             return text
         return text[: max_chars - 50] + " ...[TRUNCATED]"
 
-    # ------------------------------------------------------------------
-    # Haupt-API
-    # ------------------------------------------------------------------
     async def process_message(
         self,
         user_text: str,
-        history: Optional[list[dict[str, Any]]] = None,
+        history=None,
         *,
         mode: str = "balance",
         model_override: Optional[str] = None,
     ) -> AsyncIterator[ChatEvent]:
-        """Verarbeitet eine User-Message und yieldet ChatEvents.
-
-        Args:
-            user_text: aktuelle User-Eingabe.
-            history: vorherige Messages (Role+Content). Tool-Loop-Messages
-                werden NICHT in die History uebernommen — der Caller bekommt
-                am Ende nur die finale Assistant-Antwort.
-            mode: speed|balance|quality fuer die Modell-Auswahl.
-            model_override: explizites Modell (umgeht ModelRegistry).
-        """
         await self._ensure_resources()
-        assert self._ollama is not None
+        assert self._llm is not None
 
-        # Modell waehlen
         try:
             if model_override:
                 model = model_override
@@ -282,19 +219,13 @@ class ChatAgent:
             else:
                 model, reason = await self._pick_chat_model(mode)
         except NoSuitableModelError as exc:
-            yield ChatEvent(
-                "error",
-                {"message": str(exc), "stage": "model_selection"},
-            )
+            yield ChatEvent("error", {"message": str(exc), "stage": "model_selection"})
             yield ChatEvent("done", {"reason": "no_model"})
             return
 
         yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
 
-        # Messages aufbauen
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self._system_prompt}
-        ]
+        messages = [{"role": "system", "content": self._system_prompt}]
         if history:
             for msg in history:
                 role = msg.get("role")
@@ -305,42 +236,32 @@ class ChatAgent:
 
         tools_schema = self._registry.openai_schema()
 
-        # Multi-Turn Tool-Use-Loop
         final_text = ""
         for turn in range(self._max_tool_turns):
             try:
-                response = await self._ollama.chat(
+                response = await self._llm.chat(
                     model=model,
                     messages=messages,
                     tools=tools_schema,
                     options={"temperature": 0.2},
                 )
-            except OllamaError as exc:
-                # Wenn Modell tool-Param nicht unterstuetzt, retry ohne tools
+            except LMStudioError as exc:
                 msg_lower = str(exc).lower()
                 if "tools" in msg_lower or "function" in msg_lower:
-                    logger.info(
-                        "Modell %s unterstuetzt 'tools' nicht — Retry ohne Tool-Use", model
-                    )
+                    logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
                     try:
-                        response = await self._ollama.chat(
+                        response = await self._llm.chat(
                             model=model,
                             messages=messages,
                             options={"temperature": 0.2},
                         )
-                    except OllamaError as exc2:
-                        yield ChatEvent(
-                            "error",
-                            {"message": f"Ollama-Fehler: {exc2}", "stage": "chat"},
-                        )
-                        yield ChatEvent("done", {"reason": "ollama_error"})
+                    except LMStudioError as exc2:
+                        yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
+                        yield ChatEvent("done", {"reason": "llm_error"})
                         return
                 else:
-                    yield ChatEvent(
-                        "error",
-                        {"message": f"Ollama-Fehler: {exc}", "stage": "chat"},
-                    )
-                    yield ChatEvent("done", {"reason": "ollama_error"})
+                    yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc}", "stage": "chat"})
+                    yield ChatEvent("done", {"reason": "llm_error"})
                     return
 
             message = response.get("message") or {}
@@ -353,8 +274,7 @@ class ChatAgent:
                 break
 
             if tool_calls:
-                # Vor dem Dispatch: Assistant-Message mit Tool-Calls in History speichern
-                assistant_msg: dict[str, Any] = {
+                assistant_msg = {
                     "role": "assistant",
                     "content": content or "",
                     "tool_calls": tool_calls,
@@ -365,49 +285,49 @@ class ChatAgent:
                     function = tc.get("function") or {}
                     tool_name = function.get("name") or tc.get("name") or ""
                     raw_args = function.get("arguments")
+                    tool_call_id = tc.get("id") or ""
                     yield ChatEvent("tool_call", {
                         "name": tool_name,
                         "arguments": raw_args,
+                        "id": tool_call_id,
                     })
 
                     result = await self._dispatch_tool(tc)
                     yield ChatEvent("tool_result", {
                         "name": tool_name,
                         "result": result,
+                        "id": tool_call_id,
                     })
 
-                    # Tool-Antwort als role=tool-Message anhaengen
-                    messages.append({
+                    tool_msg = {
                         "role": "tool",
                         "content": self._truncate_tool_result(result),
                         "name": tool_name,
-                    })
+                    }
+                    if tool_call_id:
+                        tool_msg["tool_call_id"] = tool_call_id
+                    messages.append(tool_msg)
                 continue
 
-            # Weder content noch tool_calls — beende Loop, gib leeren Text aus
             yield ChatEvent("text", {"content": ""})
             break
         else:
-            # Loop ist voll durchgelaufen ohne return — last-resort: Modell ohne Tools
             try:
-                response = await self._ollama.chat(
+                response = await self._llm.chat(
                     model=model,
                     messages=messages + [{
                         "role": "user",
                         "content": (
                             "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
-                            "in 1-3 Saetzen zusammen — keine weiteren Tool-Calls."
+                            "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
                         ),
                     }],
                     options={"temperature": 0.2},
                 )
                 final_text = (response.get("message") or {}).get("content") or ""
                 yield ChatEvent("text", {"content": final_text})
-            except OllamaError as exc:
-                yield ChatEvent(
-                    "error",
-                    {"message": f"Ollama-Fehler beim Summary: {exc}", "stage": "summary"},
-                )
+            except LMStudioError as exc:
+                yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
 
         yield ChatEvent("done", {"final_text": final_text})
 

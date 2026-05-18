@@ -17,7 +17,9 @@ namespace PBStudio.UI.ViewModels;
 /// ViewModel fuer den MODELLE-Tab (Ollama Vision-Modelle).
 /// Zeigt zwei Listen: installierte Modelle (mit Delete-Button) und kuratierte Verfuegbare
 /// (mit Download-Button + Progress-Dialog). Nutzt <see cref="IApiClient"/>-Endpoints
-/// <c>/models/list</c>, <c>/models/available</c>, <c>/models/pull</c>, <c>/models/{name}</c>.
+/// <c>/models/list</c>, <c>/models/available</c>, <c>/models/recommendations</c>.
+/// LM Studio Refactor 2026-05-17: <c>/models/pull</c> und <c>/models/{name}</c> liefern
+/// jetzt HTTP 501 — Downloads/Loeschungen muessen ueber die LM-Studio-App passieren.
 /// </summary>
 public partial class ModelManagerViewModel : ObservableObject, IDisposable
 {
@@ -133,24 +135,33 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Wird von einer InstalledModelCard aufgerufen.</summary>
+    /// <summary>Wird von einer InstalledModelCard aufgerufen.
+    /// LM Studio Refactor 2026-05-17: Backend antwortet 501 — wir zeigen
+    /// den User-tauglichen Hinweis an statt einer Fehlermeldung.</summary>
     internal async Task DeleteInstalledAsync(InstalledModelCardViewModel card)
     {
-        var confirm = MessageBox.Show(
-            $"Modell '{card.Name}' wirklich loeschen?\n\nDie Dateien werden vom Ollama-Server entfernt.",
-            "Modell loeschen",
+        var info = MessageBox.Show(
+            $"Modelle koennen nicht mehr ueber PB Studio geloescht werden.\n\n" +
+            $"Bitte oeffne LM Studio -> My Models und entferne '{card.Name}' dort.\n\n" +
+            $"LM Studio jetzt oeffnen?",
+            "Modell-Verwaltung",
             MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (confirm != MessageBoxResult.Yes) return;
+            MessageBoxImage.Information);
+        if (info != MessageBoxResult.Yes) return;
 
         card.IsBusy = true;
         try
         {
-            var ok = await _api.DeleteModelAsync(card.Name).ConfigureAwait(true);
-            if (ok)
-                StatusText = $"Modell '{card.Name}' geloescht.";
-            else
-                ErrorText = $"Loeschen fehlgeschlagen fuer '{card.Name}'.";
+            await _api.DeleteModelAsync(card.Name).ConfigureAwait(true);
+            StatusText = $"Bitte LM Studio fuer '{card.Name}' verwenden.";
+        }
+        catch (NotSupportedException ex)
+        {
+            StatusText = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorText = $"Loeschen fehlgeschlagen fuer '{card.Name}': {ex.Message}";
         }
         finally
         {
@@ -159,7 +170,9 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         await LoadAsync().ConfigureAwait(true);
     }
 
-    /// <summary>Wird von einer AvailableModelCard aufgerufen. Oeffnet Progress-Dialog.</summary>
+    /// <summary>Wird von einer AvailableModelCard aufgerufen.
+    /// LM Studio Refactor 2026-05-17: Downloads werden nicht mehr unterstuetzt;
+    /// stattdessen erscheint ein Hinweis-Dialog, der zum LM-Studio Discover-Tab leitet.</summary>
     internal async Task DownloadAvailableAsync(AvailableModelCardViewModel card)
     {
         if (card.Installed)
@@ -169,26 +182,34 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var dialogVm = new DownloadProgressViewModel(card.Name, card.SizeEstimateGb);
+        MessageBox.Show(
+            $"Modell-Downloads laufen jetzt ueber LM Studio.\n\n" +
+            $"Bitte oeffne LM Studio -> Discover-Tab und lade '{card.Name}' dort herunter.\n\n" +
+            $"Nach dem Download ist das Modell sofort in PB Studio verfuegbar (LM Studio Server muss laufen).",
+            "Modell-Download",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+
+        // Optional: Backend trotzdem anrufen — antwortet 501, was wir im ApiClient
+        // in NotSupportedException ueberfuehren. Reines Logging.
         card.IsBusy = true;
-
-        var dialog = new Views.DownloadProgressDialog
+        try
         {
-            DataContext = dialogVm,
-            Owner = Application.Current?.MainWindow,
-        };
-
-        var cts = new CancellationTokenSource();
-        dialogVm.CancelRequested += (_, _) => cts.Cancel();
-
-        var streamTask = StreamPullAsync(card.Name, dialogVm, cts.Token);
-        dialog.ShowDialog(); // blockierend — Cancel-Button im Dialog setzt CancelRequested.
-
-        try { await streamTask.ConfigureAwait(true); }
-        catch { /* Errors landen im Dialog ueber dialogVm.ErrorText */ }
+            await foreach (var _ in _api.PullModelAsync(card.Name).WithCancellation(default).ConfigureAwait(true))
+            {
+                // nichts — wir erwarten ohnehin keine Events mehr
+            }
+        }
+        catch (NotSupportedException)
+        {
+            // erwarteter Pfad — der Hinweis war oben.
+        }
+        catch
+        {
+            // egal — User hat schon den Hinweis bekommen
+        }
         finally
         {
-            cts.Dispose();
             card.IsBusy = false;
         }
 
@@ -357,42 +378,4 @@ public partial class DownloadProgressViewModel : ObservableObject
     {
         Percent = 100;
         IsIndeterminate = false;
-        IsFinished = true;
-        StatusText = "Fertig.";
-        DetailText = $"'{ModelName}' wurde erfolgreich heruntergeladen.";
-    }
-
-    public void ApplyError(string error)
-    {
-        ErrorText = error;
-        IsFinished = true;
-        IsIndeterminate = false;
-        StatusText = "Fehler.";
-        DetailText = error;
-    }
-
-    public void ApplyCancelled()
-    {
-        IsFinished = true;
-        IsIndeterminate = false;
-        StatusText = "Abgebrochen.";
-        DetailText = "Pull wurde vom Nutzer abgebrochen.";
-    }
-
-    [RelayCommand]
-    private void Cancel() => CancelRequested?.Invoke(this, EventArgs.Empty);
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "0 B";
-        string[] units = { "B", "KB", "MB", "GB", "TB" };
-        double size = bytes;
-        int unit = 0;
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-        return $"{size:F2} {units[unit]}";
-    }
-}
+        I

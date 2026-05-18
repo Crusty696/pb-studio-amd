@@ -115,18 +115,20 @@
                                      Margin="0,0,12,12"
                                      Width="360">
                                 <StackPanel>
-                                    <!-- Header: Name + Delete -->
+                                    <!-- Header: Name + Manage-Hinweis (LM Studio) -->
                                     <DockPanel Margin="0,0,0,8">
+                                        <!-- Button bleibt klickbar, oeffnet Hinweis-Dialog der zu LM Studio leitet. -->
                                         <Button DockPanel.Dock="Right"
                                                 Command="{Binding DeleteCommand}"
                                                 Style="{StaticResource MaterialDesignFlatButton}"
-                                                Foreground="{StaticResource AbletonRed}"
+                                                Foreground="{StaticResource AbletonAccent}"
                                                 Padding="6,2" Height="24"
-                                                ToolTip="Modell loeschen">
+                                                Opacity="0.65"
+                                                ToolTip="Modelle werden ueber LM Studio verwaltet — klicken oeffnet einen Hinweis-Dialog">
                                             <StackPanel Orientation="Horizontal">
-                                                <icon:PackIconMaterial Kind="Delete" Width="13" Height="13"
+                                                <icon:PackIconMaterial Kind="OpenInNew" Width="13" Height="13"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="Loeschen" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Text="In LM Studio" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                         <TextBlock Text="{Binding Name}"
@@ -250,7 +252,8 @@
                                                 Foreground="{StaticResource AbletonAccent}"
                                                 HorizontalAlignment="Right"
                                                 Padding="8,2" Height="28"
-                                                ToolTip="Modell herunterladen via Ollama-Pull">
+                                                Opacity="0.75"
+                                                ToolTip="Modell-Downloads laufen ueber LM Studio (Discover-Tab). Klicken zeigt Anleitung.">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -262,9 +265,9 @@
                                                 </Style>
                                             </Button.Style>
                                             <StackPanel Orientation="Horizontal">
-                                                <icon:PackIconMaterial Kind="Download" Width="14" Height="14"
+                                                <icon:PackIconMaterial Kind="OpenInNew" Width="14" Height="14"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="Download" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Text="In LM Studio" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                     </DockPanel>
@@ -272,14 +275,4 @@
                                     <ProgressBar Height="3" Margin="0,8,0,0"
                                                  IsIndeterminate="True"
                                                  Foreground="{StaticResource AbletonAccent}"
-                                                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                </StackPanel>
-                            </md:Card>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
-</UserControl>
-                                                                                                  
+                             

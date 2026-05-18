@@ -2,7 +2,7 @@
 
 Liefert eine natuerlichsprachliche Erklaerung fuer einen Cut, basierend auf den
 strukturierten Achsen-Scores aus ``BrainExplainResponse``. Augmentiert die
-Beta-Bernoulli-Logik, ohne sie anzutasten — bei Ollama-Fehler oder Timeout
+Beta-Bernoulli-Logik, ohne sie anzutasten — bei LM-Studio-Fehler oder Timeout
 liefert die Funktion ``None`` und der Caller faellt auf die rein strukturierte
 Anzeige zurueck (Iron Rule 10 / 100 % Honesty).
 
@@ -13,13 +13,18 @@ Beispiel-Output (DE):
 
 Architektur:
     Brain-Endpoint -> generate_explanation(...) -> ModelRegistry-Auswahl
-    -> OllamaClient.chat(...) -> Text-Parsing + Cache (per cut_id, content_hash, mode).
+    -> LMStudioClient.chat(...) -> Text-Parsing + Cache (per cut_id, content_hash, mode).
 
 Iron Rules:
-    * Iron Rule 1: AMD DirectML only — Ollama laeuft als externer Daemon, kein CUDA.
+    * Iron Rule 1: AMD DirectML only — LM Studio laeuft als externer Daemon
+      mit Vulkan-Runtime (RX 7800 XT), kein CUDA.
     * Iron Rule 10: Bei Fehler ``None`` zurueckgeben + Warnlog, KEIN silent OK.
     * Iron Rule 13: Helper fuer das Brain-Modul; tastet die Beta-Bernoulli-
       Logik / WeightStore / Scorer nicht an.
+
+LM Studio Refactor 2026-05-17: Drop-in von ``OllamaClient`` auf
+``LMStudioClient``. API-Surface (chat-Methode) ist identisch — kein
+Logik-Change, nur Imports.
 """
 from __future__ import annotations
 
@@ -269,13 +274,14 @@ async def _async_generate_explanation(
     client: Optional[Any] = None,
 ) -> Optional[str]:
     """Async-Variante. Returnt ``None`` bei jedem nicht-recoverable Fehler."""
-    # Late imports — wir wollen Brain-Tests nicht zwingen, Ollama-Stack zu laden.
+    # Late imports — wir wollen Brain-Tests nicht zwingen, den ganzen
+    # LM-Studio-Stack zu laden.
     from pb_studio.ai.model_registry import (
         ModelRegistry,
         ModelRegistryError,
         NoSuitableModelError,
     )
-    from pb_studio.ai.ollama_client import OllamaClient, OllamaError
+    from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError
 
     ai_cfg = _load_ai_config()
     chash = _content_hash(
@@ -300,16 +306,16 @@ async def _async_generate_explanation(
     # Caller kann einen vorbereiteten Client uebergeben (Tests via MockTransport).
     owns_client = False
     if client is None:
-        client = OllamaClient(timeout_seconds=timeout_seconds)
+        client = LMStudioClient(timeout_seconds=timeout_seconds)
         owns_client = True
 
     try:
         registry = ModelRegistry(ai_cfg, client=client)
         try:
             await registry.refresh()
-        except OllamaError as exc:
+        except LMStudioError as exc:
             logger.warning(
-                "LLM-Narrator: Ollama nicht erreichbar (%s) — Fallback auf strukturierte Anzeige",
+                "LLM-Narrator: LM Studio nicht erreichbar (%s) — Fallback auf strukturierte Anzeige",
                 exc,
             )
             return None
@@ -339,7 +345,7 @@ async def _async_generate_explanation(
                     "num_predict": DEFAULT_MAX_TOKENS,
                 },
             )
-        except OllamaError as exc:
+        except LMStudioError as exc:
             logger.warning("LLM-Narrator: chat() fehlgeschlagen: %s", exc)
             return None
 
@@ -392,8 +398,8 @@ async def generate_explanation(
         mode: ``speed`` / ``balance`` / ``quality`` fuer Model-Auswahl.
         task: ``brain_explanation`` (Default; Caller kann andere Tasks nutzen).
         model_override: Wenn gesetzt, ueberspringt Auto-Selection.
-        timeout_seconds: HTTP-Timeout fuer den Ollama-Chat-Call.
-        client: Test-Hook fuer MockTransport-OllamaClient.
+        timeout_seconds: HTTP-Timeout fuer den LM-Studio-Chat-Call.
+        client: Test-Hook fuer MockTransport-LMStudioClient.
 
     Returns:
         Cleaner Narrativ-Text (1-3 Saetze) oder ``None`` wenn LLM nicht

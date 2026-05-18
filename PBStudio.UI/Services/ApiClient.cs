@@ -330,6 +330,12 @@ public class ApiClient : IApiClient
         return GetAsync<ModelRecommendationResponse>(url, ct);
     }
 
+    /// <summary>
+    /// LM Studio Refactor 2026-05-17: Modell-Loeschung wird vom Backend
+    /// nicht mehr unterstuetzt — LM Studio managed Modelle ueber die Desktop-App.
+    /// Der Endpoint liefert HTTP 501. Wir werfen <see cref="NotSupportedException"/>
+    /// mit einer User-tauglichen Message damit das UI das anzeigen kann.
+    /// </summary>
     public async Task<bool> DeleteModelAsync(string name, CancellationToken ct = default)
     {
         using var requestCts = ct.CanBeCanceled
@@ -339,10 +345,19 @@ public class ApiClient : IApiClient
 
         try
         {
-            // Backend route: DELETE /models/{name:path}. Name kann ":" enthalten (z.B. gemma4:latest)
-            // -> wir lassen Uri.EscapeDataString das ":" als %3A kodieren, FastAPI path-converter dekodiert es.
             var url = $"/models/{Uri.EscapeDataString(name)}";
             using var response = await _http.DeleteAsync(url, token).ConfigureAwait(false);
+
+            if ((int)response.StatusCode == 501)
+            {
+                _logger.LogInformation(
+                    "DeleteModel {Name}: Backend antwortete 501 — LM Studio managed Modelle ueber die App",
+                    name);
+                throw new NotSupportedException(
+                    "Modell-Loeschung wird nicht mehr ueber PB Studio unterstuetzt. " +
+                    "Bitte oeffne LM Studio -> My Models um das Modell zu entfernen.");
+            }
+
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogInformation("DeleteModel: {Name} nicht gefunden", name);
@@ -350,6 +365,10 @@ public class ApiClient : IApiClient
             }
             response.EnsureSuccessStatusCode();
             return true;
+        }
+        catch (NotSupportedException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, ct))
         {
@@ -432,7 +451,9 @@ public class ApiClient : IApiClient
         }
     }
 
-    /// <summary>Setup-Helfer: liefert offenen Response-Stream oder null bei Fehler/Cancel.</summary>
+    /// <summary>Setup-Helfer: liefert offenen Response-Stream oder null bei Fehler/Cancel.
+    /// LM Studio Refactor 2026-05-17: Wenn Backend mit HTTP 501 antwortet,
+    /// werfen wir <see cref="NotSupportedException"/> mit User-tauglicher Message.</summary>
     private async Task<System.IO.Stream?> OpenPullStreamAsync(string name, CancellationToken token, CancellationToken originalCt)
     {
         try
@@ -444,8 +465,23 @@ public class ApiClient : IApiClient
             // request bewusst NICHT disposen — der Lifetime ist an die Response gekoppelt,
             // und das Disposen waehrend der Streamkonsum kann den Socket killen. Der GC raeumt's.
             var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+
+            if ((int)response.StatusCode == 501)
+            {
+                _logger.LogInformation(
+                    "PullModel {Name}: Backend antwortete 501 — LM Studio managed Downloads ueber die App",
+                    name);
+                throw new NotSupportedException(
+                    "Modell-Download wird nicht mehr ueber PB Studio unterstuetzt. " +
+                    "Bitte oeffne LM Studio -> Discover-Tab um das Modell herunterzuladen.");
+            }
+
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        }
+        catch (NotSupportedException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, originalCt))
         {
@@ -868,26 +904,4 @@ public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int Total
 public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
 public record BrainStatsBucket(
     string Axis,
-    int ContextLevel,
-    string ContextKey,
-    double PositiveCount,
-    double NegativeCount,
-    double Posterior,
-    double PosteriorVariance = 0.0);
-
-public record BrainStatsResponse(
-    int TotalClicks,
-    int ColdStartAxes,
-    int LearnedAxes,
-    List<BrainStatsBucket> TopPositive,
-    List<BrainStatsBucket> TopNegative,
-    List<string>? ColdStartAxesList = null);
-public record BrainResetResponse(string Status, string? ConfirmationToken);
-public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
-public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
-// L-VIDEO-2 / X1: PeakMotion am Ende mit Default 0.0 fuer backward compat —
-// Backend liefert es jetzt im MotionData-Response, frueher wurde es im
-// Pydantic-Schema silent gedropped.
-public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory, double PeakMotion = 0.0);
-public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true, string? Encoder = null);
-public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);
+    int Contex

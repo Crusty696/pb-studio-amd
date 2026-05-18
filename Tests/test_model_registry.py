@@ -1,12 +1,12 @@
-"""Tests fuer pb_studio.ai.model_registry."""
+"""Tests fuer pb_studio.ai.model_registry (LM-Studio-Variante)."""
 from __future__ import annotations
 
 import asyncio
-import json
 
 import httpx
 import pytest
 
+from pb_studio.ai.lmstudio_client import LMStudioClient
 from pb_studio.ai.model_registry import (
     DEFAULT_TASK_PREFERENCES,
     ModelRegistry,
@@ -14,54 +14,53 @@ from pb_studio.ai.model_registry import (
     NoSuitableModelError,
     _name_matches,
 )
-from pb_studio.ai.ollama_client import OllamaClient
 
 
 def _run(coro):
     return asyncio.run(coro)
 
 
-def _client_with_models(model_names: list[str]) -> OllamaClient:
-    """Erzeugt einen OllamaClient, der via MockTransport ``model_names`` zurueckgibt."""
+def _client_with_models(model_names: list[str]) -> LMStudioClient:
+    """Erzeugt einen LMStudioClient, der via MockTransport ``model_names`` zurueckgibt."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/tags":
+        if request.url.path.endswith("/models") and request.method == "GET":
             return httpx.Response(
                 200,
                 json={
-                    "models": [
-                        {
-                            "name": n,
-                            "size": 1_000_000_000,
-                            "modified_at": "2026-05-15",
-                        }
+                    "data": [
+                        {"id": n, "object": "model", "owned_by": "test"}
                         for n in model_names
-                    ]
+                    ],
+                    "object": "list",
                 },
             )
         return httpx.Response(404)
 
-    return OllamaClient(transport=httpx.MockTransport(handler))
+    return LMStudioClient(transport=httpx.MockTransport(handler))
 
 
 # ======================================================================
-# _name_matches helper
+# _name_matches helper — angepasst auf LM-Studio-Tags
 # ======================================================================
 def test_name_matches_exact():
-    assert _name_matches("gemma4:latest", "gemma4:latest")
+    assert _name_matches("qwen/qwen3-vl-8b", "qwen/qwen3-vl-8b")
 
 
-def test_name_matches_candidate_without_tag():
+def test_name_matches_suffix_after_slash():
+    # LM Studio: 'qwen3-vl-8b' matched 'qwen/qwen3-vl-8b'
+    assert _name_matches("qwen3-vl-8b", "qwen/qwen3-vl-8b")
+    assert _name_matches("qwen/qwen3-vl-8b", "qwen3-vl-8b")
+
+
+def test_name_matches_legacy_ollama_tag():
+    # Backward-Compat fuer Ollama-Style ':latest'-Tags
     assert _name_matches("gemma4", "gemma4:9b")
-    assert _name_matches("gemma4", "gemma4:latest")
-
-
-def test_name_matches_installed_without_tag():
     assert _name_matches("gemma4:latest", "gemma4")
 
 
 def test_name_matches_different_models():
-    assert not _name_matches("gemma4", "llava:13b")
+    assert not _name_matches("qwen3-vl-8b", "gemma-4-31b-it-uncensored")
 
 
 # ======================================================================
@@ -69,7 +68,7 @@ def test_name_matches_different_models():
 # ======================================================================
 def test_registry_refresh_populates_installed_models():
     async def go():
-        async with _client_with_models(["gemma4:latest", "llava:13b"]) as client:
+        async with _client_with_models(["qwen/qwen3-vl-8b", "google/gemma-4-e4b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
         return reg
@@ -77,7 +76,7 @@ def test_registry_refresh_populates_installed_models():
     reg = _run(go())
     assert reg.is_loaded
     names = [m.name for m in reg.installed_models]
-    assert names == ["gemma4:latest", "llava:13b"]
+    assert names == ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"]
 
 
 def test_select_before_refresh_raises():
@@ -93,19 +92,20 @@ def test_get_preference_list_returns_defaults_when_no_config():
     reg = ModelRegistry()
     prefs = reg.get_preference_list("video_captioning", "balance")
     assert prefs == DEFAULT_TASK_PREFERENCES["video_captioning"]["balance"]
+    assert "qwen/qwen3-vl-8b" in prefs
 
 
 def test_get_preference_list_user_overrides_defaults():
     cfg = {
         "task_preferences": {
             "video_captioning": {
-                "balance": ["my-custom-model:latest"],
+                "balance": ["my-custom-model"],
             }
         }
     }
     reg = ModelRegistry(cfg)
     prefs = reg.get_preference_list("video_captioning", "balance")
-    assert prefs == ["my-custom-model:latest"]
+    assert prefs == ["my-custom-model"]
 
 
 def test_get_preference_list_invalid_mode_raises():
@@ -119,61 +119,65 @@ def test_get_preference_list_invalid_mode_raises():
 # ======================================================================
 def test_select_first_installed_pref():
     async def go():
-        async with _client_with_models(["llava:13b", "gemma4:latest"]) as client:
+        # balance: ["qwen/qwen3-vl-8b"] — soll qwen3-vl-8b waehlen
+        async with _client_with_models(["google/gemma-4-e4b", "qwen/qwen3-vl-8b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
-            # balance preference: gemma4 first, then llava
             return reg.select_best_for_task("video_captioning", "balance")
 
-    assert _run(go()) == "gemma4:latest"
+    assert _run(go()) == "qwen/qwen3-vl-8b"
 
 
-def test_select_falls_back_to_second_pref_when_first_missing():
+def test_select_falls_back_when_first_missing():
     async def go():
-        # Only llava installed; balance prefs are [gemma4, llava, minicpm]
-        async with _client_with_models(["llava:13b"]) as client:
+        # chat_tool_use speed: ["qwen3.5-9b-...", "google/gemma-4-e4b"]
+        # nur gemma installiert — fallback nimmt es
+        async with _client_with_models(["google/gemma-4-e4b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
-            return reg.select_best_for_task("video_captioning", "balance")
+            return reg.select_best_for_task("chat_tool_use", "speed")
 
-    assert _run(go()) == "llava:13b"
+    assert _run(go()) == "google/gemma-4-e4b"
 
 
 def test_select_speed_mode_picks_speed_pref():
     async def go():
-        async with _client_with_models(["moondream:latest"]) as client:
+        # video_captioning speed: ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"]
+        async with _client_with_models(["google/gemma-4-e4b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.select_best_for_task("video_captioning", "speed")
 
-    assert _run(go()) == "moondream:latest"
+    assert _run(go()) == "google/gemma-4-e4b"
 
 
 # ======================================================================
 # User override
 # ======================================================================
 def test_user_override_takes_precedence_if_installed():
-    cfg = {"task_overrides": {"video_captioning": "llava:13b"}}
+    cfg = {"task_overrides": {"video_captioning": "google/gemma-4-e4b"}}
 
     async def go():
-        async with _client_with_models(["llava:13b", "gemma4:latest"]) as client:
+        async with _client_with_models(
+            ["google/gemma-4-e4b", "qwen/qwen3-vl-8b"]
+        ) as client:
             reg = ModelRegistry(cfg, client=client)
             await reg.refresh()
             return reg.select_best_for_task("video_captioning", "balance")
 
-    assert _run(go()) == "llava:13b"
+    assert _run(go()) == "google/gemma-4-e4b"
 
 
 def test_user_override_ignored_if_not_installed_falls_back():
-    cfg = {"task_overrides": {"video_captioning": "not-installed:latest"}}
+    cfg = {"task_overrides": {"video_captioning": "not-installed-model"}}
 
     async def go():
-        async with _client_with_models(["gemma4:latest"]) as client:
+        async with _client_with_models(["qwen/qwen3-vl-8b"]) as client:
             reg = ModelRegistry(cfg, client=client)
             await reg.refresh()
             return reg.select_best_for_task("video_captioning", "balance")
 
-    assert _run(go()) == "gemma4:latest"
+    assert _run(go()) == "qwen/qwen3-vl-8b"
 
 
 # ======================================================================
@@ -181,7 +185,7 @@ def test_user_override_ignored_if_not_installed_falls_back():
 # ======================================================================
 def test_no_suitable_model_raises():
     async def go():
-        async with _client_with_models(["random-unrelated:latest"]) as client:
+        async with _client_with_models(["unrelated-tiny-model"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.select_best_for_task("video_captioning", "balance")
@@ -192,14 +196,14 @@ def test_no_suitable_model_raises():
 
 def test_no_suitable_with_allow_any_picks_first_installed():
     async def go():
-        async with _client_with_models(["random-unrelated:latest"]) as client:
+        async with _client_with_models(["unrelated-tiny-model"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.select_best_for_task(
                 "video_captioning", "balance", allow_any_installed=True
             )
 
-    assert _run(go()) == "random-unrelated:latest"
+    assert _run(go()) == "unrelated-tiny-model"
 
 
 def test_no_suitable_with_allow_any_but_empty_still_raises():
@@ -220,40 +224,44 @@ def test_no_suitable_with_allow_any_but_empty_still_raises():
 # ======================================================================
 def test_recommendation_reports_top_preference():
     async def go():
-        async with _client_with_models(["gemma4:latest"]) as client:
+        async with _client_with_models(["qwen/qwen3-vl-8b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.recommendation_with_reason("video_captioning", "balance")
 
     out = _run(go())
-    assert out["model"] == "gemma4:latest"
+    assert out["model"] == "qwen/qwen3-vl-8b"
     assert "top preference" in out["reason"]
-    assert out["installed"] == ["gemma4:latest"]
+    assert out["installed"] == ["qwen/qwen3-vl-8b"]
 
 
 def test_recommendation_reports_fallback_index():
     async def go():
-        async with _client_with_models(["llava:13b"]) as client:
+        # chat_general speed: ["google/gemma-4-e4b", "gemma-3-1b-..."]
+        # nur das zweite installiert — fallback #1
+        async with _client_with_models(
+            ["gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"]
+        ) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
-            return reg.recommendation_with_reason("video_captioning", "balance")
+            return reg.recommendation_with_reason("chat_general", "speed")
 
     out = _run(go())
-    assert out["model"] == "llava:13b"
+    assert "gemma-3-1b" in out["model"]
     assert "fallback" in out["reason"]
 
 
 def test_recommendation_reports_override():
-    cfg = {"task_overrides": {"video_captioning": "llava:13b"}}
+    cfg = {"task_overrides": {"video_captioning": "qwen/qwen3-vl-8b"}}
 
     async def go():
-        async with _client_with_models(["llava:13b"]) as client:
+        async with _client_with_models(["qwen/qwen3-vl-8b"]) as client:
             reg = ModelRegistry(cfg, client=client)
             await reg.refresh()
             return reg.recommendation_with_reason("video_captioning", "balance")
 
     out = _run(go())
-    assert out["model"] == "llava:13b"
+    assert out["model"] == "qwen/qwen3-vl-8b"
     assert "override" in out["reason"]
 
 

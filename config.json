@@ -16,39 +16,35 @@
         "vision_model": "moondream2_fp16",
         "audio_backend": "demucs_dml",
         "parallel_tasks": false,
-        "ollama_base_url": "http://localhost:11434",
+        "lmstudio_base_url": "http://localhost:1234/v1",
+        "ollama_base_url": "http://localhost:1234/v1",
         "default_mode": "balance",
         "task_preferences": {
             "video_captioning": {
-                "speed":   ["minicpm-v:8b-2.6-q4_0", "minicpm-v:8b-q4",  "gemma4:latest", "moondream:latest"],
-                "balance": ["minicpm-v:8b-2.6-q4_0", "gemma4:latest",    "llava:13b",     "minicpm-v:8b"],
-                "quality": ["minicpm-v:8b-2.6-q4_0", "llava:34b",        "qwen2-vl:7b",   "gemma4:latest"]
+                "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+                "balance": ["qwen/qwen3-vl-8b"],
+                "quality": ["qwen/qwen3-vl-8b"]
             },
             "image_captioning": {
-                "speed":   ["minicpm-v:8b-2.6-q4_0", "moondream:latest", "gemma4:latest"],
-                "balance": ["minicpm-v:8b-2.6-q4_0", "gemma4:latest",    "llava:13b"],
-                "quality": ["minicpm-v:8b-2.6-q4_0", "llava:34b",        "qwen2-vl:7b"]
+                "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+                "balance": ["qwen/qwen3-vl-8b"],
+                "quality": ["qwen/qwen3-vl-8b"]
             },
             "brain_explanation": {
-                "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
-                "balance": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
-                "quality": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"]
+                "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
+                "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+                "quality": ["gemma-4-26b-a4b-it-ultra-uncensored-heretic", "google/gemma-4-e4b"]
             },
             "chat_general": {
-                "speed":   ["gemma4:latest", "llama3.2:3b", "phi3:mini"],
-                "balance": ["gemma4:latest", "llama3.1:8b", "mistral:7b"],
-                "quality": ["llama3.1:70b",  "qwen2.5:32b", "gemma4:latest"]
+                "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
+                "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+                "quality": ["gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"]
             },
             "chat_tool_use": {
-                "speed":   ["llama3.1:8b",   "mistral:7b",  "gemma4:latest"],
-                "balance": ["llama3.1:8b",   "qwen2.5:7b",  "gemma4:latest"],
-                "quality": ["llama3.1:70b",  "qwen2.5:32b", "llama3.1:8b"]
+                "speed":   ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+                "balance": ["raw-uncensored-qwen3-14b-heretic-recovered", "qwen3.5-9b-uncensored-hauhaucs-aggressive"],
+                "quality": ["raw-uncensored-qwen3-14b-heretic-recovered", "gemma-4-31b-it-uncensored"]
             }
         },
         "task_overrides": {}
     },
-    "ui": {
-        "theme": "dark_red",
-        "scale_factor": 1.0
-    }
-}

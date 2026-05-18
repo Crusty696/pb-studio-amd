@@ -1,6 +1,6 @@
 """Model-Registry und Auto-Selection fuer PB Studio AI-Tasks.
 
-Wrapped ``OllamaClient.list_models()`` und matcht pro Task (z.B. Video-
+Wrapped ``LMStudioClient.list_models()`` und matcht pro Task (z.B. Video-
 Captioning) gegen eine kuratierte Preferenz-Liste, je nach Modus
 ``speed``/``balance``/``quality``. Per-Task User-Overrides ueberschreiben
 das Mapping immer.
@@ -10,63 +10,55 @@ Beispiel::
     registry = ModelRegistry()
     await registry.refresh()
     model = registry.select_best_for_task("video_captioning", mode="balance")
-    # -> "gemma4:latest"  (falls installiert; sonst naechstes Fallback)
 
 Quelle der Preferenzen:
     1. ``config.ai.task_overrides[task]``  (immer, falls gesetzt)
     2. ``config.ai.task_preferences[task][mode]``  (falls gesetzt)
     3. ``DEFAULT_TASK_PREFERENCES[task][mode]``  (Built-in Fallback)
 
-Die Registry installiert KEINE Modelle automatisch — sie waehlt nur aus
-dem aus, was bereits installiert ist. Wenn KEIN Preferenz-Modell installiert
-ist, raise ``NoSuitableModelError``.
+LM Studio Refactor 2026-05-17: Drop-in-Swap von ``OllamaClient`` auf
+``LMStudioClient``. Modell-Tags wechseln von Ollama-Format (``gemma4:latest``)
+auf LM-Studio-Format (``qwen/qwen3-vl-8b`` etc.).
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Optional
 
-from .ollama_client import OllamaClient, OllamaError, OllamaModelInfo
+from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioModelInfo
 
 logger = logging.getLogger(__name__)
 
-# Built-in Default-Preferenzen (kuratierte Vision-Modell-Liste).
-# Reihenfolge: hoechste Praeferenz zuerst. Erste installierte gewinnt.
 DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
     "video_captioning": {
-        "speed":   ["minicpm-v:8b-q4",   "gemma4:latest",  "moondream:latest"],
-        "balance": ["gemma4:latest",     "llava:13b",      "minicpm-v:8b"],
-        "quality": ["llava:34b",         "qwen2-vl:7b",    "gemma4:latest"],
+        "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "balance": ["qwen/qwen3-vl-8b"],
+        "quality": ["qwen/qwen3-vl-8b"],
     },
     "image_captioning": {
-        "speed":   ["moondream:latest",  "gemma4:latest"],
-        "balance": ["gemma4:latest",     "llava:13b"],
-        "quality": ["llava:34b",         "qwen2-vl:7b"],
+        "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "balance": ["qwen/qwen3-vl-8b"],
+        "quality": ["qwen/qwen3-vl-8b"],
     },
     "chat": {
-        "speed":   ["gemma2:2b",         "phi3:mini",      "llama3.2:3b"],
-        "balance": ["llama3.1:8b",       "mistral:7b",     "gemma2:9b"],
-        "quality": ["llama3.1:70b",      "qwen2.5:32b",    "llama3.1:8b"],
+        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
+        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+        "quality": ["gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"],
     },
-    # KI-Chat Track 2026-05-16: bilingualer Konversations-Agent (DE/EN).
-    # chat_general = freier Text-Chat ohne Tool-Use.
     "chat_general": {
-        "speed":   ["gemma4:latest",     "llama3.2:3b",    "phi3:mini",   "gemma2:2b"],
-        "balance": ["gemma4:latest",     "llama3.1:8b",    "mistral:7b",  "gemma2:9b"],
-        "quality": ["llama3.1:70b",      "qwen2.5:32b",    "gemma4:latest"],
+        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
+        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+        "quality": ["gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"],
     },
-    # chat_tool_use = Konversation MIT Function-Calling (Ollama tools-Parameter).
-    # Modelle ohne natives Tool-Calling werden vom ChatAgent erkannt + Fallback.
     "chat_tool_use": {
-        "speed":   ["llama3.1:8b",       "mistral:7b",     "gemma4:latest"],
-        "balance": ["llama3.1:8b",       "qwen2.5:7b",     "mistral:7b",  "gemma4:latest"],
-        "quality": ["llama3.1:70b",      "qwen2.5:32b",    "llama3.1:8b"],
+        "speed":   ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+        "balance": ["raw-uncensored-qwen3-14b-heretic-recovered", "qwen3.5-9b-uncensored-hauhaucs-aggressive"],
+        "quality": ["raw-uncensored-qwen3-14b-heretic-recovered", "gemma-4-31b-it-uncensored"],
     },
-    # Brain-Explanation: kurzer DE-Text (1-3 Saetze) auf Basis der Achsen-Scores.
     "brain_explanation": {
-        "speed":   ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
-        "balance": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
-        "quality": ["gemma4:latest", "minicpm-v:8b-2.6-q4_0"],
+        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
+        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
+        "quality": ["gemma-4-26b-a4b-it-ultra-uncensored-heretic", "google/gemma-4-e4b"],
     },
 }
 
@@ -82,19 +74,18 @@ class NoSuitableModelError(ModelRegistryError):
 
 
 def _normalize_model_name(name: str) -> str:
-    """Ollama haengt oft ``:latest`` an. Wir matchen tolerant."""
     return name.strip().lower()
 
 
 def _name_matches(candidate: str, installed: str) -> bool:
-    """Tag-Match: 'gemma4:latest' == 'gemma4:latest' oder 'gemma4' == 'gemma4:latest'.
-
-    Akzeptiert exakte Gleichheit ODER candidate ohne Tag matched installed mit
-    beliebigem Tag (z.B. 'gemma4' matched 'gemma4:9b').
-    """
+    """Tag-Match: tolerant gegenueber Ollama-/LM-Studio-Variationen."""
     cand = _normalize_model_name(candidate)
     inst = _normalize_model_name(installed)
     if cand == inst:
+        return True
+    if "/" in inst and inst.rsplit("/", 1)[1] == cand:
+        return True
+    if "/" in cand and cand.rsplit("/", 1)[1] == inst:
         return True
     if ":" not in cand and inst.split(":", 1)[0] == cand:
         return True
@@ -104,65 +95,49 @@ def _name_matches(candidate: str, installed: str) -> bool:
 
 
 class ModelRegistry:
-    """Haelt eine Liste installierter Modelle + waehlt das passende fuer Tasks.
-
-    ``config`` ist ein dict mit der ``ai``-Sektion aus ``config.json``. Beispiel::
-
-        {
-          "task_preferences": {"video_captioning": {"balance": ["gemma4:latest"]}},
-          "task_overrides":   {"video_captioning": "llava:13b"}
-        }
-
-    ``client`` ist optional — wird bei Bedarf neu erzeugt (mit Default-URL).
-    Tests sollten einen ``OllamaClient`` mit ``MockTransport`` injecten.
-    """
+    """Haelt eine Liste verfuegbarer Modelle + waehlt das passende fuer Tasks."""
 
     def __init__(
         self,
         config: Optional[dict[str, Any]] = None,
         *,
-        client: Optional[OllamaClient] = None,
+        client: Optional[LMStudioClient] = None,
     ) -> None:
         self._config = config or {}
         self._client = client
-        self._installed: list[OllamaModelInfo] = []
+        self._installed: list[LMStudioModelInfo] = []
         self._loaded = False
 
     @property
-    def installed_models(self) -> list[OllamaModelInfo]:
+    def installed_models(self) -> list[LMStudioModelInfo]:
         return list(self._installed)
 
     @property
     def is_loaded(self) -> bool:
         return self._loaded
 
-    def _resolve_client(self) -> OllamaClient:
+    def _resolve_client(self) -> LMStudioClient:
         if self._client is None:
-            self._client = OllamaClient()
+            self._client = LMStudioClient()
         return self._client
 
-    async def refresh(self) -> list[OllamaModelInfo]:
-        """Holt die aktuell installierten Modelle via Ollama."""
+    async def refresh(self) -> list[LMStudioModelInfo]:
         client = self._resolve_client()
         try:
             self._installed = await client.list_models()
-        except OllamaError:
+        except LMStudioError:
             self._installed = []
             self._loaded = True
             raise
         self._loaded = True
         logger.info(
-            "ModelRegistry refresh: %d Modelle installiert (%s)",
+            "ModelRegistry refresh: %d Modelle verfuegbar (%s)",
             len(self._installed),
             ", ".join(m.name for m in self._installed) or "-",
         )
         return list(self._installed)
 
-    # ------------------------------------------------------------------
-    # Selection
-    # ------------------------------------------------------------------
     def get_preference_list(self, task: str, mode: str) -> list[str]:
-        """Liefert die effektive Preferenz-Liste (User > Defaults)."""
         if mode not in VALID_MODES:
             raise ModelRegistryError(
                 f"Unbekannter mode={mode!r} (erlaubt: {sorted(VALID_MODES)})"
@@ -174,7 +149,6 @@ class ModelRegistry:
         return list(defaults.get(mode) or [])
 
     def get_user_override(self, task: str) -> Optional[str]:
-        """User-Override fuer einen Task (immer Vorrang). ``None`` wenn unset."""
         overrides = self._config.get("task_overrides") or {}
         value = overrides.get(task)
         if value is None:
@@ -189,21 +163,9 @@ class ModelRegistry:
         *,
         allow_any_installed: bool = False,
     ) -> str:
-        """Waehlt das beste installierte Modell fuer einen Task.
-
-        Reihenfolge:
-            1. ``task_overrides[task]`` (wenn installiert)
-            2. Erste installierte Entry aus ``preference_list(task, mode)``
-            3. (optional, falls ``allow_any_installed=True``) irgendein
-               installiertes Modell
-
-        Raises:
-            NoSuitableModelError: kein installiertes Modell passt.
-            ModelRegistryError: ungueltiger mode.
-        """
         if not self._loaded:
             raise ModelRegistryError(
-                "ModelRegistry nicht initialisiert — refresh() vor select aufrufen"
+                "ModelRegistry nicht initialisiert - refresh() vor select aufrufen"
             )
 
         installed_names = [m.name for m in self._installed]
@@ -214,9 +176,8 @@ class ModelRegistry:
                 if _name_matches(override, inst):
                     return inst
             logger.warning(
-                "User-Override %r fuer Task %r nicht installiert — Fallback auf Preferenzen",
-                override,
-                task,
+                "User-Override %r fuer Task %r nicht installiert - Fallback auf Preferenzen",
+                override, task,
             )
 
         prefs = self.get_preference_list(task, mode)
@@ -228,10 +189,8 @@ class ModelRegistry:
         if allow_any_installed and installed_names:
             chosen = installed_names[0]
             logger.warning(
-                "Keine Preferenz fuer Task %r/%s installiert — nutze beliebiges %r",
-                task,
-                mode,
-                chosen,
+                "Keine Preferenz fuer Task %r/%s installiert - nutze beliebiges %r",
+                task, mode, chosen,
             )
             return chosen
 
@@ -245,7 +204,6 @@ class ModelRegistry:
         task: str,
         mode: str = "balance",
     ) -> dict[str, Any]:
-        """Liefert das gewaehlte Modell + Begruendung (fuer Backend-Endpoint)."""
         override = self.get_user_override(task)
         prefs = self.get_preference_list(task, mode)
         installed_names = [m.name for m in self._installed]
@@ -263,32 +221,7 @@ class ModelRegistry:
                     reason = f"top preference fuer {mode}-mode"
                 elif idx > 0:
                     reason = (
-                        f"fallback #{idx} — top {idx} preference(s) nicht installiert"
-                    )
-                else:
-                    reason = "keine Preferenz getroffen"
-            return {
-                "task": task,
-                "mode": mode,
-                "model": model,
-                "reason": reason,
-                "preference_list": prefs,
-                "override": override,
-                "installed": installed_names,
-            }
-        except NoSuitableModelError as exc:
-            return {
-                "task": task,
-                "mode": mode,
-                "model": None,
-                "reason": str(exc),
-                "preference_list": prefs,
-                "override": override,
-                "installed": installed_names,
-            }
- > 0:
-                    reason = (
-                        f"fallback #{idx} — top {idx} preference(s) nicht installiert"
+                        f"fallback #{idx} - top {idx} preference(s) nicht installiert"
                     )
                 else:
                     reason = "keine Preferenz getroffen"

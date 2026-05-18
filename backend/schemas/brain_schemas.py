@@ -127,8 +127,8 @@ class BrainExplainResponse(BaseModel):
     narrative: Optional[str] = Field(
         default=None,
         description="Natuerlichsprachige Erklaerung (1-3 Saetze, DE) vom LLM-"
-                    "Narrator. None wenn Ollama nicht verfuegbar, kein "
+                    "Narrator. None wenn LM Studio nicht verfuegbar, kein "
                     "passendes Modell oder explizit per ?narrative=false "
                     "abgeschaltet. Augmentiert die strukturierten Achsen-"
                     "Daten, ersetzt sie nicht.",
-    )
+   

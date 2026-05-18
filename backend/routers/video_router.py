@@ -836,8 +836,8 @@ def _run_video_analysis(
                 extract_dominant_colors,
                 extract_tags_via_moondream,
             )
-            from pb_studio.video.ollama_vision_wrapper import (
-                extract_tags_via_ollama,
+            from pb_studio.video.lmstudio_vision_wrapper import (
+                extract_tags_via_lmstudio,
             )
 
             cap = cv2.VideoCapture(video_path)
@@ -853,11 +853,11 @@ def _run_video_analysis(
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 result["dominant_colors"] = extract_dominant_colors(frame_rgb, k=5)
 
-                # Primary: Ollama Auto-Selection (Vision-Modell aus Registry).
-                # Fallback: Moondream ONNX wenn Ollama down/leer ist
+                # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
+                # Fallback: Moondream ONNX wenn LM Studio down/leer ist
                 # (Iron Rule 10: keine silent fails — Tag-Quelle wird geloggt).
-                tag_source = "ollama"
-                tags = extract_tags_via_ollama(frame_rgb, mode="balance")
+                tag_source = "lmstudio"
+                tags = extract_tags_via_lmstudio(frame_rgb, mode="balance")
                 if not tags:
                     tag_source = "moondream_fallback"
                     tags = extract_tags_via_moondream(frame_rgb)
@@ -900,4 +900,4 @@ def _classify_motion(avg_motion: float) -> str:
         return "low"
     if avg_motion < 20.0:
         return "medium"
-    return "high"
+    

@@ -1,4 +1,4 @@
-"""Chat Router — KI-Chat-Endpoints fuer PB Studio (Ollama Tool-Use).
+"""Chat Router — KI-Chat-Endpoints fuer PB Studio (LM Studio Tool-Use).
 
 Endpoints:
   POST /chat/message     — SSE-Stream mit ChatEvents (text/tool_call/tool_result/...)
@@ -215,4 +215,4 @@ async def clear_history() -> StatusResponse:
     return StatusResponse(status="cleared")
 
 
-__all__ = ["router"]
+__all__ = ["router

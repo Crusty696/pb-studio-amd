@@ -229,9 +229,9 @@ async def explain(
     mit ihrer (bridge_value, posterior, score)-Aufschluesselung.
 
     Wenn ``narrative=true`` (Default), wird zusaetzlich eine natuerlich-
-    sprachliche Erklaerung via Ollama-LLM erzeugt. Bei Ollama-Fehler oder
-    fehlendem Modell bleibt ``narrative`` im Response auf ``None`` und die
-    strukturierten Felder werden trotzdem geliefert (Iron Rule 10).
+    sprachliche Erklaerung via LM-Studio-LLM erzeugt. Bei LM-Studio-Fehler
+    oder fehlendem Modell bleibt ``narrative`` im Response auf ``None``
+    und die strukturierten Felder werden trotzdem geliefert (Iron Rule 10).
 
     UX: Tooltip beim Hover ueber den Confidence-Balken in der Timeline.
     """
@@ -341,4 +341,4 @@ def _n_samples_at_most_specific(svc, axis: str, context_keys: list[str]) -> int:
             continue
         alpha, beta = row
         return int(round(alpha + beta))
-    return 0
+    ret
