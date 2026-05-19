@@ -503,9 +503,14 @@ async def separate_stems(
             pass
 
     try:
+        # B3-Fix (2026-05-19): explizit stem_timeout uebergeben (900s default
+        # statt gpu_timeout_seconds 300s) — Demucs auf 90min Mixe brauchte
+        # in der Vergangenheit >300s und brach mit GPU-Task-Timeout ab.
+        from backend.config import config as _server_config
         result = await with_gpu_task(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,
             model_id="mdx_net_inst",  # VRAM-Budget-Check via VRAMBudgetManager
+            timeout_seconds=_server_config.stem_timeout,
         )
 
         # L-N4: stems_paths in audio_clip persistieren — pacing_router liest das

@@ -82,7 +82,10 @@ class ServerConfig(BaseSettings):
     # Timeouts
     analysis_timeout: int = 120
     render_timeout: int = 600
-    stem_timeout: int = 300
+    # B3-Fix (2026-05-19): 300s war zu kurz fuer 90min DJ-Mixe — Demucs hat
+    # 2x in einem Tag mit Timeout-Error abgebrochen (log 14:11 + 16:42).
+    # 900s (15min) deckt typische 1-2h Sets ab. Override via PBSTUDIO_STEM_TIMEOUT.
+    stem_timeout: int = 900
 
     model_config = {"env_prefix": "PBSTUDIO_", "env_file": ".env"}
 
