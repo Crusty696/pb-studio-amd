@@ -304,4 +304,32 @@ async def recommend_model(
     from pb_studio.ai.model_registry import ModelRegistry, ModelRegistryError
     from pb_studio.ai.lmstudio_client import LMStudioError
 
-    ai_cfg = _load_ai_conf
+    ai_cfg = _load_ai_config()
+    try:
+        async with _make_client() as client:
+            registry = ModelRegistry(ai_cfg, client=client)
+            try:
+                await registry.refresh()
+            except LMStudioError as exc:
+                return RecommendationResponse(
+                    task=task,
+                    mode=mode,
+                    model=None,
+                    reason=f"LM Studio nicht erreichbar: {exc}",
+                    preference_list=registry.get_preference_list(task, mode) if mode in {"speed", "balance", "quality"} else [],
+                    override=registry.get_user_override(task),
+                    installed=[],
+                )
+            try:
+                data = registry.recommendation_with_reason(task, mode)
+            except ModelRegistryError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return RecommendationResponse(**data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("recommend_model fehlgeschlagen: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+__all__ = ["router"]

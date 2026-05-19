@@ -48,3 +48,8 @@
         },
         "task_overrides": {}
     },
+    "ui": {
+        "theme": "dark_red",
+        "scale_factor": 1.0
+    }
+}

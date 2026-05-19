@@ -378,4 +378,42 @@ public partial class DownloadProgressViewModel : ObservableObject
     {
         Percent = 100;
         IsIndeterminate = false;
-        I
+        IsFinished = true;
+        StatusText = "Fertig.";
+        DetailText = $"'{ModelName}' wurde erfolgreich heruntergeladen.";
+    }
+
+    public void ApplyError(string error)
+    {
+        ErrorText = error;
+        IsFinished = true;
+        IsIndeterminate = false;
+        StatusText = "Fehler.";
+        DetailText = error;
+    }
+
+    public void ApplyCancelled()
+    {
+        IsFinished = true;
+        IsIndeterminate = false;
+        StatusText = "Abgebrochen.";
+        DetailText = "Pull wurde vom Nutzer abgebrochen.";
+    }
+
+    [RelayCommand]
+    private void Cancel() => CancelRequested?.Invoke(this, EventArgs.Empty);
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double size = bytes;
+        int unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+        return $"{size:F2} {units[unit]}";
+    }
+}

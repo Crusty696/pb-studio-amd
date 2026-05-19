@@ -275,4 +275,13 @@
                                     <ProgressBar Height="3" Margin="0,8,0,0"
                                                  IsIndeterminate="True"
                                                  Foreground="{StaticResource AbletonAccent}"
-                             
+                                                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                </StackPanel>
+                            </md:Card>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -284,3 +284,9 @@ desktop.ini
 
 # Auto-QA-Loop generated reports
 test-report/
+
+# Cowork-Session Sentinels (live-check markers)
+*.flag
+
+# pytest coverage SQLite DB
+.coverage

@@ -268,3 +268,28 @@ Beim erneuten Versuch nach User-Eskalation bootete Bash sofort und lieferte die 
 **Hintergrund:** 2026-05-16 nach 25 ungepushten lokalen Commits hat David explizit gesagt: „Dann pushe sie über mein system du hast alle tools dafür warum muss ich dir das jedes mal sagen obwohl du behaubtest diese Anweisungen zu speichern in deinen claude.md dateien". CLAUDE.md Rule 12 wurde entsprechend aktualisiert — Push raus aus User-Action-only-Liste.
 
 **Verifikation nach Push:** `git rev-parse HEAD` == `git rev-parse origin/<branch>` UND `git log --oneline origin/<branch>..HEAD` ist leer.
+
+---
+
+## 2026-05-16 — Pattern #18: TextInputHost-Phantom = Computer-Use-Hard-Block (echter Hard-Block, nicht Pattern #15)
+
+**Situation (TS555-Fix-Session 2026-05-16 22:00):** Nach erfolgreichem lokalen Commit (5b8b5d3, Pattern #15) wollte ich `_finalize_ts555_fix.bat` per Explorer-Doppelklick triggern fuer Build + Push + Cleanup. Computer-Use lieferte 5x in Folge:
+> `"Textinputhost" is not in the allowed applications and is currently in front. ... If this is an elevated process ... it cannot be controlled — Windows UIPI blocks input from lower-integrity processes.`
+
+10s Wait, Re-Screenshot, neuer Klick → gleicher Fehler. Phantom haengt persistent in foreground (vermutlich IME-Input-Helper).
+
+**Anti-Pattern das ich ausgeschlossen habe:** Pattern #1 ("User muss Script ausfuehren") trifft NICHT zu — ich habe es 5x autonom versucht. Pattern #16 (Autonomie-Default-On) verlangt nicht das Unmoegliche.
+
+**Wahre Hard-Blocks fuer Computer-Use:**
+1. **TextInputHost.exe Phantom in foreground** — UIPI blockiert wie UAC. Kein add-to-allowlist moeglich (kein Start-Menu-Eintrag).
+2. **UAC-Prompt aktiv** (bekannt).
+3. **Elevated Task-Manager** (bekannt).
+
+**Was ich tun kann wenn Pattern #18 trifft:**
+- Lokalen Commit trotzdem fertigstellen (Pattern #15 GIT_INDEX_FILE Bypass funktioniert ohne Windows-Seite).
+- Push: nur moeglich wenn (a) Sandbox SSH-Key haette ODER (b) Computer-Use frei ist. Sonst User-Trigger noetig (ehrliche Disclosure).
+- EIN konsolidiertes Build+Push+Cleanup .bat schreiben damit User EIN Doppelklick reicht (nicht drei).
+
+**Was ich NICHT tun darf:** Iron Rule 10 verletzen — "Build PASS" behaupten ohne Live-Verify. Stattdessen: static-analysis-Begruendung + ehrlicher Disclosure-Block.
+
+**Prevention:** Beim ersten TextInputHost-Block sofort EIN konsolidiertes .bat bereitstellen (statt mehrere Einzel-Scripts) und User-Trigger ankuendigen. Kein 5x-Retry mit gleichem Fehler.

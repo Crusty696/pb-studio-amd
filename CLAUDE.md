@@ -48,6 +48,13 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
    - End-Report MUSS explizit zeigen: was gebaut, welche Binaries/Scripts aktualisiert, welche validiert.
    - **Hintergrund:** 2026-05-08 Trust-Incident — Bug-Fix in C# war im Source aber Release-Binary nicht gebaut → User testete altes Binary und verlor Vertrauen. Diese Regel verhindert Wiederholung.
 11. **OBSIDIAN VAULT FORTLAUFEND (User-Direktive 2026-05-11):** Obsidian-Vault `C:\Users\david\Brain\10_Projects\PB_studio\` MUSS bei JEDER nicht-trivialen Aenderung mitlaufen: INDEX.md `updated`-Frontmatter + Status-Sektion, log.md append entry, neue ADR in decisions/ bei Architektur-Entscheidung. Drift zwischen Code-State und Vault-State = Vertrauensverlust. Tools: `mcp__obsidian__*` (update_frontmatter, append_to_note, replace_in_note). **Hintergrund:** User explizit angemahnt 2026-05-11 dass Vault nicht stale werden darf.
+12. **FULL-SYNC EISERN (User-Direktive 2026-05-11):** Bei der Direktive "alles committen / kompletter Status / Vault gleichstand" MUSS folgendes synchron sein — **kein Detail darf ausgelassen oder uebersprungen werden**:
+   - Git: alle relevanten Files committed, `git status --short` leer (außer ignorierten Runtime-Artefakten in .gitignore)
+   - Obsidian INDEX.md: Frontmatter `updated` aktuell, Status-Sektion spiegelt Repo-HEAD wider (alle Commits seit letztem INDEX-Update reflektiert)
+   - Obsidian log.md: append entries fuer ALLE Session-Ereignisse (Commits, Audits, Decisions, Memory-Updates), keine Luecken
+   - Memory: jede neue Direktive/Lesson als eigenes feedback_*.md File + MEMORY.md Index-Eintrag
+   - CLAUDE.md §3 PROJECT BRAIN: Date + Status + Next Task + Bug-History aktuell
+   - Bei Drift erkannt: ZUERST sync, dann melden — nicht "kommt naechste Session". **Hintergrund:** User-Direktive 2026-05-11 "ein alles muss auf dem selben stand sein wie das projekt selber ist nicht das kleinste detail darf ausgelassen oder uebersprungen werden — das ist eine eiserne regel".
 
 12. **AUTONOMIE-LESSONS:** Bei JEDER User-Anweisung wo der User sagt "warum machst du das nicht selbst" oder aequivalent → Eintrag in `COWORK_AUTONOMY_LESSONS.md`. Pattern-Liste in dieser Datei vor jeder Code-Aktion mental durchgehen.
 
@@ -63,9 +70,20 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-05-16
-- **Phase:** KI-Chat Track lokal fertig (2026-05-17) — 5 neue Commits (65bcef5..8f93398, HEAD=8f93398) via Pattern #15 Bypass (refs/heads/main in-place via O_WRONLY). **Push pending** — Computer-Use-Timeout, `scripts/chat_track_push_only.bat` zum Doppelklicken vorbereitet.
-- **Status:** **95 AI/Chat-Tests gruen** (39 neu: 22 tool_registry + 9 chat_agent + 8 chat_router; +56 Ollama/Moondream Regression). Chat-Backend: `src/pb_studio/ai/{tool_registry,chat_agent}.py` + `backend/routers/chat_router.py` mit POST /chat/message (SSE), GET /chat/tools, /chat/history. **27 Tools** ueber Audio/Video/Pacing/Brain/Project/Render/Models/System. ModelRegistry um `chat_general` + `chat_tool_use` Tasks erweitert. WPF: CHAT-Tab (Index 10), ChatViewModel + ChatView.xaml mit Tool-Call-Expander, ApiClient.SendChatMessageAsync IAsyncEnumerable<ChatStreamEvent> + SSE-Parser.
-- **Next Task:** Push autonom via Windows (chat_track_push_only.bat), WPF Release-Build verifizieren, Live-Test mit Ollama daemon (llama3.1:8b oder gemma4 fuer Tool-Use), Obsidian-Vault sync.
+- **Phase:** LM Studio Refactor Phase A ✅ + Phase B Foundation ✅ (2026-05-17). KI-Chat Track lokal fertig (5 Commits 65bcef5..8f93398) — Push noch pending.
+- **Status:** 
+  - **Phase A LIVE-VERIFIED:** `lms runtime select llama.cpp-win-x86_64-vulkan-avx2@2.14.0` fixt das LM-Studio-Load-Problem. Root-Cause war defektes ROCm-Backend auf RX 7800 XT + Driver 31.0.24002.92. `POST /v1/chat/completions` → 200 + echte Response mit gemma-3-1b geladen unter Identifier `vk-test` (1.07 GB, 2048 ctx, Vulkan).
+  - **Phase B Foundation:** `src/pb_studio/ai/lmstudio_client.py` NEU (drop-in OllamaClient-API mit OpenAI-REST). Smoke-Test (`scripts/lmstudio_client_smoke.py`) PASS: is_alive, list_models (10), chat (content), chat_stream (events + done + content accumulated incl. reasoning_content).
+  - **Pre-staged Chat-Track-Rollback** aus Vor-Session liegt `index.lock`-bedingt unangetastet — keine Mix-Commits.
+- **Next Task:** 
+  1. Vor-Session pre-staged Zustand auflösen (Chat-Track-Rollback klären/verwerfen)
+  2. `model_registry.py` + `chat_agent.py` + `llm_narrator.py` + `ollama_vision_wrapper.py` → LMStudioClient via Iron Rule 13 (Verify-Before-Change, `pb-master` Pre-Sweep)
+  3. `backend/routers/models_router.py` pull/delete → 501 + `chat_router.py` Client tauschen
+  4. `config.json` URL → `http://localhost:1234/v1`
+  5. WPF `ApiClient.cs`/`ModelManagerView.xaml` anpassen, Release-Build
+  6. Tests umbauen (OpenAI-Format) + Commits + Push autonom
+  7. Obsidian-Vault sync nachholen
+  - **Komplette Details: `LM_STUDIO_PHASE_B_STATUS_2026-05-17.md`**
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
@@ -112,4 +130,11 @@ PBStudio.UI/
 | Python | 3.11.x | madmom/BeatNet |
 | NumPy | 1.26.4 | < 2.0 strict |
 | onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | 2.4.1+c
+| PyTorch (CPU) | 2.4.1+cpu | ML tensors |
+| BeatNet | 1.1.1 | Beat detection |
+| FFmpeg | 6.x Gyan.dev | AMF encoders |
+| FAISS-CPU | 1.7.4 | cp311-win_amd64 |
+
+## 6. 📝 BRAIN UPDATE PROTOCOL
+Nach jedem Major-Task: Current/Next Task + Architecture Decisions aktualisieren.
+Bug-Fixes → in `CHANGELOG.md` dokumentieren, nicht hier. Ziel: < 120 Zeilen.

@@ -974,4 +974,4 @@ def _classify_motion(avg_motion: float) -> str:
         return "low"
     if avg_motion < 20.0:
         return "medium"
-    
+    return "high"

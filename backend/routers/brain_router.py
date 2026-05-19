@@ -341,4 +341,4 @@ def _n_samples_at_most_specific(svc, axis: str, context_keys: list[str]) -> int:
             continue
         alpha, beta = row
         return int(round(alpha + beta))
-    ret
+    return 0

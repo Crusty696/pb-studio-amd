@@ -131,4 +131,4 @@ class BrainExplainResponse(BaseModel):
                     "passendes Modell oder explizit per ?narrative=false "
                     "abgeschaltet. Augmentiert die strukturierten Achsen-"
                     "Daten, ersetzt sie nicht.",
-   
+    )
