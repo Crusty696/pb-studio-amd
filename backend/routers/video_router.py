@@ -26,6 +26,7 @@ from ..schemas.video_schemas import (
     VideoAnalyzeRequest, VideoAnalysisResult,
     SceneInfo, MotionData,
     ThumbstripResponse,
+    ClipwaveResponse,
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 
@@ -309,6 +310,37 @@ def _extract_thumbstrip(video_path: str, n: int, size: tuple) -> list:
     """Indirection so tests can monkeypatch the heavy work."""
     from pb_studio.video.frame_extractor import FrameGrabber
     return FrameGrabber().extract_thumbnail_strip(video_path, n=n, size=size)
+
+
+@router.get(
+    "/clipwave/{clip_id}",
+    response_model=ClipwaveResponse,
+    summary="Clip-Audio-Peaks (downsampled mono) abrufen",
+    description=(
+        "Liefert N normalisierte (0..1) Peak-Werte fuer die Audio-Spur eines "
+        "Video-Clips. Used vom Timeline-Mini-Waveform-Layer. n geklammert auf [1,2048]."
+    ),
+)
+async def get_clipwave(
+    clip_id: int,
+    n: int = 256,
+    state: AppState = Depends(get_app_state),
+) -> ClipwaveResponse:
+    clip = state.get_video_clip(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+    n = max(1, min(2048, n))
+    try:
+        peaks = await asyncio.to_thread(_extract_clip_peaks, clip["path"], n)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Peaks-Erzeugung fehlgeschlagen: {e}")
+    return ClipwaveResponse(clip_id=clip_id, count=len(peaks), peaks=peaks)
+
+
+def _extract_clip_peaks(media_path: str, n: int) -> list[float]:
+    """Indirection for tests."""
+    from pb_studio.video.clip_audio_peaks import extract_peaks
+    return extract_peaks(media_path, n_buckets=n)
 
 
 @router.delete(

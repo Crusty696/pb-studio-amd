@@ -102,5 +102,12 @@ class ThumbstripResponse(BaseModel):
     frames: list[str]  # Each entry: "data:image/jpeg;base64,..."
 
 
+class ClipwaveResponse(BaseModel):
+    """Response: downsampled mono peaks (0..1) fuer Timeline-Clip-Waveform."""
+    clip_id: int
+    count: int
+    peaks: list[float]
+
+
 # Forward-References auflösen (SceneInfo/MotionData nach VideoAnalysisResult definiert)
 VideoAnalysisResult.model_rebuild()
