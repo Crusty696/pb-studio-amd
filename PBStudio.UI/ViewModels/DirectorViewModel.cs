@@ -217,11 +217,24 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         {
             ExpectedBpm = value.Bpm;
         }
-        GenerateCutListCommand.NotifyCanExecuteChanged();
+        NotifyOnUiThread(() => GenerateCutListCommand.NotifyCanExecuteChanged());
     }
 
     partial void OnSelectedVideoClipCountChanged(int value)
-        => GenerateCutListCommand.NotifyCanExecuteChanged();
+        => NotifyOnUiThread(() => GenerateCutListCommand.NotifyCanExecuteChanged());
+
+    // B2-Fix (2026-05-19): NotifyCanExecuteChanged braucht UI-Thread-Affinity.
+    // Wenn LoadClipsAsync auf Background-Thread laeuft und SelectedVideoClipCount
+    // setzt, triggert OnSelectedVideoClipCountChanged ohne Dispatcher → AggregateException
+    // (siehe wpf_app.log 17:02:29). Marshal explizit auf UI-Thread.
+    private static void NotifyOnUiThread(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+            action();
+        else
+            dispatcher.BeginInvoke(action);
+    }
 
     [RelayCommand(CanExecute = nameof(CanGenerateCutList))]
     private async Task GenerateCutListAsync()
