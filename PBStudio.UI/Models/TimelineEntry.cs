@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PBStudio.UI.Models;
@@ -33,6 +34,15 @@ public partial class TimelineEntryModel : ObservableObject
     /// <summary>R-Brain-09: true sobald /brain/explain einmal erfolgreich oder per Fehler beantwortet wurde.
     /// Wird auf false zurueckgesetzt, wenn Feedback fuer diesen Cut eingeht (Cache-Invalidate).</summary>
     public bool IsBrainExplainLoaded { get; set; }
+
+    /// <summary>N base64 JPEG data URLs from /video/thumbstrip/{id}. null until loaded.</summary>
+    [ObservableProperty] private ObservableCollection<string>? _thumbnailFrames;
+
+    /// <summary>Downsampled mono peaks (0..1) from /video/clipwave/{id}. null until loaded.</summary>
+    [ObservableProperty] private ObservableCollection<float>? _audioPeaks;
+
+    /// <summary>Set to true after both /thumbstrip and /clipwave have returned (or failed).</summary>
+    public bool IsAssetsLoaded { get; set; }
 
     public double Duration => EndTime - StartTime;
     public string TimeRangeText => $"{TimeSpan.FromSeconds(StartTime):mm\\:ss} - {TimeSpan.FromSeconds(EndTime):mm\\:ss}";
