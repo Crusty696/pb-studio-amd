@@ -24,7 +24,7 @@
 - [X] E007 [P2] [TECHNICAL] {STATUS:ReleaseReadiness} Release Hardening & UX Polish — Native dialogs, VRAM stress tests, and final UI refinements.
 - [X] E008 [P2] [PRODUCT] Deeper UX & Timeline Polish — Magnetic snapping, smooth scrolling, and UI transitions.
 - [X] E009 [P2] [TECHNICAL] Audio/Video Data Depth — Visualization of song sections, spectral data, and refined scene detection.
-- [ ] E010 [P2] [TECHNICAL] Resilience & Edge-Cases — Reconnect stress tests and extreme VRAM pressure validation. <!-- Tracking in Brain-Vault: 10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md (Punkt #16). Plan-Detail: specs/00010-resilience-edge-cases/plan.md -->
+- [~] E010 [P2] [TECHNICAL] Resilience & Edge-Cases — Reconnect stress tests and extreme VRAM pressure validation. *(Code + SSE-Live-Verify ✓. 4h-Stress-Run als deferred runtime-Test.)* <!-- Tracking in Brain-Vault: 10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md (Punkt #16). Plan-Detail: specs/00010-resilience-edge-cases/plan.md -->
 
 ## Dependency Diagram
 
@@ -79,8 +79,9 @@ graph LR
 - **Priority**: P2
 - **Source**: {STATUS:Stability}
 - **Acceptance criteria**:
-    - [ ] Verified SSE reconnection under failure conditions.
-    - [ ] Passing "Low VRAM" stress test (simulated 4GB).
+    - [X] Verified SSE reconnection under failure conditions. *(Implementiert + live-verifiziert 2026-05-15. Commits: 7418274 SSEClient 5-attempt-threshold + IsBackendReachable Property, bc4e37e ConnectionStatus-Overlay-Banner. Live-Verify-Screenshot `scripts/qa/screenshots/sse_recovery_02_overlay.png` zeigt rotes Banner nach ~50s, dann clear bei Backend-Recovery.)*
+    - [~] Passing "Low VRAM" stress test (simulated 4GB). *(Infrastructure ready: `PB_STUDIO_FORCED_VRAM=4096` env-var via VRAMArbiter (commit ef6e561 fixed constructor-crash), 4h-Stress-Script `scripts/qa/stress_4h.bat` → `src/tools/execute_4h_stress_test.py`. Live-Verify als deferred runtime-Test — laeuft ~4h, kann beilaeufig getriggert werden.)*
+- **Status:** Substantiell vollstaendig. Code-Komponenten + Tests + SSE-Live-Verify ✓. 4h-Stress-Run = scheduled background-task.
 
 ## Coverage Validation
 

@@ -293,3 +293,43 @@ Beim erneuten Versuch nach User-Eskalation bootete Bash sofort und lieferte die 
 **Was ich NICHT tun darf:** Iron Rule 10 verletzen — "Build PASS" behaupten ohne Live-Verify. Stattdessen: static-analysis-Begruendung + ehrlicher Disclosure-Block.
 
 **Prevention:** Beim ersten TextInputHost-Block sofort EIN konsolidiertes .bat bereitstellen (statt mehrere Einzel-Scripts) und User-Trigger ankuendigen. Kein 5x-Retry mit gleichem Fehler.
+
+## 2026-05-19 — Pattern #19: Post-Merge Working-Tree-Triage (Discard-vs-Keep-Strategie)
+
+**Situation:** Nach Timeline-Multi-Lane FF-Merge in main waren 121 uncommitted Eintraege im Working-Tree — Mix aus:
+- (a) sinnvollen Pre-Merge-Surgical-Stubs (53abecd) die mittlerweile obsolet sind
+- (b) Regressions-Diffs gegen den frisch gemergten HEAD (CLAUDE.md auf alten Stand, Timeline-Files ohne V1+A1)
+- (c) untracked Source/Test-Files die User-direktiv „behalten" werden sollten
+- (d) Debug-Trash (.lm_*.json, _push_result.txt, phase_a_probes)
+
+**Anti-Pattern (frueher gezeigt):** Pauschal `git add -A && commit -m "wip"` ODER pauschal `git stash && discard`. Beide loeschen Information.
+
+**Aktion (heute autonom):**
+1. **Snapshot via `git restore --staged .`** — un-stage alles, behalte Working-Tree intakt.
+2. **Diff-Triage pro File via `git diff --ignore-cr-at-eol --stat`** — CRLF-Noise raus, echte Aenderungen sehen.
+3. **3-Kategorien-Klassifikation:**
+   - KEEP: net-positive Changes vs. HEAD (z.B. `backend/main.py +2 chat_router include`)
+   - DISCARD: Regressionen gegen HEAD (`git checkout HEAD -- <files>`)
+   - ADD: Untracked die per User-Direktive bleiben
+4. **Per-Kategorie Commit-Gruppen:** chore-gitignore → chore-archive → feat-restore-A → feat-restore-B → feat-restore-C → chore-scripts → docs.
+5. **py_compile + dotnet build vor Commit** — kein "klingt-richtig"-Commit.
+
+**Resultat:** 7 Commits, 0 Regressionen, 674 pytest pass, WPF Release 0 Errors.
+
+**Trigger:** Post-Merge mit dirty working tree (>30 uncommitted Files). Audit zuerst (`git diff --ignore-cr-at-eol --stat`), nicht pauschal stagen.
+
+---
+
+## 2026-05-19 — Pattern #20: Stale-Reports im Repo-Root → archive/status/
+
+**Anti-Pattern:** Status-Reports (`STATUS_*.md`, `LM_STUDIO_*.md`, Audit-Snapshots) im Repo-Root liegen lassen weil "ist noch aktuell" — dann nach Folge-Refactor outdated, aber niemand archiviert.
+
+**Trigger:** Beim Post-Merge-Audit gefunden:
+- `STATUS_CONSOLIDATED_2026-05-15.md` (Ollama-Audit-Korrektur — Stand 2026-05-15, danach LM-Studio-Refactor 8c46676)
+- `LM_STUDIO_PHASE_B_STATUS_2026-05-17.md` (Phase B Foundation — danach 53abecd partial-rollback)
+- `LM_STUDIO_VERIFY_2026-05-17.md` (Verify-Output — gleicher Status)
+
+**Aktion:** `archive/status/` Ordner, `mv` + `git add archive/status/<file>` + Commit `chore(archive): stale status reports → archive/status/`. Frueheren Stand wird konserviert, neuer Stand im Vault-Synthese-Doc (`Brain/.../synthesis/2026-05-19-audit-last-5-days.md`).
+
+**Regel:** Wenn ein Status-Report > 48h alt UND ein Folge-Commit hat den dokumentierten Stand veraendert → archive/status/ + Vault-Synthese statt Repo-Root.
+

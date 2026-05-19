@@ -3,6 +3,52 @@
 
 ---
 
+## 2026-05-19 - Timeline-Multi-Lane Merge + Post-Merge-Cleanup (Audit-Phase)
+
+Worktree `worktree-timeline-multi-lane` (Commits c9dd4b7..8ed0111 + 22560a7 handoff) gemerged in `main` via FF `update-ref`. Anschliessend Post-Merge-Audit + 7 Cleanup-Commits (f7846d2..df2f9c6).
+
+Tests: **674 passed / 12 skipped / 0 failed** (3:25 min). WPF Release Build: 0 Errors, 10 Warnings.
+
+### Added (Timeline V1+A1 Lanes)
+- PBStudio.UI/Views/TimelineView.xaml: Split in V1 (110px) + A1 (80px) Lanes + 60px Track-Header
+- PBStudio.UI/Converters/PeaksToWaveformGeometryConverter.cs: PathGeometry-Generator fuer Mini-Waveforms
+- PBStudio.UI/Models/TimelineEntry.cs: ThumbnailFrames + AudioPeaks Properties
+- PBStudio.UI/ViewModels/TimelineViewModel.cs: Lazy-Load thumbstrip + clipwave per Entry
+- Drag collision-prevention (ClampStartToNeighbours) + Auto-Gap-Close im Contiguous-Mode
+
+### Added (Backend Per-Clip-Visuals)
+- GET /video/thumbstrip/{id}?n=8 — N evenly-spaced base64-JPEGs (160x90)
+- GET /video/clipwave/{id}?n=256 — Downsampled mono peaks (0..1)
+- src/pb_studio/video/clip_audio_peaks.extract_peaks
+- src/pb_studio/video/frame_extractor.FrameGrabber.extract_thumbnail_strip
+
+### Added (Pacing-Integrity)
+- src/pb_studio/services/pacing_service._finalize_cut_list: Streckt letzten Cut auf audio_duration (V1.length == A1.length invariant)
+- validate_timeline: Overlap + Audio-Overflow → HTTP 400 (statt Warning)
+
+### Restored (Post-Merge per User-Direktive 2026-05-19 "Chat-Track behalten")
+- backend/routers/chat_router.py + src/pb_studio/ai/chat_agent.py + tool_registry.py + Tests
+- src/pb_studio/ai/lmstudio_client.py + lmstudio_vision_wrapper.py + Tests
+- src/pb_studio/brain/llm_narrator.py + Tests (test_brain_router_narrative + test_llm_narrator)
+
+### Removed
+- Branch worktree-timeline-multi-lane (remote + lokal nach Merge)
+- Worktree-Dir .claude/worktrees/timeline-multi-lane/
+- Stale-Reports im Repo-Root → archive/status/ (LM_STUDIO_PHASE_B_STATUS_2026-05-17, LM_STUDIO_VERIFY_2026-05-17, STATUS_CONSOLIDATED_2026-05-15)
+
+### Fixed
+- pre-existing brain_schemas.py (unclosed Field) + chat_router.py (unterminated __all__) — surgical edits + Reverts
+- backend/main.py: chat_router import + include_router korrekt verkabelt
+
+### Updated (Doku)
+- specs/project-plan.md E010: Cross-Link auf Brain-Vault open-tasks/2026-05-19-post-timeline-merge.md (#16) + specs/00010-resilience-edge-cases/plan.md
+- .gitignore: LM-Studio debug-outputs, cowork-scratch, worktree-subdir, _CLEANUP_*.bat
+
+### Test-Status (Net seit 2026-05-14)
+- 2026-05-14: 511 passed / 8 skipped
+- 2026-05-17: +76 (brain-narrator + chat-track) → 587
+- 2026-05-19: +87 (Timeline-Multi-Lane backend + lmstudio + restoration) → **674 passed**
+
 ---
 
 ## 2026-05-15 - Cowork-Sessions Day 2 (Plan-Execution + Dep-Updates + Test-Coverage)

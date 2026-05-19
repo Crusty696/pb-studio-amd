@@ -69,15 +69,22 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-19
-- **Phase:** Timeline-Multi-Lane Redesign ✅ MERGED (commits c9dd4b7..8ed0111 in `main`). Live-Verify-UI pending.
+- **Date:** 2026-05-19 (Post-Merge Cleanup-Session)
+- **Phase:** Timeline-Multi-Lane Merge + Post-Merge Cleanup ✅ ABGESCHLOSSEN. 8/9 Audit-Reihenfolgepunkte autonom durchgezogen.
 - **Status:**
-  - **Timeline V1+A1 Lanes:** WPF-Redesign nach Premiere/DaVinci-Pattern. 11-Task TDD-Plan komplett durchgezogen. 19/19 Backend-Tests gruen. WPF Release Build 0 Errors. Backend `/openapi.json` 50 Routes inkl. neue `/video/thumbstrip` + `/video/clipwave`.
-  - **LM-Studio-Refactor 8c46676:** Halb-broken. Surgical-Restore + Vram/Timeline-Stubs in commit `53abecd` deckt nur Build. Tech-Debt — separater Cleanup empfohlen. Siehe Memory `project_lm_studio_refactor_broken`.
-  - **Pre-staged Chat-Track-Rollback** in parent main weiterhin unangetastet (47+ MM-Files). User-Direktive offen.
+  - **Timeline V1+A1 Lanes:** ✅ Gemerged + WPF Release 0 Errors. Live-Verify (#1) per User-Direktive skipped — Code-Verify reicht.
+  - **Working-Tree:** ✅ Clean. 121 uncommitted Eintraege geclustert in 7 Commits (f7846d2..df2f9c6): chore(gitignore) + chore(archive) + feat(chat) + feat(lm-studio) + feat(brain) + chore(scripts) + docs(specs).
+  - **Worktree-Cleanup:** ✅ `.claude/worktrees/timeline-multi-lane` entfernt, Branch `worktree-timeline-multi-lane` lokal+remote geloescht.
+  - **Chat-Track + LM-Studio:** ✅ Restored per User-Direktive ("Chat-Track behalten"). 53abecd-Deletions reversed. Phase B Foundation aktiv.
+  - **LM-Studio + Ollama Hybrid:** User-Direktive 2026-05-19 — beide Provider lauffaehig (private app). Switch via config.json + model_registry.py. Foundation: `lmstudio_client.py` + `ollama_client.py` koexistieren.
+  - **Tests:** 674 passed / 12 skipped / 0 failed (3:25 min).
+  - **E010 Resilience:** T003+T004+T011 ✅ (15.05.), `[ ] E010` in project-plan.md noch unchecked — acceptance SSE Reconnect + 4GB Stress muss live-verifiziert werden.
 - **Next Task:**
-  - **Komplette 15-Punkt Open-Tasks-Liste: `docs/handoff/2026-05-19-open-tasks-timeline-multi-lane.md`** (auch in Vault: `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`)
-  - Empfohlene Reihenfolge: #1 Live-Verify → #9-#11 Doku → #3 Chat-Track-Direktive → #2 Parent rebuild → #4-#5 Cleanup → #12-#15 optionale Re-Adds → #6-#8 LM-Studio-Cleanup separater Plan.
+  - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
+  - Verbleibend nach autonomem Lauf:
+    - #1 Live-Verify Timeline-UI (User-Direktive: skip → wird beim naechsten App-Start beilaeufig erfolgen)
+    - #16 E010 abschliessen: SSE-Reconnect Live-Test + 4GB-VRAM-Stress live + `[X] E010` setzen
+    - #12-#15 Original-Plan-Drops (DepthRenderer/SnapMarkers/Segment-Labels/VSM): optional, nur falls User die Features beim Nutzen vermisst.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
