@@ -69,21 +69,15 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-16
-- **Phase:** LM Studio Refactor Phase A ✅ + Phase B Foundation ✅ (2026-05-17). KI-Chat Track lokal fertig (5 Commits 65bcef5..8f93398) — Push noch pending.
-- **Status:** 
-  - **Phase A LIVE-VERIFIED:** `lms runtime select llama.cpp-win-x86_64-vulkan-avx2@2.14.0` fixt das LM-Studio-Load-Problem. Root-Cause war defektes ROCm-Backend auf RX 7800 XT + Driver 31.0.24002.92. `POST /v1/chat/completions` → 200 + echte Response mit gemma-3-1b geladen unter Identifier `vk-test` (1.07 GB, 2048 ctx, Vulkan).
-  - **Phase B Foundation:** `src/pb_studio/ai/lmstudio_client.py` NEU (drop-in OllamaClient-API mit OpenAI-REST). Smoke-Test (`scripts/lmstudio_client_smoke.py`) PASS: is_alive, list_models (10), chat (content), chat_stream (events + done + content accumulated incl. reasoning_content).
-  - **Pre-staged Chat-Track-Rollback** aus Vor-Session liegt `index.lock`-bedingt unangetastet — keine Mix-Commits.
-- **Next Task:** 
-  1. Vor-Session pre-staged Zustand auflösen (Chat-Track-Rollback klären/verwerfen)
-  2. `model_registry.py` + `chat_agent.py` + `llm_narrator.py` + `ollama_vision_wrapper.py` → LMStudioClient via Iron Rule 13 (Verify-Before-Change, `pb-master` Pre-Sweep)
-  3. `backend/routers/models_router.py` pull/delete → 501 + `chat_router.py` Client tauschen
-  4. `config.json` URL → `http://localhost:1234/v1`
-  5. WPF `ApiClient.cs`/`ModelManagerView.xaml` anpassen, Release-Build
-  6. Tests umbauen (OpenAI-Format) + Commits + Push autonom
-  7. Obsidian-Vault sync nachholen
-  - **Komplette Details: `LM_STUDIO_PHASE_B_STATUS_2026-05-17.md`**
+- **Date:** 2026-05-19
+- **Phase:** Timeline-Multi-Lane Redesign ✅ MERGED (commits c9dd4b7..8ed0111 in `main`). Live-Verify-UI pending.
+- **Status:**
+  - **Timeline V1+A1 Lanes:** WPF-Redesign nach Premiere/DaVinci-Pattern. 11-Task TDD-Plan komplett durchgezogen. 19/19 Backend-Tests gruen. WPF Release Build 0 Errors. Backend `/openapi.json` 50 Routes inkl. neue `/video/thumbstrip` + `/video/clipwave`.
+  - **LM-Studio-Refactor 8c46676:** Halb-broken. Surgical-Restore + Vram/Timeline-Stubs in commit `53abecd` deckt nur Build. Tech-Debt — separater Cleanup empfohlen. Siehe Memory `project_lm_studio_refactor_broken`.
+  - **Pre-staged Chat-Track-Rollback** in parent main weiterhin unangetastet (47+ MM-Files). User-Direktive offen.
+- **Next Task:**
+  - **Komplette 15-Punkt Open-Tasks-Liste: `docs/handoff/2026-05-19-open-tasks-timeline-multi-lane.md`** (auch in Vault: `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`)
+  - Empfohlene Reihenfolge: #1 Live-Verify → #9-#11 Doku → #3 Chat-Track-Direktive → #2 Parent rebuild → #4-#5 Cleanup → #12-#15 optionale Re-Adds → #6-#8 LM-Studio-Cleanup separater Plan.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
