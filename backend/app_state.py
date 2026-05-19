@@ -14,17 +14,48 @@ Einschränkungen (akzeptabel für Single-User Desktop-App):
 - Keine Session-Isolation (nur ein User gleichzeitig)
 """
 
+import asyncio
 import json
 import logging
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pb_studio.data.database_core import normalize_media_path
 from pb_studio.data.repositories.project_repository import ProjectRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_persist_error(source: str, message: str, detail: str) -> None:
+    """C2-Fix (Pe-C1, GAP-1 silent-failure, 2026-05-19): Persist-Fehler dürfen
+    nicht mehr als "unkritisch" geschluckt werden — UI MUSS sie sehen.
+
+    Versucht ein SSE-Event "persist_error" zu publizieren, damit das Frontend
+    einen Toast anzeigen kann. Fallback: nur Log (wenn kein Event-Loop läuft,
+    z.B. in pytest-Sync-Context).
+
+    Iron Rule 10 (100% Honesty): User darf nicht denken, ein Import war OK
+    wenn er in Wirklichkeit nur in-memory war und beim Restart weg ist.
+    """
+    payload: dict[str, Any] = {
+        "source": source,
+        "message": message,
+        "detail": detail[:500] if detail else "",
+        "severity": "error",
+    }
+    try:
+        from backend.dependencies import publish_event  # lazy import, vermeidet circular
+        loop = asyncio.get_running_loop()
+        # Schedule coroutine without blocking — fire-and-forget
+        loop.create_task(publish_event("persist_error", payload))
+    except RuntimeError:
+        # Kein running loop (z.B. sync test context oder startup-Phase) — Fallback Log
+        logger.error(f"persist_error [{source}] {message}: {detail}")
+    except Exception as exc:
+        # Defensive: emit failure darf den eigentlichen Fail-Path nicht blocken
+        logger.error(f"persist_error emit fehlgeschlagen ({exc}) [{source}] {message}: {detail}")
 
 
 def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
@@ -327,7 +358,8 @@ class AppState:
         try:
             ProjectRepository().update_project(project_id, name=project.get("name"), data=project_data)
         except Exception as e:
-            logger.warning("Projekt-DB-Sync fehlgeschlagen (unkritisch): %s", e)
+            logger.error("Projekt-DB-Sync fehlgeschlagen: %s", e)
+            _emit_persist_error("project_sync", "Projekt-DB-Sync fehlgeschlagen", str(e))
 
     def _find_audio_clip_by_path(self, file_path: str) -> Optional[dict]:
         normalized = normalize_media_path(file_path)
@@ -549,7 +581,11 @@ class AppState:
             if tempo_curve is not None:
                 cache_update["tempo_curve"] = tempo_curve
 
-            # In-Memory Cache ebenfalls aktualisieren
+            # C3-Fix (D-C1, 2026-05-19): NICHT nur audio_analysis_cache updaten,
+            # sondern auch audio_clips[clip_id] — sonst sehen Endpoints, die
+            # direkt aus audio_clips lesen (z.B. GET /audio/clips), inkonsistente
+            # Werte zum cache. Vor dem Fix: cache hatte bpm=128, audio_clips
+            # noch bpm=0.0 bis zum naechsten load_from_db.
             with self._state_lock:
                 if clip_id in self.audio_analysis_cache:
                     self.audio_analysis_cache[clip_id].update(cache_update)
@@ -559,6 +595,9 @@ class AppState:
                         **cache_update,
                         "duration_seconds": clip.get("duration_seconds", 0.0),
                     }
+                # D-C1 Truth-Source-Konsolidierung: spiegele cache_update in audio_clips
+                if clip_id in self.audio_clips:
+                    self.audio_clips[clip_id].update(cache_update)
 
             bpm_str = f"{bpm:.1f}" if isinstance(bpm, (int, float)) else "—"
             logger.debug(
@@ -566,7 +605,12 @@ class AppState:
                 f"(bpm={bpm_str}, key={key}, subtracks={'yes' if subtrack_segments is not None else '—'})"
             )
         except Exception as e:
-            logger.warning(f"Audio-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Audio-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
+            _emit_persist_error(
+                "audio_analysis",
+                f"Audio-Analyse für Clip {clip_id} nicht gespeichert",
+                str(e),
+            )
 
     def update_video_analysis(
         self,
@@ -688,7 +732,8 @@ class AppState:
             if embedding_samples is not None:
                 cache_update["embedding_samples"] = int(embedding_samples)
 
-            # In-Memory Cache aktualisieren (analog audio_analysis_cache).
+            # C3-Fix (D-C1, 2026-05-19): cache + video_clips synchron halten
+            # (Truth-Source-Konsolidierung analog Audio-Pfad).
             with self._state_lock:
                 if clip_id in self.video_analysis_cache:
                     self.video_analysis_cache[clip_id].update(cache_update)
@@ -698,6 +743,9 @@ class AppState:
                         **cache_update,
                         "duration_seconds": clip.get("duration_seconds", 0.0),
                     }
+                # D-C1 Truth-Source: spiegele cache_update in video_clips
+                if clip_id in self.video_clips:
+                    self.video_clips[clip_id].update(cache_update)
 
             motion_str = f"{avg_motion:.2f}" if isinstance(avg_motion, (int, float)) else "—"
             logger.debug(
@@ -706,7 +754,12 @@ class AppState:
                 f"emb_dim={embedding_dim}, emb_samples={embedding_samples})"
             )
         except Exception as e:
-            logger.warning(f"Video-Analyse DB-Persistenz fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Video-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
+            _emit_persist_error(
+                "video_analysis",
+                f"Video-Analyse für Clip {clip_id} nicht gespeichert",
+                str(e),
+            )
 
     def persist_audio_clip(self, clip: dict) -> None:
         """
@@ -740,7 +793,12 @@ class AppState:
             )
             logger.debug(f"Audio Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
+            logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
+            _emit_persist_error(
+                "audio_import",
+                f"Audio-Clip {clip.get('id')} nicht in DB gespeichert — beim Restart weg",
+                str(e),
+            )
 
     def persist_video_clip(self, clip: dict) -> None:
         """
@@ -773,7 +831,12 @@ class AppState:
             )
             logger.debug(f"Video Clip {clip['id']} in DB persistiert")
         except Exception as e:
-            logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen (unkritisch): {e}", exc_info=True)
+            logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
+            _emit_persist_error(
+                "video_import",
+                f"Video-Clip {clip.get('id')} nicht in DB gespeichert — beim Restart weg",
+                str(e),
+            )
 
     def load_from_db(self, project_id: Optional[int] = None) -> None:
         """
@@ -852,6 +915,20 @@ class AppState:
                     ai_data = json.loads(raw_ai)
                 except json.JSONDecodeError:
                     ai_data = {}
+
+                # C4-Fix (S-C1, 2026-05-19): Schema-Drift abfangen — legacy-Blobs
+                # ohne __schema_version werden on-the-fly migriert (audio_hash,
+                # stems_paths, video_hash, subtrack_segments etc. werden defaulted).
+                from pb_studio.data.schemas.media_json_schema import (
+                    migrate_audio_metadata, migrate_audio_ai_data,
+                    migrate_video_metadata, migrate_video_ai_data,
+                )
+                if clip_type == "audio":
+                    meta = migrate_audio_metadata(meta)
+                    ai_data = migrate_audio_ai_data(ai_data)
+                elif clip_type == "video":
+                    meta = migrate_video_metadata(meta)
+                    ai_data = migrate_video_ai_data(ai_data)
 
                 if clip_type == "audio":
                     is_analyzed = bool(ai_data.get("is_analyzed", False))
