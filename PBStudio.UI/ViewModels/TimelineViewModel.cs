@@ -202,6 +202,11 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         {
             MotionCurve = null;
         }
+
+        if (value != null && !value.IsAssetsLoaded)
+        {
+            _ = LoadClipAssetsAsync(value);
+        }
     }
 
     /// <summary>
@@ -237,6 +242,43 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             {
                 await Application.Current.Dispatcher.InvokeAsync(() => MotionCurve = null);
             }
+        }
+    }
+
+    /// <summary>
+    /// Loads /video/thumbstrip and /video/clipwave for the entry's clip in parallel.
+    /// Skips if already loaded. Fire-and-forget pattern: errors are logged and the
+    /// entry's visual just falls back to the background rectangle.
+    /// </summary>
+    private async Task LoadClipAssetsAsync(TimelineEntryModel entry)
+    {
+        if (entry == null || entry.IsAssetsLoaded) return;
+        if (!int.TryParse(entry.ClipId.Replace("clip_", ""),
+                          NumberStyles.Integer, CultureInfo.InvariantCulture, out var cid))
+        {
+            entry.IsAssetsLoaded = true;
+            return;
+        }
+
+        try
+        {
+            var stripTask = _api.GetThumbStripAsync(cid, n: 8);
+            var waveTask = _api.GetClipWaveAsync(cid, n: 256);
+            await Task.WhenAll(stripTask, waveTask).ConfigureAwait(false);
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (stripTask.Result?.Frames is { Count: > 0 } frames)
+                    entry.ThumbnailFrames = new ObservableCollection<string>(frames);
+                if (waveTask.Result?.Peaks is { Count: > 0 } peaks)
+                    entry.AudioPeaks = new ObservableCollection<float>(peaks);
+                entry.IsAssetsLoaded = true;
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Clip-Assets-Load fehlgeschlagen fuer clip {cid}: {ex.Message}");
+            entry.IsAssetsLoaded = true;  // mark so we don't retry every render
         }
     }
 
@@ -341,6 +383,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 AudioPath = timeline.AudioPath;
                 SelectedEntry = TimelineEntries.FirstOrDefault();
                 SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
+
+                // Eagerly load assets for the first N visible clips (rest load on-demand).
+                foreach (var e in TimelineEntries.Take(20))
+                {
+                    _ = LoadClipAssetsAsync(e);
+                }
+
                 StatusText = TimelineEntries.Count == 0
                     ? "Timeline ist leer"
                     : $"Timeline: {TimelineEntries.Count} Clips, {TotalDuration:F1}s";
