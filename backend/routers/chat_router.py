@@ -39,12 +39,39 @@ class _ChatHistoryStore:
     """Thread-safe (single-process) Speicher fuer die Chat-History.
 
     Begrenzte Laenge — aelteste Eintraege fallen weg.
+
+    I-H1 (Audit V2): snapshot_for_llm(max_tokens) trimmt token-aware via
+    tiktoken (cl100k_base, GPT-4/LM-Studio-kompatibel) statt blind 200 entries.
+    Sonst silent context-overflow bei LM-Studio (typ. 32k Modelle).
     """
     MAX_ENTRIES = 200
+    # I-H1 Default: 8192 ist konservativ für die meisten lokalen Modelle.
+    # Caller (process_message) kann mit model-spezifischer Obergrenze überschreiben.
+    DEFAULT_TOKEN_BUDGET = 8192
+    # Per-Message Overhead (role-marker, separator-tokens) ChatML/OpenAI-Format.
+    PER_MESSAGE_OVERHEAD_TOKENS = 4
+    # Reserve fuer System-Prompt + erwartete Response.
+    PROMPT_OVERHEAD_TOKENS = 1024
 
     def __init__(self) -> None:
         self._entries: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
+        self._encoding = None  # lazy-init tiktoken encoder
+
+    def _get_encoding(self):
+        """Lazy init tiktoken cl100k_base (GPT-4 + LM-Studio approximation)."""
+        if self._encoding is None:
+            import tiktoken
+            self._encoding = tiktoken.get_encoding("cl100k_base")
+        return self._encoding
+
+    def _count_tokens(self, text: str) -> int:
+        """Token-count via tiktoken. Fallback char/3 heuristic on error."""
+        try:
+            return len(self._get_encoding().encode(text))
+        except Exception:
+            # tiktoken-Download offline + Cache miss → 3 chars/token (German-conservative).
+            return max(1, len(text) // 3)
 
     async def append(self, role: str, content: str) -> None:
         async with self._lock:
@@ -56,6 +83,29 @@ class _ChatHistoryStore:
     async def snapshot(self) -> list[dict[str, Any]]:
         async with self._lock:
             return list(self._entries)
+
+    async def snapshot_for_llm(
+        self, max_tokens: int = DEFAULT_TOKEN_BUDGET
+    ) -> list[dict[str, Any]]:
+        """I-H1 fix: liefert History oldest-first-trimmed bis token-budget erfuellt ist.
+
+        Rechnet pro Eintrag content-tokens + PER_MESSAGE_OVERHEAD_TOKENS,
+        reserviert PROMPT_OVERHEAD_TOKENS fuer System + Response.
+        """
+        budget = max(0, max_tokens - self.PROMPT_OVERHEAD_TOKENS)
+        async with self._lock:
+            entries = list(self._entries)
+        # Reverse iteration: keep newest first, drop oldest until budget hits.
+        kept: list[dict[str, Any]] = []
+        total = 0
+        for entry in reversed(entries):
+            entry_tokens = self._count_tokens(entry.get("content", "")) + self.PER_MESSAGE_OVERHEAD_TOKENS
+            if total + entry_tokens > budget:
+                break
+            kept.append(entry)
+            total += entry_tokens
+        kept.reverse()
+        return kept
 
     async def clear(self) -> None:
         async with self._lock:
@@ -124,7 +174,9 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
     if request.history is not None:
         history = [h.model_dump() for h in request.history]
     else:
-        history = await _history_store.snapshot()
+        # I-H1 (Audit V2): token-aware Trim statt blind 200 entries — verhindert
+        # silent LM-Studio context-overflow.
+        history = await _history_store.snapshot_for_llm()
 
     user_text = request.message
     save_history = request.save_history
