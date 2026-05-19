@@ -215,4 +215,4 @@ async def clear_history() -> StatusResponse:
     return StatusResponse(status="cleared")
 
 
-__all__ = ["router"]
+__all__ = ["router
