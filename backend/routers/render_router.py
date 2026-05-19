@@ -221,12 +221,20 @@ async def render_status(
 
 
 def _cleanup_old_render_tasks(state: AppState, max_tasks: int = 50) -> None:
-    """Entfernt abgeschlossene Render-Tasks wenn mehr als max_tasks vorhanden."""
+    """Entfernt abgeschlossene Render-Tasks wenn mehr als max_tasks vorhanden.
+
+    P-H1 (Audit V2): Time-Gate fuer cancel_flags pop — nur Tasks loeschen die
+    TERMINAL + >1h alt sind. Sonst Race: aktive Render-Threads pruefen ihren
+    Flag und kriegen False statt True nach pop. (MEDIUM-015 Kommentar in
+    app_state.py war bekannt, Fix-Implementation jetzt komplett.)
+    """
+    import time as _t
     with state._state_lock:
         if len(state.render_tasks) <= max_tasks:
             return
         # Sortiere nach Status: completed/failed/cancelled zuerst entfernen
         terminal_statuses = {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
+        now = _t.monotonic()
         removable = [
             tid for tid, t in state.render_tasks.items()
             if t.get("status") in terminal_statuses
@@ -234,8 +242,15 @@ def _cleanup_old_render_tasks(state: AppState, max_tasks: int = 50) -> None:
         # Älteste zuerst entfernen (bis max_tasks erreicht)
         to_remove = len(state.render_tasks) - max_tasks
         for tid in removable[:to_remove]:
+            task = state.render_tasks.get(tid, {})
             del state.render_tasks[tid]
-            state.cancel_flags.pop(tid, None)
+            # P-H1: nur Flag poppen wenn Task >1h alt (race-safe).
+            # finished_at als monotonic-timestamp gesetzt beim Übergang in terminal.
+            finished_at = task.get("finished_at")
+            if finished_at is not None and (now - finished_at) > 3600:
+                state.cancel_flags.pop(tid, None)
+            # Sonst Flag stehen lassen — Memory-Leak ist akzeptabel (max 50 keys),
+            # vermeidet Race wo aktive Thread False statt True sieht.
         if to_remove > 0:
             logger.info(f"Render-Task Cleanup: {min(to_remove, len(removable))} alte Tasks entfernt")
 
@@ -317,6 +332,7 @@ async def _run_render_task(
             "percent": 100.0,
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
+            "finished_at": time.monotonic(),  # P-H1: enable time-gated cancel_flag cleanup
         })
         _safe_queue_update(queue_job_id, _RQ_COMPLETED)
 
@@ -340,6 +356,7 @@ async def _run_render_task(
         state.update_render_task(task_id, {
             "status": TaskStatus.CANCELLED.value,
             "elapsed_seconds": round(elapsed, 1),
+            "finished_at": time.monotonic(),  # P-H1
         })
         # Cancelled wird in der persistenten Queue als 'failed' mit Cancel-Hinweis markiert.
         # (Die RenderQueue-Schemata wären strenger; failed deckt 'nicht erfolgreich abgeschlossen'
@@ -370,6 +387,7 @@ async def _run_render_task(
             "error": str(e),
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
+            "finished_at": time.monotonic(),  # P-H1
         })
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
         logger.error(f"Render {task_id} fehlgeschlagen: {e}", exc_info=True)
@@ -586,6 +604,7 @@ def _execute_render(
             "eta_seconds": 0.0,
             "output_path": str(output_p),
             "error": None,
+            "finished_at": time.monotonic(),  # P-H1
         })
         return {"output_path": result_path}
     except RenderCancelledError as exc:
