@@ -433,7 +433,7 @@ class TestPacingRouter:
             r = client.post("/pacing/generate", json={
                 "audio_clip_id": 1, "video_clip_ids": [1],
                 "pacing": 3, "precision": 8, "energy_react": 5,
-                "chaos": 2, "use_motion_matching": False, "expected_bpm": 0.0
+                "chaos": 2, "use_motion_matching": False, "expected_bpm": 120.0
             })
         finally:
             pacing_mod._run_pacing_generation = orig_run

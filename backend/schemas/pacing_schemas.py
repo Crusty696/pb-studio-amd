@@ -40,7 +40,9 @@ class PacingConfigSchema(BaseModel):
     """Request: Pacing-Konfiguration."""
     audio_clip_id: int
     video_clip_ids: list[int] = []
-    expected_bpm: float = 120.0
+    # S-H2 (Audit V2): defense-in-depth bounds — Pacing-Engine bricht bei BPM<=0
+    # mit DivisionByZero. 250 BPM ist musikalisch oberes Maximum (Speedcore).
+    expected_bpm: float = Field(120.0, gt=0.0, le=400.0)
     trigger_settings: Optional[TriggerSettingsSchema] = None
     use_motion_matching: bool = False
     use_semantic_matching: bool = False
@@ -53,8 +55,9 @@ class PacingConfigSchema(BaseModel):
     # (drums/bass via Demucs), wird AdvancedPacingEngine.generate_cut_list_with_stems
     # aufgerufen. Default False -> bestehende Calls bleiben unveraendert.
     use_stem_pacing: bool = False
-    duration_limit: Optional[float] = None
-    min_cut_interval: float = 0.5
+    # S-H2 (Audit V2): duration_limit cap muss positiv sein, sonst Render-Pfad NoOp.
+    duration_limit: Optional[float] = Field(None, gt=0.0)
+    min_cut_interval: float = Field(0.5, ge=0.0)
     # Plan Phase 4: brain integration toggles
     use_brain: bool = False
     brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0)
