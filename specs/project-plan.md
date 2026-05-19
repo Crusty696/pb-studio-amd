@@ -24,7 +24,7 @@
 - [X] E007 [P2] [TECHNICAL] {STATUS:ReleaseReadiness} Release Hardening & UX Polish — Native dialogs, VRAM stress tests, and final UI refinements.
 - [X] E008 [P2] [PRODUCT] Deeper UX & Timeline Polish — Magnetic snapping, smooth scrolling, and UI transitions.
 - [X] E009 [P2] [TECHNICAL] Audio/Video Data Depth — Visualization of song sections, spectral data, and refined scene detection.
-- [ ] E010 [P2] [TECHNICAL] Resilience & Edge-Cases — Reconnect stress tests and extreme VRAM pressure validation.
+- [ ] E010 [P2] [TECHNICAL] Resilience & Edge-Cases — Reconnect stress tests and extreme VRAM pressure validation. <!-- Tracking in Brain-Vault: 10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md (Punkt #16). Plan-Detail: specs/00010-resilience-edge-cases/plan.md -->
 
 ## Dependency Diagram
 
