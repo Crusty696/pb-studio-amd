@@ -547,15 +547,18 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 double secondsPerPoint = duration / count;
 
                 int step = Math.Max(1, count / 1000);
+                const double laneHeight = 80.0;
+                const double mid = laneHeight / 2.0;
 
                 for (int i = 0; i < count; i += step)
                 {
                     double val = rawData[i];
+                    double h = Math.Max(2, val * mid * 1.8);
                     WaveformBars.Add(new WaveformBarModel
                     {
                         X = (i * secondsPerPoint),
-                        Height = Math.Max(2, val * 60),
-                        Y = 40 - (val * 30),
+                        Height = h,
+                        Y = mid - (h / 2.0),
                         Width = (secondsPerPoint * step)
                     });
                 }

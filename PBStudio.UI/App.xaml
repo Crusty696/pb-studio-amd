@@ -19,6 +19,7 @@
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <conv:ConfidenceToBrushConverter x:Key="ConfidenceToBrushConverter"/>
             <conv:MotionToHeightConverter x:Key="MotionToHeightConverter"/>
+            <conv:PeaksToWaveformGeometryConverter x:Key="PeaksToWaveformGeometryConverter"/>
 
             <!-- ══════ Ableton-Palette (Colors, fuer Storyboards/Animationen) ══════ -->
             <Color x:Key="AbletonBgColor">#1A1A1E</Color>
