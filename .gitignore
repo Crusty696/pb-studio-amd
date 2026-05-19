@@ -290,3 +290,25 @@ test-report/
 
 # pytest coverage SQLite DB
 .coverage
+
+# LM Studio / Ollama debug outputs (post-merge cleanup 2026-05-19)
+.lm_*.json
+.lm_*.txt
+.lms_*.json
+.lms_*.txt
+.lmstudio_*.txt
+.lmstudio_*.json
+
+# Cowork-scratch + pilot outputs
+.kit/
+phase_a_*.py
+phase_a_*.bat
+vrf*_probe.py
+vrf*_probe.bat
+
+# Worktree-Sub-Dir (außerhalb .worktrees/)
+.claude/worktrees/
+
+# Push-Result-Scratch
+_push_result.txt
+_CLEANUP_*.bat
