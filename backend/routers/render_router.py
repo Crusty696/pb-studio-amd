@@ -530,8 +530,18 @@ def _execute_render(
     if not timeline:
         raise RuntimeError("Keine Timeline für Rendering vorhanden")
 
-    # Timeline validieren
-    warnings, errors = validate_timeline(timeline)
+    # C1-Fix (P-C1, 2026-05-19): validate_timeline mit audio_duration aufrufen,
+    # damit Audio-Overflow-Check (Timeline > Audio = Error) auch im Render-Pfad
+    # greift. pacing_router macht das richtig (siehe pacing_router.py:261-263),
+    # render_router rief vorher OHNE audio_duration auf → Audio-Overflow-Check
+    # übersprungen. L-TI-5 Iron Audit-Lesson 2026-05-11.
+    from pb_studio.rendering.render_service import RenderService as _RenderServiceForAudio
+    try:
+        audio_duration = _RenderServiceForAudio()._get_audio_duration(audio_path) or 0.0
+    except Exception as exc:
+        logger.warning(f"audio_duration via ffprobe fehlgeschlagen ({exc}) — overflow-check skipped")
+        audio_duration = 0.0
+    warnings, errors = validate_timeline(timeline, audio_duration=audio_duration)
     if errors:
         raise RuntimeError(f"Ungültige Timeline: {'; '.join(errors)}")
     for w in warnings:
