@@ -44,6 +44,8 @@ public interface IApiClient : IDisposable
     Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
+    Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8);
+    Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256);
     Task<DeleteResponse?> DeleteVideoClipAsync(int clipId);
     Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds);
 

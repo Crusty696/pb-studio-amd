@@ -192,6 +192,16 @@ public class ApiClient : IApiClient
     public async Task<MotionData?> GetMotionAsync(int clipId)
         => await GetAsync<MotionData>($"/video/motion/{clipId}").ConfigureAwait(false);
 
+    // T6 (Timeline-Multi-Lane): Thumb-Strip + Mini-Wave fuer Per-Clip-Renderings.
+    // Backend: backend/routers/video_router.py
+    //   GET /video/thumbstrip/{clip_id}?n=8   -> Base64 JPEGs
+    //   GET /video/clipwave/{clip_id}?n=256   -> Downsampled Mono-Peaks (0..1)
+    public async Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8)
+        => await GetAsync<ThumbstripResponse>($"/video/thumbstrip/{clipId}?n={n}").ConfigureAwait(false);
+
+    public async Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256)
+        => await GetAsync<ClipwaveResponse>($"/video/clipwave/{clipId}?n={n}").ConfigureAwait(false);
+
     // --- Pacing ---
 
     public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config)
