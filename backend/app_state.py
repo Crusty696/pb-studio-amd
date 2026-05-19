@@ -58,6 +58,29 @@ def _emit_persist_error(source: str, message: str, detail: str) -> None:
         logger.error(f"persist_error emit fehlgeschlagen ({exc}) [{source}] {message}: {detail}")
 
 
+def _thumbnail_exists_for_clip(
+    clip_id: int,
+    project: Optional[dict],
+    file_path: Optional[str],
+) -> bool:
+    """D-H1 (Audit V2): pruefe Disk statt fix-False auf Reload.
+
+    Konvention: project_dir/proxy_cache/clip_{id}_thumb.jpg (siehe
+    thumbnail_generator.generate_clip_thumbnail). Fallback: Source-Video-Dir
+    statt project_dir, weil generate_clip_thumbnail bei fehlendem project_root
+    auf Path(video_path).parent / 'proxy_cache' faellt.
+    """
+    candidates: list[Path] = []
+    try:
+        if isinstance(project, dict) and project.get("path"):
+            candidates.append(Path(project["path"]) / "proxy_cache" / f"clip_{clip_id}_thumb.jpg")
+        if file_path:
+            candidates.append(Path(file_path).parent / "proxy_cache" / f"clip_{clip_id}_thumb.jpg")
+    except (TypeError, ValueError, OSError):
+        return False
+    return any(p.exists() for p in candidates)
+
+
 def resolve_active_project_root(state: "AppState", fallback_root: str | Path) -> Path:
     """Gibt den aktiven Projekt-Root zurück, sonst den konfigurierten Fallback."""
     current = state.current_project or {}
@@ -995,7 +1018,13 @@ class AppState:
                         "height": meta.get("height", 1080),
                         "fps": meta.get("fps", 30.0),
                         "codec": meta.get("codec", ""),
-                        "thumbnail_available": False,
+                        # D-H1 fix (Audit V2): filesystem-check statt fix False.
+                        # Thumbnail-Konvention: project_dir/proxy_cache/clip_{id}_thumb.jpg
+                        # (siehe thumbnail_generator.generate_clip_thumbnail). Wenn vorhanden
+                        # → True; sonst False, UI rendert dann fallback.
+                        "thumbnail_available": _thumbnail_exists_for_clip(
+                            clip_id, self.current_project, row["file_path"]
+                        ),
                         "tags": [],
                         # L-VIDEO-3 (CD-3): video_hash aus Meta (oder Legacy
                         # file_hash) zurueck ins In-Memory-Dict damit

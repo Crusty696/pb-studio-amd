@@ -337,4 +337,19 @@ class DatabaseCore:
         with DatabaseCore._lock:
             self._initialized = False
             DatabaseCore._instance = None
+            # Pe-H1: re-init thread-local. Otherwise old threads keep stale .conn refs
+            # that were closed above — next get_connection() on those threads would
+            # short-circuit on the hasattr check and return a closed connection.
+            DatabaseCore._local = threading.local()
             logger.info("DatabaseCore._instance zurückgesetzt — Neuinitialisierung möglich")
+
+    @classmethod
+    def reset_for_testing(cls):
+        """Pe-H1: full reset for pytest fixtures. Closes connections + clears
+        thread-local + singleton. Mirrors VRAMBudgetManager.reset_for_testing.
+        """
+        with cls._lock:
+            if cls._instance is not None:
+                cls._instance.shutdown()
+            cls._instance = None
+            cls._local = threading.local()

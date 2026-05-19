@@ -114,15 +114,19 @@ async def get_alive_client(timeout_seconds: float = 5.0) -> Optional[LMStudioCli
 
     for candidate in candidates:
         client = get_llm_client(provider=candidate, timeout_seconds=timeout_seconds)
+        # W-H1 (Audit V2): keep_client-Flag statt finally-mit-zweitem-is_alive.
+        # Vorher: finally rief is_alive() ein zweites Mal auf — bei transient
+        # timeout schloss es den gerade-returnten Client unter dem Caller weg.
+        keep_client = False
         try:
             if await client.is_alive():
                 logger.info("LLM-Provider aktiv: %s (%s)", candidate, client.base_url)
+                keep_client = True
                 return client
         except LMStudioConnectionError:
             logger.debug("Provider %s nicht erreichbar — naechster Kandidat", candidate)
         finally:
-            # bei Mismatch close, sonst returnen wir den lebenden client
-            if client is not None and not await client.is_alive():
+            if not keep_client:
                 await client.aclose()
     logger.warning("Kein LLM-Provider erreichbar (geprueft: %s)", ", ".join(candidates))
     return None
