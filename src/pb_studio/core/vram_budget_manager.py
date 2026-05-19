@@ -237,6 +237,23 @@ class VRAMBudgetManager:
             f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
         )
 
+        # B1-Fix (2026-05-19): Pre-register alle bekannten Model-Budgets aus
+        # KNOWN_MODEL_BUDGETS, damit reserve() nicht fuer jeden video/analyze-Call
+        # mit "not registered"-Error pollutet (vorher 624x in einem Log-File).
+        # Direct dict-set statt register_model() — vermeidet 16x INFO-log beim Boot.
+        with self._registry_lock:
+            for _mid, _mb in KNOWN_MODEL_BUDGETS.items():
+                self._models[_mid] = ModelBudget(
+                    model_id=_mid,
+                    name=_mid,
+                    estimated_vram_mb=_mb,
+                    priority=ModelPriority.MEDIUM,
+                )
+            logger.info(
+                f"VRAMBudgetManager: pre-registered {len(KNOWN_MODEL_BUDGETS)} "
+                f"known model-budgets from KNOWN_MODEL_BUDGETS"
+            )
+
     @classmethod
     def reset_for_testing(cls):
         """Reset the singleton instance for testing purposes."""
