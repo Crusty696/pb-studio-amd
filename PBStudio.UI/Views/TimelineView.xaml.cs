@@ -69,7 +69,7 @@ public partial class TimelineView : UserControl
         CompositionTarget.Rendering += OnCompositionTargetRendering;
     }
 
-    private double _lastScrollX = 0;
+    // B5-Fix (2026-05-19): _lastScrollX war never-read (CS0414). Entfernt.
     private void OnCompositionTargetRendering(object? sender, EventArgs e)
     {
         if (_viewModel == null || !_mediaOpened || PreviewPlayer.Position.TotalSeconds <= 0) return;
@@ -430,7 +430,8 @@ public partial class TimelineView : UserControl
             }
 
             // Visual Feedback: Snap Line
-            if (isSnapped)
+            // B5-Fix (2026-05-19): CS8602 Nullable deref von _viewModel.PixelsPerSecond — null-check ergaenzt.
+            if (isSnapped && _viewModel != null)
             {
                 SnapLine.Visibility = Visibility.Visible;
                 SnapLineTransform.X = snapTime * _viewModel.PixelsPerSecond;

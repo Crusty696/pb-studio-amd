@@ -157,6 +157,13 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void PlayPause() => PlayRequested?.Invoke();
 
+    // B5-Fix (2026-05-19): PauseRequested event wurde in Dispose auf null gesetzt
+    // (line 177) aber nie raised → CS0414. Explizite Pause()-Methode komplettiert
+    // das Play/Pause/Restart-Event-Trio, LearningSessionDialog hat den Subscriber
+    // bereits (LearningSessionDialog.xaml.cs:22).
+    [RelayCommand]
+    public void Pause() => PauseRequested?.Invoke();
+
     [RelayCommand]
     public void Restart() => RestartRequested?.Invoke();
 

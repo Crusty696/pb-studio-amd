@@ -7,7 +7,8 @@ namespace PBStudio.UI.Helpers;
 
 public class RulerRenderer
 {
-    private readonly VisualCollection _children;
+    // B5-Fix (2026-05-19): _children war never-used (CS0169 + CS8618 Non-Nullable).
+    // Entfernt — Rendering nutzt direkt DrawingContext, keine VisualCollection.
     private readonly DrawingVisual _drawingVisual;
 
     public RulerRenderer(Visual parent)
