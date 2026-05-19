@@ -25,6 +25,7 @@ from ..schemas.video_schemas import (
     VideoImportRequest, VideoClipInfo,
     VideoAnalyzeRequest, VideoAnalysisResult,
     SceneInfo, MotionData,
+    ThumbstripResponse,
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 
@@ -267,6 +268,47 @@ async def get_thumbnail(
         return Response(content=jpeg_bytes, media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Thumbnail-Generierung fehlgeschlagen: {e}")
+
+
+@router.get(
+    "/thumbstrip/{clip_id}",
+    response_model=ThumbstripResponse,
+    summary="Thumbnail-Strip (N Frames) abrufen",
+    description=(
+        "Liefert N evenly-spaced JPEG-Thumbnails als base64-Datenstrings, "
+        "fuer den Timeline-Clip-Strip (Premiere/Davinci-Style). "
+        "n wird auf [1,32] geklammert."
+    ),
+)
+async def get_thumbstrip(
+    clip_id: int,
+    n: int = 8,
+    state: AppState = Depends(get_app_state),
+) -> ThumbstripResponse:
+    clip = state.get_video_clip(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+    n = max(1, min(32, n))
+    try:
+        frames = await asyncio.to_thread(_extract_thumbstrip, clip["path"], n, (160, 90))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Thumbstrip-Erzeugung fehlgeschlagen: {e}")
+
+    import base64
+    import io
+    data_urls: list[str] = []
+    for img in frames:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        data_urls.append(f"data:image/jpeg;base64,{b64}")
+    return ThumbstripResponse(clip_id=clip_id, count=len(data_urls), frames=data_urls)
+
+
+def _extract_thumbstrip(video_path: str, n: int, size: tuple) -> list:
+    """Indirection so tests can monkeypatch the heavy work."""
+    from pb_studio.video.frame_extractor import FrameGrabber
+    return FrameGrabber().extract_thumbnail_strip(video_path, n=n, size=size)
 
 
 @router.delete(

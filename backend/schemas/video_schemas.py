@@ -95,5 +95,12 @@ class MotionData(BaseModel):
     motion_category: str = "medium"  # low, medium, high, extreme
 
 
+class ThumbstripResponse(BaseModel):
+    """Response: N base64-encoded JPEG thumbnails fuer Timeline-Clip-Visualization."""
+    clip_id: int
+    count: int
+    frames: list[str]  # Each entry: "data:image/jpeg;base64,..."
+
+
 # Forward-References auflösen (SceneInfo/MotionData nach VideoAnalysisResult definiert)
 VideoAnalysisResult.model_rebuild()
