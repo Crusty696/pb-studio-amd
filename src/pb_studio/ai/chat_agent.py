@@ -181,6 +181,23 @@ class ChatAgent:
                 "error": f"Unbekanntes Tool: {name!r}",
                 "available_tools": [t.name for t in self._registry.all()],
             }
+        # P-H2 (Audit V2): long-running Tools (Render, Stems) brauchen
+        # erweiterten Timeout — default 60s killt sonst aktive GPU-Tasks
+        # unter dem ChatAgent. 600s = 10min Headroom.
+        if getattr(tool, "long_running", False):
+            extended_http = httpx.AsyncClient(
+                base_url=self._backend_base_url,
+                timeout=httpx.Timeout(600.0, connect=5.0),
+            )
+            try:
+                result = await tool.handler(args, http_client=extended_http)
+            except Exception as exc:
+                logger.exception("Tool-Handler %s failed: %s", name, exc)
+                return {"error": f"Tool-Handler-Exception: {exc}", "tool": name}
+            finally:
+                await extended_http.aclose()
+            return result
+
         try:
             result = await tool.handler(args, http_client=self._http)
         except Exception as exc:

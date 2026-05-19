@@ -63,6 +63,10 @@ class Tool:
             hat (Render-Start, Stem-Separation, Modell-Pull, ...). Der Chat-
             Agent kann pre-Confirmation einbauen — aktuell nur als Audit-Flag.
         category: Logische Gruppe fuer UI/Debug (audio, video, ...).
+        long_running: True wenn der Aufruf Minuten dauert (Render, Stems,
+            full Pacing-Generate auf grosser Library). P-H2 (Audit V2):
+            ChatAgent erweitert httpx-Timeout pro Roundtrip auf 600s statt 60s,
+            sonst killt ChatAgent den Render unter sich (GPU-Lock-Starvation).
     """
     name: str
     description: str
@@ -70,6 +74,7 @@ class Tool:
     handler: ToolHandler
     destructive: bool = False
     category: str = "general"
+    long_running: bool = False
 
     @property
     def llm_name(self) -> str:
@@ -716,6 +721,7 @@ def build_default_registry() -> ToolRegistry:
         handler=_h_audio_separate_stems,
         category="audio",
         destructive=True,
+        long_running=True,  # P-H2: Demucs 4-stem ~2-5min per song.
     ))
 
     # Video -------------------------------------------------------------
@@ -882,6 +888,7 @@ def build_default_registry() -> ToolRegistry:
         handler=_h_render_start,
         category="render",
         destructive=True,
+        long_running=True,  # P-H2 (Audit V2): Render dauert Minuten — ChatAgent erhoeht Timeout auf 600s.
     ))
     reg.register(Tool(
         name="render.status",
