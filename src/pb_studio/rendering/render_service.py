@@ -268,6 +268,22 @@ class RenderService:
             logger.warning(f"FFprobe check failed: {e}")
             return True
 
+    # B4-Fix (2026-05-19): Per-Encoder ffmpeg-arg-Builder, damit
+    # `_transcode_clip` mit jedem Encoder retry-fallback aufrufbar ist.
+    @staticmethod
+    def _encoder_args(encoder: str) -> list[str]:
+        if encoder == "hevc_amf":
+            return ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
+        if encoder == "h264_amf":
+            return ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
+        if encoder == "av1_amf":
+            return ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
+        if encoder == "h264_mf":
+            return ["-c:v", "h264_mf", "-b:v", "10M"]
+        if encoder == "libx265":
+            return ["-c:v", "libx265", "-preset", "fast", "-crf", "24", "-tag:v", "hvc1"]
+        return ["-c:v", "libx264", "-preset", "fast", "-crf", "18"]
+
     def _transcode_clip(
         self,
         input_path: str,
@@ -279,73 +295,95 @@ class RenderService:
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
-        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
+        primary = self._encoder_override or self.__class__._working_encoder or "libx264"
 
-        if encoder == "hevc_amf":
-            enc_args = ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
-        elif encoder == "h264_amf":
-            enc_args = ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
-        elif encoder == "av1_amf":
-            enc_args = ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
-        elif encoder == "h264_mf":
-            enc_args = ["-c:v", "h264_mf", "-b:v", "10M"]
-        elif encoder == "libx265":
-            enc_args = ["-c:v", "libx265", "-preset", "fast", "-crf", "24", "-tag:v", "hvc1"]
+        # B4-Fix (2026-05-19): Encoder-Fallback-Chain bei Hardware-Encoder-Fail.
+        # h264_amf gibt fuer manche Clip-Profile exit 3165764104 (0xBCAB1408
+        # AMF Hardware-Error). Statt Render komplett scheitern lassen, faellt
+        # die Pipeline auf h264_mf (Win Media Foundation) und dann libx264
+        # zurueck. Cancel + leere Datei sind keine Retry-Faelle.
+        if primary.endswith("_amf"):
+            chain = [primary, "h264_mf", "libx264"]
+        elif primary == "h264_mf":
+            chain = [primary, "libx264"]
         else:
-            enc_args = ["-c:v", "libx264", "-preset", "fast", "-crf", "18"]
+            chain = [primary]
 
-        cmd = [
-            "ffmpeg", "-y", "-i", input_path,
-            "-vf", vf_filter,
-            *enc_args,
-            "-an", str(output_path)
-        ]
+        last_error: Optional[Exception] = None
+        for attempt_idx, encoder in enumerate(chain):
+            enc_args = self._encoder_args(encoder)
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-vf", vf_filter,
+                *enc_args,
+                "-an", str(output_path)
+            ]
+            process = None
+            try:
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    startupinfo=startupinfo,
+                    bufsize=1,
+                )
+                stderr_lines: list[str] = []
+                while process.poll() is None:
+                    if cancel_callback and cancel_callback():
+                        process.kill()
+                        process.wait(timeout=5)
+                        raise RenderCancelledError("Rendering cancelled during clip normalization")
+                    if process.stderr is not None:
+                        line = process.stderr.readline()
+                        if line:
+                            stderr_lines.append(line)
+                            continue
+                    time.sleep(0.1)
 
-        process = None
-        try:
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                startupinfo=startupinfo,
-                bufsize=1,
-            )
-            stderr_lines: list[str] = []
-            while process.poll() is None:
-                if cancel_callback and cancel_callback():
-                    process.kill()
-                    process.wait(timeout=5)
-                    raise RenderCancelledError("Rendering cancelled during clip normalization")
                 if process.stderr is not None:
-                    line = process.stderr.readline()
-                    if line:
-                        stderr_lines.append(line)
-                        continue
-                time.sleep(0.1)
+                    stderr_lines.extend(process.stderr.readlines())
+                stderr_text = "".join(stderr_lines)
+                if process.returncode != 0:
+                    raise subprocess.CalledProcessError(process.returncode, cmd, stderr=stderr_text)
+                if not output_path.exists() or output_path.stat().st_size == 0:
+                    raise RuntimeError(f"Encoder {encoder} hat leere Datei erstellt")
+                # Erfolg — bei Fallback-Attempt cachen wir den funktionierenden
+                # Encoder, damit Folge-Clips nicht erneut den ersten probieren.
+                if attempt_idx > 0:
+                    logger.warning(
+                        f"Encoder-Fallback erfolgreich: {primary} → {encoder} "
+                        f"(Clip: {Path(input_path).name})"
+                    )
+                    RenderService._working_encoder = encoder
+                return
+            except RenderCancelledError:
+                try:
+                    output_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                raise
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as e:
+                last_error = e
+                logger.warning(
+                    f"Transcode fehlgeschlagen mit {encoder} "
+                    f"(attempt {attempt_idx + 1}/{len(chain)}): {e}"
+                )
+                try:
+                    output_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                # naechster Encoder in Chain
+                continue
 
-            if process.stderr is not None:
-                stderr_lines.extend(process.stderr.readlines())
-            stderr_text = "".join(stderr_lines)
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, cmd, stderr=stderr_text)
-            if not output_path.exists() or output_path.stat().st_size == 0:
-                raise RuntimeError(f"Encoder {encoder} hat leere Datei erstellt")
-        except RenderCancelledError:
-            try:
-                output_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            raise
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.error(f"Transcode fehlgeschlagen mit {encoder}: {e}")
-            try:
-                output_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            raise RuntimeError(f"Transcode fehlgeschlagen: {input_path}")
+        # Alle Encoder fehlgeschlagen — gibt es kein last_error, war chain leer
+        logger.error(
+            f"Alle {len(chain)} Encoder fehlgeschlagen fuer {Path(input_path).name}: "
+            f"chain={chain}, last={last_error}"
+        )
+        raise RuntimeError(f"Transcode fehlgeschlagen: {input_path}")
 
     def _generate_concat_file(self, timeline: List[Dict], list_path: Path):
         with open(list_path, "w", encoding="utf-8") as f:
