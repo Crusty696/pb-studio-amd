@@ -332,6 +332,9 @@ public partial class TimelineView : UserControl
                 }
 
                 var dur = _draggedEntry.Duration;
+                // NEW: clamp against neighbour edges so we can't overlap (V1 lane).
+                newStart = ClampStartToNeighbours(_draggedEntry, newStart, dur);
+
                 _draggedEntry.StartTime = newStart;
                 _draggedEntry.EndTime = newStart + dur;
             }
@@ -381,6 +384,7 @@ public partial class TimelineView : UserControl
                     newClipStart += clamp;
                 }
 
+                newStart = Math.Max(ClampStartToNeighbours(_draggedEntry, newStart, _originalEndTime - newStart), newStart);
                 _draggedEntry.StartTime = newStart;
                 _draggedEntry.EndTime = _originalEndTime;
                 _draggedEntry.ClipStart = newClipStart;
@@ -410,6 +414,18 @@ public partial class TimelineView : UserControl
                 if (newEnd - _originalStartTime < MinClipDuration)
                     newEnd = _originalStartTime + MinClipDuration;
 
+                // Clamp end so we don't overlap the next clip.
+                if (_viewModel != null)
+                {
+                    double maxEnd = double.PositiveInfinity;
+                    foreach (var other in _viewModel.TimelineEntries)
+                    {
+                        if (ReferenceEquals(other, _draggedEntry)) continue;
+                        if (other.StartTime >= _draggedEntry.StartTime + 0.0001 && other.StartTime < maxEnd)
+                            maxEnd = other.StartTime;
+                    }
+                    if (newEnd > maxEnd) newEnd = maxEnd;
+                }
                 _draggedEntry.EndTime = newEnd;
             }
 
@@ -465,6 +481,57 @@ public partial class TimelineView : UserControl
         }
     }
 
+    /// <summary>
+    /// Clamps `desiredStart` so the dragged clip doesn't overlap the immediate
+    /// predecessor or successor in the chronological order. Returns the clamped
+    /// start time. Successor.EndTime is unchanged by drag (we only move whole clip).
+    /// </summary>
+    private double ClampStartToNeighbours(TimelineEntryModel dragged, double desiredStart, double duration)
+    {
+        if (_viewModel == null) return desiredStart;
+
+        TimelineEntryModel? prev = null, next = null;
+        foreach (var e in _viewModel.TimelineEntries)
+        {
+            if (ReferenceEquals(e, dragged)) continue;
+            if (e.EndTime <= dragged.StartTime + 0.0001)
+            {
+                if (prev == null || e.EndTime > prev.EndTime) prev = e;
+            }
+            else if (e.StartTime >= dragged.EndTime - 0.0001)
+            {
+                if (next == null || e.StartTime < next.StartTime) next = e;
+            }
+        }
+
+        double minStart = prev?.EndTime ?? 0.0;
+        double maxStart = next != null ? next.StartTime - duration : double.PositiveInfinity;
+        return Math.Max(minStart, Math.Min(maxStart, desiredStart));
+    }
+
+    /// <summary>
+    /// Contiguous mode: after a drag, snap each clip's StartTime so it touches the
+    /// predecessor's EndTime (cut[i].StartTime == cut[i-1].EndTime), preserving
+    /// each clip's Duration. Idempotent.
+    /// </summary>
+    private void CloseGapsInContiguousMode()
+    {
+        if (_viewModel == null || _viewModel.TimelineEntries.Count < 2) return;
+
+        for (int i = 1; i < _viewModel.TimelineEntries.Count; i++)
+        {
+            var prev = _viewModel.TimelineEntries[i - 1];
+            var curr = _viewModel.TimelineEntries[i];
+            double dur = curr.Duration;
+            if (Math.Abs(curr.StartTime - prev.EndTime) > 0.001)
+            {
+                curr.StartTime = prev.EndTime;
+                curr.EndTime = prev.EndTime + dur;
+                curr.NotifyPositionChanged();
+            }
+        }
+    }
+
     private void Clip_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_draggedEntry != null)
@@ -487,6 +554,7 @@ public partial class TimelineView : UserControl
                 if (wasDragging)
                 {
                     _viewModel.SortEntriesByTime();
+                    CloseGapsInContiguousMode();
                 }
             }
         }
