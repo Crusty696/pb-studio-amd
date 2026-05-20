@@ -81,3 +81,22 @@ def test_snapshot_schemas_consistent():
             )
 
     assert not diffs, "Schema drift:\n  " + "\n  ".join(diffs)
+
+
+def test_generated_dtos_not_stale_relative_to_snapshot():
+    """If Generated/ApiTypes.g.cs is older than the snapshot, NSwag
+    didn't run since the last snapshot refresh. Caller should rebuild."""
+    snapshot = Path(__file__).parent.parent / "PBStudio.UI" / "openapi.snapshot.json"
+    generated = (
+        Path(__file__).parent.parent
+        / "PBStudio.UI" / "Generated" / "ApiTypes.g.cs"
+    )
+    if not generated.exists():
+        pytest.skip(
+            "Generated/ApiTypes.g.cs not built yet — "
+            "run `dotnet build PBStudio.UI/PBStudio.UI.csproj` first"
+        )
+    assert generated.stat().st_mtime >= snapshot.stat().st_mtime - 1.0, (
+        f"Generated DTOs older than snapshot. "
+        f"Rebuild WPF: dotnet build PBStudio.UI/PBStudio.UI.csproj"
+    )
