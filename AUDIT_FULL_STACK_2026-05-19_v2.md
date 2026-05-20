@@ -360,9 +360,15 @@ CURRENT-STATE-MARKERS:
 - **Impact:** Schema-Drift garantiert. `load_from_db` braucht defensive `.get()`-cascaden fuer alle alten Reihen. Bei Schema-Refactor ist Roll-Forward unmoeglich ohne python-replay-skript.
 - **Recommendation Phase 7:** Pydantic-Models `AudioMetadata`, `AudioAIData`, `VideoMetadata`, `VideoAIData` mit Versionsfeld `__schema_version: int`. Migrations registrieren `from_v1_to_v2`.
 
-#### S-H1 [HIGH] Frontend VramTelemetry.cs Records sind Stubs ohne Backend-Endpoint
-- **Evidence:** Open-Tasks #6 (`/health/vram` Connection-Reset). VramTelemetry.cs (siehe 53abecd partial rollback) hat Field-Stubs, aber `backend/routers/health_router.py` listet kein `/health/vram` — UI ruft es trotzdem (siehe ApiClient.cs).
-- **Status:** Bekannt deferred per Open-Tasks. Reproducibility VERIFY in Phase 4.
+#### S-H1b [HIGH] DTO-Mismatch /health/vram Response vs WPF VramTelemetryResponse.cs ⚠️ PARTIAL 2026-05-19
+- **Evidence:** Stubs in commit 53abecd, Vram-Endpoint Schema unbekannt.
+- **Resolution (Infrastruktur):** NSwag.MSBuild generiert `PBStudio.UI/Generated/ApiTypes.g.cs` aus `PBStudio.UI/openapi.snapshot.json` (FastAPI). 3 von 4 manuellen DTOs durch `global using`-Shims ersetzt (Thumbstrip, Clipwave: Commit `1d1bde2`; BrainAxisContribution: Commit `95a35b0`).
+- **Resolution (Drift-Alarm):** `Tests/test_openapi_snapshot_drift.py` 4 Tests (Commits `dff30d8` + `225f6d0`) — schlaegt fail wenn Backend `/openapi.json` von Snapshot drift.
+- **Pending (deferred):**
+  - **T5b**: Backend `/health/vram` braucht Pydantic `response_model=VramTelemetryResponse` (aktuell inline `additionalProperties: true` → NSwag generiert keinen named type).
+  - **T7b**: Pydantic v2 + FastAPI 0.115 emittiert `Optional[str]` als OpenAPI 3.1 `anyOf:[string,null]` — NSwag 14 versteht das nicht und generiert opaque placeholder class. Fix: `FastAPI(openapi_version="3.0.3")` in `backend/main.py` ⇒ `Optional[str]` ⇒ `"type":"string","nullable":true`.
+- **Status:** PARTIAL — Build-Time-Drift-Detection und 3/4 DTOs erledigt; volle Resolution braucht T5b + T7b.
+- **Plan:** `docs/superpowers/plans/2026-05-19-nswag-openapi-codegen.md`
 
 #### S-H2 [HIGH] Tool-Schema fuer pacing.generate Datentyp-Konsistenz
 - **Evidence:** `tool_registry.py:782-797` audio_clip_id:integer matched PacingConfigSchema.audio_clip_id:int. brain_min_confidence type:number,min:0.0,max:1.0 — Backend pacing_schemas.py muss das auch erzwingen.
