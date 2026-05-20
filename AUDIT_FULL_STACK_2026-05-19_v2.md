@@ -360,14 +360,14 @@ CURRENT-STATE-MARKERS:
 - **Impact:** Schema-Drift garantiert. `load_from_db` braucht defensive `.get()`-cascaden fuer alle alten Reihen. Bei Schema-Refactor ist Roll-Forward unmoeglich ohne python-replay-skript.
 - **Recommendation Phase 7:** Pydantic-Models `AudioMetadata`, `AudioAIData`, `VideoMetadata`, `VideoAIData` mit Versionsfeld `__schema_version: int`. Migrations registrieren `from_v1_to_v2`.
 
-#### S-H1b [HIGH] DTO-Mismatch /health/vram Response vs WPF VramTelemetryResponse.cs ⚠️ MOSTLY DONE 2026-05-19
+#### S-H1b [HIGH] DTO-Mismatch /health/vram Response vs WPF VramTelemetryResponse.cs ✅ DONE 2026-05-19
 - **Evidence:** Stubs in commit 53abecd, Vram-Endpoint Schema unbekannt.
-- **Resolution (Infrastruktur):** NSwag.MSBuild generiert `PBStudio.UI/Generated/ApiTypes.g.cs` aus `PBStudio.UI/openapi.snapshot.json` (FastAPI). 3 von 4 manuellen DTOs durch `global using`-Shims ersetzt (Thumbstrip, Clipwave: Commit `1d1bde2`; BrainAxisContribution: Commit `95a35b0`).
+- **Resolution (Infrastruktur):** NSwag.MSBuild generiert `PBStudio.UI/Generated/ApiTypes.g.cs` aus `PBStudio.UI/openapi.snapshot.json` (FastAPI). Alle 4 manuellen DTOs durch `global using`-Shims ersetzt (Thumbstrip, Clipwave: Commit `1d1bde2`; BrainAxisContribution: Commit `95a35b0`; Vram-Familie: Commit `60cce5b`).
 - **Resolution (Drift-Alarm):** `Tests/test_openapi_snapshot_drift.py` 4 Tests (Commits `dff30d8` + `225f6d0`) — schlaegt fail wenn Backend `/openapi.json` von Snapshot drift.
 - **T5b DONE 2026-05-19 (commit `1693c77`):** `backend/schemas/health_schemas.py` mit 9 Pydantic-Klassen (VramHealthResponse, VramHealthSingleResponse, VramBudgetStats, VramModelEntry, VramTelemetryMulti, VramTelemetrySummary, VramTelemetryEntry, VramDurationStats, VramPeakStats). `/health/vram` `response_model=Union[VramHealthResponse, VramHealthSingleResponse]`. NSwag emittiert jetzt 9 benannte DTOs (vorher: inline additionalProperties=true → opaque).
 - **T7b DONE 2026-05-19 (commit `1693c77`):** `_custom_openapi()` + `_downgrade_openapi_to_3_0()` Walker in `backend/main.py` — Pydantic v2 OpenAPI 3.1 `anyOf:[X,null]` → 3.0 `nullable:true`. `BrainExplainResponse.narrative/segment_type` jetzt `{type:string, nullable:true}` (verifiziert via in-proc test).
-- **Pending (T5c, separater Task):** VramTelemetryViewModel.cs Migration auf neue VramHealthResponse-Shape (13+ Property-Renames + Drop von `LastObservedAt` und `VramPeakStats.Avg` da nicht in Backend-Schema). Manual stubs in `PBStudio.UI/Models/VramTelemetry.cs` bleiben bis dahin. Vram-UI-Tab funktioniert unverändert.
-- **Status:** MOSTLY DONE — Infra + Backend-Pydantic + OpenAPI-Compat erledigt. Nur VM-Refactor (T5c) noch offen.
+- **T5c DONE 2026-05-19 (commit `60cce5b`):** VramTelemetryViewModel.cs Migration auf VramHealthResponse-Shape. Property-Renames (Model_id, Duration_ms, Vram_peak_mb, Success_count, Failure_count, Models_tracked etc.). Backend liefert kein last_observed_at + kein VramPeakStats.Avg mehr — UI zeigt die Felder nicht mehr. Manual stubs in `PBStudio.UI/Models/VramTelemetry.cs` als global-using shims auf PBStudio.UI.Generated.*. Tests 15+4 passed. WPF Release 0/0.
+- **Status:** ✅ DONE — Infrastruktur, Backend-Pydantic, OpenAPI-Compat und VM-Refactor erledigt.
 - **Plan:** `docs/superpowers/plans/2026-05-19-nswag-openapi-codegen.md`
 
 #### S-H2 [HIGH] Tool-Schema fuer pacing.generate Datentyp-Konsistenz
