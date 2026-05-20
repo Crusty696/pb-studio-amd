@@ -271,7 +271,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 if (stripTask.Result?.Frames is { Count: > 0 } frames)
                     entry.ThumbnailFrames = new ObservableCollection<string>(frames);
                 if (waveTask.Result?.Peaks is { Count: > 0 } peaks)
-                    entry.AudioPeaks = new ObservableCollection<float>(peaks);
+                    entry.AudioPeaks = new ObservableCollection<float>(peaks.Select(p => (float)p));
                 entry.IsAssetsLoaded = true;
             });
         }
