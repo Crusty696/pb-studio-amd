@@ -207,10 +207,13 @@ class DatabaseCore:
         self._register_sql_functions(conn)
 
     def _register_sql_functions(self, conn):
-        try:
-            conn.create_function("normalize_media_path", 1, normalize_media_path, deterministic=True)
-        except TypeError:
-            conn.create_function("normalize_media_path", 1, normalize_media_path)
+        # M6-Fix (Pe-M2, 2026-05-20): NICHT mehr deterministic=True. Die Funktion
+        # nutzt Path.resolve() + os.path.normcase, beides plattform-abhängig
+        # (Windows: \ + lowercase, Linux: / + case-sensitive). Bei deterministic=True
+        # cached SQLite das Resultat im query-planner — bei DB-Migration zwischen
+        # OS-Plattformen oder bei sqlite-Upgrade kann das zu falschen Ergebnissen
+        # führen. Performance-Trade-off vernachlässigbar (Trigger-only-Aufrufe).
+        conn.create_function("normalize_media_path", 1, normalize_media_path)
 
     def _ensure_migration_table(self, conn):
         conn.execute("""
