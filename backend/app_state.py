@@ -321,9 +321,21 @@ class AppState:
             self.cancel_flags[task_id] = value
 
     def get_cancel_flag(self, task_id: str) -> bool:
-        """Thread-safe Lesen eines Cancel-Flags."""
+        """Thread-safe Lesen eines Cancel-Flags.
+
+        M5-Fix (D-M1, 2026-05-20): Wenn task_id NICHT in cancel_flags
+        AND auch NICHT in render_tasks → defensive True. Pattern:
+        - Vor Fix: nach reset() + render_tasks.clear() + cancel_flags.pop()
+          sah Render-Thread False → lief weiter trotz Projekt-Close.
+        - Nach Fix: kein flag + kein active task = orphan = cancelled.
+        """
         with self._state_lock:
-            return self.cancel_flags.get(task_id, False)
+            flag = self.cancel_flags.get(task_id)
+            if flag is not None:
+                return flag
+            # Unknown task_id — orphan check: wenn nicht in render_tasks, gilt
+            # task als cancelled (defensive). Verhindert die race aus L-TI-1.
+            return task_id not in self.render_tasks
 
     def reset(self) -> None:
         """Setzt den gesamten State zurück (z.B. bei neuem Projekt).
