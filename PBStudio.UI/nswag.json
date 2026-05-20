@@ -1,0 +1,37 @@
+{
+  "runtime": "Net90",
+  "defaultVariables": null,
+  "documentGenerator": {
+    "fromDocument": {
+      "json": "openapi.snapshot.json",
+      "url": "",
+      "output": null,
+      "newLineBehavior": "Auto"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "namespace": "PBStudio.UI.Generated",
+      "className": "ApiTypes",
+      "generateClientClasses": false,
+      "generateClientInterfaces": false,
+      "generateDtoTypes": true,
+      "generateExceptionClasses": false,
+      "generateResponseClasses": false,
+      "generateDataAnnotations": false,
+      "dateType": "System.DateTimeOffset",
+      "dateTimeType": "System.DateTimeOffset",
+      "arrayType": "System.Collections.Generic.IList",
+      "arrayInstanceType": "System.Collections.Generic.List",
+      "dictionaryType": "System.Collections.Generic.IDictionary",
+      "dictionaryInstanceType": "System.Collections.Generic.Dictionary",
+      "classStyle": "Record",
+      "jsonLibrary": "SystemTextJson",
+      "generateOptionalPropertiesAsNullable": true,
+      "generateNullableReferenceTypes": true,
+      "requiredPropertiesMustBeDefined": true,
+      "output": "Generated/ApiTypes.g.cs",
+      "newLineBehavior": "Auto"
+    }
+  }
+}

@@ -30,6 +30,23 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+    <PackageReference Include="NSwag.MSBuild" Version="14.2.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <Target Name="NSwag" BeforeTargets="BeforeBuild" Inputs="openapi.snapshot.json;nswag.json" Outputs="Generated/ApiTypes.g.cs">
+    <Message Text="NSwag: generating Generated/ApiTypes.g.cs from openapi.snapshot.json" Importance="high" />
+    <Exec Command="$(NSwagExe_Net90) run nswag.json /variables:Configuration=$(Configuration)" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <ItemGroup>
+    <Compile Remove="Generated/**" />
+    <None Remove="Generated/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Generated/ApiTypes.g.cs" Condition="Exists('Generated/ApiTypes.g.cs')" />
   </ItemGroup>
 
 </Project>

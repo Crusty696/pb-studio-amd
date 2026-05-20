@@ -312,3 +312,6 @@ vrf*_probe.bat
 # Push-Result-Scratch
 _push_result.txt
 _CLEANUP_*.bat
+
+# NSwag generated DTOs — regenerated from openapi.snapshot.json on each build
+PBStudio.UI/Generated/*.g.cs
