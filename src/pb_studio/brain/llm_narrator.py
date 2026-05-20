@@ -304,9 +304,18 @@ async def _async_generate_explanation(
     )
 
     # Caller kann einen vorbereiteten Client uebergeben (Tests via MockTransport).
+    # M2-Fix (W-M2, 2026-05-20): get_alive_client wired — Auto-Fallback LM Studio
+    # → Ollama wenn primary down. Vorher: Wenn LM Studio down, sofort None
+    # (kein Versuch Ollama). Jetzt: get_alive_client testet beide Provider.
     owns_client = False
     if client is None:
-        client = LMStudioClient(timeout_seconds=timeout_seconds)
+        from pb_studio.ai.llm_provider import get_alive_client
+        client = await get_alive_client(timeout_seconds=min(timeout_seconds, 5.0))
+        if client is None:
+            logger.warning(
+                "LLM-Narrator: kein LLM-Provider erreichbar (LM Studio + Ollama beide down) — Fallback"
+            )
+            return None
         owns_client = True
 
     try:

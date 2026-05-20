@@ -99,11 +99,18 @@ class ChatAgent:
                 timeout=httpx.Timeout(60.0, connect=5.0),
             )
         if self._llm is None:
-            base = os.environ.get(
-                "PBSTUDIO_LMSTUDIO_URL",
-                os.environ.get("PBSTUDIO_OLLAMA_URL", "http://localhost:1234/v1"),
-            )
-            self._llm = LMStudioClient(base_url=base)
+            # M1-Fix (W-M1, 2026-05-20): llm_provider.get_llm_client respektiert
+            # config.json::ai.provider (lmstudio | ollama | auto). Vor Fix
+            # ignorierte chat_agent config.json komplett und las nur env-vars
+            # → Provider-Switch im Settings-UI hatte keinen Effekt im Chat-Pfad.
+            # Env-vars (PBSTUDIO_LMSTUDIO_URL / PBSTUDIO_OLLAMA_URL) bleiben als
+            # Override-Pfad fuer Tests + lokale Overrides.
+            from .llm_provider import get_llm_client
+            env_override = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
+            if env_override:
+                self._llm = LMStudioClient(base_url=env_override)
+            else:
+                self._llm = get_llm_client()
         if self._model_registry is None:
             ai_cfg = self._load_ai_config()
             self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
@@ -310,6 +317,18 @@ class ChatAgent:
                     })
 
                     result = await self._dispatch_tool(tc)
+                    # M3-Fix (P-M1, 2026-05-20): Wenn Tool-Result einen "error"-key
+                    # hat (Tool-Handler-Exception oder unknown-tool), zusaetzlich
+                    # ChatEvent("error",...) emittieren — sonst sieht UI im Frontend
+                    # nur ein normales tool_result und der User merkt nicht, dass
+                    # das Tool versagt hat.
+                    if isinstance(result, dict) and "error" in result:
+                        yield ChatEvent("error", {
+                            "message": str(result.get("error", "Tool failure")),
+                            "stage": "tool_dispatch",
+                            "tool": tool_name,
+                            "tool_call_id": tool_call_id,
+                        })
                     yield ChatEvent("tool_result", {
                         "name": tool_name,
                         "result": result,
