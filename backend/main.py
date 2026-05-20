@@ -135,6 +135,56 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# T7b (S-H1b nswag-compat): downgrade auf OpenAPI 3.0.3 — Pydantic v2 emittiert
+# sonst OpenAPI 3.1 mit `anyOf:[string,null]` fuer Optional[str], was NSwag 14
+# nicht zu nullable string? collapsen kann (-> opaque placeholder classes).
+# Recursive walker konvertiert `anyOf:[X,null]` -> `{...X, nullable:true}`.
+def _downgrade_openapi_to_3_0(schema: dict) -> dict:
+    """Konvertiert OpenAPI 3.1 anyOf:[X,null] zu 3.0 nullable:true in place."""
+    if not isinstance(schema, dict):
+        return schema
+
+    if "anyOf" in schema and isinstance(schema["anyOf"], list):
+        non_null = [s for s in schema["anyOf"] if not (isinstance(s, dict) and s.get("type") == "null")]
+        has_null = any(isinstance(s, dict) and s.get("type") == "null" for s in schema["anyOf"])
+        if has_null and len(non_null) == 1 and isinstance(non_null[0], dict):
+            collapsed = dict(non_null[0])
+            collapsed["nullable"] = True
+            for k, v in schema.items():
+                if k != "anyOf":
+                    collapsed.setdefault(k, v)
+            schema.clear()
+            schema.update(collapsed)
+
+    for v in schema.values():
+        if isinstance(v, dict):
+            _downgrade_openapi_to_3_0(v)
+        elif isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict):
+                    _downgrade_openapi_to_3_0(item)
+    return schema
+
+
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema["openapi"] = "3.0.3"
+    _downgrade_openapi_to_3_0(schema)
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi
+
 # CORS für lokalen C# WPF Client
 app.add_middleware(
     CORSMiddleware,

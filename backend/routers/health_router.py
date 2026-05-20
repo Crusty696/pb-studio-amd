@@ -14,16 +14,24 @@ bestehenden Inline-Routes (FastAPI route table is path-based).
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
+
+from backend.schemas.health_schemas import (
+    VramHealthResponse, VramHealthSingleResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
 
-@router.get("/vram")
+@router.get(
+    "/vram",
+    response_model=Union[VramHealthResponse, VramHealthSingleResponse],
+    summary="VRAM-Health (Budget + Telemetrie)",
+)
 async def vram_health(
     model_id: Optional[str] = Query(
         default=None,
