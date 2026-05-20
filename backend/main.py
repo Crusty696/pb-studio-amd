@@ -115,6 +115,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"  Render-Queue Restore-on-Startup übersprungen: {e}")
 
+    # M8-Fix (I-M2, 2026-05-20): Startup-Cleanup von verwaisten temp-Dirs aelter
+    # als 24h. Vor Fix: temp/ wurde nur bei Render-Cancel/Fail aufgeraeumt
+    # (_cleanup_render_temps), nach Crash blieben .temp_render-Verzeichnisse mit
+    # Stale-Files liegen. Jetzt: Startup-sweep aller .temp_render-Dirs > 24h.
+    try:
+        import time
+        import shutil
+        from pathlib import Path
+        threshold = time.time() - 24 * 3600
+        cleaned = 0
+        # Project-Dir scan nach .temp_render
+        proj_root = Path(config.project_dir)
+        if proj_root.exists():
+            for temp_dir in proj_root.rglob(".temp_render"):
+                try:
+                    mtime = temp_dir.stat().st_mtime
+                    if mtime < threshold:
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                        cleaned += 1
+                except Exception as cleanup_err:
+                    logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
+        if cleaned:
+            logger.info(f"  Stale temp-Dirs entfernt: {cleaned} (älter als 24h)")
+    except Exception as e:
+        logger.warning(f"  temp-Cleanup-on-Startup übersprungen: {e}")
+
     yield
 
     # BUG-099 FIX: Expliziter Cleanup beim Shutdown
