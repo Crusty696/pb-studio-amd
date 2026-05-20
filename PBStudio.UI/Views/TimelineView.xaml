@@ -332,10 +332,31 @@
                                                     <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
                                                 </MultiBinding>
                                             </Border.Width>
+                                            <!-- #14 (2026-05-20): Segment-Label im SongSegment-Border. -->
+                                            <TextBlock Text="{Binding Label}"
+                                                       Foreground="{StaticResource AbletonText}"
+                                                       FontSize="9"
+                                                       Margin="4,2,0,0"
+                                                       VerticalAlignment="Top"
+                                                       Opacity="0.85"/>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- #12 (2026-05-20): DepthRenderer SpectralPoints overlay re-added.
+                                 Cyan spectral-centroid line in V1-Lane (50px high, top-aligned).
+                                 Data via SpectralPoints ObservableCollection, populated by
+                                 TimelineViewModel.UpdateSpectralPoints(). -->
+                            <controls:DepthRenderer Grid.Row="0"
+                                                    Points="{Binding SpectralPoints}"
+                                                    PixelsPerSecond="{Binding PixelsPerSecond}"
+                                                    LineBrush="Cyan"
+                                                    Opacity="0.3"
+                                                    VerticalAlignment="Top"
+                                                    Height="50"
+                                                    Margin="0,5,0,0"
+                                                    IsHitTestVisible="False"/>
 
                             <!-- Video clips -->
                             <ItemsControl x:Name="TimelineItemsControl" Grid.Row="0"
@@ -372,6 +393,44 @@
                                                 PreviewMouseDown="Clip_MouseDown"
                                                 PreviewMouseMove="Clip_MouseMove"
                                                 PreviewMouseUp="Clip_MouseUp">
+                                            <!-- #15 (2026-05-20): VisualStateManager re-added — MouseOver Opacity-Fade,
+                                                 Selected Yellow-Border, Snapped White-Border (Drag-Feedback).
+                                                 States werden von TimelineView.xaml.cs gesetzt (VisualStateManager.GoToElementState). -->
+                                            <VisualStateManager.VisualStateGroups>
+                                                <VisualStateGroup x:Name="InteractionStates">
+                                                    <VisualState x:Name="Normal"/>
+                                                    <VisualState x:Name="MouseOver">
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0.9" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Selected">
+                                                        <Storyboard>
+                                                            <ColorAnimation Storyboard.TargetName="ClipBorder"
+                                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                                            To="{StaticResource AbletonYellowColor}" Duration="0:0:0.1"/>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="BorderThickness"
+                                                                             To="2" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                </VisualStateGroup>
+                                                <VisualStateGroup x:Name="SnapStates">
+                                                    <VisualState x:Name="NormalSnap"/>
+                                                    <VisualState x:Name="Snapped">
+                                                        <Storyboard>
+                                                            <ColorAnimation Storyboard.TargetName="ClipBorder"
+                                                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                                                            To="White" Duration="0:0:0.1"/>
+                                                            <DoubleAnimation Storyboard.TargetName="ClipBorder"
+                                                                             Storyboard.TargetProperty="BorderThickness"
+                                                                             To="3" Duration="0:0:0.1"/>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                </VisualStateGroup>
+                                            </VisualStateManager.VisualStateGroups>
                                             <Border.Width>
                                                 <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
                                                     <Binding Path="Duration"/>
@@ -510,6 +569,34 @@
                                     <DataTemplate>
                                         <Line Y1="0" Y2="500" Stroke="{StaticResource AbletonGreen}"
                                               StrokeThickness="0.5" Opacity="0.20" StrokeDashArray="2,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- #13 (2026-05-20): SnapMarkers (Onset-Lines) re-added.
+                                 Cyan vertical lines parallel zu BeatMarkers, dünner + niedrigere Opacity. -->
+                            <ItemsControl Grid.Row="0" Grid.RowSpan="2" ItemsSource="{Binding SnapMarkers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Line Y1="0" Y2="500" Stroke="Cyan"
+                                              StrokeThickness="0.3" Opacity="0.10"/>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
