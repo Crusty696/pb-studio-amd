@@ -121,3 +121,56 @@ class EmbeddingCache:
 
     def load_array(self, entry: CacheEntry) -> np.ndarray:
         return np.load(entry.embedding_path)
+
+    # M7-Fix (I-M1, 2026-05-20): LRU-size-bounded cleanup
+    # Vor Fix: embedding_cache wuchs unbegrenzt — kein TTL, keine Size-Limits.
+    # Nach Fix: enforce_size_limit(max_bytes) entfernt aelteste Embeddings
+    # bis Gesamtgroesse unter limit. Wird typischerweise beim Backend-Start
+    # ODER nach storage_full-Events aufgerufen.
+
+    def total_size_bytes(self) -> int:
+        """Gesamtgroesse aller Embedding-Files in bytes."""
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(file_size_bytes), 0) FROM media_embedding_index"
+        ).fetchone()
+        return int(row[0] or 0)
+
+    def enforce_size_limit(self, max_bytes: int) -> int:
+        """Loescht aelteste Embeddings (LRU via computed_at) bis Gesamtgroesse <= max_bytes.
+
+        Args:
+            max_bytes: Hard-Limit in bytes (z.B. 5GB = 5 * 1024**3).
+
+        Returns:
+            Anzahl entfernter Embeddings.
+        """
+        if max_bytes <= 0:
+            return 0
+        current = self.total_size_bytes()
+        if current <= max_bytes:
+            return 0
+        # Aelteste zuerst — computed_at ASC
+        rows = self.conn.execute(
+            "SELECT media_hash, model_name, model_version, embedding_path, file_size_bytes "
+            "FROM media_embedding_index ORDER BY computed_at ASC"
+        ).fetchall()
+        removed = 0
+        for media_hash, model_name, model_version, path_str, size_bytes in rows:
+            if current <= max_bytes:
+                break
+            try:
+                Path(path_str).unlink(missing_ok=True)
+            except Exception as exc:
+                logger.warning("LRU-Eviction: konnte %s nicht löschen: %s", path_str, exc)
+                continue
+            self.conn.execute(
+                "DELETE FROM media_embedding_index WHERE media_hash=? "
+                "AND model_name=? AND model_version=?",
+                (media_hash, model_name, model_version),
+            )
+            current -= int(size_bytes or 0)
+            removed += 1
+        if removed:
+            logger.info("LRU-Eviction: %d Embeddings entfernt, Cache-Size %d → %d bytes",
+                        removed, current + sum(int(r[4] or 0) for r in rows[:removed]), current)
+        return removed
