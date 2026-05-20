@@ -303,12 +303,14 @@ public class ApiClient : IApiClient
     // GET /health/vram[?model_id=...] — Histogramm-basierte Performance-Telemetrie pro model_id.
     // Bei modelId=null: Multi-Model-Snapshot (Telemetry.Summary + Telemetry.Models).
     // Bei modelId gesetzt: Single-Entry-Shape (Telemetry.ModelId/Count/DurationMs/...).
-    public Task<VramTelemetryResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default)
+    public Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default)
     {
         var url = string.IsNullOrWhiteSpace(modelId)
             ? "/health/vram"
             : $"/health/vram?model_id={Uri.EscapeDataString(modelId)}";
-        return GetAsync<VramTelemetryResponse>(url, ct);
+        // T5c (S-H1b Audit V2): API surface still typed as multi-model VramHealthResponse.
+        // Single-model variant (Telemetry direkt = Entry) wird vom VM aktuell nicht genutzt.
+        return GetAsync<VramHealthResponse>(url, ct);
     }
     #endregion
 

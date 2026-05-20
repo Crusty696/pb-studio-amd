@@ -160,18 +160,12 @@
                                      Width="420">
                                 <StackPanel>
                                     <!-- Model Header -->
+                                    <!-- T5c (S-H1b 2026-05-19): LastObservedText entfernt — Backend liefert kein last_observed_at mehr. -->
                                     <DockPanel Margin="0,0,0,8">
                                         <TextBlock Text="{Binding ModelId}"
                                                    FontSize="13" FontWeight="SemiBold"
                                                    Foreground="{StaticResource AbletonAccent}"
                                                    VerticalAlignment="Center"/>
-                                        <TextBlock VerticalAlignment="Center"
-                                                   HorizontalAlignment="Right"
-                                                   FontSize="10"
-                                                   Foreground="{StaticResource AbletonTextDim}"
-                                                   ToolTip="Zeitpunkt der letzten Beobachtung (lokale Zeit)">
-                                            <Run Text="last "/><Run Text="{Binding LastObservedText, Mode=OneWay}"/>
-                                        </TextBlock>
                                     </DockPanel>
 
                                     <!-- Counters -->

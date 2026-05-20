@@ -16,8 +16,14 @@ namespace PBStudio.UI.ViewModels;
 /// <summary>
 /// ViewModel für das VRAM-Telemetry-Panel.
 ///
-/// Zeigt pro <c>model_id</c> Aggregate (count / success / failure / avg+peak duration / avg+peak VRAM)
+/// Zeigt pro <c>model_id</c> Aggregate (count / success / failure / avg+peak duration / peak VRAM)
 /// plus zwei einfache Histogramme (Duration in ms, VRAM-Peak in MB).
+///
+/// T5c (S-H1b Audit V2 2026-05-19): Migration auf NSwag-generated DTOs.
+/// Backend response_model = VramHealthResponse (Budget + Telemetry.Models/Summary).
+/// Property-Namen sind snake-preserving (Model_id, Duration_ms, Vram_peak_mb, ...).
+/// Backend liefert kein LastObservedAt mehr und kein Avg auf VramPeakStats —
+/// VM zeigt diese Felder einfach nicht mehr.
 ///
 /// Auto-Refresh via <see cref="DispatcherTimer"/> (Interval ~5s) ist nur aktiv solange
 /// <see cref="IsActive"/> wahr ist — die View setzt das Flag im Loaded/Unloaded-Event.
@@ -107,19 +113,20 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
             var resp = await _api.GetVramTelemetryAsync(modelId: null, ct: token).ConfigureAwait(true);
             if (token.IsCancellationRequested) return;
 
-            if (resp?.Telemetry == null)
+            if (resp == null)
             {
                 StatusText = "VRAM-Telemetrie nicht verfügbar.";
                 return;
             }
 
-            var summary = resp.Telemetry.Summary;
-            var modelsDict = resp.Telemetry.Models ?? new Dictionary<string, VramTelemetryEntry>();
+            var summary = resp.Telemetry?.Summary;
+            var modelsDict = resp.Telemetry?.Models ?? new Dictionary<string, VramTelemetryEntry>();
 
-            ModelsTracked = summary?.ModelsTracked ?? modelsDict.Count;
-            TotalObservations = summary?.Observations ?? modelsDict.Values.Sum(m => m.Count);
-            TotalSuccess = summary?.Success ?? modelsDict.Values.Sum(m => m.SuccessCount);
-            TotalFailure = summary?.Failure ?? modelsDict.Values.Sum(m => m.FailureCount);
+            ModelsTracked = summary?.Models_tracked ?? modelsDict.Count;
+            TotalObservations = summary?.Observations ?? modelsDict.Values.Sum(m => m.Count ?? 0);
+            // T5c: Backend-Summary liefert success/failure nicht mehr — aus Per-Model-Aggregaten errechnen.
+            TotalSuccess = modelsDict.Values.Sum(m => m.Success_count ?? 0);
+            TotalFailure = modelsDict.Values.Sum(m => m.Failure_count ?? 0);
             LastFetchedAt = DateTime.Now;
 
             ApplyBudget(resp.Budget);
@@ -149,21 +156,21 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
     /// Setzt <see cref="HasBudget"/> auf false wenn das Backend keine Budget-Daten lieferte
     /// (z.B. wenn der VRAM-Manager nicht verfügbar ist).
     /// </summary>
-    private void ApplyBudget(IReadOnlyDictionary<string, System.Text.Json.JsonElement>? budget)
+    private void ApplyBudget(VramBudgetStats? budget)
     {
-        if (budget == null || budget.Count == 0)
+        if (budget == null)
         {
             HasBudget = false;
             return;
         }
 
-        BudgetMaxMb = ReadInt(budget, "max_vram_mb");
-        BudgetUsableMb = ReadInt(budget, "usable_vram_mb");
-        BudgetReservedMb = ReadInt(budget, "reserved_mb");
-        BudgetCommittedMb = ReadInt(budget, "committed_mb");
-        BudgetAvailableMb = ReadInt(budget, "available_mb");
-        BudgetLoadedModels = ReadInt(budget, "loaded_models");
-        BudgetReservedModels = ReadInt(budget, "reserved_models");
+        BudgetMaxMb = (int)Math.Round(budget.Max_vram_mb);
+        BudgetUsableMb = (int)Math.Round(budget.Usable_vram_mb);
+        BudgetReservedMb = (int)Math.Round(budget.Reserved_mb);
+        BudgetCommittedMb = (int)Math.Round(budget.Committed_mb);
+        BudgetAvailableMb = (int)Math.Round(budget.Available_mb);
+        BudgetLoadedModels = budget.Loaded_models;
+        BudgetReservedModels = budget.Reserved_models;
         // Safety-Reserve = Hardware-VRAM minus nutzbares Budget.
         BudgetSafetyMb = Math.Max(0, BudgetMaxMb - BudgetUsableMb);
         BudgetUsedPercent = BudgetUsableMb > 0
@@ -172,27 +179,16 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
         HasBudget = BudgetMaxMb > 0 || BudgetUsableMb > 0;
     }
 
-    private static int ReadInt(IReadOnlyDictionary<string, System.Text.Json.JsonElement> dict, string key)
-    {
-        if (!dict.TryGetValue(key, out var el)) return 0;
-        return el.ValueKind switch
-        {
-            System.Text.Json.JsonValueKind.Number => el.TryGetInt32(out var i) ? i : (int)Math.Round(el.GetDouble()),
-            System.Text.Json.JsonValueKind.String => int.TryParse(el.GetString(), out var s) ? s : 0,
-            _ => 0,
-        };
-    }
-
     /// <summary>
     /// Synchronisiert die Cards mit dem aktuellen Backend-Snapshot. Bestehende Cards werden
     /// in-place aktualisiert, neue hinzugefügt, entfallene rausgeworfen — damit das ItemsControl
     /// nicht bei jedem Refresh komplett neu gebaut wird.
     /// </summary>
-    private void ApplyModelEntries(IReadOnlyDictionary<string, VramTelemetryEntry> entries)
+    private void ApplyModelEntries(IDictionary<string, VramTelemetryEntry> entries)
     {
         // Sortierung: höchste Beobachtungszahl zuerst, danach alphabetisch.
         var sorted = entries
-            .OrderByDescending(kv => kv.Value.Count)
+            .OrderByDescending(kv => kv.Value.Count ?? 0)
             .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -244,7 +240,6 @@ public partial class VramTelemetryModelCardViewModel : ObservableObject
     [ObservableProperty] private int _failureCount;
     [ObservableProperty] private string _durationSummary = "—";
     [ObservableProperty] private string _vramSummary = "—";
-    [ObservableProperty] private string _lastObservedText = "nie";
     [ObservableProperty] private string? _lastErrorText;
     [ObservableProperty] private bool _hasError;
 
@@ -253,28 +248,27 @@ public partial class VramTelemetryModelCardViewModel : ObservableObject
 
     public VramTelemetryModelCardViewModel(VramTelemetryEntry entry)
     {
-        ModelId = entry.ModelId;
+        ModelId = entry.Model_id;
         Update(entry);
     }
 
     public void Update(VramTelemetryEntry entry)
     {
-        Count = entry.Count;
-        SuccessCount = entry.SuccessCount;
-        FailureCount = entry.FailureCount;
+        Count = entry.Count ?? 0;
+        SuccessCount = entry.Success_count ?? 0;
+        FailureCount = entry.Failure_count ?? 0;
 
-        DurationSummary = FormatDurationSummary(entry.DurationMs);
-        VramSummary = FormatVramSummary(entry.VramPeakMb);
-        LastObservedText = FormatTimestamp(entry.LastObservedAt);
-        LastErrorText = ExtractErrorMessage(entry.LastError);
+        DurationSummary = FormatDurationSummary(entry.Duration_ms);
+        VramSummary = FormatVramSummary(entry.Vram_peak_mb);
+        LastErrorText = ExtractErrorMessage(entry.Last_error);
         HasError = !string.IsNullOrWhiteSpace(LastErrorText);
 
-        ReplaceBars(DurationHistogram, entry.DurationMs?.Histogram);
-        ReplaceBars(VramHistogram, entry.VramPeakMb?.Histogram);
+        ReplaceBars(DurationHistogram, entry.Duration_ms?.Histogram);
+        ReplaceBars(VramHistogram, entry.Vram_peak_mb?.Histogram);
     }
 
     private static void ReplaceBars(ObservableCollection<VramHistogramBar> target,
-                                    IReadOnlyDictionary<string, int>? histogram)
+                                    IDictionary<string, int>? histogram)
     {
         target.Clear();
         if (histogram == null || histogram.Count == 0) return;
@@ -295,7 +289,8 @@ public partial class VramTelemetryModelCardViewModel : ObservableObject
         if (stats == null) return "—";
         var min = stats.Min ?? 0.0;
         var max = stats.Max ?? 0.0;
-        return $"avg {stats.Avg:F1} ms · peak {max:F0} ms · min {min:F0} ms";
+        var avg = stats.Avg ?? 0.0;
+        return $"avg {avg:F1} ms · peak {max:F0} ms · min {min:F0} ms";
     }
 
     private static string FormatVramSummary(VramPeakStats? stats)
@@ -303,32 +298,32 @@ public partial class VramTelemetryModelCardViewModel : ObservableObject
         if (stats == null) return "—";
         var min = stats.Min ?? 0.0;
         var max = stats.Max ?? 0.0;
-        return $"avg {stats.Avg:F0} MB · peak {max:F0} MB · min {min:F0} MB";
+        // T5c: Backend liefert kein Avg auf VramPeakStats (TelemetryEntry.to_dict()
+        // expliziert nur min/max/histogram für vram_peak_mb).
+        return $"peak {max:F0} MB · min {min:F0} MB";
     }
 
-    private static string FormatTimestamp(double? unixSeconds)
+    private static string? ExtractErrorMessage(object? error)
     {
-        if (unixSeconds == null) return "nie";
+        // T5c: Backend liefert last_error jetzt als generic dict[str, Any] (object?).
+        // Common pattern: {message: "...", type: "..."}. Wir extrahieren message bevorzugt.
+        if (error == null) return null;
         try
         {
-            var ts = DateTimeOffset.FromUnixTimeMilliseconds((long)(unixSeconds.Value * 1000.0)).LocalDateTime;
-            return ts.ToString("HH:mm:ss");
+            var json = error is System.Text.Json.JsonElement el
+                ? el
+                : System.Text.Json.JsonSerializer.SerializeToElement(error);
+            if (json.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            if (json.TryGetProperty("message", out var msg))
+                return msg.ValueKind == System.Text.Json.JsonValueKind.String ? msg.GetString() : msg.ToString();
+            if (json.TryGetProperty("type", out var type))
+                return type.ValueKind == System.Text.Json.JsonValueKind.String ? type.GetString() : type.ToString();
+            return json.ToString();
         }
         catch
         {
-            return "—";
+            return null;
         }
-    }
-
-    private static string? ExtractErrorMessage(IReadOnlyDictionary<string, System.Text.Json.JsonElement>? error)
-    {
-        if (error == null || error.Count == 0) return null;
-        // Bevorzugt "message" oder "type", sonst die ersten zwei key=value Paare.
-        if (error.TryGetValue("message", out var msg))
-            return msg.ValueKind == System.Text.Json.JsonValueKind.String ? msg.GetString() : msg.ToString();
-        if (error.TryGetValue("type", out var type))
-            return type.ValueKind == System.Text.Json.JsonValueKind.String ? type.GetString() : type.ToString();
-        return string.Join(", ", error.Take(2).Select(kv => $"{kv.Key}={kv.Value}"));
     }
 }
 

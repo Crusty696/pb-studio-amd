@@ -74,7 +74,7 @@ public interface IApiClient : IDisposable
     // GET /health/vram — Histogramm-basierte Performance-Telemetrie pro model_id.
     // Gibt bei modelId=null das Multi-Model-Snapshot zurück (Summary + Models),
     // bei gesetztem modelId die single-entry Shape.
-    Task<VramTelemetryResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
+    Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
     #endregion
 
     #region Model Manager
