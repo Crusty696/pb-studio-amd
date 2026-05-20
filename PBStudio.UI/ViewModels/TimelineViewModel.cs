@@ -703,9 +703,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                   .Append(" %  (post=")
                   .Append((ax.Posterior * 100).ToString("F0"))
                   .Append(" %, bridge=")
-                  .Append((ax.BridgeValue * 100).ToString("F0"))
+                  .Append((ax.Bridge_value * 100).ToString("F0"))
                   .Append(" %, n=")
-                  .Append(ax.NSamples)
+                  .Append(ax.N_samples)
                   .AppendLine(")");
             }
         }
@@ -727,7 +727,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                   .Append(" %  (post=")
                   .Append((ax.Posterior * 100).ToString("F0"))
                   .Append(" %, n=")
-                  .Append(ax.NSamples)
+                  .Append(ax.N_samples)
                   .AppendLine(")");
             }
         }
