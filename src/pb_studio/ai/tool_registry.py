@@ -28,6 +28,16 @@ from typing import Any, Awaitable, Callable, Optional
 
 import httpx
 
+
+def _render_encoder_values() -> list[str]:
+    """M4-Fix (P-M2): RenderEncoder-Enum-Werte als list[str] fuer Tool-Schema."""
+    try:
+        from backend.schemas.render_schemas import RenderEncoder
+        return [e.value for e in RenderEncoder]
+    except ImportError:
+        # Fallback (z.B. fuer Sandbox ohne backend-Pfad): hardcoded mirror.
+        return ["hevc_amf", "h264_amf", "av1_amf", "libx265", "libx264"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -878,7 +888,10 @@ def build_default_registry() -> ToolRegistry:
             "output_path": {"type": "string"},
             "audio_path": {"type": "string"},
             "quality": {"type": "string", "enum": ["preview", "standard", "high", "ultra"], "default": "high"},
-            "encoder": {"type": "string", "enum": ["hevc_amf", "h264_amf", "av1_amf", "libx265", "libx264"]},
+            # M4-Fix (P-M2, 2026-05-20): encoder-enum aus RenderEncoder generieren,
+            # damit Tool-Schema + Pydantic-Schema nicht driften koennen. Vor Fix
+            # waren beide hardcoded und konnten unabhaengig erweitert werden.
+            "encoder": {"type": "string", "enum": _render_encoder_values()},
             "resolution_width": {"type": "integer", "default": 1920},
             "resolution_height": {"type": "integer", "default": 1080},
             "fps": {"type": "number", "default": 30.0},
