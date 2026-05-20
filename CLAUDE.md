@@ -79,7 +79,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **LM-Studio + Ollama Hybrid:** User-Direktive 2026-05-19 — beide Provider lauffaehig (private app). Switch via config.json + model_registry.py. Foundation: `lmstudio_client.py` + `ollama_client.py` koexistieren.
   - **Tests:** 674 passed / 12 skipped / 0 failed (3:25 min).
   - **E010 Resilience:** T003+T004+T011 ✅ (15.05.), `[ ] E010` in project-plan.md noch unchecked — acceptance SSE Reconnect + 4GB Stress muss live-verifiziert werden.
-  - **S-H1b/#6 nswag:** ⚠️ PARTIAL — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..225f6d0`). 3/4 DTOs migriert. Drift-Tests grün (692 pytest). Pending: T5b (backend `/health/vram` Pydantic response_model) + T7b (FastAPI `openapi_version="3.0.3"` für `Optional[str]`-Compat). Plan: `docs/superpowers/plans/2026-05-19-nswag-openapi-codegen.md`.
+  - **S-H1b/#6 nswag:** ⚠️ MOSTLY DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..1693c77`). 9 Vram-DTOs jetzt named-generated (T5b commit `1693c77`). OpenAPI 3.0.3 downgrade-walker fuer NSwag-Compat aktiv (T7b commit `1693c77`). 692 pytest gruen. Pending: T5c VramTelemetryViewModel.cs Migration auf neue Shape (13+ Property-Renames, separater Task). Plan: `docs/superpowers/plans/2026-05-19-nswag-openapi-codegen.md`.
 - **Next Task:**
   - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
   - Verbleibend nach autonomem Lauf:
