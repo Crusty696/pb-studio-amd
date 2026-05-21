@@ -315,3 +315,7 @@ _CLEANUP_*.bat
 
 # NSwag generated DTOs — regenerated from openapi.snapshot.json on each build
 PBStudio.UI/Generated/*.g.cs
+
+# Agent Skills
+.agents/
+.claude/skills/
