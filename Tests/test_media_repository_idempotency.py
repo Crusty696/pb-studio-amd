@@ -458,3 +458,62 @@ def test_add_media_retries_on_real_concurrent_database_lock(tmp_path, monkeypatc
 
     DatabaseCore().shutdown()
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
+def test_media_metadata_compression(tmp_path, monkeypatch):
+    """Verify that metadata payloads > 10 KB are compressed and base64-encoded with a prefix in SQLite,
+    but retrieved transparently decoded."""
+    db_path = tmp_path / "media_compression.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "clip.wav"
+    media_file.write_bytes(b"abc123")
+
+    # Create large metadata (> 10 KB) representing spectral/depth data
+    large_spectral_data = {
+        "song_segments": [{"start": 0.0, "end": 10.0, "label": "Intro", "energy": 0.3}],
+        "spectral_data": {
+            "timestamps": [float(i) * 0.1 for i in range(1500)],
+            "energy": [float(i % 10) / 10.0 for i in range(1500)],
+            "centroid": [float(i % 100) * 10 for i in range(1500)],
+        }
+    }
+    
+    # Assert that this is indeed larger than 10 KB when dumped as JSON
+    import json
+    json_len = len(json.dumps(large_spectral_data))
+    assert json_len > 10 * 1024  # > 10 KB
+
+    # Save to database
+    media_id = repo.add_media(1, str(media_file), "hash-large", 10.0, large_spectral_data)
+    assert media_id is not None and media_id > 0
+
+    # 1. Verify DB contains compressed representation starting with 'GZ1:' prefix
+    conn = DatabaseCore().get_connection()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT metadata_json FROM media WHERE id = ?", (media_id,)).fetchone()
+    db_metadata_str = row[0]
+    
+    assert db_metadata_str.startswith("GZ1:")
+    assert len(db_metadata_str) < json_len  # Compression should reduce size significantly
+
+    # 2. Verify transparent retrieval via repo
+    retrieved = repo.get_by_id(media_id)
+    assert retrieved is not None
+    assert retrieved["file_hash"] == "hash-large"
+    
+    # Transparently deserialized JSON string (external callers do json.loads)
+    retrieved_meta_str = retrieved["metadata_json"]
+    assert isinstance(retrieved_meta_str, str)
+    
+    retrieved_meta = json.loads(retrieved_meta_str)
+    assert isinstance(retrieved_meta, dict)
+    assert "spectral_data" in retrieved_meta
+    assert len(retrieved_meta["spectral_data"]["timestamps"]) == 1500
+    assert retrieved_meta["spectral_data"]["timestamps"] == large_spectral_data["spectral_data"]["timestamps"]
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+

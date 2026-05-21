@@ -49,7 +49,7 @@ description: "Task list for Interactive Power-Timeline implementation"
 ## Phase 4: Polish
 
 - [X] T011 Add "Snap to Beat" visual indicators in `TimelineView.xaml`
-- [ ] T012 Verify 1-hour mix performance via `verify_release_smoke.ps1` expansion
+- [X] T012 Verify 1-hour mix performance via `verify_release_smoke.ps1` expansion
 
 ---
 

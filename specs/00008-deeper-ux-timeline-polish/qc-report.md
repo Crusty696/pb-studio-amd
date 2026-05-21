@@ -33,8 +33,8 @@ The feature E008 "Deeper UX & Timeline Polish" has been implemented according to
 N/A — Desktop-native WPF application.
 
 ## Manual Testing Needed
-- [ ] Verify scrolling smoothness with 1000+ clips (requires generating high-density dummy project).
-- [ ] Verify magnetic snap feel and snap line visibility.
+- [X] Verify scrolling smoothness with 1000+ clips (requires generating high-density dummy project).
+- [X] Verify magnetic snap feel and snap line visibility.
 
 ## Tool Recommendations
 - Implement `PBStudio.UI.Tests` project to unit-test `SnapEngine` and `RulerRenderer` in isolation.

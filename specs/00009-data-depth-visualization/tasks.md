@@ -17,11 +17,11 @@ plan_path: "specs/00009-data-depth-visualization/plan.md"
 
 ### Backend — API & Storage
 - [X] T005 [P1] Implement `GET /audio/depth/{media_id}` and `POST /audio/analyze-depth/{media_id}` endpoints. (FR-001, FR-002) [COMPLETES FR-001, FR-002]
-- [ ] T006 [P1] Extend `storage.py` to handle compressed depth metadata in `media_cache` (FR-005, AD-002).
+- [X] T006 [P1] Extend `storage.py` to handle compressed depth metadata in `media_cache` (FR-005, AD-002).
 
 ### Frontend — ViewModel & Foundation
 - [X] T007 [P1] Update `TimelineViewModel.cs` with `SongSegments` and `SpectralData` collections.
-- [ ] T008 [P1] Implement dynamic downsampling logic in `TimelineViewModel.cs` (AD-004, STF-001).
+- [X] T008 [P1] Implement dynamic downsampling logic in `TimelineViewModel.cs` (AD-004, STF-001).
 
 ### Frontend — UI & Rendering
 - [X] T009 [P1] Create `DepthRenderer.cs` using `DrawingVisual` for high-performance curves (TR-001).

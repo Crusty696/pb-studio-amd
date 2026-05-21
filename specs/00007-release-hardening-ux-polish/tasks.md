@@ -36,12 +36,12 @@ description: "Task list for Release Hardening & UX Polish"
 
 - [X] T007 [P] [OBJ2] {TR-004} Audit all AI wrappers in `src/pb_studio/ai/` to ensure `enable_mem_pattern=False`
 - [X] T008 [OBJ2] {TR-002} Implement `src/tools/execute_4h_stress_test.py` with `amdsmi` telemetry and batch loop
-- [ ] T009 [OBJ2] {TR-002} [COMPLETES OBJ2] Verify `VRAMArbiter` eviction logic triggers when buffer < 500MB via stress test
+- [X] T009 [OBJ2] {TR-002} [COMPLETES OBJ2] Verify `VRAMArbiter` eviction logic triggers when buffer < 500MB via stress test
 
 ---
 ## Phase 4: Work Item 3 - UI Polish (Priority: P2)
 
-- [ ] T010 [P] {TR-005} Implement GPU-accelerated `RenderTransform` tab animations in `MainWindow.xaml`
+- [X] T010 [P] {TR-005} Implement GPU-accelerated `RenderTransform` tab animations in `MainWindow.xaml`
 - [X] T011 [P] {TR-006} Verify `VirtualizingStackPanel` is enabled and recycling for all clip list controls
 - [X] T013 [P] {TR-003} [COMPLETES TR-003] Audit all WPF ViewModels for consistent `ObservableObject` and `[ObservableProperty]` usage
 
@@ -50,7 +50,7 @@ description: "Task list for Release Hardening & UX Polish"
 ## Phase 5: Final QA
 
 
-- [ ] T012 Run full `verify_release_smoke.ps1` expansion to confirm release readiness verdict
+- [X] T012 Run full `verify_release_smoke.ps1` expansion to confirm release readiness verdict
 
 ---
 
