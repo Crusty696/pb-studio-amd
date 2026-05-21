@@ -35,7 +35,7 @@ description: "Task list for Release Hardening & UX Polish"
 ## Phase 3: Work Item 2 - Stability & Performance (Priority: P1)
 
 - [X] T007 [P] [OBJ2] {TR-004} Audit all AI wrappers in `src/pb_studio/ai/` to ensure `enable_mem_pattern=False`
-- [ ] T008 [OBJ2] {TR-002} Implement `src/tools/execute_4h_stress_test.py` with `amdsmi` telemetry and batch loop
+- [X] T008 [OBJ2] {TR-002} Implement `src/tools/execute_4h_stress_test.py` with `amdsmi` telemetry and batch loop
 - [ ] T009 [OBJ2] {TR-002} [COMPLETES OBJ2] Verify `VRAMArbiter` eviction logic triggers when buffer < 500MB via stress test
 
 ---

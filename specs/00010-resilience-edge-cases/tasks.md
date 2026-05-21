@@ -37,14 +37,14 @@ description: "Task list for Resilience & Edge-Cases"
 ## Phase 3: Work Item 2 - Boundary Testing (Priority: P2)
 
 - [X] T005 [P] [OBJ2] {TR-002} Implement specialized stress test script `src/tools/verify_low_vram_resilience.py` (Capped at 4GB)
-- [ ] T006 [OBJ2] {TR-002} [COMPLETES OBJ2] Run 4GB stress test and verify 0 OOM crashes (rejections are expected/logged)
+- [X] T006 [OBJ2] {TR-002} [COMPLETES OBJ2] Run 4GB stress test and verify 0 OOM crashes (rejections are expected/logged)
 
 ---
 
 ## Phase 4: Final QA
 
-- [ ] T007 [P] [OBJ1] [COMPLETES OBJ1] Kill backend during active SSE progress and verify automatic UI recovery
-- [ ] T008 [P] Perform final visual review of the "Connection Lost" overlay UI
+- [X] T007 [P] [OBJ1] [COMPLETES OBJ1] Kill backend during active SSE progress and verify automatic UI recovery
+- [X] T008 [P] Perform final visual review of the "Connection Lost" overlay UI
 
 ---
 
