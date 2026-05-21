@@ -222,9 +222,15 @@ async def list_clips(
                     embedding_samples = None
             has_embedding = bool(va.get("has_embedding", False))
 
-        # L-N3: video_hash separat extrahieren damit es nicht doppelt via **c
-        # an VideoClipInfo gereicht wird (TypeError "multiple values for keyword").
-        c_payload = {k: v for k, v in c.items() if k != "video_hash"}
+        # L-N3: Felder die hier explizit als kwarg uebergeben werden, aus c_payload entfernen
+        # damit kein TypeError "multiple values for keyword" auftritt (passiert nach analyze_video,
+        # weil dort is_analyzed/avg_motion/peak_motion/motion_category/embedding_*/has_embedding
+        # in state.set_video_clip() persistiert werden und somit im in-memory clip-dict landen).
+        _explicit_kwargs = {
+            "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
+            "embedding_dim", "embedding_samples", "has_embedding",
+        }
+        c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
             VideoClipInfo(
                 **c_payload,
@@ -848,9 +854,15 @@ def _run_video_analysis(
                             # delete_video_clip per Cascade die FAISS-IDs tombstoned
                             # (sonst Orphan-Hits in Pacing-Semantic-Matcher).
                             from pb_studio.data.repositories.media_repository import MediaRepository
+                            # L-W1 FIX: _run_video_analysis lauft im Thread-Pool ohne FastAPI-
+                            # Dependency-Injection; `state` ist hier nicht im Scope (NameError silent
+                            # gefangen durch except Exception unten -> Embedding wurde nie gespeichert).
+                            # Loesung: AppState-Singleton direkt holen.
+                            from backend.app_state import get_app_state as _get_state
+                            _state_local = _get_state()
                             _vmr = MediaRepository()
                             _media_row = _vmr.find_by_project_and_path(
-                                project_id=state.get_current_project_db_id(),
+                                project_id=_state_local.get_current_project_db_id(),
                                 file_path=video_path,
                             )
                             _media_id = _media_row["id"] if _media_row else None

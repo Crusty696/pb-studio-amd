@@ -1331,6 +1331,7 @@ class AdvancedPacingEngine:
 
         No-op wenn keine Subtracks injiziert. Liefert sortierte Cut-Liste.
         """
+        from .pacing_models import PacingCut
         anchors = self._subtrack_boundary_anchors()
         if not anchors or not cuts:
             return cuts
