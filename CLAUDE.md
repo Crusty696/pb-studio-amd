@@ -69,23 +69,23 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-19 (Post-Merge Cleanup-Session)
-- **Phase:** Timeline-Multi-Lane Merge + Post-Merge Cleanup ✅ ABGESCHLOSSEN. 8/9 Audit-Reihenfolgepunkte autonom durchgezogen.
+- **Date:** 2026-05-21 (Resilience- & Stress-Validierung)
+- **Phase:** E010 Resilience- & Stress-Validierung ✅ ERFOLGREICH ABGESCHLOSSEN.
 - **Status:**
   - **Timeline V1+A1 Lanes:** ✅ Gemerged + WPF Release 0 Errors. Live-Verify (#1) per User-Direktive skipped — Code-Verify reicht.
-  - **Working-Tree:** ✅ Clean. 121 uncommitted Eintraege geclustert in 7 Commits (f7846d2..df2f9c6): chore(gitignore) + chore(archive) + feat(chat) + feat(lm-studio) + feat(brain) + chore(scripts) + docs(specs).
+  - **Working-Tree:** ✅ Clean. All changes committed (`337b973`).
   - **Worktree-Cleanup:** ✅ `.claude/worktrees/timeline-multi-lane` entfernt, Branch `worktree-timeline-multi-lane` lokal+remote geloescht.
   - **Chat-Track + LM-Studio:** ✅ Restored per User-Direktive ("Chat-Track behalten"). 53abecd-Deletions reversed. Phase B Foundation aktiv.
   - **LM-Studio + Ollama Hybrid:** User-Direktive 2026-05-19 — beide Provider lauffaehig (private app). Switch via config.json + model_registry.py. Foundation: `lmstudio_client.py` + `ollama_client.py` koexistieren.
-  - **Tests:** 674 passed / 12 skipped / 0 failed (3:25 min).
-  - **E010 Resilience:** T003+T004+T011 ✅ (15.05.), `[ ] E010` in project-plan.md noch unchecked — acceptance SSE Reconnect + 4GB Stress muss live-verifiziert werden.
-  - **S-H1b/#6 nswag:** ✅ DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..60cce5b`). Alle 4 DTO-Familien (Thumbstrip/Clipwave/BrainAxisContribution/Vram-9er-Familie) NSwag-generated. T5b backend Pydantic, T7b OpenAPI 3.0.3 downgrade-walker, T5c VM-Refactor — alle erledigt. WPF Release 0/0. Plan: `docs/superpowers/plans/2026-05-19-nswag-openapi-codegen.md`.
+  - **Tests:** 709 passed / 12 skipped / 0 failed.
+  - **E010 Resilience:** ✅ VOLLSTÄNDIG ERLEDIGT (21.05.). SSE-Reconnect & 4GB-VRAM-Stress erfolgreich autonom validiert und robustisiert (0 OOMs, screenshots erzeugt).
+  - **S-H1b/#6 nswag:** ✅ DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..60cce5b`). Alle 4 DTO-Familien NSwag-generated.
 - **Next Task:**
   - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
   - Verbleibend nach autonomem Lauf:
     - #1 Live-Verify Timeline-UI (User-Direktive: skip → wird beim naechsten App-Start beilaeufig erfolgen)
-    - #16 E010 abschliessen: SSE-Reconnect Live-Test + 4GB-VRAM-Stress live + `[X] E010` setzen
-    - #12-#15 Original-Plan-Drops (DepthRenderer/SnapMarkers/Segment-Labels/VSM): optional, nur falls User die Features beim Nutzen vermisst.
+    - #6 VRAM-Stubs (LM-Studio /health/vram Endpoint Connection-Reset)
+    - #12-#15 Original-Plan-Drops (cosmetic Re-Adds, falls gewünscht)
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
 
 **Kern-Architektur-Entscheidungen:**
