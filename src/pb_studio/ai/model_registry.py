@@ -121,8 +121,24 @@ class ModelRegistry:
             self._client = LMStudioClient()
         return self._client
 
+    async def _resolve_client_async(self) -> LMStudioClient:
+        """W-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.
+
+        Wenn kein Client injiziert ist, holt get_alive_client den live-erreichbaren
+        Provider (LM Studio first, Ollama Fallback bei provider="auto"). Damit
+        funktioniert /models/recommendations auch wenn LM Studio down ist.
+        """
+        if self._client is None:
+            from pb_studio.ai.llm_provider import get_alive_client, get_llm_client, get_provider
+            if get_provider() == "auto":
+                alive = await get_alive_client(timeout_seconds=5.0)
+                self._client = alive if alive is not None else get_llm_client()
+            else:
+                self._client = get_llm_client()
+        return self._client
+
     async def refresh(self) -> list[LMStudioModelInfo]:
-        client = self._resolve_client()
+        client = await self._resolve_client_async()
         try:
             self._installed = await client.list_models()
         except LMStudioError:

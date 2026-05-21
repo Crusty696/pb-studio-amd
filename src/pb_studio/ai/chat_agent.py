@@ -105,10 +105,23 @@ class ChatAgent:
             # → Provider-Switch im Settings-UI hatte keinen Effekt im Chat-Pfad.
             # Env-vars (PBSTUDIO_LMSTUDIO_URL / PBSTUDIO_OLLAMA_URL) bleiben als
             # Override-Pfad fuer Tests + lokale Overrides.
-            from .llm_provider import get_llm_client
+            #
+            # W-QA-2 (2026-05-22): bei provider="auto" muss aktiv geprueft werden
+            # ob LM Studio erreichbar ist; sonst soll Ollama als Fallback genutzt
+            # werden. get_llm_client() alleine waehlt nur die default-base_url
+            # ohne Live-Probe → Chat schlug fehl wenn LM Studio down war obwohl
+            # Ollama lief. get_alive_client() probiert beide.
+            from .llm_provider import get_llm_client, get_alive_client, get_provider
             env_override = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
             if env_override:
                 self._llm = LMStudioClient(base_url=env_override)
+            elif get_provider() == "auto":
+                alive = await get_alive_client(timeout_seconds=5.0)
+                if alive is not None:
+                    self._llm = alive
+                else:
+                    # Beide down — Fallback auf LM Studio (Caller sieht Connection-Error)
+                    self._llm = get_llm_client()
             else:
                 self._llm = get_llm_client()
         if self._model_registry is None:

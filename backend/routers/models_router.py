@@ -160,10 +160,63 @@ def _get_base_url() -> str:
 
 
 def _make_client():
-    """Erzeugt einen frischen ``LMStudioClient`` mit Default-Settings."""
+    """Erzeugt einen frischen ``LMStudioClient`` mit Default-Settings.
+
+    W-QA-2 (2026-05-22): respektiert config.ai.provider — bei "ollama" wird
+    der Ollama-Base-URL gewaehlt. Bei "auto" greift get_alive_client_url() ein
+    um Live-Verfuegbarkeit zu pruefen. Env-Override hat hoechste Prio.
+    """
     from pb_studio.ai.lmstudio_client import LMStudioClient
 
     return LMStudioClient(base_url=_get_base_url())
+
+
+async def _make_alive_client():
+    """W-QA-2 (2026-05-22): Auto-Fallback Client.
+
+    Bei provider="auto" + LM-Studio down + Ollama up → Ollama-Client.
+    Returns (client, lmstudio_ok, ollama_ok). Caller schliesst client via
+    ``async with``. Wenn beide down: client ist None.
+    """
+    # Env-Override hat Vorrang — kein Fallback wenn explizit gesetzt
+    explicit = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
+    if explicit:
+        return _make_client(), True, False  # uns ist die Pruefung egal, env weist auf gewollten Server
+
+    from pb_studio.ai.llm_provider import get_provider, get_llm_client, DEFAULT_LMSTUDIO_URL, DEFAULT_OLLAMA_URL
+    from pb_studio.ai.lmstudio_client import LMStudioConnectionError
+
+    provider = get_provider()
+    lmstudio_ok = False
+    ollama_ok = False
+
+    async def _probe(p: str) -> bool:
+        c = get_llm_client(provider=p, timeout_seconds=3.0)
+        try:
+            return await c.is_alive()
+        except LMStudioConnectionError:
+            return False
+        finally:
+            try:
+                await c.aclose()
+            except Exception:
+                pass
+
+    if provider in ("auto", "lmstudio"):
+        lmstudio_ok = await _probe("lmstudio")
+    if provider in ("auto", "ollama"):
+        ollama_ok = await _probe("ollama")
+
+    # Provider-Wahl
+    if provider == "lmstudio":
+        chosen = "lmstudio" if lmstudio_ok else None
+    elif provider == "ollama":
+        chosen = "ollama" if ollama_ok else None
+    else:  # auto
+        chosen = "lmstudio" if lmstudio_ok else ("ollama" if ollama_ok else None)
+
+    client = get_llm_client(provider=chosen) if chosen else None
+    return client, lmstudio_ok, ollama_ok
 
 
 def _load_ai_config() -> dict[str, Any]:
@@ -183,26 +236,40 @@ def _load_ai_config() -> dict[str, Any]:
 # ----------------------------------------------------------------------
 @router.get("/list", response_model=ModelListResponse)
 async def list_models() -> ModelListResponse:
-    """Liefert alle in LM Studio verfuegbaren / geladenen Modelle."""
+    """Liefert alle in LM Studio ODER Ollama verfuegbaren / geladenen Modelle.
+
+    W-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.
+    Reportet ``ollama_available`` und ``lmstudio_available`` korrekt.
+    """
     from pb_studio.ai.lmstudio_client import LMStudioError
 
-    base_url = _get_base_url()
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    if client is None:
+        return ModelListResponse(
+            ollama_available=ollama_ok,
+            lmstudio_available=lmstudio_ok,
+            base_url=_get_base_url(),
+            models=[],
+            error="Kein LLM-Provider erreichbar (weder LM Studio noch Ollama)",
+        )
+
     try:
-        async with _make_client() as client:
-            models = await client.list_models()
+        async with client as c:
+            models = await c.list_models()
+            active_base = c.base_url
         entries = [ModelListEntry(**m.to_dict()) for m in models]
         return ModelListResponse(
-            ollama_available=True,
-            lmstudio_available=True,
-            base_url=base_url,
+            ollama_available=ollama_ok,
+            lmstudio_available=lmstudio_ok,
+            base_url=active_base,
             models=entries,
         )
     except LMStudioError as exc:
-        logger.warning("LM Studio list_models fehlgeschlagen: %s", exc)
+        logger.warning("list_models fehlgeschlagen: %s", exc)
         return ModelListResponse(
-            ollama_available=False,
-            lmstudio_available=False,
-            base_url=base_url,
+            ollama_available=ollama_ok,
+            lmstudio_available=lmstudio_ok,
+            base_url=_get_base_url(),
             models=[],
             error=str(exc),
         )
@@ -217,16 +284,18 @@ async def list_available_models() -> AvailableModelsResponse:
     from pb_studio.ai.model_registry import _name_matches  # type: ignore
     from pb_studio.ai.lmstudio_client import LMStudioError
 
-    base_url = _get_base_url()
+    # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback statt hard-coded LM-Studio.
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
     installed_names: list[str] = []
-    lmstudio_ok = True
-    try:
-        async with _make_client() as client:
-            models = await client.list_models()
-        installed_names = [m.name for m in models]
-    except LMStudioError as exc:
-        logger.warning("LM Studio list_models fehlgeschlagen (/available): %s", exc)
-        lmstudio_ok = False
+    active_base = _get_base_url()
+    if client is not None:
+        try:
+            async with client as c:
+                models = await c.list_models()
+                active_base = c.base_url
+            installed_names = [m.name for m in models]
+        except LMStudioError as exc:
+            logger.warning("list_models fehlgeschlagen (/available): %s", exc)
 
     entries: list[AvailableModelEntry] = []
     for spec in CURATED_VISION_MODELS:
@@ -242,9 +311,9 @@ async def list_available_models() -> AvailableModelsResponse:
             )
         )
     return AvailableModelsResponse(
-        ollama_available=lmstudio_ok,
+        ollama_available=ollama_ok,
         lmstudio_available=lmstudio_ok,
-        base_url=base_url,
+        base_url=active_base,
         available=entries,
     )
 
@@ -305,9 +374,22 @@ async def recommend_model(
     from pb_studio.ai.lmstudio_client import LMStudioError
 
     ai_cfg = _load_ai_config()
+    # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback statt hard-coded LM Studio.
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    if client is None:
+        registry_stub = ModelRegistry(ai_cfg)
+        return RecommendationResponse(
+            task=task,
+            mode=mode,
+            model=None,
+            reason="Kein LLM-Provider erreichbar (weder LM Studio noch Ollama)",
+            preference_list=registry_stub.get_preference_list(task, mode) if mode in {"speed", "balance", "quality"} else [],
+            override=registry_stub.get_user_override(task),
+            installed=[],
+        )
     try:
-        async with _make_client() as client:
-            registry = ModelRegistry(ai_cfg, client=client)
+        async with client as c:
+            registry = ModelRegistry(ai_cfg, client=c)
             try:
                 await registry.refresh()
             except LMStudioError as exc:
@@ -315,7 +397,7 @@ async def recommend_model(
                     task=task,
                     mode=mode,
                     model=None,
-                    reason=f"LM Studio nicht erreichbar: {exc}",
+                    reason=f"LLM-Provider nicht erreichbar: {exc}",
                     preference_list=registry.get_preference_list(task, mode) if mode in {"speed", "balance", "quality"} else [],
                     override=registry.get_user_override(task),
                     installed=[],

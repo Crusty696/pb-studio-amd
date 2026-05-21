@@ -159,12 +159,24 @@ async def _async_extract_tags(
 
     ai_cfg = _load_ai_config()
 
-    async with LMStudioClient(timeout_seconds=timeout_seconds) as client:
+    # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback fuer Video-Captioning. Vorher
+    # hartcodiert LMStudioClient() default-URL → kein Tag-Capture wenn nur
+    # Ollama up war. get_alive_client probiert beide.
+    from pb_studio.ai.llm_provider import get_alive_client, get_llm_client, get_provider
+
+    if get_provider() == "auto":
+        client = await get_alive_client(timeout_seconds=min(timeout_seconds, 5.0))
+        if client is None:
+            client = get_llm_client(timeout_seconds=timeout_seconds)
+    else:
+        client = get_llm_client(timeout_seconds=timeout_seconds)
+
+    async with client:
         registry = ModelRegistry(ai_cfg, client=client)
         try:
             await registry.refresh()
         except LMStudioError as exc:
-            logger.warning("LM Studio nicht erreichbar — keine Tags: %s", exc)
+            logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
             return []
 
         if model_override:
