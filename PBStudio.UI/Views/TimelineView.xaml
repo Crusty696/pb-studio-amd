@@ -544,8 +544,8 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <!-- Beat markers (span both lanes) -->
-                            <ItemsControl Grid.Row="0" Grid.RowSpan="2" ItemsSource="{Binding BeatMarkers}">
+                            <!-- Song-segment background (mirrored inside A1 for Phrase Coloring) -->
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding SongSegments}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
@@ -556,7 +556,7 @@
                                         <Setter Property="Canvas.Left">
                                             <Setter.Value>
                                                 <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
-                                                    <Binding/>
+                                                    <Binding Path="StartTime"/>
                                                     <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
                                                 </MultiBinding>
                                             </Setter.Value>
@@ -565,8 +565,81 @@
                                 </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Line Y1="0" Y2="500" Stroke="{StaticResource AbletonGreen}"
-                                              StrokeThickness="0.5" Opacity="0.20" StrokeDashArray="2,2"/>
+                                        <Border Height="80" Opacity="0.08">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Label}" Value="chorus">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonAccent}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="verse">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonBlue}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    <Setter Property="Background" Value="{StaticResource AbletonBorder}"/>
+                                                </Style>
+                                            </Border.Style>
+                                            <Border.Width>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="Duration"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Border.Width>
+                                            <TextBlock Text="{Binding Label}"
+                                                       Foreground="{StaticResource AbletonText}"
+                                                       FontSize="8"
+                                                       Margin="4,12,0,0"
+                                                       VerticalAlignment="Top"
+                                                       Opacity="0.4"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- DJ-Style Beatgrid on A1 Lane (Rekordbox / Traktor) -->
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding UIBeatMarkers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left">
+                                            <Setter.Value>
+                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
+                                                    <Binding Path="Time"/>
+                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                                </MultiBinding>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Canvas.Top" Value="0"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:BeatMarkerViewModel}">
+                                        <Grid Height="80" ClipToBounds="False" IsHitTestVisible="False">
+                                            <!-- Standard Beat: Dünne, halbtransparente weiße Linie -->
+                                            <Line X1="0" Y1="0" X2="0" Y2="80"
+                                                  Stroke="White" StrokeThickness="0.6" Opacity="0.25"
+                                                  x:Name="BeatLine"/>
+                                            
+                                            <!-- Downbeat: Taktnummer & kleiner Marker -->
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="-2,2,0,0" x:Name="DownbeatPanel" Visibility="Collapsed">
+                                                <Rectangle Width="2" Height="6" Fill="{StaticResource AbletonAccent}" Margin="0,0,3,0"/>
+                                                <TextBlock Text="{Binding Label}"
+                                                           Foreground="{StaticResource AbletonAccent}"
+                                                           FontSize="8" FontWeight="Bold"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsDownbeat}" Value="True">
+                                                <Setter TargetName="BeatLine" Property="Stroke" Value="{StaticResource AbletonAccent}"/>
+                                                <Setter TargetName="BeatLine" Property="StrokeThickness" Value="1.2"/>
+                                                <Setter TargetName="BeatLine" Property="Opacity" Value="0.75"/>
+                                                <Setter TargetName="DownbeatPanel" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

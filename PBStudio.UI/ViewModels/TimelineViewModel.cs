@@ -119,6 +119,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     public ObservableCollection<TimelineEntryModel> TimelineEntries { get; } = [];
     public ObservableCollection<WaveformBarModel> WaveformBars { get; } = [];
     public ObservableCollection<double> BeatMarkers { get; } = [];
+    public ObservableCollection<BeatMarkerViewModel> UIBeatMarkers { get; } = [];
     public ObservableCollection<double> SnapMarkers { get; } = [];
     public ObservableCollection<SongSegmentModel> SongSegments { get; } = [];
 
@@ -529,6 +530,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             {
                 WaveformBars.Clear();
                 BeatMarkers.Clear();
+                UIBeatMarkers.Clear();
                 SnapMarkers.Clear();
                 SongSegments.Clear();
                 _rawSpectralData = spectral;
@@ -545,10 +547,18 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
                 if (beats != null)
                 {
+                    int beatIndex = 0;
                     foreach (var b in beats)
                     {
                         BeatMarkers.Add(b.Time);
                         SnapMarkers.Add(b.Time);
+                        UIBeatMarkers.Add(new BeatMarkerViewModel
+                        {
+                            Time = b.Time,
+                            Index = beatIndex++,
+                            Strength = b.Strength,
+                            BeatType = b.BeatType
+                        });
                     }
                 }
 
@@ -818,6 +828,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         TimelineEntries.Clear();
         WaveformBars.Clear();
+        BeatMarkers.Clear();
+        UIBeatMarkers.Clear();
+        SnapMarkers.Clear();
+        SongSegments.Clear();
         TotalDuration = 0;
         AudioPath = null;
         SelectedEntry = null;

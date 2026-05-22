@@ -60,7 +60,7 @@ tools/
 *.dll
 
 # Modelle / Gewichte (zu groß für GitHub)
-models/
+/models/
 *.safetensors
 
 # Mediendaten (keine Assets auf GitHub)

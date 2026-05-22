@@ -605,7 +605,9 @@ public partial class TimelineView : UserControl
             return;
         }
 
-        if (_mediaOpened)
+        // B5-Fix/Playback: Während der aktive Playback-Timer läuft, treibt der Player den Playhead.
+        // Ein automatischer SeekToClipStart() währenddessen würde zum Zurückspringen & Stottern führen.
+        if (_mediaOpened && !_playbackTimer.IsEnabled)
         {
             SeekToClipStart();
         }
