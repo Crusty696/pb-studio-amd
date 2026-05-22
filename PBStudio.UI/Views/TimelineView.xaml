@@ -508,41 +508,14 @@
                             <!-- ══════════════════════════════════════════════════════════ -->
                             <Border Grid.Row="1" Background="#FF141414"/>
 
-                            <!-- Audio waveform (full opacity, mid-axis) -->
-                            <ItemsControl Grid.Row="1" ItemsSource="{Binding WaveformBars}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas Background="Transparent" VerticalAlignment="Stretch"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemContainerStyle>
-                                    <Style TargetType="ContentPresenter">
-                                        <Setter Property="Canvas.Left">
-                                            <Setter.Value>
-                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
-                                                    <Binding Path="X"/>
-                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
-                                                </MultiBinding>
-                                            </Setter.Value>
-                                        </Setter>
-                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                                    </Style>
-                                </ItemsControl.ItemContainerStyle>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Rectangle Height="{Binding Height}"
-                                                   Fill="{StaticResource AbletonBlue}"
-                                                   Opacity="0.95">
-                                            <Rectangle.Width>
-                                                <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
-                                                    <Binding Path="Width"/>
-                                                    <Binding Path="DataContext.PixelsPerSecond" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
-                                                </MultiBinding>
-                                            </Rectangle.Width>
-                                        </Rectangle>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <!-- Audio waveform (High-Performance Direct Waveform Drawing) -->
+                            <controls:WaveformRenderer Grid.Row="1"
+                                                       WaveformBars="{Binding WaveformBars}"
+                                                       PixelsPerSecond="{Binding PixelsPerSecond}"
+                                                       FillBrush="{StaticResource AbletonBlue}"
+                                                       IsHitTestVisible="False"
+                                                       Height="80"
+                                                       VerticalAlignment="Stretch"/>
 
                             <!-- Song-segment background (mirrored inside A1 for Phrase Coloring) -->
                             <ItemsControl Grid.Row="1" ItemsSource="{Binding SongSegments}">
@@ -565,7 +538,7 @@
                                 </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Height="80" Opacity="0.08">
+                                        <Border Height="80" Opacity="0.12">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Style.Triggers>
@@ -574,6 +547,18 @@
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Label}" Value="verse">
                                                             <Setter Property="Background" Value="{StaticResource AbletonBlue}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="intro">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonTextDim}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="outro">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonTextDim}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="break">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonYellow}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Label}" Value="bridge">
+                                                            <Setter Property="Background" Value="{StaticResource AbletonYellow}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                     <Setter Property="Background" Value="{StaticResource AbletonBorder}"/>
@@ -587,10 +572,11 @@
                                             </Border.Width>
                                             <TextBlock Text="{Binding Label}"
                                                        Foreground="{StaticResource AbletonText}"
-                                                       FontSize="8"
-                                                       Margin="4,12,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Margin="6,8,0,0"
                                                        VerticalAlignment="Top"
-                                                       Opacity="0.4"/>
+                                                       Opacity="0.3"/>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -619,24 +605,26 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type models:BeatMarkerViewModel}">
                                         <Grid Height="80" ClipToBounds="False" IsHitTestVisible="False">
-                                            <!-- Standard Beat: Dünne, halbtransparente weiße Linie -->
+                                            <!-- Standard Beat: Dünne, eisblaue, halbtransparente Linie -->
                                             <Line X1="0" Y1="0" X2="0" Y2="80"
-                                                  Stroke="White" StrokeThickness="0.6" Opacity="0.25"
+                                                  Stroke="#FF00D2FF" StrokeThickness="0.6" Opacity="0.35"
                                                   x:Name="BeatLine"/>
                                             
-                                            <!-- Downbeat: Taktnummer & kleiner Marker -->
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="-2,2,0,0" x:Name="DownbeatPanel" Visibility="Collapsed">
-                                                <Rectangle Width="2" Height="6" Fill="{StaticResource AbletonAccent}" Margin="0,0,3,0"/>
-                                                <TextBlock Text="{Binding Label}"
-                                                           Foreground="{StaticResource AbletonAccent}"
-                                                           FontSize="8" FontWeight="Bold"/>
-                                            </StackPanel>
+                                            <!-- Downbeat: Taktnummer als edles Badge -->
+                                            <Border x:Name="DownbeatPanel" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                                    Margin="-15,2,0,0" Padding="4,2" CornerRadius="2"
+                                                    Background="#CC111111" BorderBrush="#FFFF3B30" BorderThickness="1"
+                                                    Visibility="Collapsed">
+                                                <TextBlock Text="{Binding Label, StringFormat='BAR {0}'}"
+                                                           Foreground="White" FontSize="8" FontWeight="SemiBold"
+                                                           FontFamily="Consolas" VerticalAlignment="Center"/>
+                                            </Border>
                                         </Grid>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsDownbeat}" Value="True">
-                                                <Setter TargetName="BeatLine" Property="Stroke" Value="{StaticResource AbletonAccent}"/>
-                                                <Setter TargetName="BeatLine" Property="StrokeThickness" Value="1.2"/>
-                                                <Setter TargetName="BeatLine" Property="Opacity" Value="0.75"/>
+                                                <Setter TargetName="BeatLine" Property="Stroke" Value="#FFFF3B30"/>
+                                                <Setter TargetName="BeatLine" Property="StrokeThickness" Value="1.4"/>
+                                                <Setter TargetName="BeatLine" Property="Opacity" Value="0.85"/>
                                                 <Setter TargetName="DownbeatPanel" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>

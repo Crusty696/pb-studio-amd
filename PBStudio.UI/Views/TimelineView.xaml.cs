@@ -20,12 +20,14 @@ public partial class TimelineView : UserControl
     private readonly DispatcherTimer _playbackTimer;
     private readonly DispatcherTimer _syncTimer;
     private TimelineViewModel? _viewModel;
+
     private string? _loadedSourcePath;
     private double _loadedClipStart;
     private double _loadedClipEnd;
     private bool _mediaOpened;
     private bool _pendingSeek;
-    
+    private bool _wasPlayingBeforeReload;
+
     private readonly RulerRenderer _rulerRenderer;
     private SnapEngine? _snapEngine;
 
@@ -665,10 +667,32 @@ public partial class TimelineView : UserControl
 
         if (PreviewPlayer.Position.TotalSeconds >= _loadedClipEnd - 0.05)
         {
-            PreviewPlayer.Pause();
-            _playbackTimer.Stop();
-            SeekToClipStart();
-            PreviewStatusText.Text = "Preview beendet";
+            TimelineEntryModel? nextEntry = null;
+            if (_viewModel.SelectedEntry != null)
+            {
+                var sorted = new System.Collections.Generic.List<TimelineEntryModel>(_viewModel.TimelineEntries);
+                sorted.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
+                
+                int index = sorted.IndexOf(_viewModel.SelectedEntry);
+                if (index >= 0 && index < sorted.Count - 1)
+                {
+                    nextEntry = sorted[index + 1];
+                }
+            }
+
+            if (nextEntry != null)
+            {
+                _wasPlayingBeforeReload = true;
+                _viewModel.SelectedEntry = nextEntry;
+                PreviewStatusText.Text = "Lade nächsten Clip...";
+            }
+            else
+            {
+                PreviewPlayer.Pause();
+                _playbackTimer.Stop();
+                SeekToClipStart();
+                PreviewStatusText.Text = "Preview beendet";
+            }
         }
     }
 
@@ -694,6 +718,14 @@ public partial class TimelineView : UserControl
         PreviewStatusText.Text = $"Ready @ {TimeSpan.FromSeconds(_loadedClipStart):mm\\:ss}";
         if (_pendingSeek)
             SeekToClipStart();
+
+        if (_wasPlayingBeforeReload)
+        {
+            _wasPlayingBeforeReload = false;
+            PreviewPlayer.Play();
+            _playbackTimer.Start();
+            PreviewStatusText.Text = "Preview läuft";
+        }
     }
 
     private void PreviewPlayer_OnMediaEnded(object sender, RoutedEventArgs e)
@@ -732,6 +764,7 @@ public partial class TimelineView : UserControl
         if (!_mediaOpened)
             return;
 
+        _wasPlayingBeforeReload = false;
         PreviewPlayer.Pause();
         _playbackTimer.Stop();
         PreviewStatusText.Text = "Preview pausiert";
@@ -742,6 +775,7 @@ public partial class TimelineView : UserControl
         if (!_mediaOpened)
             return;
 
+        _wasPlayingBeforeReload = false;
         PreviewPlayer.Stop();
         _playbackTimer.Stop();
         SeekToClipStart();
