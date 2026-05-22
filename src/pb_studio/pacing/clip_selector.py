@@ -88,6 +88,53 @@ DEFAULT_PROMPT = "dynamic movement action visual interest"
 
 
 # =============================================================================
+# THEMATISCHE NARRATIVE CLUSTER & KEYWORDS (Stufe 3)
+# =============================================================================
+
+THEMATIC_CLUSTERS: Dict[str, List[int]] = {
+    "gothic_demonic": [1, 8, 9, 6],
+    "neon_cyber_rave": [0, 10, 11, 12],
+    "mystic_nature": [2, 5, 15, 17, 19],
+    "ethereal_water": [3, 4, 7, 13, 14, 16, 18]
+}
+
+THEMATIC_KEYWORDS: Dict[str, List[str]] = {
+    "gothic_demonic": ["gothic", "demon", "devil", "horns", "witch", "monster", "vampire", "dark forest", "ritual", "dark dress"],
+    "neon_cyber_rave": ["neon", "cyberpunk", "rave", "bioluminescent", "laser", "futuristic", "synthesizer", "party"],
+    "mystic_nature": ["mushrooms", "eerie trees", "enchanted forest", "magic", "moss", "fern", "glowing plants", "mystical forest"],
+    "ethereal_water": ["waterfall", "goddess", "dress", "river", "temple", "lake", "floating", "ethereal woman", "angel"]
+}
+
+def belongs_to_theme(clip: dict, theme: str) -> bool:
+    """Prüft, ob ein Clip-Metadaten-Dict zu einem Thema gehört."""
+    # 1. Check if the cluster belongs to the theme
+    cluster = clip.get("cluster")
+    if cluster is not None:
+        try:
+            cluster_val = int(cluster)
+            if cluster_val in THEMATIC_CLUSTERS[theme]:
+                return True
+        except (ValueError, TypeError):
+            pass
+            
+    # 2. Check if caption/tags/name has any associated theme keywords
+    desc = ""
+    if "inhalt" in clip and clip["inhalt"]:
+        desc += " " + str(clip["inhalt"]).lower()
+    if "description" in clip and clip["description"]:
+        desc += " " + str(clip["description"]).lower()
+    if "name" in clip and clip["name"]:
+        desc += " " + str(clip["name"]).lower()
+    if "tags" in clip and clip["tags"]:
+        desc += " " + " ".join([str(t).lower() for t in clip["tags"]])
+
+    for kw in THEMATIC_KEYWORDS[theme]:
+        if kw in desc:
+            return True
+    return False
+
+
+# =============================================================================
 # CLIP METADATA (FAISS-Architektur, AMD-Original)
 # =============================================================================
 
@@ -193,6 +240,55 @@ class ClipSelector:
         # by _select_semantic. None = use TRIGGER_PROMPTS default.
         self._current_prompt_override: Optional[str] = None
 
+        # --- Für Audio-Heuristik (Stufe 2) ---
+        self.bass_curve: Optional[np.ndarray] = None
+        self.energy_curve: Optional[np.ndarray] = None
+        self.duration_seconds: float = 0.0
+
+        # --- Für narrative Stile (Stufe 3) ---
+        self.active_theme: Optional[str] = None
+
+        # --- Für Obsidian Storyboard Canvas & Bridges (Stufe 4) ---
+        self.bridging_in_to: Optional[dict] = None
+        self.bridging_out_of: Optional[dict] = None
+
+    def get_audio_state_at_time(self, time_sec: float) -> str:
+        """Erkennt den Audio-Zustand (drop, break, normal) basierend auf der Bass-Kurve."""
+        curve = self.bass_curve if self.bass_curve is not None and len(self.bass_curve) > 0 else self.energy_curve
+        if curve is None or len(curve) == 0 or self.duration_seconds <= 0:
+            return "normal"
+
+        pos = max(0.0, min(1.0, time_sec / self.duration_seconds))
+        idx = int(pos * (len(curve) - 1))
+        curr_low = float(curve[idx])
+
+        # Past low (ca. 4 Sekunden zurück)
+        past_idx = max(0, idx - 4)
+        if idx > past_idx:
+            past_low = float(np.mean(curve[past_idx:idx]))
+        else:
+            past_low = curr_low
+
+        # Future low (ca. 4 Sekunden voraus)
+        fut_idx = min(len(curve) - 1, idx + 4)
+        if fut_idx > idx:
+            fut_low = float(np.mean(curve[idx:fut_idx]))
+        else:
+            fut_low = curr_low
+
+        # Drop: Anstieg im Bass
+        idx_2 = max(0, idx - 2)
+        is_drop = (curr_low > 0.58 and past_low < 0.35 and (curr_low - float(curve[idx_2]) > 0.25))
+
+        # Break: Ruhige Phase
+        is_break = (curr_low < 0.22 and fut_low < 0.22)
+
+        if is_drop:
+            return "drop"
+        elif is_break:
+            return "break"
+        return "normal"
+
     # =========================================================================
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
@@ -205,6 +301,8 @@ class ClipSelector:
         # P3.4 vulture-clarification: Compat-Param fuer NV-API, aktuell unused, future routing-hook.
         previous_clip_id: Optional[str] = None,  # noqa: ARG002
         prompt: Optional[str] = None,
+        current_time: Optional[float] = None,
+        active_theme: Optional[str] = None,
         **_unused,
     ) -> SelectedClip:
         """
@@ -219,6 +317,8 @@ class ClipSelector:
                 aktiviert er den FAISS-Semantic-Pfad und ueberschreibt den Default-
                 TRIGGER_PROMPTS-Eintrag fuer diesen Cut. None = klassischer Pfad
                 (motion/random/round_robin/semantic je nach self.strategy).
+            current_time: Optionale aktuelle Zeit im Track in Sekunden (Stufe 2).
+            active_theme: Optionales narratives Kapitel-Thema (Stufe 3).
             **_unused: Forward-kompatibler Catch-all fuer kuenftige Kwargs (verhindert
                 Wiederholung von L-TI-1 wenn neue Caller weitere optionale Args senden).
 
@@ -228,6 +328,10 @@ class ClipSelector:
         if not available_clips:
             logger.warning("Keine Clips verfügbar")
             return SelectedClip(clip_id="none", clip_path="", score=0.0)
+
+        # Stufe 3: Aktives Thema sichern
+        if active_theme is not None:
+            self.active_theme = active_theme
 
         # L-TI-1: Wenn caller einen expliziten Prompt liefert, semantic Pfad aktivieren.
         # Backward-compat: prompt=None / "" laesst self.strategy unveraendert.
@@ -248,6 +352,11 @@ class ClipSelector:
         if not candidates:
             candidates = available_clips
 
+        # Audio-Zustand für Stufe 2 Audio-Heuristik berechnen
+        audio_state = "normal"
+        if current_time is not None:
+            audio_state = self.get_audio_state_at_time(current_time)
+
         # Plan Phase 4: brain reranker delegate (deep hook).
         # Wenn reranker + context_keys gesetzt, scoret Brain alle Kandidaten und
         # picked den höchsten — Strategy bleibt als Tiebreak-Fallback.
@@ -260,11 +369,11 @@ class ClipSelector:
             except Exception as e:
                 logger.warning(f"Brain reranker failed, fallback strategy: {e}")
                 selected = self._fallback_select(
-                    candidates, trigger_strength, trigger_type
+                    candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
                 )
         else:
             selected = self._fallback_select(
-                candidates, trigger_strength, trigger_type
+                candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
             )
 
         # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
@@ -283,18 +392,20 @@ class ClipSelector:
         candidates: List[dict],
         trigger_strength: float,
         trigger_type: str,
+        current_time: Optional[float] = None,
+        audio_state: str = "normal",
     ) -> "SelectedClip":
         """Original strategy selection — used when no brain reranker available."""
         # L-TI-1: Expliziter Caller-Prompt aktiviert semantic Pfad auch ohne
         # globalen use_semantic-Switch (z.B. pacing_service uebergibt song_mood).
         if self._current_prompt_override or self.use_semantic or self.strategy == "semantic":
-            return self._select_semantic(candidates, trigger_strength, trigger_type)
+            return self._select_semantic(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
         elif self.strategy == "random":
             return self._select_random(candidates)
         elif self.strategy == "round_robin":
             return self._select_round_robin(candidates)
         else:
-            return self._select_by_motion(candidates, trigger_strength, trigger_type)
+            return self._select_by_motion(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
 
     def _select_via_brain(
         self,
@@ -454,11 +565,40 @@ class ClipSelector:
         diff = abs(motion_norm - intensity)
         return 1.0 - diff
 
+    def _get_clip_neighbors(self, target_path: str) -> List[str]:
+        """Findet die 10 ähnlichsten Clips für einen bestimmten Clip im Vektorraum (Stufe 4)."""
+        if not self.vector_store or not target_path:
+            return []
+        
+        # Finde das Embedding des Target-Clips in unserem cache/index
+        target_emb = None
+        for metadata in self.clip_cache.values():
+            if str(Path(metadata.file_path).absolute()) == str(Path(target_path).absolute()):
+                target_emb = metadata.embedding
+                break
+        
+        if target_emb is None:
+            # Falls kein direktes Metadatenobjekt, suche über textuelle oder strukturelle Übereinstimmung
+            return []
+            
+        try:
+            results = self.vector_store.search(target_emb, k=10)
+            neighbors = []
+            for meta, score in results:
+                p = meta.get("path", meta.get("file_path", ""))
+                if p:
+                    neighbors.append(str(Path(p).absolute()))
+            return neighbors
+        except Exception:
+            return []
+
     def _select_by_motion(
         self,
         clips: List[dict],
         trigger_strength: float,
         trigger_type: str,
+        current_time: Optional[float] = None,
+        audio_state: str = "normal",
     ) -> SelectedClip:
         """
         Motion-basierte Auswahl mit Roter-Faden-Continuity.
@@ -475,7 +615,7 @@ class ClipSelector:
             target_motion = max(0.0, trigger_strength * 0.7)
 
         best_clip = None
-        best_score = -1.0
+        best_score = -9999.0
 
         # L-K4: Lazy-Import um Zirkular-Import zu vermeiden.
         _key_score_fn = None
@@ -512,6 +652,39 @@ class ClipSelector:
 
             total_score = motion_score + continuity_bonus
 
+            # Stufe 2: Audio-Heuristik Scoring-Verstärker
+            if audio_state == "break":
+                if clip_motion < 0.3:
+                    total_score += 0.25
+                elif clip_motion < 0.6:
+                    total_score += 0.15
+                else:
+                    total_score -= 0.50
+            elif audio_state == "drop":
+                if clip_motion >= 0.6:
+                    total_score += 0.40
+
+            # Stufe 3: Style-Persistenz / Narrative Kapitel-Themen
+            if self.active_theme and belongs_to_theme(clip, self.active_theme):
+                total_score += 1000.0
+
+            # Stufe 4: Bridge-Übergänge für manuelle Storyboard-Anker
+            if self.bridging_in_to:
+                target_path = self.bridging_in_to.get("file_path", self.bridging_in_to.get("path", ""))
+                if target_path:
+                    neighbors = self._get_clip_neighbors(target_path)
+                    current_path = clip.get("file_path", clip.get("path", ""))
+                    if current_path and any(str(Path(current_path).absolute()) == str(Path(nb).absolute()) for nb in neighbors):
+                        total_score += 400.0
+
+            if self.bridging_out_of:
+                target_path = self.bridging_out_of.get("file_path", self.bridging_out_of.get("path", ""))
+                if target_path:
+                    neighbors = self._get_clip_neighbors(target_path)
+                    current_path = clip.get("file_path", clip.get("path", ""))
+                    if current_path and any(str(Path(current_path).absolute()) == str(Path(nb).absolute()) for nb in neighbors):
+                        total_score += 400.0
+
             # L-K4: Tonart-Bonus (Camelot-Wheel). Multiplicativer Faktor 0.3..1.0
             # auf die Motion-Selektion. Clips ohne audio_key (None) ergeben 0.5
             # (neutral) — kein Penalty wenn Detection fehlgeschlagen ist.
@@ -543,6 +716,8 @@ class ClipSelector:
         clips: List[dict],
         trigger_strength: float,
         trigger_type: str,
+        current_time: Optional[float] = None,
+        audio_state: str = "normal",
     ) -> SelectedClip:
         """
         FAISS-basierte semantische Auswahl.
@@ -579,12 +754,12 @@ class ClipSelector:
 
                 if semantic_candidates:
                     # Unter semantischen Kandidaten nach Motion wählen
-                    return self._select_by_motion(semantic_candidates, trigger_strength, trigger_type)
+                    return self._select_by_motion(semantic_candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
 
         except Exception as e:
             logger.warning(f"Semantische Suche fehlgeschlagen: {e} — Fallback auf Motion")
 
-        return self._select_by_motion(clips, trigger_strength, trigger_type)
+        return self._select_by_motion(clips, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
 
     def _get_text_embedding(self, text: str) -> Optional[np.ndarray]:
         """

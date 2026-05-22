@@ -10,13 +10,46 @@ import json
 import logging
 import random
 import subprocess
+import re
 from pathlib import Path
 from typing import Any, List, Dict, Callable, Optional
+import numpy as np
 
 from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
 from pb_studio.pacing.pacing_models import CutListEntry
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# THEMATISCHE ÜBERGANGSMATRIX & KAPITEL-SCHLEIFE (Stufe 3)
+# =============================================================================
+
+TRANSITION_COMPATIBILITY: Dict[str, List[str]] = {
+    "gothic_demonic": ["gothic_demonic", "mystic_nature"],
+    "neon_cyber_rave": ["neon_cyber_rave", "ethereal_water"],
+    "mystic_nature": ["mystic_nature", "gothic_demonic", "ethereal_water"],
+    "ethereal_water": ["ethereal_water", "mystic_nature", "neon_cyber_rave"]
+}
+
+def select_theme_for_chapter(energy: float, prev_theme: Optional[str]) -> str:
+    """Bestimmt das beste Thema basierend auf der Energie und dem vorherigen Thema."""
+    if energy > 0.58:
+        candidates = ["gothic_demonic", "neon_cyber_rave"]
+    else:
+        candidates = ["mystic_nature", "ethereal_water"]
+
+    if not prev_theme:
+        return random.choice(candidates)
+
+    # Übergänge filtern
+    compat = TRANSITION_COMPATIBILITY.get(prev_theme, [])
+    valid_candidates = [c for c in candidates if c in compat]
+    if valid_candidates:
+        return random.choice(valid_candidates)
+        
+    # Fallback
+    return prev_theme
 
 
 class PacingService:
@@ -268,6 +301,187 @@ class PacingService:
         else:
             self._last_used_cached_tempo = False
 
+        # Stufe 2 Audio-Heuristik: Kurven an Selector spiegeln
+        cs = pacing_engine.clip_selector
+        if hasattr(pacing_engine, "_pre_cached_bass_curve"):
+            cs.bass_curve = pacing_engine._pre_cached_bass_curve
+        if hasattr(pacing_engine, "_pre_cached_energy"):
+            cs.energy_curve = pacing_engine._pre_cached_energy
+        if hasattr(pacing_engine, "_pre_cached_duration"):
+            cs.duration_seconds = pacing_engine._pre_cached_duration
+
+    def segment_timeline_into_chapters(
+        self,
+        energy_curve: Optional[np.ndarray],
+        beats: List[float],
+        bpm: float,
+        duration: float,
+    ) -> List[dict]:
+        """Teilt die Timeline in narrative Abschnitte (Kapitel) von ca. 8-16 Takten (Bars) ein."""
+        if not beats or len(beats) < 4:
+            # Fallback: ein einziges Kapitel für die gesamte Länge
+            return [{"start": 0.0, "end": duration, "theme": "mystic_nature"}]
+
+        # Berechne Sekunden pro Bar (4 Beats)
+        bpm_val = bpm or 120.0
+        secs_per_beat = 60.0 / bpm_val
+        secs_per_bar = secs_per_beat * 4.0
+        
+        # Kapitelgröße soll z.B. ca. 8 oder 16 Bars betragen (ca. 15-30 Sekunden)
+        # Wir segmentieren basierend auf Beats, z.B. alle 32 oder 64 Beats.
+        beats_per_chapter = 32 # 8 Bars
+        
+        chapters = []
+        num_beats = len(beats)
+        prev_theme = None
+        
+        # Finde durchschnittliche Energie für jedes Kapitel
+        energy_data = energy_curve if energy_curve is not None and len(energy_curve) > 0 else None
+        
+        for i in range(0, num_beats, beats_per_chapter):
+            start_beat_idx = i
+            end_beat_idx = min(i + beats_per_chapter, num_beats - 1)
+            
+            start_time = beats[start_beat_idx]
+            # Für das letzte Kapitel dehnen wir das Ende bis zur vollen Dauer aus
+            if end_beat_idx == num_beats - 1 or (i + beats_per_chapter) >= num_beats:
+                end_time = duration
+            else:
+                end_time = beats[end_beat_idx]
+                
+            if end_time - start_time < 2.0:
+                # Zu kurzes Restkapitel, hänge an letztes an
+                if chapters:
+                    chapters[-1]["end"] = duration
+                    break
+            
+            # Schätze Energie für dieses Zeitintervall
+            avg_energy = 0.5
+            if energy_data is not None:
+                curve_len = len(energy_data)
+                start_idx = int((start_time / duration) * curve_len) if duration > 0 else 0
+                end_idx = int((end_time / duration) * curve_len) if duration > 0 else curve_len
+                start_idx = max(0, min(curve_len - 1, start_idx))
+                end_idx = max(start_idx + 1, min(curve_len, end_idx))
+                avg_energy = float(np.mean(energy_data[start_idx:end_idx]))
+                
+            theme = select_theme_for_chapter(avg_energy, prev_theme)
+            chapters.append({
+                "start": start_time,
+                "end": end_time,
+                "theme": theme
+            })
+            prev_theme = theme
+            
+        if not chapters:
+            chapters.append({"start": 0.0, "end": duration, "theme": "mystic_nature"})
+            
+        # Stelle sicher, dass das erste Kapitel bei 0.0 startet
+        chapters[0]["start"] = 0.0
+        # Und das letzte Kapitel bei duration endet
+        chapters[-1]["end"] = duration
+        
+        return chapters
+
+    def load_canvas_manual_anchors(self, canvas_path: str, clips: List[dict]) -> List[dict]:
+        """Storyboard-Anker und manuelle Clips aus Obsidian .canvas File einlesen (Stufe 4)."""
+        p = Path(canvas_path)
+        if not p.exists():
+            logger.info(f"Storyboard-Canvas nicht gefunden unter {canvas_path} — fahre automatisch fort.")
+            return []
+            
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.warning(f"Fehler beim Laden des Storyboards: {e}")
+            return []
+            
+        nodes = data.get("nodes", [])
+        
+        # 1. Parse Zeitanker
+        anchors = []
+        for n in nodes:
+            if n.get("type") == "text":
+                text = n.get("text", "")
+                m = re.search(r"@(\d{1,2}):(\d{2})", text)
+                if m:
+                    minutes = int(m.group(1))
+                    seconds = int(m.group(2))
+                    anchors.append({
+                        "x": float(n.get("x", 0)),
+                        "seconds": minutes * 60 + seconds
+                    })
+                    
+        if len(anchors) < 2:
+            logger.info("Canvas hat weniger als 2 Zeitanker — Überspringe Storyboard-Mapping.")
+            return []
+            
+        anchors.sort(key=lambda a: a["x"])
+        
+        def x_to_seconds(x: float) -> float | None:
+            if x <= anchors[0]["x"]:
+                return float(anchors[0]["seconds"])
+            if x >= anchors[-1]["x"]:
+                return float(anchors[-1]["seconds"])
+            for i in range(len(anchors) - 1):
+                a = anchors[i]
+                b = anchors[i+1]
+                if a["x"] <= x <= b["x"]:
+                    frac = (x - a["x"]) / (b["x"] - a["x"])
+                    return float(a["seconds"] + frac * (b["seconds"] - a["seconds"]))
+            return None
+            
+        # 2. Clips extrahieren, die oberhalb y=520 platziert wurden (manuelle Zuweisung)
+        manual_clips = []
+        clip_map_by_name = {Path(c.get("file_path", c.get("path", ""))).stem.lower(): c for c in clips}
+        clip_map_by_path = {c.get("file_path", c.get("path", "")).lower(): c for c in clips}
+        
+        for n in nodes:
+            if n.get("type") == "file":
+                y = float(n.get("y", 999))
+                if y < 520: # Clip-Lobby-Grenze
+                    file_rel = n.get("file", "")
+                    if not file_rel.lower().endswith(".mp4"):
+                        continue
+                        
+                    x = float(n.get("x", 0))
+                    sec = x_to_seconds(x)
+                    
+                    if sec is not None:
+                        filename = Path(file_rel).stem.lower()
+                        clip_info = clip_map_by_name.get(filename)
+                        if not clip_info:
+                            for key_path, val in clip_map_by_path.items():
+                                if filename in key_path:
+                                    clip_info = val
+                                    break
+                                    
+                        if clip_info:
+                            manual_clips.append({
+                                "id": clip_info.get("id"),
+                                "file_path": clip_info.get("file_path", clip_info.get("path")),
+                                "mix_start": sec,
+                                "duration": float(clip_info.get("duration", 5.0) or 5.0),
+                                "cluster": clip_info.get("cluster"),
+                                "clip_info": clip_info
+                            })
+                            
+        manual_clips.sort(key=lambda c: c["mix_start"])
+        
+        # 3. Überlappungen auflösen
+        resolved = []
+        last_end = 0.0
+        for mc in manual_clips:
+            if mc["mix_start"] < last_end:
+                mc["mix_start"] = last_end
+            mc["mix_end"] = mc["mix_start"] + mc["duration"]
+            resolved.append(mc)
+            last_end = mc["mix_end"]
+            
+        logger.info(f"{len(resolved)} manuelle Storyboard-Clips aus Obsidian Canvas geladen.")
+        return resolved
+
     def generate_cut_list_with_stems(
         self,
         audio_path: str,
@@ -370,6 +584,22 @@ class PacingService:
                 on_progress=on_progress,
             )
 
+            # Stufe 3: Kapitel segmentieren
+            pre_cached_beats_stems = []
+            if cached_analysis:
+                for b in cached_analysis.get("beats", []):
+                    if isinstance(b, dict):
+                        pre_cached_beats_stems.append(b.get("time", 0.0))
+                    else:
+                        pre_cached_beats_stems.append(float(b))
+
+            chapters = self.segment_timeline_into_chapters(
+                pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
+                pre_cached_beats_stems,
+                expected_bpm,
+                target_duration
+            )
+
             # Clip-Zuweisung via clip_selector (mit semantic prompt falls aktiv)
             song_mood = "energetic music"
             if pacing_config.get("use_semantic_matching", False):
@@ -380,15 +610,66 @@ class PacingService:
                 except Exception as e:
                     logger.warning(f"SmartDirector mood-detection failed: {e}")
 
+            # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
+            canvas_path = pacing_config.get("canvas_path", "C:/Users/david/Desktop/ComfyUI-Studio-FULL-backup/10_Projects/Crusty_Storyboard.canvas")
+            manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips)
+
             cut_with_clips = []
+            last_manual_end = 0.0
+            last_manual_clip = None
+
             for cut in pacing_cuts:
+                # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
+                active_anchor = None
+                for ma in manual_anchors:
+                    if ma["mix_start"] <= cut.time < ma["mix_end"]:
+                        active_anchor = ma
+                        break
+                        
+                if active_anchor:
+                    # Verwende den manuellen Storyboard-Clip
+                    cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{active_anchor['id']}"))
+                    last_manual_end = active_anchor["mix_end"]
+                    last_manual_clip = active_anchor
+                    continue
+
                 prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
                 if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                     prompt = f"{cut.segment_type} {prompt}"
+                
+                # Finde das aktive Kapitelthema für diesen Schnitt
+                active_theme = None
+                for ch in chapters:
+                    if ch["start"] <= cut.time < ch["end"]:
+                        active_theme = ch["theme"]
+                        break
+                
+                # Stufe 4: Bridge-Berechnung für anstehende und gerade verlassene manuelle Clips
+                next_manual = None
+                for ma in manual_anchors:
+                    if ma["mix_start"] > cut.time:
+                        next_manual = ma
+                        break
+                        
+                bridging_in_to = None
+                if next_manual and (next_manual["mix_start"] - cut.time) <= 8.0:
+                    bridging_in_to = next_manual
+                    
+                bridging_out_of = None
+                if last_manual_end and abs(cut.time - last_manual_end) < 0.2:
+                    bridging_out_of = last_manual_clip
+                    
+                pacing_engine.clip_selector.bridging_in_to = bridging_in_to
+                pacing_engine.clip_selector.bridging_out_of = bridging_out_of
+
                 sel = pacing_engine.clip_selector.select_clip(
-                    clips, cut.strength, cut.trigger_type, prompt=prompt
+                    clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
                 )
                 cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+
+                # Zurücksetzen der Bridge-Variablen
+                pacing_engine.clip_selector.bridging_in_to = None
+                pacing_engine.clip_selector.bridging_out_of = None
 
             if not cut_with_clips:
                 logger.warning("L-K5 Stem-generation lieferte 0 Cuts -> fallback round-robin.")
@@ -556,141 +837,14 @@ class PacingService:
             f"Semantic={pacing_config.get('use_semantic_matching', False)})"
         )
 
-        # Pre-cached Beats + Dauer in Engine injizieren
-        if pre_cached_beats:
-            pacing_engine._cached_audio_path = audio_path
-            pacing_engine._pre_cached_beats = pre_cached_beats
-            # Audit L-N8: per-beat strength als trigger-weight multiplier
-            if has_real_beat_strengths:
-                pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
-            if pre_cached_bpm:
-                pacing_engine._pre_cached_bpm = pre_cached_bpm
-            cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
-            if cached_dur > 0:
-                pacing_engine._pre_cached_duration = cached_dur
-
-        # Audit A2: inject cached energy_curve damit Engine RMS-Neuberechnung skippen kann.
-        # cached_analysis["energy_curve"] wird in audio_router.py persistiert
-        # (state.update_audio_analysis(...energy_curve=...)) — pacing_service liest es
-        # ab jetzt und injiziert in pacing_engine._pre_cached_energy.
-        cached_energy = cached_analysis.get("energy_curve") if cached_analysis else None
-        if cached_energy:
-            import numpy as _np
-            pacing_engine._pre_cached_energy = _np.array(cached_energy, dtype=_np.float32)
-            self._last_used_cached_energy = True
-        else:
-            self._last_used_cached_energy = False
-
-        # Audit E2: inject cached bass_curve fuer drop-section trigger weighting.
-        # cached_analysis["spectral_data"]["bands"]["low"] enthaelt das Bass-Frequenzband
-        # (vom SpectralAnalyzer 3-Band Output). Engine nutzt es ueber
-        # _bass_weight_at_time() als Multiplikator (1.0..2.0) auf Trigger-Strengths
-        # in Drop-Sektionen — verstaerkt Cuts an basslastigen Momenten.
-        spectral = cached_analysis.get("spectral_data") if cached_analysis else None
-        if spectral and isinstance(spectral, dict):
-            bands = spectral.get("bands", {})
-            low_band = bands.get("low") if isinstance(bands, dict) else None
-            if low_band and len(low_band) > 0:
-                import numpy as _np
-                pacing_engine._pre_cached_bass_curve = _np.array(low_band, dtype=_np.float32)
-                # Duration sicherstellen (fuer time->index mapping in _bass_weight_at_time)
-                if not hasattr(pacing_engine, "_pre_cached_duration") or \
-                        getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
-                    cached_dur = float(cached_analysis.get("duration_seconds", 0.0) or 0.0)
-                    if cached_dur > 0:
-                        pacing_engine._pre_cached_duration = cached_dur
-                self._last_used_cached_bass = True
-            else:
-                self._last_used_cached_bass = False
-
-            # Audit L-M2: inject mid + high curves analog bass.
-            # spectral_data.bands.mid + .high werden vom SpectralAnalyzer 3-Band
-            # Output gleich neben .low persistiert. Engine nutzt sie via
-            # _mid_weight_at_time() / _high_weight_at_time() — Helper-API ready
-            # fuer Strength-Multiplikator-Anwendung in Cut-Selection.
-            mid_band = bands.get("mid") if isinstance(bands, dict) else None
-            if mid_band and len(mid_band) > 0:
-                import numpy as _np
-                pacing_engine._pre_cached_mid_curve = _np.array(
-                    mid_band, dtype=_np.float32
-                )
-                logger.info(
-                    "Audit L-M2: mid_curve injiziert (%d Werte) — "
-                    "Helper _mid_weight_at_time(t) verfuegbar",
-                    len(mid_band),
-                )
-            high_band = bands.get("high") if isinstance(bands, dict) else None
-            if high_band and len(high_band) > 0:
-                import numpy as _np
-                pacing_engine._pre_cached_high_curve = _np.array(
-                    high_band, dtype=_np.float32
-                )
-                logger.info(
-                    "Audit L-M2: high_curve injiziert (%d Werte) — "
-                    "Helper _high_weight_at_time(t) verfuegbar",
-                    len(high_band),
-                )
-        else:
-            self._last_used_cached_bass = False
-
-        # Audit E3: inject cached subtrack_segments fuer subtrack-aware cut generation.
-        # SubtrackDetector erzeugt Segmente fuer Mixe >60s mit start_time/end_time/
-        # confidence; tempo_curve ergaenzt das Bild. Engine nutzt
-        # _subtrack_boundary_anchors() um cut-anchors an subtrack-grenzen zu
-        # platzieren (snap-to-subtrack). Heute reicht: Liste injizieren + Flag
-        # setzen, Helper-API ist ready fuer cut-selection-Integration.
-        subtracks = cached_analysis.get("subtrack_segments") if cached_analysis else None
-        if subtracks and isinstance(subtracks, list) and len(subtracks) > 0:
-            pacing_engine._pre_cached_subtracks = subtracks
-            self._last_used_cached_subtracks = True
-            logger.info(
-                "Audit E3: %d cached subtrack_segments injiziert "
-                "(boundary-anchors verfuegbar via _subtrack_boundary_anchors())",
-                len(subtracks),
-            )
-        else:
-            self._last_used_cached_subtracks = False
-
-        # Audit L-M1: inject cached tempo_curve fuer varying-BPM-Mixe.
-        # cached_analysis["tempo_curve"] kommt vom SubtrackDetector (DJ-Tempo-
-        # Variation pro Subtrack). Engine nutzt es via _tempo_at_time(t) ->
-        # liefert lokale BPM zum Zeitpunkt t (lineares mapping). Heute reicht:
-        # Curve injizieren + Flag setzen, Helper-API ist ready.
-        tempo_curve = cached_analysis.get("tempo_curve") if cached_analysis else None
-        if tempo_curve and len(tempo_curve) > 0:
-            import numpy as _np
-            pacing_engine._pre_cached_tempo_curve = _np.array(
-                tempo_curve, dtype=_np.float32
-            )
-            # Duration sicherstellen (fuer time->index mapping in _tempo_at_time)
-            if not hasattr(pacing_engine, "_pre_cached_duration") or \
-                    getattr(pacing_engine, "_pre_cached_duration", 0.0) <= 0:
-                cached_dur = float(
-                    cached_analysis.get("duration_seconds", 0.0) or 0.0
-                )
-                if cached_dur > 0:
-                    pacing_engine._pre_cached_duration = cached_dur
-            self._last_used_cached_tempo = True
-            logger.info(
-                "Audit L-M1: tempo_curve injiziert (%d Werte) — "
-                "Helper _tempo_at_time(t) verfuegbar fuer varying-BPM-Pacing",
-                len(tempo_curve),
-            )
-        else:
-            self._last_used_cached_tempo = False
+        # Pre-cached Beats + Dauer + Kurven injizieren
+        self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
 
         # Audit E1 + L-K4: use_key_matching — Camelot-Wheel key compatibility scoring.
-        # cached_analysis["key"] wird in audio_router persistiert; pacing_engine.clip_selector
-        # nutzt _key_compatibility_score(audio_key, video_key) zur Score-Anpassung.
-        # L-K4: Video-Clips haben jetzt audio_key Feld (via audio_key_detector) -> echter
-        # Effekt statt 0.5-Neutral. video_keys: {clip_id: audio_key_str} pro Clip.
         if pacing_config.get("use_key_matching", False):
             pacing_engine.clip_selector.use_key_matching = True
             cached_audio_key = cached_analysis.get("key") if cached_analysis else None
             pacing_engine.clip_selector.audio_key = cached_audio_key
-            # L-K4: Map clip_id -> audio_key fuer Per-Clip Compatibility-Score.
-            # Nur Clips mit nicht-leerem audio_key — None/missing wirkt im Score
-            # als neutral (0.5) statt Penalty.
             video_keys_map: Dict[Any, str] = {}
             for c in clips:
                 cid = c.get("id")
@@ -760,6 +914,22 @@ class PacingService:
                     # Konvertiere rohe CutPoints in das erwartete Format für die weitere Verarbeitung
                     pacing_cuts = pacing_cuts_raw
 
+                # Stufe 3: Kapitel segmentieren
+                pre_cached_beats_adv = []
+                if cached_analysis:
+                    for b in cached_analysis.get("beats", []):
+                        if isinstance(b, dict):
+                            pre_cached_beats_adv.append(b.get("time", 0.0))
+                        else:
+                            pre_cached_beats_adv.append(float(b))
+
+                chapters = self.segment_timeline_into_chapters(
+                    pacing_engine._pre_cached_energy if hasattr(pacing_engine, "_pre_cached_energy") else None,
+                    pre_cached_beats_adv,
+                    pacing_config.get("expected_bpm", 120),
+                    target_duration
+                )
+
                 # Stimmung ermitteln für semantisches Matching
                 song_mood = "energetic music"
                 if pacing_config.get("use_semantic_matching", False):
@@ -767,17 +937,67 @@ class PacingService:
                     director = SmartDirector.get_instance()
                     song_mood = director.get_dominant_mood(audio_path)
 
+                # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
+                canvas_path = pacing_config.get("canvas_path", "C:/Users/david/Desktop/ComfyUI-Studio-FULL-backup/10_Projects/Crusty_Storyboard.canvas")
+                manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips)
+
                 cut_with_clips = []
+                last_manual_end = 0.0
+                last_manual_clip = None
+
                 for cut in pacing_cuts:
+                    # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
+                    active_anchor = None
+                    for ma in manual_anchors:
+                        if ma["mix_start"] <= cut.time < ma["mix_end"]:
+                            active_anchor = ma
+                            break
+                            
+                    if active_anchor:
+                        # Verwende den manuellen Storyboard-Clip
+                        cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{active_anchor['id']}"))
+                        last_manual_end = active_anchor["mix_end"]
+                        last_manual_clip = active_anchor
+                        continue
+
                     prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
                     # Falls Struktur aktiv, prompt verfeinern
                     if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                         prompt = f"{cut.segment_type} {prompt}"
                     
+                    # Finde das aktive Kapitelthema für diesen Schnitt
+                    active_theme = None
+                    for ch in chapters:
+                        if ch["start"] <= cut.time < ch["end"]:
+                            active_theme = ch["theme"]
+                            break
+
+                    # Stufe 4: Bridge-Berechnung für anstehende und gerade verlassene manuelle Clips
+                    next_manual = None
+                    for ma in manual_anchors:
+                        if ma["mix_start"] > cut.time:
+                            next_manual = ma
+                            break
+                            
+                    bridging_in_to = None
+                    if next_manual and (next_manual["mix_start"] - cut.time) <= 8.0:
+                        bridging_in_to = next_manual
+                        
+                    bridging_out_of = None
+                    if last_manual_end and abs(cut.time - last_manual_end) < 0.2:
+                        bridging_out_of = last_manual_clip
+                        
+                    pacing_engine.clip_selector.bridging_in_to = bridging_in_to
+                    pacing_engine.clip_selector.bridging_out_of = bridging_out_of
+
                     sel = pacing_engine.clip_selector.select_clip(
-                        clips, cut.strength, cut.trigger_type, prompt=prompt
+                        clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
                     )
                     cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+
+                    # Zurücksetzen der Bridge-Variablen
+                    pacing_engine.clip_selector.bridging_in_to = None
+                    pacing_engine.clip_selector.bridging_out_of = None
                 
                 if not cut_with_clips:
                     logger.warning("Advanced generation delivered 0 cuts, falling back to simple mode.")
