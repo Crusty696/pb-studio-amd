@@ -3,6 +3,48 @@
 
 ---
 
+## 2026-05-22 - Hybrid-LLM-Audit (Commit `3025b22`)
+
+User-Audit deckte auf, dass nur 2 von 6 LLM-Call-Sites Auto-Fallback auf Ollama hatten — die anderen 4 nutzten LMStudioClient mit hard-coded LM-Studio-URL ohne Live-Probe. Folge: bei LM-Studio down + Ollama up war Chat und /models/list broken.
+
+Tests: **721 passed / 9 skipped / 0 failed** (vorher 715, +6 neue Regression-Tests).
+
+### Fixed (Hybrid-LLM-Stack — 4 Bypasses)
+- `backend/routers/models_router.py:_make_client` → neuer async `_make_alive_client()` Helper mit korrektem `lmstudio_available`+`ollama_available`-Reporting. list_models, list_available_models, recommend_model migriert.
+- `src/pb_studio/ai/chat_agent.py:_ensure_resources` → bei `provider="auto"` jetzt `get_alive_client()` statt `get_llm_client()` (vorher: kein Live-Probe → Chat brach bei LM-Studio down obwohl Ollama lief).
+- `src/pb_studio/ai/model_registry.py` → neuer `_resolve_client_async()` mit Auto-Fallback (vorher: `LMStudioClient()` lazy default).
+- `src/pb_studio/video/lmstudio_vision_wrapper.py` → `get_alive_client()` statt direkter LMStudioClient für Vision-Captioning.
+
+### Live-Verified (Backend mit LM-Studio down + Ollama up)
+- `/models/list` → `ollama_available: true`, 4 Modelle (Gemma-4-Uncensored, qwen2.5-osdev, moondream, llava:13b)
+- `/models/available` → qwen3-vl-8b listed
+- `/models/recommendations` → installed=[4 Ollama-Modelle], korrekte Reasoning
+- `/chat/message` → Gemma-4 streamt `"Hallo! 👋"`
+
+### Added (Regression-Tests)
+- `Tests/test_video_list_clips_post_analyze.py` (2 Tests) — guards `_explicit_kwargs`-Drift in `list_clips`
+- `Tests/test_pacing_snap_subtrack_import.py` (4 Tests) — guards PacingCut-Import in `_snap_cuts_to_subtrack_boundaries`
+
+---
+
+## 2026-05-21 - Auto-QA-Loop autonom (Commit `9909d4a`)
+
+Autonomer 11-Bereiche-Test der gesamten App per API-Tests gegen Backend. 60/60 Funktionen PASS, 3 echte Bugs gefunden+gefixt.
+
+### Fixed (3 Code-Bugs)
+- `backend/routers/video_router.py:list_clips` — `TypeError: VideoClipInfo got multiple values for keyword 'is_analyzed'`. Nach `analyze_video` landeten 8 Felder im in-memory clip-dict die mit den expliziten kwargs kollidierten. `_explicit_kwargs`-Set filtert sie aus `c_payload`.
+- `backend/routers/video_router.py:_run_video_analysis` — `NameError: name 'state' is not defined` im Embedding-Pfad. Worker-Thread ohne FastAPI-DI. `except Exception` schluckte silent → `embedding_dim=0` für jedes Video. Fix: `from backend.app_state import get_app_state` Singleton.
+- `src/pb_studio/pacing/advanced_pacing_engine.py:_snap_cuts_to_subtrack_boundaries` — `NameError: 'PacingCut' is not defined`. Methode nutzte `PacingCut(...)` ohne lokalen Import. Fix: lokaler Import als erste Statement.
+
+### Verified (Live mit Real-Daten)
+- BPM Detection: 123.05 BPM für Psy-Trance Mix (BeatNet+librosa)
+- Key Detection: F# minor (Krumhansl-Kessler)
+- Demucs Stem-Sep 60s WAV: 9s (DirectML)
+- h264_amf Render 60s @24fps: 18s = 80fps Render-Speed (3.3× realtime)
+- SigLIP-SO400M Embedding nach Fix: 1152-dim, 4 samples
+
+---
+
 ## 2026-05-19 - Timeline-Multi-Lane Merge + Post-Merge-Cleanup (Audit-Phase)
 
 Worktree `worktree-timeline-multi-lane` (Commits c9dd4b7..8ed0111 + 22560a7 handoff) gemerged in `main` via FF `update-ref`. Anschliessend Post-Merge-Audit + 7 Cleanup-Commits (f7846d2..df2f9c6).

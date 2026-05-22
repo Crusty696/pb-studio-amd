@@ -69,24 +69,24 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-21 (Resilience- & Stress-Validierung)
-- **Phase:** E010 Resilience- & Stress-Validierung ✅ ERFOLGREICH ABGESCHLOSSEN.
+- **Date:** 2026-05-22 (Auto-QA-Loop + Hybrid-LLM-Audit)
+- **Phase:** ✅ Hybrid-LLM-Stack live-verified, Auto-QA-Loop alle 11 Bereiche grün.
 - **Status:**
-  - **Timeline V1+A1 Lanes:** ✅ Gemerged + WPF Release 0 Errors. Live-Verify (#1) per User-Direktive skipped — Code-Verify reicht.
-  - **Working-Tree:** ✅ Clean. All changes committed (`337b973`).
-  - **Worktree-Cleanup:** ✅ `.claude/worktrees/timeline-multi-lane` entfernt, Branch `worktree-timeline-multi-lane` lokal+remote geloescht.
-  - **Chat-Track + LM-Studio:** ✅ Restored per User-Direktive ("Chat-Track behalten"). 53abecd-Deletions reversed. Phase B Foundation aktiv.
-  - **LM-Studio + Ollama Hybrid:** User-Direktive 2026-05-19 — beide Provider lauffaehig (private app). Switch via config.json + model_registry.py. Foundation: `lmstudio_client.py` + `ollama_client.py` koexistieren.
-  - **Tests:** 709 passed / 12 skipped / 0 failed.
-  - **E010 Resilience:** ✅ VOLLSTÄNDIG ERLEDIGT (21.05.). SSE-Reconnect & 4GB-VRAM-Stress erfolgreich autonom validiert und robustisiert (0 OOMs, screenshots erzeugt).
-  - **S-H1b/#6 nswag:** ✅ DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..60cce5b`). Alle 4 DTO-Familien NSwag-generated.
+  - **Auto-QA-Loop (2026-05-21):** ✅ 60/60 Funktionen PASS über 11 Bereiche (Projekt/Media/Audio-Lib/Video-Lib/Audio-Analyse/Video-Analyse/Anchor/Pacing/Timeline/Render/Settings). 3 echte Bugs gefunden+gefixt (Commit `9909d4a`).
+  - **Hybrid-LLM-Fixes (2026-05-22, `3025b22`):** ✅ User-Audit deckte auf dass nur 2/6 LLM-Call-Sites Auto-Fallback hatten. 4 Bypasses gefixt: `models_router._make_client`, `chat_agent._ensure_resources`, `model_registry._resolve_client`, `lmstudio_vision_wrapper`. Live-verified: /models/list ollama_available=true, /chat/message → Gemma-4 streaming.
+  - **Backend:** uvicorn 127.0.0.1:8765 live, alle Fixes geladen.
+  - **WPF Release-DLL:** vorhanden (2026-05-21 Build), C# unchanged → kein Rebuild nötig.
+  - **Tests:** 721 passed / 9 skipped / 0 failed (vorher 715, +6 neue Regression-Tests).
+  - **Regression-Guards committed:** `test_video_list_clips_post_analyze.py` (guards explicit_kwargs-Drift) + `test_pacing_snap_subtrack_import.py` (guards PacingCut-Import).
+  - **E010 Resilience:** ✅ VOLLSTÄNDIG ERLEDIGT (21.05.). SSE-Reconnect & 4GB-VRAM-Stress autonom validiert.
+  - **S-H1b/#6 NSwag:** ✅ DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..60cce5b`).
 - **Next Task:**
   - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
-  - Verbleibend nach autonomem Lauf:
-    - #1 Live-Verify Timeline-UI (User-Direktive: skip → wird beim naechsten App-Start beilaeufig erfolgen)
-    - #6 VRAM-Stubs (LM-Studio /health/vram Endpoint Connection-Reset)
-    - #12-#15 Original-Plan-Drops (cosmetic Re-Adds, falls gewünscht)
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7).
+  - Verbleibend:
+    - #1 GUI-Live-Verify Timeline-UI (User manuell)
+    - #12-#15 Cosmetic Re-Adds (DepthRenderer Spectral, Onset-Markers, Segment-Labels, VSM-Animations) — nur falls User vermisst
+    - 14 vor-existierende M-Files im Working-Tree (älter, nicht aus Session — separater Review-Pfad nötig)
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes).
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
