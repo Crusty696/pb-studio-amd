@@ -46,7 +46,17 @@
                 </StackPanel>
 
                 <StackPanel>
-                    <TextBlock Text="MODELLE" Style="{StaticResource SectionHeader}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="MODELLE" Style="{StaticResource SectionHeader}"/>
+                        <!-- W-QA-2 (2026-05-22): Provider-Badge zeigt live welcher LLM-Stack aktiv ist. -->
+                        <Border Margin="10,0,0,0" Padding="6,2" CornerRadius="2"
+                                Background="{StaticResource AbletonAccent}"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ProviderBadge}"
+                                       FontSize="10" FontWeight="Bold"
+                                       Foreground="Black"/>
+                        </Border>
+                    </StackPanel>
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
                                FontSize="11" Margin="0,2,0,0"/>
@@ -74,7 +84,7 @@
                         <TextBlock Foreground="{StaticResource AbletonRed}"
                                    FontSize="12" TextWrapping="Wrap"
                                    VerticalAlignment="Center">
-                            <Run Text="Ollama nicht erreichbar: "/><Run Text="{Binding ErrorText, Mode=OneWay}"/>
+                            <Run Text="LLM-Provider offline: "/><Run Text="{Binding ErrorText, Mode=OneWay}"/>
                         </TextBlock>
                     </StackPanel>
                 </Border>

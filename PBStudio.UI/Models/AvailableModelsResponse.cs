@@ -13,7 +13,8 @@ namespace PBStudio.UI.Models;
 public record AvailableModelsResponse(
     bool OllamaAvailable,
     string BaseUrl,
-    List<AvailableModelEntry> Available);
+    List<AvailableModelEntry> Available,
+    bool LmstudioAvailable = false);
 
 /// <summary>Ein kuratierter Eintrag: Default-Modelle, die PB Studio empfiehlt.</summary>
 public record AvailableModelEntry(

@@ -13,7 +13,8 @@ public record ModelListResponse(
     bool OllamaAvailable,
     string BaseUrl,
     List<ModelListEntry> Models,
-    string? Error = null);
+    string? Error = null,
+    bool LmstudioAvailable = false);
 
 /// <summary>Einzelnes installiertes Ollama-Modell (entspricht <c>/api/tags</c>).</summary>
 public record ModelListEntry(

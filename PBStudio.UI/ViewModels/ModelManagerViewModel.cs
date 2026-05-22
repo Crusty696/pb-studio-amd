@@ -34,6 +34,10 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _errorText;
     [ObservableProperty] private string _baseUrl = "";
     [ObservableProperty] private bool _ollamaAvailable;
+    // W-QA-2 (2026-05-22): Hybrid-Provider-Status sichtbar machen.
+    [ObservableProperty] private bool _lmStudioAvailable;
+    [ObservableProperty] private string _activeProvider = "unbekannt";
+    [ObservableProperty] private string _providerBadge = "OFFLINE";
     [ObservableProperty] private DateTime? _lastFetchedAt;
 
     public ObservableCollection<InstalledModelCardViewModel> InstalledModels { get; } = new();
@@ -83,18 +87,49 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             ApplyAvailable(available);
 
             OllamaAvailable = (installed?.OllamaAvailable ?? false) || (available?.OllamaAvailable ?? false);
+            LmStudioAvailable = (installed?.LmstudioAvailable ?? false) || (available?.LmstudioAvailable ?? false);
             BaseUrl = installed?.BaseUrl ?? available?.BaseUrl ?? "";
             LastFetchedAt = DateTime.Now;
 
-            if (!OllamaAvailable)
+            // W-QA-2 (2026-05-22): Provider-Status-Badge fuer User-Sichtbarkeit.
+            // base_url verraet welcher Provider live aktiv ist (1234 = LM Studio, 11434 = Ollama).
+            if (LmStudioAvailable && BaseUrl.Contains("1234"))
             {
-                var err = installed?.Error ?? "Ollama-Server nicht erreichbar.";
-                StatusText = $"Ollama offline ({BaseUrl}): {err}";
+                ActiveProvider = "LM Studio";
+                ProviderBadge = "LM STUDIO";
+            }
+            else if (OllamaAvailable && BaseUrl.Contains("11434"))
+            {
+                ActiveProvider = "Ollama";
+                ProviderBadge = "OLLAMA";
+            }
+            else if (LmStudioAvailable)
+            {
+                ActiveProvider = "LM Studio";
+                ProviderBadge = "LM STUDIO";
+            }
+            else if (OllamaAvailable)
+            {
+                ActiveProvider = "Ollama";
+                ProviderBadge = "OLLAMA";
+            }
+            else
+            {
+                ActiveProvider = "offline";
+                ProviderBadge = "OFFLINE";
+            }
+
+            if (!OllamaAvailable && !LmStudioAvailable)
+            {
+                var err = installed?.Error ?? "Kein LLM-Provider erreichbar.";
+                StatusText = $"OFFLINE: weder LM Studio noch Ollama. {err}";
                 ErrorText = err;
             }
             else
             {
-                StatusText = $"{InstalledModels.Count} installiert  ·  {AvailableModels.Count} verfuegbar  ·  Ollama @ {BaseUrl}";
+                var hybridHint = (OllamaAvailable && LmStudioAvailable) ? " (Hybrid: beide live)"
+                               : (OllamaAvailable ? " · LM Studio: offline" : " · Ollama: offline");
+                StatusText = $"{InstalledModels.Count} installiert  ·  {AvailableModels.Count} verfuegbar  ·  {ActiveProvider} @ {BaseUrl}{hybridHint}";
             }
         }
         catch (OperationCanceledException) { /* erwartet */ }
