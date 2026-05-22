@@ -59,11 +59,8 @@ class _ChatHistoryStore:
         self._encoding = None  # lazy-init tiktoken encoder
 
     def _get_encoding(self):
-        """Lazy init tiktoken cl100k_base (GPT-4 + LM-Studio approximation)."""
-        if self._encoding is None:
-            import tiktoken
-            self._encoding = tiktoken.get_encoding("cl100k_base")
-        return self._encoding
+        """Offline-Fallback: tiktoken-Download blockiert Eventloop."""
+        raise RuntimeError("tiktoken offline fallback forced")
 
     def _count_tokens(self, text: str) -> int:
         """Token-count via tiktoken. Fallback char/3 heuristic on error."""

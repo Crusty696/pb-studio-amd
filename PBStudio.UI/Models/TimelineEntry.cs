@@ -36,7 +36,7 @@ public partial class TimelineEntryModel : ObservableObject
     public bool IsBrainExplainLoaded { get; set; }
 
     /// <summary>N base64 JPEG data URLs from /video/thumbstrip/{id}. null until loaded.</summary>
-    [ObservableProperty] private ObservableCollection<string>? _thumbnailFrames;
+    [ObservableProperty] private ObservableCollection<System.Windows.Media.ImageSource>? _thumbnailFrames;
 
     /// <summary>Downsampled mono peaks (0..1) from /video/clipwave/{id}. null until loaded.</summary>
     [ObservableProperty] private ObservableCollection<float>? _audioPeaks;

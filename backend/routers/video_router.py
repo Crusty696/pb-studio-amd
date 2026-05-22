@@ -727,11 +727,19 @@ def _run_video_analysis(
                 # L-VIDEO-5: range(0, total - step, step) liess das letzte Sample
                 # bei i=total-step ausfallen (range schliesst oberen Wert aus).
                 # Folge: Motion-Curve verpasst Outro-Frames. total statt total-step.
+                curr_frame = 0
                 for i in range(0, total, step):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                    while curr_frame < i:
+                        if not cap.grab():
+                            break
+                        curr_frame += 1
+                    
                     ret, frame = cap.read()
+                    curr_frame += 1
                     if ret and frame is not None:
                         frames.append(frame)
+                    else:
+                        break
                     if len(frames) >= n_frames:
                         break
             finally:
@@ -827,11 +835,17 @@ def _run_video_analysis(
                         # L-VIDEO-5: total_frames statt total_frames - sample_step
                         # damit letztes Sample bei i=total_frames-sample_step nicht
                         # ausgelassen wird. range schliesst oberen Wert ohnehin aus.
+                        curr_frame = 0
                         for i in range(0, max(total_frames, 1), sample_step):
-                            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                            while curr_frame < i:
+                                if not cap.grab():
+                                    break
+                                curr_frame += 1
+                            
                             ret, frame = cap.read()
+                            curr_frame += 1
                             if not ret or frame is None:
-                                continue
+                                break
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             pil_img = _PILImage.fromarray(frame_rgb)
                             emb = wrapper.encode_image(pil_img)

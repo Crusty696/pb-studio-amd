@@ -43,7 +43,9 @@ class VectorStore:
         self.data_dir = Path(self.config.get("paths", {}).get("db_path", "./data")).parent
         self.index_path = self.data_dir / f"{index_name}.faiss"
         self.meta_path = self.data_dir / f"{index_name}_meta.json"
+        self.tombstone_path = self.data_dir / f"{index_name}_tombstones.json"
         self._lock = threading.Lock()
+        self._write_lock = threading.Lock()
 
         # Dimension: Auto-detect from config or first embedding
         # SigLIP SO400M = 1152, CLIP = 768, smaller models may use 512
@@ -117,6 +119,14 @@ class VectorStore:
                             logger.error(f"Failed to migrate legacy pickle: {e}")
                             self.metadata = {}
 
+                # B-7 FIX: Tombstones laden
+                if getattr(self, "tombstone_path", None) and self.tombstone_path.exists():
+                    try:
+                        with open(self.tombstone_path, "r") as f:
+                            self._tombstoned_ids = set(json.load(f))
+                    except Exception as e:
+                        logger.warning(f"Failed to load tombstones: {e}")
+
                 logger.info(f"FAISS Index loaded. Size: {self.index.ntotal}, Dim: {self.dimension}")
             except Exception as e:
                 logger.error(f"Failed to load FAISS index: {e}. Creating new.")
@@ -175,9 +185,15 @@ class VectorStore:
 
             self.metadata[faiss_id] = meta_info
 
-            # Immer nach jedem Embedding speichern — Desktop-App mit kleinem Index,
-            # Performance-Overhead akzeptabel; verhindert Datenverlust bei Absturz.
-            self._save_unlocked()
+            # Immer nach jedem Embedding im Hintergrund speichern — verhindert Datenverlust bei Absturz
+            # und blockiert parallele Suchanfragen nicht.
+            try:
+                cloned_index = faiss.clone_index(self.index) if self.index else None
+                cloned_metadata = self.metadata.copy()
+                cloned_tombstones = list(getattr(self, "_tombstoned_ids", set()))
+                self._save_background(cloned_index, cloned_metadata, cloned_tombstones)
+            except Exception as e:
+                logger.error(f"Failed to trigger background save in add_embedding: {e}")
 
             return faiss_id
 
@@ -221,11 +237,22 @@ class VectorStore:
         search() ausgefiltert. Wird von delete_audio_clip/delete_video_clip
         gerufen mit den IDs aus vector_map.media_id-Cascade."""
         with self._lock:
+            if not hasattr(self, "_tombstoned_ids"):
+                self._tombstoned_ids = set()
             for fid in faiss_ids:
                 try:
                     self._tombstoned_ids.add(int(fid))
                 except (TypeError, ValueError):
                     pass
+            
+            # B-7 FIX: Zustand nach Tombstoning im Hintergrund speichern
+            try:
+                cloned_index = faiss.clone_index(self.index) if self.index else None
+                cloned_metadata = self.metadata.copy()
+                cloned_tombstones = list(self._tombstoned_ids)
+                self._save_background(cloned_index, cloned_metadata, cloned_tombstones)
+            except Exception as e:
+                logger.error(f"Failed to trigger background save in mark_tombstoned: {e}")
 
     def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
         """Returns list of (metadata, score). Thread-safe."""
@@ -243,10 +270,11 @@ class VectorStore:
             D, I = self.index.search(q_copy, k)
 
             results = []
+            tombstoned = getattr(self, "_tombstoned_ids", set())
             for i, idx in enumerate(I[0]):
                 # Y6 / L-STATE-2: Tombstoned IDs (vector_map-cascade-removed)
                 # ausfiltern — sonst liefert FAISS Hits zu geloeschten Clips.
-                if idx != -1 and idx in self.metadata and int(idx) not in self._tombstoned_ids:
+                if idx != -1 and idx in self.metadata and int(idx) not in tombstoned:
                     score = float(D[0][i])
                     meta = self.metadata[idx]
                     results.append((meta, score))
@@ -272,20 +300,66 @@ class VectorStore:
                 with open(temp_meta, "w") as f:
                     json.dump(self.metadata, f, indent=2)
 
+                # B-7 FIX: Save tombstones
+                temp_tomb = str(self.tombstone_path) + ".tmp"
+                with open(temp_tomb, "w") as f:
+                    json.dump(list(self._tombstoned_ids), f)
+
                 # BUG-102 FIX: Atomic replace (os.replace works even if dest does not exist)
                 import os
                 os.replace(temp_index, str(self.index_path))
                 os.replace(temp_meta, str(self.meta_path))
+                os.replace(temp_tomb, str(self.tombstone_path))
 
                 logger.info("FAISS Index saved.")
             except Exception as e:
                 logger.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
                 # Cleanup temp files
-                for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp"]:
+                for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
                     try:
                         Path(tmp).unlink(missing_ok=True)
                     except Exception:
                         pass
+
+    def _save_background(self, cloned_index, cloned_metadata, cloned_tombstones):
+        """Asynchronously save cloned index and metadata in a daemon thread."""
+        write_lock = getattr(self, "_write_lock", None)
+        if write_lock is None:
+            write_lock = threading.Lock()
+            try:
+                self._write_lock = write_lock
+            except Exception:
+                pass
+
+        def do_save():
+            with write_lock:
+                if cloned_index and getattr(self, "index_path", None) is not None:
+                    try:
+                        temp_index = str(self.index_path) + ".tmp"
+                        faiss.write_index(cloned_index, temp_index)
+
+                        temp_meta = str(self.meta_path) + ".tmp"
+                        with open(temp_meta, "w") as f:
+                            json.dump(cloned_metadata, f, indent=2)
+
+                        temp_tomb = str(self.tombstone_path) + ".tmp"
+                        with open(temp_tomb, "w") as f:
+                            json.dump(cloned_tombstones, f)
+
+                        import os
+                        os.replace(temp_index, str(self.index_path))
+                        os.replace(temp_meta, str(self.meta_path))
+                        os.replace(temp_tomb, str(self.tombstone_path))
+                        logger.info("FAISS Index saved in background successfully.")
+                    except Exception as e:
+                        logger.error(f"Failed to save FAISS index/metadata in background: {e}", exc_info=True)
+                        for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
+                            try:
+                                Path(tmp).unlink(missing_ok=True)
+                            except Exception:
+                                pass
+        t = threading.Thread(target=do_save, daemon=True)
+        t.start()
 
     def _save_on_exit(self):
         """atexit-Handler: stellt sicher dass beim Prozessende gespeichert wird."""

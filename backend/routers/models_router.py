@@ -152,11 +152,11 @@ def _get_base_url() -> str:
             "PBSTUDIO_OLLAMA_URL=%s ist deprecated — bitte PBSTUDIO_LMSTUDIO_URL setzen",
             legacy,
         )
-        # Auto-rewrite 11434 -> 1234/v1 nur fuer den haeufigsten Ollama-Default
+        # Auto-rewrite 11434 -> 12341/v1 nur fuer den haeufigsten Ollama-Default
         if "11434" in legacy:
-            return "http://localhost:1234/v1"
+            return "http://127.0.0.1:12341/v1"
         return legacy
-    return "http://localhost:1234/v1"
+    return "http://127.0.0.1:12341/v1"
 
 
 def _make_client():

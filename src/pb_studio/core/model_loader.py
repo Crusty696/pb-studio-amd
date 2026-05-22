@@ -217,31 +217,40 @@ class ModelLoader:
         Returns:
             ONNX InferenceSession or dict of sessions for split models
         """
-        with self._session_lock:
-            if model_id not in self._specs:
-                logger.error(f"Unknown model: {model_id}")
-                return None
+        if model_id not in self._specs:
+            logger.error(f"Unknown model: {model_id}")
+            return None
 
-            # Already loaded? (check-and-load atomar unter Lock)
+        spec = self._specs[model_id]
+
+        # 1. Register with VRAM manager (safe without _session_lock)
+        self.vram_manager.register_model(
+            model_id=spec.model_id,
+            name=spec.name,
+            estimated_vram_mb=spec.vram_mb,
+            priority=priority or spec.priority,
+            unload_callback=lambda mid=model_id: self._do_unload(mid)
+        )
+
+        # Fast path check: if already loaded, touch and return
+        with self._session_lock:
             if model_id in self._sessions:
                 self.vram_manager.touch_model(model_id)
                 return self._sessions[model_id]
 
-            spec = self._specs[model_id]
+        # 2. Reserve VRAM OUTSIDE of _session_lock
+        # This completely avoids circular deadlock since evictions (which need _session_lock)
+        # can run without being blocked by this thread holding _session_lock!
+        if not self.vram_manager.reserve(model_id, force=force):
+            logger.error(f"Cannot reserve VRAM for {spec.name}")
+            return None
 
-            # Register with VRAM manager
-            self.vram_manager.register_model(
-                model_id=spec.model_id,
-                name=spec.name,
-                estimated_vram_mb=spec.vram_mb,
-                priority=priority or spec.priority,
-                unload_callback=lambda mid=model_id: self._do_unload(mid)
-            )
-
-            # Reserve VRAM
-            if not self.vram_manager.reserve(model_id, force=force):
-                logger.error(f"Cannot reserve VRAM for {spec.name}")
-                return None
+        # 3. Now acquire _session_lock to actually load the model
+        with self._session_lock:
+            # Check again inside the lock in case another thread loaded it in the meantime
+            if model_id in self._sessions:
+                self.vram_manager.commit(model_id)
+                return self._sessions[model_id]
 
             try:
                 # Load based on type

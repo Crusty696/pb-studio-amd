@@ -201,6 +201,9 @@ class SmartDirector:
         # Track which model is currently loaded
         self._active_model: Optional[str] = None  # "clap" or "siglip"
 
+        # B-12 FIX: Thread-Sicherheit bei Inferenz & Eviction
+        self._inference_lock = threading.Lock()
+
         # VRAM budgets (MB)
         # CLAPPyTorch laeuft auf CPU - kein VRAM noetig
         self._clap_budget = 0     # CLAP PyTorch laeuft auf CPU, nicht GPU
@@ -319,18 +322,19 @@ class SmartDirector:
 
     def _unload_clap(self):
         """Unload CLAP model to free VRAM."""
-        if self._clap is not None:
-            logger.info("Unloading CLAP model...")
-            try:
-                if hasattr(self._clap, 'unload'):
-                    self._clap.unload()
-            except Exception as e:
-                logger.warning("Error unloading CLAP: %s", e)
+        with self._inference_lock:
+            if self._clap is not None:
+                logger.info("Unloading CLAP model...")
+                try:
+                    if hasattr(self._clap, 'unload'):
+                        self._clap.unload()
+                except Exception as e:
+                    logger.warning("Error unloading CLAP: %s", e)
 
-            self._clap = None
-            self.vram_manager.release("smart_director_clap")
-            if self._active_model == "clap":
-                self._active_model = None
+                self._clap = None
+                self.vram_manager.release("smart_director_clap")
+                if self._active_model == "clap":
+                    self._active_model = None
 
     def _load_siglip(self) -> bool:
         """Load SigLIP model with VRAM management."""
@@ -373,18 +377,19 @@ class SmartDirector:
 
     def _unload_siglip(self):
         """Unload SigLIP model to free VRAM."""
-        if self._siglip is not None:
-            logger.info("Unloading SigLIP model...")
-            try:
-                if hasattr(self._siglip, 'unload'):
-                    self._siglip.unload()
-            except Exception as e:
-                logger.warning("Error unloading SigLIP: %s", e)
+        with self._inference_lock:
+            if self._siglip is not None:
+                logger.info("Unloading SigLIP model...")
+                try:
+                    if hasattr(self._siglip, 'unload'):
+                        self._siglip.unload()
+                except Exception as e:
+                    logger.warning("Error unloading SigLIP: %s", e)
 
-            self._siglip = None
-            self.vram_manager.release("smart_director_siglip")
-            if self._active_model == "siglip":
-                self._active_model = None
+                self._siglip = None
+                self.vram_manager.release("smart_director_siglip")
+                if self._active_model == "siglip":
+                    self._active_model = None
 
     def _run_with_vram_budget(self, task: str):
         """
@@ -529,11 +534,14 @@ class SmartDirector:
             }
 
             # Run CLAP classification - returns List[Tuple[str, float]]
-            results = self._clap.classify_audio(
-                audio_path,
-                labels=mood_labels,
-                top_k=len(mood_labels)
-            )
+            with self._inference_lock:
+                if self._clap is None:
+                    return {"neutral": 1.0}
+                results = self._clap.classify_audio(
+                    audio_path,
+                    labels=mood_labels,
+                    top_k=len(mood_labels)
+                )
 
             mood_scores = {}
             for label, score in results:
@@ -803,7 +811,10 @@ class SmartDirector:
             rgb_frame = middle_frame[:, :, ::-1]  # BGR to RGB
             pil_image = Image.fromarray(rgb_frame)
 
-            embedding = self._siglip.encode_image(pil_image)
+            with self._inference_lock:
+                if self._siglip is None:
+                    return np.zeros(embedding_dim, dtype=np.float32)
+                embedding = self._siglip.encode_image(pil_image)
 
             if embedding is None:
                 return np.zeros(embedding_dim, dtype=np.float32)
@@ -833,10 +844,13 @@ class SmartDirector:
             pil_image = Image.fromarray(rgb_frame)
 
             # Classify with content prompts - returns List[Tuple[str, float]]
-            results = self._siglip.classify_image(
-                pil_image,
-                labels=self._content_prompts
-            )
+            with self._inference_lock:
+                if self._siglip is None:
+                    return [], {}
+                results = self._siglip.classify_image(
+                    pil_image,
+                    labels=self._content_prompts
+                )
 
             # Convert to dict and filter to high-confidence tags
             threshold = 0.3
@@ -1363,7 +1377,10 @@ class SmartDirector:
             return None
 
         try:
-            embedding = self._siglip.encode_text(text)
+            with self._inference_lock:
+                if self._siglip is None:
+                    return None
+                embedding = self._siglip.encode_text(text)
             if embedding is None:
                 return None
 
@@ -1419,7 +1436,10 @@ class SmartDirector:
             visual_descriptions = [self._mood_to_visual_prompt(mood) for mood in mood_tags]
 
             # SigLIP.encode_text can handle a list of strings
-            mood_embeddings = self._siglip.encode_text(visual_descriptions)
+            with self._inference_lock:
+                if self._siglip is None:
+                    raise RuntimeError("SigLIP model unexpectedly unloaded")
+                mood_embeddings = self._siglip.encode_text(visual_descriptions)
 
             if mood_embeddings is None:
                 logger.warning("Failed to encode mood descriptions")

@@ -273,9 +273,9 @@ class RenderService:
     @staticmethod
     def _encoder_args(encoder: str) -> list[str]:
         if encoder == "hevc_amf":
-            return ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
-        if encoder == "h264_amf":
-            return ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
+            return ["-c:v", "hevc_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
+        elif encoder == "h264_amf":
+            return ["-c:v", "h264_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
         if encoder == "av1_amf":
             return ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
         if encoder == "h264_mf":
@@ -377,6 +377,20 @@ class RenderService:
                     pass
                 # naechster Encoder in Chain
                 continue
+            finally:
+                if process is not None and process.poll() is None:
+                    try:
+                        process.kill()
+                        process.wait(timeout=5)
+                    except Exception:
+                        pass
+                if process is not None:
+                    for pipe in (process.stdout, process.stderr):
+                        if pipe is not None:
+                            try:
+                                pipe.close()
+                            except Exception:
+                                pass
 
         # Alle Encoder fehlgeschlagen — gibt es kein last_error, war chain leer
         logger.error(
@@ -430,9 +444,9 @@ class RenderService:
 
         encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
         if encoder == "hevc_amf":
-            cmd.extend(["-c:v", "hevc_amf", "-quality", preset, "-b:v", bitrate])
+            cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_amf":
-            cmd.extend(["-c:v", "h264_amf", "-quality", preset, "-b:v", bitrate])
+            cmd.extend(["-c:v", "h264_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
         elif encoder == "av1_amf":
             cmd.extend(["-c:v", "av1_amf", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_mf":

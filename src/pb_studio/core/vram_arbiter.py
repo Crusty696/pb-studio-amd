@@ -45,7 +45,8 @@ class VRAMArbiter:
         if self.forced_limit > 0:
             logger.info(f"VRAM Arbiter: FORCED LIMIT ACTIVE: {self.forced_limit}MB")
             # C1/FIX: Ensure BudgetManager knows about this limit
-            self.budget_manager.vram_total_mb = self.forced_limit
+            self.budget_manager._max_vram_mb = self.forced_limit
+            self.budget_manager._usable_vram_mb = max(0, self.forced_limit - self.safety_buffer)
 
     @property
     def budget_manager(self):
@@ -218,18 +219,23 @@ class VRAMArbiter:
         if priority is None:
             priority = ModelPriority.MEDIUM
 
-        if self.can_allocate(required_mb, model_id):
-            return True
+        # Register the model first so the budget manager is aware of it
+        self.budget_manager.register_model(
+            model_id=model_id,
+            name=model_id,
+            estimated_vram_mb=required_mb,
+            priority=priority
+        )
 
-        logger.info(f"VRAM full. Attempting eviction for {required_mb}MB (model: {model_id})...")
+        logger.info(f"Attempting VRAM reservation for {model_id} ({required_mb}MB)...")
         
         # Use reserve with force=True which handles eviction safely under lock
         success = self.budget_manager.reserve(model_id, force=True)
         if success:
-            logger.info(f"Eviction successful. Space freed for {required_mb}MB.")
+            logger.info(f"VRAM Reserved successfully for {model_id} ({required_mb}MB).")
             return True
         else:
-            logger.error(f"Could not free {required_mb}MB even after eviction attempt.")
+            logger.error(f"Could not reserve {required_mb}MB for {model_id} even after eviction attempt.")
             return False
 
     def evict_if_needed(self, required_mb: int, exclude_models: Optional[list] = None) -> bool:

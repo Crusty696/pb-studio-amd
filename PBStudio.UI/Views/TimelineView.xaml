@@ -509,9 +509,7 @@
                             <Border Grid.Row="1" Background="#FF141414"/>
 
                             <!-- Audio waveform (full opacity, mid-axis) -->
-                            <ItemsControl Grid.Row="1" ItemsSource="{Binding WaveformBars}"
-                                          VirtualizingPanel.IsVirtualizing="True"
-                                          VirtualizingPanel.VirtualizationMode="Recycling">
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding WaveformBars}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas Background="Transparent" VerticalAlignment="Stretch"/>

@@ -189,9 +189,9 @@ class BatchRenderer:
 
             # Encoder-Args
             if self._encoder == "hevc_amf":
-                enc_args = ["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"]
+                enc_args = ["-c:v", "hevc_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
             elif self._encoder == "h264_amf":
-                enc_args = ["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"]
+                enc_args = ["-c:v", "h264_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
             elif self._encoder == "h264_mf":
                 enc_args = ["-c:v", "h264_mf", "-b:v", "10M"]
             else:

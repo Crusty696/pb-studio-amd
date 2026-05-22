@@ -695,9 +695,11 @@ class VRAMBudgetManager:
         Returns:
             Amount of VRAM freed
         """
+        callbacks_to_invoke = []
+        freed = 0
+        
         with self._registry_lock:
             exclude = set(exclude or [])
-            freed = 0
 
             # Sort by (priority descending, last_used ascending)
             # Higher priority number = lower importance = evict first
@@ -714,29 +716,29 @@ class VRAMBudgetManager:
 
                 logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
 
-                # Call unload callback
-                callback_failed = False
+                # Callbacks sammeln (B-3 Fix: Ausfuehrung ausserhalb des Locks)
                 if budget.unload_callback:
-                    try:
-                        budget.unload_callback()
-                    except Exception as e:
-                        logger.error(f"Unload callback failed for {budget.name}: {e}")
-                        callback_failed = True
+                    callbacks_to_invoke.append((budget.name, budget.unload_callback, budget))
 
-                # IMMER VRAM freigeben, auch wenn Callback fehlschlägt
+                # IMMER VRAM freigeben
                 self._committed_mb -= budget.estimated_vram_mb
                 self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
                 budget.is_loaded = False
                 freed += budget.estimated_vram_mb
 
-                if callback_failed:
-                    budget.metadata["eviction_error"] = True
-                    logger.warning(
-                        f"Model {budget.name} marked as evicted_with_error — "
-                        f"VRAM budget freed but session may still be in memory"
-                    )
+        # Callbacks ausserhalb des Locks ausfuehren, um zirkulaere Deadlocks mit ModelLoader zu vermeiden
+        for name, callback, budget in callbacks_to_invoke:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Unload callback failed for {name}: {e}")
+                budget.metadata["eviction_error"] = True
+                logger.warning(
+                    f"Model {name} marked as evicted_with_error — "
+                    f"VRAM budget freed but session may still be in memory"
+                )
 
-            return freed
+        return freed
 
     def evict_all(self, min_priority: ModelPriority = ModelPriority.LOW) -> int:
         """
@@ -748,28 +750,33 @@ class VRAMBudgetManager:
         Returns:
             Amount of VRAM freed
         """
+        callbacks_to_invoke = []
+        freed = 0
+        
         with self._registry_lock:
-            freed = 0
-
             for model_id, budget in list(self._models.items()):
                 if budget.is_loaded and budget.priority >= min_priority:
                     logger.info(f"Evicting {budget.name} ({budget.priority.name})")
 
-                    try:
-                        if budget.unload_callback:
-                            budget.unload_callback()
-                    except Exception as e:
-                        logger.error(f"Unload callback failed für {model_id}: {e}")
-                        budget.metadata["eviction_error"] = str(e)
-                    finally:
-                        # Immer Accounting aktualisieren — auch bei Fehler
-                        self._committed_mb -= budget.estimated_vram_mb
-                        self._committed_mb = max(0, self._committed_mb)  # nie negativ
-                        budget.is_loaded = False
-                        budget.metadata.setdefault("evicted", True)
-                        freed += budget.estimated_vram_mb
+                    if budget.unload_callback:
+                        callbacks_to_invoke.append((model_id, budget.name, budget.unload_callback, budget))
 
-            return freed
+                    # Immer Accounting aktualisieren
+                    self._committed_mb -= budget.estimated_vram_mb
+                    self._committed_mb = max(0, self._committed_mb)  # nie negativ
+                    budget.is_loaded = False
+                    budget.metadata.setdefault("evicted", True)
+                    freed += budget.estimated_vram_mb
+
+        # Callbacks ausserhalb des Locks ausfuehren (B-3 Fix)
+        for model_id, name, callback, budget in callbacks_to_invoke:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Unload callback failed für {model_id}: {e}")
+                budget.metadata["eviction_error"] = str(e)
+
+        return freed
 
     # =========================================================================
     # Convenience Methods

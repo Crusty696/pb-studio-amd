@@ -85,8 +85,8 @@ class CLAPPyTorch:
 
             logger.info(f"Loading CLAP model: {self.model_id}")
 
-            self.processor = ClapProcessor.from_pretrained(self.model_id)
-            self.model = ClapModel.from_pretrained(self.model_id)
+            self.processor = ClapProcessor.from_pretrained(self.model_id, local_files_only=True)
+            self.model = ClapModel.from_pretrained(self.model_id, local_files_only=True)
             self.model.to(self.device)
             self.model.eval()
 

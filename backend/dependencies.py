@@ -118,7 +118,9 @@ async def with_gpu_task(
                     logger.debug(f"Telemetrie-Update fehlgeschlagen: {obs_err}")
 
             if vram_reserved and manager:
-                manager.release(model_id)
+                # B-5 Fix: Storniere Reservierung (wirkt nur wenn nicht committed). 
+                # Freigabe passiert erst im ModelLoader beim Entladen.
+                manager.cancel_reservation(model_id)
             logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
 
 

@@ -137,6 +137,8 @@ def _make_vision_transport(model_name: str, content: str) -> httpx.MockTransport
 def _patch_client_factory(transport: httpx.MockTransport):
     """Patcht LMStudioClient so dass jeder Aufruf den MockTransport nutzt."""
     from pb_studio.ai import lmstudio_client as lm_mod
+    from pb_studio.ai import llm_provider as llm_mod
+    import contextlib
 
     orig = lm_mod.LMStudioClient
 
@@ -144,7 +146,12 @@ def _patch_client_factory(transport: httpx.MockTransport):
         kwargs["transport"] = transport
         return orig(*args, **kwargs)
 
-    return patch.object(lm_mod, "LMStudioClient", side_effect=factory)
+    @contextlib.contextmanager
+    def _cm():
+        with patch.object(lm_mod, "LMStudioClient", side_effect=factory), \
+             patch.object(llm_mod, "LMStudioClient", side_effect=factory):
+            yield
+    return _cm()
 
 
 def test_extract_tags_via_lmstudio_happy_path():
@@ -195,7 +202,9 @@ def test_extract_tags_via_lmstudio_server_down_returns_empty():
         kwargs["retry_backoff_seconds"] = 0.01
         return orig(*args, **kwargs)
 
-    with patch.object(lm_mod, "LMStudioClient", side_effect=factory):
+    from pb_studio.ai import llm_provider as llm_mod
+    with patch.object(lm_mod, "LMStudioClient", side_effect=factory), \
+         patch.object(llm_mod, "LMStudioClient", side_effect=factory):
         tags = extract_tags_via_lmstudio(frame, mode="balance")
     assert tags == []
 

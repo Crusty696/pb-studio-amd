@@ -51,11 +51,24 @@ public class VideoLibraryStateService
     {
         try
         {
-            var clips = await _api.GetVideoClipsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            if (clips == null)
-                return null;
+            var allClips = new List<VideoClipInfo>();
+            int page = 1;
+            int limit = 200;
 
-            CurrentVideoClips = clips;
+            while (true)
+            {
+                var clips = await _api.GetVideoClipsAsync(page: page, limit: limit, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (clips == null)
+                    return null;
+
+                allClips.AddRange(clips);
+                if (clips.Count < limit)
+                    break;
+
+                page++;
+            }
+
+            CurrentVideoClips = allClips;
             _lastRefreshUtc = DateTime.UtcNow;
             VideoClipsChanged?.Invoke(this, CurrentVideoClips);
             return CurrentVideoClips;

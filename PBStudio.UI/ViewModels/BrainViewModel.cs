@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.Services;
 
 namespace PBStudio.UI.ViewModels;
@@ -126,18 +127,21 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task OpenLearningSessionDialogAsync()
     {
-        var vm = CommunityToolkit.Mvvm.DependencyInjection.Ioc.Default
-            .GetRequiredService<LearningSessionViewModel>();
-        var dialog = new Views.LearningSessionDialog(vm);
+        using (var scope = CommunityToolkit.Mvvm.DependencyInjection.Ioc.Default
+            .GetRequiredService<IServiceScopeFactory>().CreateScope())
+        {
+            var vm = scope.ServiceProvider.GetRequiredService<LearningSessionViewModel>();
+            var dialog = new Views.LearningSessionDialog(vm);
 
-        // Pfade aus aktuellem Projekt + Timeline ableiten, sonst bleibt der Walkthrough
-        // ohne Audio-/Video-Preview (siehe Audit C3).
-        var (audioPath, videoBase) = await ResolveSessionPathsAsync();
-        await vm.LoadAsync(audioPath, videoBase);
+            // Pfade aus aktuellem Projekt + Timeline ableiten, sonst bleibt der Walkthrough
+            // ohne Audio-/Video-Preview (siehe Audit C3).
+            var (audioPath, videoBase) = await ResolveSessionPathsAsync();
+            await vm.LoadAsync(audioPath, videoBase);
 
-        dialog.Owner = System.Windows.Application.Current.MainWindow;
-        dialog.ShowDialog();
-        await RefreshStatsAsync();
+            dialog.Owner = System.Windows.Application.Current.MainWindow;
+            dialog.ShowDialog();
+            await RefreshStatsAsync();
+        }
     }
 
     private async Task<(string? audioPath, string? videoBase)> ResolveSessionPathsAsync()

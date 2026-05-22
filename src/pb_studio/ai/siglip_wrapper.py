@@ -75,7 +75,7 @@ class SigLIPWrapper:
     def _init_tokenizer(self) -> bool:
         try:
             from transformers import AutoTokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained("google/siglip-so400m-patch14-384")
+            self.tokenizer = AutoTokenizer.from_pretrained("google/siglip-so400m-patch14-384", local_files_only=True)
             return True
         except Exception:
             return False
@@ -84,7 +84,7 @@ class SigLIPWrapper:
         try:
             from transformers import SiglipTextModel
             logger.info("Loading SigLIP text model (PyTorch fallback)...")
-            self.text_model_fallback = SiglipTextModel.from_pretrained("google/siglip-so400m-patch14-384")
+            self.text_model_fallback = SiglipTextModel.from_pretrained("google/siglip-so400m-patch14-384", local_files_only=True)
             self.text_model_fallback.eval()
             return True
         except Exception as e:

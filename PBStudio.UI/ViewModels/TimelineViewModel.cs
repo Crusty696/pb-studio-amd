@@ -269,7 +269,26 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (stripTask.Result?.Frames is { Count: > 0 } frames)
-                    entry.ThumbnailFrames = new ObservableCollection<string>(frames);
+                {
+                    entry.ThumbnailFrames = new ObservableCollection<System.Windows.Media.ImageSource>();
+                    foreach (var f in frames)
+                    {
+                        try
+                        {
+                            var b64 = f.Replace("data:image/jpeg;base64,", "");
+                            byte[] bytes = Convert.FromBase64String(b64);
+                            using var ms = new System.IO.MemoryStream(bytes);
+                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                            bmp.BeginInit();
+                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bmp.StreamSource = ms;
+                            bmp.EndInit();
+                            bmp.Freeze();
+                            entry.ThumbnailFrames.Add(bmp);
+                        }
+                        catch { }
+                    }
+                }
                 if (waveTask.Result?.Peaks is { Count: > 0 } peaks)
                     entry.AudioPeaks = new ObservableCollection<float>(peaks.Select(p => (float)p));
                 entry.IsAssetsLoaded = true;
@@ -491,7 +510,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
             // Suche Audio ID über State Service
             var clips = await _audioLibraryState.RefreshAsync();
-            var audioClip = clips?.FirstOrDefault(c => string.Equals(c.Path, audioPath, StringComparison.OrdinalIgnoreCase));
+            
+            string normalizedAudioPath = System.IO.Path.GetFullPath(audioPath).ToLowerInvariant();
+            var audioClip = clips?.FirstOrDefault(c => 
+                System.IO.Path.GetFullPath(c.Path).ToLowerInvariant() == normalizedAudioPath);
 
             if (audioClip == null || seq != _waveformSequence) return;
 

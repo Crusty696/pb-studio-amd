@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using System.Windows.Media;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 using PBStudio.UI.Helpers;
 using PBStudio.UI.Models;
@@ -43,10 +44,11 @@ public partial class TimelineView : UserControl
     private double _originalClipStart;
     private const double MinClipDuration = 0.1;
 
+    private IServiceScope? _scope;
+
     public TimelineView()
     {
         InitializeComponent();
-        DataContext = Ioc.Default.GetRequiredService<TimelineViewModel>();
 
         _rulerRenderer = new RulerRenderer(RulerCanvas);
 
@@ -64,16 +66,12 @@ public partial class TimelineView : UserControl
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-
-        // C1/POWER: High-frequency render loop for smooth playhead tracking
-        CompositionTarget.Rendering += OnCompositionTargetRendering;
     }
 
     // B5-Fix (2026-05-19): _lastScrollX war never-read (CS0414). Entfernt.
     private void OnCompositionTargetRendering(object? sender, EventArgs e)
     {
-        if (_viewModel == null || !_mediaOpened || PreviewPlayer.Position.TotalSeconds <= 0) return;
-        if (PreviewPlayer.NaturalDuration.HasTimeSpan && PreviewPlayer.Position >= PreviewPlayer.NaturalDuration.TimeSpan) return;
+        if (_viewModel == null || !_mediaOpened || _viewModel.SelectedTimelinePosition <= 0) return;
 
         // Auto-Scroll Logic
         var playheadX = _viewModel.SelectedTimelinePosition * _viewModel.PixelsPerSecond;
@@ -118,10 +116,19 @@ public partial class TimelineView : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (_scope == null)
+        {
+            _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            DataContext = _scope.ServiceProvider.GetRequiredService<TimelineViewModel>();
+        }
+
         AttachViewModel(DataContext as TimelineViewModel);
         DataContextChanged += OnDataContextChanged;
         SyncPreviewToSelection(forceReload: true);
         DrawRuler();
+
+        // C1/POWER: High-frequency render loop for smooth playhead tracking (OnLoaded registrieren)
+        CompositionTarget.Rendering += OnCompositionTargetRendering;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -137,6 +144,10 @@ public partial class TimelineView : UserControl
         _playbackTimer.Stop();
         PreviewPlayer.Stop();
         PreviewPlayer.Source = null;
+
+        DataContext = null;
+        _scope?.Dispose();
+        _scope = null;
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

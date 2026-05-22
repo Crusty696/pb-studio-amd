@@ -21,7 +21,8 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
     migrations_dir = Path(migrations_dir)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(str(db_path))
+    # B-9 FIX: isolation_level=None verhindert implizites auto-commit von executescript()
+    conn = sqlite3.connect(str(db_path), isolation_level=None)
     try:
         init_connection(conn)
         (current,) = conn.execute("PRAGMA user_version").fetchone()

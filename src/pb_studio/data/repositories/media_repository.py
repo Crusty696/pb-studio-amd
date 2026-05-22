@@ -270,7 +270,7 @@ class MediaRepository:
     def update_status(self, media_id: int, status: str, ai_data: Dict = None):
         """Update media status and optionally AI analysis data."""
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 if ai_data:
                     json_ai = json.dumps(ai_data)
                     conn.execute(
@@ -296,7 +296,7 @@ class MediaRepository:
     def update_metadata(self, media_id: int, metadata: Dict):
         """Update technical metadata for a media file."""
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 json_meta = _serialize_meta(metadata)
                 conn.execute(
                     "UPDATE media SET metadata_json = ? WHERE id = ?",
@@ -314,7 +314,7 @@ class MediaRepository:
     def delete_media(self, media_id: int):
         """Delete a media file from the database."""
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 # Foreign key cascade will delete related vector_map entries
                 conn.execute("DELETE FROM media WHERE id = ?", (media_id,))
                 logger.info(f"Deleted media {media_id}")
@@ -337,7 +337,7 @@ class MediaRepository:
     def bulk_update_status(self, media_ids: List[int], status: str):
         """Update status for multiple media files in a single transaction."""
         try:
-            with self.db.transaction() as conn:
+            with self.db.transaction(immediate=True) as conn:
                 placeholders = ','.join('?' * len(media_ids))
                 conn.execute(
                     f"UPDATE media SET status = ? WHERE id IN ({placeholders})",

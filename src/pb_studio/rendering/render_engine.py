@@ -160,9 +160,9 @@ class RenderEngine:
         # R02 Fix: Dynamisch erkannter Encoder statt hardcodiertem hevc_amf
         encoder = self._encoder
         if encoder == "hevc_amf":
-            cmd.extend(["-c:v", "hevc_amf", "-quality", "balanced", "-b:v", "12M"])
+            cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"])
         elif encoder == "h264_amf":
-            cmd.extend(["-c:v", "h264_amf", "-quality", "balanced", "-b:v", "12M"])
+            cmd.extend(["-c:v", "h264_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"])
         elif encoder == "h264_mf":
             cmd.extend(["-c:v", "h264_mf", "-b:v", "10M"])
         elif encoder == "libx265":

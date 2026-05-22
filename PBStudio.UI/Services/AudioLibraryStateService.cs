@@ -51,11 +51,24 @@ public class AudioLibraryStateService
     {
         try
         {
-            var clips = await _api.GetAudioClipsAsync().ConfigureAwait(false);
-            if (clips == null)
-                return null;
+            var allClips = new List<AudioClipInfo>();
+            int page = 1;
+            int limit = 200;
 
-            CurrentAudioClips = clips;
+            while (true)
+            {
+                var clips = await _api.GetAudioClipsAsync(page: page, limit: limit).ConfigureAwait(false);
+                if (clips == null)
+                    return null;
+
+                allClips.AddRange(clips);
+                if (clips.Count < limit)
+                    break;
+
+                page++;
+            }
+
+            CurrentAudioClips = allClips;
             _lastRefreshUtc = DateTime.UtcNow;
             AudioClipsChanged?.Invoke(this, CurrentAudioClips);
             return CurrentAudioClips;

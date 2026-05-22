@@ -40,17 +40,18 @@ class SceneDetector:
             if not scene_list:
                 logger.warning(f"No scenes detected for {video_path}, adding full clip as single scene.")
                 # Get total duration as fallback
+                import cv2
+                cap = None
                 try:
-                    import cv2
                     cap = cv2.VideoCapture(video_path)
                     fps = cap.get(cv2.CAP_PROP_FPS)
                     frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
                     duration = frame_count / fps if fps > 0 else 0.0
-                    cap.release()
                     if duration > 0:
                         scene_list.append((0.0, duration))
-                except Exception:
-                    pass
+                finally:
+                    if cap is not None:
+                        cap.release()
 
             logger.info(f"Found {len(scene_list)} scenes.")
             return scene_list

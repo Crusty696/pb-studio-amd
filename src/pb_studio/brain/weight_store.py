@@ -107,11 +107,14 @@ class WeightStore:
                 self._cache_hits += 1
                 return cached
 
+        # B-6 FIX: Version vor Compute speichern, um Race Condition zu vermeiden
+        current_version = self._version
         value = self._compute_posterior_mean(axis, context_keys)
         with self._lock:
-            self._cache_misses += 1
-            self._evict_if_needed(self._posterior_cache)
-            self._posterior_cache[cache_key] = value
+            if self._version == current_version:
+                self._cache_misses += 1
+                self._evict_if_needed(self._posterior_cache)
+                self._posterior_cache[cache_key] = value
         return value
 
     def get_variance(
@@ -125,11 +128,13 @@ class WeightStore:
                 self._cache_hits += 1
                 return cached
 
+        current_version = self._version
         value = self._compute_variance(axis, context_keys)
         with self._lock:
-            self._cache_misses += 1
-            self._evict_if_needed(self._variance_cache)
-            self._variance_cache[cache_key] = value
+            if self._version == current_version:
+                self._cache_misses += 1
+                self._evict_if_needed(self._variance_cache)
+                self._variance_cache[cache_key] = value
         return value
 
     # ---------- write API (invalidates cache) ----------

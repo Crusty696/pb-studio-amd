@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -69,11 +70,18 @@ class EmbeddingRepository:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self._ensure_schema()
-        self.conn = sqlite3.connect(
-            str(self.db_path), isolation_level=None, check_same_thread=False
-        )
-        init_connection(self.conn)
-        self._load_vec(self.conn)
+        self._local = threading.local()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        if not hasattr(self._local, "conn"):
+            conn = sqlite3.connect(
+                str(self.db_path), isolation_level=None, check_same_thread=False
+            )
+            init_connection(conn)
+            self._load_vec(conn)
+            self._local.conn = conn
+        return self._local.conn
 
     @staticmethod
     def _load_vec(conn: sqlite3.Connection) -> None:
@@ -92,7 +100,8 @@ class EmbeddingRepository:
     def _migrate_with_vec(self, migrations_dir: Path) -> None:
         """Like migration_runner.migrate but loads sqlite-vec first."""
         import sqlite_vec
-        conn = sqlite3.connect(str(self.db_path))
+        # B-9 FIX: isolation_level=None
+        conn = sqlite3.connect(str(self.db_path), isolation_level=None)
         init_connection(conn)
         conn.enable_load_extension(True)
         try:
@@ -142,21 +151,27 @@ class EmbeddingRepository:
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         emb = self._coerce_embedding(embedding, AUDIO_DIM)
-        cur = self.conn.execute(
-            "INSERT INTO audio_units (parent_id, level, media_id, media_hash, "
-            "start_time, end_time, metadata_json) VALUES (?,?,?,?,?,?,?)",
-            (
-                parent_id, level, media_id, media_hash,
-                float(start_time), float(end_time),
-                json.dumps(metadata or {}),
-            ),
-        )
-        unit_id = int(cur.lastrowid)
-        self.conn.execute(
-            "INSERT INTO audio_embeddings (rowid, embedding) VALUES (?, ?)",
-            (unit_id, emb.tobytes()),
-        )
-        return unit_id
+        try:
+            self.conn.execute("BEGIN")
+            cur = self.conn.execute(
+                "INSERT INTO audio_units (parent_id, level, media_id, media_hash, "
+                "start_time, end_time, metadata_json) VALUES (?,?,?,?,?,?,?)",
+                (
+                    parent_id, level, media_id, media_hash,
+                    float(start_time), float(end_time),
+                    json.dumps(metadata or {}),
+                ),
+            )
+            unit_id = int(cur.lastrowid)
+            self.conn.execute(
+                "INSERT INTO audio_embeddings (rowid, embedding) VALUES (?, ?)",
+                (unit_id, emb.tobytes()),
+            )
+            self.conn.commit()
+            return unit_id
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def search_audio(
         self,
@@ -205,23 +220,29 @@ class EmbeddingRepository:
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         emb = self._coerce_embedding(embedding, VIDEO_DIM)
-        cur = self.conn.execute(
-            "INSERT INTO video_units (parent_id, level, media_id, media_hash, "
-            "start_time, end_time, motion_score, brightness, saturation, "
-            "color_temp, metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                parent_id, level, media_id, media_hash,
-                float(start_time), float(end_time),
-                motion_score, brightness, saturation, color_temp,
-                json.dumps(metadata or {}),
-            ),
-        )
-        unit_id = int(cur.lastrowid)
-        self.conn.execute(
-            "INSERT INTO video_embeddings (rowid, embedding) VALUES (?, ?)",
-            (unit_id, emb.tobytes()),
-        )
-        return unit_id
+        try:
+            self.conn.execute("BEGIN")
+            cur = self.conn.execute(
+                "INSERT INTO video_units (parent_id, level, media_id, media_hash, "
+                "start_time, end_time, motion_score, brightness, saturation, "
+                "color_temp, metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    parent_id, level, media_id, media_hash,
+                    float(start_time), float(end_time),
+                    motion_score, brightness, saturation, color_temp,
+                    json.dumps(metadata or {}),
+                ),
+            )
+            unit_id = int(cur.lastrowid)
+            self.conn.execute(
+                "INSERT INTO video_embeddings (rowid, embedding) VALUES (?, ?)",
+                (unit_id, emb.tobytes()),
+            )
+            self.conn.commit()
+            return unit_id
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def search_video(
         self,
