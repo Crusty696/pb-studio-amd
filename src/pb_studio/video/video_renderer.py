@@ -2,27 +2,72 @@
 
 AMD-Version: Nutzt AMF Hardware-Encoding (h264_amf, hevc_amf) statt NVENC.
 Verwendet encoder_utils für AMD-kompatible FFmpeg-Parameter.
+Parallelisiert das Rendering über einen ProcessPoolExecutor und nutzt MD5-Caching.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 import subprocess
 import tempfile
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, List
 
 logger = logging.getLogger(__name__)
 
 
+def _render_single_segment(
+    ffmpeg_path: str,
+    file_path: str,
+    clip_start: float,
+    duration: float,
+    seg_path: str,
+    vf_filters: str,
+    encode_params: List[str]
+) -> tuple[bool, str]:
+    """Rendert ein einzelnes Segment parallel auf Modulebene.
+    
+    Verhindert Pickling-Probleme unter Windows, da es auf Modulebene definiert ist.
+    Unterstützt intelligentes Caching vor dem Render-Aufruf.
+    """
+    p = Path(seg_path)
+    # Caching-Prüfung: Falls Datei existiert und nicht leer ist, überspringen
+    if p.exists() and p.stat().st_size > 1000:
+        return True, "cached"
+
+    cmd = [
+        ffmpeg_path, "-y",
+        "-ss", f"{clip_start:.6f}", "-t", f"{duration:.6f}",
+        "-i", str(file_path),
+        "-vf", vf_filters,
+    ] + encode_params + ["-an", str(seg_path)]
+
+    try:
+        # Führe subprocess ohne shell=True aus (IRON RULE)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        if res.returncode == 0 and p.exists():
+            return True, "rendered"
+        else:
+            err = res.stderr[-300:] if res.stderr else "Unknown error"
+            return False, f"FFmpeg failed: {err}"
+    except subprocess.TimeoutExpired:
+        return False, "Timeout (5 min)"
+    except Exception as e:
+        return False, f"Exception: {str(e)}"
+
+
 class VideoRenderer:
     """Rendert eine Cut-Liste zu einem fertigen Video (AMD AMF).
 
     Workflow:
-    1. Clips trimmen (FFmpeg)
+    1. Clips parallel trimmen + skalieren (FFmpeg + ProcessPoolExecutor + Cache)
     2. Concat-Liste erstellen
     3. Audio zusammenführen
-    4. Finales Encoding mit AMF
+    4. Finales Encoding mit AMF (verlustfrei via concat demuxer copy)
     """
 
     def __init__(
@@ -68,7 +113,7 @@ class VideoRenderer:
         return params
 
     def _run_ffmpeg(self, cmd: List[str]) -> bool:
-        """Führt FFmpeg-Befehl aus. Kein shell=True (IRON RULE)."""
+        """Führt einen synchronen FFmpeg-Befehl aus."""
         try:
             logger.debug(f"FFmpeg: {' '.join(cmd[:8])}...")
             result = subprocess.run(
@@ -89,7 +134,7 @@ class VideoRenderer:
         self, cut_list: list, audio_path: str, output_path: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str | None:
-        """Rendert Cut-Liste zu Video.
+        """Rendert Cut-Liste zu Video über paralleles Processing und Caching.
 
         Args:
             cut_list: Liste mit Dicts/Objekten (file_path, clip_start, duration)
@@ -108,48 +153,107 @@ class VideoRenderer:
         current = 0
 
         try:
-            logger.info(f"Starte Rendering: {len(cut_list)} Cuts -> {output_path}")
+            logger.info(f"Starte paralleles Rendering: {len(cut_list)} Cuts -> {output_path}")
 
-            # 1. Clips trimmen
+            # 1. Tasks vorbereiten
+            tasks = []
             segments = []
+            vf_filters = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1,format=yuv420p"
+            encode_params = self._get_encode_params()
+
             for i, cut in enumerate(cut_list):
-                if self._cancelled:
-                    self._cleanup(segments)
+                if isinstance(cut, dict):
+                    file_path = cut.get("file_path", "")
+                    clip_start = cut.get("clip_start", cut.get("start_time", 0))
+                    duration = cut.get("duration", 5.0)
+                else:
+                    file_path = getattr(cut, "file_path", "") or ""
+                    if hasattr(cut, "get_file_path"):
+                        file_path = cut.get_file_path() or file_path
+                    clip_start = getattr(cut, "clip_start", 0)
+                    if hasattr(cut, "get_clip_start"):
+                        clip_start = cut.get_clip_start()
+                    duration = getattr(cut, "duration", 5.0)
+
+                if not file_path or not Path(file_path).exists():
+                    logger.error(f"Clip nicht gefunden: {file_path}")
                     return None
 
-                seg = self._prepare_segment(cut, i)
-                if seg:
-                    segments.append(seg)
+                # Eindeutiger Hash-Name für intelligentes Caching
+                key = f"{file_path}_{clip_start:.6f}_{duration:.6f}_{self.codec}_{self.quality}"
+                h = hashlib.md5(key.encode("utf-8")).hexdigest()
+                seg_path = self.temp_dir / f"seg_{h}.mp4"
 
-                current += 1
-                if progress_callback:
-                    progress_callback(current / total_steps)
+                segments.append(seg_path)
+                tasks.append((self._ffmpeg, str(file_path), clip_start, duration, str(seg_path), vf_filters, encode_params))
 
-            if not segments:
-                logger.error("Keine Segmente erstellt")
+            # 2. Parallel mit ProcessPoolExecutor rendern (4 Workers standardmäßig)
+            num_workers = min(4, len(tasks)) if len(tasks) > 0 else 1
+            logger.info(f"Rendere {len(tasks)} Segmente parallel mit {num_workers} Workers ...")
+
+            ok_count = 0
+            cached_count = 0
+            fail_count = 0
+
+            if len(tasks) > 0:
+                with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                    futures = {
+                        executor.submit(_render_single_segment, *task): i 
+                        for i, task in enumerate(tasks)
+                    }
+
+                    for fut in as_completed(futures):
+                        if self._cancelled:
+                            logger.warning("Rendering wurde abgebrochen. Storniere ausstehende Tasks...")
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            return None
+
+                        idx = futures[fut]
+                        success, status = fut.result()
+
+                        if success:
+                            if status == "cached":
+                                cached_count += 1
+                            else:
+                                ok_count += 1
+                        else:
+                            fail_count += 1
+                            logger.error(f"Segment-Render-Fehler bei Schnitt {idx}: {status}")
+
+                        current += 1
+                        if progress_callback:
+                            progress_callback(current / total_steps)
+
+            logger.info(f"Rendering beendet. Erfolgreich: {ok_count}, Aus Cache: {cached_count}, Fehler: {fail_count}")
+
+            if fail_count > 0:
+                logger.error(f"{fail_count} Segmente konnten nicht gerendert werden. Abbruch.")
                 return None
 
-            # 2. Concat
+            # 3. Concat (byteweise Zusammenführung, extrem schnell)
             concat_path = self.temp_dir / "concat_video.mp4"
             if not self._concat_segments(segments, concat_path):
-                self._cleanup(segments)
+                # Bereinige nur den fehlerhaften Concat-Output
+                self._cleanup([concat_path])
                 return None
             current += 1
             if progress_callback:
                 progress_callback(current / total_steps)
 
-            # 3. Audio + finales Encoding
+            # 4. Audio + finales Muxing
             out = Path(output_path)
             out.parent.mkdir(parents=True, exist_ok=True)
             if not self._merge_audio(concat_path, audio_path, out):
-                self._cleanup(segments + [concat_path])
+                self._cleanup([concat_path])
                 return None
 
             if progress_callback:
                 progress_callback(1.0)
 
-            self._cleanup(segments + [concat_path])
-            logger.info(f"Rendering fertig: {output_path}")
+            # WICHTIG: Gerenderte Segmente werden NICHT gelöscht, um den Cache für künftige Iterationen zu erhalten!
+            # Nur der temporäre concat_video.mp4 Stream wird bereinigt.
+            self._cleanup([concat_path])
+            logger.info(f"Rendering erfolgreich abgeschlossen: {output_path}")
             return str(out)
 
         except Exception as e:
@@ -157,8 +261,7 @@ class VideoRenderer:
             return None
 
     def _prepare_segment(self, cut, index: int) -> Path | None:
-        """Trimmt einen Clip zu einem Segment."""
-        # Cut kann Dict oder Objekt sein
+        """Kompatibilitäts-Methode. Führt synchrones Rendern für ein einzelnes Segment aus."""
         if isinstance(cut, dict):
             file_path = cut.get("file_path", "")
             clip_start = cut.get("clip_start", cut.get("start_time", 0))
@@ -176,16 +279,18 @@ class VideoRenderer:
             logger.error(f"Clip nicht gefunden: {file_path}")
             return None
 
-        seg_path = self.temp_dir / f"segment_{index:04d}.mp4"
+        # Eindeutiger Hash-Name
+        key = f"{file_path}_{clip_start:.6f}_{duration:.6f}_{self.codec}_{self.quality}"
+        h = hashlib.md5(key.encode("utf-8")).hexdigest()
+        seg_path = self.temp_dir / f"seg_{h}.mp4"
 
-        cmd = [
-            self._ffmpeg, "-y",
-            "-ss", str(clip_start), "-t", str(duration),
-            "-i", str(file_path),
-            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30",
-        ] + self._get_encode_params() + ["-an", str(seg_path)]
+        vf_filters = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1,format=yuv420p"
+        encode_params = self._get_encode_params()
 
-        if self._run_ffmpeg(cmd) and seg_path.exists():
+        success, status = _render_single_segment(
+            self._ffmpeg, str(file_path), clip_start, duration, str(seg_path), vf_filters, encode_params
+        )
+        if success:
             return seg_path
         return None
 
