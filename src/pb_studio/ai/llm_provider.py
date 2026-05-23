@@ -35,7 +35,7 @@ from .lmstudio_client import LMStudioClient, LMStudioConnectionError
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LMSTUDIO_URL = "http://127.0.0.1:12341/v1"
+DEFAULT_LMSTUDIO_URL = "http://127.0.0.1:1234/v1"
 DEFAULT_OLLAMA_URL = "http://localhost:11434/v1"
 
 VALID_PROVIDERS = frozenset({"lmstudio", "ollama", "auto"})

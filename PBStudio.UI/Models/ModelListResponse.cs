@@ -25,4 +25,8 @@ public record ModelListEntry(
     string ModifiedAt = "",
     string? Family = null,
     string? ParameterSize = null,
-    string? QuantizationLevel = null);
+    string? QuantizationLevel = null,
+    string Description = "",
+    bool IsActive = false,
+    List<string>? ActiveTasks = null,
+    bool Vision = false);

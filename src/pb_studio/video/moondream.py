@@ -139,12 +139,12 @@ class MoondreamAnalyzer:
             local_tokenizer_path = Path(self._models_dir) / "moondream_tokenizer"
 
             if local_tokenizer_path.exists():
-                self.tokenizer = CodeGenTokenizerFast.from_pretrained(str(local_tokenizer_path))
+                self.tokenizer = CodeGenTokenizerFast.from_pretrained(str(local_tokenizer_path), local_files_only=True)
                 logger.info(f"Loaded tokenizer from local cache: {local_tokenizer_path}")
             else:
-                # Versuche von HuggingFace Hub
+                # Versuche von HuggingFace Hub (Offline-Modus erzwungen)
                 try:
-                    self.tokenizer = CodeGenTokenizerFast.from_pretrained("vikhyat/moondream2")
+                    self.tokenizer = CodeGenTokenizerFast.from_pretrained("vikhyat/moondream2", local_files_only=True)
                     logger.info("Loaded tokenizer from HuggingFace Hub")
 
                     # Speichere lokal fuer zukuenftige Verwendung

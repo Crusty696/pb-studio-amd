@@ -9,6 +9,7 @@ Endpoints:
   GET  /project/info   — Projekt-Informationen abrufen
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -224,7 +225,7 @@ async def open_project(
     # State frisch laden: erst reset, dann kanonische Clip-Kataloge aus genau diesem Projekt wiederherstellen.
     state.reset()
     state.current_project = {"path": str(project_path), "db_project_id": db_project_id}
-    state.load_from_db(project_id=db_project_id)
+    await asyncio.to_thread(state.load_from_db, project_id=db_project_id)
 
     meta = _read_project_meta(project_path)
     has_timeline = _load_timeline_into_state(project_path, state)

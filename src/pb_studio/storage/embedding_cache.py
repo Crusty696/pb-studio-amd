@@ -101,14 +101,22 @@ class EmbeddingCache:
         now = datetime.now(timezone.utc).isoformat()
         size = target.stat().st_size
 
-        self.conn.execute(
-            "INSERT OR REPLACE INTO media_embedding_index "
-            "(media_hash, media_type, embedding_path, model_name, "
-            "model_version, computed_at, file_size_bytes) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (media_hash, media_type, str(target), model_name,
-             model_version, now, size),
-        )
+        try:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO media_embedding_index "
+                "(media_hash, media_type, embedding_path, model_name, "
+                "model_version, computed_at, file_size_bytes) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (media_hash, media_type, str(target), model_name,
+                 model_version, now, size),
+            )
+        except Exception as e:
+            try:
+                target.unlink(missing_ok=True)
+            except Exception as unlink_err:
+                logger.warning("EmbeddingCache: failed to delete orphan file %s: %s", target, unlink_err)
+            raise e
+
         return CacheEntry(
             media_hash=media_hash,
             media_type=media_type,

@@ -88,8 +88,8 @@ class AudioEmbedder:
             else:
                 self._device = torch.device("cpu")
 
-            self._processor = ClapProcessor.from_pretrained(self.model_name)
-            self._model = ClapModel.from_pretrained(self.model_name)
+            self._processor = ClapProcessor.from_pretrained(self.model_name, local_files_only=True)
+            self._model = ClapModel.from_pretrained(self.model_name, local_files_only=True)
             self._model.eval()
             try:
                 self._model.to(self._device)

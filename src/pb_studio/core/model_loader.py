@@ -81,6 +81,46 @@ MODEL_SPECS = {
         model_path="UVR-MDX-NET-Inst_HQ_3.onnx",
         priority=ModelPriority.MEDIUM
     ),
+    "siglip_vision": ModelSpec(
+        model_id="siglip_vision",
+        name="SigLIP Vision Encoder",
+        model_type=ModelType.ONNX,
+        vram_mb=2000,
+        model_path="siglip_vision.onnx",
+        priority=ModelPriority.MEDIUM
+    ),
+    "siglip_text": ModelSpec(
+        model_id="siglip_text",
+        name="SigLIP Text Encoder",
+        model_type=ModelType.ONNX,
+        vram_mb=500,
+        model_path="siglip_text.onnx",
+        priority=ModelPriority.MEDIUM
+    ),
+    "clap_audio": ModelSpec(
+        model_id="clap_audio",
+        name="CLAP Audio Encoder",
+        model_type=ModelType.ONNX,
+        vram_mb=400,
+        model_path="clap_audio_encoder.onnx",
+        priority=ModelPriority.MEDIUM
+    ),
+    "clap_text": ModelSpec(
+        model_id="clap_text",
+        name="CLAP Text Encoder",
+        model_type=ModelType.ONNX,
+        vram_mb=200,
+        model_path="clap_text_encoder.onnx",
+        priority=ModelPriority.MEDIUM
+    ),
+    "clap_combined": ModelSpec(
+        model_id="clap_combined",
+        name="CLAP Combined Encoder",
+        model_type=ModelType.ONNX,
+        vram_mb=600,
+        model_path="clap_combined.onnx",
+        priority=ModelPriority.MEDIUM
+    ),
 }
 
 

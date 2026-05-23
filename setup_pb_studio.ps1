@@ -223,10 +223,16 @@ function Get-PyExe {
 }
 
 function Get-DotnetVer {
+    # Pruefe zuerst lokales portables dotnet in tools\dotnet
+    $localDotnet = Join-Path $PSScriptRoot "tools\dotnet\dotnet.exe"
+    $cmd = "dotnet"
+    if (Test-Path $localDotnet) {
+        $cmd = "`"$localDotnet`""
+    }
     try {
-        $out = & dotnet --version 2>&1
+        $out = & cmd /c "$cmd --version 2>&1"
         if ($out -match "(\d+)\.(\d+)\.(\d+)") {
-            return @{ Major = [int]$Matches[1]; Minor = [int]$Matches[2]; Patch = [int]$Matches[3]; Full = "$($Matches[1]).$($Matches[2]).$($Matches[3])" }
+            return @{ Cmd = $cmd; Major = [int]$Matches[1]; Minor = [int]$Matches[2]; Patch = [int]$Matches[3]; Full = "$($Matches[1]).$($Matches[2]).$($Matches[3])" }
         }
     } catch {}
     return $null
@@ -436,25 +442,86 @@ if (-not $SkipBuildTools) {
 
 # B.2 Python 3.11 falls fehlt
 if (-not $py -or $py.Minor -ne 11) {
+    $pyInstalled = $false
     if (Test-Admin) {
+        Step "Versuche Python 3.11 via winget..."
         Install-WingetPackage "Python.Python.3.11" "Python 3.11"
-        # Refresh PATH
         $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
         $py = Get-PyExe
-        if (-not $py -or $py.Minor -ne 11) { FAIL "Python 3.11 install scheitert"; exit 1 }
-    } else {
-        FAIL "Python 3.11 fehlt + keine Admin-Rechte. Bitte manuell von python.org installieren."
+        if ($py -and $py.Minor -eq 11) { $pyInstalled = $true }
+    }
+    
+    if (-not $pyInstalled) {
+        Step "Python 3.11 fehlt oder winget fehlgeschlagen. Starte autonomen User-Scope Download..."
+        $pyInstaller = Join-Path $env:TEMP "python-3.11.9-amd64.exe"
+        try {
+            Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" -OutFile $pyInstaller -UserAgent "PBStudioInstaller/11.0"
+            Unblock-File $pyInstaller
+            Step "Installiere Python 3.11.9 stillschweigend im User-Scope (ohne Admin-Rechte)..."
+            $installerArgs = "/quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1"
+            $proc = Start-Process -FilePath $pyInstaller -ArgumentList $installerArgs -Wait -PassThru
+            if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
+                # PATH aktualisieren fuer den aktuellen Prozess
+                $localPy = Join-Path $env:USERPROFILE "AppData\Local\Programs\Python\Python311"
+                $localPyScripts = Join-Path $localPy "Scripts"
+                $env:Path = "$localPy;$localPyScripts;$env:Path"
+                OK "Python 3.11.9 autonom im User-Scope installiert"
+                $py = Get-PyExe
+            } else {
+                FAIL "Python 3.11.9 Installer beendet mit ExitCode: $($proc.ExitCode)"
+            }
+        } catch {
+            FAIL "Autonomer Python-Download/Install fehlgeschlagen: $_"
+        } finally {
+            if (Test-Path $pyInstaller) { Remove-Item $pyInstaller -Force }
+        }
+    }
+    
+    if (-not $py -or $py.Minor -ne 11) {
+        FAIL "Python 3.11 konnte nicht eingerichtet werden. Abbruch."
         exit 1
     }
 }
 
 # B.3 .NET 9 SDK falls fehlt
 if (-not $dn -or $dn.Major -lt 9) {
+    $dotnetInstalled = $false
     if (Test-Admin) {
+        Step "Versuche .NET 9 SDK via winget..."
         Install-WingetPackage "Microsoft.DotNet.SDK.9" ".NET 9 SDK"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
-    } else {
-        WARN ".NET 9 SDK fehlt + keine Admin-Rechte. WPF-Build wird scheitern. Manuell: https://dotnet.microsoft.com/download"
+        $dn = Get-DotnetVer
+        if ($dn -and $dn.Major -ge 9) { $dotnetInstalled = $true }
+    }
+    
+    if (-not $dotnetInstalled) {
+        Step ".NET 9 SDK fehlt oder winget fehlgeschlagen. Starte portable Installation..."
+        $dotnetDest = Join-Path $TOOLS_DIR "dotnet"
+        $scriptPath = Join-Path $env:TEMP "dotnet-install.ps1"
+        try {
+            Step "Downloade offizielles Microsoft dotnet-install.ps1 Skript..."
+            Invoke-WebRequest -Uri "https://dot.net/v1/dotnet-install.ps1" -OutFile $scriptPath -UserAgent "PBStudioInstaller/11.0"
+            Unblock-File $scriptPath
+            
+            Step "Installiere .NET 9.0 SDK portabel nach $dotnetDest..."
+            $installArgs = @("-Channel", "9.0", "-InstallDir", $dotnetDest, "-Runtime", "dotnet")
+            $proc = Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Channel 9.0 -InstallDir `"$dotnetDest`"" -Wait -PassThru
+            if ($proc.ExitCode -eq 0) {
+                $env:Path = "$dotnetDest;$env:Path"
+                OK ".NET 9.0 SDK erfolgreich portabel installiert unter $dotnetDest"
+                $dn = Get-DotnetVer
+            } else {
+                FAIL "dotnet-install.ps1 beendet mit ExitCode: $($proc.ExitCode)"
+            }
+        } catch {
+            FAIL "Portable .NET SDK Installation fehlgeschlagen: $_"
+        } finally {
+            if (Test-Path $scriptPath) { Remove-Item $scriptPath -Force }
+        }
+    }
+    
+    if (-not $dn -or $dn.Major -lt 9) {
+        WARN ".NET 9.0 SDK fehlt. WPF-Build wird fehlschlagen."
     }
 }
 
@@ -502,7 +569,11 @@ OK "Brain-Stack + Backend-Deps installiert"
 $preCommit = Join-Path $REPO_ROOT "scripts\install_pre_commit.ps1"
 if (Test-Path $preCommit) {
     & $preCommit *>&1 | Out-String | Add-Content $LogFile
-    OK "Pre-commit Schema-Drift-Hook installiert"
+    if ($LASTEXITCODE -eq 0) {
+        OK "Pre-commit Schema-Drift-Hook installiert"
+    } else {
+        WARN "Pre-commit Hook-Installation fehlgeschlagen (siehe $LogFile)"
+    }
 }
 
 # B.9 WPF dotnet restore + build (falls .NET vorhanden)

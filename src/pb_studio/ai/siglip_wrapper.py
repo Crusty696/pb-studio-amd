@@ -99,16 +99,26 @@ class SigLIPWrapper:
         providers = self._get_providers()
 
         try:
+            from pb_studio.core.model_loader import ModelLoader
+            loader = ModelLoader()
+
             vision_path = models_path / "siglip_vision.onnx"
             text_path = models_path / "siglip_text.onnx"
 
             if vision_path.exists():
-                self.vision_session = ort.InferenceSession(str(vision_path), sess_options, providers=providers)
+                self.vision_session = loader.load_model("siglip_vision", force=True)
+                if self.vision_session is None:
+                    self.vision_session = ort.InferenceSession(str(vision_path), sess_options, providers=providers)
+                
                 self._active_provider = self.vision_session.get_providers()[0]
+                
                 if text_path.exists():
-                    self.text_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
+                    self.text_session = loader.load_model("siglip_text", force=True)
+                    if self.text_session is None:
+                        self.text_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
                 else:
                     self._init_text_fallback()
+                
                 self._initialized = True
                 return True
             return False
@@ -181,6 +191,13 @@ class SigLIPWrapper:
     def embedding_dimension(self) -> int: return EMBEDDING_DIM
 
     def unload(self):
+        try:
+            from pb_studio.core.model_loader import ModelLoader
+            loader = ModelLoader()
+            loader.unload_model("siglip_vision")
+            loader.unload_model("siglip_text")
+        except Exception:
+            pass
         self.vision_session = self.text_session = self.tokenizer = None
         self._initialized = False
         import gc; gc.collect()

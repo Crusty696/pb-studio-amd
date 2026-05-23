@@ -183,14 +183,14 @@ class MoondreamPyTorch:
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_source,
                 trust_remote_code=True,
-                local_files_only=snapshot_dir is not None,
+                local_files_only=True,
             )
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_source,
                 trust_remote_code=True,
                 torch_dtype=torch.float32,
-                local_files_only=snapshot_dir is not None,
+                local_files_only=True,
             )
             self.model.to(self.device)
             self.model.eval()

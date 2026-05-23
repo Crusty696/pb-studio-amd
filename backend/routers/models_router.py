@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -96,6 +97,10 @@ class ModelListEntry(BaseModel):
     family: Optional[str] = None
     parameter_size: Optional[str] = None
     quantization_level: Optional[str] = None
+    description: str = ""
+    is_active: bool = False
+    active_tasks: list[str] = Field(default_factory=list)
+    vision: bool = False
 
 
 class ModelListResponse(BaseModel):
@@ -139,6 +144,142 @@ class RecommendationResponse(BaseModel):
     installed: list[str] = Field(default_factory=list)
 
 
+class ActivateRequest(BaseModel):
+    name: str = Field(..., min_length=1, description="LM-Studio-Modellname zur Aktivierung")
+
+
+class TestRequest(BaseModel):
+    name: str = Field(..., min_length=1, description="LM-Studio-Modellname zum Testen")
+
+
+class ModelTestResponse(BaseModel):
+    success: bool
+    latency_ms: float = 0.0
+    response: str = ""
+    error: Optional[str] = None
+
+
+def _enrich_model_entry(entry: ModelListEntry, registry: "ModelRegistry") -> ModelListEntry:
+    from pb_studio.ai.model_registry import _name_matches
+
+    # 1. Abgleich mit Kuratierten Modellen
+    curated = None
+    for c_model in CURATED_VISION_MODELS:
+        if _name_matches(c_model["name"], entry.name):
+            curated = c_model
+            break
+
+    # 2. Parsing von Parameter-Größe aus dem Namen
+    parsed_param = None
+    # Regex-Suche nach Zahl vor B/b, z.B. 8b, 35b, 1.5b
+    param_match = re.search(r'(?:\b|[-_])([0-9]+(?:\.[0-9]+)?)[bB](?:\b|[-_]|\d)', entry.name)
+    if param_match:
+        parsed_param = param_match.group(1)
+        entry.parameter_size = f"{parsed_param}B"
+
+    # 3. Parsing von Quantisierung
+    parsed_quant = None
+    # Suche nach GGUF-Quantisierungscodes wie q4_k_m, q8_0, fp16
+    quant_match = re.search(r'(?:\b|[-_])(q[0-9]+_[kK]_[mMsSlL]|q[0-9]+_[0-9]|[qQ][0-9]_[kK]|[qQ][0-9]_[0-9a-zA-Z]|[fF][pP]16|[fF]16|[fF][pP]8|[gG][gG][uU][fF])(?:\b|[-_])', entry.name)
+    if quant_match:
+        parsed_quant = quant_match.group(1).upper()
+        entry.quantization_level = parsed_quant
+    elif "fp16" in entry.name.lower() or "f16" in entry.name.lower():
+        entry.quantization_level = "FP16"
+    elif "fp8" in entry.name.lower() or "f8" in entry.name.lower():
+        entry.quantization_level = "FP8"
+
+    # 4. Schätzung der Dateigröße, falls 0
+    if entry.size_bytes == 0:
+        param_val = 7.0 # Standardwert
+        if parsed_param:
+            try:
+                param_val = float(parsed_param)
+            except ValueError:
+                pass
+        elif curated:
+            param_val = curated["size_estimate_gb"] / 0.58 # rückgerechnet
+
+        quant_factor = 0.58 # Standard Q4
+        q_lower = (entry.quantization_level or "").lower()
+        if "fp16" in q_lower or "f16" in q_lower:
+            quant_factor = 2.0
+        elif "q8" in q_lower:
+            quant_factor = 1.0
+        elif "q6" in q_lower:
+            quant_factor = 0.8
+        elif "q5" in q_lower:
+            quant_factor = 0.68
+        elif "q4" in q_lower:
+            quant_factor = 0.58
+        elif "q3" in q_lower:
+            quant_factor = 0.48
+        elif "q2" in q_lower:
+            quant_factor = 0.38
+
+        est_gb = param_val * quant_factor
+        entry.size_gb = round(est_gb, 2)
+        entry.size_mb = round(est_gb * 1024, 1)
+        entry.size_bytes = int(est_gb * 1024 * 1024 * 1024)
+
+    # 5. Vision-Fähigkeit erkennen
+    entry.vision = False
+    if curated:
+        entry.vision = curated["vision"]
+    else:
+        # Vision-Keywords im Namen suchen
+        vision_keywords = ["vl", "vision", "moondream", "llava", "multimodal", "clip"]
+        name_lower = entry.name.lower()
+        if any(kw in name_lower for kw in vision_keywords):
+            entry.vision = True
+
+    # 6. Aktive Tasks bestimmen
+    entry.active_tasks = []
+    # Standardmäßige Tasks:
+    tasks_to_check = {
+        "video_captioning": "Video-Analyse",
+        "image_captioning": "Bild-Analyse",
+        "chat": "Chat (Haupt)",
+        "chat_general": "Chat",
+        "chat_tool_use": "Tool-Ausführung",
+        "brain_explanation": "KI-Director"
+    }
+    for t_key, t_name in tasks_to_check.items():
+        try:
+            selected = registry.select_best_for_task(t_key, mode="balance")
+            if _name_matches(selected, entry.name):
+                entry.active_tasks.append(t_name)
+        except Exception:
+            pass
+
+    entry.is_active = len(entry.active_tasks) > 0
+
+    # 7. Deutsche Beschreibung generieren
+    if curated:
+        entry.description = curated["description"]
+    else:
+        # Dynamische Beschreibung
+        family_name = "LLM"
+        for fam in ["Gemma", "Qwen", "Llama", "Phi", "Mistral", "DeepSeek", "Gemma-4", "Phi-4"]:
+            if fam.lower() in entry.name.lower():
+                family_name = fam
+                break
+
+        type_str = "Vision- und Text-Modell" if entry.vision else "reines Textmodell"
+        desc_parts = [
+            f"Lokales {family_name} ({type_str}).",
+            f"Parametergröße: {entry.parameter_size or 'Unbekannt'}, Quantisierung: {entry.quantization_level or 'Unbekannt'}."
+        ]
+        if entry.vision:
+            desc_parts.append("Eignet sich hervorragend zur Bildbeschreibung und Video-Szenen-Analyse.")
+        else:
+            desc_parts.append("Optimiert für Textgenerierung, logisches Denken und interaktive Chats.")
+
+        entry.description = " ".join(desc_parts)
+
+    return entry
+
+
 # ----------------------------------------------------------------------
 # Helper: LM-Studio-Client + AI-Config-Reader
 # ----------------------------------------------------------------------
@@ -152,11 +293,11 @@ def _get_base_url() -> str:
             "PBSTUDIO_OLLAMA_URL=%s ist deprecated — bitte PBSTUDIO_LMSTUDIO_URL setzen",
             legacy,
         )
-        # Auto-rewrite 11434 -> 12341/v1 nur fuer den haeufigsten Ollama-Default
+        # Auto-rewrite 11434 -> 1234/v1 nur fuer den haeufigsten Ollama-Default
         if "11434" in legacy:
-            return "http://127.0.0.1:12341/v1"
+            return "http://127.0.0.1:1234/v1"
         return legacy
-    return "http://127.0.0.1:12341/v1"
+    return "http://127.0.0.1:1234/v1"
 
 
 def _make_client():
@@ -254,10 +395,23 @@ async def list_models() -> ModelListResponse:
         )
 
     try:
+        from pb_studio.ai.model_registry import ModelRegistry
+        ai_cfg = _load_ai_config()
+
         async with client as c:
             models = await c.list_models()
             active_base = c.base_url
-        entries = [ModelListEntry(**m.to_dict()) for m in models]
+            # Bereite Registry vor, um aktive Zuweisungen zu ermitteln
+            registry = ModelRegistry(ai_cfg, client=c)
+            registry._installed = models
+            registry._loaded = True
+
+        entries = []
+        for m in models:
+            entry = ModelListEntry(**m.to_dict())
+            enriched = _enrich_model_entry(entry, registry)
+            entries.append(enriched)
+
         return ModelListResponse(
             ollama_available=ollama_ok,
             lmstudio_available=lmstudio_ok,
@@ -412,6 +566,110 @@ async def recommend_model(
     except Exception as exc:
         logger.error("recommend_model fehlgeschlagen: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/activate")
+async def activate_model(request: ActivateRequest) -> JSONResponse:
+    """Aktiviert ein Modell fuer die passenden AI-Tasks in PB Studio und persistiert dies in der Konfiguration."""
+    try:
+        from pb_studio.config_manager import ConfigManager
+
+        # 1. Ermitteln, ob das Modell vision-faehig ist
+        vision_keywords = ["vl", "vision", "moondream", "llava", "multimodal", "clip"]
+        name_lower = request.name.lower()
+        is_vision = any(kw in name_lower for kw in vision_keywords)
+        
+        from pb_studio.ai.model_registry import _name_matches
+        for c_model in CURATED_VISION_MODELS:
+            if _name_matches(c_model["name"], request.name):
+                is_vision = c_model["vision"]
+                break
+
+        # 2. Config laden und task_overrides anpassen
+        cfg_manager = ConfigManager()
+        ai_cfg = cfg_manager.get("ai") or {}
+        if not isinstance(ai_cfg, dict):
+            ai_cfg = {}
+
+        overrides = ai_cfg.get("task_overrides") or {}
+        if not isinstance(overrides, dict):
+            overrides = {}
+
+        # Text-Tasks überschreiben wir immer
+        text_tasks = ["chat", "chat_general", "chat_tool_use", "brain_explanation"]
+        for t in text_tasks:
+            overrides[t] = request.name
+
+        # Vision-Tasks nur bei vision-faehigen Modellen überschreiben
+        vision_tasks = ["video_captioning", "image_captioning"]
+        if is_vision:
+            for t in vision_tasks:
+                overrides[t] = request.name
+        else:
+            # Falls ein nicht-vision-faehiges Modell aktiviert wird, loeschen wir die Overrides fuer Vision-Tasks,
+            # damit dort das standardmaessige Vision-Modell aktiv bleibt!
+            for t in vision_tasks:
+                if t in overrides:
+                    del overrides[t]
+
+        ai_cfg["task_overrides"] = overrides
+
+        if is_vision:
+            ai_cfg["vision_model"] = request.name
+
+        cfg_manager.set("ai", ai_cfg)
+
+        logger.info("Modell '%s' erfolgreich fuer Tasks aktiviert (Vision: %s)", request.name, is_vision)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Modell '{request.name}' erfolgreich aktiviert.",
+                "vision_enabled": is_vision,
+                "activated_tasks": text_tasks + (vision_tasks if is_vision else [])
+            }
+        )
+    except Exception as exc:
+        logger.error("Aktivierung von Modell '%s' fehlgeschlagen: %s", request.name, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/test", response_model=ModelTestResponse)
+async def test_model(request: TestRequest) -> ModelTestResponse:
+    """Fuehrt einen minimalen Inferenz-Smoke-Test (max_tokens=1) auf der AMD-GPU durch, um die Funktion zu pruefen."""
+    import time
+    
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    if client is None:
+        return ModelTestResponse(
+            success=False,
+            error="Kein LLM-Provider erreichbar (weder LM Studio noch Ollama)."
+        )
+
+    start_time = time.perf_counter()
+    try:
+        async with client as c:
+            # Minimaler Prompt, nur 1 Token generieren um VRAM und Zeit zu sparen
+            result = await c.generate(
+                model=request.name,
+                prompt="Say 'ok'",
+                options={"max_tokens": 1, "temperature": 0.0}
+            )
+            response_text = result.get("response") or ""
+
+        latency = (time.perf_counter() - start_time) * 1000.0
+        return ModelTestResponse(
+            success=True,
+            latency_ms=round(latency, 1),
+            response=response_text.strip() or "OK"
+        )
+    except Exception as exc:
+        latency = (time.perf_counter() - start_time) * 1000.0
+        logger.warning("GPU-Smoke-Test fuer Modell '%s' fehlgeschlagen: %s", request.name, exc)
+        return ModelTestResponse(
+            success=False,
+            latency_ms=round(latency, 1),
+            error=str(exc)
+        )
 
 
 __all__ = ["router"]

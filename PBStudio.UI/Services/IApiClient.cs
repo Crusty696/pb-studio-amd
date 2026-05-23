@@ -103,6 +103,12 @@ public interface IApiClient : IDisposable
 
     /// <summary>Empfehlung welches Modell die Auto-Selection fuer Task+Mode waehlen wuerde.</summary>
     Task<ModelRecommendationResponse?> GetModelRecommendationAsync(string task = "video_captioning", string mode = "balance", CancellationToken ct = default);
+
+    /// <summary>Aktiviert das Modell persistent im Backend fuer alle passenden Tasks.</summary>
+    Task<bool> ActivateModelAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Fuehrt einen Inferenz-Smoke-Test auf der AMD-GPU durch.</summary>
+    Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default);
     #endregion
 
     #region Chat

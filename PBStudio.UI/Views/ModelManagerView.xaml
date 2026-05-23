@@ -4,6 +4,7 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             xmlns:conv="clr-namespace:PBStudio.UI.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -11,6 +12,10 @@
              Background="{StaticResource AbletonBg}"
              Loaded="OnLoaded"
              Unloaded="OnUnloaded">
+
+    <UserControl.Resources>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -120,36 +125,86 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:InstalledModelCardViewModel}">
-                            <md:Card Style="{StaticResource AbletonCard}"
-                                     Padding="14"
+                            <md:Card Padding="14"
                                      Margin="0,0,12,12"
                                      Width="360">
+                                <md:Card.Style>
+                                    <Style TargetType="md:Card" BasedOn="{StaticResource AbletonCard}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{StaticResource AbletonGreen}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </md:Card.Style>
                                 <StackPanel>
-                                    <!-- Header: Name + Manage-Hinweis (LM Studio) -->
+                                    <!-- Header: Aktiv-Badge + Name + Capabilities + Delete -->
                                     <DockPanel Margin="0,0,0,8">
-                                        <!-- Button bleibt klickbar, oeffnet Hinweis-Dialog der zu LM Studio leitet. -->
+                                        <!-- In LM Studio Button (Delete-Command) -->
                                         <Button DockPanel.Dock="Right"
                                                 Command="{Binding DeleteCommand}"
                                                 Style="{StaticResource MaterialDesignFlatButton}"
                                                 Foreground="{StaticResource AbletonAccent}"
                                                 Padding="6,2" Height="24"
                                                 Opacity="0.65"
-                                                ToolTip="Modelle werden ueber LM Studio verwaltet — klicken oeffnet einen Hinweis-Dialog">
+                                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                                ToolTip="Modell entfernen (öffnet Anleitung für LM Studio)">
                                             <StackPanel Orientation="Horizontal">
-                                                <icon:PackIconMaterial Kind="OpenInNew" Width="13" Height="13"
+                                                <icon:PackIconMaterial Kind="TrashCanOutline" Width="13" Height="13"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="In LM Studio" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Entfernen" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
+
+                                        <!-- Aktiv-Badge (nur wenn aktiv) -->
+                                        <Border DockPanel.Dock="Left" Margin="0,0,8,0" Padding="6,2" CornerRadius="2"
+                                                Background="{StaticResource AbletonGreen}"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="AKTIV" FontSize="10" FontWeight="Bold" Foreground="Black"/>
+                                        </Border>
+
+                                        <!-- Name -->
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource AbletonAccent}"
+                                                   Foreground="{StaticResource AbletonText}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </DockPanel>
 
-                                    <!-- Detail-Grid -->
-                                    <Grid>
+                                    <!-- Capabilities & Tasks -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <!-- Capabilities (z.B. Vision & Text oder Text) -->
+                                        <Border Padding="6,2" CornerRadius="2"
+                                                Background="{StaticResource AbletonPanel}"
+                                                BorderBrush="{StaticResource AbletonBorder}"
+                                                BorderThickness="1"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding CapabilitiesText}" FontSize="10"
+                                                       Foreground="{StaticResource AbletonAccent}"/>
+                                        </Border>
+
+                                        <!-- Aktive Zuweisungen (falls aktiv) -->
+                                        <TextBlock Text="{Binding ActiveTasksText}" FontSize="10" 
+                                                   Foreground="{StaticResource AbletonGreen}"
+                                                   FontWeight="Medium" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+
+                                    <!-- Beschreibung -->
+                                    <TextBlock Text="{Binding Description}"
+                                               Foreground="{StaticResource AbletonTextDim}"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,10"
+                                               Height="34"
+                                               TextTrimming="WordEllipsis"
+                                               ToolTip="{Binding Description}"/>
+
+                                    <!-- Detail-Grid (Groesse, Params, Quant) -->
+                                    <Grid Margin="0,0,0,10">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
@@ -174,14 +229,97 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <TextBlock Margin="0,8,0,0"
-                                               Foreground="{StaticResource AbletonTextDim}"
-                                               FontSize="10">
-                                        <Run Text="modified "/><Run Text="{Binding ModifiedDisplay, Mode=OneWay}"/>
-                                    </TextBlock>
+                                    <!-- modified-Text und Busy-Overlay -->
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock Foreground="{StaticResource AbletonTextDim}"
+                                                   FontSize="10" VerticalAlignment="Center">
+                                            <Run Text="modified "/><Run Text="{Binding ModifiedDisplay, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </Grid>
+
+                                    <!-- Steuerung & Test Footer -->
+                                    <Border BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0" Padding="0,8,0,0" Margin="0,2,0,0">
+                                        <DockPanel LastChildFill="True">
+                                            <!-- GPU-Test Button links -->
+                                            <Button DockPanel.Dock="Left"
+                                                    Command="{Binding TestCommand}"
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Foreground="{StaticResource AbletonAccent}"
+                                                    Padding="6,2" Height="26"
+                                                    IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
+                                                    ToolTip="GPU-Inferenz-Smoke-Test auf AMD DirectML ausführen">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <icon:PackIconMaterial Kind="PlayCircleOutline" Width="14" Height="14"
+                                                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                                                           Visibility="{Binding IsTesting, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                                    <!-- Lade-Spinner, wenn getestet wird -->
+                                                    <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                                                 Value="0" IsIndeterminate="True"
+                                                                 Width="12" Height="12" Margin="0,0,4,0"
+                                                                 Foreground="{StaticResource AbletonAccent}"
+                                                                 Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                    <TextBlock Text="GPU-Test" FontSize="11" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+
+                                            <!-- Aktivieren Button rechts (ausblenden, wenn bereits aktiv) -->
+                                            <Button DockPanel.Dock="Right"
+                                                    Command="{Binding ActivateCommand}"
+                                                    Foreground="Black"
+                                                    Background="{StaticResource AbletonGreen}"
+                                                    BorderBrush="{StaticResource AbletonGreen}"
+                                                    Padding="12,2" Height="26"
+                                                    HorizontalAlignment="Right"
+                                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                                    ToolTip="Dieses Modell persistent als Hauptmodell aktivieren">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <icon:PackIconMaterial Kind="CheckBold" Width="12" Height="12"
+                                                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Aktivieren" FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
+                                                </StackPanel>
+                                            </Button>
+
+                                            <!-- Teststatus mittig -->
+                                            <TextBlock Text="{Binding TestStatus}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       TextAlignment="Center"
+                                                       Margin="6,0"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding TestStatus}" Value="Wird getestet...">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding TestStatusColor}" Value="#00FF66">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding TestStatusColor}" Value="#FF4444">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonRed}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DockPanel>
+                                    </Border>
 
                                     <!-- Busy-Overlay -->
-                                    <ProgressBar Height="3" Margin="0,8,0,0"
+                                    <ProgressBar Height="3" Margin="0,6,0,0"
                                                  IsIndeterminate="True"
                                                  Foreground="{StaticResource AbletonAccent}"
                                                  Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>

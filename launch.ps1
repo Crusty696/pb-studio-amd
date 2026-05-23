@@ -65,22 +65,48 @@ function Write-Status($msg, $color = 'Cyan') {
 function Resolve-PythonExe {
     $candidates = @(
         (Join-Path $ProjectRoot '.venv\Scripts\python.exe'),
-        'C:\Users\david\AppData\Local\Programs\Python\Python311\python.exe',
+        (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Python\Python311\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
+        'C:\Python311\python.exe',
         'python'
     )
 
     foreach ($candidate in $candidates) {
         if ($candidate -eq 'python') {
             try {
-                $null = & $candidate --version 2>$null
-                return $candidate
+                $version = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+                if ($version -eq "3.11") {
+                    return $candidate
+                }
             } catch {}
         } elseif (Test-Path $candidate) {
             return $candidate
         }
     }
 
-    throw 'Python executable not found (.venv preferred, global fallback missing).'
+    throw 'Python 3.11 executable not found (.venv preferred, local AppData/global fallbacks missing).'
+}
+
+function Resolve-DotnetExe {
+    $candidates = @(
+        (Join-Path $ProjectRoot 'tools\dotnet\dotnet.exe'),
+        'dotnet'
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -eq 'dotnet') {
+            try {
+                $version = & $candidate --version 2>$null
+                if ($version) {
+                    return $candidate
+                }
+            } catch {}
+        } elseif (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
 }
 
 function Test-BackendHealth {
@@ -459,6 +485,15 @@ if (-not $BackendOnly) {
     $frontendExe = Resolve-FrontendExe
     if ($frontendExe) {
         Write-Status "Starte Frontend: $frontendExe"
+
+        # Portables dotnet bevorzugen und fuer den Child-Prozess bereitstellen
+        $DotnetExe = Resolve-DotnetExe
+        if ($DotnetExe -and ($DotnetExe -like "*tools\dotnet*")) {
+            $dotnetDir = Split-Path $DotnetExe -Parent
+            $env:DOTNET_ROOT = $dotnetDir
+            $env:Path = "$dotnetDir;$env:Path"
+            Write-Status "Nutze portables .NET Runtime ($dotnetDir)" "DarkGray"
+        }
 
         $env:PBSTUDIO_BACKEND_DIR = Join-Path $ProjectRoot 'backend'
         if (-not $FrontendOnly) {

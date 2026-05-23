@@ -939,8 +939,8 @@ class AdvancedPacingEngine:
             if stems_json:
                 try:
                     stems_dict = json.loads(stems_json)
-                    if stems_dict and "drums" in stems_dict and ts.kick_weight > 0:
-                        logger.info(f"Smart Stems aktiviert: {stems_dict.get('drums', '')}")
+                    if stems_dict and ("drums" in stems_dict or "instrumental" in stems_dict) and ts.kick_weight > 0:
+                        logger.info(f"Smart Stems aktiviert: {stems_dict.get('drums') or stems_dict.get('instrumental')}")
                         return self.generate_cut_list_with_stems(
                             audio_path=audio_path,
                             stems=stems_dict,
@@ -1494,17 +1494,26 @@ class AdvancedPacingEngine:
         # Stem-Trigger extrahieren
         stem_triggers: List[PacingCut] = []
 
-        if "drums" in stems:
-            drum_triggers = self._extract_drum_triggers_from_stem(stems["drums"])
-            stem_triggers.extend(drum_triggers)
-            _emit(60.0, force=True)
-
-        if "bass" in stems:
-            bass_triggers = self._extract_bass_triggers_from_stem(stems["bass"])
-            for t in bass_triggers:
-                t.strength *= 0.7
-            stem_triggers.extend(bass_triggers)
+        # Fallback auf instrumental wenn drums & bass fehlen (z.B. bei UVR 2-Stem Models)
+        if "drums" not in stems and "bass" not in stems and "instrumental" in stems:
+            logger.info("Drums/Bass Stems fehlen. Verwende 'instrumental' als rhythmischen Fallback-Stem.")
+            instrumental_triggers = self._extract_drum_triggers_from_stem(stems["instrumental"])
+            for t in instrumental_triggers:
+                t.strength *= 0.95  # leichte Reduzierung, da komplexeres Spektrum
+            stem_triggers.extend(instrumental_triggers)
             _emit(75.0, force=True)
+        else:
+            if "drums" in stems:
+                drum_triggers = self._extract_drum_triggers_from_stem(stems["drums"])
+                stem_triggers.extend(drum_triggers)
+                _emit(60.0, force=True)
+
+            if "bass" in stems:
+                bass_triggers = self._extract_bass_triggers_from_stem(stems["bass"])
+                for t in bass_triggers:
+                    t.strength *= 0.7
+                stem_triggers.extend(bass_triggers)
+                _emit(75.0, force=True)
 
         all_triggers = base_cuts + stem_triggers
         all_triggers.sort(key=lambda x: x.time)

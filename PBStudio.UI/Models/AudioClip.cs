@@ -27,9 +27,17 @@ public partial class AudioClipModel : ObservableObject
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public bool HasCacheHash => !string.IsNullOrWhiteSpace(AudioHash);
     public bool HasStems => StemsPaths != null && StemsPaths.Count > 0;
-    public string? StemsFolderPath => HasStems
-        ? System.IO.Path.GetDirectoryName(StemsPaths!.Values.First())
-        : null;
+    public string? StemsFolderPath
+    {
+        get
+        {
+            if (!HasStems) return null;
+            var rawPath = StemsPaths!.Values.First();
+            if (string.IsNullOrEmpty(rawPath)) return null;
+            var normalized = rawPath.Replace('/', '\\');
+            return System.IO.Path.GetDirectoryName(normalized);
+        }
+    }
 
     partial void OnDurationSecondsChanged(double value) => OnPropertyChanged(nameof(DurationText));
     partial void OnAudioHashChanged(string? value) => OnPropertyChanged(nameof(HasCacheHash));

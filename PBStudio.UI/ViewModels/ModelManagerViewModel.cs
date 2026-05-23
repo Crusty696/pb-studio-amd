@@ -251,6 +251,67 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         await LoadAsync().ConfigureAwait(true);
     }
 
+    internal async Task ActivateInstalledAsync(InstalledModelCardViewModel card)
+    {
+        if (card.IsBusy) return;
+        card.IsBusy = true;
+        try
+        {
+            var success = await _api.ActivateModelAsync(card.Name).ConfigureAwait(true);
+            if (success)
+            {
+                StatusText = $"Modell '{card.Name}' erfolgreich aktiviert.";
+            }
+            else
+            {
+                ErrorText = $"Aktivierung fehlgeschlagen fuer '{card.Name}'";
+                StatusText = "Aktivierung fehlgeschlagen.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorText = $"Aktivierung fehlgeschlagen fuer '{card.Name}': {ex.Message}";
+            StatusText = "Aktivierung fehlgeschlagen.";
+        }
+        finally
+        {
+            card.IsBusy = false;
+        }
+        await LoadAsync().ConfigureAwait(true);
+    }
+
+    internal async Task TestInstalledAsync(InstalledModelCardViewModel card)
+    {
+        if (card.IsTesting) return;
+        card.IsTesting = true;
+        card.TestStatus = "Wird getestet...";
+        card.TestStatusColor = "#CCCCCC";
+        try
+        {
+            var resp = await _api.TestModelAsync(card.Name).ConfigureAwait(true);
+            if (resp != null && resp.Success)
+            {
+                card.TestStatus = $"Erfolgreich ({resp.LatencyMs:F0} ms)";
+                card.TestStatusColor = "#00FF66"; // Ableton Green
+            }
+            else
+            {
+                var err = resp?.Error ?? "Unbekannter Fehler bei Inferenz.";
+                card.TestStatus = $"Fehler: {err}";
+                card.TestStatusColor = "#FF4444"; // Rot
+            }
+        }
+        catch (Exception ex)
+        {
+            card.TestStatus = $"Fehler: {ex.Message}";
+            card.TestStatusColor = "#FF4444";
+        }
+        finally
+        {
+            card.IsTesting = false;
+        }
+    }
+
     private async Task StreamPullAsync(string name, DownloadProgressViewModel vm, CancellationToken ct)
     {
         try
@@ -304,6 +365,16 @@ public partial class InstalledModelCardViewModel : ObservableObject
     public string ModifiedDisplay { get; }
     public string ParameterSize { get; }
     public string Quantization { get; }
+    
+    [ObservableProperty] private string _description = "—";
+    [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private string _activeTasksText = "—";
+    [ObservableProperty] private bool _hasActiveTasks;
+    [ObservableProperty] private string _testStatus = "Nicht getestet";
+    [ObservableProperty] private string _testStatusColor = "#888888"; // Standardgrau
+    [ObservableProperty] private string _capabilitiesText = "Text (Chat)";
+    [ObservableProperty] private bool _isTesting;
+    public bool Vision { get; }
 
     [ObservableProperty] private bool _isBusy;
 
@@ -315,12 +386,27 @@ public partial class InstalledModelCardViewModel : ObservableObject
         ParameterSize = entry.ParameterSize ?? "—";
         Quantization = entry.QuantizationLevel ?? "—";
         ModifiedDisplay = FormatTimestamp(entry.ModifiedAt);
+        
+        Description = entry.Description ?? "—";
+        IsActive = entry.IsActive;
+        Vision = entry.Vision;
+        CapabilitiesText = entry.Vision ? "Vision & Text" : "Text (Chat)";
+        ActiveTasksText = entry.ActiveTasks != null && entry.ActiveTasks.Count > 0 
+            ? string.Join(", ", entry.ActiveTasks) 
+            : "Keine";
+        HasActiveTasks = entry.IsActive;
     }
 
     public string SizeDisplay => SizeGb > 0 ? $"{SizeGb:F2} GB" : "—";
 
     [RelayCommand]
     private Task DeleteAsync() => _parent.DeleteInstalledAsync(this);
+
+    [RelayCommand]
+    private Task ActivateAsync() => _parent.ActivateInstalledAsync(this);
+
+    [RelayCommand]
+    private Task TestAsync() => _parent.TestInstalledAsync(this);
 
     private static string FormatTimestamp(string raw)
     {

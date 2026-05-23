@@ -11,12 +11,22 @@ REM MUSS vor allem anderen stehen. Net-session-Check verhindert Loop.
 REM -----------------------------------------------------------------------
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo Admin-Rechte werden angefordert ...
+    if "%1"=="--no-elevation" (
+        shift
+        goto :continue
+    )
+    echo Admin-Rechte werden angefordert (fuer optionale System-Installationen) ...
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-      "Start-Process cmd.exe -Verb RunAs -ArgumentList '/c \"\"%~f0\"\" %*' -WorkingDirectory '%~dp0'"
-    exit /b 0
+      "try { Start-Process cmd.exe -Verb RunAs -ArgumentList '/c \"\"%~f0\"\" --no-elevation %*' -WorkingDirectory '%~dp0' -ErrorAction Stop } catch { exit 1 }"
+    if !ERRORLEVEL! EQU 0 (
+        exit /b 0
+    )
+    echo.
+    echo [WARN] Admin-Erhoehung abgelehnt/fehlgeschlagen. Fahre im User-Scope fort...
+    echo [WARN] Einige winget-Installationen werden im User-Scope ausgefuehrt.
+    echo.
 )
-
+:continue
 cd /d "%~dp0"
 REM logs-Verzeichnis MUSS vor dem Tee-Object-Pipe existieren
 if not exist "logs" mkdir logs

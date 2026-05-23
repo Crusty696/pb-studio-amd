@@ -15,7 +15,6 @@ param(
 
 $ErrorActionPreference = "Continue"
 $ProjectRoot = $PSScriptRoot
-$PythonExe = "C:\Users\david\AppData\Local\Programs\Python\Python311\python.exe"
 
 function Write-Status($msg, $color = "Cyan") {
     Write-Host "[Build] " -NoNewline -ForegroundColor $color
@@ -24,8 +23,64 @@ function Write-Status($msg, $color = "Cyan") {
 
 Write-Status "=== PB Studio AMD Build ===" "Yellow"
 
+# === Python- & Dotnet-Pfade dynamisch aufloesen ===
+function Resolve-PythonExe {
+    $candidates = @(
+        (Join-Path $ProjectRoot '.venv\Scripts\python.exe'),
+        (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Python\Python311\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
+        'C:\Python311\python.exe',
+        'python'
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -eq 'python') {
+            try {
+                $version = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+                if ($version -eq "3.11") {
+                    return $candidate
+                }
+            } catch {}
+        } elseif (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw 'Python 3.11 executable not found (.venv preferred, local AppData/global fallbacks missing).'
+}
+
+function Resolve-DotnetExe {
+    $candidates = @(
+        (Join-Path $ProjectRoot 'tools\dotnet\dotnet.exe'),
+        'dotnet'
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -eq 'dotnet') {
+            try {
+                $version = & $candidate --version 2>$null
+                if ($version) {
+                    return $candidate
+                }
+            } catch {}
+        } elseif (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw '.NET SDK executable not found (portable tools\dotnet or global installation missing).'
+}
+
+try {
+    $PythonExe = Resolve-PythonExe
+    $DotnetExe = Resolve-DotnetExe
+} catch {
+    Write-Status "FEHLER bei der Pfadaufloesung: $_" "Red"
+    exit 1
+}
+
 # === Python-Abhaengigkeiten pruefen ===
-Write-Status "Pruefe Python-Abhaengigkeiten..."
+Write-Status "Pruefe Python-Abhaengigkeiten mit $PythonExe..."
 
 $requiredPackages = @("fastapi", "uvicorn", "pydantic", "pydantic-settings")
 foreach ($pkg in $requiredPackages) {
@@ -50,17 +105,24 @@ if (-not (Test-Path $csprojPath)) {
     exit 1
 }
 
-# .NET SDK pruefen
-$dotnetVersion = & dotnet --version 2>&1
-Write-Status ".NET SDK: $dotnetVersion"
+# .NET SDK info
+$dotnetVersion = & $DotnetExe --version 2>&1
+Write-Status "Nutze .NET SDK ($DotnetExe): $dotnetVersion"
+
+# Dotnet-Root temporaer setzen falls wir das portable dotnet nutzen
+if ($DotnetExe -like "*tools\dotnet*") {
+    $dotnetDir = Split-Path $DotnetExe -Parent
+    $env:DOTNET_ROOT = $dotnetDir
+    $env:Path = "$dotnetDir;$env:Path"
+}
 
 if ($Clean) {
     Write-Status "Clean Build..."
-    & dotnet clean $csprojPath -c $Configuration --nologo -v q
+    & $DotnetExe clean $csprojPath -c $Configuration --nologo -v q
 }
 
 Write-Status "Kompiliere: $Configuration..."
-& dotnet build $csprojPath -c $Configuration --nologo
+& $DotnetExe build $csprojPath -c $Configuration --nologo
 $buildExit = $LASTEXITCODE
 
 if ($buildExit -eq 0) {

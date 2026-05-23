@@ -342,6 +342,33 @@ public class ApiClient : IApiClient
         return GetAsync<ModelRecommendationResponse>(url, ct);
     }
 
+    public async Task<bool> ActivateModelAsync(string name, CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await PostAsync<object>("/models/activate", new { name }).ConfigureAwait(false);
+            return result != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ActivateModelAsync {Name} fehlgeschlagen", name);
+            return false;
+        }
+    }
+
+    public async Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default)
+    {
+        try
+        {
+            return await PostAsync<ModelTestResponse>("/models/test", new { name }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "TestModelAsync {Name} fehlgeschlagen", name);
+            return new ModelTestResponse(false, 0.0, "", ex.Message);
+        }
+    }
+
     /// <summary>
     /// LM Studio Refactor 2026-05-17: Modell-Loeschung wird vom Backend
     /// nicht mehr unterstuetzt — LM Studio managed Modelle ueber die Desktop-App.

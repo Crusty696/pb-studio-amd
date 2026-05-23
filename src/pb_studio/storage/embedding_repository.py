@@ -305,4 +305,7 @@ class EmbeddingRepository:
         arr = np.asarray(vec, dtype=np.float32).reshape(-1)
         if arr.size != dim:
             raise ValueError(f"Embedding-Dim {arr.size} != erwartet {dim}")
+        norm = np.linalg.norm(arr)
+        if norm > 1e-8:
+            arr = arr / norm
         return arr

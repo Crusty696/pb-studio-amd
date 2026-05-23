@@ -158,8 +158,35 @@ class MediaRepository:
         if not row:
             return None
         d = dict(row)
+        file_path = d.get("file_path", "").lower()
+        is_video = any(file_path.endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm"))
+
         if "metadata_json" in d:
-            d["metadata_json"] = _deserialize_meta_str(d.get("metadata_json"))
+            meta_str = _deserialize_meta_str(d.get("metadata_json"))
+            try:
+                meta_dict = json.loads(meta_str)
+                from pb_studio.data.schemas.media_json_schema import migrate_audio_metadata, migrate_video_metadata
+                if is_video:
+                    meta_dict = migrate_video_metadata(meta_dict)
+                else:
+                    meta_dict = migrate_audio_metadata(meta_dict)
+                d["metadata_json"] = json.dumps(meta_dict)
+            except Exception as exc:
+                logger.warning("MediaRepository: failed to migrate metadata_json: %s", exc)
+                d["metadata_json"] = meta_str
+
+        if "ai_data_json" in d and d.get("ai_data_json"):
+            try:
+                ai_dict = json.loads(d["ai_data_json"])
+                from pb_studio.data.schemas.media_json_schema import migrate_audio_ai_data, migrate_video_ai_data
+                if is_video:
+                    ai_dict = migrate_video_ai_data(ai_dict)
+                else:
+                    ai_dict = migrate_audio_ai_data(ai_dict)
+                d["ai_data_json"] = json.dumps(ai_dict)
+            except Exception as exc:
+                logger.warning("MediaRepository: failed to migrate ai_data_json: %s", exc)
+
         return d
 
     def find_by_project_and_path(self, project_id: int, file_path: str) -> Optional[Dict]:

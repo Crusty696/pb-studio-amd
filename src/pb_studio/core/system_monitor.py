@@ -1,6 +1,7 @@
 import sys
 import logging
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,12 @@ class SystemMonitor:
         self.config = ConfigManager()
         self.computer = None
         self.gpu_sensor = None
+        # T3.4: 10s-Cache für PowerShell-Sensor-Fallbacks
+        self._cached_stats: dict = {}
+        self._cache_time: float = 0.0
+        self._cache_lock = threading.Lock()
+        self._cache_ttl: float = 10.0  # Sekunden
+        self._bg_refresh_running = False
         if _HAS_CLR:
             self._initialize_lhm()
         else:
@@ -114,7 +121,51 @@ class SystemMonitor:
             logger.warning("No suitable GPU found for monitoring.")
 
     def get_stats(self) -> dict:
-        """Reads current hardware stats."""
+        """Reads current hardware stats with 10s caching for PowerShell fallbacks.
+        
+        T3.4: PowerShell-Subprozesse (driver_version, VRAM-Total, VRAM-Used,
+        GPU-Temp, GPU-Load) werden in einem Hintergrund-Thread ausgeführt und
+        das Ergebnis für _cache_ttl Sekunden gecacht, damit der FastAPI-EventLoop
+        nicht durch synchrone subprocess.run Aufrufe (5-8s Timeout) blockiert wird.
+        """
+        now = time.monotonic()
+        
+        # Wenn Cache gültig ist, sofort zurückgeben
+        with self._cache_lock:
+            if self._cached_stats and (now - self._cache_time) < self._cache_ttl:
+                return self._cached_stats.copy()
+        
+        # Erstaufruf oder Cache abgelaufen → Ergebnis berechnen
+        # LHM-Abfragen sind schnell (in-process, kein subprocess)
+        stats = self._collect_lhm_stats()
+        
+        # PowerShell Fallbacks im Hintergrund starten (stale-while-revalidate)
+        with self._cache_lock:
+            if not self._bg_refresh_running:
+                self._bg_refresh_running = True
+                bg = threading.Thread(
+                    target=self._bg_refresh_ps_stats,
+                    args=(stats,),
+                    daemon=True,
+                    name="system-monitor-ps-refresh",
+                )
+                bg.start()
+        
+        # Sofort LHM-only-Stats zurückgeben (Fallback-Werte kommen im nächsten Poll)
+        with self._cache_lock:
+            if self._cached_stats:
+                # Merge: LHM-Werte aktualisieren, PS-Fallback-Werte behalten
+                merged = self._cached_stats.copy()
+                for k in ("gpu_load", "gpu_temp", "gpu_memory_used", "gpu_memory_total", "cpu_load"):
+                    if stats.get(k, 0.0) > 0:
+                        merged[k] = stats[k]
+                merged["gpu_name"] = stats["gpu_name"]
+                return merged
+        
+        return stats
+    
+    def _collect_lhm_stats(self) -> dict:
+        """Sammelt nur die schnellen LHM In-Process Sensorwerte."""
         stats = {
             "gpu_name": self.gpu_sensor.Name if self.gpu_sensor else "Unknown",
             "gpu_load": 0.0,
@@ -122,23 +173,12 @@ class SystemMonitor:
             "gpu_memory_used": 0.0,
             "gpu_memory_total": 0.0,
             "cpu_load": 0.0,
-            "driver_version": "Unknown", # BUG-080 FIX
+            "driver_version": "Unknown",
         }
 
         if not self.computer: return stats
         
-        # BUG-080/BUG-100 FIX: Get Driver Version (Windows only) via PowerShell (wmic is deprecated)
-        if stats["driver_version"] == "Unknown":
-            try:
-                import subprocess
-                cmd = ["powershell", "-Command", "(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                if res.returncode == 0 and res.stdout.strip():
-                    stats["driver_version"] = res.stdout.strip()
-            except Exception:
-                pass
-
-        # Update sensors
+        # Update sensors (LHM in-process - schnell)
         for hardware in self.computer.Hardware:
             hardware.Update()
 
@@ -181,40 +221,61 @@ class SystemMonitor:
                         # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
                         stats["gpu_memory_total"] = s.Value or 0.0
 
-        # BUG-205 Fix: Wenn LibreHardwareMonitor fuer dedicated GPU 0 sensors liefert
-        # (AMD Adrenalin/Treiber blockiert manchmal Sensor-Zugriff fuer dedicated GPUs),
-        # fallback via WMI Win32_VideoController.AdapterRAM fuer mindestens VRAM-Total.
-        # Verifiziert via debug_gpu_stats3.py: RX 7800 XT zeigt sensors=0, iGPU=18.
-        if stats["gpu_memory_total"] == 0.0:
-            wmi_total = self._wmi_query_vram_total(stats["gpu_name"])
-            if wmi_total > 0:
-                stats["gpu_memory_total"] = wmi_total
-
-        # BUG-205 Phase 2: VRAM-Used via Windows Performance Counter
-        # "\GPU Process Memory(*)\Local Usage" - summiert ueber alle Prozesse.
-        # Verifiziert per powershell test 2026-05-09: liefert ~1760 MB live.
-        if stats["gpu_memory_used"] == 0.0:
-            counter_used = self._counter_query_vram_used()
-            if counter_used > 0:
-                stats["gpu_memory_used"] = counter_used
-
-        # Audit D1: GPU Temperature Fallback wenn dedicated GPU 0 liefert
-        # (gleiches Pattern wie BUG-205: AMD Adrenalin blockiert Temperature-Sensors).
-        # Versuch via iGPU im selben Package - kein perfekter Proxy aber besser als 0.
-        if stats["gpu_temp"] == 0.0:
-            alt_temp = self._query_temperature_alternative()
-            if alt_temp > 0:
-                stats["gpu_temp"] = alt_temp
-
-        # Audit D2: GPU Load Fallback wenn LHM 0 liefert
-        # (gleiches Pattern wie BUG-205: AMD Adrenalin blockiert Load-Sensor).
-        # Fallback ueber Windows Performance Counter \GPU Engine(*)\Utilization.
-        if stats["gpu_load"] == 0.0:
-            alt_load = self._query_load_alternative()
-            if alt_load > 0:
-                stats["gpu_load"] = alt_load
-
         return stats
+
+    def _bg_refresh_ps_stats(self, base_stats: dict) -> None:
+        """T3.4: Hintergrund-Thread für langsame PowerShell-Sensor-Fallbacks.
+        
+        Sammelt driver_version, VRAM-Total/Used Fallbacks, GPU-Temp und GPU-Load
+        via subprocess.run (jeweils 5-8s Timeout). Aktualisiert den Cache atomic.
+        """
+        try:
+            stats = base_stats.copy()
+            
+            # BUG-080/BUG-100 FIX: Get Driver Version via PowerShell
+            if stats["driver_version"] == "Unknown":
+                try:
+                    import subprocess
+                    cmd = ["powershell", "-Command", "(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"]
+                    res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    if res.returncode == 0 and res.stdout.strip():
+                        stats["driver_version"] = res.stdout.strip()
+                except Exception:
+                    pass
+
+            # BUG-205 Fix: VRAM-Total Fallback via Registry
+            if stats["gpu_memory_total"] == 0.0:
+                wmi_total = self._wmi_query_vram_total(stats["gpu_name"])
+                if wmi_total > 0:
+                    stats["gpu_memory_total"] = wmi_total
+
+            # BUG-205 Phase 2: VRAM-Used via Windows Performance Counter
+            if stats["gpu_memory_used"] == 0.0:
+                counter_used = self._counter_query_vram_used()
+                if counter_used > 0:
+                    stats["gpu_memory_used"] = counter_used
+
+            # Audit D1: GPU Temperature Fallback
+            if stats["gpu_temp"] == 0.0:
+                alt_temp = self._query_temperature_alternative()
+                if alt_temp > 0:
+                    stats["gpu_temp"] = alt_temp
+
+            # Audit D2: GPU Load Fallback
+            if stats["gpu_load"] == 0.0:
+                alt_load = self._query_load_alternative()
+                if alt_load > 0:
+                    stats["gpu_load"] = alt_load
+
+            # Cache atomic aktualisieren
+            with self._cache_lock:
+                self._cached_stats = stats
+                self._cache_time = time.monotonic()
+        except Exception as e:
+            logger.warning("BG-Refresh PowerShell stats fehlgeschlagen: %s", e)
+        finally:
+            with self._cache_lock:
+                self._bg_refresh_running = False
 
     def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
         """Fallback: query GPU-VRAM via Registry HardwareInformation.qwMemorySize.

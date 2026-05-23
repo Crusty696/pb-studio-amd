@@ -104,18 +104,29 @@ class CLAPAnalyzer:
         providers = self._get_providers()
 
         try:
+            from pb_studio.core.model_loader import ModelLoader
+            loader = ModelLoader()
+
             audio_path = models_path / "clap_audio_encoder.onnx"
             text_path = models_path / "clap_text_encoder.onnx"
             combined_path = models_path / "clap_combined.onnx"
 
             if combined_path.exists():
-                self.combined_session = ort.InferenceSession(str(combined_path), sess_options, providers=providers)
+                self.combined_session = loader.load_model("clap_combined", force=True)
+                if self.combined_session is None:
+                    self.combined_session = ort.InferenceSession(str(combined_path), sess_options, providers=providers)
                 self._active_provider = self.combined_session.get_providers()[0]
                 self._initialized = True
                 return True
             elif audio_path.exists() and text_path.exists():
-                self.audio_encoder_session = ort.InferenceSession(str(audio_path), sess_options, providers=providers)
-                self.text_encoder_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
+                self.audio_encoder_session = loader.load_model("clap_audio", force=True)
+                if self.audio_encoder_session is None:
+                    self.audio_encoder_session = ort.InferenceSession(str(audio_path), sess_options, providers=providers)
+                
+                self.text_encoder_session = loader.load_model("clap_text", force=True)
+                if self.text_encoder_session is None:
+                    self.text_encoder_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
+                
                 self._active_provider = self.audio_encoder_session.get_providers()[0]
                 self._initialized = True
                 return True
@@ -210,6 +221,14 @@ class CLAPAnalyzer:
     def is_ready(self) -> bool: return self._initialized
 
     def unload(self):
+        try:
+            from pb_studio.core.model_loader import ModelLoader
+            loader = ModelLoader()
+            loader.unload_model("clap_combined")
+            loader.unload_model("clap_audio")
+            loader.unload_model("clap_text")
+        except Exception:
+            pass
         self.audio_encoder_session = self.text_encoder_session = self.combined_session = None
         self._initialized = False
         import gc; gc.collect()

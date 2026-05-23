@@ -6,6 +6,14 @@ REM Loggt komplette Konsolen-Ausgabe nach logs\start_<ts>.log.
 setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
+
+REM Pruefe ob portables .NET SDK vorhanden ist und konfiguriere Umgebung
+if exist "%~dp0tools\dotnet\dotnet.exe" (
+    set "DOTNET_ROOT=%~dp0tools\dotnet"
+    set "PATH=%~dp0tools\dotnet;%PATH%"
+    echo [INFO] Nutze portables .NET SDK unter tools\dotnet.
+)
+
 REM logs-Verzeichnis MUSS vor dem Tee-Object-Pipe existieren
 if not exist "logs" mkdir logs
 
@@ -68,7 +76,7 @@ if "!BUILD_NEEDED!"=="1" (
     set "_BPS1=%~dp0build.ps1"
     set "_BLF=%~dp0!LOGFILE!"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-      "$lf='!_BLF!'; $ps1='!_BPS1!'; & $ps1 -Configuration Release *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }"
+      "$lf='!_BLF!'; $ps1='!_BPS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_BPS1!' -Configuration Release *>&1 | ForEach-Object { $s=[string]`$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit `$LASTEXITCODE"
     set BUILD_RC=!ERRORLEVEL!
     if !BUILD_RC! NEQ 0 (
         echo.
@@ -95,7 +103,7 @@ echo [2/2] Launch... >> "!LOGFILE!"
 set "_PS1=%~dp0launch.ps1"
 set "_LF=%~dp0%LOGFILE%"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$lf='!_LF!'; $ps1='!_PS1!'; & $ps1 %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }"
+  "$lf='!_LF!'; $ps1='!_PS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_PS1!' %* *>&1 | ForEach-Object { $s=[string]`$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit `$LASTEXITCODE"
 set RC=!ERRORLEVEL!
 
 echo.

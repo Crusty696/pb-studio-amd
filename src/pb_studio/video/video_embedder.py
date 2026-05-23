@@ -86,8 +86,8 @@ class VideoEmbedder:
                 self._device = torch.device("cpu")
                 self._dtype = torch.float32
 
-            self._processor = AutoImageProcessor.from_pretrained(self.model_name)
-            full = AutoModel.from_pretrained(self.model_name, torch_dtype=self._dtype)
+            self._processor = AutoImageProcessor.from_pretrained(self.model_name, local_files_only=True)
+            full = AutoModel.from_pretrained(self.model_name, torch_dtype=self._dtype, local_files_only=True)
             self._model = getattr(full, "vision_model", full)
             self._model.eval()
             try:

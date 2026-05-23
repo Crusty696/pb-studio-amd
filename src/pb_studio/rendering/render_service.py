@@ -297,15 +297,14 @@ class RenderService:
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
         primary = self._encoder_override or self.__class__._working_encoder or "libx264"
 
-        # B4-Fix (2026-05-19): Encoder-Fallback-Chain bei Hardware-Encoder-Fail.
-        # h264_amf gibt fuer manche Clip-Profile exit 3165764104 (0xBCAB1408
-        # AMF Hardware-Error). Statt Render komplett scheitern lassen, faellt
-        # die Pipeline auf h264_mf (Win Media Foundation) und dann libx264
-        # zurueck. Cancel + leere Datei sind keine Retry-Faelle.
-        if primary.endswith("_amf"):
+        # T4.1-Fix (2026-05-23): Codec-spezifische Fallback-Kette.
+        # HEVC-Encoder (hevc_amf) duerfen NUR auf libx265 (CPU HEVC) fallen,
+        # NICHT auf H.264 — das verursacht Codec-Konflikte beim Concat-Demuxer.
+        # H.264-Encoder behalten ihre eigene H.264-Chain.
+        if primary == "hevc_amf":
+            chain = [primary, "libx265"]
+        elif primary in ("h264_amf", "h264_mf"):
             chain = [primary, "h264_mf", "libx264"]
-        elif primary == "h264_mf":
-            chain = [primary, "libx264"]
         else:
             chain = [primary]
 
@@ -414,20 +413,13 @@ class RenderService:
                 f.write(f"inpoint {in_pt:.3f}\n")
                 f.write(f"outpoint {out_pt:.3f}\n")
 
-    def _run_ffmpeg_render(
+    def _build_render_cmd(
         self, list_path: Path, audio_path: Optional[str], output_path: Path,
         bitrate: str, preset: str, audio_offset: float,
-        total_duration: float,
-        target_fps: float,
-        progress_callback: Optional[Callable[..., None]] = None,
-        cancel_callback: Optional[Callable[[], bool]] = None,
-        render_start_time: Optional[float] = None,
+        total_duration: float, encoder: str,
         audio_dur: Optional[float] = None,
-    ) -> dict[str, Any]:
-        """Finaler Render mit Echtzeit-Progress."""
-        # BUG-070 FIX: Guard gegen Path(None)
-        if audio_path and not Path(audio_path).exists():
-            raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
+    ) -> tuple[list[str], float]:
+        """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
         cmd = [
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0",
@@ -442,7 +434,6 @@ class RenderService:
 
         cmd.extend(["-map", "0:v", "-map", "1:a"])
 
-        encoder = self._encoder_override or self.__class__._working_encoder or "libx264"
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
         elif encoder == "h264_amf":
@@ -456,17 +447,12 @@ class RenderService:
         else:
             cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "18"])
 
-        logger.info(f"Final Render Encoder: {encoder}")
-
         cmd.extend([
             "-c:a", "aac", "-b:a", "320k",
             "-movflags", "+faststart",
             "-stats_period", "0.5",
         ])
 
-        if audio_dur is None:
-            audio_dur = self._get_audio_duration(audio_path)
-        
         render_dur = total_duration
         if audio_dur and audio_dur > 0:
             render_dur = min(audio_dur, total_duration) if total_duration > 0 else audio_dur
@@ -475,38 +461,109 @@ class RenderService:
             total_duration = render_dur
 
         cmd.append(str(output_path))
+        return cmd, total_duration
 
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    def _run_ffmpeg_render(
+        self, list_path: Path, audio_path: Optional[str], output_path: Path,
+        bitrate: str, preset: str, audio_offset: float,
+        total_duration: float,
+        target_fps: float,
+        progress_callback: Optional[Callable[..., None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+        render_start_time: Optional[float] = None,
+        audio_dur: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """Finaler Render mit Echtzeit-Progress und Encoder-Fallback."""
+        # BUG-070 FIX: Guard gegen Path(None)
+        if audio_path and not Path(audio_path).exists():
+            raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
 
-        process = subprocess.Popen(
-            cmd, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, startupinfo=startupinfo, bufsize=1
-        )
+        if audio_dur is None:
+            audio_dur = self._get_audio_duration(audio_path)
 
-        try:
-            return self._parse_ffmpeg_progress(
-                process,
-                total_duration,
-                target_fps,
-                progress_callback,
-                cancel_callback,
-                render_start_time=render_start_time,
+        primary = self._encoder_override or self.__class__._working_encoder or "libx264"
+
+        # T4.1 (2026-05-23): Codec-spezifische Fallback-Kette fuer finalen Render.
+        # HEVC bleibt bei HEVC (hevc_amf → libx265), NICHT auf H.264 fallen
+        # — das verursacht Codec-Konflikte beim Concat-Demuxer.
+        if primary == "hevc_amf":
+            chain = [primary, "libx265"]
+        elif primary in ("h264_amf", "h264_mf"):
+            chain = [primary, "h264_mf", "libx264"]
+        else:
+            chain = [primary]
+
+        last_error: Optional[Exception] = None
+        for attempt_idx, encoder in enumerate(chain):
+            logger.info(f"Final Render Encoder: {encoder} (attempt {attempt_idx + 1}/{len(chain)})")
+
+            cmd, effective_duration = self._build_render_cmd(
+                list_path, audio_path, output_path,
+                bitrate, preset, audio_offset, total_duration, encoder,
+                audio_dur=audio_dur,
             )
-        finally:
-            if process.poll() is None:
+
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            process = subprocess.Popen(
+                cmd, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, startupinfo=startupinfo, bufsize=1
+            )
+
+            try:
+                result = self._parse_ffmpeg_progress(
+                    process,
+                    effective_duration,
+                    target_fps,
+                    progress_callback,
+                    cancel_callback,
+                    render_start_time=render_start_time,
+                )
+                # Erfolg — bei Fallback-Attempt cachen
+                if attempt_idx > 0:
+                    logger.warning(
+                        f"Render-Encoder-Fallback erfolgreich: {primary} → {encoder}"
+                    )
+                    RenderService._working_encoder = encoder
+                return result
+            except RenderCancelledError:
                 try:
-                    process.kill()
-                    process.wait(timeout=5)
+                    output_path.unlink(missing_ok=True)
                 except Exception:
                     pass
-            for pipe in (process.stdout, process.stderr):
-                if pipe is not None:
+                raise
+            except (RuntimeError, subprocess.TimeoutExpired) as e:
+                last_error = e
+                logger.warning(
+                    f"Final-Render fehlgeschlagen mit {encoder} "
+                    f"(attempt {attempt_idx + 1}/{len(chain)}): {e}"
+                )
+                try:
+                    output_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                # naechster Encoder in Chain
+                continue
+            finally:
+                if process.poll() is None:
                     try:
-                        pipe.close()
+                        process.kill()
+                        process.wait(timeout=5)
                     except Exception:
                         pass
+                for pipe in (process.stdout, process.stderr):
+                    if pipe is not None:
+                        try:
+                            pipe.close()
+                        except Exception:
+                            pass
+
+        # Alle Encoder fehlgeschlagen
+        raise RuntimeError(
+            f"Final-Render fehlgeschlagen mit allen Encodern {chain}: {last_error}"
+        )
 
     def _parse_ffmpeg_progress(
         self,
@@ -522,23 +579,14 @@ class RenderService:
         stderr_lines: list = []
 
         def enqueue_stderr(pipe, q, lines_list):
+            # T4.2 (2026-05-23): Blockweises readline() statt pipe.read(1)
+            # um CPU-Last drastisch zu reduzieren.
             try:
-                buffer = []
-                while True:
-                    char = pipe.read(1)
-                    if not char:
-                        if buffer:
-                            line = "".join(buffer)
-                            q.put(line)
-                            lines_list.append(line)
+                for line in iter(pipe.readline, ""):
+                    if not line:
                         break
-                    
-                    buffer.append(char)
-                    if char in ('\r', '\n'):
-                        line = "".join(buffer)
-                        q.put(line)
-                        lines_list.append(line)
-                        buffer.clear()
+                    q.put(line)
+                    lines_list.append(line)
             except Exception:
                 pass
 

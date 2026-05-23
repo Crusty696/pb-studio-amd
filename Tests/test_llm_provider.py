@@ -29,7 +29,7 @@ def test_valid_providers_set():
 
 
 def test_default_urls_constants():
-    assert DEFAULT_LMSTUDIO_URL == "http://127.0.0.1:12341/v1"
+    assert DEFAULT_LMSTUDIO_URL == "http://127.0.0.1:1234/v1"
     assert DEFAULT_OLLAMA_URL == "http://localhost:11434/v1"
 
 

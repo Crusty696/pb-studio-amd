@@ -460,18 +460,26 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         // L-N4: Stems-Ordner im Windows Explorer oeffnen.
         // Akzeptiert clip-Parameter (vom Button gebunden) oder fallback auf SelectedClip.
         var target = clip ?? SelectedClip;
-        if (target?.StemsFolderPath is { } path && Directory.Exists(path))
+        if (target?.StemsFolderPath is { } path)
         {
-            try
+            var cleanPath = path.Replace('/', '\\');
+            if (Directory.Exists(cleanPath))
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
+                try
                 {
-                    UseShellExecute = true,
-                });
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"\"{cleanPath}\"")
+                    {
+                        UseShellExecute = true,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    StatusText = $"Stems-Ordner kann nicht geoeffnet werden: {ex.Message}";
+                }
             }
-            catch (Exception ex)
+            else
             {
-                StatusText = $"Stems-Ordner kann nicht geoeffnet werden: {ex.Message}";
+                StatusText = $"Stems-Ordner existiert nicht: {cleanPath}";
             }
         }
         else
