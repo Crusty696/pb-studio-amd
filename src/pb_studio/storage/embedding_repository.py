@@ -71,6 +71,8 @@ class EmbeddingRepository:
         self.db_path = Path(db_path)
         self._ensure_schema()
         self._local = threading.local()
+        self._all_conns: list[sqlite3.Connection] = []
+        self._conns_lock = threading.Lock()
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -80,6 +82,8 @@ class EmbeddingRepository:
             )
             init_connection(conn)
             self._load_vec(conn)
+            with self._conns_lock:
+                self._all_conns.append(conn)
             self._local.conn = conn
         return self._local.conn
 
@@ -131,10 +135,13 @@ class EmbeddingRepository:
             conn.close()
 
     def close(self) -> None:
-        try:
-            self.conn.close()
-        except Exception:
-            pass
+        with self._conns_lock:
+            for conn in self._all_conns:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self._all_conns.clear()
 
     # ---- Audio ----
 

@@ -168,6 +168,7 @@ def annotate_cuts_with_brain(
         meta["brain_scores"] = scores
         meta["context_keys"] = ctx.context_keys
         meta["brain_final_score"] = round(final_score, 6)
+        meta["bridge_values"] = bridge_values
         new_cut["metadata"] = meta
         out.append(new_cut)
 

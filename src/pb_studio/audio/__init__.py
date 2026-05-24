@@ -44,11 +44,6 @@ except ImportError:
     pass
 
 try:
-    from .anchor_features import AnchorFeatureExtractor
-except ImportError:
-    pass
-
-try:
     from .dj_mix_analyzer import DJMixAnalyzer, ENERGY_PHASES
 except ImportError:
     pass
@@ -74,7 +69,6 @@ __all__ = [
     'SpectralAnalyzer',
     'FREQUENCY_BANDS',
     'BAND_NAMES',
-    'AnchorFeatureExtractor',
     'DJMixAnalyzer',
     'ENERGY_PHASES',
     'StructureAnalyzer',

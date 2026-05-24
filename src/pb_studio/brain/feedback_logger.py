@@ -71,9 +71,11 @@ class FeedbackLogger:
                         alpha_delta=alpha_delta,
                         beta_delta=beta_delta,
                         now_iso=ts,
+                        invalidate=False,
                     )
                     bumps += 1
             self.weights.conn.execute("COMMIT")
+            self.weights._invalidate()  # Einmalige Invalidierung nach erfolgreichem COMMIT
         except Exception:
             self.weights.conn.execute("ROLLBACK")
             raise

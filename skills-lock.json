@@ -42,6 +42,12 @@
       "sourceType": "github",
       "skillPath": "skills/caveman-stats/SKILL.md",
       "computedHash": "331f720e2fa97b68cacdae44384878071e8cac6013479edea68f4c8eca308852"
+    },
+    "consulting-team": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": "skills/consulting-team/SKILL.md",
+      "computedHash": "c80bc96349a75c74dcc806d7a9dd5b4de8c33f51d79dea2d077f7859a919e3bb"
     }
   }
 }

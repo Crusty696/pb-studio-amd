@@ -55,11 +55,6 @@ except ImportError:
     aggregate_clip_tags = None
     TAG_KEYWORDS = {}
 
-try:
-    from .video_renderer import VideoRenderer
-except ImportError:
-    VideoRenderer = None
-
 __all__ = [
     # Bestehende Module
     'VideoGenerator',
@@ -77,5 +72,4 @@ __all__ = [
     'extract_tags',
     'aggregate_clip_tags',
     'TAG_KEYWORDS',
-    'VideoRenderer',
 ]

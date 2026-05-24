@@ -270,8 +270,10 @@ class VRAMBudgetManager:
         3. WMI Win32_VideoController query
         4. Fallback: 8192MB
         """
-        # 1. Config (nur wenn explizit gesetzt)
-        config_limit = self.config.get("hardware", {}).get("vram_limit_mb", 0)
+        # 1. Config (nur wenn explizit gesetzt oder per Env-Var injiziert)
+        import os
+        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get("PB_STUDIO_FORCED_VRAM")
+        config_limit = int(env_limit) if env_limit and env_limit.isdigit() else self.config.get("hardware", {}).get("vram_limit_mb", 0)
         if config_limit > 0:
             logger.info(f"Using configured VRAM limit: {config_limit}MB")
             return config_limit
@@ -368,6 +370,37 @@ class VRAMBudgetManager:
         """Get available VRAM (usable - reserved - committed)."""
         with self._registry_lock:
             return max(0, self._usable_vram_mb - self._reserved_mb - self._committed_mb)
+
+    def update_max_vram(self, limit_mb: int) -> None:
+        """Dynamically update maximum VRAM limit with safety protection.
+        
+        Args:
+            limit_mb: New VRAM limit in MB
+            
+        Raises:
+            ValueError: If new usable VRAM is less than currently committed VRAM.
+        """
+        with self._registry_lock:
+            new_usable = limit_mb - self._safety_buffer_mb
+            if new_usable < 0:
+                raise ValueError("Das VRAM-Limit ist zu niedrig (Sicherheits-Buffer fuer OS nicht gedeckt).")
+                
+            if new_usable < self._committed_mb:
+                shortfall = self._committed_mb - new_usable
+                self._evict_for_space(shortfall)
+                
+                if new_usable < self._committed_mb:
+                    raise ValueError(
+                        f"Limit kann nicht auf {limit_mb}MB gesenkt werden. "
+                        f"Aktuell sind {self._committed_mb + self._safety_buffer_mb}MB durch aktive Prozesse belegt."
+                    )
+            
+            self._max_vram_mb = limit_mb
+            self._usable_vram_mb = new_usable
+            logger.info(
+                f"VRAMBudgetManager: Dynamically updated limits. "
+                f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
+            )
 
     @property
     def total_reserved_mb(self) -> int:

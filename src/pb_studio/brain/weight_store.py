@@ -148,6 +148,7 @@ class WeightStore:
         alpha_delta: float,
         beta_delta: float,
         now_iso: Optional[str] = None,
+        invalidate: bool = True,
     ) -> None:
         ts = now_iso or datetime.now(timezone.utc).isoformat()
         self.conn.execute(
@@ -159,7 +160,8 @@ class WeightStore:
             "last_updated   = excluded.last_updated",
             (axis, level, key, alpha_delta, beta_delta, ts, alpha_delta, beta_delta),
         )
-        self._invalidate()
+        if invalidate:
+            self._invalidate()
 
     def reset(self) -> None:
         self.conn.execute("DELETE FROM axis_weights")

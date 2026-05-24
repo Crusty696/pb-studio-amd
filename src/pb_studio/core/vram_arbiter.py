@@ -31,7 +31,7 @@ class VRAMArbiter:
 
         # C1/RESILIENCE: Forced VRAM limit via environment variable (for testing)
         import os
-        env_limit = os.environ.get("PB_STUDIO_FORCED_VRAM")
+        env_limit = os.environ.get("PB_STUDIO_FORCED_VRAM") or os.environ.get("PBSTUDIO_VRAM_LIMIT_MB")
         self.forced_limit = int(env_limit) if env_limit and env_limit.isdigit() else 0
 
         # Safety buffer: Don't let apps use 100% of VRAM. Leave 500MB for OS/Desktop.
