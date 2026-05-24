@@ -15,3 +15,6 @@ global using VramTelemetrySummary = PBStudio.UI.Generated.VramTelemetrySummary;
 global using VramTelemetryEntry = PBStudio.UI.Generated.VramTelemetryEntry;
 global using VramDurationStats = PBStudio.UI.Generated.VramDurationStats;
 global using VramPeakStats = PBStudio.UI.Generated.VramPeakStats;
+global using VramLimitRequest = PBStudio.UI.Generated.VramLimitRequest;
+global using VramLimitResponse = PBStudio.UI.Generated.VramLimitResponse;
+

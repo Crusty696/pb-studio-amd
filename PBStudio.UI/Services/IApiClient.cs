@@ -75,7 +75,9 @@ public interface IApiClient : IDisposable
     // Gibt bei modelId=null das Multi-Model-Snapshot zurück (Summary + Models),
     // bei gesetztem modelId die single-entry Shape.
     Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
+    Task<VramLimitResponse?> UpdateVramLimitAsync(int limitMb, CancellationToken ct = default);
     #endregion
+
 
     #region Model Manager
     // ----------------------------------------------------------------------

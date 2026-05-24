@@ -18,6 +18,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogs;
     private readonly ISettingsService _settings;
     private CancellationTokenSource? _probeCts;
+    private CancellationTokenSource? _vramDebounceCts;
     private bool _disposed;
 
     // ── GPU Status ────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         FfmpegPath = s.FfmpegPath ?? "";
         VramLimitMb = s.VramCapMb > 0 ? s.VramCapMb : 8192;
+        PythonBridgeService.SetVramLimitEnvVar(VramLimitMb);
 
         // FFmpeg-Pfad sofort als Env-Var setzen, damit Backend beim ERSTEN Start
         // den persistierten Pfad nutzt (analog SetForcedVramEnvVar unten).
@@ -132,6 +134,46 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         UpdateKiModeLabels();
         _ = RefreshKiAutoSelectionAsync();
+    }
+
+    // T2.2: Live-VRAM-Slider Debounce (500ms) und API-Call
+    partial void OnVramLimitMbChanged(int value)
+    {
+        _vramDebounceCts?.Cancel();
+        _vramDebounceCts = new CancellationTokenSource();
+        var ct = _vramDebounceCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(500, ct).ConfigureAwait(true);
+                
+                if (ct.IsCancellationRequested) return;
+                
+                StatusText = "Aktualisiere VRAM-Limit...";
+                var res = await _api.UpdateVramLimitAsync(value, ct).ConfigureAwait(true);
+                
+                if (ct.IsCancellationRequested) return;
+
+                if (res != null)
+                {
+                    StatusText = $"VRAM-Limit live gedrosselt auf {value} MB.";
+                }
+                else
+                {
+                    StatusText = "Warnung: Live-Drosselung fehlgeschlagen. Wert liegt evtl. unter dem aktiven VRAM-Bedarf.";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Erwartet bei schnellem Schieben
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Fehler beim Live-Drosseln: {ex.Message}";
+            }
+        }, ct);
     }
 
     private void UpdateKiModeLabels()
@@ -286,6 +328,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
             // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
             PythonBridgeService.SetForcedVramEnvVar(_settings.Current.ForcedVramMb);
+            PythonBridgeService.SetVramLimitEnvVar(_settings.Current.VramCapMb);
             PythonBridgeService.SetFfmpegPathEnvVar(_settings.Current.FfmpegPath);
 
             // 4. Subtle UI-feedback
@@ -346,6 +389,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _disposed = true;
         try { _probeCts?.Cancel(); } catch { /* ignore */ }
         _probeCts?.Dispose();
+        try { _vramDebounceCts?.Cancel(); } catch { /* ignore */ }
+        _vramDebounceCts?.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }
+

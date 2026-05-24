@@ -223,7 +223,9 @@ public class ApiClient : IApiClient
                 e.ClipStart,
                 e.TriggerType,
                 e.TriggerStrength,
-                e.SegmentType
+                e.SegmentType,
+                e.BrainConfidence,
+                e.CutId
             )).ToList()
         };
         return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
@@ -312,7 +314,14 @@ public class ApiClient : IApiClient
         // Single-model variant (Telemetry direkt = Entry) wird vom VM aktuell nicht genutzt.
         return GetAsync<VramHealthResponse>(url, ct);
     }
+
+    public async Task<VramLimitResponse?> UpdateVramLimitAsync(int limitMb, CancellationToken ct = default)
+    {
+        return await PostAsync<VramLimitResponse>("/health/vram/limit", new VramLimitRequest(limitMb)).ConfigureAwait(false);
+    }
+
     #endregion
+
 
     #region Model Manager
     // ----------------------------------------------------------------------

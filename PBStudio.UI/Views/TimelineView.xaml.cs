@@ -378,29 +378,31 @@ public partial class TimelineView : UserControl
                     }
                 }
 
-                // Constraints: StartTime >= 0, ClipStart >= 0, min Dauer
+                // Constraints: StartTime >= 0, min Dauer, Nachbar-Grenzen
                 if (newStart < 0)
                 {
-                    newClipStart -= newStart; // newStart is negativ -> addiert
                     newStart = 0;
-                }
-                if (newClipStart < 0)
-                {
-                    newStart -= newClipStart;
-                    newClipStart = 0;
                 }
                 if (_originalEndTime - newStart < MinClipDuration)
                 {
-                    var maxStart = _originalEndTime - MinClipDuration;
-                    var clamp = maxStart - newStart;
-                    newStart = maxStart;
-                    newClipStart += clamp;
+                    newStart = _originalEndTime - MinClipDuration;
                 }
 
+                // Nachbar-Clamping vornehmen
                 newStart = Math.Max(ClampStartToNeighbours(_draggedEntry, newStart, _originalEndTime - newStart), newStart);
+
+                // ClipStart-Limitierung: darf nicht kleiner als 0 werden (sonst wuerden wir vor den Videoanfang trimmen)
+                var actualDelta = newStart - _originalStartTime;
+                var finalClipStart = _originalClipStart + actualDelta;
+                if (finalClipStart < 0)
+                {
+                    finalClipStart = 0;
+                    newStart = _originalStartTime - _originalClipStart;
+                }
+
                 _draggedEntry.StartTime = newStart;
                 _draggedEntry.EndTime = _originalEndTime;
-                _draggedEntry.ClipStart = newClipStart;
+                _draggedEntry.ClipStart = finalClipStart;
             }
             // L-TI-2: Trim-Right — bewegt die rechte Kante. StartTime + ClipStart
             // bleiben fix, nur EndTime aendert sich (= Duration aendert sich).

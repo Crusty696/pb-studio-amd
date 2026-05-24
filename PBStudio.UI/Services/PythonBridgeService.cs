@@ -56,6 +56,19 @@ public class PythonBridgeService : IDisposable
             Environment.SetEnvironmentVariable(key, null, EnvironmentVariableTarget.Process);
     }
 
+    /// <summary>
+    /// Setzt die PBSTUDIO_VRAM_LIMIT_MB Env-Var auf Process-Ebene.
+    /// Wird vom BudgetManager und Arbiter im Backend eingelesen.
+    /// </summary>
+    public static void SetVramLimitEnvVar(int? mb)
+    {
+        const string key = "PBSTUDIO_VRAM_LIMIT_MB";
+        if (mb.HasValue && mb.Value > 0)
+            Environment.SetEnvironmentVariable(key, mb.Value.ToString(), EnvironmentVariableTarget.Process);
+        else
+            Environment.SetEnvironmentVariable(key, null, EnvironmentVariableTarget.Process);
+    }
+
     public bool IsRunning => _isRunning;
     public event EventHandler<bool>? StatusChanged;
 
