@@ -13,7 +13,7 @@
         "enable_monitoring": true
     },
     "ai": {
-        "vision_model": "moondream2_fp16",
+        "vision_model": "llava:13b",
         "audio_backend": "demucs_dml",
         "parallel_tasks": false,
         "provider": "auto",
@@ -22,32 +22,108 @@
         "default_mode": "balance",
         "task_preferences": {
             "video_captioning": {
-                "speed":   ["moondream:latest", "llava:13b", "qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-                "balance": ["llava:13b", "moondream:latest", "qwen/qwen3-vl-8b"],
-                "quality": ["llava:13b", "qwen/qwen3-vl-8b"]
+                "speed": [
+                    "moondream:latest",
+                    "llava:13b",
+                    "qwen/qwen3-vl-8b",
+                    "google/gemma-4-e4b"
+                ],
+                "balance": [
+                    "llava:13b",
+                    "moondream:latest",
+                    "qwen/qwen3-vl-8b"
+                ],
+                "quality": [
+                    "llava:13b",
+                    "qwen/qwen3-vl-8b"
+                ]
             },
             "image_captioning": {
-                "speed":   ["moondream:latest", "llava:13b", "qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-                "balance": ["llava:13b", "moondream:latest", "qwen/qwen3-vl-8b"],
-                "quality": ["llava:13b", "qwen/qwen3-vl-8b"]
+                "speed": [
+                    "moondream:latest",
+                    "llava:13b",
+                    "qwen/qwen3-vl-8b",
+                    "google/gemma-4-e4b"
+                ],
+                "balance": [
+                    "llava:13b",
+                    "moondream:latest",
+                    "qwen/qwen3-vl-8b"
+                ],
+                "quality": [
+                    "llava:13b",
+                    "qwen/qwen3-vl-8b"
+                ]
             },
             "brain_explanation": {
-                "speed":   ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
-                "balance": ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-                "quality": ["samsonium/qwen2.5-osdev:latest", "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "gemma-4-26b-a4b-it-ultra-uncensored-heretic", "google/gemma-4-e4b"]
+                "speed": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "google/gemma-4-e4b",
+                    "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"
+                ],
+                "balance": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
+                    "google/gemma-4-e4b"
+                ],
+                "quality": [
+                    "samsonium/qwen2.5-osdev:latest",
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "gemma-4-26b-a4b-it-ultra-uncensored-heretic",
+                    "google/gemma-4-e4b"
+                ]
             },
             "chat_general": {
-                "speed":   ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
-                "balance": ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-                "quality": ["samsonium/qwen2.5-osdev:latest", "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"]
+                "speed": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "google/gemma-4-e4b",
+                    "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"
+                ],
+                "balance": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
+                    "google/gemma-4-e4b"
+                ],
+                "quality": [
+                    "samsonium/qwen2.5-osdev:latest",
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "gemma-4-31b-it-uncensored",
+                    "gemma-4-26b-a4b-it-ultra-uncensored-heretic"
+                ]
             },
             "chat_tool_use": {
-                "speed":   ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-                "balance": ["joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "samsonium/qwen2.5-osdev:latest", "raw-uncensored-qwen3-14b-heretic-recovered", "qwen3.5-9b-uncensored-hauhaucs-aggressive"],
-                "quality": ["samsonium/qwen2.5-osdev:latest", "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b", "raw-uncensored-qwen3-14b-heretic-recovered", "gemma-4-31b-it-uncensored"]
+                "speed": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
+                    "google/gemma-4-e4b"
+                ],
+                "balance": [
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "samsonium/qwen2.5-osdev:latest",
+                    "raw-uncensored-qwen3-14b-heretic-recovered",
+                    "qwen3.5-9b-uncensored-hauhaucs-aggressive"
+                ],
+                "quality": [
+                    "samsonium/qwen2.5-osdev:latest",
+                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+                    "raw-uncensored-qwen3-14b-heretic-recovered",
+                    "gemma-4-31b-it-uncensored"
+                ]
             }
         },
-        "task_overrides": {}
+        "task_overrides": {
+            "chat": "llava:13b",
+            "chat_general": "llava:13b",
+            "chat_tool_use": "llava:13b",
+            "brain_explanation": "llava:13b",
+            "video_captioning": "llava:13b",
+            "image_captioning": "llava:13b"
+        }
     },
     "ui": {
         "theme": "dark_red",

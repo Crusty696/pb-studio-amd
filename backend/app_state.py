@@ -888,15 +888,6 @@ class AppState:
             project_id = int(project_id or self.get_current_project_db_id())
             rows = repo.get_by_project(project_id=project_id)
 
-            with self._state_lock:
-                self.audio_clips.clear()
-                self.audio_analysis_cache.clear()
-                self.video_clips.clear()
-                self.video_analysis_cache.clear()
-            with self._lock:
-                self._audio_next_id = 1
-                self._video_next_id = 1
-
             max_audio_id = 0
             max_video_id = 0
             audio_count = 0
@@ -1064,21 +1055,26 @@ class AppState:
                             "audio_key": ai_data.get("audio_key"),
                         }
 
-            # Unter Lock alle Clips und Analyse-Caches atomar zuweisen
+            # Unter Lock alle Clips und Caches atomar leeren und zuweisen (R-2 Fix)
             with self._state_lock:
+                self.audio_clips.clear()
                 self.audio_clips.update(tmp_audio)
+                
+                self.video_clips.clear()
                 self.video_clips.update(tmp_video)
+                
+                self.audio_analysis_cache.clear()
                 if tmp_audio_analysis:
                     self.audio_analysis_cache.update(tmp_audio_analysis)
+                    
+                self.video_analysis_cache.clear()
                 if tmp_video_analysis:
                     self.video_analysis_cache.update(tmp_video_analysis)
 
-            # ID-Counter nach dem Load anpassen
+            # ID-Counter nach dem Load atomar anpassen
             with self._lock:
-                if max_audio_id > 0:
-                    self._audio_next_id = max_audio_id + 1
-                if max_video_id > 0:
-                    self._video_next_id = max_video_id + 1
+                self._audio_next_id = max_audio_id + 1 if max_audio_id > 0 else 1
+                self._video_next_id = max_video_id + 1 if max_video_id > 0 else 1
 
             logger.info(
                 f"DB-Load OK für Projekt {project_id}: {audio_count} Audio-Clips, {video_count} Video-Clips wiederhergestellt"
