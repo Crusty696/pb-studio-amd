@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.schemas.health_schemas import (
     VramHealthResponse, VramHealthSingleResponse,
+    VramLimitRequest, VramLimitResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,3 +72,51 @@ async def vram_health(
         "budget": budget_stats,
         "telemetry": telemetry,
     }
+
+
+@router.post(
+    "/vram/limit",
+    response_model=VramLimitResponse,
+    summary="Dynamisches VRAM-Limit aktualisieren",
+)
+async def update_vram_limit(
+    payload: VramLimitRequest,
+) -> dict[str, Any]:
+    """
+    Aktualisiert das maximale VRAM-Limit des VRAMBudgetManagers zur Laufzeit.
+    
+    Wenn das neue usable Limit unter dem aktuell committeden VRAM liegt, 
+    wird ein HTTP 409 (Conflict) Error zurueckgegeben.
+    """
+    try:
+        from pb_studio.core.vram_budget_manager import get_vram_manager
+    except Exception as exc:
+        logger.warning(f"VRAM-Manager nicht importierbar: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"VRAM-Manager nicht verfuegbar: {exc}",
+        )
+
+    try:
+        manager = get_vram_manager()
+        manager.update_max_vram(payload.limit_mb)
+        stats = manager.get_stats()
+    except ValueError as val_exc:
+        logger.warning(f"VRAM-Limit-Aenderung abgelehnt: {val_exc}")
+        raise HTTPException(
+            status_code=409,
+            detail=str(val_exc),
+        )
+    except Exception as exc:
+        logger.error(f"VRAM-Limit-Aenderung fehlgeschlagen: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"VRAM-Limit-Aenderung fehlgeschlagen: {exc}",
+        )
+
+    return {
+        "status": "ok",
+        "limit_mb": payload.limit_mb,
+        "usable_vram_mb": stats.get("usable_vram_mb", 0.0),
+    }
+

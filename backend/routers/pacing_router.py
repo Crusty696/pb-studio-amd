@@ -135,6 +135,17 @@ async def generate_cut_list(
                     )
             except Exception as brain_e:
                 logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
+        else:
+            # R-Brain: use_brain ist False. Alte Timelines deaktivieren, um Geister-Daten
+            # bei /brain/suggest und /brain/learning_session zu verhindern
+            try:
+                from pb_studio.brain.brain_service import BrainService
+                svc = BrainService.get()
+                if svc.state_conn is not None:
+                    svc.state_conn.execute("UPDATE timelines SET is_current = 0")
+                    logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
+            except Exception as e:
+                logger.warning("Alte Timelines in state.db konnten nicht deaktiviert werden: %s", e)
 
         # Timeline validieren
         audio_dur = audio_clips_snapshot.get(config.audio_clip_id, {}).get("duration_seconds")

@@ -20,11 +20,11 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
 $snapshotPath = Join-Path $repoRoot "PBStudio.UI/openapi.snapshot.json"
-$uri = "http://localhost:$Port/openapi.json"
+$uri = "http://127.0.0.1:$Port/openapi.json"
 
 function Test-BackendAlive {
     try {
-        $null = Invoke-RestMethod -Uri "http://localhost:$Port/health" -TimeoutSec 2
+        $null = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 2
         return $true
     } catch {
         return $false

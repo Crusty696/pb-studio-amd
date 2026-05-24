@@ -35,7 +35,7 @@ def test_snapshot_matches_live_backend():
     client = TestClient(app)
     live = client.get("/openapi.json").json()
 
-    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8-sig"))
 
     live_paths = sorted(_normalize(live).get("paths", {}).keys())
     snap_paths = sorted(_normalize(snapshot).get("paths", {}).keys())
@@ -59,7 +59,7 @@ def test_snapshot_schemas_consistent():
     OpenAPI itself — they're a drift-alarm)."""
     client = TestClient(app)
     live = client.get("/openapi.json").json()
-    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8-sig"))
 
     live_schemas = (live.get("components") or {}).get("schemas") or {}
     snap_schemas = (snapshot.get("components") or {}).get("schemas") or {}

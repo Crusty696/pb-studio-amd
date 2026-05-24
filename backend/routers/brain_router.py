@@ -39,27 +39,43 @@ async def suggest(req: BrainSuggestRequest) -> BrainSuggestResponse:
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
 
+    # Video-IDs in "clip_X"-Format wandeln fuer DB-Match
+    allowed_clips = {f"clip_{vid}" for vid in req.video_clip_ids} if req.video_clip_ids else None
+
+    # Alle Cuts der aktuellen Timeline laden, filtern nach Audio-ID und current=1
     rows = svc.state_conn.execute(
-        "SELECT id, clip_id, start_time, end_time, brain_scores_json "
+        "SELECT id, clip_id, start_time, end_time, brain_scores_json, metadata_json "
         "FROM timeline_cuts WHERE timeline_id IN "
-        "(SELECT id FROM timelines WHERE is_current=1) "
-        "ORDER BY position_idx LIMIT ?",
-        (int(req.top_n),),
+        "(SELECT id FROM timelines WHERE is_current=1 AND audio_clip_id=?)",
+        (int(req.audio_clip_id),),
     ).fetchall()
 
     out: list[BrainSuggestion] = []
     for r in rows:
+        clip_id_str = str(r[1])
+        if allowed_clips and clip_id_str not in allowed_clips:
+            continue
+
         scores = _json.loads(r[4]) if r[4] else {}
-        final = sum(scores.values()) / len(scores) if scores else 0.0
+        meta = _json.loads(r[5]) if r[5] else {}
+        
+        # Nutze gespeicherten final_score oder berechne Durchschnitt
+        final = meta.get("brain_final_score")
+        if final is None:
+            final = sum(scores.values()) / len(scores) if scores else 0.0
+
         out.append(BrainSuggestion(
             cut_id=int(r[0]),
-            clip_id=str(r[1]),
+            clip_id=clip_id_str,
             start_time=float(r[2]),
             end_time=float(r[3]),
             final_score=float(final),
             brain_scores=scores,
         ))
-    return BrainSuggestResponse(suggestions=out)
+
+    # In Python nach echtem Score absteigend sortieren und limitieren
+    out.sort(key=lambda s: s.final_score, reverse=True)
+    return BrainSuggestResponse(suggestions=out[:int(req.top_n)])
 
 
 @router.post("/feedback", response_model=BrainFeedbackResponse)
@@ -255,27 +271,36 @@ async def explain(
     metadata: dict = _json.loads(row[6]) if row[6] else {}
     context_keys: list[str] = metadata.get("context_keys") or [""]
 
-    # Pro Achse: posterior aus weight_store rekonstruieren.
-    # score (gespeichert) = bridge_value * posterior, daher
-    # bridge_value = score / posterior (mit safe-divide).
+    # Pro Achse: posterior aus weight_store lesen.
+    # Nutzt gespeicherte bridge_values aus den Metadaten, um mathematischen
+    # Drift durch spaetere Klicks zu verhindern.
     contributions: list[BrainAxisContribution] = []
     cold_start: list[str] = []
+    raw_bridge_values = metadata.get("bridge_values") or {}
 
     for axis, score in scores.items():
         posterior = float(svc.weights.get_posterior_mean(axis, context_keys))
-        # rekonstruiere bridge_value
-        if posterior > 1e-9:
-            bridge_value = max(0.0, min(1.0, float(score) / posterior))
+        
+        # Nutze gespeicherte bridge_values wenn vorhanden, sonst Fallback auf Rekonstruktion
+        if raw_bridge_values:
+            bridge_value = float(raw_bridge_values.get(axis, 0.0))
+            current_score = bridge_value * posterior
         else:
-            bridge_value = 0.0
+            if posterior > 1e-9:
+                bridge_value = max(0.0, min(1.0, float(score) / posterior))
+            else:
+                bridge_value = 0.0
+            current_score = score
+
         n_samples = _n_samples_at_most_specific(svc, axis, context_keys)
         if n_samples < 10:
             cold_start.append(axis)
+            
         contributions.append(BrainAxisContribution(
             axis=axis,
             bridge_value=round(bridge_value, 6),
             posterior=round(posterior, 6),
-            score=round(max(0.0, min(1.0, float(score))), 6),
+            score=round(max(0.0, min(1.0, float(current_score))), 6),
             n_samples=n_samples,
         ))
 

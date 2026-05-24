@@ -99,3 +99,20 @@ class VramHealthSingleResponse(BaseModel):
     status: str = "ok"
     budget: VramBudgetStats
     telemetry: VramTelemetryEntry
+
+
+# ============================================================================
+# Dynamic Limit side
+# ============================================================================
+
+class VramLimitRequest(BaseModel):
+    """Request schema for POST /health/vram/limit."""
+    limit_mb: int = Field(..., description="The new maximum VRAM limit in MB.")
+
+
+class VramLimitResponse(BaseModel):
+    """Response schema for POST /health/vram/limit."""
+    status: str = "ok"
+    limit_mb: int
+    usable_vram_mb: float
+
