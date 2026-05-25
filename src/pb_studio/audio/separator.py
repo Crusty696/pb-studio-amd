@@ -110,6 +110,17 @@ def _ensure_torchvision_stub() -> bool:
     logger.warning("torchvision not installed; using minimal fallback for onnx2torch imports")
     return True
 
+def _get_vram_model_id(model_name: str) -> str:
+    """Determine the VRAM model budget ID based on filename."""
+    name_lower = model_name.lower()
+    if "mdxc" in name_lower or "demucs" in name_lower:
+        return "mdxc_models"
+    elif "voc" in name_lower:
+        return "mdx_net_voc"
+    else:
+        return "mdx_net_inst"
+
+
 class StemSeparator:
     def __init__(self):
         self.config = ConfigManager()
@@ -186,8 +197,15 @@ class StemSeparator:
     def unload(self):
         """Release VRAM and reset separator."""
         if self.separator is not None:
-            # audio-separator doesn't have an explicit unload for all models, 
-            # but we can clear its state and trigger GC.
+            try:
+                from pb_studio.core.vram_budget_manager import get_vram_manager
+                vram_mgr = get_vram_manager()
+                vram_mgr.release("mdx_net_inst")
+                vram_mgr.release("mdx_net_voc")
+                vram_mgr.release("mdxc_models")
+            except Exception as ve:
+                logger.warning(f"Failed to release separation budgets during unload: {ve}")
+
             self.separator = None
             import gc
             gc.collect()
@@ -233,6 +251,21 @@ class StemSeparator:
 
         # Scoped DirectML patch
         self._apply_directml_patch()
+        
+        # VRAM Budget Manager integration
+        vram_reserved = False
+        model_id = None
+        try:
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+            vram_mgr = get_vram_manager()
+            model_id = _get_vram_model_id(model_name)
+            logger.info(f"Reserving VRAM budget for audio separation: {model_id}")
+            vram_reserved = vram_mgr.reserve(model_id, force=True)
+            if not vram_reserved:
+                logger.warning(f"VRAM reserve failed or returned False for {model_id}")
+        except Exception as ve:
+            logger.warning(f"Failed to integrate with VRAMBudgetManager reserve (proceeding): {ve}")
+
         try:
             if not self.separator:
                 return {"error": "Separator not initialized"}
@@ -243,6 +276,12 @@ class StemSeparator:
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
+            
+            if vram_reserved and model_id:
+                try:
+                    vram_mgr.commit(model_id)
+                except Exception as ve:
+                    logger.warning(f"Failed to commit VRAM for {model_id}: {ve}")
 
             logger.info(f"Starting separation for: {file_path}")
             _emit(30.0, "running_inference")
@@ -263,6 +302,11 @@ class StemSeparator:
             return {"error": str(e)}
         finally:
             self._restore_directml_patch()
+            if vram_reserved and model_id:
+                try:
+                    vram_mgr.release(model_id)
+                except Exception as ve:
+                    logger.warning(f"Failed to release VRAM for {model_id}: {ve}")
 
     def _run_inference(self, file_path: str):
         """Internal seam: runs the underlying audio-separator inference call.

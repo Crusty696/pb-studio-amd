@@ -138,7 +138,45 @@ class SubtrackDetector:
         """
         import librosa
 
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
+        # Compute chroma in chunks to prevent memory spikes on long files
+        chunk_size_sec = 300  # 5 minutes
+        chunk_samples = chunk_size_sec * sr
+        chroma_list = []
+        
+        starts = list(range(0, y.size, chunk_samples))
+        for i, start in enumerate(starts):
+            # If this is the last chunk and it's too small (< 2048), process it with the previous one
+            if i == len(starts) - 1 and len(y) - start < 2048 and i > 0:
+                continue
+                
+            # Determine end index
+            if i == len(starts) - 2 and len(y) - starts[i+1] < 2048:
+                end = len(y)
+            else:
+                end = min(start + chunk_samples, y.size)
+                
+            y_chunk = y[start:end]
+            if len(y_chunk) < 2048:
+                if len(y_chunk) == 0:
+                    continue
+                # If we couldn't merge (e.g. only one chunk), pad it
+                pad_len = 2048 - len(y_chunk)
+                y_chunk = np.pad(y_chunk, (0, pad_len), mode="constant")
+                chroma_chunk = librosa.feature.chroma_cqt(y=y_chunk, sr=sr, hop_length=self.hop_length)
+                # Keep only original length frames
+                expected_frames = max(1, int(round(len(y) / self.hop_length)))
+                chroma_chunk = chroma_chunk[:, :expected_frames]
+            else:
+                chroma_chunk = librosa.feature.chroma_cqt(
+                    y=y_chunk, sr=sr, hop_length=self.hop_length
+                )
+            chroma_list.append(chroma_chunk)
+            
+        if chroma_list:
+            chroma = np.concatenate(chroma_list, axis=1)
+        else:
+            chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
+
         # Aggregate chroma into ~1-sec bins so SSM stays bounded.
         frames_per_sec = sr / self.hop_length
         bin_frames = max(1, int(round(frames_per_sec)))  # 1 second
