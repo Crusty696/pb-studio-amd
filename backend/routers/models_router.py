@@ -293,11 +293,12 @@ def _get_base_url() -> str:
             "PBSTUDIO_OLLAMA_URL=%s ist deprecated — bitte PBSTUDIO_LMSTUDIO_URL setzen",
             legacy,
         )
-        # Auto-rewrite 11434 -> 1234/v1 nur fuer den haeufigsten Ollama-Default
         if "11434" in legacy:
-            return "http://127.0.0.1:1234/v1"
+            from pb_studio.ai.llm_provider import get_base_url
+            return get_base_url(provider="lmstudio")
         return legacy
-    return "http://127.0.0.1:1234/v1"
+    from pb_studio.ai.llm_provider import get_base_url
+    return get_base_url(provider="lmstudio")
 
 
 def _make_client():
@@ -377,56 +378,86 @@ def _load_ai_config() -> dict[str, Any]:
 # ----------------------------------------------------------------------
 @router.get("/list", response_model=ModelListResponse)
 async def list_models() -> ModelListResponse:
-    """Liefert alle in LM Studio ODER Ollama verfuegbaren / geladenen Modelle.
+    """Liefert alle verfuegbaren Modelle aus LM Studio UND Ollama (Hybrid-Merge)."""
+    from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError
+    from pb_studio.ai.llm_provider import get_llm_client
+    
+    lmstudio_ok = False
+    ollama_ok = False
+    
+    lmstudio_client = get_llm_client(provider="lmstudio", timeout_seconds=2.0)
+    ollama_client = get_llm_client(provider="ollama", timeout_seconds=2.0)
+    
+    try:
+        lmstudio_ok = await lmstudio_client.is_alive()
+    except Exception:
+        pass
+        
+    try:
+        ollama_ok = await ollama_client.is_alive()
+    except Exception:
+        pass
 
-    W-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.
-    Reportet ``ollama_available`` und ``lmstudio_available`` korrekt.
-    """
-    from pb_studio.ai.lmstudio_client import LMStudioError
-
-    client, lmstudio_ok, ollama_ok = await _make_alive_client()
-    if client is None:
+    if not lmstudio_ok and not ollama_ok:
+        try:
+            await lmstudio_client.aclose()
+        except Exception:
+            pass
+        try:
+            await ollama_client.aclose()
+        except Exception:
+            pass
         return ModelListResponse(
-            ollama_available=ollama_ok,
-            lmstudio_available=lmstudio_ok,
+            ollama_available=False,
+            lmstudio_available=False,
             base_url=_get_base_url(),
             models=[],
             error="Kein LLM-Provider erreichbar (weder LM Studio noch Ollama)",
         )
 
-    try:
-        from pb_studio.ai.model_registry import ModelRegistry
-        ai_cfg = _load_ai_config()
+    merged_models = []
+    seen_names = set()
+    
+    async def _fetch_from_provider(p_client, p_ok):
+        if not p_ok:
+            return []
+        try:
+            async with p_client as c:
+                return await c.list_models()
+        except Exception as exc:
+            logger.warning("Fehler beim Laden der Modelle von %s: %s", p_client.base_url, exc)
+            return []
 
-        async with client as c:
-            models = await c.list_models()
-            active_base = c.base_url
-            # Bereite Registry vor, um aktive Zuweisungen zu ermitteln
-            registry = ModelRegistry(ai_cfg, client=c)
-            registry._installed = models
-            registry._loaded = True
+    lms_models = await _fetch_from_provider(lmstudio_client, lmstudio_ok)
+    oll_models = await _fetch_from_provider(ollama_client, ollama_ok)
 
-        entries = []
-        for m in models:
-            entry = ModelListEntry(**m.to_dict())
-            enriched = _enrich_model_entry(entry, registry)
-            entries.append(enriched)
+    for m in lms_models + oll_models:
+        m_name = m.name
+        if m_name not in seen_names:
+            seen_names.add(m_name)
+            merged_models.append(m)
 
-        return ModelListResponse(
-            ollama_available=ollama_ok,
-            lmstudio_available=lmstudio_ok,
-            base_url=active_base,
-            models=entries,
-        )
-    except LMStudioError as exc:
-        logger.warning("list_models fehlgeschlagen: %s", exc)
-        return ModelListResponse(
-            ollama_available=ollama_ok,
-            lmstudio_available=lmstudio_ok,
-            base_url=_get_base_url(),
-            models=[],
-            error=str(exc),
-        )
+    from pb_studio.ai.model_registry import ModelRegistry
+    ai_cfg = _load_ai_config()
+    
+    registry = ModelRegistry(ai_cfg, client=None)
+    registry._installed = merged_models
+    registry._loaded = True
+
+    entries = []
+    for m in merged_models:
+        entry = ModelListEntry(**m.to_dict())
+        enriched = _enrich_model_entry(entry, registry)
+        entries.append(enriched)
+
+    active_base = lmstudio_client.base_url if lmstudio_ok else ollama_client.base_url
+
+    return ModelListResponse(
+        ollama_available=ollama_ok,
+        lmstudio_available=lmstudio_ok,
+        base_url=active_base,
+        models=entries,
+    )
 
 
 # ----------------------------------------------------------------------
@@ -434,22 +465,44 @@ async def list_models() -> ModelListResponse:
 # ----------------------------------------------------------------------
 @router.get("/available", response_model=AvailableModelsResponse)
 async def list_available_models() -> AvailableModelsResponse:
-    """Kuratierte Vision-Modelle + Installations-Status."""
+    """Kuratierte Vision-Modelle + Installations-Status (Hybrid-Merge)."""
     from pb_studio.ai.model_registry import _name_matches  # type: ignore
     from pb_studio.ai.lmstudio_client import LMStudioError
+    from pb_studio.ai.llm_provider import get_llm_client
 
-    # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback statt hard-coded LM-Studio.
-    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    lmstudio_ok = False
+    ollama_ok = False
+    
+    lmstudio_client = get_llm_client(provider="lmstudio", timeout_seconds=2.0)
+    ollama_client = get_llm_client(provider="ollama", timeout_seconds=2.0)
+    
+    try:
+        lmstudio_ok = await lmstudio_client.is_alive()
+    except Exception:
+        pass
+        
+    try:
+        ollama_ok = await ollama_client.is_alive()
+    except Exception:
+        pass
+
     installed_names: list[str] = []
-    active_base = _get_base_url()
-    if client is not None:
+    
+    async def _fetch_names(p_client, p_ok):
+        if not p_ok:
+            return []
         try:
-            async with client as c:
+            async with p_client as c:
                 models = await c.list_models()
-                active_base = c.base_url
-            installed_names = [m.name for m in models]
-        except LMStudioError as exc:
-            logger.warning("list_models fehlgeschlagen (/available): %s", exc)
+                return [m.name for m in models]
+        except Exception:
+            return []
+
+    lms_names = await _fetch_names(lmstudio_client, lmstudio_ok)
+    oll_names = await _fetch_names(ollama_client, ollama_ok)
+    installed_names = list(set(lms_names + oll_names))
+
+    active_base = lmstudio_client.base_url if lmstudio_ok else ollama_client.base_url
 
     entries: list[AvailableModelEntry] = []
     for spec in CURATED_VISION_MODELS:
@@ -511,16 +564,12 @@ async def ollama_pull_generator(model_name: str, ollama_url: str):
 async def pull_model(request: PullRequest):
     """LM Studio managed Downloads ueber UI — oder native Weiterleitung an Ollama."""
     client, lmstudio_ok, ollama_ok = await _make_alive_client()
-    is_ollama = False
-    ollama_base = None
-    if client is not None:
-        is_ollama = "11434" in client.base_url
-        if is_ollama:
-            ollama_base = client.base_url
-
-    if is_ollama and ollama_base:
+    
+    # Universal Ollama-Download-Bypass: Wenn Ollama online ist, leiten wir alle Downloads an Ollama weiter!
+    if ollama_ok:
+        from pb_studio.ai.llm_provider import DEFAULT_OLLAMA_URL
         return StreamingResponse(
-            ollama_pull_generator(request.name, ollama_base),
+            ollama_pull_generator(request.name, DEFAULT_OLLAMA_URL),
             media_type="text/event-stream"
         )
 
@@ -530,7 +579,7 @@ async def pull_model(request: PullRequest):
             "error": "not_implemented",
             "message": _LMSTUDIO_MANAGEMENT_HINT,
             "requested_model": request.name,
-            "hint": "Open LM Studio -> Discover tab to download models.",
+            "hint": "Open LM Studio -> Discover tab to download models, or start Ollama to enable universal downloads.",
         },
     )
 
@@ -545,16 +594,12 @@ async def delete_model(name: str) -> JSONResponse:
         raise HTTPException(status_code=400, detail="Leerer Modellname")
     
     client, lmstudio_ok, ollama_ok = await _make_alive_client()
-    is_ollama = False
-    ollama_base = None
-    if client is not None:
-        is_ollama = "11434" in client.base_url
-        if is_ollama:
-            ollama_base = client.base_url
-            
-    if is_ollama and ollama_base:
+    
+    # Universal Ollama-Delete-Bypass: Wenn Ollama online ist, können wir das Modell dort löschen!
+    if ollama_ok:
+        from pb_studio.ai.llm_provider import DEFAULT_OLLAMA_URL
         import httpx
-        delete_url = ollama_base
+        delete_url = DEFAULT_OLLAMA_URL
         if delete_url.endswith("/v1"):
             delete_url = delete_url[:-3]
         delete_url = f"{delete_url.rstrip('/')}/api/delete"
@@ -565,17 +610,8 @@ async def delete_model(name: str) -> JSONResponse:
                 response = await http_client.request("DELETE", delete_url, json={"name": name})
                 if response.status_code == 200:
                     return JSONResponse(content={"status": "success", "message": f"Model {name} deleted."})
-                else:
-                    return JSONResponse(
-                        status_code=response.status_code,
-                        content={"status": "error", "error": f"Ollama HTTP {response.status_code}: {response.text}"}
-                    )
         except Exception as exc:
             logger.error(f"Ollama delete failed: {exc}")
-            return JSONResponse(
-                status_code=500,
-                content={"status": "error", "error": str(exc)}
-            )
 
     return JSONResponse(
         status_code=501,

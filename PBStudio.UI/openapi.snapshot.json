@@ -1988,7 +1988,7 @@
                                                                  "Models (LM Studio)"
                                                              ],
                                                     "summary":  "Pull Model",
-                                                    "description":  "LM Studio managed Downloads ueber UI â HTTP 501 + Hinweis.",
+                                                    "description":  "LM Studio managed Downloads ueber UI â oder native Weiterleitung an Ollama.",
                                                     "operationId":  "pull_model_models_pull_post",
                                                     "requestBody":  {
                                                                         "content":  {
@@ -2001,7 +2001,7 @@
                                                                         "required":  true
                                                                     },
                                                     "responses":  {
-                                                                      "501":  {
+                                                                      "200":  {
                                                                                   "description":  "Successful Response",
                                                                                   "content":  {
                                                                                                   "application/json":  {
@@ -2030,7 +2030,7 @@
                                                                      "Models (LM Studio)"
                                                                  ],
                                                         "summary":  "Delete Model",
-                                                        "description":  "LM Studio managed Modelle ueber UI â HTTP 501 + Hinweis.",
+                                                        "description":  "LM Studio managed Modelle ueber UI â oder native Loeschung via Ollama.",
                                                         "operationId":  "delete_model_models__name__delete",
                                                         "parameters":  [
                                                                            {
@@ -2044,7 +2044,7 @@
                                                                            }
                                                                        ],
                                                         "responses":  {
-                                                                          "501":  {
+                                                                          "200":  {
                                                                                       "description":  "Successful Response",
                                                                                       "content":  {
                                                                                                       "application/json":  {
@@ -4547,7 +4547,12 @@
                                                                                                         "type":  "string",
                                                                                                         "nullable":  true,
                                                                                                         "title":  "Audio Key"
-                                                                                                    }
+                                                                                                    },
+                                                                                      "tag_source":  {
+                                                                                                         "type":  "string",
+                                                                                                         "nullable":  true,
+                                                                                                         "title":  "Tag Source"
+                                                                                                     }
                                                                                   },
                                                                    "type":  "object",
                                                                    "required":  [
@@ -4688,7 +4693,12 @@
                                                                                                       "type":  "boolean",
                                                                                                       "title":  "Has Embedding",
                                                                                                       "default":  false
-                                                                                                  }
+                                                                                                  },
+                                                                                "tag_source":  {
+                                                                                                   "type":  "string",
+                                                                                                   "nullable":  true,
+                                                                                                   "title":  "Tag Source"
+                                                                                               }
                                                                             },
                                                              "type":  "object",
                                                              "required":  [

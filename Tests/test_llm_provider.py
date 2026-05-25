@@ -80,17 +80,20 @@ def test_base_url_auto_prefers_lmstudio(mock_cfg):
     assert get_base_url() == DEFAULT_LMSTUDIO_URL
 
 
-def test_get_llm_client_lmstudio():
+@patch("pb_studio.ai.llm_provider._load_config", return_value={})
+def test_get_llm_client_lmstudio(mock_cfg):
     client = get_llm_client(provider="lmstudio")
     assert client.base_url == DEFAULT_LMSTUDIO_URL
 
 
-def test_get_llm_client_ollama():
+@patch("pb_studio.ai.llm_provider._load_config", return_value={})
+def test_get_llm_client_ollama(mock_cfg):
     client = get_llm_client(provider="ollama")
     assert client.base_url == DEFAULT_OLLAMA_URL
 
 
-def test_get_llm_client_timeout_passthrough():
+@patch("pb_studio.ai.llm_provider._load_config", return_value={})
+def test_get_llm_client_timeout_passthrough(mock_cfg):
     client = get_llm_client(provider="lmstudio", timeout_seconds=42.0)
     assert client.timeout_seconds == 42.0
 

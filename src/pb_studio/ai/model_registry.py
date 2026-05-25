@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
     "video_captioning": {
         "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "balance": ["qwen/qwen3-vl-8b"],
-        "quality": ["qwen/qwen3-vl-8b"],
+        "balance": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "quality": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
     },
     "image_captioning": {
         "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "balance": ["qwen/qwen3-vl-8b"],
-        "quality": ["qwen/qwen3-vl-8b"],
+        "balance": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "quality": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
     },
     "chat": {
         "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
@@ -200,6 +200,19 @@ class ModelRegistry:
         for candidate in prefs:
             for inst in installed_names:
                 if _name_matches(candidate, inst):
+                    return inst
+
+        # Smart Vision Fallback: Falls kein praeferiertes Modell passt und es ein Vision-Task ist,
+        # suchen wir nach dem ersten installierten Modell mit Vision-Faehigkeiten.
+        if task in ("video_captioning", "image_captioning"):
+            vision_keywords = ["vl", "vision", "moondream", "llava", "multimodal", "clip", "gemma-4", "minicpm"]
+            for inst in installed_names:
+                inst_lower = inst.lower()
+                if any(kw in inst_lower for kw in vision_keywords):
+                    logger.info(
+                        "Auto-selection: Smart Vision Fallback auf Modell %r fuer Task %r",
+                        inst, task
+                    )
                     return inst
 
         if allow_any_installed and installed_names:
