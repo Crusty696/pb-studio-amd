@@ -104,82 +104,140 @@ def annotate_cuts_with_brain(
             video_embedding_by_clip[cid] = emb
 
     out: list[dict[str, Any]] = []
-    timeline_id = _ensure_timeline(persist_to_state_conn, audio_clip_id)
 
-    for idx, cut in enumerate(cuts):
-        start = float(cut.get("start_time", 0.0))
-        end = float(cut.get("end_time", start + 1.0))
-        clip_id = str(cut.get("clip_id", ""))
-
-        sub_start, sub_end = _enclosing_subtrack(start, subtrack_segments)
-        a_energy = _value_at_time(energy_curve, start, audio_duration)
-
-        v = video_analysis_by_clip.get(clip_id, {})
-        motion = float(v.get("avg_motion") or 0.0)
-        v_pace = _video_pace_score(v)
-        scene_dist = _nearest_scene_distance(start, v.get("scenes") or [])
-        a_centroid = _value_at_time(centroid_curve_norm, start, audio_duration)
-
-        ctx = resolver.resolve(
-            section_type=str(cut.get("metadata", {}).get("segment_type") or "transition"),
-            cut_time_sec=start,
-            subtrack_start_sec=sub_start,
-            subtrack_end_sec=sub_end,
-            audio_energy=a_energy,
-            audio_mood_tags=audio_mood_tags,
-            video_motion_score=motion,
-            video_pace_class_value=v_pace,
-            energy_curve_full=energy_curve,
-            motion_curve_full=v.get("motion_curve") or None,
-        )
-
-        feats = CandidateFeatures(
-            trigger_type=str(cut.get("metadata", {}).get("trigger_type") or ""),
-            trigger_strength=float(cut.get("metadata", {}).get("trigger_strength") or 0.0),
-            audio_energy=a_energy,
-            audio_centroid=a_centroid,
-            audio_embedding=audio_embedding,
-            motion_score=motion,
-            scene_distance_sec=scene_dist,
-            brightness=float(v.get("avg_brightness") or 0.5),
-            saturation=float(v.get("avg_saturation") or 0.5),
-            color_temp=float(v.get("avg_color_temp") or 0.0),
-            pace_class_score=v_pace,
-            video_embedding=video_embedding_by_clip.get(clip_id),
-            mood_tags=list(v.get("mood_tags") or []),
-            audio_mood_tags=audio_mood_tags,
-            cut_duration_sec=max(end - start, 0.01),
-        )
-
-        bridge_values = bridge.compute_all(feats)
-        scores: dict[str, float] = {}
-        for axis in BRIDGE_AXES:
-            bv = float(bridge_values.get(axis, 0.0))
-            w = float(weight_store.get_posterior_mean(axis, ctx.context_keys))
-            scores[axis] = round(bv * w, 6)
-
-        final_score = sum(scores.values()) / len(scores) if scores else 0.0
-
-        if final_score < min_confidence:
-            continue
-
-        new_cut = dict(cut)
-        meta = dict(new_cut.get("metadata") or {})
-        meta["brain_scores"] = scores
-        meta["context_keys"] = ctx.context_keys
-        meta["brain_final_score"] = round(final_score, 6)
-        meta["bridge_values"] = bridge_values
-        new_cut["metadata"] = meta
-        out.append(new_cut)
-
-        if persist_to_state_conn is not None and timeline_id is not None:
-            cut_db_id = _persist_cut(
-                persist_to_state_conn, timeline_id, idx, new_cut, scores, ctx,
+    if persist_to_state_conn is not None:
+        try:
+            # Expliziter Transaktions-Kontext für maximale I/O-Performance (reduziert N+2 Writes auf 1 Write)
+            with persist_to_state_conn:
+                timeline_id = _ensure_timeline(persist_to_state_conn, audio_clip_id)
+                for idx, cut in enumerate(cuts):
+                    new_cut = _annotate_and_maybe_persist_cut(
+                        idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
+                        energy_curve, subtrack_segments, audio_mood_tags,
+                        video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                        weight_store, min_confidence, persist_to_state_conn, timeline_id
+                    )
+                    if new_cut is not None:
+                        out.append(new_cut)
+        except Exception as e:
+            logger.error(f"Failed to persist annotated cuts to state db: {e}", exc_info=True)
+            # Robustheits-Fallback: RAM-only im Fehlerfall, damit die Generierung nie fehlschlägt
+            out = []
+            for idx, cut in enumerate(cuts):
+                new_cut = _annotate_and_maybe_persist_cut(
+                    idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
+                    energy_curve, subtrack_segments, audio_mood_tags,
+                    video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                    weight_store, min_confidence, None, None
+                )
+                if new_cut is not None:
+                    out.append(new_cut)
+    else:
+        # RAM-only Modus
+        for idx, cut in enumerate(cuts):
+            new_cut = _annotate_and_maybe_persist_cut(
+                idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
+                energy_curve, subtrack_segments, audio_mood_tags,
+                video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                weight_store, min_confidence, None, None
             )
-            if cut_db_id is not None:
-                meta["cut_id"] = cut_db_id
+            if new_cut is not None:
+                out.append(new_cut)
 
     return out
+
+
+def _annotate_and_maybe_persist_cut(
+    idx: int,
+    cut: dict[str, Any],
+    bridge: BridgeDimensions,
+    resolver: ContextResolver,
+    audio_duration: float,
+    centroid_curve_norm: list[float],
+    energy_curve: list,
+    subtrack_segments: list,
+    audio_mood_tags: list[str],
+    video_analysis_by_clip: dict[str, dict],
+    audio_embedding: Optional[np.ndarray],
+    video_embedding_by_clip: dict[str, np.ndarray],
+    weight_store: WeightStore,
+    min_confidence: float,
+    conn: Optional[sqlite3.Connection],
+    timeline_id: Optional[int],
+) -> Optional[dict[str, Any]]:
+    """Helper method: processes a single cut list entry and optionally persists it (R-2 / G-2)."""
+    start = float(cut.get("start_time", 0.0))
+    end = float(cut.get("end_time", start + 1.0))
+    clip_id = str(cut.get("clip_id", ""))
+
+    sub_start, sub_end = _enclosing_subtrack(start, subtrack_segments)
+    a_energy = _value_at_time(energy_curve, start, audio_duration)
+
+    v = video_analysis_by_clip.get(clip_id, {})
+    motion = float(v.get("avg_motion") or 0.0)
+    v_pace = _video_pace_score(v)
+    scene_dist = _nearest_scene_distance(start, v.get("scenes") or [])
+    a_centroid = _value_at_time(centroid_curve_norm, start, audio_duration)
+
+    ctx = resolver.resolve(
+        section_type=str(cut.get("metadata", {}).get("segment_type") or "transition"),
+        cut_time_sec=start,
+        subtrack_start_sec=sub_start,
+        subtrack_end_sec=sub_end,
+        audio_energy=a_energy,
+        audio_mood_tags=audio_mood_tags,
+        video_motion_score=motion,
+        video_pace_class_value=v_pace,
+        energy_curve_full=energy_curve,
+        motion_curve_full=v.get("motion_curve") or None,
+    )
+
+    feats = CandidateFeatures(
+        trigger_type=str(cut.get("metadata", {}).get("trigger_type") or ""),
+        trigger_strength=float(cut.get("metadata", {}).get("trigger_strength") or 0.0),
+        audio_energy=a_energy,
+        audio_centroid=a_centroid,
+        audio_embedding=audio_embedding,
+        motion_score=motion,
+        scene_distance_sec=scene_dist,
+        brightness=float(v.get("avg_brightness") or 0.5),
+        saturation=float(v.get("avg_saturation") or 0.5),
+        color_temp=float(v.get("avg_color_temp") or 0.0),
+        pace_class_score=v_pace,
+        video_embedding=video_embedding_by_clip.get(clip_id),
+        mood_tags=list(v.get("mood_tags") or []),
+        audio_mood_tags=audio_mood_tags,
+        cut_duration_sec=max(end - start, 0.01),
+    )
+
+    bridge_values = bridge.compute_all(feats)
+    scores: dict[str, float] = {}
+    for axis in BRIDGE_AXES:
+        bv = float(bridge_values.get(axis, 0.0))
+        w = float(weight_store.get_posterior_mean(axis, ctx.context_keys))
+        scores[axis] = round(bv * w, 6)
+
+    final_score = sum(scores.values()) / len(scores) if scores else 0.0
+
+    if final_score < min_confidence:
+        return None
+
+    new_cut = dict(cut)
+    meta = dict(new_cut.get("metadata") or {})
+    meta["brain_scores"] = scores
+    meta["context_keys"] = ctx.context_keys
+    meta["brain_final_score"] = round(final_score, 6)
+    meta["bridge_values"] = bridge_values
+    new_cut["metadata"] = meta
+
+    if conn is not None and timeline_id is not None:
+        cut_db_id = _persist_cut(
+            conn, timeline_id, idx, new_cut, scores, ctx,
+        )
+        if cut_db_id is not None:
+            meta["cut_id"] = cut_db_id
+
+    return new_cut
 
 
 # ---------- helpers ----------

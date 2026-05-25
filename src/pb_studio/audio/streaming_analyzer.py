@@ -341,7 +341,9 @@ class StreamingAudioAnalyzer:
         info = sf.info(str(path))
         native_sr = info.samplerate
 
-        start_sample = int(offset * native_sr)
+        # AP-07 Fix: Begrenze start_sample auf info.frames - 1, um ValueError bei seek
+        # ueber das Dateiende (aufgrund von Rundungen bei Dateiende-Metadaten) zu verhindern.
+        start_sample = min(int(offset * native_sr), info.frames - 1)
         n_samples = int(duration * native_sr)
 
         with sf.SoundFile(str(path)) as f:
