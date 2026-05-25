@@ -482,9 +482,48 @@ _LMSTUDIO_MANAGEMENT_HINT = (
 )
 
 
-@router.post("/pull", status_code=501)
-async def pull_model(request: PullRequest) -> JSONResponse:
-    """LM Studio managed Downloads ueber UI — HTTP 501 + Hinweis."""
+async def ollama_pull_generator(model_name: str, ollama_url: str):
+    import httpx
+    # Rewrite base_url from OpenAI compat (e.g. /v1) to native Ollama api /api/pull
+    pull_url = ollama_url
+    if pull_url.endswith("/v1"):
+        pull_url = pull_url[:-3]
+    pull_url = f"{pull_url.rstrip('/')}/api/pull"
+    
+    logger.info(f"Ollama native pull starting for model {model_name} via {pull_url}")
+    try:
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream("POST", pull_url, json={"name": model_name, "stream": True}) as response:
+                if response.status_code != 200:
+                    err_msg = f"Ollama HTTP {response.status_code}"
+                    yield f"event: pull_progress\ndata: {json.dumps({'status': 'error', 'error': err_msg})}\n\n"
+                    return
+                
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        yield f"event: pull_progress\ndata: {line.strip()}\n\n"
+    except Exception as exc:
+        logger.error(f"Ollama pull failed: {exc}")
+        yield f"event: pull_progress\ndata: {json.dumps({'status': 'error', 'error': str(exc)})}\n\n"
+
+
+@router.post("/pull")
+async def pull_model(request: PullRequest):
+    """LM Studio managed Downloads ueber UI — oder native Weiterleitung an Ollama."""
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    is_ollama = False
+    ollama_base = None
+    if client is not None:
+        is_ollama = "11434" in client.base_url
+        if is_ollama:
+            ollama_base = client.base_url
+
+    if is_ollama and ollama_base:
+        return StreamingResponse(
+            ollama_pull_generator(request.name, ollama_base),
+            media_type="text/event-stream"
+        )
+
     return JSONResponse(
         status_code=501,
         content={
@@ -497,13 +536,47 @@ async def pull_model(request: PullRequest) -> JSONResponse:
 
 
 # ----------------------------------------------------------------------
-# DELETE /models/{name}  — NICHT unterstuetzt (LM Studio managed)
+# DELETE /models/{name}  — NICHT unterstuetzt (LM Studio managed) oder Ollama DELETE
 # ----------------------------------------------------------------------
-@router.delete("/{name:path}", status_code=501)
+@router.delete("/{name:path}")
 async def delete_model(name: str) -> JSONResponse:
-    """LM Studio managed Modelle ueber UI — HTTP 501 + Hinweis."""
+    """LM Studio managed Modelle ueber UI — oder native Loeschung via Ollama."""
     if not name.strip():
         raise HTTPException(status_code=400, detail="Leerer Modellname")
+    
+    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    is_ollama = False
+    ollama_base = None
+    if client is not None:
+        is_ollama = "11434" in client.base_url
+        if is_ollama:
+            ollama_base = client.base_url
+            
+    if is_ollama and ollama_base:
+        import httpx
+        delete_url = ollama_base
+        if delete_url.endswith("/v1"):
+            delete_url = delete_url[:-3]
+        delete_url = f"{delete_url.rstrip('/')}/api/delete"
+        
+        logger.info(f"Ollama native delete starting for model {name} via {delete_url}")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
+                response = await http_client.request("DELETE", delete_url, json={"name": name})
+                if response.status_code == 200:
+                    return JSONResponse(content={"status": "success", "message": f"Model {name} deleted."})
+                else:
+                    return JSONResponse(
+                        status_code=response.status_code,
+                        content={"status": "error", "error": f"Ollama HTTP {response.status_code}: {response.text}"}
+                    )
+        except Exception as exc:
+            logger.error(f"Ollama delete failed: {exc}")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "error": str(exc)}
+            )
+
     return JSONResponse(
         status_code=501,
         content={
