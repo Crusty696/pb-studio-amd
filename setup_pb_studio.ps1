@@ -157,6 +157,13 @@ function Step([string]$msg) {
     Log-Out $msg
 }
 
+function Test-VCRedist {
+    try {
+        $reg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" -Name "Installed" -ErrorAction SilentlyContinue
+        return ($reg -and $reg.Installed -eq 1)
+    } catch { return $false }
+}
+
 function Test-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     $prin = New-Object Security.Principal.WindowsPrincipal($id)
@@ -395,6 +402,19 @@ else { Step "FFmpeg fehlt - wird in Phase B geladen" }
 if (Test-Path (Join-Path $TOOLS_DIR "LibreHardwareMonitor")) { OK "LibreHardwareMonitor in tools/ vorhanden" }
 else { Step "LibreHardwareMonitor fehlt - wird in Phase B geladen" }
 
+# A.11 MSVC C++ Runtime
+if (Test-VCRedist) { OK "Visual C++ Redistributable (x64) vorhanden" }
+else { WARN "Visual C++ Redistributable (x64) fehlt - wird in Phase B installiert" }
+
+# A.12 Git
+$global:HasGit = $false
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    OK "Git installiert"
+    $global:HasGit = $true
+} else {
+    WARN "Git nicht gefunden - wird in Phase B portabel/systemweit eingerichtet"
+}
+
 # A.X Summary
 Write-Host ""
 Write-Host "  ----- Pre-Flight Summary -----" -ForegroundColor Cyan
@@ -414,6 +434,68 @@ if ($global:Issues.Count -gt 0) {
 Hdr "PHASE B: Install"
 
 if (-not (Test-Path $TOOLS_DIR)) { New-Item -ItemType Directory -Path $TOOLS_DIR | Out-Null }
+
+# B.0.1 Winget Source Reset (sichert frische Systeme ab)
+if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Step "Initialisiere winget Quellen (Source Reset)..."
+    & winget source reset --force *>&1 | Out-String | Add-Content $LogFile
+}
+
+# B.0.2 Visual C++ Redistributable 2015-2022 x64 (kritisch fuer onnxruntime/cv2 DLLs)
+if (-not (Test-VCRedist)) {
+    $vcInstalled = $false
+    if (Test-Admin -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Step "Versuche Visual C++ Redistributable via winget..."
+        & winget install -e --id Microsoft.VCRedist.2015+.x64 --silent --accept-package-agreements --accept-source-agreements *>&1 | Out-String | Add-Content $LogFile
+        if (Test-VCRedist) { $vcInstalled = $true }
+    }
+    if (-not $vcInstalled) {
+        Step "Visual C++ Redistributable fehlt. Downloade direkt von Microsoft..."
+        $vcRedistPath = Join-Path $env:TEMP "vc_redist.x64.exe"
+        try {
+            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $vcRedistPath -UserAgent "PBStudioInstaller/11.0"
+            Unblock-File $vcRedistPath
+            Step "Installiere Visual C++ Redistributable stillschweigend..."
+            $proc = Start-Process -FilePath $vcRedistPath -ArgumentList "/quiet /norestart" -Wait -PassThru
+            if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
+                OK "Visual C++ Redistributable erfolgreich installiert"
+            } else {
+                WARN "Visual C++ Redistributable Installer beendet mit ExitCode: $($proc.ExitCode)"
+            }
+        } catch {
+            WARN "Visual C++ Redistributable Download/Install fehlgeschlagen: $_"
+        } finally {
+            if (Test-Path $vcRedistPath) { Remove-Item $vcRedistPath -Force }
+        }
+    }
+} else {
+    OK "Visual C++ Redistributable (x64) bereits installiert"
+}
+
+# B.0.3 Git Auto-Check & Installation (sichert pre-commit hooks und checkout ab)
+if (-not $global:HasGit) {
+    $gitInstalled = $false
+    if (Test-Admin -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Step "Versuche Git via winget..."
+        Install-WingetPackage "Git.Git" "Git"
+        $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+        if (Get-Command git -ErrorAction SilentlyContinue) { $gitInstalled = $true }
+    }
+    if (-not $gitInstalled) {
+        Step "Git fehlt oder winget fehlgeschlagen. Installiere portables MinGit..."
+        $gitDir = Install-Tool "https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/MinGit-2.45.1-64-bit.zip" "MinGit" "git"
+        if ($gitDir) {
+            $cmdDir = Join-Path $gitDir "cmd"
+            $env:Path = "$cmdDir;$env:Path"
+            $userPath = [Environment]::GetEnvironmentVariable("Path","User")
+            if (-not ($userPath -like "*$cmdDir*")) {
+                [Environment]::SetEnvironmentVariable("Path","$cmdDir;$userPath","User")
+                OK "MinGit in User-PATH ergaenzt"
+            }
+            $global:HasGit = $true
+        }
+    }
+}
 
 # B.1 VS Build Tools
 if (-not $SkipBuildTools) {
@@ -510,6 +592,13 @@ if (-not $dn -or $dn.Major -lt 9) {
                 $env:Path = "$dotnetDest;$env:Path"
                 OK ".NET 9.0 SDK erfolgreich portabel installiert unter $dotnetDest"
                 $dn = Get-DotnetVer
+                
+                # Permanente Pfadkopplung fuer WPF /dotnet build in nachfolgenden Shells
+                $userPath = [Environment]::GetEnvironmentVariable("Path","User")
+                if (-not ($userPath -like "*$dotnetDest*")) {
+                    [Environment]::SetEnvironmentVariable("Path","$dotnetDest;$userPath","User")
+                    OK ".NET SDK in User-PATH ergaenzt"
+                }
             } else {
                 FAIL "dotnet-install.ps1 beendet mit ExitCode: $($proc.ExitCode)"
             }
