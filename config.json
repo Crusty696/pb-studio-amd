@@ -117,12 +117,12 @@
             }
         },
         "task_overrides": {
-            "chat": "llava:13b",
-            "chat_general": "llava:13b",
-            "chat_tool_use": "llava:13b",
-            "brain_explanation": "llava:13b",
-            "video_captioning": "llava:13b",
-            "image_captioning": "llava:13b"
+            "chat": "",
+            "chat_general": "",
+            "chat_tool_use": "",
+            "brain_explanation": "",
+            "video_captioning": "",
+            "image_captioning": ""
         }
     },
     "ui": {
