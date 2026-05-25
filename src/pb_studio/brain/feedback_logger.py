@@ -63,7 +63,7 @@ class FeedbackLogger:
 
         bumps = 0
         try:
-            self.weights.conn.execute("BEGIN")
+            self.weights.conn.execute("BEGIN IMMEDIATE")
             for axis in BRIDGE_AXES:
                 for level, key in enumerate(context_keys):
                     self.weights.update(
