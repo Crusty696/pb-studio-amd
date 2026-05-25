@@ -141,7 +141,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"  temp-Cleanup-on-Startup übersprungen: {e}")
 
+    # Zombie-Prozess-Wächter (Heartbeat-Schutz)
+    import asyncio
+    async def _zombie_watcher():
+        logger.info("  Zombie-Prozess-Wächter aktiv (Toleranz: 60s ab Start / 30s nach Client-Verlust)")
+        from .dependencies import _event_queues
+        
+        # Grace-Period ab Start: 60 Sekunden, damit sich der C#-WPF-Client in Ruhe verbinden kann
+        await asyncio.sleep(60)
+        
+        consecutive_idle_checks = 0
+        while True:
+            await asyncio.sleep(5)
+            # Wenn keine aktiven SSE-Event-Queues registriert sind
+            if not _event_queues:
+                consecutive_idle_checks += 1
+                # 6 Checks * 5 Sekunden = 30 Sekunden ohne Client
+                if consecutive_idle_checks >= 6:
+                    logger.warning("Kein aktiver Client verbunden (SSE-Verbindungen verwaist). Automatischer Shutdown wird eingeleitet...")
+                    _force_exit()
+            else:
+                consecutive_idle_checks = 0
+                
+    watcher_task = asyncio.create_task(_zombie_watcher())
+
     yield
+
+    try:
+        watcher_task.cancel()
+    except Exception:
+        pass
 
     # BUG-099 FIX: Expliziter Cleanup beim Shutdown
     logger.info("PB Studio AMD Backend wird heruntergefahren...")
