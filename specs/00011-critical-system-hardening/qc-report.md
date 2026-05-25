@@ -16,6 +16,12 @@
 - **QC-Verifikation**: `pytest Tests/test_subtrack_detector.py` ausgeführt.
 - **Ergebnis**: 2 passed, 1 skipped (f-measure realdata), 0 failed (100% Erfolg).
 
+### 3. Z-UI: WPF View-Lifecycle & DI-Scope Härtung
+- **Implementierung**: `AudioLibraryView`, `VideoLibraryView` und `ChatView` auf `IServiceScope` Kapselung umgestellt. Scopes werden bei `Loaded` instanziiert und bei `Unloaded` disposed, wodurch Microsoft DI transient `IDisposable` ViewModels zuverlässig entladen und freigegeben werden können.
+- **QC-Verifikation**: Erfolgreicher WPF-Release-Build mit `dotnet build PBStudio.UI --configuration Release` ausgeführt.
+- **Ergebnis**: 0 Fehler, 0 Warnungen (100% Erfolg).
+
 ## 🚀 Freigabe
 Sämtliche Code-Zonen sind sauber voneinander getrennt. Die Speicheroptimierungen sind nachweislich stabil und regressionstestsicher im System verankert.
 Das Feature wird hiermit zur Freigabe deklariert.
+
