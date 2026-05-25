@@ -22,6 +22,10 @@ public class SSEClient : IDisposable
     private readonly object _stateLock = new object(); // BUG-056 FIX
     private volatile bool _disposed;
     private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
+    
+    // Throttling fields
+    private readonly object _progressLock = new object();
+    private readonly Dictionary<string, (DateTime Time, double Percent)> _lastProgressUpdate = [];
 
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
@@ -259,27 +263,63 @@ public class SSEClient : IDisposable
             switch (streamKind)
             {
                 case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "gpu_error":
-                    ProgressReceived?.Invoke(this, new ProgressEventArgs
                     {
-                        EventType = eventType,
-                        Percent = TryGetDouble(root, "percent"),
-                        Message = FirstNonEmpty(
+                        var pct = TryGetDouble(root, "percent");
+                        var status = NormalizeStatus(root);
+                        var taskId = FirstNonEmpty(TryGetString(root, "task_id"), TryGetString(root, "job_id"));
+                        var msg = FirstNonEmpty(
                             TryGetString(root, "message"),
                             TryGetString(root, "error"),
-                            TryGetString(root, "detail")),
-                        TaskId = FirstNonEmpty(TryGetString(root, "task_id"), TryGetString(root, "job_id")),
-                        Status = NormalizeStatus(root),
-                        CurrentFrame = TryGetInt(root, "current_frame"),
-                        TotalFrames = TryGetInt(root, "total_frames"),
-                        ElapsedSeconds = TryGetDouble(root, "elapsed_seconds"),
-                        EtaSeconds = TryGetDouble(root, "eta_seconds"),
-                        OutputPath = TryGetString(root, "output_path"),
-                        Error = TryGetString(root, "error"),
-                        Step = TryGetString(root, "step"),
-                        StepIndex = TryGetInt(root, "step_index"),
-                        StepTotal = TryGetInt(root, "step_total"),
-                        ClipId = TryGetInt(root, "clip_id"),
-                    });
+                            TryGetString(root, "detail"));
+
+                        bool isFinal = status == "completed" || status == "failed" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool shouldEmit = true;
+
+                        if (!isFinal && !string.IsNullOrEmpty(taskId))
+                        {
+                            var now = DateTime.UtcNow;
+                            lock (_progressLock)
+                            {
+                                if (_lastProgressUpdate.TryGetValue(taskId, out var lastUpdate))
+                                {
+                                    if ((now - lastUpdate.Time).TotalMilliseconds < 100)
+                                    {
+                                        shouldEmit = false;
+                                    }
+                                    else
+                                    {
+                                        _lastProgressUpdate[taskId] = (now, pct);
+                                    }
+                                }
+                                else
+                                {
+                                    _lastProgressUpdate[taskId] = (now, pct);
+                                }
+                            }
+                        }
+
+                        if (shouldEmit)
+                        {
+                            ProgressReceived?.Invoke(this, new ProgressEventArgs
+                            {
+                                EventType = eventType,
+                                Percent = pct,
+                                Message = msg,
+                                TaskId = taskId,
+                                Status = status,
+                                CurrentFrame = TryGetInt(root, "current_frame"),
+                                TotalFrames = TryGetInt(root, "total_frames"),
+                                ElapsedSeconds = TryGetDouble(root, "elapsed_seconds"),
+                                EtaSeconds = TryGetDouble(root, "eta_seconds"),
+                                OutputPath = TryGetString(root, "output_path"),
+                                Error = TryGetString(root, "error"),
+                                Step = TryGetString(root, "step"),
+                                StepIndex = TryGetInt(root, "step_index"),
+                                StepTotal = TryGetInt(root, "step_total"),
+                                ClipId = TryGetInt(root, "clip_id"),
+                            });
+                        }
+                    }
                     break;
 
                 case StreamKind.Log when eventType == "log":
