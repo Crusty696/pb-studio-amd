@@ -36,6 +36,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _selectedTimelinePosition;
     [ObservableProperty] private double _pixelsPerSecond = 100.0;
     [ObservableProperty] private double _horizontalOffset = 0.0;
+    [ObservableProperty] private bool _showWaveform = true;
+    [ObservableProperty] private bool _showBeatgrid = true;
 
     // /pacing/preview — Backend rendert 640×360 Slice der aktuellen Timeline.
     [ObservableProperty] private double _previewStartSec = 0.0;
