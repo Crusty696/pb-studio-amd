@@ -276,6 +276,15 @@ class MotionAnalyzer:
 
             Returns (zeros, zeros) on error.
         """
+        # R15/GUARD: Downscale 4K input to maximum 1080p to prevent DirectML TDRs and excessive RAM allocation
+        h, w = frame1.shape[:2]
+        if w > 1920 or h > 1080:
+            scale = min(1920 / w, 1080 / h)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            frame1 = cv2.resize(frame1, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            frame2 = cv2.resize(frame2, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
         if not self._initialized:
             if not self._init_model():
                 h, w = frame1.shape[:2]
