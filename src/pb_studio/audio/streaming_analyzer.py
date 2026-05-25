@@ -252,11 +252,17 @@ class StreamingAudioAnalyzer:
         Nur der aktuelle Chunk + Overlap lebt im RAM.
         """
         import librosa
+        import soundfile as sf
 
         step = self.window_sec - self.overlap_sec
         if step <= 0:
             step = self.window_sec  # Safety: overlap darf nicht >= window sein
         n_windows = max(1, math.ceil((duration - self.overlap_sec) / step))
+
+        try:
+            native_sr = sf.info(str(path)).samplerate
+        except Exception:
+            native_sr = self.SR
 
         # Aggregations-Objekte
         bpm_est = _RunningBPMEstimator()
@@ -266,7 +272,9 @@ class StreamingAudioAnalyzer:
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
 
         for i in range(n_windows):
-            chunk_start = i * step
+            # Berechne start_sample absolut und drift-frei
+            start_sample = int(i * step * native_sr)
+            chunk_start = start_sample / native_sr
             chunk_dur = min(self.window_sec, duration - chunk_start)
             if chunk_dur < 2.0:
                 continue
