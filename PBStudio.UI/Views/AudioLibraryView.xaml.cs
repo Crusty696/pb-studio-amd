@@ -1,16 +1,37 @@
+using System.Windows;
 using System.Windows.Controls;
 using CommunityToolkit.Mvvm.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI.Views;
 
-/// <summary>AudioLibraryView — DataContext wird via Ioc.Default aufgelöst.</summary>
+/// <summary>AudioLibraryView — DataContext wird via IServiceScope auflösung gehortet.</summary>
 public partial class AudioLibraryView : UserControl
 {
+    private IServiceScope? _scope;
+
     public AudioLibraryView()
     {
         InitializeComponent();
-        DataContext = Ioc.Default.GetRequiredService<AudioLibraryViewModel>();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_scope == null)
+        {
+            _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            DataContext = _scope.ServiceProvider.GetRequiredService<AudioLibraryViewModel>();
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DataContext = null;
+        _scope?.Dispose();
+        _scope = null;
     }
 
     /// <summary>Multi-Select Sync: ListBox.SelectedItems -> VM.SelectedClips.</summary>
@@ -20,3 +41,4 @@ public partial class AudioLibraryView : UserControl
             vm.UpdateSelectedClips(list.SelectedItems);
     }
 }
+

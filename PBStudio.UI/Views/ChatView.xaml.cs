@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI.Views;
@@ -13,11 +14,31 @@ namespace PBStudio.UI.Views;
 /// </summary>
 public partial class ChatView : UserControl
 {
+    private IServiceScope? _scope;
+
     public ChatView()
     {
         InitializeComponent();
-        DataContext = Ioc.Default.GetRequiredService<ChatViewModel>();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_scope == null)
+        {
+            _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            DataContext = _scope.ServiceProvider.GetRequiredService<ChatViewModel>();
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DataContext = null;
+        _scope?.Dispose();
+        _scope = null;
+    }
+
 
     private void InputBox_KeyDown(object sender, KeyEventArgs e)
     {
