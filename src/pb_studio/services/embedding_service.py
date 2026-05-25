@@ -222,13 +222,25 @@ class EmbeddingService:
             end_time=float(scenes[-1][1]) if scenes else 0.0,
             embedding=result.clip_embedding,
         )
-        for (s, e), emb in zip(result.scene_times, result.scene_embeddings):
+        
+        # Bulk-Insert für alle Szenen-Einheiten
+        scenes_data = [
+            {
+                "parent_id": clip_id,
+                "level": "scene",
+                "media_id": job.media_id,
+                "media_hash": job.media_hash,
+                "start_time": float(s),
+                "end_time": float(e),
+                "embedding": emb,
+            }
+            for (s, e), emb in zip(result.scene_times, result.scene_embeddings)
+        ]
+        
+        if scenes_data:
             await asyncio.to_thread(
-                self.repository.add_video_unit,
-                parent_id=clip_id, level="scene",
-                media_id=job.media_id, media_hash=job.media_hash,
-                start_time=float(s), end_time=float(e),
-                embedding=emb,
+                self.repository.add_video_units_bulk,
+                scenes_data
             )
 
     async def _notify(

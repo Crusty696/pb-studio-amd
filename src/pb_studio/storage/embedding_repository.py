@@ -307,6 +307,71 @@ class EmbeddingRepository:
             ).fetchone()
         return row is not None
 
+    def add_video_units_bulk(
+        self,
+        units_data: list[dict[str, Any]],
+    ) -> list[int]:
+        """Insert multiple video units and their embeddings in a single transaction."""
+        inserted_ids = []
+        try:
+            self.conn.execute("BEGIN")
+            for item in units_data:
+                emb = self._coerce_embedding(item["embedding"], VIDEO_DIM)
+                cur = self.conn.execute(
+                    "INSERT INTO video_units (parent_id, level, media_id, media_hash, "
+                    "start_time, end_time, motion_score, brightness, saturation, "
+                    "color_temp, metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        item.get("parent_id"), item["level"], item["media_id"], item["media_hash"],
+                        float(item["start_time"]), float(item["end_time"]),
+                        item.get("motion_score"), item.get("brightness"),
+                        item.get("saturation"), item.get("color_temp"),
+                        json.dumps(item.get("metadata") or {}),
+                    ),
+                )
+                unit_id = int(cur.lastrowid)
+                self.conn.execute(
+                    "INSERT INTO video_embeddings (rowid, embedding) VALUES (?, ?)",
+                    (unit_id, emb.tobytes()),
+                )
+                inserted_ids.append(unit_id)
+            self.conn.commit()
+            return inserted_ids
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def add_audio_units_bulk(
+        self,
+        units_data: list[dict[str, Any]],
+    ) -> list[int]:
+        """Insert multiple audio units and their embeddings in a single transaction."""
+        inserted_ids = []
+        try:
+            self.conn.execute("BEGIN")
+            for item in units_data:
+                emb = self._coerce_embedding(item["embedding"], AUDIO_DIM)
+                cur = self.conn.execute(
+                    "INSERT INTO audio_units (parent_id, level, media_id, media_hash, "
+                    "start_time, end_time, metadata_json) VALUES (?,?,?,?,?,?,?)",
+                    (
+                        item.get("parent_id"), item["level"], item["media_id"], item["media_hash"],
+                        float(item["start_time"]), float(item["end_time"]),
+                        json.dumps(item.get("metadata") or {}),
+                    ),
+                )
+                unit_id = int(cur.lastrowid)
+                self.conn.execute(
+                    "INSERT INTO audio_embeddings (rowid, embedding) VALUES (?, ?)",
+                    (unit_id, emb.tobytes()),
+                )
+                inserted_ids.append(unit_id)
+            self.conn.commit()
+            return inserted_ids
+        except Exception:
+            self.conn.rollback()
+            raise
+
     @staticmethod
     def _coerce_embedding(vec: np.ndarray, dim: int) -> np.ndarray:
         arr = np.asarray(vec, dtype=np.float32).reshape(-1)
