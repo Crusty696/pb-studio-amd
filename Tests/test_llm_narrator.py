@@ -215,7 +215,8 @@ def test_generate_explanation_returns_none_on_lmstudio_unreachable():
         return await generate_explanation(client=client, **_sample_inputs())
 
     text = asyncio.run(go())
-    assert text is None
+    assert text is not None
+    assert "Detaillierte KI-Erklärung ist offline" in text
 
 
 def test_generate_explanation_returns_none_when_no_model_installed():
@@ -227,7 +228,8 @@ def test_generate_explanation_returns_none_when_no_model_installed():
         return await generate_explanation(client=client, **_sample_inputs())
 
     text = asyncio.run(go())
-    assert text is None
+    assert text is not None
+    assert "Detaillierte KI-Erklärung ist offline" in text
 
 
 def test_generate_explanation_returns_none_on_empty_chat_response():
@@ -238,7 +240,8 @@ def test_generate_explanation_returns_none_on_empty_chat_response():
         return await generate_explanation(client=client, **_sample_inputs())
 
     text = asyncio.run(go())
-    assert text is None
+    assert text is not None
+    assert "Detaillierte KI-Erklärung ist offline" in text
 
 
 def test_generate_explanation_returns_none_on_chat_5xx():
@@ -249,7 +252,8 @@ def test_generate_explanation_returns_none_on_chat_5xx():
         return await generate_explanation(client=client, **_sample_inputs())
 
     text = asyncio.run(go())
-    assert text is None
+    assert text is not None
+    assert "Detaillierte KI-Erklärung ist offline" in text
 
 
 # ======================================================================

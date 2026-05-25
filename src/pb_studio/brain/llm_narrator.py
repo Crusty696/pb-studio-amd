@@ -303,6 +303,36 @@ async def _async_generate_explanation(
         final_score=final_score,
     )
 
+    def get_offline_explanation() -> str:
+        top_names = []
+        if top_axes:
+            for a in top_axes[:2]:
+                axis_name = a.get("axis", "Unbekannt")
+                translations = {
+                    "beat": "Rhythmus-Synchronität (Beat)",
+                    "onset": "Einsatz-Dynamik (Onset)",
+                    "kick": "Bass-Präsenz (Kick)",
+                    "snare": "Snare-Taktung (Snare)",
+                    "hihat": "Hihat-Frequenz (Hihat)",
+                    "energy": "Energieverlauf",
+                    "motion": "Bewegungsintensität (Motion)",
+                    "scene_cut": "Schnittfrequenz (Scene Cuts)",
+                    "brightness_match": "Helligkeitsverlauf",
+                    "color_temp_match": "Farbtemperatur",
+                    "pace_match": "Pacing-Geschwindigkeit",
+                    "semantic_match": "Thematischer Inhalt (Semantic)",
+                    "mood_match": "Stimmung (Mood)",
+                }
+                top_names.append(translations.get(axis_name, axis_name))
+        
+        axes_str = " und ".join(top_names) if top_names else "allgemeine Pacing-Faktoren"
+        return (
+            f"Dieses Video-Segment wurde ausgewählt, da es eine hohe mathematische Übereinstimmung "
+            f"in den Bereichen {axes_str} aufweist (Gesamt-Confidence: {final_score:.2f}).\n\n"
+            f"[Hinweis: Detaillierte KI-Erklärung ist offline. Bitte starten Sie LM Studio oder Ollama, "
+            f"um die automatische Textgenerierung zu aktivieren.]"
+        )
+
     # Caller kann einen vorbereiteten Client uebergeben (Tests via MockTransport).
     # M2-Fix (W-M2, 2026-05-20): get_alive_client wired — Auto-Fallback LM Studio
     # → Ollama wenn primary down. Vorher: Wenn LM Studio down, sofort None
@@ -313,9 +343,9 @@ async def _async_generate_explanation(
         client = await get_alive_client(timeout_seconds=min(timeout_seconds, 5.0))
         if client is None:
             logger.warning(
-                "LLM-Narrator: kein LLM-Provider erreichbar (LM Studio + Ollama beide down) — Fallback"
+                "LLM-Narrator: kein LLM-Provider erreichbar (LM Studio + Ollama beide down) — Fallback auf offline Text"
             )
-            return None
+            return get_offline_explanation()
         owns_client = True
 
     try:
@@ -324,10 +354,10 @@ async def _async_generate_explanation(
             await registry.refresh()
         except LMStudioError as exc:
             logger.warning(
-                "LLM-Narrator: LM Studio nicht erreichbar (%s) — Fallback auf strukturierte Anzeige",
+                "LLM-Narrator: LM Studio nicht erreichbar (%s) — Fallback auf offline Text",
                 exc,
             )
-            return None
+            return get_offline_explanation()
         if model_override:
             model = model_override
         else:
@@ -335,12 +365,12 @@ async def _async_generate_explanation(
                 model = registry.select_best_for_task(task, mode)
             except (NoSuitableModelError, ModelRegistryError) as exc:
                 logger.warning(
-                    "LLM-Narrator: kein passendes Modell fuer task=%r mode=%r: %s",
+                    "LLM-Narrator: kein passendes Modell fuer task=%r mode=%r: %s — Fallback auf offline Text",
                     task,
                     mode,
                     exc,
                 )
-                return None
+                return get_offline_explanation()
 
         try:
             response = await client.chat(
@@ -355,8 +385,8 @@ async def _async_generate_explanation(
                 },
             )
         except LMStudioError as exc:
-            logger.warning("LLM-Narrator: chat() fehlgeschlagen: %s", exc)
-            return None
+            logger.warning("LLM-Narrator: chat() fehlgeschlagen: %s — Fallback auf offline Text", exc)
+            return get_offline_explanation()
 
         message = response.get("message") or {}
         raw = (
@@ -367,10 +397,10 @@ async def _async_generate_explanation(
         text = _post_process_narrative(str(raw))
         if not text:
             logger.warning(
-                "LLM-Narrator: leere Antwort vom Modell %s — Fallback auf strukturierte Anzeige",
+                "LLM-Narrator: leere Antwort vom Modell %s — Fallback auf offline Text",
                 model,
             )
-            return None
+            return get_offline_explanation()
         _cache_put(cache_key, text)
         return text
     finally:

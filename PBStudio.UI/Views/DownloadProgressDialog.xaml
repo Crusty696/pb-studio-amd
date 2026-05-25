@@ -73,10 +73,15 @@
                     <icon:PackIconMaterial Kind="AlertCircle" Width="14" Height="14"
                                            Foreground="{StaticResource AbletonRed}"
                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding ErrorText}"
+                    <TextBox Text="{Binding ErrorText, Mode=OneWay}"
                                Foreground="{StaticResource AbletonRed}"
+                               Background="Transparent"
+                               BorderThickness="0"
+                               IsReadOnly="True"
                                FontSize="11"
                                TextWrapping="Wrap"
+                               Padding="0"
+                               Cursor="IBeam"
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>

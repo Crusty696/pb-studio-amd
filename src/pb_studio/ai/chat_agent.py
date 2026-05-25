@@ -416,7 +416,15 @@ class ChatAgent:
                             yield ChatEvent("done", {"reason": "llm_error"})
                             return
                     else:
-                        yield ChatEvent("error", {"message": f"LLM-Fehler (kein Fallback möglich): {exc}", "stage": "chat"})
+                        error_msg = (
+                            f"Verbindung zum lokalen KI-Dienst (LM Studio / Ollama) verloren.\n\n"
+                            f"Mögliche Ursachen & Lösungen:\n"
+                            f"1. LM Studio oder Ollama läuft nicht. Bitte starten Sie Ihre lokale KI-Anwendung.\n"
+                            f"2. In LM Studio ist kein Modell geladen. Bitte laden Sie ein Chat-Modell (z. B. 'gemma-4-e4b' oder 'moondream').\n"
+                            f"3. Falls Sie Ollama nutzen, stellen Sie sicher, dass mindestens ein Modell installiert ist (z. B. via 'ollama run gemma:2b').\n\n"
+                            f"Originaler Fehler: {exc}"
+                        )
+                        yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
                         yield ChatEvent("done", {"reason": "llm_error"})
                         return
 

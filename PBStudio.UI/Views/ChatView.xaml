@@ -110,11 +110,15 @@
                                 </DockPanel>
 
                                 <!-- Content -->
-                                <TextBlock Text="{Binding Content}"
-                                           TextWrapping="Wrap"
-                                           Foreground="{StaticResource AbletonText}"
-                                           FontSize="13"
-                                           LineHeight="18"/>
+                                <TextBox Text="{Binding Content, Mode=OneWay}"
+                                         TextWrapping="Wrap"
+                                         Foreground="{StaticResource AbletonText}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         IsReadOnly="True"
+                                         FontSize="13"
+                                         Padding="0"
+                                         Cursor="IBeam"/>
 
                                 <!-- Streaming-Indikator -->
                                 <TextBlock Text="..."
