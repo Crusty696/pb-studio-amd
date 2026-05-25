@@ -547,6 +547,14 @@ if (-not $py -or $py.Minor -ne 11) {
                 $localPy = Join-Path $env:USERPROFILE "AppData\Local\Programs\Python\Python311"
                 $localPyScripts = Join-Path $localPy "Scripts"
                 $env:Path = "$localPy;$localPyScripts;$env:Path"
+                
+                # Permanente Pfadkopplung in der Registry fuer neue Shells + Batchdateien
+                $userPath = [Environment]::GetEnvironmentVariable("Path","User")
+                if (-not ($userPath -like "*$localPy*")) {
+                    [Environment]::SetEnvironmentVariable("Path","$localPy;$localPyScripts;$userPath","User")
+                    OK "Python 3.11 in User-PATH permanent registriert"
+                }
+                
                 OK "Python 3.11.9 autonom im User-Scope installiert"
                 $py = Get-PyExe
             } else {

@@ -40,6 +40,28 @@ function Write-Status($msg, $color = 'Cyan') {
     Write-Host $msg
 }
 
+function Resolve-DotnetExe {
+    $candidates = @(
+        (Join-Path $ProjectRoot 'tools\dotnet\dotnet.exe'),
+        'dotnet'
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -eq 'dotnet') {
+            try {
+                $version = & $candidate --version 2>$null
+                if ($version) {
+                    return $candidate
+                }
+            } catch {}
+        } elseif (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw '.NET SDK executable not found (portable tools\dotnet or global installation missing).'
+}
+
 function Get-RelativePathSafe {
     param(
         [Parameter(Mandatory = $true)]
@@ -165,9 +187,28 @@ if (-not $FlatOutput) {
 }
 
 # --- dotnet publish ---
-Write-Status "Running: dotnet $($publishArgs -join ' ')"
-& dotnet @publishArgs
-$publishExit = $LASTEXITCODE
+try {
+    $DotnetExe = Resolve-DotnetExe
+    # Dotnet-Root temporaer setzen falls wir das portable dotnet nutzen
+    if ($DotnetExe -like "*tools\dotnet*") {
+        $dotnetDir = Split-Path $DotnetExe -Parent
+        $env:DOTNET_ROOT = $dotnetDir
+        $env:Path = "$dotnetDir;$env:Path"
+        Write-Status "Nutze portables .NET SDK ($dotnetDir)" "DarkGray"
+    }
+    
+    # .NET SDK info
+    $dotnetVersion = & $DotnetExe --version 2>&1
+    Write-Status "Nutze .NET SDK ($DotnetExe): $dotnetVersion"
+    
+    Write-Status "Running: $DotnetExe $($publishArgs -join ' ')"
+    & $DotnetExe @publishArgs
+    $publishExit = $LASTEXITCODE
+} catch {
+    Write-Status "FATAL: dotnet-Auflösung oder publish fehlgeschlagen: $_" 'Red'
+    exit 1
+}
+
 if ($publishExit -ne 0) {
     Write-Status "FATAL: dotnet publish failed with exit code $publishExit" 'Red'
     exit $publishExit

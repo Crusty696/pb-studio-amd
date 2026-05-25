@@ -21,7 +21,7 @@ if not "%~1"=="" (
 )
 
 echo INFO: Starte Stresstest mit %CYCLES% Zyklen...
-python scripts\long_stress_run.py %CYCLES%
+.venv\Scripts\python.exe scripts\long_stress_run.py %CYCLES%
 
 if !ERRORLEVEL! EQU 0 (
     echo SUCCESS: Stresstest fehlerfrei beendet.

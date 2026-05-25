@@ -2,6 +2,13 @@
 REM SSE-Recovery + Visual Review Test — full autonomous run
 cd /d "%~dp0"
 
+REM Pruefe ob portables .NET SDK vorhanden ist und konfiguriere Umgebung
+if exist "%~dp0tools\dotnet\dotnet.exe" (
+    set "DOTNET_ROOT=%~dp0tools\dotnet"
+    set "PATH=%~dp0tools\dotnet;%PATH%"
+    echo [INFO] Nutze portables .NET SDK unter tools\dotnet.
+)
+
 echo === SSE-Recovery-Test Start: %date% %time% ===  > sse_test.log
 
 REM Kill any leftover python
@@ -21,7 +28,7 @@ echo Build OK >> sse_test.log
 
 REM === Phase 2: Launch Backend in background ===
 echo --- Phase 2: Backend launch --- >> sse_test.log
-start "PB-Backend" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && python -m uvicorn backend.main:app --port 8765"
+start "PB-Backend" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765"
 echo Waiting 30s for backend ready... >> sse_test.log
 ping -n 31 127.0.0.1 >nul
 
@@ -49,7 +56,7 @@ powershell -Command "Add-Type -AssemblyName System.Windows.Forms; Add-Type -Asse
 
 REM === Phase 6: Restart backend, wait, screenshot 2 (overlay gone) ===
 echo --- Phase 6: Restart backend --- >> sse_test.log
-start "PB-Backend2" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && python -m uvicorn backend.main:app --port 8765"
+start "PB-Backend2" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765"
 echo Waiting 30s for backend ready + reconnect... >> sse_test.log
 ping -n 31 127.0.0.1 >nul
 

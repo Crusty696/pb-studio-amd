@@ -13,7 +13,7 @@ REM Start backend mit Forced 4GB VRAM Limit
 echo --- Backend launch mit PB_STUDIO_FORCED_VRAM=4000 --- >> stress_low.log
 set PYTHONPATH=src
 set PB_STUDIO_FORCED_VRAM=4000
-start "PB-Backend-4GB" /MIN cmd /c "set PYTHONPATH=src && set PB_STUDIO_FORCED_VRAM=4000 && python -m uvicorn backend.main:app --port 8765 > backend_low.log 2>&1"
+start "PB-Backend-4GB" /MIN cmd /c "set PYTHONPATH=src && set PB_STUDIO_FORCED_VRAM=4000 && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765 > backend_low.log 2>&1"
 ping -n 36 127.0.0.1 >nul
 
 REM Probe health + VRAM telemetry
