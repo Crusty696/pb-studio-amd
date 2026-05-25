@@ -251,6 +251,11 @@ class StemSeparator:
             _emit(90.0, "saving_stems")
             logger.info(f"Separation complete. Files: {output_files}")
             _emit(100.0, "complete")
+            
+            # RAM/VRAM-Cleanup
+            import gc
+            gc.collect()
+            
             return {"stems": output_files}
 
         except Exception as e:
