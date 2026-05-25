@@ -231,15 +231,15 @@ class StemSeparator:
 
         _emit(0.0, "init")
 
-        if not self.separator:
-            return {"error": "Separator not initialized"}
-
-        if not Path(file_path).exists():
-            return {"error": f"File not found: {file_path}"}
-
         # Scoped DirectML patch
         self._apply_directml_patch()
         try:
+            if not self.separator:
+                return {"error": "Separator not initialized"}
+
+            if not Path(file_path).exists():
+                return {"error": f"File not found: {file_path}"}
+
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)

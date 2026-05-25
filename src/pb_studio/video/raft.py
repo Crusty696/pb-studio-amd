@@ -181,6 +181,20 @@ class MotionAnalyzer:
             logger.info(f"RAFT model loaded. Active Provider: {self._active_provider}")
             self._log_model_info()
 
+            if self._active_provider == "DmlExecutionProvider":
+                try:
+                    from pb_studio.core.vram_budget_manager import get_vram_manager
+                    mgr = get_vram_manager()
+                    model_id = "raft_small" if "raft_small" in str(self.model_path).lower() else "raft_standard"
+                    budget = mgr.get_model(model_id)
+                    if budget is not None:
+                        budget.unload_callback = self.unload
+                    mgr.reserve(model_id, force=False)
+                    mgr.commit(model_id)
+                    logger.info("RAFT model registered and committed with VRAMBudgetManager")
+                except Exception as ve:
+                    logger.warning("VRAM-Manager-Registrierung fuer RAFT fehlgeschlagen: %s", ve)
+
             return True
 
         except Exception as e:
@@ -670,6 +684,15 @@ class MotionAnalyzer:
         """Release model resources."""
         self.session = None
         self._initialized = False
+
+        try:
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+            mgr = get_vram_manager()
+            model_id = "raft_small" if "raft_small" in str(self.model_path).lower() else "raft_standard"
+            mgr.release(model_id)
+            logger.info("RAFT model VRAM released in VRAMBudgetManager")
+        except Exception as ve:
+            logger.warning("VRAM-Manager-Freigabe fuer RAFT fehlgeschlagen: %s", ve)
 
         # DirectML gibt VRAM erst bei GC frei
         import gc
