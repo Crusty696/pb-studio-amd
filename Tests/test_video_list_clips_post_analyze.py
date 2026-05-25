@@ -37,7 +37,7 @@ def _seed_analyzed_video_clip(state, clip_id=1):
         "thumbnail_available": True,
         "tags": [],
         "video_hash": "abc" * 21 + "x",
-        # 7 fields written by analyze_video into in-memory clip:
+        # 8 fields written by analyze_video into in-memory clip:
         "is_analyzed": True,
         "avg_motion": 12.5,
         "peak_motion": 99.0,
@@ -45,6 +45,7 @@ def _seed_analyzed_video_clip(state, clip_id=1):
         "embedding_dim": 1152,
         "embedding_samples": 4,
         "has_embedding": True,
+        "tag_source": "lmstudio:qwen3-vl-8b",
     })
 
 
@@ -99,6 +100,7 @@ def test_explicit_kwargs_filter_covers_all_documented_fields():
         "embedding_dim",
         "embedding_samples",
         "has_embedding",
+        "tag_source",
     }
     missing = expected - found
     extra = found - expected
