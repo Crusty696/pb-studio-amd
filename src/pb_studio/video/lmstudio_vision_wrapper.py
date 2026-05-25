@@ -150,7 +150,7 @@ async def _async_extract_tags(
     prompt: str,
     model_override: Optional[str],
     timeout_seconds: float,
-) -> list[str]:
+) -> tuple[list[str], str]:
     from pb_studio.ai.model_registry import (
         ModelRegistry,
         NoSuitableModelError,
@@ -177,7 +177,7 @@ async def _async_extract_tags(
             await registry.refresh()
         except LMStudioError as exc:
             logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
-            return []
+            return [], "none"
 
         if model_override:
             model = model_override
@@ -186,12 +186,12 @@ async def _async_extract_tags(
                 model = registry.select_best_for_task(task, mode)
             except NoSuitableModelError as exc:
                 logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
-                return []
+                return [], "none"
 
         cache_key = (_frame_hash(frame_rgb), model, mode)
         cached = _cache_get(cache_key)
         if cached is not None:
-            return list(cached)
+            return list(cached), model
 
         try:
             response = await client.chat(
@@ -202,16 +202,16 @@ async def _async_extract_tags(
             )
         except LMStudioError as exc:
             logger.warning("LM Studio chat fehlgeschlagen (Tags): %s", exc)
-            return []
+            return [], model
 
         message = response.get("message") or {}
         raw = message.get("content") or response.get("response") or ""
         tags = _parse_tags(str(raw))
         _cache_put(cache_key, tags)
-        return tags
+        return tags, model
 
 
-def extract_tags_via_lmstudio(
+def extract_tags_and_model_via_lmstudio(
     frame_rgb: Optional[np.ndarray],
     *,
     mode: str = DEFAULT_MODE,
@@ -219,10 +219,10 @@ def extract_tags_via_lmstudio(
     prompt: str = DEFAULT_PROMPT,
     model_override: Optional[str] = None,
     timeout_seconds: float = 60.0,
-) -> list[str]:
-    """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell.
+) -> tuple[list[str], str]:
+    """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell inkl. verwendetem Modellnamen.
 
-    Bei Fehlern (LM Studio down, kein Modell, Timeout) -> leere Liste +
+    Bei Fehlern (LM Studio down, kein Modell, Timeout) -> (leere Liste, "none") +
     Warnlog. Der Aufrufer kann dann auf Moondream-Fallback umschalten.
 
     Args:
@@ -235,15 +235,17 @@ def extract_tags_via_lmstudio(
         timeout_seconds: HTTP-Timeout fuer den Chat-Call.
 
     Returns:
-        Liste von max 10 Tags (lowercased, Stopwords gefiltert).
+        Tuple aus:
+            - Liste von max 10 Tags (lowercased, Stopwords gefiltert)
+            - Name des benutzten Modells (z.B. "qwen3-vl-8b" oder "none")
     """
     if frame_rgb is None:
-        return []
+        return [], "none"
     try:
         if frame_rgb.size == 0:
-            return []
+            return [], "none"
     except AttributeError:
-        return []
+        return [], "none"
 
     try:
         return asyncio.run(
@@ -274,12 +276,46 @@ def extract_tags_via_lmstudio(
             )
         except Exception as inner:
             logger.warning("LM Studio tag extraction failed: %s", inner)
-            return []
+            return [], "none"
         finally:
             loop.close()
     except Exception as exc:
         logger.warning("LM Studio tag extraction failed: %s", exc)
-        return []
+        return [], "none"
+
+
+def extract_tags_via_lmstudio(
+    frame_rgb: Optional[np.ndarray],
+    *,
+    mode: str = DEFAULT_MODE,
+    task: str = DEFAULT_TASK,
+    prompt: str = DEFAULT_PROMPT,
+    model_override: Optional[str] = None,
+    timeout_seconds: float = 60.0,
+) -> list[str]:
+    """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell (Abwaertskompatibel).
+
+    Args:
+        frame_rgb: RGB-Frame als (H,W,3) uint8 numpy-Array.
+        mode: ``speed`` / ``balance`` / ``quality`` fuer Auto-Selection.
+        task: Task-Schluessel in ``ai.task_preferences`` (Default
+            ``video_captioning``).
+        prompt: Override fuer den Default-Prompt (deutsch).
+        model_override: Wenn gesetzt, ueberspringt Auto-Selection.
+        timeout_seconds: HTTP-Timeout fuer den Chat-Call.
+
+    Returns:
+        Liste von max 10 Tags (lowercased, Stopwords gefiltert).
+    """
+    tags, _ = extract_tags_and_model_via_lmstudio(
+        frame_rgb,
+        mode=mode,
+        task=task,
+        prompt=prompt,
+        model_override=model_override,
+        timeout_seconds=timeout_seconds,
+    )
+    return tags
 
 
 def clear_tag_cache() -> None:

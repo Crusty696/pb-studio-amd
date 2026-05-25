@@ -184,6 +184,7 @@ async def list_clips(
         embedding_dim: Optional[int] = None
         embedding_samples: Optional[int] = None
         has_embedding: bool = False
+        tag_source: Optional[str] = None
         if is_analyzed:
             va = analysis_snap.get(clip_id) or {}
             motion = va.get("motion") or {}
@@ -221,6 +222,7 @@ async def list_clips(
                 except (TypeError, ValueError):
                     embedding_samples = None
             has_embedding = bool(va.get("has_embedding", False))
+            tag_source = va.get("tag_source")
 
         # L-N3: Felder die hier explizit als kwarg uebergeben werden, aus c_payload entfernen
         # damit kein TypeError "multiple values for keyword" auftritt (passiert nach analyze_video,
@@ -228,7 +230,7 @@ async def list_clips(
         # in state.set_video_clip() persistiert werden und somit im in-memory clip-dict landen).
         _explicit_kwargs = {
             "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
-            "embedding_dim", "embedding_samples", "has_embedding",
+            "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
         }
         c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
@@ -242,6 +244,7 @@ async def list_clips(
                 embedding_dim=embedding_dim,
                 embedding_samples=embedding_samples,
                 has_embedding=has_embedding,
+                tag_source=tag_source,
             )
         )
     return result
@@ -494,6 +497,7 @@ async def analyze_video(
             audio_key=result.get("audio_key"),  # L-K4
             embedding_dim=int(result.get("embedding_dim", 0) or 0),       # L-M8
             embedding_samples=int(result.get("embedding_samples", 0) or 0),  # L-M8
+            tag_source=result.get("tag_source"),
         )
 
         await publish_log(
@@ -937,7 +941,7 @@ def _run_video_analysis(
                 extract_tags_via_moondream,
             )
             from pb_studio.video.lmstudio_vision_wrapper import (
-                extract_tags_via_lmstudio,
+                extract_tags_and_model_via_lmstudio,
             )
 
             cap = cv2.VideoCapture(video_path)
@@ -956,11 +960,14 @@ def _run_video_analysis(
                 # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
                 # Fallback: Moondream ONNX wenn LM Studio down/leer ist
                 # (Iron Rule 10: keine silent fails — Tag-Quelle wird geloggt).
-                tag_source = "lmstudio"
-                tags = extract_tags_via_lmstudio(frame_rgb, mode="balance")
-                if not tags:
-                    tag_source = "moondream_fallback"
+                tags, used_model = extract_tags_and_model_via_lmstudio(frame_rgb, mode="balance")
+                if tags:
+                    tag_source = used_model
+                else:
+                    tag_source = "moondream"
                     tags = extract_tags_via_moondream(frame_rgb)
+                    if not tags:
+                        tag_source = "none"
                 result["tags"] = tags
                 result["tag_source"] = tag_source
 

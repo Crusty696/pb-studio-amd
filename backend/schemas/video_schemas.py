@@ -37,6 +37,7 @@ class VideoClipInfo(BaseModel):
     embedding_dim: Optional[int] = None
     embedding_samples: Optional[int] = None
     has_embedding: bool = False
+    tag_source: Optional[str] = None
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -71,6 +72,7 @@ class VideoAnalysisResult(BaseModel):
     # None wenn Video keinen Audio-Track hat oder Detection fehlschlaegt.
     # Wird im Pacing fuer use_key_matching (Camelot-Wheel Compatibility) genutzt.
     audio_key: Optional[str] = None
+    tag_source: Optional[str] = None
 
 
 class SceneInfo(BaseModel):

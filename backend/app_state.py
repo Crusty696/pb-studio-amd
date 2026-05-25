@@ -661,6 +661,7 @@ class AppState:
         audio_key: Optional[str] = None,
         embedding_dim: Optional[int] = None,   # L-M8
         embedding_samples: Optional[int] = None,  # L-M8
+        tag_source: Optional[str] = None,
     ) -> None:
         """
         Persistiert Video-Analyse-Ergebnisse in der ai_data_json-Spalte des
@@ -727,6 +728,8 @@ class AppState:
                 ai_data["tags"] = tags
             if audio_key is not None:
                 ai_data["audio_key"] = audio_key
+            if tag_source is not None:
+                ai_data["tag_source"] = tag_source
             # L-M8: embedding-meta persistieren
             if embedding_dim is not None:
                 ai_data["embedding_dim"] = int(embedding_dim)
@@ -760,6 +763,8 @@ class AppState:
                 cache_update["tags"] = tags
             if audio_key is not None:
                 cache_update["audio_key"] = audio_key
+            if tag_source is not None:
+                cache_update["tag_source"] = tag_source
             # L-M8: embedding-meta in den Cache uebernehmen
             if embedding_dim is not None:
                 cache_update["embedding_dim"] = int(embedding_dim)
