@@ -118,8 +118,10 @@ class ModelRegistry:
 
     def _resolve_client(self) -> LMStudioClient:
         if self._client is None:
-            self._client = LMStudioClient()
+            from pb_studio.ai.llm_provider import get_llm_client
+            self._client = get_llm_client()
         return self._client
+
 
     async def _resolve_client_async(self) -> LMStudioClient:
         """W-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.

@@ -99,31 +99,45 @@ class ChatAgent:
                 timeout=httpx.Timeout(60.0, connect=5.0),
             )
         if self._llm is None:
-            # M1-Fix (W-M1, 2026-05-20): llm_provider.get_llm_client respektiert
-            # config.json::ai.provider (lmstudio | ollama | auto). Vor Fix
-            # ignorierte chat_agent config.json komplett und las nur env-vars
-            # → Provider-Switch im Settings-UI hatte keinen Effekt im Chat-Pfad.
-            # Env-vars (PBSTUDIO_LMSTUDIO_URL / PBSTUDIO_OLLAMA_URL) bleiben als
-            # Override-Pfad fuer Tests + lokale Overrides.
-            #
-            # W-QA-2 (2026-05-22): bei provider="auto" muss aktiv geprueft werden
-            # ob LM Studio erreichbar ist; sonst soll Ollama als Fallback genutzt
-            # werden. get_llm_client() alleine waehlt nur die default-base_url
-            # ohne Live-Probe → Chat schlug fehl wenn LM Studio down war obwohl
-            # Ollama lief. get_alive_client() probiert beide.
             from .llm_provider import get_llm_client, get_alive_client, get_provider
             env_override = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
             if env_override:
                 self._llm = LMStudioClient(base_url=env_override)
-            elif get_provider() == "auto":
-                alive = await get_alive_client(timeout_seconds=5.0)
-                if alive is not None:
-                    self._llm = alive
-                else:
-                    # Beide down — Fallback auf LM Studio (Caller sieht Connection-Error)
-                    self._llm = get_llm_client()
             else:
-                self._llm = get_llm_client()
+                provider = get_provider()
+                if provider == "auto":
+                    alive = await get_alive_client(timeout_seconds=5.0)
+                    self._llm = alive if alive is not None else get_llm_client()
+                else:
+                    primary = get_llm_client(provider=provider)
+                    primary_alive = False
+                    try:
+                        primary_alive = await primary.is_alive()
+                    except Exception:
+                        pass
+                    
+                    if primary_alive:
+                        self._llm = primary
+                    else:
+                        other_provider = "ollama" if provider == "lmstudio" else "lmstudio"
+                        secondary = get_llm_client(provider=other_provider)
+                        secondary_alive = False
+                        try:
+                            secondary_alive = await secondary.is_alive()
+                        except Exception:
+                            pass
+                        
+                        if secondary_alive:
+                            logger.warning(
+                                "Primärer LLM-Provider %s ist offline. Weiche autonom im Chat auf %s aus!",
+                                provider, other_provider
+                            )
+                            await primary.aclose()
+                            self._llm = secondary
+                        else:
+                            await secondary.aclose()
+                            self._llm = primary
+
         if self._model_registry is None:
             ai_cfg = self._load_ai_config()
             self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
@@ -139,6 +153,71 @@ class ChatAgent:
                 await self._llm.aclose()
             finally:
                 self._llm = None
+
+    async def _attempt_fallback(self) -> bool:
+        """Versucht autonom auf den alternativen LLM-Provider zu wechseln.
+
+        Prueft, ob der alternative Provider alive ist. Wenn ja, wird der aktuelle
+        Client geschlossen, der neue Client initialisiert, die ModelRegistry
+        aktualisiert und True zurueckgegeben.
+        """
+        if self._llm is None:
+            return False
+
+        current_url = self._llm.base_url
+        from .llm_provider import get_base_url, get_llm_client
+
+        ollama_url = get_base_url("ollama")
+        # Bestimme alternative Provider
+        if "11434" in current_url or current_url == ollama_url:
+            other_provider = "lmstudio"
+        else:
+            other_provider = "ollama"
+
+        logger.warning(
+            "Verbindungsproblem mit aktuellem Provider (%s). Pruefe Fallback auf %s...",
+            current_url, other_provider
+        )
+
+        secondary = get_llm_client(provider=other_provider, timeout_seconds=5.0)
+        secondary_alive = False
+        try:
+            secondary_alive = await secondary.is_alive()
+        except Exception:
+            pass
+
+        if secondary_alive:
+            logger.warning(
+                "Fallback-Provider %s ist online! Wechsle Client...", other_provider
+            )
+            # Alten Client schliessen
+            if self._owned_llm:
+                try:
+                    await self._llm.aclose()
+                except Exception:
+                    pass
+
+            # Neuen Client setzen
+            self._llm = secondary
+            self._owned_llm = True
+
+            # ModelRegistry fuer den neuen Client neu erstellen/aktualisieren
+            ai_cfg = self._load_ai_config()
+            self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
+            try:
+                await self._model_registry.refresh()
+            except Exception as exc:
+                logger.error("Fehler beim Aktualisieren der Registry nach Fallback: %s", exc)
+                return False
+
+            return True
+        else:
+            try:
+                await secondary.aclose()
+            except Exception:
+                pass
+            logger.error("Alternativer LLM-Provider %s ist ebenfalls offline.", other_provider)
+            return False
 
     @staticmethod
     def _load_ai_config() -> dict:
@@ -157,9 +236,18 @@ class ChatAgent:
         try:
             await self._model_registry.refresh()
         except LMStudioError as exc:
-            raise NoSuitableModelError(
-                f"LM Studio nicht erreichbar - Chat kann nicht laufen: {exc}"
-            ) from exc
+            logger.warning("Fehler beim Aktualisieren der Registry: %s. Versuche Fallback...", exc)
+            if await self._attempt_fallback():
+                try:
+                    await self._model_registry.refresh()
+                except Exception as exc2:
+                    raise NoSuitableModelError(
+                        f"Fehler bei Registry-Refresh nach Fallback: {exc2}"
+                    ) from exc2
+            else:
+                raise NoSuitableModelError(
+                    f"LM Studio nicht erreichbar - Chat kann nicht laufen: {exc}"
+                ) from exc
 
         for task in ("chat_tool_use", "chat_general", "chat"):
             try:
@@ -297,9 +385,40 @@ class ChatAgent:
                         yield ChatEvent("done", {"reason": "llm_error"})
                         return
                 else:
-                    yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc}", "stage": "chat"})
-                    yield ChatEvent("done", {"reason": "llm_error"})
-                    return
+                    logger.warning("Verbindungsfehler im Chat-Turn %s: %s. Versuche Fallback...", turn, exc)
+                    other_prov = "ollama" if "11434" not in (self._llm.base_url if self._llm else "") else "lmstudio"
+                    yield ChatEvent("error", {
+                        "message": f"Verbindung zu {self._llm.base_url if self._llm else 'LLM'} verloren. Wechsle automatisch auf {other_prov}...",
+                        "stage": "fallback"
+                    })
+
+                    if await self._attempt_fallback():
+                        try:
+                            if model_override:
+                                model = model_override
+                                reason = "explicit override (fallback)"
+                            else:
+                                model, reason = await self._pick_chat_model(mode)
+
+                            yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+
+                            response = await self._llm.chat(
+                                model=model,
+                                messages=messages,
+                                tools=tools_schema,
+                                options={"temperature": 0.2},
+                            )
+                        except Exception as exc_fallback:
+                            yield ChatEvent("error", {
+                                "message": f"Fehler bei Chat nach Fallback auf {other_prov}: {exc_fallback}",
+                                "stage": "chat_fallback"
+                            })
+                            yield ChatEvent("done", {"reason": "llm_error"})
+                            return
+                    else:
+                        yield ChatEvent("error", {"message": f"LLM-Fehler (kein Fallback möglich): {exc}", "stage": "chat"})
+                        yield ChatEvent("done", {"reason": "llm_error"})
+                        return
 
             message = response.get("message") or {}
             content = message.get("content") or ""
@@ -376,7 +495,36 @@ class ChatAgent:
                 final_text = (response.get("message") or {}).get("content") or ""
                 yield ChatEvent("text", {"content": final_text})
             except LMStudioError as exc:
-                yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
+                logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
+                other_prov = "ollama" if "11434" not in (self._llm.base_url if self._llm else "") else "lmstudio"
+                yield ChatEvent("error", {
+                    "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
+                    "stage": "fallback"
+                })
+                if await self._attempt_fallback():
+                    try:
+                        if model_override:
+                            model = model_override
+                        else:
+                            model, _ = await self._pick_chat_model(mode)
+
+                        response = await self._llm.chat(
+                            model=model,
+                            messages=messages + [{
+                                "role": "user",
+                                "content": (
+                                    "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
+                                    "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
+                                ),
+                            }],
+                            options={"temperature": 0.2},
+                        )
+                        final_text = (response.get("message") or {}).get("content") or ""
+                        yield ChatEvent("text", {"content": final_text})
+                    except Exception as exc_fallback:
+                        yield ChatEvent("error", {"message": f"Fehler bei Summary nach Fallback: {exc_fallback}", "stage": "summary_fallback"})
+                else:
+                    yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
 
         yield ChatEvent("done", {"final_text": final_text})
 

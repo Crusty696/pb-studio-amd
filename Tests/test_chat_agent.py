@@ -443,3 +443,73 @@ def test_agent_legacy_ollama_client_alias_still_works():
 
     _run(go())
     assert len(fake.chat_calls) == 1
+
+
+def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
+    """Wenn im Chat ein LMStudioError auftritt, weicht der Agent autonom auf den anderen Provider aus."""
+    # Erste Client: wirft Fehler beim chat()
+    class FailingLMStudioClient(LMStudioClient):
+        def __init__(self):
+            super().__init__(base_url="http://127.0.0.1:1234/v1")
+
+        async def list_models(self):
+            return [LMStudioModelInfo(name="failed-model", size_bytes=1, modified_at="", digest="")]
+
+        async def chat(self, *args, **kwargs):
+            raise LMStudioError("Connection refused by LM Studio")
+
+        async def aclose(self):
+            pass
+
+    failing_client = FailingLMStudioClient()
+
+    # Zweite Client (Ollama): funktioniert
+    working_fallback = FakeLMStudioClient(
+        responses=[{"message": {"role": "assistant", "content": "Hallo von Ollama! LM Studio hatte ein Problem, aber ich bin da."}}],
+        installed=["gemma-4-e4b"],
+    )
+    # Setze base_url auf Ollama
+    working_fallback.base_url = "http://localhost:11434/v1"
+
+    # Mocke get_llm_client und get_base_url aus llm_provider
+    import pb_studio.ai.llm_provider as llm_provider
+    monkeypatch.setattr(llm_provider, "get_base_url", lambda provider: "http://localhost:11434/v1" if provider == "ollama" else "http://127.0.0.1:1234/v1")
+
+    def mock_get_llm_client(provider=None, **kwargs):
+        if provider == "ollama":
+            return working_fallback
+        return failing_client
+
+    monkeypatch.setattr(llm_provider, "get_llm_client", mock_get_llm_client)
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=failing_client,
+            http_client=_mock_backend({}),
+            model_registry=ModelRegistry({}, client=failing_client),
+        ) as agent:
+            # We want it to think it owns the LLM so it closes it if needed
+            agent._owned_llm = True
+            async for ev in agent.process_message("Hallo"):
+                events.append(ev)
+        return events
+
+    events = _run(go())
+    types = [e.type for e in events]
+
+    # Pruefe, ob der Fehler-Event (Fallback-Info) erzeugt wurde
+    assert "error" in types
+    error_event = next(e for e in events if e.type == "error")
+    assert "fallback" in error_event.payload["stage"]
+    assert "Wechsle automatisch auf ollama" in error_event.payload["message"]
+
+    # Pruefe, ob das neue Modell vermeldet wurde
+    model_events = [e for e in events if e.type == "model"]
+    assert len(model_events) >= 2  # Erstes Modell, dann nach Fallback das zweite Modell
+    assert model_events[-1].payload["model"] == "gemma-4-e4b"
+
+    # Pruefe, ob der Text von Ollama geliefert wurde
+    text_event = next(e for e in events if e.type == "text")
+    assert "Hallo von Ollama" in text_event.payload["content"]
+    assert events[-1].type == "done"
