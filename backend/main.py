@@ -144,21 +144,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Zombie-Prozess-Wächter (Heartbeat-Schutz)
     import asyncio
     async def _zombie_watcher():
-        logger.info("  Zombie-Prozess-Wächter aktiv (Toleranz: 60s ab Start / 30s nach Client-Verlust)")
-        from .dependencies import _event_queues
+        logger.info("  Zombie-Prozess-Wächter aktiv (Toleranz: 120s ab Start / 120s nach Client-Verlust)")
+        from .dependencies import _event_queues, gpu_lock
+        from .app_state import get_app_state
         
-        # Grace-Period ab Start: 60 Sekunden, damit sich der C#-WPF-Client in Ruhe verbinden kann
-        await asyncio.sleep(60)
+        # Grace-Period ab Start: 120 Sekunden, damit sich der C#-WPF-Client in Ruhe verbinden kann
+        await asyncio.sleep(120)
         
         consecutive_idle_checks = 0
         while True:
             await asyncio.sleep(5)
+            
             # Wenn keine aktiven SSE-Event-Queues registriert sind
-            if not _event_queues:
+            has_client = len(_event_queues) > 0
+            
+            # Prüfen, ob GPU-Tasks aktiv sind oder ein Rendering läuft
+            gpu_active = gpu_lock.locked()
+            render_active = False
+            try:
+                render_active = get_app_state().is_render_active()
+            except Exception as e:
+                logger.debug(f"is_render_active Check fehlgeschlagen: {e}")
+            
+            if not has_client and not gpu_active and not render_active:
                 consecutive_idle_checks += 1
-                # 6 Checks * 5 Sekunden = 30 Sekunden ohne Client
-                if consecutive_idle_checks >= 6:
-                    logger.warning("Kein aktiver Client verbunden (SSE-Verbindungen verwaist). Automatischer Shutdown wird eingeleitet...")
+                # 24 Checks * 5 Sekunden = 120 Sekunden ohne Client und ohne Hintergrundaktivität
+                if consecutive_idle_checks >= 24:
+                    logger.warning("Kein aktiver Client verbunden (SSE-Verbindungen verwaist) und keine Hintergrund-Tasks aktiv. Automatischer Shutdown wird eingeleitet...")
                     _force_exit()
             else:
                 consecutive_idle_checks = 0
