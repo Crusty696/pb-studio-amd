@@ -18,10 +18,18 @@ logger = logging.getLogger(__name__)
 # Globaler GPU-Lock: Nur 1 ONNX DirectML Session gleichzeitig
 gpu_lock = asyncio.Lock()
 
+# Globaler DB-Schreib-Lock: Verhindert WAL-Lock-Contention bei gleichzeitigen Schreibzugriffen
+db_write_lock = asyncio.Lock()
+
 
 async def get_gpu_lock() -> asyncio.Lock:
     """Dependency: GPU-Lock für DirectML Serialisierung."""
     return gpu_lock
+
+
+async def get_db_write_lock() -> asyncio.Lock:
+    """Dependency: Globales Lock für SQLite-Schreibzugriffe (Vermeidung von WAL-Lock-Contention)."""
+    return db_write_lock
 
 
 async def with_gpu_task(
@@ -42,14 +50,27 @@ async def with_gpu_task(
     # VRAM-Reservierung (vor dem Lock-Erwerb)
     if model_id:
         try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager
+            from pb_studio.core.vram_budget_manager import get_vram_manager, VRAMAllocationError
             manager = get_vram_manager()
-            # C1/FIX: Echte Reservierung triggern (inkl. Eviction falls nötig)
-            if manager.reserve(model_id, force=True):
-                vram_reserved = True
-                logger.debug(f"VRAM-Budget reserviert fuer: {model_id}")
+            
+            # C1/FIX: Retry-Loop mit Timeout für VRAM-Allokation
+            # Versuche bis zu 10 Sekunden lang (10 Ticks à 1 Sekunde), den VRAM zu reservieren.
+            # Falls andere Tasks ihren VRAM freigeben (z.B. durch automatische Eviction), wird er frei.
+            vram_timeout = 10
+            start_alloc = time.time()
+            while time.time() - start_alloc < vram_timeout:
+                if manager.reserve(model_id, force=True):
+                    vram_reserved = True
+                    logger.debug(f"VRAM-Budget reserviert fuer: {model_id}")
+                    break
+                logger.warning(f"VRAM knapp für '{model_id}' — warte auf Freigabe (evict)...")
+                await asyncio.sleep(1.0)
+                
+            if not vram_reserved:
+                raise VRAMAllocationError(f"VRAM-Ressourcen erschöpft: Reservierung für Modell '{model_id}' fehlgeschlagen.")
         except Exception as e:
-            logger.warning(f"VRAM-Reservierung fehlgeschlagen (ignoriert): {e}")
+            logger.error(f"VRAM-Reservierung fehlgeschlagen: {e}")
+            raise
 
     # Timeout bestimmen
     if timeout_seconds is None:

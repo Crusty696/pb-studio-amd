@@ -103,13 +103,16 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
 
     # Z2 / GPU-F4: log_feedback macht SQLite-INSERT + WeightStore-Math (~10-50ms).
     # asyncio.to_thread haelt den Event-Loop frei fuer parallele SSE-Streams.
+    # Mit db_write_lock abgesichert gegen concurrent database write locks.
+    from ..dependencies import db_write_lock
     import asyncio as _aio
-    bumps = await _aio.to_thread(
-        svc.feedback_logger.log_feedback,
-        cut_id=req.cut_id,
-        rating=req.rating,
-        context_keys=context_keys,
-    )
+    async with db_write_lock:
+        bumps = await _aio.to_thread(
+            svc.feedback_logger.log_feedback,
+            cut_id=req.cut_id,
+            rating=req.rating,
+            context_keys=context_keys,
+        )
     total = await _aio.to_thread(svc.weights.total_clicks)
     return BrainFeedbackResponse(
         status="ok",
@@ -228,7 +231,10 @@ async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
         raise HTTPException(status_code=400, detail="invalid or expired token")
 
     _pending_reset_tokens.discard(req.confirmation_token)
-    svc.weights.reset()
+    from ..dependencies import db_write_lock
+    import asyncio as _aio
+    async with db_write_lock:
+        await _aio.to_thread(svc.weights.reset)
     return BrainResetResponse(status="reset_complete")
 
 
