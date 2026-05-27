@@ -36,6 +36,11 @@ class ModelPriority(IntEnum):
     BACKGROUND = 5  # Batch processing, evict first
 
 
+class VRAMAllocationError(Exception):
+    """Custom exception raised when VRAM allocation fails after eviction or timeout."""
+    pass
+
+
 @dataclass
 class ModelBudget:
     """VRAM budget specification for a model."""
