@@ -216,9 +216,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         // Spec 00010 T004: invertierte Flagge — bindbar an Overlay.Visibility
         // via BooleanToVisibilityConverter. Auf UI-Thread dispatchen.
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = App.Current.Dispatcher.InvokeAsync(async () =>
         {
             IsBackendUnreachable = !reachable;
+
+            if (!reachable)
+            {
+                _logger.LogWarning("WPF Auto-Recovery: Backend nicht erreichbar. Versuche automatischen Neustart des Backends im Hintergrund...");
+                try
+                {
+                    // StartAsync() im Hintergrund aufrufen, um den UI-Thread nicht zu belasten.
+                    await Task.Run(async () => await _bridge.StartAsync().ConfigureAwait(false));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "WPF Auto-Recovery: Fehler beim Versuch, das Backend neu zu starten.");
+                }
+            }
         });
     }
 
