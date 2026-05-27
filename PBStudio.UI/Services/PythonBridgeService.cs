@@ -78,7 +78,7 @@ public class PythonBridgeService : IDisposable
         _httpClient = new HttpClient
         {
             BaseAddress = new Uri($"http://127.0.0.1:{Port}"),
-            Timeout = TimeSpan.FromSeconds(30),
+            Timeout = TimeSpan.FromMinutes(10),
         };
     }
 
