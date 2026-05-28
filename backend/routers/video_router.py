@@ -885,6 +885,25 @@ def _run_video_analysis(
                             )
                             _media_id = _media_row["id"] if _media_row else None
                             vs = VectorStore(index_name="video_index")
+
+                            # Deduplizierung: Vorherige FAISS-IDs fuer diese media_id tombstonen & aus vector_map loeschen
+                            if _media_id is not None:
+                                try:
+                                    from pb_studio.data.database_core import DatabaseCore
+                                    _db = DatabaseCore()
+                                    with _db.transaction() as conn:
+                                        old_faiss_ids = [r[0] for r in conn.execute(
+                                            "SELECT faiss_id FROM vector_map WHERE media_id = ?", (_media_id,)
+                                        )]
+                                        if old_faiss_ids:
+                                            # Tombstonen im VectorStore
+                                            vs.mark_tombstoned(old_faiss_ids)
+                                            # Aus SQLite loeschen
+                                            conn.execute("DELETE FROM vector_map WHERE media_id = ?", (_media_id,))
+                                            logger.info(f"Deduplizierung: {len(old_faiss_ids)} alte Embeddings fuer media_id {_media_id} tombstoned.")
+                                except Exception as dedup_err:
+                                    logger.warning(f"Embedding-Deduplizierung fehlgeschlagen: {dedup_err}")
+
                             vs.add_embedding_with_media_link(
                                 embedding.astype(_np.float32),
                                 meta_info={
@@ -923,6 +942,8 @@ def _run_video_analysis(
                     result["has_embedding"] = False
             finally:
                 del wrapper  # Release SigLIP ONNX session / DirectML VRAM
+                import gc
+                gc.collect()
 
         except Exception as e:
             logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")
@@ -945,35 +966,55 @@ def _run_video_analysis(
             )
 
             cap = cv2.VideoCapture(video_path)
+            frames_rgb = []
             try:
                 total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                mid = max(0, total // 2)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                ret, frame = cap.read()
+                if total > 0:
+                    indices = [max(0, total // 4), max(0, total // 2), max(0, total * 3 // 4)]
+                    # Eindeutige Indizes sortiert
+                    indices = sorted(list(set(indices)))
+                    for idx in indices:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            frames_rgb.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             finally:
                 cap.release()
 
-            if ret and frame is not None:
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                result["dominant_colors"] = extract_dominant_colors(frame_rgb, k=5)
+            if frames_rgb:
+                # 4a. Dominante Farben ueber alle gesammelten Frames extrahieren (3-Punkt)
+                # Wir stacken die Bilder vertikal um KMeans auf allen Pixeln auszufuehren
+                combined_rgb = _np.vstack(frames_rgb)
+                result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
 
-                # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
-                # Fallback: Moondream ONNX wenn LM Studio down/leer ist
-                # (Iron Rule 10: keine silent fails — Tag-Quelle wird geloggt).
-                tags, used_model = extract_tags_and_model_via_lmstudio(frame_rgb, mode="balance")
-                if tags:
-                    tag_source = used_model
-                else:
-                    tag_source = "moondream"
-                    tags = extract_tags_via_moondream(frame_rgb)
+                # 4b. Tags fuer jeden Frame extrahieren und vereinigen
+                all_tags = []
+                seen_tags = set()
+                tag_sources = []
+                
+                for f_rgb in frames_rgb:
+                    # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
+                    # Fallback: Moondream ONNX wenn LM Studio down/leer ist
+                    tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode="balance")
                     if not tags:
-                        tag_source = "none"
-                result["tags"] = tags
-                result["tag_source"] = tag_source
+                        used_model = "moondream"
+                        tags = extract_tags_via_moondream(f_rgb)
+                    
+                    if tags:
+                        for tag in tags:
+                            if tag not in seen_tags:
+                                all_tags.append(tag)
+                                seen_tags.add(tag)
+                        if used_model not in tag_sources:
+                            tag_sources.append(used_model)
+                
+                # Begrenzen auf max 10 Tags
+                result["tags"] = all_tags[:10]
+                result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
 
                 logger.info(
-                    f"L-K2: {len(result['dominant_colors'])} colors, "
-                    f"{len(result['tags'])} tags ({tag_source}) fuer clip {clip_id}"
+                    f"L-K2 (3-Punkt-Sampling): {len(result['dominant_colors'])} colors, "
+                    f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
                 )
             else:
                 result["dominant_colors"] = []
