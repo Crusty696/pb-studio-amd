@@ -69,17 +69,15 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-22 (Auto-QA-Loop + Hybrid-LLM-Audit)
-- **Phase:** ✅ Hybrid-LLM-Stack live-verified, Auto-QA-Loop alle 11 Bereiche grün.
-- **Status:**
-  - **Auto-QA-Loop (2026-05-21):** ✅ 60/60 Funktionen PASS über 11 Bereiche (Projekt/Media/Audio-Lib/Video-Lib/Audio-Analyse/Video-Analyse/Anchor/Pacing/Timeline/Render/Settings). 3 echte Bugs gefunden+gefixt (Commit `9909d4a`).
-  - **Hybrid-LLM-Fixes (2026-05-22, `3025b22`):** ✅ User-Audit deckte auf dass nur 2/6 LLM-Call-Sites Auto-Fallback hatten. 4 Bypasses gefixt: `models_router._make_client`, `chat_agent._ensure_resources`, `model_registry._resolve_client`, `lmstudio_vision_wrapper`. Live-verified: /models/list ollama_available=true, /chat/message → Gemma-4 streaming.
-  - **Backend:** uvicorn 127.0.0.1:8765 live, alle Fixes geladen.
-  - **WPF Release-DLL:** vorhanden (2026-05-21 Build), C# unchanged → kein Rebuild nötig.
-  - **Tests:** 721 passed / 9 skipped / 0 failed (vorher 715, +6 neue Regression-Tests).
-  - **Regression-Guards committed:** `test_video_list_clips_post_analyze.py` (guards explicit_kwargs-Drift) + `test_pacing_snap_subtrack_import.py` (guards PacingCut-Import).
-  - **E010 Resilience:** ✅ VOLLSTÄNDIG ERLEDIGT (21.05.). SSE-Reconnect & 4GB-VRAM-Stress autonom validiert.
-  - **S-H1b/#6 NSwag:** ✅ DONE — NSwag.MSBuild OpenAPI→C# pipeline live (commits `9fb5cc7..60cce5b`).
+- **Date:** 2026-05-28 (Video-Analyse-Pipeline-Optimierung + Pause-Sync)
+- **Phase:** ⏸️ Session pausiert auf User-Wunsch. Working-Tree clean, alles committed.
+- **Status (2026-05-28):**
+  - **Video-Analyse-Opt (`a56daac`):** FAISS-Dedup bei Re-Analyse (alte Embeddings derselben media_id tombstonen statt duplizieren), `gc.collect()` nach SigLIP-VRAM-Release, 3-Punkt-Frame-Sampling (25/50/75%) für Tags+Farben statt Mid-Frame. Refs verifiziert (`mark_tombstoned`, `vector_map`).
+  - **Audit-Scanner committed (`441831b`):** scratch/ codebase+concurrency scanner + vault-helper.
+  - **Tests:** 735 collected. ⚠️ Voller Lauf diese Session NICHT verifiziert (von User-Pause unterbrochen). Letzter verifizierter Stand: 722 pass (Vault 28.05). Bekannte Falle: hängende parallele pytest-Prozesse locken `.pytest_tmp2/.../state.db` → WinError 32 setup-errors (KEIN App-Bug; kill python + rm .pytest_tmp2 vor Lauf).
+  - **"193 findings / 22 critical / 39 high" (INDEX-Frontmatter):** heuristik-Scanner-Output, NICHT verifizierte Bugs. Live-Re-Run: Python-Scanner 16 low-findings (cap.set-seek/sys.path), 0 CRITICAL; C#-Audit 60 "MEMORY_LEAK"+14 DI = WPF event+=-Standardmuster, hohe False-Positive-Rate. Echte verifizierte CRITICAL: 0.
+  - **Backend:** DOWN (nicht gestartet diese Session).
+  - **Hybrid-LLM (`3025b22`):** ✅ 4 Bypasses gefixt, live-verified. **Auto-QA-Loop (`9909d4a`):** ✅ 60/60. **WPF Release-DLL:** 2026-05-21 Build, C# unchanged. **E010 Resilience & NSwag:** ✅ DONE.
 - **Next Task:**
   - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
   - Verbleibend:
