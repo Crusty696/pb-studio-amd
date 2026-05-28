@@ -533,6 +533,35 @@ async def separate_stems(
             except Exception as e:
                 logger.warning(f"stems_paths-DB-Persistierung fehlgeschlagen (unkritisch): {e}")
 
+            # Lücke schliessen: Re-run der Sub-Track-Detection mit echten Stems für hochpräzise Boundaries!
+            try:
+                logger.info(f"Starte hochpräzise Sub-Track-Detection mit frisch generierten Stems für Clip {request.clip_id}...")
+                from pb_studio.audio.subtrack_detector import SubtrackDetector
+                detector = SubtrackDetector()
+                
+                # Da librosa-Ladevorgänge blockieren, im Threadpool ausführen
+                subtrack_res = await asyncio.to_thread(detector.detect, clip["path"], stems_paths)
+                
+                clip["subtrack_segments"] = [
+                    {
+                        "start_time": s, "end_time": e, "confidence": c,
+                        "sub_bpm": None, "sub_key": None,
+                    }
+                    for (s, e, c) in subtrack_res.segments
+                ]
+                clip["tempo_curve"] = subtrack_res.tempo_curve
+                
+                # State und Analyse-Cache mit den neuen Werten aktualisieren
+                state.update_audio_analysis(
+                    clip_id=clip["id"],
+                    subtrack_segments=clip["subtrack_segments"],
+                    tempo_curve=clip["tempo_curve"],
+                )
+                
+                logger.info(f"Sub-Track-Detection mit Stems erfolgreich aktualisiert und im Cache/DB persistiert für Clip {request.clip_id}.")
+            except Exception as sub_err:
+                logger.error(f"Re-Run der Sub-Track-Detection mit Stems fehlgeschlagen: {sub_err}", exc_info=True)
+
         return StemResult(clip_id=request.clip_id, **result)
     except Exception as e:
         logger.error(f"Stem-Separation fehlgeschlagen: {e}", exc_info=True)
