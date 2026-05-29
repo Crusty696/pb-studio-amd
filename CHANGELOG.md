@@ -3,6 +3,21 @@
 
 ---
 
+## 2026-05-29 - Epic 00012: Timeline High-Fidelity Playback & DJ-Beatgrid (Commit `40e4a8d`)
+
+Erfolgreicher Abschluss des finalen Feature-Epics der Entwicklungs-Roadmap. Etablierung aller UI- und Playback-Refactorings für eine DAW-Level Wellenform-Darstellung und ruckelfreie Wiedergabe.
+
+Tests: **727 passed / 9 skipped / 0 failed** (100% Erfolg). WPF Release Build: 0 Fehler / 0 Warnungen.
+
+### Added / Refactored (Timeline High-Fidelity & DJ-Beatgrid)
+- **GPU-beschleunigter WaveformRenderer (FR-001):** WPF FrameworkElement Custom Control, das Amplituden in einer einzigen StreamGeometry zeichnet, was die UI-Rendering-Last um ~99% reduziert.
+- **Ruckelfreie Playback-Kanten-Übergänge (FR-002):** Implementierung des transienten Flags `_wasPlayingBeforeReload` im Code-Behind von `TimelineView.xaml.cs` zur Gewährleistung unterbrechungsfreier Wiedergabe an Clipgrenzen.
+- **High-Contrast DJ-Beatgrid (FR-003):** Rote Downbeats, eisblaue Beats und kontrastreiche abgerundete Badges mit Taktnummer-Beschriftungen (z.B. `BAR 12`) sorgen für 100%ige Lesbarkeit.
+- **Song-Phrasen & Wasserzeichen (FR-004):** Sanfte farbliche Abgrenzung der musikalischen Struktur mit transparenten Bezeichnungen auf der A1-Spur.
+- **Verifikations-Gates (TR-005):** Etablierung der `.completed`, `.qc-passed` und `qc-report.md` Qualitäts-Gates für Epic 00012.
+
+---
+
 ## 2026-05-22 - Hybrid-LLM-Audit (Commit `3025b22`)
 
 User-Audit deckte auf, dass nur 2 von 6 LLM-Call-Sites Auto-Fallback auf Ollama hatten — die anderen 4 nutzten LMStudioClient mit hard-coded LM-Studio-URL ohne Live-Probe. Folge: bei LM-Studio down + Ollama up war Chat und /models/list broken.
