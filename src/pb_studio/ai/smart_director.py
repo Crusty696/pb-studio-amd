@@ -259,10 +259,9 @@ class SmartDirector:
         if self._active_model == "clap" and self._clap is not None:
             return True
 
-        # Unload SigLIP first
-        if self._active_model == "siglip":
-            self._unload_siglip()
-
+        # CLAP PyTorch laeuft auf CPU (VRAM = 0). SigLIP muss nicht präventiv entladen werden,
+        # da es im GPU VRAM verbleiben kann und der VRAMBudgetManager es bei echtem Bedarf
+        # (Modellkonflikt) dynamisch evizieren kann.
         return self._load_clap()
 
     def _ensure_siglip_loaded(self) -> bool:
@@ -399,7 +398,8 @@ class SmartDirector:
             task: "audio" (uses CLAP) or "video" (uses SigLIP)
         """
         if task == "audio":
-            self._unload_siglip()
+            # Da CLAP auf CPU läuft (VRAM budget = 0), muss SigLIP nicht entladen werden!
+            # Verhindert unnötiges PCIe-Thrashing.
             self._load_clap()
         elif task == "video":
             self._unload_clap()

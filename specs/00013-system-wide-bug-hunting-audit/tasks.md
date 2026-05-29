@@ -14,3 +14,9 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [x] T003 [P] [OBJ-3] Perform static audit of Z-UI-VM & Z-UI-SERVICES (Memory leaks & thread safety)
 - [x] T004 [P] [OBJ-4] Perform static audit of Shared-Zones & Z-INFRA (API Routes & traversal safety)
 - [x] T005 [P] [OBJ-5] Execute E2E automated smoke runs and Visual screenshot audits
+- [x] T006 [P] [OBJ-3] {(FR-101)} Fix SmartDirector VRAM-Thrashing in `src/pb_studio/ai/smart_director.py`
+- [x] T007 [P] [OBJ-2] {(FR-102)} Implement true ONNX Batch Inference in `src/pb_studio/ai/siglip_wrapper.py`
+- [x] T008 [P] [OBJ-4] {(FR-103)} Add physical Index Re-Indexing `clean_tombstones()` in `src/pb_studio/data/vector_store.py`
+- [x] T009 [P] [OBJ-5] {(TR-104)} Execute test verification for AI optimizations
+
+

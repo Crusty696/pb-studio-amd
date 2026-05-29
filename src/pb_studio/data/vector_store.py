@@ -245,14 +245,72 @@ class VectorStore:
                 except (TypeError, ValueError):
                     pass
             
-            # B-7 FIX: Zustand nach Tombstoning im Hintergrund speichern
-            try:
-                cloned_index = faiss.clone_index(self.index) if self.index else None
-                cloned_metadata = self.metadata.copy()
-                cloned_tombstones = list(self._tombstoned_ids)
-                self._save_background(cloned_index, cloned_metadata, cloned_tombstones)
-            except Exception as e:
-                logger.error(f"Failed to trigger background save in mark_tombstoned: {e}")
+            # Trigger clean_tombstones bei signifikantem Tombstone-Bloat
+            # Bedingung: min. 100 Tombstones und min. 20% des Indexes tombstoniert
+            total = self.index.ntotal if self.index else 0
+            if len(self._tombstoned_ids) >= 100 and len(self._tombstoned_ids) / max(1, total) >= 0.2:
+                self._clean_tombstones_unlocked()
+            else:
+                # B-7 FIX: Zustand nach Tombstoning im Hintergrund speichern
+                try:
+                    cloned_index = faiss.clone_index(self.index) if self.index else None
+                    cloned_metadata = self.metadata.copy()
+                    cloned_tombstones = list(self._tombstoned_ids)
+                    self._save_background(cloned_index, cloned_metadata, cloned_tombstones)
+                except Exception as e:
+                    logger.error(f"Failed to trigger background save in mark_tombstoned: {e}")
+
+    def clean_tombstones(self) -> None:
+        """Physische Bereinigung des FAISS-Indexes (Re-Indexing) mit Thread-Sicherung."""
+        with self._lock:
+            self._clean_tombstones_unlocked()
+
+    def _clean_tombstones_unlocked(self) -> None:
+        """
+        Interne, nicht thread-sichere Methode zur Bereinigung (ruft self._lock nicht auf).
+        Erstellt einen neuen FAISS-Index und schliesst alle markierten IDs dauerhaft aus.
+        """
+        tombstones = getattr(self, "_tombstoned_ids", set())
+        if not tombstones or self.index is None or self.index.ntotal == 0:
+            return
+
+        logger.info(f"Physisches Re-Indexing gestartet. Tombstones zu entfernen: {len(tombstones)}")
+        
+        try:
+            # Neuen Index erstellen (IndexFlatIP)
+            new_index = faiss.IndexFlatIP(self.dimension)
+            new_metadata = {}
+            
+            new_id = 0
+            for old_id in range(self.index.ntotal):
+                if old_id in tombstones:
+                     continue
+                
+                # Vektor aus altem Index rekonstruieren
+                vec = np.zeros(self.dimension, dtype=np.float32)
+                self.index.reconstruct(old_id, vec)
+                vec_2d = vec.reshape(1, -1)
+                new_index.add(vec_2d)
+                
+                # Metadaten übertragen
+                if old_id in self.metadata:
+                    new_metadata[new_id] = self.metadata[old_id]
+                
+                new_id += 1
+            
+            self.index = new_index
+            self.metadata = new_metadata
+            self._tombstoned_ids.clear()
+            
+            logger.info(f"Re-Indexing beendet. Neue Index-Groesse: {self.index.ntotal}")
+            
+            # Im Hintergrund speichern
+            cloned_index = faiss.clone_index(self.index) if self.index else None
+            cloned_metadata = self.metadata.copy()
+            cloned_tombstones = []
+            self._save_background(cloned_index, cloned_metadata, cloned_tombstones)
+        except Exception as e:
+            logger.error(f"Fehler bei clean_tombstones: {e}", exc_info=True)
 
     def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
         """Returns list of (metadata, score). Thread-safe."""

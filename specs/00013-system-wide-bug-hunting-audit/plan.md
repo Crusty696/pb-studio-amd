@@ -62,3 +62,7 @@ Während des Audits wurden 5 konkrete Schwachstellen und 1 Performance-Engpass i
 4. **Z-DATA (SQLite Cross-Thread Shutdown):** Verbindungserstellung in `database_core.py` auf `check_same_thread=False` umgestellt, damit der Haupt-Thread beim Anwendungs-Shutdown alle Thread-lokalen Verbindungen sauber schließen kann.
 5. **Z-VIDEO (Moondream VRAM Leak):** Die Tag-Extraktion in `moondream_wrapper.py` läuft in einem `try...finally`-Block, der den `MoondreamAnalyzer` im `finally`-Block garantiert entlädt.
 6. **Z-INFRA (Smoke Test Process Tree Kill):** `verify_release_smoke.ps1` wurde so modifiziert, dass der gesamte Uvicorn-Backend-Prozessbaum via `taskkill /f /t` beendet wird, um Windows-Prozesszombies dauerhaft auszuschließen.
+7. **Z-CORE/Z-AUDIO (SmartDirector VRAM-Thrashing):** Korrektur der Entladelogik in `SmartDirector._ensure_clap_loaded()` – da CLAP auf CPU (Budget = 0) läuft, entladen wir SigLIP nicht mehr präventiv, um PCIe/VRAM-Thrashing zu verhindern.
+8. **Z-VIDEO/Z-CORE (SigLIP Batch Inferenz):** Umstellung von `SigLIPWrapper.encode_images_batch()` auf echte ONNX Batch-Inferenz über 4D-Tensoren zur optimalen GPU-Auslastung auf AMD-Karten.
+9. **Z-DATA (Vector Store Tombstone Re-Indexing):** Hinzufügen von `clean_tombstones()` zur physischen Index-Bereinigung und Re-Indexing zur Vermeidung von Suchzeit- und Speicherbloat bei vielen gelöschten Medien.
+

@@ -112,3 +112,54 @@ class TestVectorStoreSearch:
             # Results should be (metadata, score) tuples
             assert results[0][0]["id"] == "A"
             assert results[0][1] == 0.95
+
+
+class TestVectorStoreTombstones:
+    """Tests for tombstones and re-indexing."""
+
+    def test_clean_tombstones_rebuilds_index(self, reset_config_singleton, tmp_path):
+        """Verify that clean_tombstones removes tombstoned items and compacts index."""
+        from pb_studio.data.vector_store import VectorStore
+        
+        # Neuen echten VectorStore mit Dimension 4 im tmp_path erstellen
+        store = VectorStore(index_name="test_tombstones_index", dimension=4)
+        store.index_path = tmp_path / "test_tombstones_index.faiss"
+        store.meta_path = tmp_path / "test_tombstones_index_meta.json"
+        store.tombstone_path = tmp_path / "test_tombstones_index_tombstones.json"
+        store._create_new_index()
+        
+        # 3 Embeddings hinzufügen
+        v0 = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        v1 = np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+        v2 = np.array([0.0, 0.0, 1.0, 0.0], dtype=np.float32)
+        
+        id0 = store.add_embedding(v0, {"name": "zero"})
+        id1 = store.add_embedding(v1, {"name": "one"})
+        id2 = store.add_embedding(v2, {"name": "two"})
+        
+        assert store.index.ntotal == 3
+        assert len(store.metadata) == 3
+        
+        # ID 1 (Eintrag 2) tombstonieren
+        store.mark_tombstoned([id1])
+        assert id1 in store._tombstoned_ids
+        
+        # Suche sollte ID 1 nicht mehr zurückliefern
+        res = store.search(v1, k=3)
+        # ID 1 ("one") sollte ausgefiltert sein
+        names = [r[0]["name"] for r in res]
+        assert "one" not in names
+        assert len(names) == 2
+        
+        # clean_tombstones manuell aufrufen (Re-Indexing)
+        store.clean_tombstones()
+        
+        # Index sollte nun nur noch 2 Einträge haben und Tombstones leer sein
+        assert store.index.ntotal == 2
+        assert len(store.metadata) == 2
+        assert len(store._tombstoned_ids) == 0
+        
+        # Die verbleibenden Einträge müssen "zero" und "two" sein
+        assert store.metadata[0]["name"] == "zero"
+        assert store.metadata[1]["name"] == "two"
+

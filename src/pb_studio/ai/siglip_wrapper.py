@@ -143,10 +143,41 @@ class SigLIPWrapper:
             return None
 
     def encode_images_batch(self, images: List[Image.Image]) -> Optional[np.ndarray]:
-        """Encode multiple images (Required by tests)."""
-        embs = [self.encode_image(img) for img in images]
-        valid = [e for e in embs if e is not None]
-        return np.stack(valid) if valid else None
+        """Encode multiple images using true ONNX Runtime Batch Inference."""
+        if not self._initialized and not self._init_model():
+            return None
+        if not images:
+            return None
+        try:
+            # Preprocess all images and stack into a single batch (B, 3, 384, 384)
+            tensors = []
+            for img in images:
+                img_pre = img.convert('RGB').resize((SIGLIP_IMAGE_SIZE, SIGLIP_IMAGE_SIZE), Image.Resampling.BICUBIC)
+                arr = (np.array(img_pre, dtype=np.float32) / 255.0 - SIGLIP_MEAN) / SIGLIP_STD
+                tensors.append(np.transpose(arr, (2, 0, 1)))
+            
+            batch_tensor = np.stack(tensors).astype(np.float32)
+            
+            outputs = self.vision_session.run(
+                None, 
+                {self.vision_session.get_inputs()[0].name: batch_tensor}
+            )
+            embs = outputs[0]  # Shape: (B, N, 1152) or (B, 1152)
+            
+            # Falls die Form (B, N, 1152) ist (z.B. Patch-Embeddings), ueber Patches mitteln
+            if embs.ndim == 3:
+                embs = np.mean(embs, axis=1)
+            
+            # L2-Normalisierung fuer alle Vektoren im Batch
+            norms = np.linalg.norm(embs, axis=1, keepdims=True) + 1e-8
+            embs_normalized = embs / norms
+            return embs_normalized
+        except Exception as e:
+            logger.error(f"Failed to encode batch of images: {e}")
+            # Fallback auf sequenzielles Encoding, falls Batch-Inferenz scheitert
+            embs = [self.encode_image(img) for img in images]
+            valid = [e for e in embs if e is not None]
+            return np.stack(valid) if valid else None
 
     def encode_text(self, texts: Union[str, List[str]]) -> Optional[np.ndarray]:
         if not self._initialized and not self._init_model(): return None
