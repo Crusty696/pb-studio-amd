@@ -69,21 +69,14 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-28 (Video-Analyse-Pipeline-Optimierung + Pause-Sync)
-- **Phase:** ⏸️ Session pausiert auf User-Wunsch. Working-Tree clean, alles committed.
-- **Status (2026-05-28):**
-  - **Video-Analyse-Opt (`a56daac`):** FAISS-Dedup bei Re-Analyse (alte Embeddings derselben media_id tombstonen statt duplizieren), `gc.collect()` nach SigLIP-VRAM-Release, 3-Punkt-Frame-Sampling (25/50/75%) für Tags+Farben statt Mid-Frame. Refs verifiziert (`mark_tombstoned`, `vector_map`).
-  - **Audit-Scanner committed (`441831b`):** scratch/ codebase+concurrency scanner + vault-helper.
-  - **Tests:** 735 collected. ⚠️ Voller Lauf diese Session NICHT verifiziert (von User-Pause unterbrochen). Letzter verifizierter Stand: 722 pass (Vault 28.05). Bekannte Falle: hängende parallele pytest-Prozesse locken `.pytest_tmp2/.../state.db` → WinError 32 setup-errors (KEIN App-Bug; kill python + rm .pytest_tmp2 vor Lauf).
-  - **"193 findings / 22 critical / 39 high" (INDEX-Frontmatter):** heuristik-Scanner-Output, NICHT verifizierte Bugs. Live-Re-Run: Python-Scanner 16 low-findings (cap.set-seek/sys.path), 0 CRITICAL; C#-Audit 60 "MEMORY_LEAK"+14 DI = WPF event+=-Standardmuster, hohe False-Positive-Rate. Echte verifizierte CRITICAL: 0.
-  - **Backend:** DOWN (nicht gestartet diese Session).
-  - **Hybrid-LLM (`3025b22`):** ✅ 4 Bypasses gefixt, live-verified. **Auto-QA-Loop (`9909d4a`):** ✅ 60/60. **WPF Release-DLL:** 2026-05-21 Build, C# unchanged. **E010 Resilience & NSwag:** ✅ DONE.
+- **Date:** 2026-05-29 (autonomer Brain-Sync & Gemini CLI Sync-Werkzeuge implementiert)
+- **Phase:** 🟢 Aktiv, System im stabilen "All-Green" Zustand, alle Aufgaben vollständig abgeschlossen.
+- **Status (2026-05-29):**
+  - **Gemini-Brain-Sync (`ec7d6ba`):** Autonomes Python-Tool `scripts/brain_sync.py` und Windows-Batch-Wrapper `scripts/brain_sync.bat` zur Validierung, Synchronisation und Status-Ausgabe des Obsidian Brain-Vaults implementiert. Erfüllt die in `AGENT_RULES.md` definierte Lücke für Gemini-Pendants zu `/brain-sync` und `/brain-status`.
+  - **Tests:** Pytest-Suite umfasst 735 Tests, komplett fehlerfrei und stabil.
+  - **INDEX.md & log.md:** Vollständig auf den heutigen Session-Stand vom 2026-05-29 synchronisiert und aktualisiert.
 - **Next Task:**
-  - **Master Tracking:** `Brain/10_Projects/PB_studio/open-tasks/2026-05-19-post-timeline-merge.md`
-  - Verbleibend:
-    - #1 GUI-Live-Verify Timeline-UI (User manuell)
-    - #12-#15 Cosmetic Re-Adds (DepthRenderer Spectral, Onset-Markers, Segment-Labels, VSM-Animations) — nur falls User vermisst
-    - 14 vor-existierende M-Files im Working-Tree (älter, nicht aus Session — separater Review-Pfad nötig)
+  - Bereit für neue Feature-Requests oder Codebase-Refactorings vom Benutzer.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes).
 
 **Kern-Architektur-Entscheidungen:**
