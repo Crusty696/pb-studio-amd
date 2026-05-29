@@ -421,7 +421,8 @@ finally {
             Start-Sleep -Seconds 2
         } catch {}
         if (-not $script:BackendProcess.HasExited) {
-            $script:BackendProcess.Kill()
+            # Beende den gesamten Prozessbaum (einschließlich Uvicorn-Worker) via taskkill /F /T, da Kill() nur den Parent-Prozess beendet!
+            taskkill /pid $script:BackendProcess.Id /f /t 2>$null | Out-Null
         }
     }
 }
