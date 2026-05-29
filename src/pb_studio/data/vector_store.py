@@ -286,40 +286,57 @@ class VectorStore:
         with self._lock:
             self._save_unlocked()
 
-    def _save_unlocked(self):
+    def _save_unlocked(self, force: bool = False):
         """Save index and metadata atomically (caller must hold lock)."""
-        if self.index and getattr(self, "index_path", None) is not None:
-            # Atomic save: write to temp files, then rename
+        write_lock = getattr(self, "_write_lock", None)
+        if write_lock is None:
+            write_lock = threading.Lock()
             try:
-                # Save FAISS index to temp file first
-                temp_index = str(self.index_path) + ".tmp"
-                faiss.write_index(self.index, temp_index)
+                self._write_lock = write_lock
+            except Exception:
+                pass
 
-                # Save metadata to temp file
-                temp_meta = str(self.meta_path) + ".tmp"
-                with open(temp_meta, "w") as f:
-                    json.dump(self.metadata, f, indent=2)
+        # Non-blocking lock acquisition to prevent main thread blocking, unless force=True
+        acquired = write_lock.acquire(blocking=force)
+        if not acquired:
+            logger.info("Asynchroner Speichervorgang läuft bereits. Überspringe synchrones Speichern zur Performance-Optimierung.")
+            return
 
-                # B-7 FIX: Save tombstones
-                temp_tomb = str(self.tombstone_path) + ".tmp"
-                with open(temp_tomb, "w") as f:
-                    json.dump(list(self._tombstoned_ids), f)
+        try:
+            if self.index and getattr(self, "index_path", None) is not None:
+                # Atomic save: write to temp files, then rename
+                try:
+                    # Save FAISS index to temp file first
+                    temp_index = str(self.index_path) + ".tmp"
+                    faiss.write_index(self.index, temp_index)
 
-                # BUG-102 FIX: Atomic replace (os.replace works even if dest does not exist)
-                import os
-                os.replace(temp_index, str(self.index_path))
-                os.replace(temp_meta, str(self.meta_path))
-                os.replace(temp_tomb, str(self.tombstone_path))
+                    # Save metadata to temp file
+                    temp_meta = str(self.meta_path) + ".tmp"
+                    with open(temp_meta, "w") as f:
+                        json.dump(self.metadata, f, indent=2)
 
-                logger.info("FAISS Index saved.")
-            except Exception as e:
-                logger.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
-                # Cleanup temp files
-                for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
-                    try:
-                        Path(tmp).unlink(missing_ok=True)
-                    except Exception:
-                        pass
+                    # B-7 FIX: Save tombstones
+                    temp_tomb = str(self.tombstone_path) + ".tmp"
+                    with open(temp_tomb, "w") as f:
+                        json.dump(list(self._tombstoned_ids), f)
+
+                    # BUG-102 FIX: Atomic replace (os.replace works even if dest does not exist)
+                    import os
+                    os.replace(temp_index, str(self.index_path))
+                    os.replace(temp_meta, str(self.meta_path))
+                    os.replace(temp_tomb, str(self.tombstone_path))
+
+                    logger.info("FAISS Index saved.")
+                except Exception as e:
+                    logger.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
+                    # Cleanup temp files
+                    for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
+                        try:
+                            Path(tmp).unlink(missing_ok=True)
+                        except Exception:
+                            pass
+        finally:
+            write_lock.release()
 
     def _save_background(self, cloned_index, cloned_metadata, cloned_tombstones):
         """Asynchronously save cloned index and metadata in a daemon thread."""
@@ -365,6 +382,6 @@ class VectorStore:
         """atexit-Handler: stellt sicher dass beim Prozessende gespeichert wird."""
         try:
             with self._lock:
-                self._save_unlocked()
+                self._save_unlocked(force=True)
         except Exception:
             pass

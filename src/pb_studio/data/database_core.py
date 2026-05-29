@@ -285,7 +285,7 @@ class DatabaseCore:
         if not hasattr(self._local, 'conn') or self._local.conn is None:
             self._local.conn = sqlite3.connect(
                 str(self.db_path),
-                check_same_thread=True,  # Thread-safe!
+                check_same_thread=False,  # Thread-safe via thread-local isolation, but allows clean cross-thread shutdown!
                 timeout=30.0,
             )
             self._configure_connection(self._local.conn)

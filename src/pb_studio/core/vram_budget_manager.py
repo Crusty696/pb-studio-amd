@@ -973,6 +973,9 @@ class VRAMContext:
     def set_unload_callback(self, fn: Callable):
         """Set function to call on context exit."""
         self._unload_fn = fn
+        with self.manager._registry_lock:
+            if self.model_id in self.manager._models:
+                self.manager._models[self.model_id].unload_callback = fn
 
     def commit(self):
         """Mark model as successfully loaded."""

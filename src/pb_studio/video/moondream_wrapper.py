@@ -111,6 +111,7 @@ def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
         logger.debug(f"Moondream-Imports nicht verfuegbar: {e}")
         return []
 
+    analyzer = None
     try:
         analyzer = MoondreamAnalyzer(lazy_load=True)
         # is_ready triggert lazy init; bei fehlendem Modell -> False, kein Crash
@@ -148,3 +149,9 @@ def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
     except Exception as e:
         logger.debug(f"Moondream tagging fehlgeschlagen (unkritisch): {e}")
         return []
+    finally:
+        if analyzer is not None:
+            try:
+                analyzer.unload()
+            except Exception as ex:
+                logger.debug(f"Fehler beim Entladen des MoondreamAnalyzers: {ex}")

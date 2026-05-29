@@ -13,6 +13,7 @@ DirectML Considerations:
 
 import logging
 import threading
+# pyrefly: ignore [missing-import]
 import onnxruntime as ort
 
 _model_loader_init_lock = threading.Lock()
@@ -457,8 +458,11 @@ class ModelLoader:
                     if isinstance(session, dict):
                         for key in list(session.keys()):
                             session[key] = None
+                    session = None
                     self.vram_manager.release(model_id)
 
+        import gc
+        gc.collect()
         logger.info("All models unloaded")
 
 
