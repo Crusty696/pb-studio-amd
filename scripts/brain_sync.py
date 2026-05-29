@@ -248,7 +248,7 @@ def main():
     branch, uncommitted_count, uncommitted_files = get_git_status()
     
     # Tests count
-    tests_count = 735 # Direct fallback to last known valid count if subprocess fails
+    tests_count = 727 # Direct fallback to last known valid count if subprocess fails
     
     # Lint files
     if not args.no_lint:
