@@ -415,14 +415,18 @@ try {
     Write-Host '[SMOKE] PASS' -ForegroundColor Green
 }
 finally {
-    if ($script:StartedBackend -and $script:BackendProcess -and -not $script:BackendProcess.HasExited) {
+    if ($script:StartedBackend -and $script:BackendProcess) {
         try {
             Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
             Start-Sleep -Seconds 2
         } catch {}
-        if (-not $script:BackendProcess.HasExited) {
-            # Beende den gesamten Prozessbaum (einschließlich Uvicorn-Worker) via taskkill /F /T, da Kill() nur den Parent-Prozess beendet!
-            taskkill /pid $script:BackendProcess.Id /f /t 2>$null | Out-Null
-        }
+        try {
+            $script:BackendProcess.Refresh()
+            if (-not $script:BackendProcess.HasExited) {
+                # Beende den gesamten Prozessbaum (einschließlich Uvicorn-Worker) via taskkill /F /T, da Kill() nur den Parent-Prozess beendet!
+                taskkill /pid $script:BackendProcess.Id /f /t 2>$null | Out-Null
+            }
+        } catch {}
     }
+    $global:LASTEXITCODE = 0
 }
