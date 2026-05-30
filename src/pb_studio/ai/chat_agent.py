@@ -167,9 +167,11 @@ class ChatAgent:
         current_url = self._llm.base_url
         from .llm_provider import get_base_url, get_llm_client
 
-        ollama_url = get_base_url("ollama")
+        ollama_url = get_base_url("ollama").rstrip("/")
+        lmstudio_url = get_base_url("lmstudio").rstrip("/")
+        current_normalized = current_url.rstrip("/")
         # Bestimme alternative Provider
-        if "11434" in current_url or current_url == ollama_url:
+        if current_normalized == ollama_url:
             other_provider = "lmstudio"
         else:
             other_provider = "ollama"
@@ -386,7 +388,10 @@ class ChatAgent:
                         return
                 else:
                     logger.warning("Verbindungsfehler im Chat-Turn %s: %s. Versuche Fallback...", turn, exc)
-                    other_prov = "ollama" if "11434" not in (self._llm.base_url if self._llm else "") else "lmstudio"
+                    from .llm_provider import get_base_url
+                    ollama_url = get_base_url("ollama").rstrip("/")
+                    current_base = self._llm.base_url.rstrip("/") if self._llm else ""
+                    other_prov = "lmstudio" if current_base == ollama_url else "ollama"
                     yield ChatEvent("error", {
                         "message": f"Verbindung zu {self._llm.base_url if self._llm else 'LLM'} verloren. Wechsle automatisch auf {other_prov}...",
                         "stage": "fallback"
@@ -504,7 +509,10 @@ class ChatAgent:
                 yield ChatEvent("text", {"content": final_text})
             except LMStudioError as exc:
                 logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
-                other_prov = "ollama" if "11434" not in (self._llm.base_url if self._llm else "") else "lmstudio"
+                from .llm_provider import get_base_url
+                ollama_url_s = get_base_url("ollama").rstrip("/")
+                current_base_s = self._llm.base_url.rstrip("/") if self._llm else ""
+                other_prov = "lmstudio" if current_base_s == ollama_url_s else "ollama"
                 yield ChatEvent("error", {
                     "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
                     "stage": "fallback"

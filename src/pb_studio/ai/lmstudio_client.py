@@ -325,7 +325,8 @@ class LMStudioClient:
                 continue
             except httpx.HTTPError as exc:
                 raise LMStudioError(
-                    f"HTTP-Fehler bei {method} {path}: {exc}"
+                    f"HTTP-Fehler bei {method} {path} "
+                    f"({self.base_url}): {type(exc).__name__}: {exc}"
                 ) from exc
             if response.status_code >= 500 and attempt < self.retry_attempts:
                 logger.warning(
