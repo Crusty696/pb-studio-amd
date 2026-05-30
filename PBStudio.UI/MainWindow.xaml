@@ -9,6 +9,7 @@
         xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
         xmlns:views="clr-namespace:PBStudio.UI.Views"
         xmlns:converters="clr-namespace:PBStudio.UI.Converters"
+        xmlns:controls="clr-namespace:PBStudio.UI.Controls"
         mc:Ignorable="d"
         Title="PB Studio AMD"
         Width="1400" Height="900"
@@ -55,15 +56,15 @@
             </Border>
 
             <!-- ── Main Tabs Area ── -->
-            <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Background="{StaticResource AbletonBg}" BorderThickness="0"
+            <controls:CachedTabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Background="{StaticResource AbletonBg}" BorderThickness="0"
                         RenderTransformOrigin="0.5,0.05" Opacity="1.0">
-                <TabControl.RenderTransform>
+                <controls:CachedTabControl.RenderTransform>
                     <!-- P2.1/Spec-00007 T010: GPU-accelerated tab swap animation.
                          ScaleTransform animiert ueber Compositor-Thread (RenderTransform = GPU-Pfad). -->
                     <ScaleTransform x:Name="TabContentScale" ScaleX="1.0" ScaleY="1.0"/>
-                </TabControl.RenderTransform>
-                <TabControl.Triggers>
-                    <EventTrigger RoutedEvent="TabControl.SelectionChanged">
+                </controls:CachedTabControl.RenderTransform>
+                <controls:CachedTabControl.Triggers>
+                    <EventTrigger RoutedEvent="Selector.SelectionChanged">
                         <BeginStoryboard>
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetName="TabContentScale" Storyboard.TargetProperty="ScaleX"
@@ -75,8 +76,8 @@
                             </Storyboard>
                         </BeginStoryboard>
                     </EventTrigger>
-                </TabControl.Triggers>
-                <TabControl.Resources>
+                </controls:CachedTabControl.Triggers>
+                <controls:CachedTabControl.Resources>
                     <Style TargetType="TabItem">
                         <Setter Property="Padding" Value="14,8"/>
                         <Setter Property="FontSize" Value="11"/>
@@ -113,7 +114,7 @@
                             </Setter.Value>
                         </Setter>
                     </Style>
-                </TabControl.Resources>
+                </controls:CachedTabControl.Resources>
 
                 <TabItem Header="PROJEKT">
                     <views:ProjectOverviewView/>
@@ -153,7 +154,7 @@
                 <TabItem Header="CHAT">
                     <views:ChatView/>
                 </TabItem>
-            </TabControl>
+            </controls:CachedTabControl>
 
             <!-- ── Status Bar ── -->
             <Border Grid.Row="2" Height="24" Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="0,1,0,0">

@@ -33,7 +33,7 @@
             <DockPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button Command="{Binding ImportVideosCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Einzelne Video-Dateien importieren">
+                            ToolTip="Dateien importieren&#x0a;• Was es macht: Öffnet einen Dialog zur Auswahl einzelner Videodateien (MP4, MOV, AVI etc.).&#x0a;• Wozu es dient: Fügt neue Video-Clips Ihrer lokalen PB Studio Bibliothek hinzu.&#x0a;• Wann nutzen: Wann immer Sie neues Ausgangsmaterial für Ihre automatischen Schnitte bereitstellen möchten.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="VideoPlus" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -42,7 +42,7 @@
                     </Button>
                     
                     <Button Command="{Binding ImportFolderCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Ganzen Ordner importieren" Margin="4,0,0,0">
+                            ToolTip="Ordner importieren&#x0a;• Was es macht: Importiert alle kompatiblen Videodateien aus einem ausgewählten Ordner auf einmal.&#x0a;• Wozu es dient: Spart Zeit beim Einlesen großer Videosammlungen.&#x0a;• Wann nutzen: Ideal zum schnellen Hinzufügen von Clip-Paketen oder B-Roll-Sammlungen." Margin="4,0,0,0">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="FolderPlus" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -53,7 +53,7 @@
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                     <Button Command="{Binding AnalyzeSelectedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Selektierten Clip analysieren (Scene-Detection + Motion)">
+                            ToolTip="Ausgewählten Clip analysieren&#x0a;• Was es macht: Startet die KI-Szenen- und Bewegungserkennung für den aktuell ausgewählten Clip auf der GPU.&#x0a;• Wozu es dient: Ermittelt Schnittpunkte (Cuts) und die Dynamik (Motion) für das rhythmische Pacing.&#x0a;• Wann nutzen: Vor dem Generieren der Cut-Liste, um präzise Schnitte zu gewährleisten.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -64,7 +64,7 @@
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                     <Button Command="{Binding AnalyzeAllCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Alle Clips analysieren (Scene-Detection + Motion) – dauert länger">
+                            ToolTip="Alle Clips analysieren&#x0a;• Was es macht: Analysiert die gesamte Bibliothek nacheinander vollautomatisch auf der GPU.&#x0a;• Wozu es dient: Bereitet alle importierten Videos komplett für die spätere Verwendung vor.&#x0a;• Wann nutzen: Empfohlen nach dem ersten Import einer größeren Anzahl neuer Videos (z. B. über Nacht laufen lassen).">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="PlaylistCheck" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -73,7 +73,7 @@
                     </Button>
 
                     <Button Command="{Binding AnalyzeMarkedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Nur die markierten Clips analysieren">
+                            ToolTip="Markierte Clips analysieren&#x0a;• Was es macht: Analysiert ausschließlich die in der Übersicht selektierten Clips.&#x0a;• Wozu es dient: Ermöglicht eine gezielte Aufbereitung bestimmter Videos ohne Wartezeit für den Rest.&#x0a;• Wann nutzen: Nützlich, wenn Sie nur eine handverlesene Auswahl neu hinzugefügter Clips analysieren wollen.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -87,7 +87,7 @@
                             Content="Alle markieren"/>
 
                     <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Markierte Clips loeschen (DB + Memory + Analyse-Cache)">
+                            ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die ausgewählten Videos vollständig aus der Datenbank und dem Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -96,7 +96,7 @@
                     </Button>
 
                     <Button Command="{Binding DeleteAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="ALLE Video-Clips loeschen">
+                            ToolTip="Gesamte Bibliothek löschen&#x0a;• Was es macht: Löscht die gesamte Videodatenbank dieses Projekts unwiderruflich.&#x0a;• Wozu es dient: Setzt das Projekt komplett zurück, um z. B. mit völlig neuem Material von vorne zu beginnen.&#x0a;• Wann nutzen: Mit Vorsicht nutzen, wenn Sie die Bibliothek vollständig leeren möchten.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteSweep" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"
@@ -170,7 +170,7 @@
                                             HorizontalAlignment="Right" VerticalAlignment="Top"
                                             Margin="0,4,4,0"
                                             Visibility="{Binding HasCacheHash, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                            ToolTip="Video-Hash vorhanden - analyse cached">
+                                            ToolTip="Analyse-Cache verfügbar&#x0a;• Was es macht: Zeigt an, dass dieses Video bereits früher gehasht und erfolgreich analysiert wurde.&#x0a;• Wozu es dient: Überspringt die langwierige GPU-Analyse und lädt die Daten in Millisekunden aus dem Cache.&#x0a;• Wann nutzen: Wird vollautomatisch verwendet, wenn Sie ein bereits bekanntes Video erneut importieren.">
                                         <TextBlock Text="CACHED" FontSize="9" FontWeight="Bold"
                                                    Foreground="{StaticResource AbletonBg}"/>
                                     </Border>
