@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace PBStudio.UI.Controls;
 
@@ -41,38 +42,66 @@ public class CachedTabControl : TabControl
         // Erstelle unser internes Grid das alle Contents hält
         _itemsHolderPanel = new Grid();
 
-        // Suche den PART_SelectedContentHost (Standard-WPF-TabControl)
-        // und ersetze ihn mit unserem Grid
-        // Falls nicht gefunden: füge das Grid als Overlay hinzu
-        if (GetTemplateChild("PART_SelectedContentHost") is ContentPresenter contentHost)
+        // Suche den PART_SelectedContentHost (Standard-WPF + MaterialDesign).
+        // Statt den ContentHost zu verstecken und ein Geschwister-Grid
+        // einzufügen (scheitert wenn der Parent kein Grid ist — MaterialDesign
+        // wrappt den ContentPresenter in einer Border), ersetzen wir den
+        // ContentHost template-agnostisch an exakt seiner Stelle im Visual Tree.
+        var contentHost = GetTemplateChild("PART_SelectedContentHost") as FrameworkElement;
+        if (contentHost != null && ReplaceInVisualParent(contentHost, _itemsHolderPanel))
         {
-            // Verstecke den Standard-ContentPresenter
-            contentHost.Visibility = Visibility.Collapsed;
-
-            // Füge unser Grid als Geschwister ein
-            if (contentHost.Parent is Grid parentGrid)
-            {
-                // Gleiche Grid.Row/Column wie der ContentPresenter
-                Grid.SetRow(_itemsHolderPanel, Grid.GetRow(contentHost));
-                Grid.SetColumn(_itemsHolderPanel, Grid.GetColumn(contentHost));
-                Grid.SetRowSpan(_itemsHolderPanel, Grid.GetRowSpan(contentHost));
-                Grid.SetColumnSpan(_itemsHolderPanel, Grid.GetColumnSpan(contentHost));
-                parentGrid.Children.Add(_itemsHolderPanel);
-            }
+            // erfolgreich an Stelle des ContentHost eingehängt
         }
-        else
+        else if (GetTemplateChild("ContentPanel") is Panel panel)
         {
-            // Fallback: Suche das Content-Panel im Template
-            // MaterialDesign nutzt ggf. andere Namen
-            if (GetTemplateChild("ContentPanel") is Panel panel)
-            {
-                panel.Children.Add(_itemsHolderPanel);
-            }
+            // Fallback: bekanntes Content-Panel im Template
+            panel.Children.Add(_itemsHolderPanel);
         }
 
         // Initialisiere vorhandene Tabs
         EnsureAllTabsCached();
         UpdateVisibility();
+    }
+
+    /// <summary>
+    /// Ersetzt <paramref name="oldElement"/> durch <paramref name="newElement"/>
+    /// im Visual-Parent, unabhängig vom Parent-Typ (Panel, Decorator/Border,
+    /// ContentControl, Border). Gibt false zurück wenn kein bekannter Parent-Typ.
+    /// </summary>
+    private static bool ReplaceInVisualParent(FrameworkElement oldElement, FrameworkElement newElement)
+    {
+        var parent = VisualTreeHelper.GetParent(oldElement) as DependencyObject;
+
+        switch (parent)
+        {
+            case Panel panel:
+            {
+                int idx = panel.Children.IndexOf(oldElement);
+                if (idx < 0) return false;
+                // Layout-Attached-Properties (Grid/DockPanel) vom Original übernehmen
+                Grid.SetRow(newElement, Grid.GetRow(oldElement));
+                Grid.SetColumn(newElement, Grid.GetColumn(oldElement));
+                Grid.SetRowSpan(newElement, Grid.GetRowSpan(oldElement));
+                Grid.SetColumnSpan(newElement, Grid.GetColumnSpan(oldElement));
+                panel.Children.RemoveAt(idx);
+                panel.Children.Insert(idx, newElement);
+                return true;
+            }
+            case Border border:
+                border.Child = newElement;
+                return true;
+            case Decorator decorator:
+                decorator.Child = newElement;
+                return true;
+            case ContentControl contentControl:
+                contentControl.Content = newElement;
+                return true;
+            case ContentPresenter contentPresenter:
+                contentPresenter.Content = newElement;
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected override void OnSelectionChanged(SelectionChangedEventArgs e)
