@@ -69,16 +69,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-05-29 (Epic 00012 High-Fidelity Playback & DJ-Beatgrid abgeschlossen)
+- **Date:** 2026-05-30 (Epic 00013 System-wide Bug Hunting & Codebase Audit abgeschlossen)
 - **Phase:** 🟢 Aktiv, System im stabilen "All-Green" Zustand, alle Aufgaben vollständig abgeschlossen.
-- **Status (2026-05-29):**
-  - **Timeline High-Fidelity Playback & DJ-Beatgrid (Epic 00012):** Autonom abgeschlossen. Phase-Gates (`.completed`, `.qc-passed`, `qc-report.md`) erfolgreich etabliert. Alle Refactorings (GPU-optimierter `WaveformRenderer`, nahtlose Clipübergänge, leuchtend rotes Downbeat-Grid mit BAR-Badges) vollständig vollendet und mit 0 Fehlern / 0 Warnungen kompiliert.
-  - **Gemini-Brain-Sync (`ec7d6ba`):** Autonomes Python-Tool `scripts/brain_sync.py` und Windows-Batch-Wrapper `scripts/brain_sync.bat` implementiert.
-  - **Tests:** Pytest-Suite umfasst 727 Tests, komplett fehlerfrei und stabil.
-  - **INDEX.md & log.md:** Vollständig auf den heutigen Session-Stand vom 2026-05-29 synchronisiert und aktualisiert.
+- **Status (2026-05-30):**
+  - **System-wide Bug Hunting & Codebase Audit (Epic 00013):** Vollständig abgeschlossen und verifiziert. Phase-Gates (`.completed`, `.qc-passed`, `qc-report.md`) erfolgreich etabliert. Alle Optimierungen (VRAM Context, Vector Store Save Lock, SQLite cross-thread connections, Moondream VRAM release, SmartDirector VRAM-Thrashing fix, SigLIP true batch-inference, Vector Store Tombstones and Re-indexing, Smart Selector und LLM-Narrator Fix) vollständig vollendet.
+  - **WPF:** Bug in VM-Initialisierung (Tab-Cycle) behoben, Release-Build 100% grün (0 Fehler / 0 Warnungen).
+  - **Tests:** Pytest-Suite umfasst 736 Tests, komplett fehlerfrei und stabil.
+  - **INDEX.md & log.md:** Vollständig auf den heutigen Session-Stand vom 2026-05-30 synchronisiert und aktualisiert.
 - **Next Task:**
   - Bereit für neue Feature-Requests oder Codebase-Refactorings vom Benutzer.
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes).
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**).
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
