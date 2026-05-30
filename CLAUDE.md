@@ -73,7 +73,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - **Phase:** 🟢 Aktiv, System im stabilen "All-Green" Zustand, alle Aufgaben vollständig abgeschlossen.
 - **Status (2026-05-30):**
   - **System-wide Bug Hunting & Codebase Audit (Epic 00013):** Vollständig abgeschlossen und verifiziert. Phase-Gates (`.completed`, `.qc-passed`, `qc-report.md`) erfolgreich etabliert. Alle Optimierungen (VRAM Context, Vector Store Save Lock, SQLite cross-thread connections, Moondream VRAM release, SmartDirector VRAM-Thrashing fix, SigLIP true batch-inference, Vector Store Tombstones and Re-indexing, Smart Selector und LLM-Narrator Fix) vollständig vollendet.
-  - **WPF:** Bug in VM-Initialisierung (Tab-Cycle) behoben, Release-Build 100% grün (0 Fehler / 0 Warnungen).
+  - **WPF:** Bug in VM-Initialisierung (Tab-Cycle) über sicheren UI-Loaded-Lade-Workflow behoben, Release-Build 100% grün (0 Fehler / 0 Warnungen).
   - **Tests:** Pytest-Suite umfasst 736 Tests, komplett fehlerfrei und stabil.
   - **INDEX.md & log.md:** Vollständig auf den heutigen Session-Stand vom 2026-05-30 synchronisiert und aktualisiert.
 - **Next Task:**
