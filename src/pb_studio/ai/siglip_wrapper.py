@@ -118,18 +118,31 @@ class SigLIPWrapper:
                     self.vision_session = ort.InferenceSession(str(vision_path), sess_options, providers=providers)
                 
                 self._active_provider = self.vision_session.get_providers()[0]
+                if self._active_provider != 'DmlExecutionProvider':
+                    raise RuntimeError(
+                        f"SigLIP vision session was loaded on {self._active_provider}, "
+                        f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                    )
                 
                 if text_path.exists():
                     self.text_session = loader.load_model("siglip_text", force=True)
                     if self.text_session is None:
                         self.text_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
+                    
+                    text_provider = self.text_session.get_providers()[0]
+                    if text_provider != 'DmlExecutionProvider':
+                        raise RuntimeError(
+                            f"SigLIP text session was loaded on {text_provider}, "
+                            f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                        )
                 else:
                     self._init_text_fallback()
                 
                 self._initialized = True
                 return True
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to initialize SigLIP: {e}")
             return False
 
     def preprocess_image(self, image: Image.Image) -> np.ndarray:

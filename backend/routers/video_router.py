@@ -941,6 +941,11 @@ def _run_video_analysis(
                     )
                     result["has_embedding"] = False
             finally:
+                if 'wrapper' in locals() and wrapper is not None:
+                    try:
+                        wrapper.unload()
+                    except Exception as unload_err:
+                        logger.warning(f"Failed to unload SigLIPWrapper: {unload_err}")
                 del wrapper  # Release SigLIP ONNX session / DirectML VRAM
                 import gc
                 gc.collect()
