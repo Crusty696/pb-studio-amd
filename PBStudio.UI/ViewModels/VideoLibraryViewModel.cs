@@ -85,6 +85,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(this, (_, _) => HandleProjectEnd());
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => HandleProjectEnd());
         WeakReferenceMessenger.Default.Register<AppShutdownMessage>(this, (_, _) => BeginShutdown());
+
+        // Auto-load if project already opened on tab activation
+        _ = RequestClipReloadAsync();
     }
 
     partial void OnSelectedClipChanged(VideoClipModel? value)

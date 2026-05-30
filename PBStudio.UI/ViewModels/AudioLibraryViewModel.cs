@@ -55,6 +55,9 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
             System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+
+        // Auto-load if project already opened on tab activation
+        _ = LoadAudioClipsAsync();
     }
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
