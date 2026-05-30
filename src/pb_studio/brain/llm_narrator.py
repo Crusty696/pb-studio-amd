@@ -362,7 +362,7 @@ async def _async_generate_explanation(
             model = model_override
         else:
             try:
-                model = registry.select_best_for_task(task, mode)
+                model = registry.select_best_for_task(task, mode, allow_any_installed=False)
             except (NoSuitableModelError, ModelRegistryError) as exc:
                 logger.warning(
                     "LLM-Narrator: kein passendes Modell fuer task=%r mode=%r: %s — Fallback auf offline Text",
