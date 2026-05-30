@@ -188,10 +188,11 @@ def test_no_suitable_model_raises():
         async with _client_with_models(["unrelated-tiny-model"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
-            return reg.select_best_for_task("video_captioning", "balance")
+            return reg.select_best_for_task("video_captioning", "balance", allow_any_installed=False)
 
     with pytest.raises(NoSuitableModelError):
         _run(go())
+
 
 
 def test_no_suitable_with_allow_any_picks_first_installed():
