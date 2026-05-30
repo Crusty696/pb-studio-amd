@@ -23,7 +23,12 @@ public partial class VideoLibraryView : UserControl
         if (_scope == null)
         {
             _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
-            DataContext = _scope.ServiceProvider.GetRequiredService<VideoLibraryViewModel>();
+            var vm = _scope.ServiceProvider.GetRequiredService<VideoLibraryViewModel>();
+            DataContext = vm;
+            if (vm.LoadClipsCommand.CanExecute(null))
+            {
+                vm.LoadClipsCommand.Execute(null);
+            }
         }
     }
 

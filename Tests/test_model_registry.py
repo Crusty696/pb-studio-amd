@@ -197,14 +197,14 @@ def test_no_suitable_model_raises():
 
 def test_no_suitable_with_allow_any_picks_first_installed():
     async def go():
-        async with _client_with_models(["unrelated-tiny-model"]) as client:
+        async with _client_with_models(["unrelated-tiny-vl-model"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.select_best_for_task(
                 "video_captioning", "balance", allow_any_installed=True
             )
 
-    assert _run(go()) == "unrelated-tiny-model"
+    assert _run(go()) == "unrelated-tiny-vl-model"
 
 
 def test_no_suitable_with_allow_any_but_empty_still_raises():

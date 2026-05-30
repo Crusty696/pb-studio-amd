@@ -23,7 +23,12 @@ public partial class AudioLibraryView : UserControl
         if (_scope == null)
         {
             _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
-            DataContext = _scope.ServiceProvider.GetRequiredService<AudioLibraryViewModel>();
+            var vm = _scope.ServiceProvider.GetRequiredService<AudioLibraryViewModel>();
+            DataContext = vm;
+            if (vm.LoadAudioClipsCommand.CanExecute(null))
+            {
+                vm.LoadAudioClipsCommand.Execute(null);
+            }
         }
     }
 

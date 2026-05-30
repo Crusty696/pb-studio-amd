@@ -270,15 +270,22 @@ class ModelRegistry:
             )
             return sorted_matches[0]
 
-        # 3. Stufe: Generischer Fallback (beliebiges installiertes Modell, mode-sortiert)
+        # 3. Stufe: Generischer Fallback (beliebiges installiertes Modell, mode-sortiert mit Eignungsprüfung)
         if allow_any_installed and installed_names:
-            sorted_all = _sort_models_by_mode(installed_names, mode)
-            chosen = sorted_all[0]
-            logger.warning(
-                "Keine Praeferenz oder Keyword-Match fuer Task %r/%s installiert - nutze beliebiges passendes %r",
-                task, mode, chosen,
-            )
-            return chosen
+            if task in ("video_captioning", "image_captioning"):
+                vision_kws = TASK_KEYWORDS["video_captioning"]
+                eligible = [inst for inst in installed_names if any(kw in inst.lower() for kw in vision_kws)]
+            else:
+                eligible = [inst for inst in installed_names if "embedding" not in inst.lower()]
+
+            if eligible:
+                sorted_all = _sort_models_by_mode(eligible, mode)
+                chosen = sorted_all[0]
+                logger.warning(
+                    "Keine Praeferenz oder Keyword-Match fuer Task %r/%s installiert - nutze passendes Fallback-Modell %r",
+                    task, mode, chosen,
+                )
+                return chosen
 
         raise NoSuitableModelError(
             f"Kein installiertes Modell fuer task={task!r} mode={mode!r}. "
