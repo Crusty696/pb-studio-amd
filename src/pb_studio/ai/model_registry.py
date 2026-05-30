@@ -23,6 +23,7 @@ auf LM-Studio-Format (``qwen/qwen3-vl-8b`` etc.).
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioModelInfo
@@ -71,6 +72,54 @@ class ModelRegistryError(RuntimeError):
 
 class NoSuitableModelError(ModelRegistryError):
     """Kein installiertes Modell erfuellt die Preferenz-Kette fuer den Task."""
+
+
+def _parse_parameter_size(name: str) -> float:
+    """Parses parameter size (e.g. 1.5b, 8b, 14b, 32b, 70b) from model name.
+    Returns size in billions as float, or 0.0 if not found.
+    """
+    match = re.search(r'(\d+(?:\.\d+)?)\s*[bB]', name)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+    # If not found, look for numbers that look like parameter size
+    # E.g. gemma-2, phi-3, qwen-7
+    match = re.search(r'(?:gemma|phi|qwen|llama|gemma-3|gemma-4)\D*(\d+)', name.lower())
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+    return 0.0
+
+
+def _sort_models_by_mode(installed: list[str], mode: str) -> list[str]:
+    """Sorts model names based on the mode and their parsed parameter sizes."""
+    pairs = [(name, _parse_parameter_size(name)) for name in installed]
+    
+    if mode == "speed":
+        # Sort ascending by size (smaller models first)
+        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else 3.0))
+    elif mode == "quality":
+        # Sort descending by size (larger models first)
+        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else 8.0), reverse=True)
+    else:  # balance
+        # Sort by distance to 8B (balanced model size)
+        pairs.sort(key=lambda x: abs((x[1] if x[1] > 0 else 8.0) - 8.0))
+        
+    return [name for name, _ in pairs]
+
+
+TASK_KEYWORDS: dict[str, list[str]] = {
+    "video_captioning": ["vl", "vision", "moondream", "llava", "multimodal", "clip", "minicpm", "qwen"],
+    "image_captioning": ["vl", "vision", "moondream", "llava", "multimodal", "clip", "minicpm", "qwen"],
+    "chat": ["chat", "instruct", "it", "deepseek", "llama", "gemma", "qwen", "phi", "mistral"],
+    "chat_general": ["chat", "instruct", "it", "deepseek", "llama", "gemma", "qwen", "phi", "mistral"],
+    "chat_tool_use": ["tool", "function", "agent", "qwen", "llama", "phi", "gemma"],
+    "brain_explanation": ["thinking", "reasoning", "r1", "deepseek", "phi", "llama"],
+}
 
 
 def _normalize_model_name(name: str) -> str:
@@ -179,7 +228,7 @@ class ModelRegistry:
         task: str,
         mode: str = "balance",
         *,
-        allow_any_installed: bool = False,
+        allow_any_installed: bool = True,
     ) -> str:
         if not self._loaded:
             raise ModelRegistryError(
@@ -198,29 +247,35 @@ class ModelRegistry:
                 override, task,
             )
 
+        # 1. Stufe: Direkter Praeferenz-Match
         prefs = self.get_preference_list(task, mode)
         for candidate in prefs:
             for inst in installed_names:
                 if _name_matches(candidate, inst):
                     return inst
 
-        # Smart Vision Fallback: Falls kein praeferiertes Modell passt und es ein Vision-Task ist,
-        # suchen wir nach dem ersten installierten Modell mit Vision-Faehigkeiten.
-        if task in ("video_captioning", "image_captioning"):
-            vision_keywords = ["vl", "vision", "moondream", "llava", "multimodal", "clip", "gemma-4", "minicpm"]
-            for inst in installed_names:
-                inst_lower = inst.lower()
-                if any(kw in inst_lower for kw in vision_keywords):
-                    logger.info(
-                        "Auto-selection: Smart Vision Fallback auf Modell %r fuer Task %r",
-                        inst, task
-                    )
-                    return inst
+        # 2. Stufe: Smart Keyword Fallback (inkl. Vision & Chat/Tool/Reasoning)
+        task_kws = TASK_KEYWORDS.get(task, [])
+        keyword_matches = []
+        for inst in installed_names:
+            inst_lower = inst.lower()
+            if any(kw in inst_lower for kw in task_kws):
+                keyword_matches.append(inst)
 
+        if keyword_matches:
+            sorted_matches = _sort_models_by_mode(keyword_matches, mode)
+            logger.info(
+                "Auto-selection: Keyword Fallback fuer Task %r / Mode %s: waehle %r aus %r",
+                task, mode, sorted_matches[0], keyword_matches
+            )
+            return sorted_matches[0]
+
+        # 3. Stufe: Generischer Fallback (beliebiges installiertes Modell, mode-sortiert)
         if allow_any_installed and installed_names:
-            chosen = installed_names[0]
+            sorted_all = _sort_models_by_mode(installed_names, mode)
+            chosen = sorted_all[0]
             logger.warning(
-                "Keine Preferenz fuer Task %r/%s installiert - nutze beliebiges %r",
+                "Keine Praeferenz oder Keyword-Match fuer Task %r/%s installiert - nutze beliebiges passendes %r",
                 task, mode, chosen,
             )
             return chosen

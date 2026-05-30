@@ -81,15 +81,10 @@ class SigLIPWrapper:
             return False
 
     def _init_text_fallback(self) -> bool:
-        try:
-            from transformers import SiglipTextModel
-            logger.info("Loading SigLIP text model (PyTorch fallback)...")
-            self.text_model_fallback = SiglipTextModel.from_pretrained("google/siglip-so400m-patch14-384", local_files_only=True)
-            self.text_model_fallback.eval()
-            return True
-        except Exception as e:
-            logger.error(f"Text fallback fail: {e}")
-            return False
+        # PyTorch CPU Fallback deaktiviert um VRAM/RAM-Spikes (>1.5GB) und OOM-Abstuerze auf Windows zu verhindern.
+        logger.warning("SigLIP text model PyTorch CPU fallback is disabled to prevent VRAM/RAM OOM crashes.")
+        return False
+
 
     def _init_model(self) -> bool:
         if self._initialized: return True
