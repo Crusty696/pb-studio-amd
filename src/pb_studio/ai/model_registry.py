@@ -229,13 +229,25 @@ class ModelRegistry:
         mode: str = "balance",
         *,
         allow_any_installed: bool = True,
+        exclude: Optional[set[str]] = None,
     ) -> str:
         if not self._loaded:
             raise ModelRegistryError(
                 "ModelRegistry nicht initialisiert - refresh() vor select aufrufen"
             )
 
-        installed_names = [m.name for m in self._installed]
+        # Filtere ausgeschlossene Modelle (z.B. nicht-geladene die schon fehlgeschlagen sind)
+        _exclude = exclude or set()
+        installed_names = [
+            m.name for m in self._installed
+            if m.name not in _exclude
+        ]
+
+        if not installed_names and self._installed:
+            raise NoSuitableModelError(
+                f"Alle verfuegbaren Modelle wurden ausgeschlossen (exclude={_exclude}). "
+                f"Installiert: {[m.name for m in self._installed]}"
+            )
 
         override = self.get_user_override(task)
         if override:
@@ -289,7 +301,7 @@ class ModelRegistry:
 
         raise NoSuitableModelError(
             f"Kein installiertes Modell fuer task={task!r} mode={mode!r}. "
-            f"Preferenzen={prefs}. Installiert={installed_names}."
+            f"Preferenzen={prefs}. Installiert={installed_names}. Ausgeschlossen={_exclude}."
         )
 
     def recommendation_with_reason(

@@ -183,8 +183,14 @@ public class ApiClient : IApiClient
         }
     }
 
-    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId)
-        => await PostAsync<VideoAnalysisResult>("/video/analyze", new { clip_id = clipId }).ConfigureAwait(false);
+    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true)
+        => await PostAsync<VideoAnalysisResult>("/video/analyze", new { 
+            clip_id = clipId,
+            detect_scenes = detectScenes,
+            analyze_motion = analyzeMotion,
+            generate_embeddings = generateEmbeddings,
+            generate_captions = generateCaptions
+        }).ConfigureAwait(false);
 
     public async Task<List<SceneInfo>?> GetScenesAsync(int clipId)
         => await GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}").ConfigureAwait(false);
@@ -929,13 +935,11 @@ public record VideoClipInfo(
     bool ThumbnailAvailable,
     List<string> Tags,
     bool IsAnalyzed = false,
-    // L-M4: Motion-Felder fuer Detail-Card (null falls nicht analysiert oder kein motion-Block).
     double? AvgMotion = null,
     double? PeakMotion = null,
     string? MotionCategory = null,
-    // L-N3: SHA256 media_hash fuer Embedding-Cache-Reuse. UI rendert "CACHED"-Badge
-    // wenn nicht null. Am Ende fuer backward-compat (positionale Args).
-    string? VideoHash = null);
+    string? VideoHash = null,
+    string? TagSource = null);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
 public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);

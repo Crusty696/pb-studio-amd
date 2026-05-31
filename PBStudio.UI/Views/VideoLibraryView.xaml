@@ -83,6 +83,32 @@
 
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
+                    <!-- Analyse-Einzelschritte Checkboxen -->
+                    <CheckBox IsChecked="{Binding StepDetectScenes}"
+                              Style="{StaticResource AbletonCheckBox}"
+                              Content="Szenen"
+                              ToolTip="Szenenerkennung&#x0a;• Was es macht: Sucht automatisch nach harten Schnitten im Video.&#x0a;• Wozu es dient: Unterteilt den Clip in Szenen, damit Schnitte rhythmisch darauf abgestimmt werden können.&#x0a;• Wann nutzen: Immer empfohlen für szenisch abwechslungsreiche Videos."/>
+                     
+                    <CheckBox IsChecked="{Binding StepAnalyzeMotion}"
+                              Style="{StaticResource AbletonCheckBox}"
+                              Content="Bewegung (RAFT)"
+                              ToolTip="Bewegungsanalyse (RAFT)&#x0a;• Was es macht: Analysiert die Bewegungsdynamik (Kamera- und Objektbewegung) auf der GPU.&#x0a;• Wozu es dient: Erlaubt dem Director, schnelle Szenen mit schneller Musik und ruhige mit ruhiger Musik zu paaren.&#x0a;• Wann nutzen: Nützlich für energetische, actionreiche Musikvideos."
+                              Margin="8,0,0,0"/>
+
+                    <CheckBox IsChecked="{Binding StepGenerateEmbeddings}"
+                              Style="{StaticResource AbletonCheckBox}"
+                              Content="Bild-Inferenz (SigLIP)"
+                              ToolTip="Semantische Bild-Inferenz (SigLIP)&#x0a;• Was es macht: Erstellt mathematische Vektoren des Videoinhalts auf der GPU.&#x0a;• Wozu es dient: Ermöglicht dem Director, thematisch exakt passende Videos zu Liedtexten oder Stimmungen zu finden.&#x0a;• Wann nutzen: Unverzichtbar für thematische und semantische Bild-Musik-Harmonie."
+                              Margin="8,0,0,0"/>
+
+                    <CheckBox IsChecked="{Binding StepGenerateCaptions}"
+                              Style="{StaticResource AbletonCheckBox}"
+                              Content="Tags &amp; Farben (Moondream)"
+                              ToolTip="Kategorie-Tags &amp; Farben (Moondream/LM Studio)&#x0a;• Was es macht: Extrahiert dominante Farben und beschreibende Tags aus den Bildern des Clips.&#x0a;• Wozu es dient: Erlaubt Farb-Matching (z.B. dunkle Clips in ruhigen Passagen) und inhaltsbasierte Suche.&#x0a;• Wann nutzen: Aktivieren, wenn Sie exakte Stichwort- oder Farb-Suchen nutzen wollen."
+                              Margin="8,0,0,0"/>
+
+                    <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
+                     
                     <Button Command="{Binding SelectAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
                             Content="Alle markieren"/>
 
@@ -220,9 +246,15 @@
                                 </StackPanel>
                             </Border>
                             <StackPanel Margin="8,6,8,8">
-                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
-                                           Foreground="{StaticResource AbletonText}"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <DockPanel>
+                                    <CheckBox IsChecked="{Binding IsMarked, UpdateSourceTrigger=PropertyChanged}"
+                                              VerticalAlignment="Center" Margin="0,0,6,0"
+                                              ToolTip="Video auswählen&#x0a;• Was es macht: Markiert dieses Video für Sammelaktionen.&#x0a;• Wozu es dient: Ermöglicht es, mehrere Videos auf einmal zu analysieren oder zu löschen.&#x0a;• Wann nutzen: Zur gezielten Batch-Verarbeitung ausgewählter Videos."/>
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12"
+                                               Foreground="{StaticResource AbletonText}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                     <TextBlock Text="{Binding DurationText}"
                                                Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
@@ -291,6 +323,15 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Modell-Anzeige für die Tags/Captions -->
+                    <StackPanel Margin="0,10,0,0" Visibility="{Binding SelectedClip.TagSource, Converter={StaticResource NullToVisibilityConverter}}">
+                        <TextBlock Text="VERWENDETES KI-MODELL" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <icon:PackIconMaterial Kind="RobotOutline" Width="13" Height="13" Foreground="{StaticResource AbletonAccent}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding SelectedClip.TagSource}" Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+ 
                     <Separator Background="{StaticResource AbletonBorder}" Margin="0,12"/>
                 </StackPanel>
 

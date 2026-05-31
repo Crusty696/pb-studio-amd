@@ -17,6 +17,8 @@ public partial class VideoClipModel : ObservableObject
     public List<string> Tags { get; set; } = [];
     [ObservableProperty] private BitmapImage? _thumbnail;
     [ObservableProperty] private bool _isAnalyzed;
+    [ObservableProperty] private bool _isMarked;
+    [ObservableProperty] private string? _tagSource;
     /// <summary>R15/C-03: Flag aus Python VideoClipInfo.thumbnail_available — gibt an, ob das
     /// Backend bereits ein Thumbnail für diesen Clip generiert hat.</summary>
     public bool ThumbnailAvailable { get; set; }

@@ -41,7 +41,7 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="6,4" Height="28"
-                            ToolTip="Modell-Liste neu laden">
+                            ToolTip="Modell-Liste aktualisieren&#x0a;• Was es macht: Fragt den aktiven LLM-Provider (z.B. LM Studio) nach allen installierten und geladenen Modellen ab.&#x0a;• Wozu es dient: Bringt die Liste der verfügbaren Modelle auf den neuesten Stand, wenn du in LM Studio neue Modelle hinzugefügt hast.&#x0a;• Wann &amp; wie nutzen: Immer dann anklicken, wenn du ein neues Modell in LM Studio geladen hast und dieses hier nicht sofort siehst.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -149,7 +149,7 @@
                                                 Padding="6,2" Height="24"
                                                 Opacity="0.65"
                                                 IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
-                                                ToolTip="Modell entfernen (öffnet Anleitung für LM Studio)">
+                                                ToolTip="Modell entfernen&#x0a;• Was es macht: Zeigt eine Schritt-für-Schritt-Anleitung an, wie du das Modell sicher aus LM Studio entfernst.&#x0a;• Wozu es dient: Gibt wertvollen Festplattenspeicher frei, wenn du ein Modell nicht mehr benötigst.&#x0a;• Wann &amp; wie nutzen: Klicken, wenn du alte Modelle dauerhaft löschen willst, um Platz auf deinem Laufwerk zu schaffen.">
                                             <StackPanel Orientation="Horizontal">
                                                 <icon:PackIconMaterial Kind="TrashCanOutline" Width="13" Height="13"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -247,7 +247,7 @@
                                                     Foreground="{StaticResource AbletonAccent}"
                                                     Padding="6,2" Height="26"
                                                     IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
-                                                    ToolTip="GPU-Inferenz-Smoke-Test auf AMD DirectML ausführen">
+                                                    ToolTip="DirectML GPU-Smoke-Test&#x0a;• Was es macht: Führt eine kleine Test-Inferenz auf deiner AMD-Grafikkarte über die DirectML-Schnittstelle aus.&#x0a;• Wozu es dient: Verifiziert blitzschnell, ob das Modell auf deiner GPU fehlerfrei und beschleunigt läuft.&#x0a;• Wann &amp; wie nutzen: Direkt nach der ersten Installation oder Aktivierung eines Modells ausführen, um Kompatibilitätsprobleme sofort aufzudecken.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <icon:PackIconMaterial Kind="PlayCircleOutline" Width="14" Height="14"
                                                                            VerticalAlignment="Center" Margin="0,0,4,0"
@@ -271,7 +271,7 @@
                                                     Padding="12,2" Height="26"
                                                     HorizontalAlignment="Right"
                                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
-                                                    ToolTip="Dieses Modell persistent als Hauptmodell aktivieren">
+                                                    ToolTip="Als Hauptmodell aktivieren&#x0a;• Was es macht: Setzt das gewählte Modell als Standard-Modell für alle zukünftigen Chat- und Analyse-Aufgaben fest.&#x0a;• Wozu es dient: Stellt sicher, dass PB Studio für den KI-Chat und die Director-Analysen immer dein bevorzugtes Modell anspricht.&#x0a;• Wann &amp; wie nutzen: Anklicken, wenn du ein anderes Modell (z.B. ein größeres für bessere Qualität oder ein kleineres für mehr Performance) standardmäßig verwenden möchtest.">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                                                         <Setter Property="Visibility" Value="Visible"/>
@@ -401,7 +401,7 @@
                                                 HorizontalAlignment="Right"
                                                 Padding="8,2" Height="28"
                                                 Opacity="0.75"
-                                                ToolTip="Modell-Downloads laufen ueber LM Studio (Discover-Tab). Klicken zeigt Anleitung.">
+                                                ToolTip="Modelle über LM Studio herunterladen&#x0a;• Was es macht: Öffnet eine bebilderte Anleitung, wie du Modelle im Discover-Tab von LM Studio suchst und herunterlädst.&#x0a;• Wozu es dient: Da PB Studio komplett offline läuft, delegieren wir die Modell-Downloads an das mächtige LM Studio Interface.&#x0a;• Wann &amp; wie nutzen: Klicken, wenn du ein Modell aus der Liste 'Verfügbar' nutzen möchtest, das noch nicht auf deiner Festplatte installiert ist.">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
                                                     <Setter Property="Visibility" Value="Visible"/>

@@ -26,7 +26,7 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 
 from .model_registry import ModelRegistry, ModelRegistryError, NoSuitableModelError
-from .lmstudio_client import LMStudioClient, LMStudioError
+from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError
 from .tool_registry import ToolRegistry, build_default_registry, _get_backend_base_url
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,14 @@ class ChatAgent:
             logger.debug("AI-Config nicht ladbar fuer ChatAgent: %s", exc)
         return {}
 
-    async def _pick_chat_model(self, mode: str):
+    async def _pick_chat_model(self, mode: str, *, exclude: set[str] | None = None):
+        """Waehlt das beste Chat-Modell, optional mit Ausschluss-Liste.
+
+        Args:
+            mode: speed/balance/quality
+            exclude: Set von Modell-Namen die uebersprungen werden sollen
+                     (z.B. weil sie nicht geladen sind und schon fehlgeschlagen haben).
+        """
         await self._ensure_resources()
         assert self._model_registry is not None
         try:
@@ -251,15 +258,19 @@ class ChatAgent:
                     f"LM Studio nicht erreichbar - Chat kann nicht laufen: {exc}"
                 ) from exc
 
+        _exclude = exclude or set()
+
         for task in ("chat_tool_use", "chat_general", "chat"):
             try:
-                model = self._model_registry.select_best_for_task(task, mode)
+                model = self._model_registry.select_best_for_task(
+                    task, mode, exclude=_exclude
+                )
                 return model, f"task={task}, mode={mode}"
             except (NoSuitableModelError, ModelRegistryError):
                 continue
         try:
             model = self._model_registry.select_best_for_task(
-                "chat", mode, allow_any_installed=True
+                "chat", mode, allow_any_installed=True, exclude=_exclude
             )
             return model, "fallback: irgendein installiertes Modell"
         except (NoSuitableModelError, ModelRegistryError) as exc:
@@ -364,6 +375,11 @@ class ChatAgent:
         tools_schema = self._registry.openai_schema()
 
         final_text = ""
+        # Set von Modellen die fehlgeschlagen sind (z.B. nicht geladen in LM Studio)
+        # Bei Model-Fehlern wird das naechste Modell probiert statt sofort Provider-Fallback.
+        _failed_models: set[str] = set()
+        MAX_MODEL_RETRIES = 3
+
         for turn in range(self._max_tool_turns):
             try:
                 response = await self._llm.chat(
@@ -374,6 +390,8 @@ class ChatAgent:
                 )
             except LMStudioError as exc:
                 msg_lower = str(exc).lower()
+
+                # Fall 1: Modell unterstuetzt keine Tools → Retry ohne Tools
                 if "tools" in msg_lower or "function" in msg_lower:
                     logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
                     try:
@@ -386,8 +404,10 @@ class ChatAgent:
                         yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
                         yield ChatEvent("done", {"reason": "llm_error"})
                         return
-                else:
-                    logger.warning("Verbindungsfehler im Chat-Turn %s: %s. Versuche Fallback...", turn, exc)
+
+                # Fall 2: Connection-Error → Provider-Fallback
+                elif isinstance(exc, LMStudioConnectionError):
+                    logger.warning("Connection-Fehler im Chat-Turn %s: %s. Versuche Provider-Fallback...", turn, exc)
                     from .llm_provider import get_base_url
                     ollama_url = get_base_url("ollama").rstrip("/")
                     current_base = self._llm.base_url.rstrip("/") if self._llm else ""
@@ -398,6 +418,7 @@ class ChatAgent:
                     })
 
                     if await self._attempt_fallback():
+                        _failed_models.clear()  # Neuer Provider → alte Fehler zuruecksetzen
                         try:
                             if model_override:
                                 model = model_override
@@ -431,6 +452,68 @@ class ChatAgent:
                         )
                         yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
                         yield ChatEvent("done", {"reason": "llm_error"})
+                        return
+
+                # Fall 3: Model-Fehler (z.B. nicht geladen) → naechstes Modell versuchen
+                else:
+                    _failed_models.add(model)
+                    logger.warning(
+                        "Modell %r fehlgeschlagen (Turn %s): %s. Versuche naechstes Modell... (fehlgeschlagen: %s)",
+                        model, turn, exc, _failed_models
+                    )
+
+                    if len(_failed_models) >= MAX_MODEL_RETRIES:
+                        # Zu viele Modell-Fehler → Provider-Fallback versuchen
+                        logger.warning(
+                            "%d Modelle fehlgeschlagen auf diesem Provider. Versuche Provider-Fallback...",
+                            len(_failed_models)
+                        )
+                        from .llm_provider import get_base_url
+                        ollama_url_f = get_base_url("ollama").rstrip("/")
+                        current_base_f = self._llm.base_url.rstrip("/") if self._llm else ""
+                        other_prov_f = "lmstudio" if current_base_f == ollama_url_f else "ollama"
+
+                        if await self._attempt_fallback():
+                            _failed_models.clear()
+                            try:
+                                model, reason = await self._pick_chat_model(mode)
+                                yield ChatEvent("model", {"model": model, "reason": f"{reason} (provider-fallback)", "mode": mode})
+                                continue  # Retry den Turn mit neuem Modell+Provider
+                            except NoSuitableModelError as exc_no_model:
+                                yield ChatEvent("error", {"message": str(exc_no_model), "stage": "model_selection"})
+                                yield ChatEvent("done", {"reason": "no_model"})
+                                return
+                        else:
+                            yield ChatEvent("error", {
+                                "message": f"Kein Modell konnte den Chat ausfuehren. {len(_failed_models)} Modelle fehlgeschlagen: {_failed_models}. Alternativer Provider ({other_prov_f}) ebenfalls offline.",
+                                "stage": "chat"
+                            })
+                            yield ChatEvent("done", {"reason": "llm_error"})
+                            return
+
+                    # Naechstes Modell auswaehlen (ohne die fehlgeschlagenen)
+                    try:
+                        if not model_override:
+                            new_model, new_reason = await self._pick_chat_model(mode, exclude=_failed_models)
+                            yield ChatEvent("error", {
+                                "message": f"Modell '{model}' nicht verfuegbar (evtl. nicht geladen). Wechsle auf '{new_model}'...",
+                                "stage": "model_retry"
+                            })
+                            model = new_model
+                            reason = new_reason
+                            yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+                            continue  # Retry den Turn mit neuem Modell
+                        else:
+                            # Bei model_override kein Retry mit anderem Modell
+                            yield ChatEvent("error", {"message": f"Explizites Modell '{model}' fehlgeschlagen: {exc}", "stage": "chat"})
+                            yield ChatEvent("done", {"reason": "llm_error"})
+                            return
+                    except NoSuitableModelError:
+                        yield ChatEvent("error", {
+                            "message": f"Kein weiteres Modell verfuegbar. Fehlgeschlagen: {_failed_models}.",
+                            "stage": "chat"
+                        })
+                        yield ChatEvent("done", {"reason": "no_model"})
                         return
 
             message = response.get("message") or {}

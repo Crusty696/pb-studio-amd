@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from pb_studio.ai.chat_agent import ChatAgent, ChatEvent
-from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError, LMStudioModelInfo
+from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError, LMStudioModelInfo
 from pb_studio.ai.model_registry import ModelRegistry, NoSuitableModelError
 from pb_studio.ai.tool_registry import build_default_registry
 
@@ -456,7 +456,7 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
             return [LMStudioModelInfo(name="failed-model", size_bytes=1, modified_at="", digest="")]
 
         async def chat(self, *args, **kwargs):
-            raise LMStudioError("Connection refused by LM Studio")
+            raise LMStudioConnectionError("Connection refused by LM Studio")
 
         async def aclose(self):
             pass
@@ -512,4 +512,66 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
     # Pruefe, ob der Text von Ollama geliefert wurde
     text_event = next(e for e in events if e.type == "text")
     assert "Hallo von Ollama" in text_event.payload["content"]
+    assert events[-1].type == "done"
+
+
+def test_agent_model_retry_on_non_connection_error(monkeypatch):
+    """Wenn ein Modell mit einem nicht-Connection-Fehler fehlschlaegt,
+    muss der Agent das naechste Modell versuchen statt Provider-Fallback.
+
+    Simuliert LM Studio mit 2 Modellen: erstes ist 'nicht geladen' (model error),
+    zweites funktioniert.
+    """
+    call_count = 0
+
+    class ModelRetryClient(LMStudioClient):
+        def __init__(self):
+            super().__init__(base_url="http://127.0.0.1:12341/v1")
+
+        async def list_models(self):
+            return [
+                LMStudioModelInfo(name="unloaded-model", size_bytes=1, modified_at="", digest=""),
+                LMStudioModelInfo(name="loaded-model", size_bytes=1, modified_at="", digest=""),
+            ]
+
+        async def chat(self, model, messages, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if model == "unloaded-model":
+                raise LMStudioError("Model not loaded: unloaded-model")
+            return {"message": {"role": "assistant", "content": f"Antwort von {model}!"}}
+
+        async def aclose(self):
+            pass
+
+        async def is_alive(self):
+            return True
+
+    client = ModelRetryClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    types = [e.type for e in events]
+
+    # Muss model_retry error event haben
+    retry_errors = [e for e in events if e.type == "error" and e.payload.get("stage") == "model_retry"]
+    assert len(retry_errors) >= 1, f"Erwarte model_retry event, bekommen: {[(e.type, e.payload.get('stage')) for e in events]}"
+    assert "nicht verfuegbar" in retry_errors[0].payload["message"]
+
+    # Muss Text-Event mit Antwort vom geladenen Modell haben
+    assert "text" in types
+    text_event = next(e for e in events if e.type == "text")
+    assert "loaded-model" in text_event.payload["content"]
     assert events[-1].type == "done"

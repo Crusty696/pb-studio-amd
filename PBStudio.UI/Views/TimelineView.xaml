@@ -31,7 +31,7 @@
                     <Button Command="{Binding RefreshTimelineCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
-                            ToolTip="Aktuelle Cut-Liste laden"
+                            ToolTip="Timeline laden&#x0a;• Was es macht: Lädt die aktuelle Cut-Liste des Smart Directors neu auf die Zeitachse.&#x0a;• Wozu es dient: Aktualisiert die visuelle Darstellung, falls der Smart Director ein neues Video generiert hat oder externe Änderungen vorliegen.&#x0a;• Wann &amp; wie nutzen: Nach jeder neuen Generierung oder manuellen Anpassung anklicken, um den aktuellsten Stand anzuzeigen."
                             Padding="8,4" Height="30">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -44,7 +44,7 @@
                     <!-- Zoom Controls -->
                     <icon:PackIconMaterial Kind="MagnifyMinus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <Slider Width="120" Minimum="10" Maximum="500" Value="{Binding PixelsPerSecond}"
-                            VerticalAlignment="Center" ToolTip="Horizontaler Zoom (Pixel/Sekunde)"/>
+                            VerticalAlignment="Center" ToolTip="Horizontaler Zoom&#x0a;• Was es macht: Vergrößert oder verkleinert die zeitliche Darstellung der Timeline.&#x0a;• Wozu es dient: Ermöglicht das präzise Trimmen und Betrachten einzelner Takte und Videoschnitte.&#x0a;• Wann &amp; wie nutzen: Nach links schieben für eine Gesamtübersicht, nach rechts schieben für detailgenaues Arbeiten an Taktgrenzen."/>
                     <icon:PackIconMaterial Kind="MagnifyPlus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
 
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
@@ -52,12 +52,12 @@
                     <!-- Show Waveform/Beatgrid Toggles -->
                     <CheckBox IsChecked="{Binding ShowWaveform}"
                               Style="{StaticResource AbletonCheckBox}"
-                              ToolTip="Musik-Wellenform anzeigen/ausblenden"
+                              ToolTip="Wellenform anzeigen&#x0a;• Was es macht: Blendet die visuelle Lautstärkekurve (Wellenform) der geladenen Musikspur ein oder aus.&#x0a;• Wozu es dient: Hilft dabei, Breaks, Drops und rhythmische Wechsel in der Musik visuell zu lokalisieren.&#x0a;• Wann &amp; wie nutzen: Aktiviert lassen, um Schnitte präzise auf Audio-Ereignisse abzustimmen."
                               Content="Wellenform"/>
                               
                     <CheckBox IsChecked="{Binding ShowBeatgrid}"
                               Style="{StaticResource AbletonCheckBox}"
-                              ToolTip="Takt-Beatgrid anzeigen/ausblenden"
+                              ToolTip="Beatgrid anzeigen&#x0a;• Was es macht: Zeigt ein regelmäßiges Liniennetz auf Takt-Basis über der Audiospur an.&#x0a;• Wozu es dient: Macht die einzelnen Musik-Beats sichtbar, um Schnitte perfekt synchron zur Musik auszurichten.&#x0a;• Wann &amp; wie nutzen: Einschalten für rhythmisch exakte Videomontagen und taktsynchrones Cutten."
                               Content="Beatgrid"
                               Margin="10,0,6,0"/>
 
@@ -71,7 +71,7 @@
                              Foreground="{StaticResource AbletonText}"
                              BorderBrush="{StaticResource AbletonBorder}"
                              VerticalContentAlignment="Center"
-                             ToolTip="Start-Sekunde für Preview"/>
+                             ToolTip="Vorschau-Startsekunde&#x0a;• Was es macht: Bestimmt die genaue Sekunde im Mix, ab der das gerenderte Vorschau-Video starten soll.&#x0a;• Wozu es dient: Ermöglicht das gezielte Testen von Übergängen oder Drops an bestimmten Stellen.&#x0a;• Wann &amp; wie nutzen: Trag hier z.B. die Zeit kurz vor einem Break oder Drop ein, um nur diesen Übergang zu prüfen."/>
                     <TextBlock Text="s · " Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="2,0,4,0"/>
                     <TextBlock Text="Dauer" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBox Width="44" Height="22" Padding="4,2"
@@ -80,13 +80,13 @@
                              Foreground="{StaticResource AbletonText}"
                              BorderBrush="{StaticResource AbletonBorder}"
                              VerticalContentAlignment="Center"
-                             ToolTip="Preview-Länge in Sekunden"/>
+                             ToolTip="Vorschau-Dauer&#x0a;• Was es macht: Definiert die Länge des zu generierenden Vorschau-Videos in Sekunden.&#x0a;• Wozu es dient: Spart Rechenzeit und VRAM, indem nur ein kurzer Ausschnitt statt des gesamten Mixes gerendert wird.&#x0a;• Wann &amp; wie nutzen: Typischerweise auf 10 bis 30 Sekunden einstellen. Längere Vorschauen dauern beim Rendern entsprechend länger."/>
                     <TextBlock Text="s" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="2,0,8,0"/>
                     <Button Command="{Binding GeneratePreviewCommand}"
                             IsEnabled="{Binding IsGeneratingPreview, Converter={StaticResource InverseBooleanConverter}}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
-                            ToolTip="Preview-Video aus aktueller Timeline rendern (640×360)"
+                            ToolTip="Vorschau-Video rendern&#x0a;• Was es macht: Erstellt ein temporäres Vorschau-Video in kleiner Auflösung (640×360) für den gewählten Zeitbereich.&#x0a;• Wozu es dient: Ermöglicht eine flüssige Echtzeit-Vorschau der generierten Videomontage inklusive Musik.&#x0a;• Wann &amp; wie nutzen: Klicken nach dem Ändern von Pacing-Gewichten oder Schnitten, um das Endergebnis visuell zu bewerten."
                             Padding="8,4" Height="30">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="MovieOpenPlay" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>

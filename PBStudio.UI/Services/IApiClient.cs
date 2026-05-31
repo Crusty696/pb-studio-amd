@@ -41,7 +41,7 @@ public interface IApiClient : IDisposable
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);
     Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default);
     Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default);
-    Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId);
+    Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
     Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8);

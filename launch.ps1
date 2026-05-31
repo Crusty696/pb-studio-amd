@@ -419,12 +419,112 @@ $PythonExe = Resolve-PythonExe
 $pyVersion = & $PythonExe --version 2>&1
 Write-Status "Python: $pyVersion"
 
-$ffmpegPath = Join-Path $ProjectRoot 'tools\ffmpeg\bin\ffmpeg.exe'
-if (Test-Path $ffmpegPath) {
-    Write-Status "FFmpeg: $ffmpegPath"
-} else {
-    Write-Status 'FFmpeg nicht gefunden (optional)' 'Yellow'
+# --- Headless Start & API-Verbindungstests für Ollama und LM Studio ---
+Write-Status 'Überprüfe lokale KI-Dienste (Ollama & LM Studio)...' 'DarkGray'
+
+# Hilfsfunktionen für echte API-Verbindungstests
+function Test-OllamaApi {
+    try {
+        $response = Invoke-RestMethod -Uri 'http://localhost:11434/api/tags' -TimeoutSec 2 -ErrorAction SilentlyContinue
+        return ($null -ne $response) -and ($null -ne $response.models)
+    } catch {
+        return $false
+    }
 }
+
+function Test-LmsApi([int]$port) {
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:${port}/v1/models" -TimeoutSec 2 -ErrorAction SilentlyContinue
+        return ($null -ne $response) -and ($null -ne $response.data)
+    } catch {
+        return $false
+    }
+}
+
+# 1. Ollama check & headless start
+$ollamaRunning = Test-OllamaApi
+if (-not $ollamaRunning) {
+    # Falls API nicht antwortet, prüfe ob der Prozess überhaupt läuft
+    $ollamaProc = Get-Process -Name "ollama" -ErrorAction SilentlyContinue
+    if ($ollamaProc) {
+        Write-Status "Ollama-Prozess läuft bereits, aber die API antwortet nicht. Warte auf API..." 'Yellow'
+        $ollamaRunning = $true
+    }
+}
+
+if (-not $ollamaRunning) {
+    $ollamaCmd = Get-Command "ollama" -ErrorAction SilentlyContinue
+    if ($ollamaCmd) {
+        Write-Status "Ollama-API ist inaktiv. Starte headless im Hintergrund..." 'Yellow'
+        $null = Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden
+        
+        # Warte auf echte API-Bereitschaft (Modell-Schnittstelle)
+        Write-Status "Warte auf Ollama-API-Bereitschaft (Modell-Schnittstelle)..." 'DarkGray'
+        $deadline = (Get-Date).AddSeconds(15)
+        $startedOk = $false
+        while ((Get-Date) -lt $deadline) {
+            if (Test-OllamaApi) {
+                Write-Status "Ollama-API ist erfolgreich bereit und reagiert!" 'Green'
+                $startedOk = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $startedOk) {
+            Write-Status "Ollama-API antwortet nach 15s noch nicht. Wird im Hintergrund fortgesetzt." 'Yellow'
+        }
+    } else {
+        Write-Status "Ollama ist auf diesem System nicht im PATH installiert (Überspringe Start)." 'DarkGray'
+    }
+} else {
+    Write-Status "Ollama-API ist bereits aktiv und reagiert erfolgreich." 'Green'
+}
+
+# 2. LM Studio check & headless start
+$lmsPorts = @(1234, 12341)
+$activeLmsPort = $null
+$lmsRunning = $false
+
+# Prüfe, ob einer der Ports bereits auf echte API-Anfragen reagiert
+foreach ($port in $lmsPorts) {
+    if (Test-LmsApi -port $port) {
+        $activeLmsPort = $port
+        $lmsRunning = $true
+        break
+    }
+}
+
+if (-not $lmsRunning) {
+    # Suche lms CLI
+    $lmsCandidates = @(
+        "$env:USERPROFILE\.lmstudio\bin\lms.exe",
+        "$env:USERPROFILE\.lmstudio\bin\lms.cmd",
+        "$env:LOCALAPPDATA\Programs\LM Studio\resources\app\.webpack\main\lms.exe"
+    )
+    $lms = $null
+    foreach ($p in $lmsCandidates) {
+        if (Test-Path $p) { $lms = $p; break }
+    }
+    if (-not $lms) {
+        try { $found = (Get-Command lms -ErrorAction Stop).Source; if ($found) { $lms = $found } } catch {}
+    }
+
+    if ($lms) {
+        Write-Status "LM Studio Server läuft nicht. Starte headless via lms CLI..." 'Yellow'
+        $null = Start-Process -FilePath $lms -ArgumentList "server", "start" -WindowStyle Hidden
+        
+        # Warte auf echte API-Bereitschaft (Modell-Daten)
+        Write-Status "Warte auf LM Studio API-Bereitschaft..." 'DarkGray'
+        $deadline = (Get-Date).AddSeconds(20)
+        $startedOk = $false
+        while ((Get-Date) -lt $deadline) {
+            foreach ($port in $lmsPorts) {
+                if (Test-LmsApi -port $port) {
+                    $activeLmsPort = $port
+                    $lmsRunning = $true
+                    break
+                }
+            }
 
 if (-not $FrontendOnly) {
     if (Test-BackendHealth) {

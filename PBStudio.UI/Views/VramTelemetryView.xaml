@@ -37,7 +37,7 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="6,4" Height="28"
-                            ToolTip="Telemetrie jetzt neu laden">
+                            ToolTip="Telemetrie aktualisieren&#x0a;• Was es macht: Lädt die aktuellen VRAM-Belegungsdaten und die GPU-Telemetrie sofort neu.&#x0a;• Wozu es dient: Zeigt dir an, ob Modelle im VRAM verblieben sind, wie viel Speicher gerade aktiv genutzt wird und ob Fehler auftraten.&#x0a;• Wann &amp; wie nutzen: Nach Analysevorgängen oder dem Laden neuer Modelle anklicken, um die VRAM-Auslastung live zu kontrollieren.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -105,7 +105,7 @@
                                 <TextBlock Text="SAFETY" Style="{StaticResource ParamLabel}"/>
                                 <TextBlock Text="{Binding BudgetSafetyMb}" FontSize="16" FontWeight="SemiBold"
                                            Foreground="{StaticResource AbletonTextDim}"
-                                           ToolTip="max - usable: Sicherheits-Reserve, die nie an Modelle vergeben wird"/>
+                                           ToolTip="Sicherheits-Reserve (Safety)&#x0a;• Was es macht: Speichert einen festen Puffer deines Grafikkartenspeichers (VRAM) für Windows und andere Apps ab.&#x0a;• Wozu es dient: Verhindert Abstürze (Out-of-Memory-Fehler), da das System und die Anzeige stets genügend freien VRAM behalten.&#x0a;• Wann &amp; wie nutzen: Wird automatisch berechnet. Du musst hier nichts tun; der Wert schützt dein System im Hintergrund."/>
                             </StackPanel>
                             <StackPanel Grid.Column="3">
                                 <TextBlock Text="RESERVED" Style="{StaticResource ParamLabel}"/>
@@ -121,7 +121,7 @@
                                 <TextBlock Text="HEADROOM" Style="{StaticResource ParamLabel}"/>
                                 <TextBlock Text="{Binding BudgetAvailableMb}" FontSize="16" FontWeight="SemiBold"
                                            Foreground="{StaticResource AbletonAccent}"
-                                           ToolTip="usable - reserved - committed: was Modelle noch anfordern können"/>
+                                           ToolTip="Freier Modell-VRAM (Headroom)&#x0a;• Was es macht: Zeigt den VRAM an, der für weitere KI-Modelle innerhalb des erlaubten Limits noch zur Verfügung steht.&#x0a;• Wozu es dient: Zeigt dir auf einen Blick, ob du ein weiteres Modell (z.B. Phi-3 oder Moondream) starten kannst, ohne die Sicherheits-Reserve zu verletzen.&#x0a;• Wann &amp; wie nutzen: Vor dem Starten neuer KI-Tasks prüfen. Liegt der Headroom nahe 0 MB, sollten andere Modelle im Model-Manager zuerst entladen werden."/>
                             </StackPanel>
                         </Grid>
                     </StackPanel>

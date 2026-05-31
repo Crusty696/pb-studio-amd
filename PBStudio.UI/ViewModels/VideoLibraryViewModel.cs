@@ -51,6 +51,10 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _pendingCount;
     [ObservableProperty] private bool _isImporting;
     [ObservableProperty] private double _importProgress;
+    [ObservableProperty] private bool _stepDetectScenes = true;
+    [ObservableProperty] private bool _stepAnalyzeMotion = true;
+    [ObservableProperty] private bool _stepGenerateEmbeddings = true;
+    [ObservableProperty] private bool _stepGenerateCaptions = true;
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
     public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
@@ -200,11 +204,12 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task DeleteSelectedAsync()
     {
-        if (SelectedClips.Count == 0 || IsDeleting) return;
+        var markedClips = VideoClips.Where(c => c.IsMarked).ToList();
+        if (markedClips.Count == 0 || IsDeleting) return;
         IsDeleting = true;
         try
         {
-            var ids = SelectedClips.Select(c => c.Id).ToList();
+            var ids = markedClips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Video-Clips...";
             var resp = ids.Count == 1
                 ? await _api.DeleteVideoClipAsync(ids[0])
@@ -246,31 +251,41 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectAllVideos()
     {
-        SelectedClips.Clear();
-        foreach (var c in VideoClips) SelectedClips.Add(c);
+        bool anyUnmarked = VideoClips.Any(c => !c.IsMarked);
+        foreach (var c in VideoClips)
+        {
+            c.IsMarked = anyUnmarked;
+        }
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        AnalyzeMarkedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     private async Task AnalyzeMarkedAsync()
     {
-        if (SelectedClips.Count == 0 || IsAnalyzing) return;
-        var clips = SelectedClips.ToList();
+        var markedClips = VideoClips.Where(c => c.IsMarked).ToList();
+        if (markedClips.Count == 0 || IsAnalyzing) return;
         IsAnalyzingAll = true;
         IsAnalyzing = true;
-        var total = clips.Count;
+        var total = markedClips.Count;
         var done = 0;
         try
         {
-            foreach (var clip in clips)
+            foreach (var clip in markedClips)
             {
                 if (clip.IsAnalyzed) { done++; continue; }
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100.0;
-                var result = await _api.AnalyzeVideoAsync(clip.Id);
+                var result = await _api.AnalyzeVideoAsync(
+                    clip.Id,
+                    StepDetectScenes,
+                    StepAnalyzeMotion,
+                    StepGenerateEmbeddings,
+                    StepGenerateCaptions
+                );
                 if (result != null)
                 {
                     clip.IsAnalyzed = true;
-                    // L-M6: Auto-Reload scenes wenn der analysierte Clip aktuell selektiert ist.
                     if (SelectedClip != null && SelectedClip.Id == clip.Id)
                     {
                         await LoadScenesAsync(clip.Id).ConfigureAwait(false);
@@ -461,12 +476,20 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         Tags = c.Tags,
                         IsAnalyzed = c.IsAnalyzed,
                         ThumbnailAvailable = c.ThumbnailAvailable,
-                        // L-M4: Motion-Felder fuer Detail-Card (null falls nicht analysiert).
                         AvgMotion = c.AvgMotion,
                         PeakMotion = c.PeakMotion,
                         MotionCategory = c.MotionCategory,
-                        // L-N3: video_hash treibt HasCacheHash -> "CACHED"-Badge.
                         VideoHash = c.VideoHash,
+                        TagSource = c.TagSource,
+                    };
+
+                    clip.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(VideoClipModel.IsMarked))
+                        {
+                            DeleteSelectedCommand.NotifyCanExecuteChanged();
+                            AnalyzeMarkedCommand.NotifyCanExecuteChanged();
+                        }
                     };
 
                     if (_thumbnailCache.TryGetValue(c.Id, out var cachedThumb))
@@ -510,7 +533,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _api.AnalyzeVideoAsync(SelectedClip.Id);
+            var result = await _api.AnalyzeVideoAsync(
+                SelectedClip.Id,
+                StepDetectScenes,
+                StepAnalyzeMotion,
+                StepGenerateEmbeddings,
+                StepGenerateCaptions
+            );
             if (result != null)
             {
                 SelectedClip.IsAnalyzed = true;
@@ -557,7 +586,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100;
 
-                var result = await _api.AnalyzeVideoAsync(clip.Id);
+                var result = await _api.AnalyzeVideoAsync(
+                    clip.Id,
+                    StepDetectScenes,
+                    StepAnalyzeMotion,
+                    StepGenerateEmbeddings,
+                    StepGenerateCaptions
+                );
                 if (result != null)
                 {
                     clip.IsAnalyzed = true;

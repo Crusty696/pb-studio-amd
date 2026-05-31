@@ -129,6 +129,12 @@ class PreviewGenerator:
                 )
                 if result.returncode == 0 and seg_path.exists():
                     segment_files.append(seg_path)
+                else:
+                    logger.error(
+                        f"ffmpeg segment {i} rendering fehlgeschlagen (code {result.returncode}):\n"
+                        f"Stderr: {result.stderr}\n"
+                        f"Cmd: {' '.join(cmd)}"
+                    )
 
             if not segment_files:
                 logger.error("Keine gültigen Segmente gerendert")
@@ -136,7 +142,13 @@ class PreviewGenerator:
 
             logger.info(f"Preview: {len(segment_files)} Segmente gerendert, concat...")
 
-            concat_input = "|".join(str(s) for s in segment_files)
+            # BUG-FIX: Windows-Doppelpunkt-Bug im concat-Protokoll beheben.
+            # Da absolute Pfade auf Windows einen Doppelpunkt enthalten (z. B. 'C:\...'),
+            # scheitert ffmpeg mit 'Protocol c not on whitelist'.
+            # Lösung: Wir wechseln das Arbeitsverzeichnis des ffmpeg Concat-Prozesses auf
+            # temp_dir und übergeben nur die relativen Dateinamen der Segmente an concat_input.
+            # Der Ausgabepfad muss unbedingt absolut übergeben werden!
+            concat_input = "|".join(s.name for s in segment_files)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             cmd = [
@@ -144,12 +156,21 @@ class PreviewGenerator:
                 "-i", f"concat:{concat_input}",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-pix_fmt", "yuv420p", "-an",
-                str(output_path)
+                str(output_path.absolute())
             ]
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=120
+                encoding="utf-8", errors="replace", timeout=120,
+                cwd=str(temp_dir)
             )
+
+            if result.returncode != 0:
+                logger.error(
+                    f"ffmpeg preview concat fehlgeschlagen (code {result.returncode}):\n"
+                    f"Stderr: {result.stderr}\n"
+                    f"Cmd: {' '.join(cmd)}"
+                )
+
             return result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
 
         except Exception as e:
