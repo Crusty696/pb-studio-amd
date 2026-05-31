@@ -575,3 +575,65 @@ def test_agent_model_retry_on_non_connection_error(monkeypatch):
     text_event = next(e for e in events if e.type == "text")
     assert "loaded-model" in text_event.payload["content"]
     assert events[-1].type == "done"
+
+
+def test_agent_readtimeout_does_not_churn_models(monkeypatch):
+    """Ein ReadTimeout darf NICHT als 'Modell nicht geladen' interpretiert werden.
+
+    Statt durch alle (evtl. ungeladenen) Modelle zu churnen, muss der Agent
+    den Timeout ehrlich melden und mit reason='timeout' abbrechen.
+    """
+    call_count = 0
+
+    class TimeoutClient(LMStudioClient):
+        def __init__(self):
+            super().__init__(base_url="http://127.0.0.1:12341/v1")
+
+        async def list_models(self):
+            return [
+                LMStudioModelInfo(name="loaded-model", size_bytes=1, modified_at="", digest=""),
+                LMStudioModelInfo(name="other-model", size_bytes=1, modified_at="", digest=""),
+            ]
+
+        async def chat(self, model, messages, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise LMStudioError(
+                "HTTP-Fehler bei POST /chat/completions (http://127.0.0.1:12341/v1): ReadTimeout: ."
+            )
+
+        async def aclose(self):
+            pass
+
+        async def is_alive(self):
+            return True
+
+    client = TimeoutClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+
+    # Kein Durch-Churnen: chat() darf nur EINMAL gerufen werden (kein Modell-Wechsel).
+    assert call_count == 1, f"Erwarte 1 chat-Call, bekommen {call_count} (churnte durch Modelle)"
+
+    # Ehrliche Timeout-Meldung, NICHT "nicht geladen" / "nicht verfuegbar".
+    err = next(e for e in events if e.type == "error")
+    assert "Timeout" in err.payload["message"]
+    assert "nicht geladen" not in err.payload["message"]
+    assert "nicht verfuegbar" not in err.payload["message"]
+
+    # done mit reason=timeout
+    assert events[-1].type == "done"
+    assert events[-1].payload.get("reason") == "timeout"

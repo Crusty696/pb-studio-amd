@@ -40,6 +40,11 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434/v1"
 
 VALID_PROVIDERS = frozenset({"lmstudio", "ollama", "auto"})
 
+# Read-Timeout fuer echte Chat-Generierung. Reasoning-Modelle (deepseek-r1,
+# phi-4-reasoning) "denken" viele Sekunden bevor Tokens kommen — ein kurzer
+# Probe-Timeout (5s) wuerde jede Generierung mit ReadTimeout abbrechen.
+DEFAULT_GENERATION_TIMEOUT = 180.0
+
 
 def _load_config() -> dict:
     """Liefert die ai-Sektion aus config.json, leeres dict bei Fehler."""
@@ -96,14 +101,21 @@ def get_llm_client(
     )
 
 
-async def get_alive_client(timeout_seconds: float = 5.0) -> Optional[LMStudioClient]:
+async def get_alive_client(
+    timeout_seconds: float = 5.0,
+    *,
+    client_timeout_seconds: float = DEFAULT_GENERATION_TIMEOUT,
+) -> Optional[LMStudioClient]:
     """Auto-Mode mit Fallback: LM Studio first, Ollama wenn LM Studio down.
 
-    Liefert eingesteckten Client (async-context geoeffnet noch nicht) oder
-    None wenn beide Provider unerreichbar sind. Caller ist verantwortlich
-    fuer ``async with`` Eintritt und Schliessen.
+    Liefert einen frischen Client mit Generierungs-Timeout
+    (``client_timeout_seconds``) oder None wenn beide Provider unerreichbar
+    sind. Caller ist verantwortlich fuer ``async with`` Eintritt und Schliessen.
 
-    Pruefung erfolgt via ``is_alive()`` (kurzer Timeout).
+    Die Erreichbarkeits-Pruefung laeuft auf einem separaten Probe-Client mit
+    kurzem ``timeout_seconds`` — der zurueckgegebene Client bekommt aber den
+    laengeren Generierungs-Timeout, sonst wuerde jede echte Chat-Generierung
+    mit ReadTimeout abbrechen (Reasoning-Modelle denken laenger als 5s).
     """
     provider = get_provider()
     candidates: list[str]
@@ -113,20 +125,18 @@ async def get_alive_client(timeout_seconds: float = 5.0) -> Optional[LMStudioCli
         candidates = [provider]
 
     for candidate in candidates:
-        client = get_llm_client(provider=candidate, timeout_seconds=timeout_seconds)
-        # W-H1 (Audit V2): keep_client-Flag statt finally-mit-zweitem-is_alive.
-        # Vorher: finally rief is_alive() ein zweites Mal auf — bei transient
-        # timeout schloss es den gerade-returnten Client unter dem Caller weg.
-        keep_client = False
+        probe = get_llm_client(provider=candidate, timeout_seconds=timeout_seconds)
         try:
-            if await client.is_alive():
-                logger.info("LLM-Provider aktiv: %s (%s)", candidate, client.base_url)
-                keep_client = True
-                return client
+            alive = await probe.is_alive()
         except LMStudioConnectionError:
+            alive = False
             logger.debug("Provider %s nicht erreichbar — naechster Kandidat", candidate)
         finally:
-            if not keep_client:
-                await client.aclose()
+            await probe.aclose()
+
+        if alive:
+            logger.info("LLM-Provider aktiv: %s", candidate)
+            # Frischer Client mit Generierungs-Timeout (Probe war nur kurz).
+            return get_llm_client(provider=candidate, timeout_seconds=client_timeout_seconds)
     logger.warning("Kein LLM-Provider erreichbar (geprueft: %s)", ", ".join(candidates))
     return None

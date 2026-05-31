@@ -99,28 +99,40 @@ class ChatAgent:
                 timeout=httpx.Timeout(60.0, connect=5.0),
             )
         if self._llm is None:
-            from .llm_provider import get_llm_client, get_alive_client, get_provider
+            from .llm_provider import (
+                get_llm_client, get_alive_client, get_provider,
+                DEFAULT_GENERATION_TIMEOUT,
+            )
             env_override = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
             if env_override:
-                self._llm = LMStudioClient(base_url=env_override)
+                self._llm = LMStudioClient(
+                    base_url=env_override, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
+                )
             else:
                 provider = get_provider()
                 if provider == "auto":
+                    # Probe kurz (5s), Client-Timeout aber generierungs-tauglich.
                     alive = await get_alive_client(timeout_seconds=5.0)
-                    self._llm = alive if alive is not None else get_llm_client()
+                    self._llm = alive if alive is not None else get_llm_client(
+                        timeout_seconds=DEFAULT_GENERATION_TIMEOUT
+                    )
                 else:
-                    primary = get_llm_client(provider=provider)
+                    primary = get_llm_client(
+                        provider=provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
+                    )
                     primary_alive = False
                     try:
                         primary_alive = await primary.is_alive()
                     except Exception:
                         pass
-                    
+
                     if primary_alive:
                         self._llm = primary
                     else:
                         other_provider = "ollama" if provider == "lmstudio" else "lmstudio"
-                        secondary = get_llm_client(provider=other_provider)
+                        secondary = get_llm_client(
+                            provider=other_provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
+                        )
                         secondary_alive = False
                         try:
                             secondary_alive = await secondary.is_alive()
@@ -181,7 +193,13 @@ class ChatAgent:
             current_url, other_provider
         )
 
-        secondary = get_llm_client(provider=other_provider, timeout_seconds=5.0)
+        from .llm_provider import DEFAULT_GENERATION_TIMEOUT
+        # Generierungs-Timeout (nicht 5s) — der Client wird bei Erfolg fuer echte
+        # Chat-Generierung uebernommen; is_alive bleibt trotzdem schnell, da bei
+        # Offline-Provider der Connect-Timeout (5s) greift.
+        secondary = get_llm_client(
+            provider=other_provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
+        )
         secondary_alive = False
         try:
             secondary_alive = await secondary.is_alive()
@@ -404,6 +422,23 @@ class ChatAgent:
                         yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
                         yield ChatEvent("done", {"reason": "llm_error"})
                         return
+
+                # Fall 1b: Read-Timeout → Modell ist zu langsam, NICHT "nicht geladen".
+                # Auf andere (evtl. ungeladene) Modelle zu wechseln macht es schlimmer,
+                # daher ehrlich melden und abbrechen statt durch alle Modelle zu churnen.
+                elif ("timeout" in msg_lower) and not isinstance(exc, LMStudioConnectionError):
+                    logger.warning("Read-Timeout bei Modell %r (Turn %s): %s", model, turn, exc)
+                    yield ChatEvent("error", {
+                        "message": (
+                            f"Modell '{model}' hat nicht rechtzeitig geantwortet (Timeout). "
+                            f"Das Modell ist geladen, braucht aber laenger als erlaubt — "
+                            f"evtl. ein langsames Reasoning-Modell oder gerade beim Laden. "
+                            f"Bitte erneut versuchen oder ein schnelleres Modell waehlen."
+                        ),
+                        "stage": "chat"
+                    })
+                    yield ChatEvent("done", {"reason": "timeout"})
+                    return
 
                 # Fall 2: Connection-Error → Provider-Fallback
                 elif isinstance(exc, LMStudioConnectionError):
