@@ -260,6 +260,23 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         AnalyzeMarkedCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>Schreibt die Motion-Ergebnisse aus dem Analyse-Response ins Clip-Model,
+    /// damit die Detail-Card direkt nach der Analyse Motion zeigt (sonst "Keine Motion-Daten"
+    /// bis zum naechsten Full-Reload, obwohl das Backend die Daten bereits persistiert hat).</summary>
+    private static void ApplyMotionResult(VideoClipModel clip, VideoAnalysisResult result)
+    {
+        if (result.Motion != null)
+        {
+            clip.AvgMotion = result.Motion.AvgMotion;
+            clip.PeakMotion = result.Motion.PeakMotion;
+            clip.MotionCategory = result.Motion.MotionCategory;
+        }
+        else if (result.AvgMotion > 0)
+        {
+            clip.AvgMotion = result.AvgMotion;
+        }
+    }
+
     [RelayCommand]
     private async Task AnalyzeMarkedAsync()
     {
@@ -286,6 +303,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 if (result != null)
                 {
                     clip.IsAnalyzed = true;
+                    ApplyMotionResult(clip, result);
                     if (SelectedClip != null && SelectedClip.Id == clip.Id)
                     {
                         await LoadScenesAsync(clip.Id).ConfigureAwait(false);
@@ -543,6 +561,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             if (result != null)
             {
                 SelectedClip.IsAnalyzed = true;
+                ApplyMotionResult(SelectedClip, result);
                 StatusText = $"Analyse fertig: {result.SceneCount} Scenes | Motion: {result.AvgMotion:F1}";
 
                 // L-M6: Auto-Reload scenes nach Analyse - OnSelectedClipChanged triggert
@@ -596,6 +615,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 if (result != null)
                 {
                     clip.IsAnalyzed = true;
+                    ApplyMotionResult(clip, result);
                     // L-M6: Auto-Reload scenes wenn der analysierte Clip aktuell selektiert ist.
                     if (SelectedClip != null && SelectedClip.Id == clip.Id)
                     {
