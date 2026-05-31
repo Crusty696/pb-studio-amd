@@ -390,6 +390,43 @@ class LMStudioClient:
             ))
         return result
 
+    async def get_vision_model_names(self) -> set[str]:
+        """Liefert die Namen aller vision-faehigen Modelle (``type == 'vlm'``).
+
+        Nutzt LM Studios native REST-API ``/api/v0/models`` (liefert ein
+        ``type``-Feld: ``vlm``/``llm``/``embeddings``). Best-effort: bei jedem
+        Fehler (Endpoint fehlt, z.B. Ollama; Connection; JSON) -> leeres Set,
+        damit der Caller auf Keyword-Heuristik zurueckfallen kann.
+
+        Das OpenAI-kompatible ``/v1/models`` liefert KEIN ``type`` — daher ist
+        dieser separate Call noetig, um z.B. ein Reasoning-Modell mit ``qwen``
+        im Namen nicht faelschlich als Vision-Modell zu waehlen.
+        """
+        # base_url ist .../v1 — /api/v0/models liegt daneben (Host-Root).
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        url = f"{base}/api/v0/models"
+        try:
+            client = await self._ensure_client()
+            response = await client.get(url)
+            if response.status_code != 200:
+                return set()
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001 — best-effort, nie hart fehlschlagen
+            logger.debug("get_vision_model_names: /api/v0/models nicht verfuegbar: %s", exc)
+            return set()
+
+        vision: set[str] = set()
+        for raw in (payload.get("data") or []):
+            if not isinstance(raw, dict):
+                continue
+            if str(raw.get("type") or "").lower() == "vlm":
+                name = str(raw.get("id") or raw.get("name") or "").strip()
+                if name:
+                    vision.add(name)
+        return vision
+
     # ------------------------------------------------------------------
     # /v1/chat/completions — Chat (+ Vision via images)
     # ------------------------------------------------------------------

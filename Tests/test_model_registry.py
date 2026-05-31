@@ -195,6 +195,50 @@ def test_no_suitable_model_raises():
 
 
 
+def test_vision_task_skips_text_qwen_model():
+    """Regression: 'qwen' im Namen eines TEXT-Modells (deepseek-r1-qwen3) darf
+    nicht als Vision-Modell fuer Captioning gewaehlt werden. Der echte vlm
+    (google/gemma-4-e4b, via 'e4b'-Token) muss gewaehlt werden."""
+    async def go():
+        async with _client_with_models(
+            ["deepseek/deepseek-r1-0528-qwen3-8b", "google/gemma-4-e4b"]
+        ) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            return reg.select_best_for_task("video_captioning", "balance")
+
+    chosen = _run(go())
+    assert chosen == "google/gemma-4-e4b", f"erwartete vlm, bekam {chosen!r}"
+
+
+def test_vision_task_authoritative_vlm_set_overrides_keywords():
+    """Wenn /api/v0/models ein vlm meldet das KEIN Vision-Token im Namen hat,
+    muss es trotzdem als vision-faehig gelten (autoritativ)."""
+    async def go():
+        async with _client_with_models(["mystery-captioner-7b", "phi-4-reasoning"]) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            # Simuliere /api/v0/models type==vlm fuer das sonst token-lose Modell.
+            reg._vision_models = {"mystery-captioner-7b"}
+            return reg.select_best_for_task("video_captioning", "balance")
+
+    assert _run(go()) == "mystery-captioner-7b"
+
+
+def test_vision_task_no_vision_model_raises_when_vlm_known():
+    """Nur Text-Modelle installiert, aber es sind vlm-Modelle bekannt -> klarer Fehler
+    statt ein Text-Modell zu waehlen das 'does not support images' wirft."""
+    async def go():
+        async with _client_with_models(["phi-4-reasoning", "deepseek-r1"]) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            reg._vision_models = {"some-vlm-not-installed"}
+            return reg.select_best_for_task("video_captioning", "balance")
+
+    with pytest.raises(NoSuitableModelError):
+        _run(go())
+
+
 def test_no_suitable_with_allow_any_picks_first_installed():
     async def go():
         async with _client_with_models(["unrelated-tiny-vl-model"]) as client:
