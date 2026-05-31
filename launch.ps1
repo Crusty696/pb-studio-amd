@@ -525,6 +525,22 @@ if (-not $lmsRunning) {
                     break
                 }
             }
+            if ($lmsRunning) {
+                Write-Status "LM Studio API ist erfolgreich bereit und reagiert (Port $activeLmsPort)!" 'Green'
+                $startedOk = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $startedOk) {
+            Write-Status "LM Studio API antwortet nach 20s noch nicht. Wird im Hintergrund fortgesetzt." 'Yellow'
+        }
+    } else {
+        Write-Status "LM Studio (lms CLI) ist auf diesem System nicht installiert (Überspringe Start)." 'DarkGray'
+    }
+} else {
+    Write-Status "LM Studio API ist bereits aktiv und reagiert erfolgreich (Port $activeLmsPort)." 'Green'
+}
 
 if (-not $FrontendOnly) {
     if (Test-BackendHealth) {
