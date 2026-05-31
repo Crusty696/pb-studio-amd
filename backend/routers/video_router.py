@@ -962,6 +962,7 @@ def _run_video_analysis(
     if request.generate_captions:
         try:
             import cv2
+            import numpy as _np  # lokal, da Embedding-Block (der _np sonst importiert) optional ist
             from pb_studio.video.moondream_wrapper import (
                 extract_dominant_colors,
                 extract_tags_via_moondream,

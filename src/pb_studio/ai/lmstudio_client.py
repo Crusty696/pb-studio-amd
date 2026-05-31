@@ -130,10 +130,23 @@ def _encode_image_data_uri(image: Any) -> str:
             arr = np.clip(arr, 0, 255).astype(np.uint8)
         mode = "RGBA" if arr.shape[2] == 4 else "RGB"
         pil = PILImage.fromarray(arr, mode=mode)
+        # Downscale auf max. Kantenlaenge: volle Video-Frames (1920x1080+) als PNG
+        # erzeugen riesige Payloads und lassen die Vision-Inferenz extrem langsam
+        # werden (>180s ReadTimeout). Vision-Modelle arbeiten intern ohnehin mit
+        # ~384-768px Tiles — ein Downscale aendert die Tag-Qualitaet kaum, macht
+        # den Call aber Faktor 10+ schneller. JPEG statt PNG spart zusaetzlich.
+        _MAX_EDGE = 768
+        longest = max(pil.width, pil.height)
+        if longest > _MAX_EDGE:
+            scale = _MAX_EDGE / float(longest)
+            new_size = (max(1, int(pil.width * scale)), max(1, int(pil.height * scale)))
+            pil = pil.resize(new_size, PILImage.LANCZOS)
         buf = io.BytesIO()
-        pil.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        return f"data:image/png;base64,{b64}"
+        if mode == "RGBA":
+            pil.save(buf, format="PNG")
+            return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
+        pil.save(buf, format="JPEG", quality=85)
+        return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
     raise LMStudioError(
         f"Unbekannter Image-Typ: {type(image).__name__} "
         "(unterstuetzt: bytes, np.ndarray, base64-str, data-URI-str)"
