@@ -1,5 +1,5 @@
 """
-PB Studio GUI Screenshot Test v3 — uses select() and keyboard for tab switching.
+PB Studio GUI Screenshot Test v3 (Modernized for current German UI tabs)
 """
 import time
 import sys
@@ -39,7 +39,7 @@ def check_content(img, tab_name):
     if w < 100 or h < 100:
         return False, f"too small: {w}x{h}"
     content = img.crop((50, h // 3, w - 50, h - 30))
-    # Use numpy-like approach with PIL
+    
     r_vals, g_vals, b_vals = [], [], []
     for x in range(0, content.width, max(1, content.width // 50)):
         for y in range(0, content.height, max(1, content.height // 50)):
@@ -54,7 +54,7 @@ def check_content(img, tab_name):
 
 def main():
     print("=" * 60)
-    print("PB STUDIO GUI SCREENSHOT TEST v3")
+    print("PB STUDIO GUI SCREENSHOT TEST (German UI Edition)")
     print("=" * 60)
 
     # Restore window via Win32
@@ -68,7 +68,7 @@ def main():
         time.sleep(1)
         print(f"  HWND: {hwnd}")
     else:
-        print("  Window not found!")
+        print("  Window 'PB Studio AMD' not found!")
         sys.exit(1)
 
     # Connect
@@ -81,15 +81,19 @@ def main():
     print(f"  Size: {rect.width()}x{rect.height()}")
     check("App verbunden", rect.width() > 500, f"{rect.width()}x{rect.height()}")
 
-    # Take screenshots per tab using select() method
+    # Take screenshots per tab using the actual WPF tab titles
     print("\n[2] Tab-Screenshots...")
-    tabs = ["IMPORT", "AUDIO", "VIDEO", "ANCHORS", "DIRECTOR", "TIMELINE", "PRODUKTION", "SETTINGS"]
+    tabs = [
+        "PROJEKT", "AUDIO", "VIDEO", "KI-REGIE", 
+        "TIMELINE", "EXPORT", "CHAT", "HIRN", 
+        "MODELLE", "PERFORMANCE", "SETTINGS"
+    ]
 
     for i, tab_name in enumerate(tabs):
         try:
             tab = win.child_window(title=tab_name, control_type="TabItem")
             tab.select()
-            time.sleep(1)
+            time.sleep(1.0) # Wait for page load and animation
 
             rect = win.rectangle()
             img = grab_window(rect)
