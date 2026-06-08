@@ -25,5 +25,6 @@
 1. **KI-Modus Sync:** Endpoint `POST /models/mode` verifiziert, persistiert den Modus korrekt in `config.json`.
 2. **Sortier-Heuristik:** Heuristik-Bug behoben; unbekannte Modellgrößen werden an das Ende sortiert, sodass das VLM `google/gemma-4-e4b` korrekt vor `llava-nousresearch` priorisiert wird, wenn letzteres seine Größe nicht angibt.
 3. **Retry-Fallbacks:** VLM-Ladefehler in LM-Studio werden durch die Retry-Schleife mit Ausschlussliste abgefangen. Die Anwendung fällt nahtlos auf das nächste funktionierende Modell zurück.
+4. **VLM Capabilities (Vision-Erkennung):** VLM-Modelle (z. B. Gemma-4-26B-QAT, Qwen-35B-Aggressive) werden durch die asynchrone Abfrage der LM Studio API (VLM Type-Detection) und Übergabe an `ModelRegistry` im Modelle-Tab korrekt mit dem Badge `Vision & Text` versehen.
 
-QC bestanden am 2026-06-08.
+QC bestanden am 2026-06-09.
