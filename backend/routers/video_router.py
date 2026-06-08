@@ -998,10 +998,12 @@ def _run_video_analysis(
                 seen_tags = set()
                 tag_sources = []
                 
+                from pb_studio.config_manager import ConfigManager
+                current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
                 for f_rgb in frames_rgb:
                     # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
                     # Fallback: Moondream ONNX wenn LM Studio down/leer ist
-                    tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode="balance")
+                    tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode=current_mode)
                     if not tags:
                         used_model = "moondream"
                         tags = extract_tags_via_moondream(f_rgb)

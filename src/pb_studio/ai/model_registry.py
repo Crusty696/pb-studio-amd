@@ -100,14 +100,14 @@ def _sort_models_by_mode(installed: list[str], mode: str) -> list[str]:
     pairs = [(name, _parse_parameter_size(name)) for name in installed]
     
     if mode == "speed":
-        # Sort ascending by size (smaller models first)
-        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else 3.0))
+        # Sort ascending by size (smaller models first), push unknowns (0.0) to the end
+        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else 999.0))
     elif mode == "quality":
-        # Sort descending by size (larger models first)
-        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else 8.0), reverse=True)
+        # Sort descending by size (larger models first), push unknowns (0.0) to the end
+        pairs.sort(key=lambda x: (x[1] if x[1] > 0 else -1.0), reverse=True)
     else:  # balance
-        # Sort by distance to 8B (balanced model size)
-        pairs.sort(key=lambda x: abs((x[1] if x[1] > 0 else 8.0) - 8.0))
+        # Sort by distance to 8B (balanced model size), push unknowns (0.0) to the end by giving them a high distance of 10.0
+        pairs.sort(key=lambda x: (abs(x[1] - 8.0) if x[1] > 0 else 10.0))
         
     return [name for name, _ in pairs]
 

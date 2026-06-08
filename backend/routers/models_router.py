@@ -144,6 +144,10 @@ class RecommendationResponse(BaseModel):
     installed: list[str] = Field(default_factory=list)
 
 
+class ModeRequest(BaseModel):
+    mode: str = Field(..., min_length=1, description="KI-Modus: speed|balance|quality")
+
+
 class ActivateRequest(BaseModel):
     name: str = Field(..., min_length=1, description="LM-Studio-Modellname zur Aktivierung")
 
@@ -244,9 +248,11 @@ def _enrich_model_entry(entry: ModelListEntry, registry: "ModelRegistry") -> Mod
         "chat_tool_use": "Tool-Ausführung",
         "brain_explanation": "KI-Director"
     }
+    from pb_studio.config_manager import ConfigManager
+    current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
     for t_key, t_name in tasks_to_check.items():
         try:
-            selected = registry.select_best_for_task(t_key, mode="balance")
+            selected = registry.select_best_for_task(t_key, mode=current_mode)
             if _name_matches(selected, entry.name):
                 entry.active_tasks.append(t_name)
         except Exception:
@@ -739,6 +745,34 @@ async def activate_model(request: ActivateRequest) -> JSONResponse:
         )
     except Exception as exc:
         logger.error("Aktivierung von Modell '%s' fehlgeschlagen: %s", request.name, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/mode")
+async def update_ki_mode(request: ModeRequest) -> JSONResponse:
+    """Aktualisiert den standardmaessigen KI-Modus (speed|balance|quality) in der Konfiguration."""
+    if request.mode not in ("speed", "balance", "quality"):
+        raise HTTPException(status_code=400, detail="Ungueltiger Modus. Erlaubt sind: speed, balance, quality.")
+    try:
+        from pb_studio.config_manager import ConfigManager
+        cfg_manager = ConfigManager()
+        ai_cfg = cfg_manager.get("ai") or {}
+        if not isinstance(ai_cfg, dict):
+            ai_cfg = {}
+        
+        ai_cfg["default_mode"] = request.mode
+        cfg_manager.set("ai", ai_cfg)
+        
+        logger.info("KI-Modus erfolgreich auf '%s' aktualisiert", request.mode)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"KI-Modus erfolgreich auf '{request.mode}' aktualisiert.",
+                "mode": request.mode
+            }
+        )
+    except Exception as exc:
+        logger.error("Aktualisierung des KI-Modus fehlgeschlagen: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

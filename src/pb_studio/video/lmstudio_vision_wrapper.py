@@ -179,36 +179,48 @@ async def _async_extract_tags(
             logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
             return [], "none"
 
-        if model_override:
-            model = model_override
-        else:
+        exclude_models = set()
+        max_attempts = 3
+        attempt = 0
+
+        while attempt < max_attempts:
+            attempt += 1
+            if model_override:
+                model = model_override
+            else:
+                try:
+                    model = registry.select_best_for_task(task, mode, exclude=exclude_models)
+                except NoSuitableModelError as exc:
+                    logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
+                    return [], "none"
+
+            cache_key = (_frame_hash(frame_rgb), model, mode)
+            cached = _cache_get(cache_key)
+            if cached is not None:
+                return list(cached), model
+
             try:
-                model = registry.select_best_for_task(task, mode)
-            except NoSuitableModelError as exc:
-                logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
-                return [], "none"
+                response = await client.chat(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    images=[frame_rgb],
+                    options={"temperature": 0.2},
+                )
+                message = response.get("message") or {}
+                raw = message.get("content") or response.get("response") or ""
+                tags = _parse_tags(str(raw))
+                _cache_put(cache_key, tags)
+                return tags, model
+            except LMStudioError as exc:
+                logger.warning("LM Studio chat mit Modell '%s' fehlgeschlagen (Tags): %s", model, exc)
+                if model_override:
+                    # Bei explizitem Override macht ein Fallback keinen Sinn
+                    return [], model
+                # Modell ausschließen und nächstes versuchen
+                logger.info("Schliesse Modell '%s' aus und versuche das naechste geeignete Modell...", model)
+                exclude_models.add(model)
 
-        cache_key = (_frame_hash(frame_rgb), model, mode)
-        cached = _cache_get(cache_key)
-        if cached is not None:
-            return list(cached), model
-
-        try:
-            response = await client.chat(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                images=[frame_rgb],
-                options={"temperature": 0.2},
-            )
-        except LMStudioError as exc:
-            logger.warning("LM Studio chat fehlgeschlagen (Tags): %s", exc)
-            return [], model
-
-        message = response.get("message") or {}
-        raw = message.get("content") or response.get("response") or ""
-        tags = _parse_tags(str(raw))
-        _cache_put(cache_key, tags)
-        return tags, model
+        return [], "none"
 
 
 def extract_tags_and_model_via_lmstudio(
