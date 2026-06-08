@@ -128,6 +128,7 @@ public partial class App : Application
         services.AddTransient<VramTelemetryViewModel>();
         services.AddTransient<ModelManagerViewModel>();
         services.AddTransient<ChatViewModel>();
+        services.AddTransient<TerminalViewModel>();
 
         // Windows
         services.AddTransient<MainWindow>();

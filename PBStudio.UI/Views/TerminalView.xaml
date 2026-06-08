@@ -1,0 +1,72 @@
+<UserControl x:Class="PBStudio.UI.Views.TerminalView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="800"
+             d:DataContext="{d:DesignInstance vm:TerminalViewModel}">
+    
+    <Grid Background="{StaticResource AbletonBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Panel with Controls -->
+        <Border Grid.Row="0" 
+                Background="{StaticResource AbletonPanel}" 
+                BorderBrush="{StaticResource AbletonBorder}" 
+                BorderThickness="0,0,0,1" 
+                Padding="12,8">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <icon:PackIconMaterial Kind="Console" Width="16" Height="16" Foreground="{StaticResource AbletonAccent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="LIVE BACKEND TERMINAL" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AbletonText}" VerticalAlignment="Center"/>
+                    <TextBlock Text=" • Echtzeit-Logs der KI-Workstation" FontSize="11" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <!-- Clear Button -->
+                <Button Command="{Binding ClearCommand}" 
+                        DockPanel.Dock="Right" 
+                        Style="{StaticResource MaterialDesignFlatButton}"
+                        Background="Transparent"
+                        BorderBrush="{StaticResource AbletonBorder}"
+                        Foreground="{StaticResource AbletonText}"
+                        Height="28" Padding="12,0" FontSize="11">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="TrashCanOutline" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="Terminal leeren" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </DockPanel>
+        </Border>
+
+        <!-- Terminal Output Box -->
+        <Border Grid.Row="1" 
+                Background="#0C0C0C" 
+                BorderBrush="{StaticResource AbletonBorder}" 
+                BorderThickness="1" 
+                Margin="12" CornerRadius="4">
+            <TextBox x:Name="TxtLog"
+                     Text="{Binding LogContent, Mode=OneWay}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Foreground="#FF764D" 
+                     FontFamily="Consolas, Courier New, monospace"
+                     FontSize="12"
+                     Padding="12"
+                     SelectionBrush="#FF764D"
+                     md:TextFieldAssist.DecorationVisibility="Collapsed"
+                     TextChanged="TxtLog_TextChanged"/>
+        </Border>
+    </Grid>
+</UserControl>

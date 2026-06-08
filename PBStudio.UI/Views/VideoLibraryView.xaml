@@ -332,6 +332,74 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- KI-Komponenten Analysestatus -->
+                    <Border Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}"
+                            BorderThickness="1" CornerRadius="3" Margin="0,10,0,0" Padding="10,8">
+                        <StackPanel>
+                            <TextBlock Text="KI-ANALYSE STATUS" FontSize="9" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,0,8"/>
+                            
+                            <!-- Szenen (PySceneDetect) -->
+                            <DockPanel Margin="0,2">
+                                <icon:PackIconMaterial Kind="MovieOutline" Width="13" Height="13" Foreground="{StaticResource AbletonTextDim}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Szenen-Schnitte (PySceneDetect)" FontSize="11" Foreground="{StaticResource AbletonText}" VerticalAlignment="Center"/>
+                                <icon:PackIconMaterial DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" Width="12" Height="12">
+                                    <icon:PackIconMaterial.Style>
+                                        <Style TargetType="icon:PackIconMaterial">
+                                            <Setter Property="Kind" Value="CheckCircleOutline"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedClip.IsAnalyzed}" Value="False">
+                                                    <Setter Property="Kind" Value="ClockOutline"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </icon:PackIconMaterial.Style>
+                                </icon:PackIconMaterial>
+                            </DockPanel>
+
+                            <!-- Bewegung (RAFT) -->
+                            <DockPanel Margin="0,2">
+                                <icon:PackIconMaterial Kind="RunFast" Width="13" Height="13" Foreground="{StaticResource AbletonTextDim}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Bewegungskurve (RAFT)" FontSize="11" Foreground="{StaticResource AbletonText}" VerticalAlignment="Center"/>
+                                <icon:PackIconMaterial DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" Width="12" Height="12">
+                                    <icon:PackIconMaterial.Style>
+                                        <Style TargetType="icon:PackIconMaterial">
+                                            <Setter Property="Kind" Value="CheckCircleOutline"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedClip.AvgMotion}" Value="{x:Null}">
+                                                    <Setter Property="Kind" Value="ClockOutline"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </icon:PackIconMaterial.Style>
+                                </icon:PackIconMaterial>
+                            </DockPanel>
+
+                            <!-- Embeddings (SigLIP) -->
+                            <DockPanel Margin="0,2">
+                                <icon:PackIconMaterial Kind="VectorSquare" Width="13" Height="13" Foreground="{StaticResource AbletonTextDim}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Inhalt-Vektor (SigLIP)" FontSize="11" Foreground="{StaticResource AbletonText}" VerticalAlignment="Center"/>
+                                <icon:PackIconMaterial DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" Width="12" Height="12">
+                                    <icon:PackIconMaterial.Style>
+                                        <Style TargetType="icon:PackIconMaterial">
+                                            <Setter Property="Kind" Value="CheckCircleOutline"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedClip.HasCacheHash}" Value="False">
+                                                    <Setter Property="Kind" Value="ClockOutline"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </icon:PackIconMaterial.Style>
+                                </icon:PackIconMaterial>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Modell-Anzeige für die Tags/Captions -->
                     <StackPanel Margin="0,10,0,0" Visibility="{Binding SelectedClip.TagSource, Converter={StaticResource NullToVisibilityConverter}}">
                         <TextBlock Text="VERWENDETES KI-MODELL" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
@@ -339,6 +407,25 @@
                             <icon:PackIconMaterial Kind="RobotOutline" Width="13" Height="13" Foreground="{StaticResource AbletonAccent}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock Text="{Binding SelectedClip.TagSource}" Foreground="{StaticResource AbletonAccent}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
+                    </StackPanel>
+
+                    <!-- KI-Tags (Moondream) -->
+                    <StackPanel Margin="0,10,0,0">
+                        <TextBlock Text="KI-GENERIERTE MERKMALE &amp; TAGS" FontSize="9" Foreground="{StaticResource AbletonTextDim}" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding SelectedClip.Tags}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Margin="0,-3"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource AbletonPanel}" BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1" CornerRadius="10" Padding="8,3" Margin="0,3,6,3">
+                                        <TextBlock Text="{Binding}" Foreground="{StaticResource AbletonText}" FontSize="10" FontWeight="SemiBold"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
  
                     <Separator Background="{StaticResource AbletonBorder}" Margin="0,12"/>

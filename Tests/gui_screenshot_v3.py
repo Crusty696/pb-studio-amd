@@ -86,7 +86,7 @@ def main():
     tabs = [
         "PROJEKT", "AUDIO", "VIDEO", "KI-REGIE", 
         "TIMELINE", "EXPORT", "CHAT", "HIRN", 
-        "MODELLE", "PERFORMANCE", "SETTINGS"
+        "MODELLE", "PERFORMANCE", "SETTINGS", "TERMINAL"
     ]
 
     for i, tab_name in enumerate(tabs):

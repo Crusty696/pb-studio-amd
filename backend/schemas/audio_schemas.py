@@ -85,10 +85,11 @@ class WaveformData(BaseModel):
 
 
 class StemModel(str, Enum):
-    """Verfügbare Stem-Separation Modelle (AMD UVR-MDX-NET)."""
+    """Verfügbare Stem-Separation Modelle (AMD UVR-MDX-NET & Demucs)."""
     INST_HQ_3 = "UVR-MDX-NET-Inst_HQ_3.onnx"
     INST_HQ_4 = "UVR-MDX-NET-Inst_HQ_4.onnx"
     VOCALFT = "UVR-MDX-NET-Voc_FT.onnx"
+    HTDEMUCS = "htdemucs"  # 4-Spur Demucs (Drums, Bass, Vocals, Other)
 
 
 class StemSeparateRequest(BaseModel):
