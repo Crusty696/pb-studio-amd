@@ -7,9 +7,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Models;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -47,6 +49,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     {
         _api = api;
         _logger = logger;
+        WeakReferenceMessenger.Default.Register<KiModeChangedMessage>(this, (_, _) => _ = RefreshAsync());
     }
 
     /// <summary>Wird von der View ueber Loaded/Unloaded gesteuert. Triggert initialen Load.</summary>

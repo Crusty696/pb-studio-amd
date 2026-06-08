@@ -123,7 +123,7 @@ public class ApiClient : IApiClient
     public async Task<List<double>?> GetOnsetsAsync(int clipId)
         => await GetAsync<List<double>>($"/audio/onsets/{clipId}").ConfigureAwait(false);
 
-    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "UVR-MDX-NET-Inst_HQ_3.onnx")
+    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs")
         => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
 
     // --- Audio (Erweitert) ---
@@ -367,6 +367,20 @@ public class ApiClient : IApiClient
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ActivateModelAsync {Name} fehlgeschlagen", name);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateKiModeAsync(string mode, CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await PostAsync<object>("/models/mode", new { mode }).ConfigureAwait(false);
+            return result != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "UpdateKiModeAsync {Mode} fehlgeschlagen", mode);
             return false;
         }
     }

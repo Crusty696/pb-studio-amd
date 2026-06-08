@@ -28,7 +28,7 @@ public interface IApiClient : IDisposable
     Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200);
     Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId);
     Task<List<BeatData>?> GetBeatsAsync(int clipId);
-    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "UVR-MDX-NET-Inst_HQ_3.onnx");
+    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs");
     Task<DeleteResponse?> DeleteAudioClipAsync(int clipId);
     Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds);
 
@@ -108,6 +108,9 @@ public interface IApiClient : IDisposable
 
     /// <summary>Aktiviert das Modell persistent im Backend fuer alle passenden Tasks.</summary>
     Task<bool> ActivateModelAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Aktualisiert den KI-Modus persistent im Backend.</summary>
+    Task<bool> UpdateKiModeAsync(string mode, CancellationToken ct = default);
 
     /// <summary>Fuehrt einen Inferenz-Smoke-Test auf der AMD-GPU durch.</summary>
     Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default);

@@ -331,10 +331,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             PythonBridgeService.SetVramLimitEnvVar(_settings.Current.VramCapMb);
             PythonBridgeService.SetFfmpegPathEnvVar(_settings.Current.FfmpegPath);
 
+            // KI-Modus ins Backend synchronisieren
+            var modeSyncSuccess = await _api.UpdateKiModeAsync(KiMode).ConfigureAwait(true);
+            if (modeSyncSuccess)
+            {
+                WeakReferenceMessenger.Default.Send<KiModeChangedMessage>();
+            }
+
             // 4. Subtle UI-feedback
             await Task.Delay(150).ConfigureAwait(true);
             if (string.IsNullOrEmpty(FfmpegPathError))
-                StatusText = "Einstellungen gespeichert: " + _settings.ConfigFilePath;
+            {
+                var syncHint = modeSyncSuccess ? "" : " (Backend-Sync fehlgeschlagen)";
+                StatusText = "Einstellungen gespeichert" + syncHint + ": " + _settings.ConfigFilePath;
+            }
         }
         catch (Exception ex)
         {

@@ -31,3 +31,6 @@ public sealed record BackendReadyMessage;
 // Timeline / Director
 public sealed record TimelineRefreshMessage;
 public sealed record NavigateDirectorMessage;
+
+// AI / Model-Manager Mode Sync
+public sealed record KiModeChangedMessage;
