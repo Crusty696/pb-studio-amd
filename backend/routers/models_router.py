@@ -227,15 +227,7 @@ def _enrich_model_entry(entry: ModelListEntry, registry: "ModelRegistry") -> Mod
         entry.size_bytes = int(est_gb * 1024 * 1024 * 1024)
 
     # 5. Vision-Fähigkeit erkennen
-    entry.vision = False
-    if curated:
-        entry.vision = curated["vision"]
-    else:
-        # Vision-Keywords im Namen suchen
-        vision_keywords = ["vl", "vision", "moondream", "llava", "multimodal", "clip"]
-        name_lower = entry.name.lower()
-        if any(kw in name_lower for kw in vision_keywords):
-            entry.vision = True
+    entry.vision = registry._is_vision_capable(entry.name)
 
     # 6. Aktive Tasks bestimmen
     entry.active_tasks = []
@@ -443,11 +435,20 @@ async def list_models() -> ModelListResponse:
             seen_names.add(m_name)
             merged_models.append(m)
 
+    vision_names = set()
+    if lmstudio_ok:
+        try:
+            async with lmstudio_client as c:
+                vision_names = await c.get_vision_model_names()
+        except Exception as exc:
+            logger.debug("Konnte Vision-Modelle von LM Studio nicht abfragen: %s", exc)
+
     from pb_studio.ai.model_registry import ModelRegistry
     ai_cfg = _load_ai_config()
     
     registry = ModelRegistry(ai_cfg, client=None)
     registry._installed = merged_models
+    registry._vision_models = vision_names
     registry._loaded = True
 
     entries = []
