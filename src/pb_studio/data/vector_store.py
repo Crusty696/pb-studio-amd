@@ -3,6 +3,7 @@ import faiss
 import numpy as np
 import logging
 import json
+import os
 import tempfile
 import threading
 from pathlib import Path
@@ -68,16 +69,30 @@ class VectorStore:
             _atexit_registered = True
 
     @staticmethod
-    def _save_active_on_exit() -> None:
+    def _save_active_on_exit(
+        _faiss_ref=faiss,
+        _json_ref=json,
+        _os_ref=os,
+        _logger_ref=logger,
+        _path_ref=Path
+    ) -> None:
         """L-VIDEO-1 Sub-Fix: atexit-Handler greift auf aktuell aktive Instanz zu.
-        Verhindert dass N alte Instanzen ihre toten Indizes ueberschreiben."""
+        Verhindert dass N alte Instanzen ihre toten Indizes ueberschreiben.
+        Hält starke Referenzen auf Module zur Shutdown-Sicherheit (T-DATA-01)."""
         inst = VectorStore._instance
         if inst is not None:
             try:
-                inst._save_on_exit()
+                inst._save_on_exit(
+                    faiss_mod=_faiss_ref,
+                    json_mod=_json_ref,
+                    os_mod=_os_ref,
+                    logger_mod=_logger_ref,
+                    path_class=_path_ref
+                )
             except Exception:
                 # atexit darf niemals werfen
                 pass
+
 
     def _load_index(self):
         if self.index_path.exists():
@@ -344,7 +359,15 @@ class VectorStore:
         with self._lock:
             self._save_unlocked()
 
-    def _save_unlocked(self, force: bool = False):
+    def _save_unlocked(
+        self,
+        force: bool = False,
+        faiss_mod=faiss,
+        json_mod=json,
+        os_mod=os,
+        logger_mod=logger,
+        path_class=Path
+    ):
         """Save index and metadata atomically (caller must hold lock)."""
         write_lock = getattr(self, "_write_lock", None)
         if write_lock is None:
@@ -357,7 +380,7 @@ class VectorStore:
         # Non-blocking lock acquisition to prevent main thread blocking, unless force=True
         acquired = write_lock.acquire(blocking=force)
         if not acquired:
-            logger.info("Asynchroner Speichervorgang läuft bereits. Überspringe synchrones Speichern zur Performance-Optimierung.")
+            logger_mod.info("Asynchroner Speichervorgang läuft bereits. Überspringe synchrones Speichern zur Performance-Optimierung.")
             return
 
         try:
@@ -366,31 +389,29 @@ class VectorStore:
                 try:
                     # Save FAISS index to temp file first
                     temp_index = str(self.index_path) + ".tmp"
-                    faiss.write_index(self.index, temp_index)
+                    faiss_mod.write_index(self.index, temp_index)
 
                     # Save metadata to temp file
                     temp_meta = str(self.meta_path) + ".tmp"
                     with open(temp_meta, "w") as f:
-                        json.dump(self.metadata, f, indent=2)
+                        json_mod.dump(self.metadata, f, indent=2)
 
                     # B-7 FIX: Save tombstones
                     temp_tomb = str(self.tombstone_path) + ".tmp"
                     with open(temp_tomb, "w") as f:
-                        json.dump(list(self._tombstoned_ids), f)
+                        json_mod.dump(list(self._tombstoned_ids), f)
 
-                    # BUG-102 FIX: Atomic replace (os.replace works even if dest does not exist)
-                    import os
-                    os.replace(temp_index, str(self.index_path))
-                    os.replace(temp_meta, str(self.meta_path))
-                    os.replace(temp_tomb, str(self.tombstone_path))
-
-                    logger.info("FAISS Index saved.")
+                    # BUG-102 FIX: Atomic replace
+                    os_mod.replace(temp_index, str(self.index_path))
+                    os_mod.replace(temp_meta, str(self.meta_path))
+                    os_mod.replace(temp_tomb, str(self.tombstone_path))
+                    logger_mod.info("FAISS Index saved.")
                 except Exception as e:
-                    logger.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
+                    logger_mod.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
                     # Cleanup temp files
                     for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
                         try:
-                            Path(tmp).unlink(missing_ok=True)
+                            path_class(tmp).unlink(missing_ok=True)
                         except Exception:
                             pass
         finally:
@@ -436,10 +457,24 @@ class VectorStore:
         t = threading.Thread(target=do_save, daemon=True)
         t.start()
 
-    def _save_on_exit(self):
+    def _save_on_exit(
+        self,
+        faiss_mod=faiss,
+        json_mod=json,
+        os_mod=os,
+        logger_mod=logger,
+        path_class=Path
+    ):
         """atexit-Handler: stellt sicher dass beim Prozessende gespeichert wird."""
         try:
             with self._lock:
-                self._save_unlocked(force=True)
+                self._save_unlocked(
+                    force=True,
+                    faiss_mod=faiss_mod,
+                    json_mod=json_mod,
+                    os_mod=os_mod,
+                    logger_mod=logger_mod,
+                    path_class=path_class
+                )
         except Exception:
             pass
