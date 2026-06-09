@@ -43,7 +43,7 @@ log_dir.mkdir(exist_ok=True)
 # Native C++ Crash Handler (faulthandler) aktivieren
 try:
     import faulthandler
-    crash_log_file = open(log_dir / "native_crash.log", "a", encoding="utf-8")
+    crash_log_file = open(log_dir / "native_crash.log", "ab", buffering=0)
     faulthandler.enable(file=crash_log_file, all_threads=True)
     logging.getLogger("backend.main").info(f"Native Crash Handler (faulthandler) aktiviert.")
 except Exception as e:
