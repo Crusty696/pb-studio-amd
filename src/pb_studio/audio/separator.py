@@ -33,6 +33,9 @@ from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
+from pb_studio.core.gpu_lock import gpu_inference_lock
+
+
 
 def _box_iou(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
     """Compute IoU for NMS in the lightweight torchvision fallback."""
@@ -314,7 +317,8 @@ class StemSeparator:
         Extracted so tests (and future progress hooks into audio-separator
         internals) can patch a single boundary instead of the whole separate().
         """
-        return self.separator.separate(file_path)
+        with gpu_inference_lock:
+            return self.separator.separate(file_path)
 
     def list_models(self):
         """Returns available models grouped by type."""
