@@ -741,6 +741,12 @@ def _run_video_analysis(
                     ret, frame = cap.read()
                     curr_frame += 1
                     if ret and frame is not None:
+                        # Downscale frame to max 360p (height=360, width scaled proportionally) to prevent RAM OOM (T016)
+                        h, w = frame.shape[:2]
+                        if h > 360:
+                            scale = 360.0 / h
+                            new_w = int(w * scale)
+                            frame = cv2.resize(frame, (new_w, 360), interpolation=cv2.INTER_AREA)
                         frames.append(frame)
                     else:
                         break
@@ -1000,21 +1006,38 @@ def _run_video_analysis(
                 
                 from pb_studio.config_manager import ConfigManager
                 current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
-                for f_rgb in frames_rgb:
-                    # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
-                    # Fallback: Moondream ONNX wenn LM Studio down/leer ist
-                    tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode=current_mode)
-                    if not tags:
-                        used_model = "moondream"
-                        tags = extract_tags_via_moondream(f_rgb)
-                    
-                    if tags:
-                        for tag in tags:
-                            if tag not in seen_tags:
-                                all_tags.append(tag)
-                                seen_tags.add(tag)
-                        if used_model not in tag_sources:
-                            tag_sources.append(used_model)
+                moondream_analyzer = None
+                try:
+                    for f_rgb in frames_rgb:
+                        # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
+                        # Fallback: Moondream ONNX wenn LM Studio down/leer ist
+                        tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode=current_mode)
+                        if not tags:
+                            used_model = "moondream"
+                            if moondream_analyzer is None:
+                                try:
+                                    from pb_studio.video.moondream import MoondreamAnalyzer
+                                    moondream_analyzer = MoondreamAnalyzer(lazy_load=True)
+                                except Exception as ma_err:
+                                    logger.debug(f"MoondreamAnalyzer konnte nicht instanziiert werden: {ma_err}")
+                            if moondream_analyzer is not None:
+                                tags = extract_tags_via_moondream(f_rgb, analyzer=moondream_analyzer)
+                            else:
+                                tags = []
+                        
+                        if tags:
+                            for tag in tags:
+                                if tag not in seen_tags:
+                                    all_tags.append(tag)
+                                    seen_tags.add(tag)
+                            if used_model not in tag_sources:
+                                tag_sources.append(used_model)
+                finally:
+                    if moondream_analyzer is not None:
+                        try:
+                            moondream_analyzer.unload()
+                        except Exception as unload_err:
+                            logger.debug(f"Fehler beim Entladen des MoondreamAnalyzers im Video-Router: {unload_err}")
                 
                 # Begrenzen auf max 10 Tags
                 result["tags"] = all_tags[:10]

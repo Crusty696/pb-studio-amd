@@ -84,7 +84,7 @@ _STOPWORDS = frozenset({
 })
 
 
-def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
+def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray], analyzer: Optional[object] = None) -> list[str]:
     """Moondream-Captioning + Tag-Extraktion. Lazy ONNX/DirectML.
 
     Falls Moondream-ONNX nicht verfuegbar (kein Modell, kein DirectML, etc.)
@@ -92,6 +92,7 @@ def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
 
     Args:
         frame_rgb: Frame als (H, W, 3) uint8 RGB-Array.
+        analyzer: Optionaler pre-initialisierter MoondreamAnalyzer zur Vermeidung von Model-Thrashing.
 
     Returns:
         Liste von max 10 Tags (lowercased, Stopwords + kurze Woerter gefiltert).
@@ -111,12 +112,16 @@ def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
         logger.debug(f"Moondream-Imports nicht verfuegbar: {e}")
         return []
 
-    analyzer = None
+    local_analyzer = False
     try:
-        analyzer = MoondreamAnalyzer(lazy_load=True)
+        if analyzer is None:
+            analyzer = MoondreamAnalyzer(lazy_load=True)
+            local_analyzer = True
+
         # is_ready triggert lazy init; bei fehlendem Modell -> False, kein Crash
-        analyzer._init_model()
-        if not analyzer.is_ready:
+        if hasattr(analyzer, '_init_model'):
+            analyzer._init_model()
+        if not getattr(analyzer, 'is_ready', False):
             logger.debug("Moondream nicht ready (kein ONNX-Modell oder kein DirectML)")
             return []
 
@@ -150,7 +155,7 @@ def extract_tags_via_moondream(frame_rgb: Optional[np.ndarray]) -> list[str]:
         logger.debug(f"Moondream tagging fehlgeschlagen (unkritisch): {e}")
         return []
     finally:
-        if analyzer is not None:
+        if local_analyzer and analyzer is not None:
             try:
                 analyzer.unload()
             except Exception as ex:
