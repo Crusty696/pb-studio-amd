@@ -215,6 +215,14 @@ async def _async_extract_tags(
                 tags = _parse_tags(str(raw))
                 _cache_put(cache_key, tags)
                 return tags, model
+            except asyncio.TimeoutError as exc:
+                logger.warning("LM Studio Chat-Timeout (%ss) erreicht mit Modell '%s': %s", timeout_seconds, model, exc)
+                if model_override:
+                    # Bei explizitem Override macht ein Fallback keinen Sinn
+                    return [], model
+                # Modell ausschließen und nächstes versuchen
+                logger.info("Schliesse Modell '%s' wegen Timeout aus und versuche das naechste...", model)
+                exclude_models.add(model)
             except LMStudioError as exc:
                 logger.warning("LM Studio chat mit Modell '%s' fehlgeschlagen (Tags): %s", model, exc)
                 if model_override:

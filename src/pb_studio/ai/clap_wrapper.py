@@ -26,6 +26,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+from pb_studio.core.gpu_lock import gpu_inference_lock
+
+
 # CLAP Audio Processing Constants
 CLAP_SAMPLE_RATE = 48000
 CLAP_DURATION = 10.0
@@ -171,7 +174,8 @@ class CLAPAnalyzer:
             audio_input = audio[np.newaxis, :]
             session = self.combined_session or self.audio_encoder_session
             if session is None: return None
-            outputs = session.run(None, {session.get_inputs()[0].name: audio_input})
+            with gpu_inference_lock:
+                outputs = session.run(None, {session.get_inputs()[0].name: audio_input})
             embedding = outputs[0].squeeze()
             if embedding.ndim == 2: embedding = np.mean(embedding, axis=0)
             return embedding / (np.linalg.norm(embedding) + 1e-8)
