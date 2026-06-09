@@ -123,8 +123,9 @@ public class ApiClient : IApiClient
     public async Task<List<double>?> GetOnsetsAsync(int clipId)
         => await GetAsync<List<double>>($"/audio/onsets/{clipId}").ConfigureAwait(false);
 
-    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs")
+    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml")
         => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
+
 
     // --- Audio (Erweitert) ---
 

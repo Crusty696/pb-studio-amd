@@ -28,7 +28,8 @@ public interface IApiClient : IDisposable
     Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200);
     Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId);
     Task<List<BeatData>?> GetBeatsAsync(int clipId);
-    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs");
+    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml");
+
     Task<DeleteResponse?> DeleteAudioClipAsync(int clipId);
     Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds);
 

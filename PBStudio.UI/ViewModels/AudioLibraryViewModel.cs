@@ -425,7 +425,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _api.SeparateStemsAsync(SelectedClip.Id, "htdemucs");
+            var result = await _api.SeparateStemsAsync(SelectedClip.Id, "htdemucs.yaml");
+
             if (result != null)
             {
                 // L-N4: stems_paths sofort auf dem Model setzen damit STEMS-Badge
