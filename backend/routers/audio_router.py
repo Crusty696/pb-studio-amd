@@ -309,9 +309,11 @@ async def analyze_audio(
         _pre_cached = state.get_audio_analysis(request.clip_id) or {}
         _pre_subtracks = _pre_cached.get("subtrack_segments") or []
         _pre_tempo_curve = _pre_cached.get("tempo_curve") or []
+        stems_paths = clip.get("stems_paths") or {}
         result = await asyncio.to_thread(
-            _run_audio_analysis, audio_path, request.clip_id, request, _loop
+            _run_audio_analysis, audio_path, request.clip_id, request, stems_paths, _loop
         )
+
         # L-AUDIO-5 / Z5: Subtracks + tempo_curve in result mergen wenn der
         # Analyse-Pfad sie nicht selbst geliefert hat — sonst gehen sie verloren.
         if not result.get("subtrack_segments"):
@@ -661,12 +663,23 @@ def _emit_analysis_progress(loop, step: str, percent: float, message: str) -> No
         pass
 
 
-def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequest, _loop=None) -> dict[str, Any]:
+def _run_audio_analysis(
+    audio_path: str,
+    clip_id: int,
+    request: AudioAnalyzeRequest,
+    stems_paths: dict[str, str] = None,
+    _loop=None,
+) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
     import numpy as np
 
     _emit_analysis_progress(_loop, "load", 5.0, "Audio wird geladen…")
+
+    if stems_paths is None:
+        stems_paths = {}
+    drums_path = stems_paths.get("drums")
+    instrumental_path = stems_paths.get("instrumental")
 
     # L-AUDIO-1 / Y4 (M-2 CRITICAL): Streaming-Branch fuer lange Mixe (>10min) vermeidet
     # OOM bei 90min-DJ-Mix (~480MB float32-Array). Probe Duration via get_duration
@@ -697,7 +710,12 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
                     _loop, "beat_chunk", overall, f"Streaming-Analyse {pct:.1f}%"
                 )
 
-            _stream_res = StreamingAudioAnalyzer().analyze(audio_path, on_progress=_stream_progress)
+            # Verwende Drums-Spur für Beat-Tracking falls vorhanden, sonst Original
+            analysis_path = drums_path if drums_path and Path(drums_path).exists() else audio_path
+            logger.info(f"Streaming-Analyse verwendet Pfad für Beats: {analysis_path}")
+
+            _stream_res = StreamingAudioAnalyzer().analyze(analysis_path, on_progress=_stream_progress)
+
             duration = _stream_res.duration_seconds
             _stream_beats = list(_stream_res.beats)
             _stream_bpm = float(_stream_res.bpm)
@@ -758,9 +776,12 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
                     )
 
                 # detect_beats gibt list[float] zurück - BeatNet oder Librosa-Fallback
-                beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
+                beat_detect_path = drums_path if drums_path and Path(drums_path).exists() else audio_path
+                logger.info(f"Beat-Detection verwendet Pfad: {beat_detect_path}")
+                beat_times = detector.detect_beats(beat_detect_path, on_progress=_beat_progress)
                 if beat_times:
                     arr = np.asarray(beat_times, dtype=np.float64)
+
 
                     # Audit L-N8: real per-beat strength via librosa.onset.onset_strength.
                     # Vorher: hardcoded 1.0 - Engine konnte beats nicht gewichten.
@@ -826,9 +847,15 @@ def _run_audio_analysis(audio_path: str, clip_id: int, request: AudioAnalyzeRequ
     key = None
     try:
         from pb_studio.audio.key_detector import KeyDetector
-        key = KeyDetector().detect_key(y, sr)
+        if instrumental_path and Path(instrumental_path).exists():
+            logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
+            y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
+            key = KeyDetector().detect_key(y_inst, sr_inst)
+        else:
+            key = KeyDetector().detect_key(y, sr)
     except Exception as e:
         logger.warning(f"Key-Detection fehlgeschlagen: {e}")
+
 
     _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")
 

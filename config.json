@@ -117,10 +117,10 @@
             }
         },
         "task_overrides": {
-            "chat": "google/gemma-4-26b-a4b-qat",
-            "chat_general": "google/gemma-4-26b-a4b-qat",
-            "chat_tool_use": "google/gemma-4-26b-a4b-qat",
-            "brain_explanation": "google/gemma-4-26b-a4b-qat"
+            "chat": "google/gemma-4-12b-qat",
+            "chat_general": "google/gemma-4-12b-qat",
+            "chat_tool_use": "google/gemma-4-12b-qat",
+            "brain_explanation": "google/gemma-4-12b-qat"
         }
     },
     "ui": {

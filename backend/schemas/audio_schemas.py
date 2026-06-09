@@ -89,7 +89,8 @@ class StemModel(str, Enum):
     INST_HQ_3 = "UVR-MDX-NET-Inst_HQ_3.onnx"
     INST_HQ_4 = "UVR-MDX-NET-Inst_HQ_4.onnx"
     VOCALFT = "UVR-MDX-NET-Voc_FT.onnx"
-    HTDEMUCS = "htdemucs"  # 4-Spur Demucs (Drums, Bass, Vocals, Other)
+    HTDEMUCS = "htdemucs.yaml"  # 4-Spur Demucs (Drums, Bass, Vocals, Other)
+
 
 
 class StemSeparateRequest(BaseModel):
