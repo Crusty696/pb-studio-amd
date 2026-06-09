@@ -21,6 +21,18 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [x] T010 [P] [OBJ-6] {(FR-105)} Fix htdemucs model filename in `backend/schemas/audio_schemas.py`
 - [x] T011 [P] [OBJ-7] {(FR-106)} Integrate stems into audio analysis pipeline in `backend/routers/audio_router.py`
 - [x] T012 [P] [OBJ-7] {(TR-107)} Run verification tests for stem separation and integrated audio analysis
+- [x] T013 [P] [OBJ-1] {(FR-108)} Fix VRAM-Eviction ABBA deadlock in `vram_budget_manager.py` / `model_loader.py`
+- [x] T014 [P] [OBJ-1] {(FR-109)} Resolve SQLite project repository deferred transaction contention
+- [x] T015 [P] [OBJ-1] {(FR-110)} Secure atexit shutdown saving logic in `vector_store.py`
+- [x] T016 [P] [OBJ-2] {(FR-111)} Downscale frames in `video_router.py` to prevent RAM OOM
+- [x] T017 [P] [OBJ-2] {(FR-112)} Implement Moondream model caching loop in `video_router.py`
+- [x] T018 [P] [OBJ-2] {(FR-113)} Limit RAM-usage in `subtrack_detector.py` stems activity calculation
+- [x] T019 [P] [OBJ-3] {(FR-114)} Resolve WPF IDisposable ViewModels root container leak
+- [x] T020 [P] [OBJ-3] {(FR-115)} Dispose HttpResponseMessage socket resources in `ApiClient.cs`
+- [x] T021 [P] [OBJ-3] {(FR-116)} Add SSEClient EOF delay to avoid connection hot loops
+- [x] T022 [P] [OBJ-3] {(FR-117)} Implement active tab polling timer check for `VramTelemetryView`
+- [x] T023 [P] [OBJ-3] {(FR-118)} Integrate `WaveformCache` back into `/audio/waveform` route
+
 
 
 
