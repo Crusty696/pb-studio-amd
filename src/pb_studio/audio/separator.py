@@ -276,6 +276,16 @@ class StemSeparator:
             if not Path(file_path).exists():
                 return {"error": f"File not found: {file_path}"}
 
+            # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
+            config = getattr(self, "config", None) or ConfigManager()
+            model_dir = config.get("paths", {}).get("models_dir", "./models")
+            model_path = Path(model_dir) / model_name
+            if not model_path.exists():
+                return {
+                    "error": f"Model file '{model_name}' not found in '{model_dir}'. "
+                             "Please run the setup scripts to download models before using PB Studio offline."
+                }
+
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
