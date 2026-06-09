@@ -525,16 +525,15 @@ public class ApiClient : IApiClient
     /// werfen wir <see cref="NotSupportedException"/> mit User-tauglicher Message.</summary>
     private async Task<System.IO.Stream?> OpenPullStreamAsync(string name, CancellationToken token, CancellationToken originalCt)
     {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/models/pull")
+        {
+            Content = JsonContent.Create(new { name }, options: JsonOptions),
+        };
+        // request bewusst NICHT disposen — der Lifetime ist an die Response gekoppelt,
+        // und das Disposen waehrend der Streamkonsum kann den Socket killen. Der GC raeumt's.
+        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, "/models/pull")
-            {
-                Content = JsonContent.Create(new { name }, options: JsonOptions),
-            };
-            // request bewusst NICHT disposen — der Lifetime ist an die Response gekoppelt,
-            // und das Disposen waehrend der Streamkonsum kann den Socket killen. Der GC raeumt's.
-            var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-
             if ((int)response.StatusCode == 501)
             {
                 _logger.LogInformation(
@@ -550,14 +549,17 @@ public class ApiClient : IApiClient
         }
         catch (NotSupportedException)
         {
+            response.Dispose();
             throw;
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, originalCt))
         {
+            response.Dispose();
             return null;
         }
         catch (Exception ex)
         {
+            response.Dispose();
             _logger.LogWarning(ex, "PullModel({Name}): Stream-Open fehlgeschlagen", name);
             return null;
         }
@@ -834,8 +836,16 @@ public class ApiClient : IApiClient
                 Content = JsonContent.Create(body, options: JsonOptions),
             };
             var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+            try
+            {
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+            }
+            catch
+            {
+                response.Dispose();
+                throw;
+            }
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, originalCt))
         {
@@ -896,7 +906,7 @@ public class ApiClient : IApiClient
         var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            var response = await _http.DeleteAsync("/chat/history", token).ConfigureAwait(false);
+            using var response = await _http.DeleteAsync("/chat/history", token).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

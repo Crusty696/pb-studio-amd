@@ -17,6 +17,7 @@ public partial class VramTelemetryView : UserControl
     public VramTelemetryView()
     {
         InitializeComponent();
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -28,7 +29,7 @@ public partial class VramTelemetryView : UserControl
         }
 
         if (DataContext is VramTelemetryViewModel vm)
-            vm.IsActive = true;
+            vm.IsActive = IsVisible;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -41,5 +42,13 @@ public partial class VramTelemetryView : UserControl
         DataContext = null;
         _scope?.Dispose();
         _scope = null;
+    }
+
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (DataContext is VramTelemetryViewModel vm)
+        {
+            vm.IsActive = IsVisible;
+        }
     }
 }

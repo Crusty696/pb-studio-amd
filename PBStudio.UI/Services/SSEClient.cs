@@ -154,7 +154,11 @@ public class SSEClient : IDisposable
                 {
                     var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
                     if (line == null)
+                    {
+                        _logger.LogWarning("SSE {Endpoint}: EOF erreicht, verzoegere Reconnect um 2s", endpoint);
+                        await Task.Delay(2000, ct).ConfigureAwait(false);
                         break;
+                    }
 
                     if (string.IsNullOrEmpty(line))
                     {

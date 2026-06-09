@@ -1,17 +1,36 @@
+using System.Windows;
 using System.Windows.Controls;
 using CommunityToolkit.Mvvm.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 
 namespace PBStudio.UI.Views;
 
-/// <summary>ProductionView — DataContext wird via Ioc.Default aufgelöst (kein XAML-Instantiierung).</summary>
+/// <summary>ProductionView — DataContext wird via IServiceScope aufgelöst.</summary>
 public partial class ProductionView : UserControl
 {
+    private IServiceScope? _scope;
+
     public ProductionView()
     {
         InitializeComponent();
-        // KORREKTUR: DataContext via DI auflösen, nicht über XAML <vm:ProductionViewModel/>
-        // XAML kann keinen Konstruktor mit Parametern aufrufen → Ioc.Default
-        DataContext = Ioc.Default.GetRequiredService<ProductionViewModel>();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_scope == null)
+        {
+            _scope = Ioc.Default.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            DataContext = _scope.ServiceProvider.GetRequiredService<ProductionViewModel>();
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DataContext = null;
+        _scope?.Dispose();
+        _scope = null;
     }
 }
