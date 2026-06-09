@@ -40,15 +40,26 @@ Um eine lückenlose Verifikation zu gewährleisten, gliedern wir das System-Audi
   1. Prüfung der Pytest-Suite auf unzureichend getestete Edge-Cases oder stumme Assert-Mocks.
   2. Ausführung der vollständigen Testabdeckungsprüfung per `verify_release_smoke.ps1` und `gui_screenshot_v4.py`.
 
+### Phase 6: Z-AUDIO Stem-Fehlerbehebung & Pipeline-Integration (Neu)
+* **Aktivität:**
+  1. In `backend/schemas/audio_schemas.py` den Enum-Wert `StemModel.HTDEMUCS` von `"htdemucs"` auf `"htdemucs.yaml"` ändern, damit `audio-separator` das Modell korrekt auflöst.
+  2. In `backend/routers/audio_router.py` die Funktion `_run_audio_analysis` so anpassen, dass sie das Dictionary `stems_paths` (aus dem Clip-State) als optionalen Parameter übergeben bekommt.
+  3. Bei der Beat-Detection (sowohl Streaming als auch Offline) prüfen, ob ein `drums_path` in den `stems_paths` existiert und physisch vorhanden ist. Falls ja, diesen Pfad für BeatNet / Beat-Detection verwenden.
+  4. Bei der Key-Detection prüfen, ob ein `instrumental_path` in `stems_paths` existiert und physisch vorhanden ist. Falls ja, dieses Audio für die Key-Detection laden und analysieren (begrenzt auf max. 600s).
+  5. In `analyze_audio` in `audio_router.py` die `stems_paths` aus dem Clip-State auslesen und an `_run_audio_analysis` übergeben.
+
 ---
 
 ## Verification Plan
 
 ### Automatisierte Tests
-* Pytest Suite: `pytest Tests/ -x -q`
+* Pytest Suite: `pytest Tests/ -x -q` (insbesondere `Tests/test_audio_analyzer.py`)
 * WPF Release Build: `dotnet build PBStudio.UI\PBStudio.UI.csproj -c Release`
 * E2E Smoke-Pipeline: `powershell.exe -ExecutionPolicy Bypass -File .\verify_release_smoke.ps1`
-* Visual Verification: `python Tests/gui_screenshot_v4.py`
+
+### Manuelle Verifikation
+* Stem-Separation über Swagger-UI oder App testen mit dem Demucs-Modell.
+* Audio-Analyse nach der Stem-Separation ausführen und prüfen, ob die Ausgaben die Drums/Instrumental-Pfade verwenden.
 
 ---
 
@@ -65,4 +76,7 @@ Während des Audits wurden 5 konkrete Schwachstellen und 1 Performance-Engpass i
 7. **Z-CORE/Z-AUDIO (SmartDirector VRAM-Thrashing):** Korrektur der Entladelogik in `SmartDirector._ensure_clap_loaded()` – da CLAP auf CPU (Budget = 0) läuft, entladen wir SigLIP nicht mehr präventiv, um PCIe/VRAM-Thrashing zu verhindern.
 8. **Z-VIDEO/Z-CORE (SigLIP Batch Inferenz):** Umstellung von `SigLIPWrapper.encode_images_batch()` auf echte ONNX Batch-Inferenz über 4D-Tensoren zur optimalen GPU-Auslastung auf AMD-Karten.
 9. **Z-DATA (Vector Store Tombstone Re-Indexing):** Hinzufügen von `clean_tombstones()` zur physischen Index-Bereinigung und Re-Indexing zur Vermeidung von Suchzeit- und Speicherbloat bei vielen gelöschten Medien.
+10. **Z-AUDIO (Demucs Modellname):** `StemModel.HTDEMUCS` in `audio_schemas.py` auf `"htdemucs.yaml"` geändert.
+11. **Z-AUDIO (Stems-Analyse-Pipeline):** Die Audio-Analyse liest `stems_paths` aus dem Clip-State und leitet die Beat-Detection auf die Drums-Spur und die Key-Detection auf die Instrumental-Spur um.
+
 

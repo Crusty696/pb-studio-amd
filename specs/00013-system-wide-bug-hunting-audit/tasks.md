@@ -18,5 +18,10 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [x] T007 [P] [OBJ-2] {(FR-102)} Implement true ONNX Batch Inference in `src/pb_studio/ai/siglip_wrapper.py`
 - [x] T008 [P] [OBJ-4] {(FR-103)} Add physical Index Re-Indexing `clean_tombstones()` in `src/pb_studio/data/vector_store.py`
 - [x] T009 [P] [OBJ-5] {(TR-104)} Execute test verification for AI optimizations
+- [x] T010 [P] [OBJ-6] {(FR-105)} Fix htdemucs model filename in `backend/schemas/audio_schemas.py`
+- [x] T011 [P] [OBJ-7] {(FR-106)} Integrate stems into audio analysis pipeline in `backend/routers/audio_router.py`
+- [x] T012 [P] [OBJ-7] {(TR-107)} Run verification tests for stem separation and integrated audio analysis
+
+
 
 
