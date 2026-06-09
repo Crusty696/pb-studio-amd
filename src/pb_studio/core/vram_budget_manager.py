@@ -385,6 +385,7 @@ class VRAMBudgetManager:
         Raises:
             ValueError: If new usable VRAM is less than currently committed VRAM.
         """
+        callbacks_to_invoke = []
         with self._registry_lock:
             new_usable = limit_mb - self._safety_buffer_mb
             if new_usable < 0:
@@ -392,7 +393,7 @@ class VRAMBudgetManager:
                 
             if new_usable < self._committed_mb:
                 shortfall = self._committed_mb - new_usable
-                self._evict_for_space(shortfall)
+                freed, callbacks_to_invoke = self._evict_for_space(shortfall)
                 
                 if new_usable < self._committed_mb:
                     raise ValueError(
@@ -406,6 +407,15 @@ class VRAMBudgetManager:
                 f"VRAMBudgetManager: Dynamically updated limits. "
                 f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
             )
+
+        # Callbacks ausserhalb von self._registry_lock ausfuehren, um zirkulaere Deadlocks zu vermeiden
+        for name, callback, budget in callbacks_to_invoke:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Unload callback failed for {name}: {e}")
+                budget.metadata["eviction_error"] = True
+
 
     @property
     def total_reserved_mb(self) -> int:
@@ -571,6 +581,8 @@ class VRAMBudgetManager:
         Returns:
             True if reservation successful
         """
+        callbacks_to_invoke = []
+        success = False
         with self._registry_lock:
             if model_id not in self._models:
                 logger.error(f"Cannot reserve: Model {model_id} not registered")
@@ -588,30 +600,45 @@ class VRAMBudgetManager:
                 if force:
                     shortfall = budget.estimated_vram_mb - self.available_vram_mb
                     # Try eviction
-                    freed = self._evict_for_space(shortfall, exclude=[model_id])
+                    freed, callbacks_to_invoke = self._evict_for_space(shortfall, exclude=[model_id])
                     if freed < shortfall:
                         logger.error(
                             f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB (Shortfall: {shortfall}MB), "
                             f"could only free {freed}MB"
                         )
-                        return False
+                        success = False
+                    else:
+                        success = True
                 else:
                     logger.warning(
                         f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB, "
                         f"Available {self.available_vram_mb}MB"
                     )
-                    return False
+                    success = False
+            else:
+                success = True
 
-            # Reserve
-            budget.is_reserved = True
-            budget.touch()
-            self._reserved_mb += budget.estimated_vram_mb
+            if success:
+                # Reserve
+                budget.is_reserved = True
+                budget.touch()
+                self._reserved_mb += budget.estimated_vram_mb
 
-            # Move to end of OrderedDict (LRU tracking)
-            self._models.move_to_end(model_id)
+                # Move to end of OrderedDict (LRU tracking)
+                self._models.move_to_end(model_id)
 
-            logger.info(f"Reserved {budget.estimated_vram_mb}MB for {budget.name}")
-            return True
+                logger.info(f"Reserved {budget.estimated_vram_mb}MB for {budget.name}")
+
+        # Callbacks ausserhalb von self._registry_lock ausfuehren, um zirkulaere Deadlocks zu vermeiden
+        for name, callback, budget in callbacks_to_invoke:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Unload callback failed for {name}: {e}")
+                budget.metadata["eviction_error"] = True
+
+        return success
+
 
     def commit(self, model_id: str) -> bool:
         """
@@ -718,7 +745,7 @@ class VRAMBudgetManager:
     # Eviction Policy
     # =========================================================================
 
-    def _evict_for_space(self, needed_mb: int, exclude: Optional[List[str]] = None) -> int:
+    def _evict_for_space(self, needed_mb: int, exclude: Optional[List[str]] = None) -> tuple[int, list]:
         """
         Evict models to free up space.
 
@@ -731,7 +758,7 @@ class VRAMBudgetManager:
             exclude: Model IDs to never evict
 
         Returns:
-            Amount of VRAM freed
+            Tuple (freed_mb, callbacks_to_invoke)
         """
         callbacks_to_invoke = []
         freed = 0
@@ -754,7 +781,7 @@ class VRAMBudgetManager:
 
                 logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
 
-                # Callbacks sammeln (B-3 Fix: Ausfuehrung ausserhalb des Locks)
+                # Callbacks sammeln
                 if budget.unload_callback:
                     callbacks_to_invoke.append((budget.name, budget.unload_callback, budget))
 
@@ -764,19 +791,8 @@ class VRAMBudgetManager:
                 budget.is_loaded = False
                 freed += budget.estimated_vram_mb
 
-        # Callbacks ausserhalb des Locks ausfuehren, um zirkulaere Deadlocks mit ModelLoader zu vermeiden
-        for name, callback, budget in callbacks_to_invoke:
-            try:
-                callback()
-            except Exception as e:
-                logger.error(f"Unload callback failed for {name}: {e}")
-                budget.metadata["eviction_error"] = True
-                logger.warning(
-                    f"Model {name} marked as evicted_with_error — "
-                    f"VRAM budget freed but session may still be in memory"
-                )
+        return freed, callbacks_to_invoke
 
-        return freed
 
     def evict_all(self, min_priority: ModelPriority = ModelPriority.LOW) -> int:
         """
