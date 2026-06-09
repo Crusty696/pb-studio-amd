@@ -195,6 +195,56 @@ class TestAudioRouter:
         ids = list(fresh_state.audio_clips.keys())
         assert ids == [1, 2, 3]
 
+    def test_analyze_uses_stems_if_present(self, client, tmp_path, fresh_state):
+        audio_mod = _get_module("backend.routers.audio_router")
+        orig_probe = audio_mod._probe_audio_info
+        orig_pub = audio_mod.publish_event
+        orig_run_analysis = audio_mod._run_audio_analysis
+
+        async def fake_pub(*a, **kw): pass
+        audio_mod._probe_audio_info = lambda _: {"duration": 30.0, "sample_rate": 44100, "channels": 2}
+        audio_mod.publish_event = fake_pub
+
+        mock_run_analysis = MagicMock(return_value={
+            "clip_id": 1,
+            "duration_seconds": 30.0,
+            "bpm": 120.0,
+            "beat_count": 0,
+            "beats": [],
+            "key": "C Major",
+            "energy_curve": [],
+            "structure_segments": [],
+            "spectral_data": None
+        })
+        audio_mod._run_audio_analysis = mock_run_analysis
+
+        try:
+            audio = tmp_path / "song.mp3"
+            audio.write_bytes(b"\x00" * 100)
+            
+            r_import = client.post("/audio/import", json={"path": str(audio)})
+            assert r_import.status_code == 200
+            
+            clip = fresh_state.get_audio_clip(1)
+            stems_paths = {
+                "drums": str(tmp_path / "drums.wav"),
+                "instrumental": str(tmp_path / "instrumental.wav")
+            }
+            clip["stems_paths"] = stems_paths
+            fresh_state.set_audio_clip(1, clip)
+
+            r_analyze = client.post("/audio/analyze", json={"clip_id": 1, "detect_beats": True})
+            assert r_analyze.status_code == 200
+        finally:
+            audio_mod._probe_audio_info = orig_probe
+            audio_mod.publish_event = orig_pub
+            audio_mod._run_audio_analysis = orig_run_analysis
+
+        mock_run_analysis.assert_called_once()
+        args, kwargs = mock_run_analysis.call_args
+        assert args[3] == stems_paths
+
+
 
 # ─────────────────────────────────────────────────────────────────
 # Video Router
