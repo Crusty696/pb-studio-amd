@@ -79,4 +79,13 @@ Während des Audits wurden 5 konkrete Schwachstellen und 1 Performance-Engpass i
 10. **Z-AUDIO (Demucs Modellname):** `StemModel.HTDEMUCS` in `audio_schemas.py` auf `"htdemucs.yaml"` geändert.
 11. **Z-AUDIO (Stems-Analyse-Pipeline):** Die Audio-Analyse liest `stems_paths` aus dem Clip-State und leitet die Beat-Detection auf die Drums-Spur und die Key-Detection auf die Instrumental-Spur um.
 
+## Strategische Consulting Fixes (F1 - F5) (Neu)
+
+Um die vollständige Release-Bereitschaft zu erreichen, beheben wir die folgenden 5 identifizierten Risiken:
+- **F1 (VRAM-Absicherung):** Einführung eines globalen synchronen `gpu_inference_lock` in `src/pb_studio/core/gpu_lock.py` und Absicherung aller ONNX Inferenz-Aufrufe (RAFT, SigLIP, Moondream, AudioSeparator) zur Verhinderung paralleler GPU-Auslastungen auf Systemen mit <= 8GB VRAM.
+- **F2 (Native Crash Logging):** Registrierung von Pythons nativem `faulthandler` beim Start des Backends (`backend/main.py`), um native C++ Access Violations der `onnxruntime.dll` / DirectML in `logs/native_crash.log` zu loggen statt stummem Absturz.
+- **F3 (VLM-Timeout):** Kürzung des LM Studio VLM-Timeouts von 60s auf 15s in `src/pb_studio/video/lmstudio_vision_wrapper.py` mit `asyncio.wait_for`-Absicherung, um bei hängenden Verbindungen zügig auf das lokale Moondream-ONNX Fallback umzuschalten.
+- **F4 (4h-Resilience-Gate):** Korrektur des relativen Pfad-Bugs in `scripts/qa/stress_4h.bat` und Starten des Langzeit-Stresstests im Hintergrund zur Absicherung der 4h-Resilienz.
+- **F5 (SQLite write block):** Entkoppelung der CPU-/IO-intensiven FAISS Tombstone-Markierung (`vs.mark_tombstoned`) aus dem SQLite Transaktions-Scope in `backend/routers/video_router.py`, um SQLite-Lock-Contention zu verhindern.
+
 

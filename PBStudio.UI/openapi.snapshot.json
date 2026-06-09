@@ -1944,7 +1944,7 @@
                                                                 "Models (LM Studio)"
                                                             ],
                                                    "summary":  "List Models",
-                                                   "description":  "Liefert alle in LM Studio ODER Ollama verfuegbaren / geladenen Modelle.\n\nW-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.\nReportet ``ollama_available`` und ``lmstudio_available`` korrekt.",
+                                                   "description":  "Liefert alle verfuegbaren Modelle aus LM Studio UND Ollama (Hybrid-Merge).",
                                                    "operationId":  "list_models_models_list_get",
                                                    "responses":  {
                                                                      "200":  {
@@ -1966,7 +1966,7 @@
                                                                      "Models (LM Studio)"
                                                                  ],
                                                         "summary":  "List Available Models",
-                                                        "description":  "Kuratierte Vision-Modelle + Installations-Status.",
+                                                        "description":  "Kuratierte Vision-Modelle + Installations-Status (Hybrid-Merge).",
                                                         "operationId":  "list_available_models_models_available_get",
                                                         "responses":  {
                                                                           "200":  {
@@ -2167,6 +2167,48 @@
                                                                       }
                                                     }
                                        },
+                  "/models/mode":  {
+                                       "post":  {
+                                                    "tags":  [
+                                                                 "Models (LM Studio)"
+                                                             ],
+                                                    "summary":  "Update Ki Mode",
+                                                    "description":  "Aktualisiert den standardmaessigen KI-Modus (speed|balance|quality) in der Konfiguration.",
+                                                    "operationId":  "update_ki_mode_models_mode_post",
+                                                    "requestBody":  {
+                                                                        "content":  {
+                                                                                        "application/json":  {
+                                                                                                                 "schema":  {
+                                                                                                                                "$ref":  "#/components/schemas/ModeRequest"
+                                                                                                                            }
+                                                                                                             }
+                                                                                    },
+                                                                        "required":  true
+                                                                    },
+                                                    "responses":  {
+                                                                      "200":  {
+                                                                                  "description":  "Successful Response",
+                                                                                  "content":  {
+                                                                                                  "application/json":  {
+                                                                                                                           "schema":  {
+
+                                                                                                                                      }
+                                                                                                                       }
+                                                                                              }
+                                                                              },
+                                                                      "422":  {
+                                                                                  "description":  "Validation Error",
+                                                                                  "content":  {
+                                                                                                  "application/json":  {
+                                                                                                                           "schema":  {
+                                                                                                                                          "$ref":  "#/components/schemas/HTTPValidationError"
+                                                                                                                                      }
+                                                                                                                       }
+                                                                                              }
+                                                                              }
+                                                                  }
+                                                }
+                                   },
                   "/models/test":  {
                                        "post":  {
                                                     "tags":  [
@@ -3264,6 +3306,21 @@
                                                                             ],
                                                                "title":  "HistoryResponse"
                                                            },
+                                       "ModeRequest":  {
+                                                           "properties":  {
+                                                                              "mode":  {
+                                                                                           "type":  "string",
+                                                                                           "minLength":  1,
+                                                                                           "title":  "Mode",
+                                                                                           "description":  "KI-Modus: speed|balance|quality"
+                                                                                       }
+                                                                          },
+                                                           "type":  "object",
+                                                           "required":  [
+                                                                            "mode"
+                                                                        ],
+                                                           "title":  "ModeRequest"
+                                                       },
                                        "ModelListEntry":  {
                                                               "properties":  {
                                                                                  "name":  {
@@ -3991,10 +4048,11 @@
                                                          "enum":  [
                                                                       "UVR-MDX-NET-Inst_HQ_3.onnx",
                                                                       "UVR-MDX-NET-Inst_HQ_4.onnx",
-                                                                      "UVR-MDX-NET-Voc_FT.onnx"
+                                                                      "UVR-MDX-NET-Voc_FT.onnx",
+                                                                      "htdemucs.yaml"
                                                                   ],
                                                          "title":  "StemModel",
-                                                         "description":  "VerfÃ¼gbare Stem-Separation Modelle (AMD UVR-MDX-NET)."
+                                                         "description":  "VerfÃ¼gbare Stem-Separation Modelle (AMD UVR-MDX-NET \u0026 Demucs)."
                                                      },
                                        "StemResult":  {
                                                           "properties":  {

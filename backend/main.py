@@ -39,7 +39,18 @@ from pb_studio.utils.log_rotation import (  # noqa: E402
 
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
+
+# Native C++ Crash Handler (faulthandler) aktivieren
+try:
+    import faulthandler
+    crash_log_file = open(log_dir / "native_crash.log", "a", encoding="utf-8")
+    faulthandler.enable(file=crash_log_file, all_threads=True)
+    logging.getLogger("backend.main").info(f"Native Crash Handler (faulthandler) aktiviert.")
+except Exception as e:
+    logging.getLogger("backend.main").error(f"Failed to enable faulthandler: {e}")
+
 log_file = log_dir / "backend.log"
+
 
 _log_level = getattr(logging, config.log_level.upper(), logging.INFO)
 

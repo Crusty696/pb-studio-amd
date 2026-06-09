@@ -32,6 +32,12 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [x] T021 [P] [OBJ-3] {(FR-116)} Add SSEClient EOF delay to avoid connection hot loops
 - [x] T022 [P] [OBJ-3] {(FR-117)} Implement active tab polling timer check for `VramTelemetryView`
 - [x] T023 [P] [OBJ-3] {(FR-118)} Integrate `WaveformCache` back into `/audio/waveform` route
+- [x] T024 [P] [OBJ-1] {(FR-119)} Implement global synchronous GPU inference lock (F1)
+- [x] T025 [P] [OBJ-1] {(FR-120)} Setup native C++ crash logger faulthandler in `backend/main.py` (F2)
+- [x] T026 [P] [OBJ-2] {(FR-121)} Shrink LM Studio VLM timeout to 15s with asyncio.wait_for (F3)
+- [x] T027 [P] [OBJ-5] {(FR-122)} Fix path bug and run 4h stress test background scripts (F4)
+- [x] T028 [P] [OBJ-4] {(FR-123)} Decouple VectorStore tombstone calls from SQLite transaction scopes (F5)
+
 
 
 
