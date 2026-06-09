@@ -25,6 +25,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+from pb_studio.core.gpu_lock import gpu_inference_lock
+
+
 # SigLIP preprocessing constants
 SIGLIP_IMAGE_SIZE = 384
 SIGLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
@@ -155,7 +158,8 @@ class SigLIPWrapper:
         if not self._initialized and not self._init_model(): return None
         try:
             tensor = self.preprocess_image(image)
-            outputs = self.vision_session.run(None, {self.vision_session.get_inputs()[0].name: tensor})
+            with gpu_inference_lock:
+                outputs = self.vision_session.run(None, {self.vision_session.get_inputs()[0].name: tensor})
             emb = outputs[0].squeeze()
             if emb.ndim == 2: emb = np.mean(emb, axis=0)
             return emb / (np.linalg.norm(emb) + 1e-8)
@@ -178,10 +182,11 @@ class SigLIPWrapper:
             
             batch_tensor = np.stack(tensors).astype(np.float32)
             
-            outputs = self.vision_session.run(
-                None, 
-                {self.vision_session.get_inputs()[0].name: batch_tensor}
-            )
+            with gpu_inference_lock:
+                outputs = self.vision_session.run(
+                    None, 
+                    {self.vision_session.get_inputs()[0].name: batch_tensor}
+                )
             embs = outputs[0]  # Shape: (B, N, 1152) or (B, 1152)
             
             # Falls die Form (B, N, 1152) ist (z.B. Patch-Embeddings), ueber Patches mitteln
@@ -207,7 +212,8 @@ class SigLIPWrapper:
             inputs = self.tokenizer(texts, padding="max_length", max_length=64, truncation=True, return_tensors="np")
             if self.text_session:
                 feed = {inp.name: inputs["input_ids"] if "input_ids" in inp.name else inputs["attention_mask"] for inp in self.text_session.get_inputs()}
-                embeddings = self.text_session.run(None, feed)[0]
+                with gpu_inference_lock:
+                    embeddings = self.text_session.run(None, feed)[0]
             else:
                 import torch
                 with torch.no_grad():
