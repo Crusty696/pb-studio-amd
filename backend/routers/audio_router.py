@@ -872,6 +872,12 @@ def _run_audio_analysis(
     }
 
 
+from pb_studio.audio.waveform_cache import WaveformCache
+
+# Globaler LRU-Waveform-Cache zur Drosselung redundanter FFT-Berechnungen (T023)
+_waveform_cache = WaveformCache(max_size=50)
+
+
 def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
     """Extrahiert N-Band Waveform-Daten, blockierend.
 
@@ -879,10 +885,19 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
     bands>=4: alle 3 Bänder (max verfügbar)
     """
     try:
-        from pb_studio.audio.waveform_analyzer import WaveformAnalyzer
-        result = WaveformAnalyzer().get_downsampled_waveform(
-            audio_path, target_points=1000
-        )
+        # 1. Versuche aus Cache zu lesen (T023)
+        result = _waveform_cache.get(audio_path)
+        if result is None:
+            from pb_studio.audio.waveform_analyzer import WaveformAnalyzer
+            result = WaveformAnalyzer().get_downsampled_waveform(
+                audio_path, target_points=1000
+            )
+            if result:
+                _waveform_cache.put(audio_path, result)
+
+        if not result:
+            return []
+
         # result: dict mit 'low', 'mid', 'high' als numpy arrays
         all_keys = ["low", "mid", "high"]
         if bands <= 1:
@@ -898,7 +913,7 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
                 output.append([float(v) for v in arr])
         return output
     except ImportError:
-        logger.warning("WaveformAnalyzer nicht verfügbar, leere Daten")
+        logger.warning("WaveformAnalyzer nicht verfuegbar, leere Daten")
         return []
     except Exception as e:
         logger.warning(f"Waveform-Extraktion fehlgeschlagen: {e}")

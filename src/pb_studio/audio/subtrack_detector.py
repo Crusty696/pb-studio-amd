@@ -217,14 +217,41 @@ class SubtrackDetector:
 
         if stem_paths:
             stem_rms_list = []
+            chunk_size_sec = 300  # 5-Minuten-Chunks zur Begrenzung des RAM-Verbrauchs (T018)
             for name in ("vocals", "drums", "bass", "other"):
                 p = stem_paths.get(name)
                 if p and Path(p).is_file():
-                    s, _ = librosa.load(p, sr=sr, mono=True)
-                    rms = librosa.feature.rms(y=s, hop_length=self.hop_length)[0]
-                    stem_rms_list.append(rms)
+                    try:
+                        total_dur = float(librosa.get_duration(path=str(p)))
+                        rms_chunks = []
+                        # Chunkweise laden und RMS berechnen
+                        for offset in range(0, int(total_dur), chunk_size_sec):
+                            dur = min(chunk_size_sec, total_dur - offset)
+                            s_chunk, _ = librosa.load(
+                                str(p),
+                                sr=sr,
+                                mono=True,
+                                offset=offset,
+                                duration=dur,
+                            )
+                            if s_chunk.size > 0:
+                                rms_chunk = librosa.feature.rms(
+                                    y=s_chunk, hop_length=self.hop_length
+                                )[0]
+                                rms_chunks.append(rms_chunk)
+                        
+                        if rms_chunks:
+                            rms = np.concatenate(rms_chunks)
+                            stem_rms_list.append(rms)
+                    except Exception as e:
+                        logger.warning(f"Fehler bei chunked RMS-Berechnung fuer {name}: {e}")
+
             if stem_rms_list:
-                stacked = np.stack(stem_rms_list, axis=0)
+                # Da die concatenate-Teile eventuell minimal unterschiedliche Längen haben,
+                # bringen wir alle RMS-Arrays auf die gleiche Länge (die des kürzesten).
+                min_len = min(rms.size for rms in stem_rms_list)
+                truncated_list = [rms[:min_len] for rms in stem_rms_list]
+                stacked = np.stack(truncated_list, axis=0)
             else:
                 stacked = librosa.feature.rms(y=y, hop_length=self.hop_length)
         else:
