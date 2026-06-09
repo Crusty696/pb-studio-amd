@@ -22,6 +22,9 @@ from typing import Optional, Tuple, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+from pb_studio.core.gpu_lock import gpu_inference_lock
+
+
 # RAFT preprocessing constants
 RAFT_DEFAULT_SIZE = (448, 256)  # Width x Height (divisible by 8)
 RAFT_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -328,8 +331,9 @@ class MotionAnalyzer:
             for name in iter_inputs:
                 inputs[name] = np.array([num_iterations], dtype=np.int64)
 
-            # Run inference
-            outputs = self.session.run(None, inputs)
+            # Run inference under global GPU lock
+            with gpu_inference_lock:
+                outputs = self.session.run(None, inputs)
 
             # RAFT Output ist typisch: flow [1, 2, H, W]
             # oder Liste von flows fuer verschiedene Iterationen

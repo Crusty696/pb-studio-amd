@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from PIL import Image
 
+from pb_studio.core.gpu_lock import gpu_inference_lock
+
+
 try:
     import onnxruntime as ort
 except ImportError:  # pragma: no cover - optional dependency in test envs
@@ -380,26 +383,27 @@ class MoondreamAnalyzer:
         try:
             img_tensor = self.preprocess_image(image)
 
-            if self._is_combined_model:
-                # Combined model - encoder teil
-                # Typische Input-Namen: "pixel_values", "image"
-                input_name = self.combined_session.get_inputs()[0].name
+            with gpu_inference_lock:
+                if self._is_combined_model:
+                    # Combined model - encoder teil
+                    # Typische Input-Namen: "pixel_values", "image"
+                    input_name = self.combined_session.get_inputs()[0].name
 
-                # Nur encoder-output zurueckgeben (erster Output typisch)
-                outputs = self.combined_session.run(
-                    None,  # Alle outputs
-                    {input_name: img_tensor}
-                )
-                return outputs[0]
-            else:
-                # Split model - dedizierter encoder
-                input_name = self.encoder_session.get_inputs()[0].name
+                    # Nur encoder-output zurueckgeben (erster Output typisch)
+                    outputs = self.combined_session.run(
+                        None,  # Alle outputs
+                        {input_name: img_tensor}
+                    )
+                    return outputs[0]
+                else:
+                    # Split model - dedizierter encoder
+                    input_name = self.encoder_session.get_inputs()[0].name
 
-                outputs = self.encoder_session.run(
-                    None,
-                    {input_name: img_tensor}
-                )
-                return outputs[0]
+                    outputs = self.encoder_session.run(
+                        None,
+                        {input_name: img_tensor}
+                    )
+                    return outputs[0]
 
         except Exception as e:
             logger.error(f"Image encoding failed: {e}")
@@ -471,8 +475,9 @@ class MoondreamAnalyzer:
                     image_embeddings
                 )
 
-                # Run decoder
-                outputs = session.run(None, decoder_inputs)
+                # Run decoder under global GPU lock
+                with gpu_inference_lock:
+                    outputs = session.run(None, decoder_inputs)
 
                 # Get logits for next token (last position)
                 logits = outputs[0]  # Shape: [batch, seq_len, vocab]

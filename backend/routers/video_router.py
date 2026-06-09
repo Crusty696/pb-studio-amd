@@ -897,16 +897,19 @@ def _run_video_analysis(
                                 try:
                                     from pb_studio.data.database_core import DatabaseCore
                                     _db = DatabaseCore()
+                                    old_faiss_ids = []
                                     with _db.transaction() as conn:
                                         old_faiss_ids = [r[0] for r in conn.execute(
                                             "SELECT faiss_id FROM vector_map WHERE media_id = ?", (_media_id,)
                                         )]
                                         if old_faiss_ids:
-                                            # Tombstonen im VectorStore
-                                            vs.mark_tombstoned(old_faiss_ids)
                                             # Aus SQLite loeschen
                                             conn.execute("DELETE FROM vector_map WHERE media_id = ?", (_media_id,))
-                                            logger.info(f"Deduplizierung: {len(old_faiss_ids)} alte Embeddings fuer media_id {_media_id} tombstoned.")
+                                    
+                                    # Tombstonen im VectorStore außerhalb der SQL-Transaktion ausführen
+                                    if old_faiss_ids:
+                                        vs.mark_tombstoned(old_faiss_ids)
+                                        logger.info(f"Deduplizierung: {len(old_faiss_ids)} alte Embeddings fuer media_id {_media_id} tombstoned.")
                                 except Exception as dedup_err:
                                     logger.warning(f"Embedding-Deduplizierung fehlgeschlagen: {dedup_err}")
 

@@ -200,11 +200,15 @@ async def _async_extract_tags(
                 return list(cached), model
 
             try:
-                response = await client.chat(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    images=[frame_rgb],
-                    options={"temperature": 0.2},
+                # C-F3: Hard 15s timeout wrapper for the chat call to prevent hangs
+                response = await asyncio.wait_for(
+                    client.chat(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        images=[frame_rgb],
+                        options={"temperature": 0.2},
+                    ),
+                    timeout=timeout_seconds
                 )
                 message = response.get("message") or {}
                 raw = message.get("content") or response.get("response") or ""
@@ -230,7 +234,7 @@ def extract_tags_and_model_via_lmstudio(
     task: str = DEFAULT_TASK,
     prompt: str = DEFAULT_PROMPT,
     model_override: Optional[str] = None,
-    timeout_seconds: float = 60.0,
+    timeout_seconds: float = 15.0,
 ) -> tuple[list[str], str]:
     """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell inkl. verwendetem Modellnamen.
 
