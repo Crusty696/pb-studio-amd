@@ -330,21 +330,24 @@ class TestVideoRouter:
 
     def test_analyse_liefert_motion_mit_clip_id(self, client, fresh_state):
         video_mod = _get_module("backend.routers.video_router")
-        orig_run = video_mod._run_video_analysis
+        orig_scene = video_mod._run_scene_detection
+        orig_gpu = video_mod._run_video_gpu_analysis
+        orig_color = video_mod._run_color_and_caption_analysis
 
-        def fake_run(video_path, clip_id, request, _loop=None):
-            # Audit C1: _run_video_analysis hat jetzt optionalen _loop Param fuer
-            # per-frame RAFT progress callback (analysis_progress SSE).
+        def fake_scene(video_path, detect_scenes):
             return {
-                "clip_id": clip_id,
                 "scene_count": 1,
-                "avg_motion": 12.5,
                 "scenes": [{
                     "start_time": 0.0,
                     "end_time": 1.0,
                     "scene_type": "cut",
                     "confidence": 0.9,
-                }],
+                }]
+            }
+
+        def fake_gpu(video_path, clip_id, request, _loop=None):
+            return {
+                "avg_motion": 12.5,
                 "motion": {
                     "clip_id": clip_id,
                     "avg_motion": 12.5,
@@ -352,7 +355,21 @@ class TestVideoRouter:
                     "peak_frames": [{"frame_index": 3, "confidence": 0.8}],
                     "motion_category": "medium",
                 },
+                "embedding_dim": 512,
+                "embedding_samples": 1,
+                "has_embedding": True
             }
+
+        async def fake_color(video_path, clip_id, generate_captions):
+            return {
+                "dominant_colors": ["#000000"],
+                "tags": ["test"],
+                "tag_source": "mock"
+            }
+
+        video_mod._run_scene_detection = fake_scene
+        video_mod._run_video_gpu_analysis = fake_gpu
+        video_mod._run_color_and_caption_analysis = fake_color
 
         fresh_state.video_clips[1] = {
             "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
@@ -364,17 +381,20 @@ class TestVideoRouter:
         from pathlib import Path as _Path
         from unittest.mock import patch as _patch
 
-        video_mod._run_video_analysis = fake_run
         try:
-            with _patch.object(_Path, "exists", return_value=True):
+            with _patch.object(_Path, "exists", return_value=True), \
+                 _patch("pb_studio.video.audio_key_detector.detect_video_audio_key", return_value="C Major"):
                 r = client.post("/video/analyze", json={
                     "clip_id": 1,
                     "detect_scenes": True,
                     "analyze_motion": True,
                     "generate_embeddings": False,
+                    "generate_captions": False
                 })
         finally:
-            video_mod._run_video_analysis = orig_run
+            video_mod._run_scene_detection = orig_scene
+            video_mod._run_video_gpu_analysis = orig_gpu
+            video_mod._run_color_and_caption_analysis = orig_color
 
         assert r.status_code == 200
         body = r.json()

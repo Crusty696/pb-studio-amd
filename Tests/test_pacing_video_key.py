@@ -49,78 +49,123 @@ def test_audio_key_detector_with_real_audio(tmp_path):
 
 
 def test_video_analysis_includes_audio_key_field():
-    """Y3 / GPU-F2: _run_video_analysis returns audio_key=None always now —
-    Detection wurde aus with_gpu_task rausgenommen (Lock-Held-For-CPU-Bug).
-    Der analyze_video Route-Handler ruft detect_video_audio_key NACH with_gpu_task.
+    """Y3 / GPU-F2: audio_key Detection wurde aus with_gpu_task rausgenommen.
+    Der analyze_video Route-Handler ruft detect_video_audio_key NACH dem GPU-Lock.
+    
+    Dieser Test verifiziert, dass die Route /video/analyze das Feld audio_key
+    im result-dict enthält, wenn detect_video_audio_key einen Wert zurückgibt."""
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app_state import get_app_state, AppState
+    
+    state = AppState()
+    app.dependency_overrides[get_app_state] = lambda: state
+    client = TestClient(app)
 
-    Dieser Test verifiziert dass das Feld VORHANDEN ist im result-dict (Schema-
-    Kontrakt) auch wenn Y3 den Wert auf None setzt."""
-    from backend.routers.video_router import _run_video_analysis
-    from backend.schemas.video_schemas import VideoAnalyzeRequest
-    from unittest.mock import MagicMock
+    video_mod = sys.modules.get("backend.routers.video_router")
+    if video_mod is None:
+        import importlib
+        video_mod = importlib.import_module("backend.routers.video_router")
 
-    fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    orig_scene = video_mod._run_scene_detection
+    orig_gpu = video_mod._run_video_gpu_analysis
+    orig_color = video_mod._run_color_and_caption_analysis
 
-    with patch("cv2.VideoCapture") as mock_cap, \
-         patch("pb_studio.video.scene_detect.SceneDetector"), \
-         patch("pb_studio.video.raft.MotionAnalyzer") as mock_motion_cls:
+    async def fake_color(*a, **kw):
+        return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
 
-        mock_instance = MagicMock()
-        mock_instance.get.side_effect = lambda *a: 100 if a[0] == 7 else 30.0
-        mock_instance.read.return_value = (True, fake_frame)
-        mock_cap.return_value = mock_instance
+    video_mod._run_scene_detection = lambda *a, **kw: {"scene_count": 0, "scenes": []}
+    video_mod._run_video_gpu_analysis = lambda *a, **kw: {
+        "avg_motion": 0.0, "motion": None, "embedding_dim": 0, "embedding_samples": 0, "has_embedding": False
+    }
+    video_mod._run_color_and_caption_analysis = fake_color
 
-        mock_motion = mock_motion_cls.return_value
-        mock_motion.analyze_video_segment.return_value = {
-            "avg_motion": 0.0, "frame_motions": [], "scene_changes": []
-        }
-        mock_motion.unload = lambda: None
+    state.video_clips[1] = {
+        "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+        "duration_seconds": 10.0, "width": 1920, "height": 1080,
+        "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+    }
 
-        req = VideoAnalyzeRequest(
-            clip_id=1, detect_scenes=False, analyze_motion=True,
-            generate_embeddings=False, generate_captions=False
-        )
-        result = _run_video_analysis("/tmp/fake.mp4", 1, req)
+    from pathlib import Path as _Path
+    try:
+        with patch.object(_Path, "exists", return_value=True), \
+             patch("pb_studio.video.audio_key_detector.detect_video_audio_key", return_value="C Major"):
+            r = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": True,
+                "analyze_motion": True,
+                "generate_embeddings": False,
+                "generate_captions": False
+            })
+    finally:
+        video_mod._run_scene_detection = orig_scene
+        video_mod._run_video_gpu_analysis = orig_gpu
+        video_mod._run_color_and_caption_analysis = orig_color
+        app.dependency_overrides.clear()
 
-    # Y3: _run_video_analysis liefert audio_key=None — Detection passiert spaeter
-    # im analyze_video Endpoint OUTSIDE with_gpu_task.
-    assert "audio_key" in result, "audio_key Feld muss im result-dict existieren"
-    assert result["audio_key"] is None, "Y3: _run_video_analysis darf audio_key NICHT mehr setzen"
+    assert r.status_code == 200
+    body = r.json()
+    assert "audio_key" in body
+    assert body["audio_key"] == "C Major"
 
 
 def test_video_analysis_audio_key_none_on_failure():
     """Detect-Fehler -> audio_key=None, kein Crash."""
-    from backend.routers.video_router import _run_video_analysis
-    from backend.schemas.video_schemas import VideoAnalyzeRequest
-    from unittest.mock import MagicMock
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app_state import get_app_state, AppState
+    
+    state = AppState()
+    app.dependency_overrides[get_app_state] = lambda: state
+    client = TestClient(app)
 
-    fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    video_mod = sys.modules.get("backend.routers.video_router")
+    if video_mod is None:
+        import importlib
+        video_mod = importlib.import_module("backend.routers.video_router")
 
-    with patch("cv2.VideoCapture") as mock_cap, \
-         patch("pb_studio.video.scene_detect.SceneDetector"), \
-         patch("pb_studio.video.raft.MotionAnalyzer") as mock_motion_cls, \
-         patch("pb_studio.video.audio_key_detector.detect_video_audio_key") as mock_key:
+    orig_scene = video_mod._run_scene_detection
+    orig_gpu = video_mod._run_video_gpu_analysis
+    orig_color = video_mod._run_color_and_caption_analysis
 
-        mock_instance = MagicMock()
-        mock_instance.get.side_effect = lambda *a: 100 if a[0] == 7 else 30.0
-        mock_instance.read.return_value = (True, fake_frame)
-        mock_cap.return_value = mock_instance
+    async def fake_color(*a, **kw):
+        return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
 
-        mock_motion = mock_motion_cls.return_value
-        mock_motion.analyze_video_segment.return_value = {
-            "avg_motion": 0.0, "frame_motions": [], "scene_changes": []
-        }
-        mock_motion.unload = lambda: None
-        mock_key.return_value = None  # Detection failed
+    video_mod._run_scene_detection = lambda *a, **kw: {"scene_count": 0, "scenes": []}
+    video_mod._run_video_gpu_analysis = lambda *a, **kw: {
+        "avg_motion": 0.0, "motion": None, "embedding_dim": 0, "embedding_samples": 0, "has_embedding": False
+    }
+    video_mod._run_color_and_caption_analysis = fake_color
 
-        req = VideoAnalyzeRequest(
-            clip_id=1, detect_scenes=False, analyze_motion=True,
-            generate_embeddings=False, generate_captions=False
-        )
-        result = _run_video_analysis("/tmp/fake.mp4", 1, req)
+    state.video_clips[1] = {
+        "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+        "duration_seconds": 10.0, "width": 1920, "height": 1080,
+        "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+    }
 
-    assert "audio_key" in result
-    assert result["audio_key"] is None
+    from pathlib import Path as _Path
+    try:
+        with patch.object(_Path, "exists", return_value=True), \
+             patch("pb_studio.video.audio_key_detector.detect_video_audio_key", side_effect=Exception("detect failed")):
+            r = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": True,
+                "analyze_motion": True,
+                "generate_embeddings": False,
+                "generate_captions": False
+            })
+    finally:
+        video_mod._run_scene_detection = orig_scene
+        video_mod._run_video_gpu_analysis = orig_gpu
+        video_mod._run_color_and_caption_analysis = orig_color
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200
+    body = r.json()
+    assert "audio_key" in body
+    assert body["audio_key"] is None
 
 
 def test_pacing_service_forwards_video_audio_key():

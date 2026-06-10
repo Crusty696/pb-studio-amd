@@ -20,6 +20,11 @@ def isolated_test_database(tmp_path, monkeypatch):
     """Jeder Test nutzt eine isolierte SQLite-Datei statt der produktiven DB."""
     from pb_studio.config_manager import ConfigManager
     from pb_studio.data.database_core import DatabaseCore
+    from pb_studio.brain.brain_service import BrainService
+    try:
+        from backend._brain_singleton import clear_project_state
+    except ImportError:
+        clear_project_state = None
 
     test_db_path = tmp_path / "test_pb_studio.db"
 
@@ -35,6 +40,10 @@ def isolated_test_database(tmp_path, monkeypatch):
         DatabaseCore._instance.shutdown()
     ConfigManager._instance = None
     DatabaseCore._instance = None
+    
+    BrainService.reset_singleton()
+    if clear_project_state:
+        clear_project_state()
 
     monkeypatch.setattr(ConfigManager, "_load_config", _load_test_config)
 
@@ -44,6 +53,10 @@ def isolated_test_database(tmp_path, monkeypatch):
         DatabaseCore._instance.shutdown()
     ConfigManager._instance = None
     DatabaseCore._instance = None
+    
+    BrainService.reset_singleton()
+    if clear_project_state:
+        clear_project_state()
 
 
 @pytest.fixture

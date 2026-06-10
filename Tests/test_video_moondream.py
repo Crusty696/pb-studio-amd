@@ -6,66 +6,162 @@ from unittest.mock import patch, MagicMock
 
 def test_video_analysis_populates_dominant_colors():
     """Phase 4: result["dominant_colors"] + result["tags"] sind nach Analyse gesetzt."""
-    from backend.routers.video_router import _run_video_analysis
-    from backend.schemas.video_schemas import VideoAnalyzeRequest
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app_state import get_app_state, AppState
+    
+    state = AppState()
+    app.dependency_overrides[get_app_state] = lambda: state
+    client = TestClient(app)
 
-    # Roter Mid-Frame (480x640 RGB)
-    fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    fake_frame[:, :, 2] = 255  # OpenCV BGR -> red channel index 2
+    video_mod = sys.modules.get("backend.routers.video_router")
+    if video_mod is None:
+        import importlib
+        video_mod = importlib.import_module("backend.routers.video_router")
 
-    # Mocke cv2.VideoCapture global (wird in Phase 2 motion + Phase 4 L-K2 verwendet)
-    mock_cap_instance = MagicMock()
-    # CAP_PROP_FRAME_COUNT=10, CAP_PROP_FPS=30 — wird mehrfach abgefragt.
-    # side_effect rotiert; um beide Phasen zu bedienen verwende return-cycle:
-    mock_cap_instance.get.side_effect = lambda *a, **k: 10
-    mock_cap_instance.read.return_value = (True, fake_frame)
-    mock_cap_instance.set.return_value = None
-    mock_cap_instance.release.return_value = None
+    orig_scene = video_mod._run_scene_detection
+    orig_gpu = video_mod._run_video_gpu_analysis
+    orig_color = video_mod._run_color_and_caption_analysis
 
-    with patch("cv2.VideoCapture", return_value=mock_cap_instance), \
-         patch("pb_studio.video.scene_detect.SceneDetector") as mock_scene, \
-         patch("pb_studio.video.raft.MotionAnalyzer") as mock_motion_cls:
+    video_mod._run_scene_detection = lambda *a, **kw: {"scene_count": 0, "scenes": []}
+    video_mod._run_video_gpu_analysis = lambda *a, **kw: {
+        "avg_motion": 0.0,
+        "motion": {
+            "clip_id": 1,
+            "peak_motion": 0.0,
+            "avg_motion": 0.0,
+            "motion_curve": [],
+            "peak_frames": [],
+            "motion_category": "low"
+        },
+        "embedding_dim": 0,
+        "embedding_samples": 0,
+        "has_embedding": False
+    }
+    
+    async def fake_color(video_path, clip_id, generate_captions):
+        if generate_captions:
+            return {
+                "dominant_colors": ["#ff0000"],
+                "tags": ["red", "static"],
+                "tag_source": "mock"
+            }
+        else:
+            return {
+                "dominant_colors": [],
+                "tags": [],
+                "tag_source": "mock"
+            }
+    video_mod._run_color_and_caption_analysis = fake_color
 
-        mock_scene.return_value.detect_scenes.return_value = []
-        mock_motion = mock_motion_cls.return_value
-        mock_motion.analyze_video_segment.return_value = {
-            "avg_motion": 5.0,
-            "frame_motions": [1.0, 2.0],
-            "scene_changes": [],
-        }
-        mock_motion.unload = lambda: None
+    state.video_clips[1] = {
+        "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+        "duration_seconds": 10.0, "width": 1920, "height": 1080,
+        "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+    }
 
-        req = VideoAnalyzeRequest(
-            clip_id=1,
-            detect_scenes=True,
-            analyze_motion=True,
-            generate_embeddings=False,
-            generate_captions=True,
-        )
-        result = _run_video_analysis("/tmp/fake.mp4", 1, req)
+    from pathlib import Path as _Path
+    try:
+        with patch.object(_Path, "exists", return_value=True):
+            r = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": False,
+                "analyze_motion": False,
+                "generate_embeddings": False,
+                "generate_captions": True
+            })
+    finally:
+        video_mod._run_scene_detection = orig_scene
+        video_mod._run_video_gpu_analysis = orig_gpu
+        video_mod._run_color_and_caption_analysis = orig_color
+        app.dependency_overrides.clear()
 
-    assert "dominant_colors" in result
-    assert isinstance(result["dominant_colors"], list)
-    assert "tags" in result
-    assert isinstance(result["tags"], list)
+    assert r.status_code == 200
+    body = r.json()
+    assert "dominant_colors" in body
+    assert body["dominant_colors"] == ["#ff0000"]
+    assert "tags" in body
+    assert body["tags"] == ["red", "static"]
 
 
 def test_video_analysis_skips_phase4_when_captions_disabled():
     """generate_captions=False -> dominant_colors + tags sind leere Listen."""
-    from backend.routers.video_router import _run_video_analysis
-    from backend.schemas.video_schemas import VideoAnalyzeRequest
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app_state import get_app_state, AppState
+    
+    state = AppState()
+    app.dependency_overrides[get_app_state] = lambda: state
+    client = TestClient(app)
 
-    req = VideoAnalyzeRequest(
-        clip_id=2,
-        detect_scenes=False,
-        analyze_motion=False,
-        generate_embeddings=False,
-        generate_captions=False,
-    )
-    result = _run_video_analysis("/tmp/fake.mp4", 2, req)
+    video_mod = sys.modules.get("backend.routers.video_router")
+    if video_mod is None:
+        import importlib
+        video_mod = importlib.import_module("backend.routers.video_router")
 
-    assert result["dominant_colors"] == []
-    assert result["tags"] == []
+    orig_scene = video_mod._run_scene_detection
+    orig_gpu = video_mod._run_video_gpu_analysis
+    orig_color = video_mod._run_color_and_caption_analysis
+
+    video_mod._run_scene_detection = lambda *a, **kw: {"scene_count": 0, "scenes": []}
+    video_mod._run_video_gpu_analysis = lambda *a, **kw: {
+        "avg_motion": 0.0,
+        "motion": {
+            "clip_id": 2,
+            "peak_motion": 0.0,
+            "avg_motion": 0.0,
+            "motion_curve": [],
+            "peak_frames": [],
+            "motion_category": "low"
+        },
+        "embedding_dim": 0,
+        "embedding_samples": 0,
+        "has_embedding": False
+    }
+    
+    async def fake_color(video_path, clip_id, generate_captions):
+        if generate_captions:
+            return {
+                "dominant_colors": ["#ff0000"],
+                "tags": ["red", "static"],
+                "tag_source": "mock"
+            }
+        else:
+            return {
+                "dominant_colors": [],
+                "tags": [],
+                "tag_source": "mock"
+            }
+    video_mod._run_color_and_caption_analysis = fake_color
+
+    state.video_clips[2] = {
+        "id": 2, "name": "clip_2", "path": "C:/clip.mp4",
+        "duration_seconds": 10.0, "width": 1920, "height": 1080,
+        "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+    }
+
+    from pathlib import Path as _Path
+    try:
+        with patch.object(_Path, "exists", return_value=True):
+            r = client.post("/video/analyze", json={
+                "clip_id": 2,
+                "detect_scenes": False,
+                "analyze_motion": False,
+                "generate_embeddings": False,
+                "generate_captions": False
+            })
+    finally:
+        video_mod._run_scene_detection = orig_scene
+        video_mod._run_video_gpu_analysis = orig_gpu
+        video_mod._run_color_and_caption_analysis = orig_color
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["dominant_colors"] == []
+    assert body["tags"] == []
 
 
 def test_extract_dominant_colors_red_image():
