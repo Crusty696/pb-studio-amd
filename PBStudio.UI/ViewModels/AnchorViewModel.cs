@@ -98,24 +98,27 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
 
             var selectedClipId = SelectedAudioClip?.Id;
 
-            AvailableAudioClips.Clear();
-            foreach (var clip in clips)
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                AvailableAudioClips.Add(new AudioClipModel
+                AvailableAudioClips.Clear();
+                foreach (var clip in clips)
                 {
-                    Id = clip.Id,
-                    Name = clip.Name,
-                    Path = clip.Path,
-                    DurationSeconds = clip.DurationSeconds,
-                    SampleRate = clip.SampleRate,
-                    Channels = clip.Channels,
-                    Format = clip.Format,
-                    Bpm = clip.Bpm,
-                    Key = clip.Key ?? "",
-                    BeatCount = clip.BeatCount,
-                    IsAnalyzed = clip.IsAnalyzed,
-                });
-            }
+                    AvailableAudioClips.Add(new AudioClipModel
+                    {
+                        Id = clip.Id,
+                        Name = clip.Name,
+                        Path = clip.Path,
+                        DurationSeconds = clip.DurationSeconds,
+                        SampleRate = clip.SampleRate,
+                        Channels = clip.Channels,
+                        Format = clip.Format,
+                        Bpm = clip.Bpm,
+                        Key = clip.Key ?? "",
+                        BeatCount = clip.BeatCount,
+                        IsAnalyzed = clip.IsAnalyzed,
+                    });
+                }
+            });
 
             var nextSelection = selectedClipId.HasValue
                 ? AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value)
@@ -182,8 +185,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         var clip = SelectedAudioClip;
         if (clip == null)
         {
-            WaveformBars.Clear();
-            BeatMarkers.Clear();
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                WaveformBars.Clear();
+                BeatMarkers.Clear();
+            });
             StatusText = "Keine Audio-Quelle ausgewählt";
             return;
         }
@@ -212,14 +218,20 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
             clip = SelectedAudioClip;
             if (clip == null)
             {
-                WaveformBars.Clear();
-                BeatMarkers.Clear();
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    WaveformBars.Clear();
+                    BeatMarkers.Clear();
+                });
                 StatusText = "Keine Audio-Quelle ausgewählt";
                 return;
             }
 
-            WaveformBars.Clear();
-            BeatMarkers.Clear();
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                WaveformBars.Clear();
+                BeatMarkers.Clear();
+            });
             IsLoadingWaveform = true;
             StatusText = $"Lade Waveform: {clip.Name}...";
 
@@ -237,8 +249,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
                     ? clip.DurationSeconds
                     : 300;
 
-            BuildWaveformBars(waveform);
-            BuildBeatMarkers(beats, TimelineDuration);
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                BuildWaveformBars(waveform);
+                BuildBeatMarkers(beats, TimelineDuration);
+            });
 
             var beatStatus = beats?.Count > 0
                 ? $"{BeatMarkers.Count} Beats"

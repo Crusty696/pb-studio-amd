@@ -680,7 +680,7 @@ if ($dn -and $dn.Major -ge 9) {
     if (Test-Path $csproj) {
         Step "dotnet restore + build ..."
         & dotnet restore $csproj --nologo -v q *>&1 | Out-String | Add-Content $LogFile
-        & dotnet build $csproj --nologo -v q *>&1 | Out-String | Add-Content $LogFile
+        & dotnet build $csproj -c Release --nologo -v q *>&1 | Out-String | Add-Content $LogFile
         if ($LASTEXITCODE -eq 0) { OK "WPF Build OK" }
         else { WARN "WPF Build scheitert (siehe $LogFile)" }
     }

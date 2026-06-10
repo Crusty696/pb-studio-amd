@@ -98,7 +98,7 @@ public partial class App : Application
         services.AddHttpClient<ApiClient>(client =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:8765");
-            client.Timeout = TimeSpan.FromMinutes(10);
+            client.Timeout = TimeSpan.FromMinutes(20);
         });
 
         // Services (Singleton für Desktop-App)
@@ -137,17 +137,25 @@ public partial class App : Application
     protected override async void OnExit(ExitEventArgs e)
     {
         var api = _serviceProvider?.GetService<IApiClient>();
-        (api as ApiClient)?.BeginShutdown();
-
         using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         try
         {
             if (api != null)
             {
-                await Task.WhenAll(
-                    api.SaveProjectAsync().WaitAsync(shutdownCts.Token),
-                    api.ShutdownAsync().WaitAsync(shutdownCts.Token)
-                ).WaitAsync(shutdownCts.Token);
+                // K7: Speichern vor dem Shutdown-Cancel des HTTP-Clients ausführen
+                try
+                {
+                    await api.SaveProjectAsync().WaitAsync(shutdownCts.Token);
+                }
+                catch (Exception saveEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                }
+
+                // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
+                (api as ApiClient)?.BeginShutdown();
+
+                await api.ShutdownAsync().WaitAsync(shutdownCts.Token);
             }
             var bridge = _serviceProvider?.GetService<PythonBridgeService>();
             if (bridge != null)

@@ -85,4 +85,6 @@ class BrainStore:
                 conn.close()
             except Exception:
                 pass
+        self.weights_conn = None
+        self.patterns_conn = None
         self.cache.close()

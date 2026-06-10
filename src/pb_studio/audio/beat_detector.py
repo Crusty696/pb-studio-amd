@@ -175,7 +175,11 @@ class BeatDetector:
             half_w = int(np.ceil(window_sec / frame_period)) if frame_period > 0 else 1
 
             strengths: List[float] = []
+            audio_duration = float(len(audio)) / sr
             for bt in beat_times:
+                if bt > audio_duration + 0.1:
+                    strengths.append(1.0)
+                    continue
                 center = int(np.argmin(np.abs(onset_times - float(bt))))
                 lo = max(0, center - half_w)
                 hi = min(n_frames, center + half_w + 1)

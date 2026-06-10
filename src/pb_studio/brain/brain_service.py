@@ -110,3 +110,5 @@ class BrainService:
             if cls._instance is not None:
                 cls._instance.close()
             cls._instance = None
+        import gc
+        gc.collect()

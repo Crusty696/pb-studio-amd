@@ -385,8 +385,7 @@ function Resolve-FrontendExe {
     # statt erste-gefunden-Logik. Verhindert dass alte artifacts/publish/ EXE
     # ueber frisches bin/Release/ Build geladen wird (typischer dev-loop bug).
     $candidates += @(
-        (Join-Path $ProjectRoot 'PBStudio.UI\bin\Release\net9.0-windows\PBStudio.UI.exe'),
-        (Join-Path $ProjectRoot 'PBStudio.UI\bin\Debug\net9.0-windows\PBStudio.UI.exe')
+        (Join-Path $ProjectRoot 'PBStudio.UI\bin\Release\net9.0-windows\PBStudio.UI.exe')
     )
 
     foreach ($mode in @('framework', 'selfcontained', 'singlefile')) {

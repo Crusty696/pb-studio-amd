@@ -104,6 +104,7 @@ class EmbeddingRepository:
     def _migrate_with_vec(self, migrations_dir: Path) -> None:
         """Like migration_runner.migrate but loads sqlite-vec first."""
         import sqlite_vec
+        from .migration_runner import split_sql_statements
         # B-9 FIX: isolation_level=None
         conn = sqlite3.connect(str(self.db_path), isolation_level=None)
         init_connection(conn)
@@ -119,17 +120,22 @@ class EmbeddingRepository:
                 if i <= current:
                     continue
                 sql = script.read_text(encoding="utf-8")
+                statements = split_sql_statements(sql)
                 try:
                     conn.execute("BEGIN")
-                    conn.executescript(sql)
+                    for stmt in statements:
+                        conn.execute(stmt)
                     conn.execute(f"PRAGMA user_version = {i}")
-                    conn.commit()
+                    conn.execute("COMMIT")
                     logger.info(
                         "Applied migration %s in %s -> %d",
                         script.name, migrations_dir.name, i,
                     )
                 except Exception:
-                    conn.rollback()
+                    try:
+                        conn.execute("ROLLBACK")
+                    except sqlite3.OperationalError:
+                        pass
                     raise
         finally:
             conn.close()

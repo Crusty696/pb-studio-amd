@@ -296,6 +296,11 @@ class VectorStore:
             new_index = faiss.IndexFlatIP(self.dimension)
             new_metadata = {}
             
+            # SQLite-Verbindung herstellen
+            from pb_studio.data.database_core import DatabaseCore
+            db = DatabaseCore()
+            updates = []
+            
             new_id = 0
             for old_id in range(self.index.ntotal):
                 if old_id in tombstones:
@@ -311,7 +316,24 @@ class VectorStore:
                 if old_id in self.metadata:
                     new_metadata[new_id] = self.metadata[old_id]
                 
+                # IDs aufsteigend sammeln
+                if new_id != old_id:
+                    updates.append((new_id, old_id))
+                
                 new_id += 1
+            
+            # SQLite vector_map synchronisieren in einer Transaktion (aufsteigend nach new_id)
+            if updates:
+                try:
+                    with db.transaction(immediate=True) as conn:
+                        for new_fid, old_fid in updates:
+                            conn.execute(
+                                "UPDATE vector_map SET faiss_id = ? WHERE faiss_id = ?",
+                                (new_fid, old_fid)
+                            )
+                    logger.info(f"vector_map erfolgreich mit {len(updates)} ID-Updates synchronisiert.")
+                except Exception as sql_err:
+                    logger.error(f"Fehler bei vector_map SQL-Updates waehrend Kompaktierung: {sql_err}", exc_info=True)
             
             self.index = new_index
             self.metadata = new_metadata

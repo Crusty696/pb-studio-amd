@@ -253,5 +253,15 @@ class VRAMArbiter:
             return True
 
         # Try to evict
-        freed = self.budget_manager._evict_for_space(required_mb, exclude=exclude_models)
-        return freed >= required_mb
+        freed_mb, callbacks = self.budget_manager._evict_for_space(required_mb, exclude=exclude_models)
+        
+        # K11: Unload callbacks ausführen, um Modelle physisch zu entladen
+        for name, callback, budget in callbacks:
+            try:
+                logger.info(f"Triggering unload callback for evicted model: {name}")
+                callback()
+            except Exception as e:
+                logger.error(f"Error executing unload callback for evicted model {name}: {e}", exc_info=True)
+                budget.metadata["eviction_error"] = True
+
+        return freed_mb >= required_mb

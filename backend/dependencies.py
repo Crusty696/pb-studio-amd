@@ -96,10 +96,8 @@ async def with_gpu_task(
         success = False
         error_payload: dict[str, Any] | None = None
         try:
-            result = await asyncio.wait_for(
-                asyncio.to_thread(func, *args, **kwargs),
-                timeout=timeout_seconds,
-            )
+            task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=timeout_seconds)
             success = True
             return result
         except asyncio.TimeoutError:
@@ -114,6 +112,14 @@ async def with_gpu_task(
                 "task": func.__name__,
             })
             raise TimeoutError(f"GPU-Task '{func.__name__}' Timeout")
+        except asyncio.CancelledError:
+            logger.warning(f"GPU-Task '{func.__name__}' abgebrochen (CancelledError)!")
+            error_payload = {
+                "type": "CancelledError",
+                "message": f"GPU-Task abgebrochen: {func.__name__}",
+                "task": func.__name__,
+            }
+            raise
         except Exception as exc:
             error_payload = {
                 "type": type(exc).__name__,
@@ -122,6 +128,13 @@ async def with_gpu_task(
             }
             raise
         finally:
+            if 'task' in locals() and not task.done():
+                logger.warning(f"GPU-Thread fuer '{func.__name__}' laeuft noch. Warte auf Beendigung, um parallele GPU-Interferenz zu verhindern...")
+                try:
+                    await task
+                except Exception as thread_exc:
+                    logger.debug(f"Hintergrund-Thread warf Exception beim Warten: {thread_exc}")
+
             duration_ms = (time.perf_counter() - start_ts) * 1000.0
             # VRAM-Peak: groesserer Wert aus Anfangs-Snapshot und aktuellem committed_mb
             if manager:

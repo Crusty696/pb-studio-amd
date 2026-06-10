@@ -260,12 +260,14 @@ class SubtrackDetector:
         # per-stem absolute first difference, summed
         diffs = np.abs(np.diff(stacked, axis=-1))
         stem_signal = np.sum(diffs, axis=0)
-        # pad/truncate to match t_axis length
-        out = np.zeros(t_axis.size, dtype=np.float32)
-        if stem_signal.size and out.size:
-            n = min(stem_signal.size, out.size)
-            out[:n] = stem_signal[:n]
+        # Interpolation auf t_axis, um Stauchung/Abschneiden zu verhindern
+        if stem_signal.size and t_axis.size:
+            times = np.arange(stem_signal.size) * (self.hop_length / sr)
+            out = np.interp(t_axis, times, stem_signal).astype(np.float32)
+        else:
+            out = np.zeros(t_axis.size, dtype=np.float32)
         return out
+
 
     def _tempo_drift(
         self, y: np.ndarray, sr: int, t_axis: np.ndarray
@@ -314,9 +316,12 @@ class SubtrackDetector:
         flux = librosa.onset.onset_strength(
             y=y, sr=sr, hop_length=self.hop_length
         )
-        out = np.zeros(t_axis.size, dtype=np.float32)
-        n = min(flux.size, out.size)
-        out[:n] = flux[:n]
+        # Interpolation auf t_axis, um Stauchung/Abschneiden zu verhindern
+        if flux.size and t_axis.size:
+            times = np.arange(flux.size) * (self.hop_length / sr)
+            out = np.interp(t_axis, times, flux).astype(np.float32)
+        else:
+            out = np.zeros(t_axis.size, dtype=np.float32)
         return out
 
     def _pick_peaks(

@@ -266,7 +266,7 @@ public class SSEClient : IDisposable
 
             switch (streamKind)
             {
-                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "gpu_error":
+                case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "pacing_progress" or "gpu_error":
                     {
                         var pct = TryGetDouble(root, "percent");
                         var status = NormalizeStatus(root);

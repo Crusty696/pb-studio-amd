@@ -310,6 +310,13 @@ async def analyze_audio(
         _pre_subtracks = _pre_cached.get("subtrack_segments") or []
         _pre_tempo_curve = _pre_cached.get("tempo_curve") or []
         stems_paths = clip.get("stems_paths") or {}
+        if isinstance(stems_paths, str):
+            try:
+                import json as _json
+                parsed = _json.loads(stems_paths)
+                stems_paths = parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                stems_paths = {}
         result = await asyncio.to_thread(
             _run_audio_analysis, audio_path, request.clip_id, request, stems_paths, _loop
         )
@@ -420,17 +427,23 @@ async def get_onsets(
     if not energy:
         return []
     
+    duration = float(analysis.get("duration_seconds", 0.0))
+    if duration <= 0.0:
+        clip = state.get_audio_clip(clip_id)
+        duration = float(clip.get("duration_seconds", 0.0)) if clip else 0.0
+    if duration <= 0.0:
+        duration = len(energy) / ((22050 / 512) / 4.0)
+
     # C1/FIX: Offload heavy math to threadpool
     from fastapi.concurrency import run_in_threadpool
-    return await run_in_threadpool(_calculate_onsets_sync, energy)
+    return await run_in_threadpool(_calculate_onsets_sync, energy, duration)
 
 
-def _calculate_onsets_sync(energy: list[float]) -> list[float]:
+def _calculate_onsets_sync(energy: list[float], duration: float) -> list[float]:
     """Synchronous math for onset detection."""
     from scipy.signal import find_peaks
     
-    # 512 hop_length bei 22050 Hz -> ~0.023s per point
-    fps = 22050 / 512
+    fps = len(energy) / duration if duration > 0 else ((22050 / 512) / 4.0)
     peaks, _ = find_peaks(energy, height=0.3, distance=int(0.1 * fps))
     return (peaks / fps).tolist()
 
@@ -457,7 +470,7 @@ async def get_waveform(
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
             clip_id=clip_id,
-            sample_rate=44100,  # WaveformAnalyzer analysiert immer bei 44100 Hz
+            sample_rate=22050,  # WaveformAnalyzer analysiert bei 22050 Hz
             bands=waveform,
             duration_seconds=clip["duration_seconds"],
         )
@@ -710,11 +723,17 @@ def _run_audio_analysis(
                     _loop, "beat_chunk", overall, f"Streaming-Analyse {pct:.1f}%"
                 )
 
-            # Verwende Drums-Spur für Beat-Tracking falls vorhanden, sonst Original
-            analysis_path = drums_path if drums_path and Path(drums_path).exists() else audio_path
+            # Verwende Drums-Spur für Beat-Tracking falls vorhanden und valide (>0 Bytes), sonst Instrumental, sonst Original
+            analysis_path = drums_path if drums_path and Path(drums_path).exists() and Path(drums_path).stat().st_size > 0 else (instrumental_path if instrumental_path and Path(instrumental_path).exists() else audio_path)
             logger.info(f"Streaming-Analyse verwendet Pfad für Beats: {analysis_path}")
-
-            _stream_res = StreamingAudioAnalyzer().analyze(analysis_path, on_progress=_stream_progress)
+            try:
+                _stream_res = StreamingAudioAnalyzer().analyze(analysis_path, on_progress=_stream_progress)
+            except Exception as e:
+                if analysis_path != audio_path:
+                    logger.warning(f"Streaming-Analyse mit {analysis_path} fehlgeschlagen: {e}. Versuche Fallback auf Original-Mix...")
+                    _stream_res = StreamingAudioAnalyzer().analyze(audio_path, on_progress=_stream_progress)
+                else:
+                    raise
 
             duration = _stream_res.duration_seconds
             _stream_beats = list(_stream_res.beats)
@@ -776,9 +795,16 @@ def _run_audio_analysis(
                     )
 
                 # detect_beats gibt list[float] zurück - BeatNet oder Librosa-Fallback
-                beat_detect_path = drums_path if drums_path and Path(drums_path).exists() else audio_path
+                beat_detect_path = drums_path if drums_path and Path(drums_path).exists() and Path(drums_path).stat().st_size > 0 else (instrumental_path if instrumental_path and Path(instrumental_path).exists() else audio_path)
                 logger.info(f"Beat-Detection verwendet Pfad: {beat_detect_path}")
-                beat_times = detector.detect_beats(beat_detect_path, on_progress=_beat_progress)
+                try:
+                    beat_times = detector.detect_beats(beat_detect_path, on_progress=_beat_progress)
+                except Exception as e:
+                    if beat_detect_path != audio_path:
+                        logger.warning(f"Beat-Detection mit {beat_detect_path} fehlgeschlagen: {e}. Versuche Fallback auf Original-Mix...")
+                        beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
+                    else:
+                        raise
                 if beat_times:
                     arr = np.asarray(beat_times, dtype=np.float64)
 
@@ -970,6 +996,35 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
             # Unbekannter Stem — als "other" zuweisen falls noch frei
             if mapped["other_path"] is None:
                 mapped["other_path"] = fpath
+
+    # Synthetisiere instrumental_path falls htdemucs (drums, bass, other, vocals vorhanden, aber kein instrumental)
+    if (mapped["vocals_path"] and mapped["drums_path"] and mapped["bass_path"] and mapped["other_path"] 
+            and mapped["instrumental_path"] is None):
+        try:
+            logger.info("Synthetisiere Instrumental-Stem aus Drums + Bass + Other...")
+            import soundfile as sf
+            import numpy as np
+            
+            # Ausgabepfad generieren (im selben Verzeichnis wie die anderen Stems)
+            drums_p = Path(mapped["drums_path"])
+            inst_p = drums_p.parent / f"{drums_p.stem.replace('(Drums)', '(Instrumental)').replace('drums', 'instrumental')}.wav"
+            
+            data_drums, sr = sf.read(mapped["drums_path"])
+            data_bass, _ = sf.read(mapped["bass_path"])
+            data_other, _ = sf.read(mapped["other_path"])
+            
+            # Sicherstellen, dass die Arrays die gleiche Länge haben (falls minimal abweichend)
+            min_len = min(len(data_drums), len(data_bass), len(data_other))
+            data_inst = data_drums[:min_len] + data_bass[:min_len] + data_other[:min_len]
+            
+            # Amplitudenbegrenzung gegen Clipping
+            data_inst = np.clip(data_inst, -1.0, 1.0)
+            
+            sf.write(str(inst_p), data_inst, sr)
+            mapped["instrumental_path"] = str(inst_p)
+            logger.info(f"Instrumental-Stem erfolgreich synthetisiert unter: {inst_p}")
+        except Exception as synth_err:
+            logger.error(f"Fehler bei der Synthese des Instrumental-Stems: {synth_err}", exc_info=True)
 
     logger.info(f"Stem-Mapping: {len(normalized_stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
     return mapped

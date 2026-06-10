@@ -421,7 +421,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if (e.EventType == "analysis_progress" && IsGenerating)
+        if ((e.EventType == "analysis_progress" || e.EventType == "pacing_progress") && IsGenerating)
         {
             Application.Current.Dispatcher.Invoke(() =>
             {

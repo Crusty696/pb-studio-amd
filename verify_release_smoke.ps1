@@ -62,9 +62,10 @@ function Test-Health {
 }
 
 function Resolve-PythonExe {
+    $userProfile = [Environment]::GetFolderPath('UserProfile')
     $candidates = @(
         (Join-Path $ProjectPath '.venv\Scripts\python.exe'),
-        'C:\Users\david\AppData\Local\Programs\Python\Python311\python.exe',
+        (Join-Path $userProfile 'AppData\Local\Programs\Python\Python311\python.exe'),
         'python'
     )
 
@@ -413,6 +414,11 @@ try {
     }
 
     Write-Host '[SMOKE] PASS' -ForegroundColor Green
+    $global:LASTEXITCODE = 0
+}
+catch {
+    Write-Host "[SMOKE] FAIL: $_" -ForegroundColor Red
+    $global:LASTEXITCODE = 1
 }
 finally {
     if ($script:StartedBackend -and $script:BackendProcess) {
@@ -428,5 +434,5 @@ finally {
             }
         } catch {}
     }
-    $global:LASTEXITCODE = 0
+    exit $global:LASTEXITCODE
 }

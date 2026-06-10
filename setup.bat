@@ -62,7 +62,7 @@ REM Alle Skip-Flags werden an PS1 weitergereicht (%*).
 set "_PS1=%~dp0setup_pb_studio.ps1"
 set "_LF=%~dp0%LOGFILE%"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$lf='!_LF!'; $ps1='!_PS1!'; & $ps1 %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }"
+  "$lf='!_LF!'; $ps1='!_PS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_PS1!' %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit $LASTEXITCODE"
 set RC=!ERRORLEVEL!
 
 REM ABORT-on-Error: Immer Exit-Code und Log-Pfad ausgeben

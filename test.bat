@@ -31,7 +31,7 @@ if not exist ".venv\Scripts\python.exe" (
 set "_PS1=%~dp0run_full_test.ps1"
 set "_LF=%~dp0%LOGFILE%"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$lf='!_LF!'; $ps1='!_PS1!'; & $ps1 %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }"
+  "$lf='!_LF!'; $ps1='!_PS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_PS1!' %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit $LASTEXITCODE"
 set RC=!ERRORLEVEL!
 
 echo.

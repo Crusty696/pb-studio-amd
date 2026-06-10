@@ -315,6 +315,15 @@ class AppState:
             if task_id in self.render_tasks:
                 self.render_tasks[task_id].update(updates)
 
+    def is_render_active(self) -> bool:
+        """Prüft thread-safe, ob aktuell ein Render-Task aktiv läuft."""
+        with self._state_lock:
+            for task in self.render_tasks.values():
+                status = task.get("status")
+                if status in ("running", "processing", "pending"):
+                    return True
+            return False
+
     def set_cancel_flag(self, task_id: str, value: bool) -> None:
         """Thread-safe Setzen eines Cancel-Flags."""
         with self._state_lock:

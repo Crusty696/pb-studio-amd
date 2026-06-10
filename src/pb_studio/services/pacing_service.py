@@ -142,7 +142,7 @@ class PacingService:
             cut = CutListEntry(
                 clip_id=f"clip_{clip_id}",
                 start_time=current_cut.time,
-                end_time=next_cut.time,
+                end_time=current_cut.time + duration,
                 metadata=metadata,
             )
             cut_list.append(cut)
@@ -383,8 +383,10 @@ class PacingService:
         
         return chapters
 
-    def load_canvas_manual_anchors(self, canvas_path: str, clips: List[dict]) -> List[dict]:
+    def load_canvas_manual_anchors(self, canvas_path: str | None, clips: List[dict]) -> List[dict]:
         """Storyboard-Anker und manuelle Clips aus Obsidian .canvas File einlesen (Stufe 4)."""
+        if not canvas_path:
+            return []
         p = Path(canvas_path)
         if not p.exists():
             logger.info(f"Storyboard-Canvas nicht gefunden unter {canvas_path} — fahre automatisch fort.")
@@ -522,7 +524,7 @@ class PacingService:
             )
 
         from pb_studio.data.vector_store import VectorStore
-        vstore = VectorStore()
+        vstore = VectorStore(index_name="video_index")
 
         if (not total_duration or total_duration <= 0) and audio_path:
             try:
@@ -611,8 +613,8 @@ class PacingService:
                     logger.warning(f"SmartDirector mood-detection failed: {e}")
 
             # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
-            canvas_path = pacing_config.get("canvas_path", "C:/Users/david/Desktop/ComfyUI-Studio-FULL-backup/10_Projects/Crusty_Storyboard.canvas")
-            manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips)
+            canvas_path = pacing_config.get("canvas_path")
+            manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
 
             cut_with_clips = []
             last_manual_end = 0.0
@@ -769,7 +771,7 @@ class PacingService:
 
         # 3. Automatisches Pacing (Standard)
         from pb_studio.data.vector_store import VectorStore
-        vstore = VectorStore()
+        vstore = VectorStore(index_name="video_index")
         
         # S01/CRITICAL: Ensure total_duration is valid. If 0.0, probe it now.
         if (not total_duration or total_duration <= 0) and audio_path:
@@ -938,8 +940,8 @@ class PacingService:
                     song_mood = director.get_dominant_mood(audio_path)
 
                 # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
-                canvas_path = pacing_config.get("canvas_path", "C:/Users/david/Desktop/ComfyUI-Studio-FULL-backup/10_Projects/Crusty_Storyboard.canvas")
-                manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips)
+                canvas_path = pacing_config.get("canvas_path")
+                manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
 
                 cut_with_clips = []
                 last_manual_end = 0.0
@@ -1075,7 +1077,7 @@ class PacingService:
             cut_list.append(CutListEntry(
                 clip_id=f"clip_{clip['id']}",
                 start_time=cur.time,
-                end_time=nxt.time,
+                end_time=cur.time + dur,
                 metadata={
                     "file_path": fp,
                     "clip_name": clip.get("name", "Unknown"),

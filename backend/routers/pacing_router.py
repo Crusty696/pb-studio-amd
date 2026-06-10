@@ -256,6 +256,8 @@ async def update_timeline(
                 "trigger_type": entry.trigger_type,
                 "trigger_strength": entry.trigger_strength,
                 "segment_type": entry.segment_type,
+                "brain_final_score": entry.brain_confidence,
+                "cut_id": entry.cut_id,
             }
         })
 

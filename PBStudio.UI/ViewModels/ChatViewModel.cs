@@ -79,7 +79,7 @@ public partial class ChatViewModel : ObservableObject
         var historyForBackend = Messages
             .Where(m => !m.IsStreaming && (m.Role == ChatRole.User || m.Role == ChatRole.Assistant))
             .Where(m => !ReferenceEquals(m.Message, userMsg))  // exclude the just-added user msg (backend re-adds it)
-            .Take(40)  // limit history sent over the wire
+            .TakeLast(40)  // limit history sent over the wire
             .Select(m => m.Message)
             .ToList();
 

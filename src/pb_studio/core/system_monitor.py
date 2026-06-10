@@ -39,6 +39,7 @@ class SystemMonitor:
         self._cached_stats: dict = {}
         self._cache_time: float = 0.0
         self._cache_lock = threading.Lock()
+        self._lhm_lock = threading.Lock()
         self._cache_ttl: float = 10.0  # Sekunden
         self._bg_refresh_running = False
         if _HAS_CLR:
@@ -167,7 +168,7 @@ class SystemMonitor:
     def _collect_lhm_stats(self) -> dict:
         """Sammelt nur die schnellen LHM In-Process Sensorwerte."""
         stats = {
-            "gpu_name": self.gpu_sensor.Name if self.gpu_sensor else "Unknown",
+            "gpu_name": "Unknown",
             "gpu_load": 0.0,
             "gpu_temp": 0.0,
             "gpu_memory_used": 0.0,
@@ -178,48 +179,51 @@ class SystemMonitor:
 
         if not self.computer: return stats
         
-        # Update sensors (LHM in-process - schnell)
-        for hardware in self.computer.Hardware:
-            hardware.Update()
+        with self._lhm_lock:
+            stats["gpu_name"] = self.gpu_sensor.Name if self.gpu_sensor else "Unknown"
+            
+            # Update sensors (LHM in-process - schnell)
+            for hardware in self.computer.Hardware:
+                hardware.Update()
 
-            # CPU Load
-            h_type_str = str(hardware.HardwareType)
-            if h_type_str == "Cpu":
-                for s in hardware.Sensors:
+                # CPU Load
+                h_type_str = str(hardware.HardwareType)
+                if h_type_str == "Cpu":
+                    for s in hardware.Sensors:
+                        s_type = str(s.SensorType)
+                        name = s.Name.lower()
+                        if s_type == "Load" and "total" in name:
+                            stats["cpu_load"] = s.Value or 0.0
+
+            if self.gpu_sensor:
+                for s in self.gpu_sensor.Sensors:
                     s_type = str(s.SensorType)
                     name = s.Name.lower()
-                    if s_type == "Load" and "total" in name:
-                        stats["cpu_load"] = s.Value or 0.0
+                    
+                    # Load
+                    if s_type == "Load" and "core" in name:
+                        stats["gpu_load"] = max(stats["gpu_load"], s.Value or 0.0)
+                    
+                    # Temp (Edge or Hotspot - prefer Edge/Core)
+                    if s_type == "Temperature":
+                        # Prefer "Core" or generic "GPU Core", avoid "Hot Spot" if possible (or take max?)
+                        if "core" in name or "edge" in name:
+                             stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
 
-        if self.gpu_sensor:
-            for s in self.gpu_sensor.Sensors:
-                s_type = str(s.SensorType)
-                name = s.Name.lower()
-                
-                # Load
-                if s_type == "Load" and "core" in name:
-                    stats["gpu_load"] = max(stats["gpu_load"], s.Value or 0.0)
-                
-                # Temp (Edge or Hotspot - prefer Edge/Core)
-                if s_type == "Temperature":
-                    # Prefer "Core" or generic "GPU Core", avoid "Hot Spot" if possible (or take max?)
-                    if "core" in name or "edge" in name:
-                         stats["gpu_temp"] = max(stats["gpu_temp"], s.Value or 0.0)
-
-                # Memory (SmallData in LHM)
-                if s_type == "SmallData":
-                    # Nur "GPU Memory Used" oder "D3D Dedicated Memory Used" zulassen
-                    # NICHT "D3D Shared Memory Used/Total" oder "D3D Dedicated Memory Total/Free"
-                    if "shared" in name:
-                        pass  # Shared Memory ignorieren (ist nicht VRAM)
-                    elif "memory used" in name and "free" not in name and "total" not in name:
-                        stats["gpu_memory_used"] = s.Value or 0.0
-                    elif name == "gpu memory total":
-                        # Exakt "GPU Memory Total" - nicht D3D Shared/Dedicated Total
-                        stats["gpu_memory_total"] = s.Value or 0.0
-                    elif "d3d dedicated memory total" in name and stats["gpu_memory_total"] == 0:
-                        # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
-                        stats["gpu_memory_total"] = s.Value or 0.0
+                    # Memory (SmallData in LHM)
+                    if s_type == "SmallData":
+                        # Nur "GPU Memory Used" oder "D3D Dedicated Memory Used" zulassen
+                        # NICHT "D3D Shared Memory Used/Total" oder "D3D Dedicated Memory Total/Free"
+                        if "shared" in name:
+                            pass  # Shared Memory ignorieren (ist nicht VRAM)
+                        elif "memory used" in name and "free" not in name and "total" not in name:
+                            stats["gpu_memory_used"] = s.Value or 0.0
+                        elif name == "gpu memory total":
+                            # Exakt "GPU Memory Total" - nicht D3D Shared/Dedicated Total
+                            stats["gpu_memory_total"] = s.Value or 0.0
+                        elif "d3d dedicated memory total" in name and stats["gpu_memory_total"] == 0:
+                            # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
+                            stats["gpu_memory_total"] = s.Value or 0.0
 
         return stats
 

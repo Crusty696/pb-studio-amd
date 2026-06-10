@@ -636,6 +636,10 @@ class VRAMBudgetManager:
             except Exception as e:
                 logger.error(f"Unload callback failed for {name}: {e}")
                 budget.metadata["eviction_error"] = True
+                with self._registry_lock:
+                    if not budget.is_loaded:
+                        budget.is_loaded = True
+                        self._committed_mb += budget.estimated_vram_mb
 
         return success
 
@@ -829,6 +833,10 @@ class VRAMBudgetManager:
             except Exception as e:
                 logger.error(f"Unload callback failed für {model_id}: {e}")
                 budget.metadata["eviction_error"] = str(e)
+                with self._registry_lock:
+                    if not budget.is_loaded:
+                        budget.is_loaded = True
+                        self._committed_mb += budget.estimated_vram_mb
 
         return freed
 

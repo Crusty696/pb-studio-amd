@@ -27,7 +27,7 @@ public class ApiClient : IApiClient
     public ApiClient(HttpClient http, ILogger<ApiClient> logger)
     {
         _http = http;
-        _http.Timeout = TimeSpan.FromMinutes(10);
+        _http.Timeout = TimeSpan.FromMinutes(20);
         _logger = logger;
     }
 

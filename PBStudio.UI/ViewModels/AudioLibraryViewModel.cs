@@ -59,7 +59,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if (e.EventType == "analysis_progress" && (IsAnalyzing || IsSeparating))
+        if ((e.EventType == "analysis_progress" || e.EventType == "stem_progress") && (IsAnalyzing || IsSeparating))
         {
             Application.Current.Dispatcher.Invoke(() =>
             {

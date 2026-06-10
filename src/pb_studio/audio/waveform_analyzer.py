@@ -23,7 +23,7 @@ class WaveformAnalyzer:
     multi-band waveform visualization data.
     """
 
-    def __init__(self, sr: int = 44100, filter_order: int = 4):
+    def __init__(self, sr: int = 22050, filter_order: int = 4):
         """
         Initialize WaveformAnalyzer.
 
@@ -95,6 +95,8 @@ class WaveformAnalyzer:
 
                 result[band_name] = rms_envelope
                 logger.debug(f"{band_name}: {len(rms_envelope)} RMS frames")
+                del y_filtered
+                import gc; gc.collect()
 
             logger.info(f"3-band extraction complete: {len(result['low'])} frames")
             return result

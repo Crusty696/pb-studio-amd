@@ -1,0 +1,6 @@
+{
+  "feature": "00015-fix-full-audit",
+  "status": "qc-passed",
+  "qc_passed_at": "2026-06-10T21:24:00Z",
+  "verifier": "Antigravity CLI"
+}

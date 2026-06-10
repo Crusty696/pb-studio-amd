@@ -18,6 +18,7 @@ from collections import OrderedDict, deque
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from pathlib import Path
 from dataclasses import dataclass
 
 from .pacing_models import SelectedClip
@@ -792,18 +793,34 @@ class ClipSelector:
     def _analyze_clip_motion(self, file_path: str) -> float:
         """
         Analysiert Motion-Score eines Video-Clips.
-        Nutzt RAFT ONNX wenn verfügbar, sonst Librosa/OpenCV-Fallback.
+        Nutzt RAFT ONNX wenn verfügbar, sonst OpenCV-Fallback.
         """
+        # 1. Versuche RAFT-basierte Analyse via MotionAnalyzer
         try:
-            # Versuche RAFT-basierte Analyse via VideoAnalyzer
-            from ..video.raft import RAFTOpticalFlow
-            analyzer = RAFTOpticalFlow()
-            if hasattr(analyzer, "get_motion_score"):
-                score = analyzer.get_motion_score(file_path)
-                if score is not None:
-                    return float(score)
-        except Exception:
-            pass
+            from ..video.raft import MotionAnalyzer
+            analyzer = MotionAnalyzer(lazy_load=True)
+            if analyzer.model_path and analyzer.model_path.exists():
+                import cv2
+                cap = cv2.VideoCapture(str(file_path))
+                if cap.isOpened():
+                    frames = []
+                    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    max_frames = 20
+                    step = max(1, total // max_frames)
+                    for i in range(0, min(total, max_frames * step), step):
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+                        frames.append(frame)
+                    cap.release()
+
+                    if len(frames) >= 2:
+                        res = analyzer.analyze_video_segment(frames, stride=1)
+                        avg_motion = res.get("avg_motion", 0.0)
+                        return min(1.0, max(0.0, float(avg_motion) / 10.0))
+        except Exception as e:
+            logger.debug(f"RAFT Motion-Analyse fehlgeschlagen für {file_path}: {e}")
 
         try:
             # OpenCV-Fallback: Frame-Differenz als Motion-Proxy

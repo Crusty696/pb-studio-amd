@@ -449,6 +449,9 @@ async def analyze_video(
     })
 
     try:
+        # Step 2: Scene Detection (CPU-only)
+        scene_res = await asyncio.to_thread(_run_scene_detection, clip["path"], request.detect_scenes)
+
         await publish_event("analysis_progress", {
             "clip_id": request.clip_id,
             "step": "motion_embedding",
@@ -457,16 +460,34 @@ async def analyze_video(
             "percent": 35.0,
             "message": f"Motion + Embedding (RAFT/SigLIP) laeuft: {clip['name']}",
         })
-        # Audit C1: _loop an _run_video_analysis durchreichen, damit der RAFT
-        # on_progress callback per-frame SSE-Events publishen kann (asyncio
-        # run_coroutine_threadsafe braucht den Event-Loop des FastAPI-Workers).
+        # Audit C1: _loop an _run_video_gpu_analysis durchreichen
         _loop = asyncio.get_running_loop()
-        result = await with_gpu_task(
-            _run_video_analysis, clip["path"], request.clip_id, request, _loop,
+        gpu_res = await with_gpu_task(
+            _run_video_gpu_analysis, clip["path"], request.clip_id, request, _loop,
             model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
         )
 
-        # Y3 / GPU-F2: L-K4 audio_key Detection OUTSIDE with_gpu_task — ffmpeg
+        # Step 3: Color + Caption (CPU/HTTP & optional Moondream GPU Fallback)
+        color_caption_res = await _run_color_and_caption_analysis(
+            clip["path"], request.clip_id, request.generate_captions
+        )
+
+        # Zusammenführen der Ergebnisse
+        result = {
+            "clip_id": request.clip_id,
+            "scene_count": scene_res["scene_count"],
+            "scenes": scene_res["scenes"],
+            "avg_motion": gpu_res["avg_motion"],
+            "motion": gpu_res.get("motion"),
+            "embedding_dim": gpu_res["embedding_dim"],
+            "embedding_samples": gpu_res["embedding_samples"],
+            "has_embedding": gpu_res["has_embedding"],
+            "dominant_colors": color_caption_res["dominant_colors"],
+            "tags": color_caption_res["tags"],
+            "tag_source": color_caption_res["tag_source"],
+        }
+
+        # Y3 / GPU-F2: L-K4 audio_key Detection OUTSIDE with_gpu_task - ffmpeg
         # extract 30s mono WAV + Krumhansl-Kessler ist pure CPU-Arbeit und darf
         # den GPU-Lock NICHT halten (sonst blocken parallele Stem-/Render-Tasks).
         try:
@@ -667,36 +688,16 @@ def _generate_thumbnail(video_path: str) -> bytes:
         tmp_path.unlink(missing_ok=True)
 
 
-def _run_video_analysis(
-    video_path: str,
-    clip_id: int,
-    request: VideoAnalyzeRequest,
-    _loop=None,
-) -> dict[str, Any]:
-    """Führt Video-Analyse durch (blockierend, GPU).
-
-    Audit C1: optionaler _loop Parameter ermöglicht per-frame SSE-Events aus
-    dem RAFT MotionAnalyzer.analyze_video_segment on_progress callback heraus.
-    None-default für Tests / Sync-Aufrufe ohne Event-Loop.
-    """
-    # L-M8: embedding_dim/samples standardmaessig 0 setzen damit Persistenz
-    # nach Reload deterministisch 0 zeigt (nicht None) wenn kein Embedding
-    # generiert wurde.
-    result: dict = {
-        "clip_id": clip_id,
+def _run_scene_detection(video_path: str, detect_scenes: bool) -> dict[str, Any]:
+    """Scene Detection via PySceneDetect (CPU-only)."""
+    result = {
         "scene_count": 0,
-        "avg_motion": 0.0,
-        "embedding_dim": 0,
-        "embedding_samples": 0,
-        "has_embedding": False,
+        "scenes": []
     }
-
-    # 1. Scene-Detection via PySceneDetect
-    if request.detect_scenes:
+    if detect_scenes:
         try:
             from pb_studio.video.scene_detect import SceneDetector
             scenes_raw = SceneDetector().detect_scenes(video_path)
-            # SceneDetector gibt [(start_sec, end_sec), ...] zurück
             result["scenes"] = [
                 {
                     "start_time": float(s[0]),
@@ -709,28 +710,38 @@ def _run_video_analysis(
             result["scene_count"] = len(scenes_raw)
         except Exception as e:
             logger.warning(f"Scene-Detection fehlgeschlagen: {e}")
+    return result
 
-    # 2. Motion-Analyse via RAFT (benötigt Frames — via FrameGrabber extrahieren)
+
+def _run_video_gpu_analysis(
+    video_path: str,
+    clip_id: int,
+    request: VideoAnalyzeRequest,
+    _loop=None,
+) -> dict[str, Any]:
+    """Motion + Embedding via RAFT und SigLIP (DirectML, GPU)."""
+    result = {
+        "avg_motion": 0.0,
+        "embedding_dim": 0,
+        "embedding_samples": 0,
+        "has_embedding": False,
+    }
+
+    # 1. Motion-Analyse via RAFT
     if request.analyze_motion:
         try:
             import cv2
             from pb_studio.video.raft import MotionAnalyzer
 
-            # User-Anforderung 2026-05-09: jeder Analyse-Schritt MUSS volle Datei-Laenge
-            # abdecken (kein Sampling-Cap). Cap min(30,...) entfernt. 2 Frames/s Grid
-            # ueber GESAMTES Video. Lange Videos brauchen entsprechend laenger.
             cap = cv2.VideoCapture(video_path)
             try:
                 total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
                 duration_sec = total / max(fps, 1.0)
-                n_frames = max(2, int(duration_sec * 2))  # 2 Samples/s, KEIN cap
+                n_frames = max(2, int(duration_sec * 2))
                 step = max(1, total // n_frames)
 
                 frames = []
-                # L-VIDEO-5: range(0, total - step, step) liess das letzte Sample
-                # bei i=total-step ausfallen (range schliesst oberen Wert aus).
-                # Folge: Motion-Curve verpasst Outro-Frames. total statt total-step.
                 curr_frame = 0
                 for i in range(0, total, step):
                     while curr_frame < i:
@@ -741,7 +752,6 @@ def _run_video_analysis(
                     ret, frame = cap.read()
                     curr_frame += 1
                     if ret and frame is not None:
-                        # Downscale frame to max 360p (height=360, width scaled proportionally) to prevent RAM OOM (T016)
                         h, w = frame.shape[:2]
                         if h > 360:
                             scale = 360.0 / h
@@ -758,10 +768,6 @@ def _run_video_analysis(
             if len(frames) >= 2:
                 motion_analyzer = MotionAnalyzer()
                 try:
-                    # Audit C1: per-frame SSE Progress callback. Mappe RAFT-internes
-                    # 0..100% auf 35..65% (motion-Phase im Pipeline-Pipeline:
-                    # init=0..15, scenes=15..35, motion=35..65, embedding=65..90,
-                    # finalize=90..100).
                     def _motion_progress(pct: float) -> None:
                         if _loop is None:
                             return
@@ -785,7 +791,6 @@ def _run_video_analysis(
                         frames, stride=1, on_progress=_motion_progress
                     )
 
-                    # Übersetze Sample-Indizes zu echten Video-Frame-Nummern
                     translated_scene_changes = [
                         {
                             "frame_index": sc["frame_index"] * step,
@@ -796,28 +801,26 @@ def _run_video_analysis(
                         if isinstance(sc, dict)
                     ]
 
-                    # L-K3: peak_motion aus motion_curve max berechnen
                     motion_curve_vals = motion_result.get("frame_motions", [])
                     peak_motion_value = float(max(motion_curve_vals)) if motion_curve_vals else 0.0
 
                     result["motion"] = {
                         "clip_id": clip_id,
                         "avg_motion": float(motion_result.get("avg_motion", 0.0)),
-                        "peak_motion": peak_motion_value,  # L-K3 NEU
+                        "peak_motion": peak_motion_value,
                         "motion_curve": [float(v) for v in motion_curve_vals],
                         "peak_frames": translated_scene_changes,
                         "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
                     }
                     result["avg_motion"] = result["motion"]["avg_motion"]
                 finally:
-                    # FIX 4: .unload() aufrufen um DirectML VRAM explizit freizugeben
                     motion_analyzer.unload()
                     import gc; gc.collect()
                     del motion_analyzer
         except Exception as e:
             logger.warning(f"Motion-Analyse fehlgeschlagen: {e}")
 
-    # 3. Embedding (SigLIP DirectML — optional, benötigt ONNX-Modell-Datei)
+    # 2. Embedding (SigLIP DirectML)
     if request.generate_embeddings:
         try:
             import cv2
@@ -827,24 +830,17 @@ def _run_video_analysis(
             wrapper = SigLIPWrapper(lazy_load=False)
             try:
                 if wrapper.is_ready:
-                    # User-Anforderung 2026-05-09: jeder Schritt muss volle Datei-Laenge
-                    # abdecken. Statt 1 Frame aus Mitte: N Frames gleichmaessig verteilt
-                    # ueber Gesamt-Dauer, dann Embedding-Mittelwert (L2-normalisiert).
                     import numpy as _np
                     from PIL import Image as _PILImage
 
                     cap = cv2.VideoCapture(video_path)
-                    embeddings_collected: list = []
+                    embeddings_collected = []
                     try:
                         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
                         duration_sec = total_frames / max(fps, 1.0)
-                        # 1 Sample / 5s ueber GESAMTES Video, min 3 Samples
                         n_emb_samples = max(3, int(duration_sec / 5.0))
                         sample_step = max(1, total_frames // n_emb_samples)
-                        # L-VIDEO-5: total_frames statt total_frames - sample_step
-                        # damit letztes Sample bei i=total_frames-sample_step nicht
-                        # ausgelassen wird. range schliesst oberen Wert ohnehin aus.
                         curr_frame = 0
                         for i in range(0, max(total_frames, 1), sample_step):
                             while curr_frame < i:
@@ -869,19 +865,10 @@ def _run_video_analysis(
                     if embeddings_collected:
                         stacked = _np.stack(embeddings_collected, axis=0)
                         embedding = stacked.mean(axis=0)
-                        # L2-normalisieren damit Mittelwert wieder Unit-Vector ist
                         norm = float(_np.linalg.norm(embedding))
                         if norm > 1e-3:
                             embedding = embedding / norm
-                            # Y6 / L-STATE-2: add_embedding_with_media_link statt
-                            # add_embedding — schreibt zusaetzlich vector_map-Row, sodass
-                            # delete_video_clip per Cascade die FAISS-IDs tombstoned
-                            # (sonst Orphan-Hits in Pacing-Semantic-Matcher).
                             from pb_studio.data.repositories.media_repository import MediaRepository
-                            # L-W1 FIX: _run_video_analysis lauft im Thread-Pool ohne FastAPI-
-                            # Dependency-Injection; `state` ist hier nicht im Scope (NameError silent
-                            # gefangen durch except Exception unten -> Embedding wurde nie gespeichert).
-                            # Loesung: AppState-Singleton direkt holen.
                             from backend.app_state import get_app_state as _get_state
                             _state_local = _get_state()
                             _vmr = MediaRepository()
@@ -892,7 +879,6 @@ def _run_video_analysis(
                             _media_id = _media_row["id"] if _media_row else None
                             vs = VectorStore(index_name="video_index")
 
-                            # Deduplizierung: Vorherige FAISS-IDs fuer diese media_id tombstonen & aus vector_map loeschen
                             if _media_id is not None:
                                 try:
                                     from pb_studio.data.database_core import DatabaseCore
@@ -903,28 +889,27 @@ def _run_video_analysis(
                                             "SELECT faiss_id FROM vector_map WHERE media_id = ?", (_media_id,)
                                         )]
                                         if old_faiss_ids:
-                                            # Aus SQLite loeschen
                                             conn.execute("DELETE FROM vector_map WHERE media_id = ?", (_media_id,))
                                     
-                                    # Tombstonen im VectorStore außerhalb der SQL-Transaktion ausführen
                                     if old_faiss_ids:
                                         vs.mark_tombstoned(old_faiss_ids)
                                         logger.info(f"Deduplizierung: {len(old_faiss_ids)} alte Embeddings fuer media_id {_media_id} tombstoned.")
                                 except Exception as dedup_err:
                                     logger.warning(f"Embedding-Deduplizierung fehlgeschlagen: {dedup_err}")
 
+                            duration_seconds = duration_sec if 'duration_sec' in locals() else 0.0
                             vs.add_embedding_with_media_link(
                                 embedding.astype(_np.float32),
                                 meta_info={
                                     "clip_id": clip_id,
                                     "path": video_path,
                                     "scene_id": f"clip_{clip_id}_full",
-                                    "duration": result.get("duration_seconds", 0.0),
+                                    "duration": duration_seconds,
                                     "samples": len(embeddings_collected),
                                 },
                                 media_id=_media_id,
                                 segment_start=0.0,
-                                segment_end=float(result.get("duration_seconds", 0.0) or 0.0),
+                                segment_end=duration_seconds,
                                 description=f"clip_{clip_id}_full",
                             )
                             result["has_embedding"] = True
@@ -935,19 +920,11 @@ def _run_video_analysis(
                                 f"gespeichert fuer Clip {clip_id} (dim={len(embedding)})"
                             )
                         else:
-                            logger.warning(
-                                f"SigLIP near-zero mean embedding (norm={norm:.2e}) fuer clip {clip_id} "
-                                "- FAISS-Insert uebersprungen"
-                            )
                             result["has_embedding"] = False
                     else:
                         result["has_embedding"] = False
                 else:
-                    # ONNX-Modell nicht vorhanden — kein Fehler, nur Info
-                    logger.info(
-                        "SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen. "
-                        "Pacing verwendet Round-Robin Fallback."
-                    )
+                    logger.info("SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen.")
                     result["has_embedding"] = False
             finally:
                 if 'wrapper' in locals() and wrapper is not None:
@@ -955,79 +932,110 @@ def _run_video_analysis(
                         wrapper.unload()
                     except Exception as unload_err:
                         logger.warning(f"Failed to unload SigLIPWrapper: {unload_err}")
-                del wrapper  # Release SigLIP ONNX session / DirectML VRAM
-                import gc
-                gc.collect()
-
+                del wrapper
+                import gc; gc.collect()
         except Exception as e:
             logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")
             result["has_embedding"] = False
 
-    # 4. L-K2: Dominant Colors (KMeans) + Tags (Moondream optional, lazy ONNX).
-    # Vorher waren beide Felder NIE in result -> Audit E4 Helper-API
-    # (tags_overlap_score, dominant_color_similarity in semantic_matcher) nutzlos
-    # weil Daten leer. Mid-frame als reprasentative Probe; KMeans ist billig
-    # (~50ms), Moondream nur wenn ONNX-Modell + DirectML verfuegbar.
-    if request.generate_captions:
+    return result
+
+
+def _run_moondream_inference_on_frames(frames_rgb: list) -> list[list[str]]:
+    """Führt Moondream Tag-Generierung auf GPU aus. Läuft unter GPU-Lock 'moondream_fp16'."""
+    tags_collected = []
+    try:
+        from pb_studio.video.moondream import MoondreamAnalyzer
+        from pb_studio.video.moondream_wrapper import extract_tags_via_moondream
+        moondream_analyzer = MoondreamAnalyzer(lazy_load=True)
         try:
-            import cv2
-            import numpy as _np  # lokal, da Embedding-Block (der _np sonst importiert) optional ist
-            from pb_studio.video.moondream_wrapper import (
-                extract_dominant_colors,
-                extract_tags_via_moondream,
-            )
-            from pb_studio.video.lmstudio_vision_wrapper import (
-                extract_tags_and_model_via_lmstudio,
-            )
+            for f_rgb in frames_rgb:
+                tags = extract_tags_via_moondream(f_rgb, analyzer=moondream_analyzer)
+                tags_collected.append(tags)
+        finally:
+            moondream_analyzer.unload()
+            import gc; gc.collect()
+    except Exception as ma_err:
+        logger.warning(f"Moondream Inferenz fehlgeschlagen: {ma_err}")
+    return tags_collected
 
-            cap = cv2.VideoCapture(video_path)
-            frames_rgb = []
-            try:
-                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                if total > 0:
-                    indices = [max(0, total // 4), max(0, total // 2), max(0, total * 3 // 4)]
-                    # Eindeutige Indizes sortiert
-                    indices = sorted(list(set(indices)))
-                    for idx in indices:
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                        ret, frame = cap.read()
-                        if ret and frame is not None:
-                            frames_rgb.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            finally:
-                cap.release()
 
-            if frames_rgb:
-                # 4a. Dominante Farben ueber alle gesammelten Frames extrahieren (3-Punkt)
-                # Wir stacken die Bilder vertikal um KMeans auf allen Pixeln auszufuehren
-                combined_rgb = _np.vstack(frames_rgb)
-                result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
+async def _run_color_and_caption_analysis(
+    video_path: str,
+    clip_id: int,
+    generate_captions: bool,
+) -> dict[str, Any]:
+    """Extrahiert Farben und Tags (KMeans auf CPU, LM-Studio über HTTP, Moondream als GPU-Fallback)."""
+    result = {
+        "dominant_colors": [],
+        "tags": [],
+        "tag_source": "none",
+    }
+    if not generate_captions:
+        result["tag_source"] = "skipped"
+        return result
 
-                # 4b. Tags fuer jeden Frame extrahieren und vereinigen
-                all_tags = []
-                seen_tags = set()
-                tag_sources = []
-                
-                from pb_studio.config_manager import ConfigManager
-                current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
-                moondream_analyzer = None
+    try:
+        import cv2
+        import numpy as _np
+        from pb_studio.video.moondream_wrapper import extract_dominant_colors
+
+        # Frames sammeln (CPU)
+        cap = cv2.VideoCapture(video_path)
+        frames_rgb = []
+        try:
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total > 0:
+                indices = [max(0, total // 4), max(0, total // 2), max(0, total * 3 // 4)]
+                indices = sorted(list(set(indices)))
+                for idx in indices:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        frames_rgb.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        finally:
+            cap.release()
+
+        if frames_rgb:
+            # 1. Dominante Farben (KMeans, CPU)
+            combined_rgb = _np.vstack(frames_rgb)
+            result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
+
+            # 2. Tags extrahieren
+            all_tags = []
+            seen_tags = set()
+            tag_sources = []
+
+            from pb_studio.config_manager import ConfigManager
+            current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
+
+            from pb_studio.video.lmstudio_vision_wrapper import extract_tags_and_model_via_lmstudio
+            
+            async def run_lm_studio(f):
+                return await asyncio.to_thread(extract_tags_and_model_via_lmstudio, f, current_mode)
+
+            moondream_frames_to_run = []
+            for f_rgb in frames_rgb:
+                tags, used_model = await run_lm_studio(f_rgb)
+                if tags:
+                    for tag in tags:
+                        if tag not in seen_tags:
+                            all_tags.append(tag)
+                            seen_tags.add(tag)
+                    if used_model not in tag_sources:
+                        tag_sources.append(used_model)
+                else:
+                    moondream_frames_to_run.append(f_rgb)
+
+            # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
+            if moondream_frames_to_run:
                 try:
-                    for f_rgb in frames_rgb:
-                        # Primary: LM Studio Auto-Selection (Vision-Modell aus Registry).
-                        # Fallback: Moondream ONNX wenn LM Studio down/leer ist
-                        tags, used_model = extract_tags_and_model_via_lmstudio(f_rgb, mode=current_mode)
-                        if not tags:
-                            used_model = "moondream"
-                            if moondream_analyzer is None:
-                                try:
-                                    from pb_studio.video.moondream import MoondreamAnalyzer
-                                    moondream_analyzer = MoondreamAnalyzer(lazy_load=True)
-                                except Exception as ma_err:
-                                    logger.debug(f"MoondreamAnalyzer konnte nicht instanziiert werden: {ma_err}")
-                            if moondream_analyzer is not None:
-                                tags = extract_tags_via_moondream(f_rgb, analyzer=moondream_analyzer)
-                            else:
-                                tags = []
-                        
+                    moondream_tags_list = await with_gpu_task(
+                        _run_moondream_inference_on_frames, moondream_frames_to_run,
+                        model_id="moondream_fp16"
+                    )
+                    used_model = "moondream"
+                    for tags in moondream_tags_list:
                         if tags:
                             for tag in tags:
                                 if tag not in seen_tags:
@@ -1035,41 +1043,26 @@ def _run_video_analysis(
                                     seen_tags.add(tag)
                             if used_model not in tag_sources:
                                 tag_sources.append(used_model)
-                finally:
-                    if moondream_analyzer is not None:
-                        try:
-                            moondream_analyzer.unload()
-                        except Exception as unload_err:
-                            logger.debug(f"Fehler beim Entladen des MoondreamAnalyzers im Video-Router: {unload_err}")
-                
-                # Begrenzen auf max 10 Tags
-                result["tags"] = all_tags[:10]
-                result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
+                except Exception as moondream_err:
+                    logger.warning(f"Moondream Fallback GPU-Inferenz fehlgeschlagen: {moondream_err}")
 
-                logger.info(
-                    f"L-K2 (3-Punkt-Sampling): {len(result['dominant_colors'])} colors, "
-                    f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
-                )
-            else:
-                result["dominant_colors"] = []
-                result["tags"] = []
-                result["tag_source"] = "none"
-        except Exception as e:
-            logger.warning(f"Tag/Color-Extract fehlgeschlagen (unkritisch): {e}")
+            result["tags"] = all_tags[:10]
+            result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
+            
+            logger.info(
+                f"KMeans+LMStudio/Moondream-Split: {len(result['dominant_colors'])} colors, "
+                f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
+            )
+        else:
             result["dominant_colors"] = []
             result["tags"] = []
-            result["tag_source"] = "error"
-    else:
+            result["tag_source"] = "none"
+
+    except Exception as e:
+        logger.warning(f"Color/Tag-Analyse fehlgeschlagen (unkritisch): {e}")
         result["dominant_colors"] = []
         result["tags"] = []
-        result["tag_source"] = "skipped"
-
-    # Y3 / GPU-F2: L-K4 audio_key Detection (FFmpeg+librosa, ~30s CPU) wird
-    # JETZT NICHT mehr hier ausgefuehrt — sie haelt sonst den globalen GPU-Lock
-    # blockierend fuer reine CPU-Arbeit. Der Aufrufer (analyze_video Endpoint)
-    # macht den Detection-Step NACH with_gpu_task, damit andere GPU-Tasks
-    # (Stem-Separation, Render-Preview) waehrenddessen laufen koennen.
-    result["audio_key"] = None
+        result["tag_source"] = "error"
 
     return result
 

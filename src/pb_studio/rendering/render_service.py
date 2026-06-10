@@ -216,6 +216,15 @@ class RenderService:
         normalized = []
         total = len(timeline)
 
+        # Ermittle Ziel-Codec basierend auf dem aktiven Encoder
+        primary_enc = self._encoder_override or self.__class__._working_encoder or "libx264"
+        if "hevc" in primary_enc or "x265" in primary_enc:
+            target_codec = "hevc"
+        elif "av1" in primary_enc:
+            target_codec = "av1"
+        else:
+            target_codec = "h264"
+
         for i, clip in enumerate(timeline):
             if cancel_callback and cancel_callback():
                 raise RenderCancelledError("Rendering cancelled during clip normalization")
@@ -224,7 +233,7 @@ class RenderService:
                 logger.warning(f"Clip {i} hat keinen Pfad-Eintrag!")
                 continue
 
-            needs_norm = self._check_needs_normalization(path, w, h, fps)
+            needs_norm = self._check_needs_normalization(path, w, h, fps, target_codec)
             if needs_norm:
                 if cb:
                     pct = 10 + int(40 * (i / total))
@@ -244,25 +253,58 @@ class RenderService:
 
         return normalized
 
-    def _check_needs_normalization(self, path: str, tw: int, th: int, tfps: float) -> bool:
+    def _check_needs_normalization(self, path: str, tw: int, th: int, tfps: float, target_codec: str) -> bool:
         cmd = [
             "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,r_frame_rate",
+            "-show_streams",
             "-of", "json", path
         ]
         try:
             res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
             data = json.loads(res)
-            stream = data["streams"][0]
-            width = int(stream["width"])
-            height = int(stream["height"])
-            rate_str = stream.get("r_frame_rate", "30/1")
+            
+            # Suche Video-Stream und zaehle Audio-Streams
+            video_stream = None
+            audio_streams_count = 0
+            for stream in data.get("streams", []):
+                codec_type = stream.get("codec_type")
+                if codec_type == "video" and video_stream is None:
+                    video_stream = stream
+                elif codec_type == "audio":
+                    audio_streams_count += 1
+            
+            if not video_stream:
+                logger.warning(f"Kein Video-Stream in {Path(path).name} gefunden!")
+                return True
+                
+            width = int(video_stream.get("width", 0))
+            height = int(video_stream.get("height", 0))
+            codec_name = video_stream.get("codec_name", "")
+            pix_fmt = video_stream.get("pix_fmt", "")
+            
+            rate_str = video_stream.get("r_frame_rate", "30/1")
             num, den = map(int, rate_str.split("/"))
             fps = float(num) / float(den) if den != 0 else 0.0
-            if abs(fps - tfps) >= 0.1 or width != tw or height != th:
-                logger.info(f"Mismatch: {Path(path).name}: {width}x{height}@{fps:.2f}fps")
+            
+            # Normalisierung erforderlich, wenn Auflösung/FPS nicht übereinstimmen,
+            # der Codec nicht mit dem Render-Codec übereinstimmt, Audio-Streams vorhanden sind
+            # oder das Pixel-Format nicht dem Standard yuv420p entspricht.
+            if width != tw or height != th or abs(fps - tfps) >= 0.1:
+                logger.info(f"Mismatch Resolution/FPS: {Path(path).name}: {width}x{height}@{fps:.2f}fps, erwartet {tw}x{th}@{tfps:.2f}fps")
                 return True
+                
+            if codec_name != target_codec:
+                logger.info(f"Mismatch Codec: {Path(path).name} hat {codec_name}, erwartet {target_codec}")
+                return True
+                
+            if audio_streams_count > 0:
+                logger.info(f"Mismatch Audio: {Path(path).name} enthält {audio_streams_count} Audio-Stream(s), normalisiere zum Entfernen")
+                return True
+                
+            if pix_fmt != "yuv420p" and pix_fmt != "yuv420p10le":
+                logger.info(f"Mismatch PixFmt: {Path(path).name} hat {pix_fmt}, normalisiere zu yuv420p")
+                return True
+                
             return False
         except Exception as e:
             logger.warning(f"FFprobe check failed: {e}")
@@ -433,6 +475,7 @@ class RenderService:
             cmd.extend(["-i", audio_path])
 
         cmd.extend(["-map", "0:v", "-map", "1:a"])
+        cmd.extend(["-vf", "select=concatdec_select,setpts=N/FR/TB"])
 
         if encoder == "hevc_amf":
             cmd.extend(["-c:v", "hevc_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])

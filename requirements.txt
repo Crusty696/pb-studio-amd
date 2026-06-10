@@ -12,7 +12,7 @@ psutil>=5.9.0
 onnxruntime-directml==1.19.2
 torch==2.4.1
 torchvision==0.19.1
-torchaudio
+torchaudio==2.4.1
 torch-directml==0.2.5.dev240914  # AMD GPU via DirectML for Brain CLAP+SigLIP (only dev releases on PyPI)
 transformers==4.49.0             # PIN: lower blocks CLAP (CVE-2025-32434),
                                   # higher breaks SigLIP-2 tokenizer

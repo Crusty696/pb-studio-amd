@@ -58,6 +58,7 @@ class EmbeddingCache:
             self.conn.close()
         except Exception:
             pass
+        self.conn = None
 
     def lookup(
         self, media_hash: str, model_name: str, model_version: str
