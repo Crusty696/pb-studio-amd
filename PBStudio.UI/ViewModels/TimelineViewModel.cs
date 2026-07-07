@@ -19,7 +19,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 {
     private readonly TimelineStateService _timelineState;
     private readonly AudioLibraryStateService _audioLibraryState;
-    private readonly ApiClient _api;
+    // AP3.5 (Audit 2026-06-10): IApiClient statt konkretem ApiClient — die
+    // Transient-Registrierung erzeugte hier eine ZWEITE ApiClient-Instanz mit
+    // eigenem Shutdown-Token, die BeginShutdown() der Singleton-Instanz nie erreichte.
+    private readonly IApiClient _api;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private int _waveformSequence;
@@ -125,7 +128,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     public ObservableCollection<double> SnapMarkers { get; } = [];
     public ObservableCollection<SongSegmentModel> SongSegments { get; } = [];
 
-    public TimelineViewModel(TimelineStateService timelineState, AudioLibraryStateService audioLibraryState, ApiClient api)
+    public TimelineViewModel(TimelineStateService timelineState, AudioLibraryStateService audioLibraryState, IApiClient api)
     {
         _timelineState = timelineState;
         _audioLibraryState = audioLibraryState;

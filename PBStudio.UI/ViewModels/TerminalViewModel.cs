@@ -3,7 +3,9 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -21,8 +23,13 @@ public partial class TerminalViewModel : ObservableObject, IDisposable
         _sse = sse;
         _sse.LogReceived += OnLogReceived;
         
+        WeakReferenceMessenger.Default.Register<WpfLogMessage>(this, (r, m) =>
+        {
+            AppendLog(m.Level, m.Message);
+        });
+
         // Initial-Meldung im Terminal
-        AppendLog("SYSTEM", "Terminal initialisiert. Warte auf Backend-Logs...");
+        AppendLog("SYSTEM", "Terminal initialisiert. Warte auf Logs...");
     }
 
     private void OnLogReceived(object? sender, LogEventArgs e)
@@ -62,5 +69,6 @@ public partial class TerminalViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _sse.LogReceived -= OnLogReceived;
+        WeakReferenceMessenger.Default.Unregister<WpfLogMessage>(this);
     }
 }

@@ -377,6 +377,8 @@ public partial class InstalledModelCardViewModel : ObservableObject
     [ObservableProperty] private string _testStatusColor = "#888888"; // Standardgrau
     [ObservableProperty] private string _capabilitiesText = "Text (Chat)";
     [ObservableProperty] private bool _isTesting;
+    [ObservableProperty] private string _provider = "lmstudio";
+    [ObservableProperty] private string _providerBadgeText = "LM STUDIO";
     public bool Vision { get; }
 
     [ObservableProperty] private bool _isBusy;
@@ -398,6 +400,13 @@ public partial class InstalledModelCardViewModel : ObservableObject
             ? string.Join(", ", entry.ActiveTasks) 
             : "Keine";
         HasActiveTasks = entry.IsActive;
+        Provider = entry.Provider;
+        ProviderBadgeText = entry.Provider switch
+        {
+            "ollama" => "OLLAMA",
+            "both" => "BEIDE",
+            _ => "LM STUDIO"
+        };
     }
 
     public string SizeDisplay => SizeGb > 0 ? $"{SizeGb:F2} GB" : "—";

@@ -110,7 +110,16 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    foreach (var s in scenes) SelectedClipScenes.Add(s);
+                    // AP3.3 (Audit 2026-06-10): Clear vor Add — Re-Analyse desselben
+                    // Clips hängte die Szenen sonst doppelt an. SceneIndex (1-basiert)
+                    // client-seitig setzen, Backend sendet keinen Index.
+                    SelectedClipScenes.Clear();
+                    var idx = 1;
+                    foreach (var s in scenes)
+                    {
+                        s.SceneIndex = idx++;
+                        SelectedClipScenes.Add(s);
+                    }
                 });
             }
         }
