@@ -179,6 +179,7 @@ def main():
 
         sess_options = ort.SessionOptions()
         sess_options.enable_mem_pattern = False
+        sess_options.enable_cpu_mem_arena = False  # IRON RULE 2: BEIDE Flags Pflicht (AP5.2)
 
         providers = []
         if 'DmlExecutionProvider' in ort.get_available_providers():

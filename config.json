@@ -19,7 +19,7 @@
         "provider": "auto",
         "lmstudio_base_url": "http://127.0.0.1:12341/v1",
         "ollama_base_url": "http://localhost:11434/v1",
-        "default_mode": "balance",
+        "default_mode": "speed",
         "task_preferences": {
             "video_captioning": {
                 "speed": [
@@ -117,10 +117,10 @@
             }
         },
         "task_overrides": {
-            "chat": "google/gemma-4-12b-qat",
-            "chat_general": "google/gemma-4-12b-qat",
-            "chat_tool_use": "google/gemma-4-12b-qat",
-            "brain_explanation": "google/gemma-4-12b-qat"
+            "chat": "gemma4:12b",
+            "chat_general": "gemma4:12b",
+            "chat_tool_use": "gemma4:12b",
+            "brain_explanation": "gemma4:12b"
         }
     },
     "ui": {

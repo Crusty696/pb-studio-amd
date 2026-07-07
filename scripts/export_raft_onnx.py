@@ -141,6 +141,7 @@ def main():
 
         sess_options = ort.SessionOptions()
         sess_options.enable_mem_pattern = False  # CRITICAL for DirectML
+        sess_options.enable_cpu_mem_arena = False  # IRON RULE 2: BEIDE Flags Pflicht (AP5.2)
 
         providers = []
         available = ort.get_available_providers()

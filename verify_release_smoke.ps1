@@ -12,6 +12,7 @@ $ProjectPath = (Resolve-Path $ProjectPath).Path
 
 $script:StartedBackend = $false
 $script:BackendProcess = $null
+$script:SmokeExitCode = 1  # AP5.3: Default FAIL — nur expliziter PASS setzt 0
 
 function Step($name, [scriptblock]$action) {
     Write-Host "[SMOKE] $name" -ForegroundColor Cyan
@@ -414,11 +415,13 @@ try {
     }
 
     Write-Host '[SMOKE] PASS' -ForegroundColor Green
-    $global:LASTEXITCODE = 0
+    # AP5.3 (Audit 2026-06-10): dedizierte Variable statt $global:LASTEXITCODE —
+    # taskkill im finally wuerde LASTEXITCODE sonst vor dem exit ueberschreiben
+    $script:SmokeExitCode = 0
 }
 catch {
     Write-Host "[SMOKE] FAIL: $_" -ForegroundColor Red
-    $global:LASTEXITCODE = 1
+    $script:SmokeExitCode = 1
 }
 finally {
     if ($script:StartedBackend -and $script:BackendProcess) {
@@ -434,5 +437,5 @@ finally {
             }
         } catch {}
     }
-    exit $global:LASTEXITCODE
+    exit $script:SmokeExitCode
 }

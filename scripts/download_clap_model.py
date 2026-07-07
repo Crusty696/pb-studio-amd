@@ -235,6 +235,7 @@ def test_inference(audio_encoder_path: Path, text_encoder_path: Path):
         # Create session options (DirectML-compatible)
         sess_options = ort.SessionOptions()
         sess_options.enable_mem_pattern = False  # KRITISCH für DirectML!
+        sess_options.enable_cpu_mem_arena = False  # IRON RULE 2: BEIDE Flags Pflicht (AP5.2)
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
         # Use CPU for testing (DirectML might not be available on all systems)
