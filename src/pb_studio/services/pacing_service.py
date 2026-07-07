@@ -79,8 +79,9 @@ class PacingService:
         key = str(clip_path)
         if key in self._duration_cache:
             return self._duration_cache[key]
+        from pb_studio.video.encoder_utils import _get_ffprobe_path
         cmd = [
-            "ffprobe", "-v", "error",
+            _get_ffprobe_path(), "-v", "error",
             "-show_entries", "format=duration",
             "-of", "json", str(clip_path)
         ]

@@ -140,9 +140,15 @@ async def generate_cut_list(
             # bei /brain/suggest und /brain/learning_session zu verhindern
             try:
                 from pb_studio.brain.brain_service import BrainService
+                from ..dependencies import db_write_lock
                 svc = BrainService.get()
                 if svc.state_conn is not None:
-                    svc.state_conn.execute("UPDATE timelines SET is_current = 0")
+                    # AP1.3 (Audit 2026-06-10): Write auf state_conn einheitlich hinter
+                    # db_write_lock + to_thread (Pattern aus brain_router)
+                    async with db_write_lock:
+                        await asyncio.to_thread(
+                            svc.state_conn.execute, "UPDATE timelines SET is_current = 0"
+                        )
                     logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
             except Exception as e:
                 logger.warning("Alte Timelines in state.db konnten nicht deaktiviert werden: %s", e)
@@ -184,6 +190,9 @@ async def generate_cut_list(
             cut_count=len(cuts),
             average_cut_duration=round(avg_dur, 2),
         )
+    except HTTPException:
+        # AP1.1 (Audit 2026-06-10): Validierungs-Fehler (400) nicht in 500 umwandeln
+        raise
     except Exception as e:
         logger.error(f"Pacing-Generierung fehlgeschlagen: {e}", exc_info=True)
         await publish_log(
@@ -271,7 +280,11 @@ async def update_timeline(
     audio_dur = 0.0
     if state.current_audio_path:
         from pb_studio.rendering.render_service import RenderService
-        audio_dur = RenderService()._get_audio_duration(state.current_audio_path) or 0.0
+        # AP1.2 (Audit 2026-06-10): ffprobe-Subprocess blockierte den Event-Loop
+        # (SSE-Keepalives/parallele Requests froren ein) -> to_thread
+        audio_dur = await asyncio.to_thread(
+            RenderService()._get_audio_duration, state.current_audio_path
+        ) or 0.0
 
     warnings, errors = validate_timeline(internal_cuts, audio_duration=audio_dur)
     if errors:
@@ -314,6 +327,8 @@ async def generate_preview(
             duration=request.duration,
             resolution="640x360",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Preview fehlgeschlagen: {e}")
 
