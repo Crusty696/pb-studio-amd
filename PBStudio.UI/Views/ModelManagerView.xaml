@@ -185,6 +185,52 @@
                                                        Foreground="{StaticResource AbletonAccent}"/>
                                         </Border>
 
+                                        <!-- Provider Badge (Ollama/LM Studio/Beide) -->
+                                        <Border Padding="6,2" CornerRadius="2"
+                                                Margin="6,0,0,0"
+                                                BorderThickness="1"
+                                                VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource AbletonPanel}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AbletonBorder}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="ollama">
+                                                            <Setter Property="Background" Value="#154060"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource AbletonBlue}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="lmstudio">
+                                                            <Setter Property="Background" Value="#4d2215"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="both">
+                                                            <Setter Property="Background" Value="#253d1a"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource AbletonGreen}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding ProviderBadgeText}" FontSize="10"
+                                                       FontWeight="Bold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Provider}" Value="ollama">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonBlue}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Provider}" Value="lmstudio">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Provider}" Value="both">
+                                                                <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+
                                         <!-- Aktive Zuweisungen (falls aktiv) -->
                                         <TextBlock Text="{Binding ActiveTasksText}" FontSize="10" 
                                                    Foreground="{StaticResource AbletonGreen}"

@@ -7,10 +7,14 @@
              xmlns:models="clr-namespace:PBStudio.UI.Models"
              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              Background="{StaticResource AbletonBg}">
 
     <UserControl.Resources>
         <converters:TimeToPixelConverter x:Key="TimeToPixelConverter"/>
+        <!-- AP3.3: typisierter Double statt String-Source "100.0" (String wurde vom
+             TimeToPixelConverter zu 0.0 verworfen — Balken war permanent 0px breit) -->
+        <sys:Double x:Key="SceneBarScale">100.0</sys:Double>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
@@ -464,19 +468,22 @@
                                                 <Run Text=" - "/> 
                                                 <Run Text="{Binding EndTime, StringFormat={}{0:F2}s}"/>
                                             </TextBlock>
+                                            <!-- AP3.3 (Audit 2026-06-10): MotionScore existiert pro Szene nicht
+                                                 (Backend liefert Motion nur pro Clip) — Balken+Wert zeigen jetzt
+                                                 die real vorhandene Scene-Detection-Confidence (0-1). -->
                                             <Grid Margin="0,4,0,0" Height="4" Background="{StaticResource AbletonBorder}">
                                                 <Rectangle HorizontalAlignment="Left" Fill="{StaticResource AbletonAccent}" Opacity="0.8">
                                                     <Rectangle.Width>
                                                         <MultiBinding Converter="{StaticResource TimeToPixelConverter}">
-                                                            <Binding Path="MotionScore"/>
-                                                            <Binding Source="100.0"/> <!-- scale 0-1 to 100px -->
+                                                            <Binding Path="Confidence"/>
+                                                            <Binding Source="{StaticResource SceneBarScale}"/>
                                                         </MultiBinding>
                                                     </Rectangle.Width>
                                                 </Rectangle>
                                             </Grid>
                                         </StackPanel>
 
-                                        <TextBlock Grid.Column="2" Text="{Binding MotionScore, StringFormat={}{0:F1}}" 
+                                        <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat={}{0:F2}}"
                                                    Foreground="{StaticResource AbletonAccent}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>

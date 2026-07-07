@@ -13,13 +13,13 @@ namespace PBStudio.UI;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private readonly IApiClient _api;
     private readonly ILogger<MainWindow> _logger;
     private bool _shutdownStarted;
 
-    public MainWindow(MainViewModel viewModel, IApiClient api, ILogger<MainWindow> logger)
+    // AP3.1: IApiClient-Parameter entfernt — wurde nur noch für das (entfernte)
+    // verfrühte BeginShutdown() in OnClosing gebraucht.
+    public MainWindow(MainViewModel viewModel, ILogger<MainWindow> logger)
     {
-        _api = api;
         _logger = logger;
         InitializeComponent();
         DataContext = viewModel;
@@ -117,6 +117,10 @@ public partial class MainWindow : Window
 
         _shutdownStarted = true;
         WeakReferenceMessenger.Default.Send(new AppShutdownMessage());
-        _api.BeginShutdown();
+        // AP3.1/K7-Nachfix (Audit 2026-06-10): BeginShutdown() hier entfernt —
+        // OnClosing feuert VOR App.OnExit; der Cancel des Shutdown-Tokens hätte
+        // den SaveProjectAsync-Call in OnExit weiterhin sofort abgebrochen
+        // (Save-on-Exit wäre trotz K7-Fix tot geblieben). BeginShutdown läuft
+        // jetzt ausschließlich in App.OnExit NACH dem Projekt-Save.
     }
 }
