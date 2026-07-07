@@ -3383,7 +3383,12 @@
                                                                                                 "type":  "boolean",
                                                                                                 "title":  "Vision",
                                                                                                 "default":  false
-                                                                                            }
+                                                                                            },
+                                                                                 "provider":  {
+                                                                                                  "type":  "string",
+                                                                                                  "title":  "Provider",
+                                                                                                  "default":  "lmstudio"
+                                                                                              }
                                                                              },
                                                               "type":  "object",
                                                               "required":  [
