@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Media;
 using PBStudio.UI.Models;
@@ -42,13 +43,24 @@ public class WaveformRenderer : FrameworkElement
         set => SetValue(FillBrushProperty, value);
     }
 
+    // AP3.4 (Audit 2026-06-10): TimelineViewModel mutiert WaveformBars in-place
+    // (Clear()+Add() — Property-Referenz bleibt identisch), das DP-Changed-Event
+    // feuerte dadurch nie und die Waveform erschien erst bei Zoom/Resize.
+    // Fix: bei INotifyCollectionChanged-Quellen auf CollectionChanged (un)subscriben.
     private static void OnWaveformBarsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is WaveformRenderer renderer)
-        {
-            renderer.InvalidateVisual();
-        }
+        if (d is not WaveformRenderer renderer) return;
+
+        if (e.OldValue is INotifyCollectionChanged oldCol)
+            oldCol.CollectionChanged -= renderer.OnBarsCollectionChanged;
+        if (e.NewValue is INotifyCollectionChanged newCol)
+            newCol.CollectionChanged += renderer.OnBarsCollectionChanged;
+
+        renderer.InvalidateVisual();
     }
+
+    private void OnBarsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => InvalidateVisual();
 
     protected override void OnRender(DrawingContext drawingContext)
     {

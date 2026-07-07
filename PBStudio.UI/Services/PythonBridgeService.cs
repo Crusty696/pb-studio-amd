@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.Services;
 
@@ -138,6 +141,11 @@ public class PythonBridgeService : IDisposable
                     return;
                 }
 
+                // AP3.1 (Audit 2026-06-10): Kill-on-Close JobObject — beendet den
+                // gesamten uvicorn-Prozessbaum garantiert mit, auch wenn die WPF-App
+                // hart crasht (vorher: Zombie-Backend blockierte Port 8765).
+                AssignToKillOnCloseJob(_pythonProcess, _logger);
+
                 _pythonProcess.OutputDataReceived += (_, e) =>
                 {
                     if (e.Data != null) _logger.LogDebug("[Python] {Line}", e.Data);
@@ -154,6 +162,10 @@ public class PythonBridgeService : IDisposable
                 {
                     _isRunning = true;
                     StatusChanged?.Invoke(this, true);
+                    // AP3.2 (Audit 2026-06-10): BackendReadyMessage wurde nirgends
+                    // gesendet — SettingsViewModel & Co. registrierten darauf und
+                    // blieben dauerhaft auf "Backend: Offline".
+                    WeakReferenceMessenger.Default.Send(new BackendReadyMessage());
                     _logger.LogInformation("Python Backend gestartet (Startprozess-PID={Pid})", _pythonProcess.Id);
                     StartWatchdog();
                     return;
@@ -287,6 +299,8 @@ public class PythonBridgeService : IDisposable
         _ownsProcess = false;
         _logger.LogInformation(logMessage, Port);
         StatusChanged?.Invoke(this, true);
+        // AP3.2: auch im Attach-Modus ist das Backend ab hier nutzbar
+        WeakReferenceMessenger.Default.Send(new BackendReadyMessage());
     }
 
     private async Task<bool> IsBackendAlreadyHealthyAsync()
@@ -370,6 +384,113 @@ public class PythonBridgeService : IDisposable
         _isStopping = true;
         _httpClient.Dispose();
         _lifecycleGate.Dispose();
+    }
+
+    // ── AP3.1: Kill-on-Close JobObject ───────────────────────────────────────
+    // Garantiert, dass der uvicorn-Prozessbaum stirbt, sobald der WPF-Prozess
+    // endet — auch bei hartem Crash, wo OnExit/StopAsync nie laufen.
+    // Best-effort: schlägt die Zuweisung fehl (z.B. Prozess bereits in
+    // einem Job ohne Nested-Job-Support), bleibt das bisherige Verhalten.
+
+    private static IntPtr _jobHandle = IntPtr.Zero;
+    private static readonly object _jobLock = new();
+
+    private static void AssignToKillOnCloseJob(Process process, ILogger logger)
+    {
+        try
+        {
+            lock (_jobLock)
+            {
+                if (_jobHandle == IntPtr.Zero)
+                {
+                    _jobHandle = JobObjectNative.CreateJobObject(IntPtr.Zero, null);
+                    if (_jobHandle == IntPtr.Zero)
+                    {
+                        logger.LogDebug("JobObject konnte nicht erstellt werden (Win32={Err})", Marshal.GetLastWin32Error());
+                        return;
+                    }
+
+                    var info = new JobObjectNative.JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+                    info.BasicLimitInformation.LimitFlags = JobObjectNative.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                    var length = Marshal.SizeOf<JobObjectNative.JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
+                    var infoPtr = Marshal.AllocHGlobal(length);
+                    try
+                    {
+                        Marshal.StructureToPtr(info, infoPtr, false);
+                        if (!JobObjectNative.SetInformationJobObject(
+                                _jobHandle, JobObjectNative.JobObjectExtendedLimitInformation, infoPtr, (uint)length))
+                        {
+                            logger.LogDebug("SetInformationJobObject fehlgeschlagen (Win32={Err})", Marshal.GetLastWin32Error());
+                            return;
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(infoPtr);
+                    }
+                }
+
+                if (JobObjectNative.AssignProcessToJobObject(_jobHandle, process.Handle))
+                    logger.LogInformation("Python-Prozess dem Kill-on-Close JobObject zugewiesen (kein Zombie-Backend bei WPF-Crash)");
+                else
+                    logger.LogDebug("AssignProcessToJobObject fehlgeschlagen (Win32={Err})", Marshal.GetLastWin32Error());
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "JobObject-Zuweisung fehlgeschlagen (best-effort, kein Abbruch)");
+        }
+    }
+
+    private static class JobObjectNative
+    {
+        internal const int JobObjectExtendedLimitInformation = 9;
+        internal const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        internal static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string? name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool SetInformationJobObject(IntPtr job, int infoClass, IntPtr info, uint infoLength);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+        {
+            public long PerProcessUserTimeLimit;
+            public long PerJobUserTimeLimit;
+            public uint LimitFlags;
+            public UIntPtr MinimumWorkingSetSize;
+            public UIntPtr MaximumWorkingSetSize;
+            public uint ActiveProcessLimit;
+            public long Affinity;
+            public uint PriorityClass;
+            public uint SchedulingClass;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct IO_COUNTERS
+        {
+            public ulong ReadOperationCount;
+            public ulong WriteOperationCount;
+            public ulong OtherOperationCount;
+            public ulong ReadTransferCount;
+            public ulong WriteTransferCount;
+            public ulong OtherTransferCount;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+        {
+            public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+            public IO_COUNTERS IoInfo;
+            public UIntPtr ProcessMemoryLimit;
+            public UIntPtr JobMemoryLimit;
+            public UIntPtr PeakProcessMemoryUsed;
+            public UIntPtr PeakJobMemoryUsed;
+        }
     }
 
     private static string? FindBackendDirectory()

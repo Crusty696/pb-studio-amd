@@ -89,6 +89,7 @@ public partial class App : Application
         {
             builder.AddConsole();
             builder.AddProvider(new FileLoggerProvider(logFile));
+            builder.AddProvider(new TerminalLoggerProvider());
             builder.SetMinimumLevel(LogLevel.Debug);
             builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
             builder.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
@@ -134,37 +135,59 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
-        var api = _serviceProvider?.GetService<IApiClient>();
-        using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        // AP3.1 (Audit 2026-06-10): vorher `async void` — nach dem ersten await
+        // kehrte OnExit zurück, der Prozess konnte enden BEVOR Save/Shutdown/
+        // StopAsync liefen (uvicorn-Zombie auf Port 8765, Save verloren).
+        // Jetzt: Cleanup läuft auf dem ThreadPool (kein SyncContext → kein
+        // Deadlock) und OnExit blockiert gebunden (max. 12s), bis er fertig ist.
         try
         {
-            if (api != null)
+            var sp = _serviceProvider;
+            if (sp != null)
             {
-                // K7: Speichern vor dem Shutdown-Cancel des HTTP-Clients ausführen
-                try
+                var cleanup = Task.Run(async () =>
                 {
-                    await api.SaveProjectAsync().WaitAsync(shutdownCts.Token);
-                }
-                catch (Exception saveEx)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[PBStudio] Project save on exit failed: {saveEx.Message}");
-                }
+                    using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    var api = sp.GetService<IApiClient>();
+                    if (api != null)
+                    {
+                        // K7: Speichern VOR BeginShutdown (Token-Cancel) ausführen
+                        try
+                        {
+                            await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                        }
+                        catch (Exception saveEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                        }
 
-                // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
-                (api as ApiClient)?.BeginShutdown();
+                        // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
+                        (api as ApiClient)?.BeginShutdown();
 
-                await api.ShutdownAsync().WaitAsync(shutdownCts.Token);
+                        try
+                        {
+                            await api.ShutdownAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                        }
+                        catch (Exception shutdownEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Backend shutdown call failed: {shutdownEx.Message}");
+                        }
+                    }
+                    var bridge = sp.GetService<PythonBridgeService>();
+                    if (bridge != null)
+                        await bridge.StopAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                });
+
+                if (!cleanup.Wait(TimeSpan.FromSeconds(12)))
+                    System.Diagnostics.Debug.WriteLine("[PBStudio] OnExit cleanup timeout (12s) — fahre mit Dispose fort");
             }
-            var bridge = _serviceProvider?.GetService<PythonBridgeService>();
-            if (bridge != null)
-                await bridge.StopAsync().WaitAsync(shutdownCts.Token);
         }
         catch (Exception ex)
         {
             // Shutdown errors are non-critical — log but always proceed with cleanup
-            System.Diagnostics.Debug.WriteLine($"[PBStudio] OnExit async error (non-critical): {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[PBStudio] OnExit error (non-critical): {ex.Message}");
         }
         finally
         {

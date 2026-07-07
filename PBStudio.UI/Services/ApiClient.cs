@@ -997,7 +997,12 @@ public record BrainStatsResponse(
     List<string>? ColdStartAxesList = null);
 public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
-public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence);
+// AP3.3 (Audit 2026-06-10): SceneIndex client-seitig (Backend sendet keinen Index;
+// JSON-Deserialisierung lässt das Feld auf 0, VideoLibraryViewModel setzt es nach Load).
+public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence)
+{
+    public int SceneIndex { get; set; }
+}
 // L-VIDEO-2 / X1: PeakMotion am Ende mit Default 0.0 fuer backward compat —
 // Backend liefert es jetzt im MotionData-Response, frueher wurde es im
 // Pydantic-Schema silent gedropped.

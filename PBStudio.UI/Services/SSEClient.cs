@@ -29,7 +29,7 @@ public class SSEClient : IDisposable
 
     private const int InitialReconnectDelayMs = 3000;
     private const int MaxReconnectDelayMs = 30000;
-    private const int MaxReconnectAttempts = 50;
+    // AP3.7: MaxReconnectAttempts entfernt — kein endgültiges Aufgeben mehr
     // Spec 00010 T003 (TR-001): nach diesem Schwellwert UI per BackendReachabilityChanged
     // benachrichtigen. Verhindert UI-Flackern bei kurzen Drops.
     private const int NotifyUiAfterAttempts = 5;
@@ -202,11 +202,12 @@ public class SSEClient : IDisposable
                 {
                     IsBackendReachable = false;
                 }
-                if (reconnectAttempts > MaxReconnectAttempts)
-                {
-                    _logger.LogError("SSE {Endpoint}: Max Reconnect-Versuche ({Attempts}) erreicht, gebe auf.", endpoint, reconnectAttempts);
-                    break;
-                }
+                // AP3.7 (Audit 2026-06-10): Hard-Cap (50 Versuche → break) entfernt.
+                // Vorher starb der Stream nach ~25min Backend-Ausfall ENDGÜLTIG
+                // (_isListening blieb true → StartListening war No-Op → SSE bis zum
+                // App-Neustart tot). Jetzt: unbegrenzt weiter mit 30s-gedeckeltem
+                // Backoff — der Stop/Start-Zyklus via OnBackendStatusChanged und das
+                // CancellationToken bleiben die regulären Exit-Pfade.
 
                 LogReconnectFailure(endpoint, reconnectDelayMs, reconnectAttempts, ex);
 
@@ -240,21 +241,19 @@ public class SSEClient : IDisposable
         if (isConnectionRefused)
         {
             _logger.LogInformation(
-                "SSE {Endpoint} wartet auf Backend, nächster Reconnect in {Delay}ms (Versuch {Attempt}/{Max}).",
+                "SSE {Endpoint} wartet auf Backend, nächster Reconnect in {Delay}ms (Versuch {Attempt}).",
                 endpoint,
                 reconnectDelayMs,
-                reconnectAttempts,
-                MaxReconnectAttempts);
+                reconnectAttempts);
             return;
         }
 
         _logger.LogWarning(
             ex,
-            "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt}/{Max})...",
+            "SSE {Endpoint} Verbindung unterbrochen, Reconnect in {Delay}ms (Versuch {Attempt})...",
             endpoint,
             reconnectDelayMs,
-            reconnectAttempts,
-            MaxReconnectAttempts);
+            reconnectAttempts);
     }
 
     private void ProcessEvent(StreamKind streamKind, string eventType, string jsonData)

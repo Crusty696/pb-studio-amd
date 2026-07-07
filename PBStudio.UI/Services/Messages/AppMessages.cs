@@ -34,3 +34,6 @@ public sealed record NavigateDirectorMessage;
 
 // AI / Model-Manager Mode Sync
 public sealed record KiModeChangedMessage;
+
+// WPF Internal Logging
+public sealed record WpfLogMessage(string Level, string Message);

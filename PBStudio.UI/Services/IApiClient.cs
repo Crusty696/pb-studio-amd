@@ -37,6 +37,10 @@ public interface IApiClient : IDisposable
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
     Task<List<StructureSegment>?> GetStructureAsync(int clipId);
     Task<SpectralData?> GetSpectralAsync(int clipId);
+    // AP3.5 (Audit 2026-06-10): war nur auf ApiClient public — zwang TimelineViewModel,
+    // den konkreten ApiClient zu injizieren (zweite HttpClient-Instanz, BeginShutdown
+    // erreichte sie nie). Additiv, einziger Implementierer ApiClient hat die Methode bereits.
+    Task<List<double>?> GetOnsetsAsync(int clipId);
 
     // --- Video ---
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);

@@ -78,6 +78,7 @@ public class ProjectService
 
     public async Task CloseProjectAsync()
     {
+        WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
         await _api.CloseProjectAsync().ConfigureAwait(false);
         CurrentProject = null;
         ProjectChanged?.Invoke(this, null);

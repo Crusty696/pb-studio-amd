@@ -47,13 +47,22 @@ public class DepthRenderer : FrameworkElement
         _children.Add(_drawingVisual);
     }
 
+    // AP3.4 (Audit 2026-06-10): analog WaveformRenderer — In-place-Mutationen
+    // (Clear()+Add()) feuerten kein DP-Changed-Event; CollectionChanged-Abo nachgerüstet.
     private static void OnPointsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is DepthRenderer renderer)
-        {
-            renderer.InvalidateVisual();
-        }
+        if (d is not DepthRenderer renderer) return;
+
+        if (e.OldValue is INotifyCollectionChanged oldCol)
+            oldCol.CollectionChanged -= renderer.OnPointsCollectionChanged;
+        if (e.NewValue is INotifyCollectionChanged newCol)
+            newCol.CollectionChanged += renderer.OnPointsCollectionChanged;
+
+        renderer.InvalidateVisual();
     }
+
+    private void OnPointsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => InvalidateVisual();
 
     protected override void OnRender(DrawingContext drawingContext)
     {

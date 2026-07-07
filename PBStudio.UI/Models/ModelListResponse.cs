@@ -29,4 +29,5 @@ public record ModelListEntry(
     string Description = "",
     bool IsActive = false,
     List<string>? ActiveTasks = null,
-    bool Vision = false);
+    bool Vision = false,
+    string Provider = "lmstudio");
