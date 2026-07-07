@@ -46,7 +46,11 @@ def detect_video_audio_key(video_path: str | Path) -> Optional[str]:
             from pb_studio.config import config as _config
             ffmpeg_path = str(getattr(_config, "ffmpeg_path", "ffmpeg"))
         except Exception:
-            pass
+            try:
+                from pb_studio.video.encoder_utils import _get_ffmpeg_path
+                ffmpeg_path = _get_ffmpeg_path()
+            except Exception:
+                ffmpeg_path = "ffmpeg"
 
         # NamedTemporaryFile + delete=False, damit wir den Pfad an ffmpeg geben koennen
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:

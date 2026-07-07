@@ -120,15 +120,16 @@ class MoondreamAnalyzer:
 
         return sess_options
 
-    def _get_providers(self) -> List[str]:
+    def _get_providers(self) -> List[Any]:
         """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
         providers = []
 
         if 'DmlExecutionProvider' in available:
-            providers.append('DmlExecutionProvider')
-            logger.info("DirectML provider available - using AMD GPU acceleration")
+            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
+            providers.append(('DmlExecutionProvider', {'device_id': device_id}))
+            logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration")
 
         # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
         return providers

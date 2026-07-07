@@ -27,8 +27,9 @@ def extract_peaks(media_path: str, n_buckets: int = 256) -> list[float]:
     if not p.exists():
         return []
 
+    from pb_studio.video.encoder_utils import _get_ffmpeg_path
     cmd = [
-        "ffmpeg", "-v", "error",
+        _get_ffmpeg_path(), "-v", "error",
         "-i", str(p),
         "-vn", "-ac", "1", "-ar", "8000",
         "-f", "s16le", "-",
