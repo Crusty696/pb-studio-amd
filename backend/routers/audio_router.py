@@ -739,6 +739,21 @@ def _run_audio_analysis(
             _stream_beats = list(_stream_res.beats)
             _stream_bpm = float(_stream_res.bpm)
             _stream_energy = list(_stream_res.energy_curve)
+
+            # AP4.1 (Audit 2026-06-10): Kamen die Beats vom Drums-/Instrumental-Stem,
+            # repraesentierte die Energy-Curve nur Stem-RMS statt Mix-Energie —
+            # Konsumenten (Pacing, Onsets, UI) bekamen still andere Semantik.
+            # Energy jetzt in separatem energy_only-Pass vom Original-Mix.
+            if analysis_path != audio_path:
+                try:
+                    _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
+                    _energy_res = StreamingAudioAnalyzer().analyze(audio_path, energy_only=True)
+                    _stream_energy = list(_energy_res.energy_curve)
+                except Exception as energy_e:
+                    logger.warning(
+                        f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
+                    )
+
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
             y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=600.0)
         except Exception as e:
@@ -773,7 +788,20 @@ def _run_audio_analysis(
                 # geliefert - keine Re-Detection auf Full-Load (waere ineffizient).
                 arr = np.asarray(_stream_beats, dtype=np.float64)
                 from pb_studio.audio.beat_detector import BeatDetector as _BD
-                strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
+                # AP4.2 (Audit 2026-06-10): y ist nur der 600s-Snapshot — Beats
+                # jenseits davon wurden vorher auf den letzten Snapshot-Frame
+                # geclampt (alle mit demselben Bogus-Strength). Jetzt: echte
+                # Strengths nur fuer Beats im Snapshot, Rest neutral 1.0.
+                _snap_dur = float(len(y)) / sr if sr > 0 else 0.0
+                _snap_times = [float(t) for t in arr if float(t) <= _snap_dur]
+                _snap_strengths = (
+                    _BD.compute_beat_strengths(y, sr, _snap_times) if _snap_times else []
+                )
+                _snap_iter = iter(_snap_strengths)
+                strengths = [
+                    (float(next(_snap_iter, 1.0)) if float(t) <= _snap_dur else 1.0)
+                    for t in arr
+                ]
                 for t, s in zip(arr, strengths):
                     beats.append({
                         "time": float(t),
@@ -839,7 +867,12 @@ def _run_audio_analysis(
     if request.detect_structure:
         try:
             from pb_studio.audio.structure_analyzer import StructureAnalyzer
-            struct_result = StructureAnalyzer().analyze_song_structure(y, sr)
+            # AP4.3 (Audit 2026-06-10): echte Datei-Dauer uebergeben — y ist im
+            # Streaming-Pfad nur der 600s-Snapshot, wodurch der DJ-Mix-Branch
+            # (600.0 > 600 = False) nie erreichbar war.
+            struct_result = StructureAnalyzer().analyze_song_structure(
+                y, sr, total_duration=_probe_dur if _probe_dur > 0 else None
+            )
             structure_segments = struct_result.get("segments", [])
         except Exception as e:
             logger.warning(f"Struktur-Analyse fehlgeschlagen: {e}")

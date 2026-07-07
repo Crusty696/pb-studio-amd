@@ -11,7 +11,11 @@ class AudioAnalyzer:
             from pb_studio.config_manager import ConfigManager
             self.ffmpeg_path = ConfigManager().ffmpeg_path
         except Exception:
-            self.ffmpeg_path = "ffmpeg"  # Fallback: System-PATH
+            try:
+                from pb_studio.video.encoder_utils import _get_ffmpeg_path
+                self.ffmpeg_path = _get_ffmpeg_path()
+            except Exception:
+                self.ffmpeg_path = "ffmpeg"  # Fallback: System-PATH
 
         try:
             # Lazy import to avoid loading heavyweight models on app start if not needed

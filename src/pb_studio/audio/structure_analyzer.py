@@ -185,11 +185,15 @@ class StructureAnalyzer:
     # ------------------------------------------------------------------
 
     def _assign_labels(
-        self, y: FloatArray, sr: int, boundaries: FloatArray, cluster_labels: FloatArray
+        self, y: FloatArray, sr: int, boundaries: FloatArray, cluster_labels: FloatArray,
+        total_duration: float | None = None,
     ) -> List[str]:
         labels = []
         duration = len(y) / sr
-        is_dj_mix = duration > 600
+        # AP4.3: DJ-Mix-Entscheidung anhand der ECHTEN Datei-Dauer treffen,
+        # nicht anhand des (auf 600s gecappten) Snapshots.
+        effective_duration = total_duration if total_duration and total_duration > 0 else duration
+        is_dj_mix = effective_duration > 600
 
         transitions = []
         if is_dj_mix:
@@ -293,6 +297,7 @@ class StructureAnalyzer:
     def analyze_song_structure(
         self, y: FloatArray, sr: int, num_segments: int = 10,
         progress_callback: Callable[[str, float], None] | None = None,
+        total_duration: float | None = None,
     ) -> dict:
         """Analysiert Song-Struktur (Segmente und Labels).
 
@@ -301,6 +306,11 @@ class StructureAnalyzer:
             sr: Samplerate
             num_segments: Ziel-Anzahl Segmente (Hinweis)
             progress_callback: Optionaler Callback (phase, progress)
+            total_duration: AP4.3 (Audit 2026-06-10) — echte Datei-Dauer in
+                Sekunden, falls y nur ein Snapshot ist (Streaming-Pfad lädt
+                exakt 600.0s → `len(y)/sr > 600` war NIE wahr und der gesamte
+                DJ-Mix-Branch (Transitions, peak/rising-Labels) war im
+                API-Pfad toter Code).
 
         Returns:
             Dict mit total_segments und segments Liste
@@ -320,7 +330,10 @@ class StructureAnalyzer:
             else:
                 cluster_labels = np.array([0])
 
-            named_labels = self._assign_labels(y, sr, boundaries, cluster_labels)
+            named_labels = self._assign_labels(
+                y, sr, boundaries, cluster_labels,
+                total_duration=total_duration,
+            )
 
             segments = []
             for i in range(len(boundaries) - 1):

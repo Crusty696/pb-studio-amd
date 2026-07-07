@@ -272,11 +272,23 @@ class SubtrackDetector:
     def _tempo_drift(
         self, y: np.ndarray, sr: int, t_axis: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Sliding-window tempo. Drift-Magnitude = absolute Diff zwischen Fenstern."""
+        """Sliding-window tempo. Drift-Magnitude = absolute Diff zwischen Fenstern.
+
+        AP4.6 (Audit 2026-06-10): hop_sec wird dynamisch je nach Dateidauer angepasst,
+        um den massiven Rechenaufwand (tausende beat_track-Aufrufe) bei langen
+        DJ-Mixen (>30 min) zu verhindern.
+        """
         import librosa
 
         win_sec = 8.0
-        hop_sec = 1.0
+        total_duration = y.size / sr
+        if total_duration > 1800.0:    # > 30 Min: 10s Hops
+            hop_sec = 10.0
+        elif total_duration > 600.0:   # > 10 Min: 5s Hops
+            hop_sec = 5.0
+        else:
+            hop_sec = 2.0              # < 10 Min: 2s Hops (2x schneller als 1s)
+
         win_samples = int(win_sec * sr)
         hop_samples = int(hop_sec * sr)
         if y.size < win_samples * 2:

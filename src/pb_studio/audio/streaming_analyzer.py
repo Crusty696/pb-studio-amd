@@ -173,11 +173,17 @@ class StreamingAudioAnalyzer:
         self,
         audio_path: str | Path,
         on_progress: Optional[Callable[[float], None]] = None,
+        energy_only: bool = False,
     ) -> StreamingAnalysisResult:
         """Volle chunked Analyse. on_progress(0..100).
 
         Fuer Files <= 1.5x window_sec wird Single-Shot verwendet.
         Fuer laengere Files echtes Chunk-Streaming.
+
+        AP4.1 (Audit 2026-06-10): energy_only=True ueberspringt die teure
+        Beat-Detection (librosa.beat.beat_track pro Chunk) und liefert nur
+        die RMS-Energy-Curve. Wird genutzt, um die Energy vom Original-Mix
+        zu berechnen, waehrend Beats vom Drums-Stem kommen (beats=[], bpm=0).
         """
         import librosa
 
@@ -191,9 +197,9 @@ class StreamingAudioAnalyzer:
 
         # Fuer Files <= 1.5x window: Fallback zu single-shot
         if duration <= self.window_sec * 1.5:
-            return self._analyze_single_shot(path, duration, on_progress)
+            return self._analyze_single_shot(path, duration, on_progress, energy_only=energy_only)
 
-        return self._analyze_streaming(path, duration, on_progress)
+        return self._analyze_streaming(path, duration, on_progress, energy_only=energy_only)
 
     # ------------------------------------------------------------------
     # Single-Shot (kurze Files)
@@ -203,6 +209,7 @@ class StreamingAudioAnalyzer:
         path: Path,
         duration: float,
         on_progress: Optional[Callable[[float], None]],
+        energy_only: bool = False,
     ) -> StreamingAnalysisResult:
         """Fuer kleine Files: standard librosa load + librosa beat_track."""
         import librosa
@@ -213,8 +220,11 @@ class StreamingAudioAnalyzer:
         if on_progress:
             on_progress(40.0)
 
-        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        beats = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+        if energy_only:
+            tempo, beats = 0.0, []
+        else:
+            tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+            beats = librosa.frames_to_time(beat_frames, sr=sr).tolist()
 
         if on_progress:
             on_progress(70.0)
@@ -246,6 +256,7 @@ class StreamingAudioAnalyzer:
         path: Path,
         duration: float,
         on_progress: Optional[Callable[[float], None]],
+        energy_only: bool = False,
     ) -> StreamingAnalysisResult:
         """Echtes Chunk-Streaming mit soundfile block-I/O.
 
@@ -285,10 +296,11 @@ class StreamingAudioAnalyzer:
                 logger.warning(f"Chunk {i} load fehlgeschlagen: {e}")
                 continue
 
-            # --- Beat-Detection pro Chunk ---
-            self._process_beats(
-                chunk, chunk_start, bpm_est, beat_acc
-            )
+            # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
+            if not energy_only:
+                self._process_beats(
+                    chunk, chunk_start, bpm_est, beat_acc
+                )
 
             # --- RMS-Energy pro Chunk ---
             self._process_energy(

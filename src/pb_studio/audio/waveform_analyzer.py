@@ -71,6 +71,22 @@ class WaveformAnalyzer:
 
             # Load audio (mono, target sample rate)
             use_sr = target_sr if target_sr is not None else self.sr
+
+            # AP4.5 (Audit 2026-06-10): Langdatei-Guard — 90-min-Mix @22050 wäre
+            # ~480MB float32, sosfiltfilt verdreifacht das intern in float64.
+            # Für reine Waveform-VISUALISIERUNG reicht bei sehr langen Files eine
+            # niedrigere Abtastrate (High-Band wird dann bei Nyquist gekappt).
+            if target_sr is None:
+                try:
+                    _probe_dur = float(librosa.get_duration(path=audio_path))
+                except Exception:
+                    _probe_dur = 0.0
+                if _probe_dur > 1800.0:  # > 30 min
+                    use_sr = 11025
+                    logger.info(
+                        f"Lange Datei ({_probe_dur:.0f}s) — Waveform-SR auf {use_sr}Hz reduziert (RAM-Guard)"
+                    )
+
             y, sr = librosa.load(audio_path, sr=use_sr, mono=True)
 
             if len(y) == 0:
@@ -143,7 +159,9 @@ class WaveformAnalyzer:
 
         # Apply zero-phase filtering (forward + backward)
         # This eliminates phase distortion which is critical for beat alignment
-        y_filtered = sosfiltfilt(sos, y)
+        # AP4.5: sofort zurück auf float32 — sosfiltfilt arbeitet intern in
+        # float64; ohne Downcast hielte jedes Band das Doppelte im RAM.
+        y_filtered = sosfiltfilt(sos, y).astype(np.float32)
 
         return y_filtered
 

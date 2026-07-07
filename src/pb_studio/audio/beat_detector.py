@@ -221,7 +221,16 @@ class BeatDetector:
         self._safe_emit(on_progress, 0.0)
 
         # BeatNet hängt bei langen Dateien (>600s) - direkt librosa nutzen
-        total_dur = librosa.get_duration(path=audio_path)
+        # AP4.4 (Audit 2026-06-10): get_duration stand ungeschuetzt ausserhalb
+        # jedes try (BUG-088 hatte nur _detect_beats_librosa gefixt) — eine
+        # korrupte/leere Datei warf hier und riss die gesamte Beat-Analyse
+        # inkl. Energy-Berechnung mit. Default 0.0 -> regulaerer Pfad mit
+        # eigener Fehlerbehandlung uebernimmt.
+        try:
+            total_dur = librosa.get_duration(path=audio_path)
+        except Exception as dur_e:
+            logger.warning(f"get_duration fehlgeschlagen fuer {audio_path}: {dur_e}")
+            total_dur = 0.0
         if total_dur > 600:
             logger.info(f"Lange Datei ({total_dur:.0f}s) -> direkt Librosa")
             return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
