@@ -380,6 +380,40 @@ class LMStudioClient:
         (geladen ODER on-demand ladbar). Im Gegensatz zu Ollama gibt es kein
         klares "installed but unloaded" — die App entscheidet das selbst.
         """
+        is_ollama = "11434" in self.base_url or "ollama" in self.base_url.lower()
+        if is_ollama:
+            base = self.base_url
+            if base.endswith("/v1"):
+                base = base[:-3]
+            url = f"{base.rstrip('/')}/api/tags"
+            try:
+                client = await self._ensure_client()
+                response = await client.get(url)
+                self._raise_for_status(response, "list_models_ollama")
+                payload = response.json()
+                raw_models = payload.get("models") or []
+                result: list[LMStudioModelInfo] = []
+                for raw in raw_models:
+                    name = str(raw.get("name") or "unknown")
+                    details = raw.get("details") or {}
+                    size_bytes = int(raw.get("size") or 0)
+                    family = details.get("family") or (details.get("families") or [None])[0]
+                    parameter_size = details.get("parameter_size")
+                    quantization_level = details.get("quantization_level")
+                    
+                    result.append(LMStudioModelInfo(
+                        name=name,
+                        size_bytes=size_bytes,
+                        modified_at=str(raw.get("modified_at") or ""),
+                        digest=str(raw.get("digest") or ""),
+                        family=family,
+                        parameter_size=parameter_size,
+                        quantization_level=quantization_level,
+                    ))
+                return result
+            except Exception as exc:
+                logger.warning("Fehler bei nativem Ollama-Modell-List (%s): %s. Fallback auf OpenAI API.", url, exc)
+
         response = await self._request_with_retry("GET", "/models")
         self._raise_for_status(response, "list_models")
         try:
@@ -389,7 +423,7 @@ class LMStudioClient:
                 f"list_models: ungueltige JSON-Antwort: {exc}"
             ) from exc
         raw_models = payload.get("data") or []
-        result: list[LMStudioModelInfo] = []
+        result = []
         for raw in raw_models:
             name = str(raw.get("id") or raw.get("name") or "unknown")
             # OpenAI-Schema kennt size nicht direkt. LM Studio fuegt manchmal

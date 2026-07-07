@@ -61,7 +61,7 @@ class SigLIPWrapper:
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         return sess_options
 
-    def _get_providers(self) -> List[str]:
+    def _get_providers(self) -> List[Any]:
         """IRC-1 / IRON RULE 1: AMD DirectML ONLY — kein CPU-Fallback.
 
         Wenn DmlExecutionProvider nicht verfuegbar ist, scheitert die
@@ -73,7 +73,8 @@ class SigLIPWrapper:
                 "SigLIP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
                 "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
             )
-        return ['DmlExecutionProvider']
+        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
+        return [('DmlExecutionProvider', {'device_id': device_id})]
 
     def _init_tokenizer(self) -> bool:
         try:

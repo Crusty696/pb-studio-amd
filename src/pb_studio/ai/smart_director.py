@@ -601,11 +601,12 @@ class SmartDirector:
             import wave
 
             # Convert to WAV using FFmpeg
+            from pb_studio.video.encoder_utils import _get_ffmpeg_path
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp_path = tmp.name
 
             subprocess.run([
-                "ffmpeg", "-y", "-i", audio_path,
+                _get_ffmpeg_path(), "-y", "-i", audio_path,
                 "-ac", "1", "-ar", "22050", "-acodec", "pcm_s16le",
                 tmp_path
             ], capture_output=True, timeout=120)
@@ -668,9 +669,10 @@ class SmartDirector:
         """Get audio file duration in seconds."""
         try:
             import subprocess
+            from pb_studio.video.encoder_utils import _get_ffprobe_path
 
             result = subprocess.run([
-                "ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+                _get_ffprobe_path(), "-v", "quiet", "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1", audio_path
             ], capture_output=True, text=True, timeout=15)
 
