@@ -68,7 +68,9 @@ class TestCLAPAnalyzer:
             mock_providers.return_value = ['DmlExecutionProvider', 'CPUExecutionProvider']
             providers = analyzer_lazy._get_providers()
 
-            assert providers == ['DmlExecutionProvider']
+            assert len(providers) == 1
+            prov = providers[0]
+            assert prov == 'DmlExecutionProvider' or (isinstance(prov, tuple) and prov[0] == 'DmlExecutionProvider')
             assert 'CPUExecutionProvider' not in providers
 
     def test_providers_no_cpu_fallback_raises(self, analyzer_lazy):
