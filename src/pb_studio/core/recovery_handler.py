@@ -43,27 +43,14 @@ class RecoveryHandler:
             freed_vram = self.arbiter.budget_manager.evict_all(min_priority=ModelPriority.MEDIUM)
             logger.info(f"Freed {freed_vram}MB of VRAM during OOM recovery.")
 
-            # Step 2: Clear global caches
-            # Currently there is no explicit global cache implemented as requested in FEHLENDE_KOMPONENTEN.
-            # But we can try to clear what's available.
-            try:
-                from pb_studio.data.global_cache import get_global_cache
-                get_global_cache().invalidate()
-                logger.info("Global Cache invalidated.")
-            except ImportError:
-                pass
-
-            # Step 3: Run Python Garbage Collection
+            # Step 2: Run Python Garbage Collection
+            # AP5.1 (Audit 2026-06-10): torch.cuda-Block entfernt (IRON RULE 1:
+            # AMD DirectML only — cuda.empty_cache war auf Ziel-Hardware wirkungslos).
+            # Toter Import pb_studio.data.global_cache entfernt (Modul existiert nicht).
+            # DirectML-VRAM wird bereits in Step 1 über evict_all physisch freigegeben;
+            # gc.collect() löst die letzten Session-Referenzen auf.
             import gc
             gc.collect()
-            
-            # Step 4: Clear PyTorch / ONNX Caches if possible
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except ImportError:
-                pass
 
             logger.info("OOM Recovery completed. Ready for retry.")
             return True

@@ -204,7 +204,8 @@ class ModelLoader:
         providers = []
 
         if "DmlExecutionProvider" in available:
-            providers.append("DmlExecutionProvider")
+            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
+            providers.append(("DmlExecutionProvider", {"device_id": device_id}))
 
         providers.append("CPUExecutionProvider")
 

@@ -205,3 +205,41 @@ async def publish_log(message: str, *, level: str = "info", detail: str | None =
     if source:
         payload["source"] = source
     await publish_event("log", payload)
+
+
+class SSELogHandler(logging.Handler):
+    """Logging Handler, der alle Log-Records in die SSE Event-Queue leitet."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            # Endlosschleife vermeiden
+            name = record.name
+            if (name.startswith("backend.routers.events") or
+                name.startswith("pb_studio.backend.routers.events") or
+                "events_router" in name or
+                "dependencies" in name or
+                "uvicorn" in name or 
+                "fastapi" in name):
+                return
+
+            message = self.format(record)
+            payload = {
+                "level": record.levelname.lower(),
+                "message": message,
+                "source": name
+            }
+            event = {"event": "log", "data": payload}
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                for queue in list(_event_queues.values()):
+                    try:
+                        loop.call_soon_threadsafe(queue.put_nowait, event)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
