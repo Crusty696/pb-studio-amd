@@ -64,6 +64,10 @@ class BrainStore:
             check_same_thread=False,
         )
         init_connection(self.patterns_conn)
+        # AP5.5 (Audit 2026-06-10): patterns_conn ist check_same_thread=False,
+        # hatte aber im Gegensatz zu weights_conn keinen Lock — konkurrierende
+        # Cursor-Nutzung derselben sqlite3-Connection ist nicht thread-safe.
+        self._patterns_lock = __import__("threading").Lock()
 
         self.cache = EmbeddingCache(self.cache_path, self.embeddings_dir)
 

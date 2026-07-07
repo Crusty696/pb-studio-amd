@@ -96,7 +96,12 @@ class EmbeddingCache:
     ) -> CacheEntry:
         emb = np.asarray(embedding, dtype=np.float32)
         safe_model = model_name.replace("/", "_").replace(":", "_")
-        target = self.embeddings_dir / f"{media_hash[:16]}_{safe_model}_v{model_version}.npy"
+        # AP5.4 (Audit 2026-06-10): voller Hash statt [:16] — 64-bit-Prefix-Kollision
+        # liess zwei verschiedene Medien dieselbe .npy-Datei ueberschreiben, waehrend
+        # die DB beide vollen Hashes auf dieselbe Datei zeigte -> falsches Embedding
+        # bei lookup. model_version wird wie model_name sanitisiert.
+        safe_version = str(model_version).replace("/", "_").replace(":", "_").replace("\\", "_")
+        target = self.embeddings_dir / f"{media_hash}_{safe_model}_v{safe_version}.npy"
         np.save(target, emb)
 
         now = datetime.now(timezone.utc).isoformat()
