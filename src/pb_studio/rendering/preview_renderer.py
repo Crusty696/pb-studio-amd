@@ -3,7 +3,8 @@ PreviewGenerator - Schnelle Vorschau ab beliebigem Zeitpunkt (AMD Version).
 
 Erzeugt 90-Sekunden-Previews mit Smart Slicing.
 Kein ffmpeg-python — nutzt subprocess direkt.
-Kein NVENC — nutzt libx264 ultrafast für Speed.
+Kein NVENC — AP2.4 (Audit 2026-06-10): nutzt get_preview_encoder()
+(h264_amf -quality speed wenn AMF verfügbar, sonst libx264 ultrafast).
 """
 
 import logging
@@ -13,7 +14,15 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from pb_studio.video.encoder_utils import _get_ffmpeg_path, get_preview_encoder
+
 logger = logging.getLogger(__name__)
+
+
+def _preview_encoder_args() -> list[str]:
+    """Encoder-Args für Preview-Segmente (AMF-first, IRON RULE 4)."""
+    enc = get_preview_encoder()
+    return ["-c:v", enc.encoder, *enc.params]
 
 
 @dataclass
@@ -113,12 +122,12 @@ class PreviewGenerator:
                     f"fps={self.OUTPUT_FPS:.3f},setpts=PTS-STARTPTS"
                 )
                 cmd = [
-                    "ffmpeg", "-y",
+                    _get_ffmpeg_path(), "-y",
                     "-ss", str(actual_start),
                     "-t", str(clip_duration),
                     "-i", clip.video_path,
                     "-vf", vf,
-                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
+                    *_preview_encoder_args(),
                     "-pix_fmt", "yuv420p",
                     "-an", "-f", "mpegts",
                     str(seg_path)
@@ -152,9 +161,9 @@ class PreviewGenerator:
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             cmd = [
-                "ffmpeg", "-y",
+                _get_ffmpeg_path(), "-y",
                 "-i", f"concat:{concat_input}",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                *_preview_encoder_args(),
                 "-pix_fmt", "yuv420p", "-an",
                 str(output_path.absolute())
             ]

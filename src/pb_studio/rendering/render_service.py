@@ -29,6 +29,11 @@ class RenderCancelledError(RuntimeError):
     pass
 import logging
 
+# AP2.1 (Audit 2026-06-10): bare "ffmpeg"/"ffprobe" schlugen fehl, wenn FFmpeg
+# nur als Bundle in tools/ffmpeg/bin liegt (PATH-unabhängige Auflösung via
+# ConfigManager -> PATH -> tools/, wie encoder_utils sie bereits nutzt).
+from pb_studio.video.encoder_utils import _get_ffmpeg_path, _get_ffprobe_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,7 +88,7 @@ class RenderService:
 
         for enc_name, desc in encoders:
             test_cmd = [
-                "ffmpeg", "-y",
+                _get_ffmpeg_path(), "-y",
                 "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.1",
                 "-c:v", enc_name,
                 "-f", "null", "-"
@@ -214,6 +219,7 @@ class RenderService:
     ) -> List[Dict]:
         """Prüft Clips und transkodiert bei Bedarf in einheitliches Format."""
         normalized = []
+        normalized_cache = {}  # Cache für bereits transkodierte Clips: input_path -> new_clip
         total = len(timeline)
 
         # Ermittle Ziel-Codec basierend auf dem aktiven Encoder
@@ -233,6 +239,16 @@ class RenderService:
                 logger.warning(f"Clip {i} hat keinen Pfad-Eintrag!")
                 continue
 
+            # Cache-Lookup: Wenn derselbe Clip bereits normalisiert wurde, Pfad wiederverwenden
+            if path in normalized_cache:
+                cached_clip = normalized_cache[path]
+                new_clip = clip.copy()
+                new_clip["clip_path"] = cached_clip["clip_path"]
+                new_clip["file_path"] = cached_clip["file_path"]
+                new_clip["is_temp"] = cached_clip["is_temp"]
+                normalized.append(new_clip)
+                continue
+
             needs_norm = self._check_needs_normalization(path, w, h, fps, target_codec)
             if needs_norm:
                 if cb:
@@ -247,6 +263,7 @@ class RenderService:
                 new_clip["clip_path"] = str(temp_path)
                 new_clip["file_path"] = str(temp_path)
                 new_clip["is_temp"] = True
+                normalized_cache[path] = new_clip
                 normalized.append(new_clip)
             else:
                 normalized.append(clip)
@@ -255,7 +272,7 @@ class RenderService:
 
     def _check_needs_normalization(self, path: str, tw: int, th: int, tfps: float, target_codec: str) -> bool:
         cmd = [
-            "ffprobe", "-v", "error",
+            _get_ffprobe_path(), "-v", "error",
             "-show_streams",
             "-of", "json", path
         ]
@@ -304,7 +321,14 @@ class RenderService:
             if pix_fmt != "yuv420p" and pix_fmt != "yuv420p10le":
                 logger.info(f"Mismatch PixFmt: {Path(path).name} hat {pix_fmt}, normalisiere zu yuv420p")
                 return True
-                
+
+            # AP2.2 (Audit 2026-06-10): SAR-Mismatch fuehrt im Concat-Demuxer zu
+            # Stream-Parameter-Wechseln (anamorphe Clips). "0:1"/"N/A" = unbekannt -> ok.
+            sar = video_stream.get("sample_aspect_ratio", "1:1")
+            if sar not in ("1:1", "0:1", "N/A", ""):
+                logger.info(f"Mismatch SAR: {Path(path).name} hat {sar}, normalisiere zu 1:1")
+                return True
+
             return False
         except Exception as e:
             logger.warning(f"FFprobe check failed: {e}")
@@ -354,7 +378,7 @@ class RenderService:
         for attempt_idx, encoder in enumerate(chain):
             enc_args = self._encoder_args(encoder)
             cmd = [
-                "ffmpeg", "-y", "-i", input_path,
+                _get_ffmpeg_path(), "-y", "-i", input_path,
                 "-vf", vf_filter,
                 *enc_args,
                 "-an", str(output_path)
@@ -463,7 +487,7 @@ class RenderService:
     ) -> tuple[list[str], float]:
         """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
         cmd = [
-            "ffmpeg", "-y",
+            _get_ffmpeg_path(), "-y",
             "-f", "concat", "-safe", "0",
             "-segment_time_metadata", "1",
             "-i", str(list_path)
@@ -539,6 +563,21 @@ class RenderService:
         last_error: Optional[Exception] = None
         for attempt_idx, encoder in enumerate(chain):
             logger.info(f"Final Render Encoder: {encoder} (attempt {attempt_idx + 1}/{len(chain)})")
+
+            # AP2.3 (Audit 2026-06-10): Encoder-Fallback war nur ein Log-Warning —
+            # ein stiller CPU-Encode (10x langsamer) blieb für den User unsichtbar.
+            # Jetzt via progress_callback in die Render-Progress-Kette (SSE) gemeldet.
+            if attempt_idx > 0 and progress_callback:
+                try:
+                    self._emit_progress(
+                        progress_callback,
+                        f"⚠ Encoder-Fallback aktiv: {primary} → {encoder}"
+                        + (" (CPU-Encoding, deutlich langsamer)" if encoder.startswith("libx") else ""),
+                        0.0,
+                        {"encoder_fallback": True, "encoder": encoder, "primary": primary},
+                    )
+                except Exception:
+                    pass
 
             cmd, effective_duration = self._build_render_cmd(
                 list_path, audio_path, output_path,
@@ -789,7 +828,7 @@ class RenderService:
 
     def _get_audio_duration(self, audio_path: str) -> Optional[float]:
         cmd = [
-            "ffprobe", "-v", "error",
+            _get_ffprobe_path(), "-v", "error",
             "-show_entries", "format=duration",
             "-of", "json", audio_path
         ]
