@@ -101,6 +101,7 @@ class ModelListEntry(BaseModel):
     is_active: bool = False
     active_tasks: list[str] = Field(default_factory=list)
     vision: bool = False
+    provider: str = "lmstudio"
 
 
 class ModelListResponse(BaseModel):
@@ -173,34 +174,38 @@ def _enrich_model_entry(entry: ModelListEntry, registry: "ModelRegistry") -> Mod
             curated = c_model
             break
 
-    # 2. Parsing von Parameter-Größe aus dem Namen
-    parsed_param = None
-    # Regex-Suche nach Zahl vor B/b, z.B. 8b, 35b, 1.5b
-    param_match = re.search(r'(?:\b|[-_])([0-9]+(?:\.[0-9]+)?)[bB](?:\b|[-_]|\d)', entry.name)
-    if param_match:
-        parsed_param = param_match.group(1)
-        entry.parameter_size = f"{parsed_param}B"
+    # 2. Parsing von Parameter-Größe aus dem Namen (nur wenn nicht bereits belegt)
+    if not entry.parameter_size:
+        parsed_param = None
+        # Regex-Suche nach Zahl vor B/b, z.B. 8b, 35b, 1.5b
+        param_match = re.search(r'(?:\b|[-_])([0-9]+(?:\.[0-9]+)?)[bB](?:\b|[-_]|\d)', entry.name)
+        if param_match:
+            parsed_param = param_match.group(1)
+            entry.parameter_size = f"{parsed_param}B"
 
-    # 3. Parsing von Quantisierung
-    parsed_quant = None
-    # Suche nach GGUF-Quantisierungscodes wie q4_k_m, q8_0, fp16
-    quant_match = re.search(r'(?:\b|[-_])(q[0-9]+_[kK]_[mMsSlL]|q[0-9]+_[0-9]|[qQ][0-9]_[kK]|[qQ][0-9]_[0-9a-zA-Z]|[fF][pP]16|[fF]16|[fF][pP]8|[gG][gG][uU][fF])(?:\b|[-_])', entry.name)
-    if quant_match:
-        parsed_quant = quant_match.group(1).upper()
-        entry.quantization_level = parsed_quant
-    elif "fp16" in entry.name.lower() or "f16" in entry.name.lower():
-        entry.quantization_level = "FP16"
-    elif "fp8" in entry.name.lower() or "f8" in entry.name.lower():
-        entry.quantization_level = "FP8"
+    # 3. Parsing von Quantisierung (nur wenn nicht bereits belegt)
+    if not entry.quantization_level:
+        parsed_quant = None
+        # Suche nach GGUF-Quantisierungscodes wie q4_k_m, q8_0, fp16
+        quant_match = re.search(r'(?:\b|[-_])(q[0-9]+_[kK]_[mMsSlL]|q[0-9]+_[0-9]|[qQ][0-9]_[kK]|[qQ][0-9]_[0-9a-zA-Z]|[fF][pP]16|[fF]16|[fF][pP]8|[gG][gG][uU][fF])(?:\b|[-_])', entry.name)
+        if quant_match:
+            parsed_quant = quant_match.group(1).upper()
+            entry.quantization_level = parsed_quant
+        elif "fp16" in entry.name.lower() or "f16" in entry.name.lower():
+            entry.quantization_level = "FP16"
+        elif "fp8" in entry.name.lower() or "f8" in entry.name.lower():
+            entry.quantization_level = "FP8"
 
     # 4. Schätzung der Dateigröße, falls 0
     if entry.size_bytes == 0:
         param_val = 7.0 # Standardwert
-        if parsed_param:
-            try:
-                param_val = float(parsed_param)
-            except ValueError:
-                pass
+        if entry.parameter_size:
+            param_match = re.search(r'([0-9]+(?:\.[0-9]+)?)', entry.parameter_size)
+            if param_match:
+                try:
+                    param_val = float(param_match.group(1))
+                except ValueError:
+                    pass
         elif curated:
             param_val = curated["size_estimate_gb"] / 0.58 # rückgerechnet
 
@@ -225,6 +230,10 @@ def _enrich_model_entry(entry: ModelListEntry, registry: "ModelRegistry") -> Mod
         entry.size_gb = round(est_gb, 2)
         entry.size_mb = round(est_gb * 1024, 1)
         entry.size_bytes = int(est_gb * 1024 * 1024 * 1024)
+    else:
+        # Falls Größe bereits bekannt (z.B. von Ollama), rechnen wir GB und MB korrekt aus!
+        entry.size_gb = round(entry.size_bytes / (1024 * 1024 * 1024), 2)
+        entry.size_mb = round(entry.size_bytes / (1024 * 1024), 1)
 
     # 5. Vision-Fähigkeit erkennen
     entry.vision = registry._is_vision_capable(entry.name)
@@ -429,6 +438,9 @@ async def list_models() -> ModelListResponse:
     lms_models = await _fetch_from_provider(lmstudio_client, lmstudio_ok)
     oll_models = await _fetch_from_provider(ollama_client, ollama_ok)
 
+    lms_names = {m.name for m in lms_models}
+    oll_names = {m.name for m in oll_models}
+
     for m in lms_models + oll_models:
         m_name = m.name
         if m_name not in seen_names:
@@ -454,6 +466,17 @@ async def list_models() -> ModelListResponse:
     entries = []
     for m in merged_models:
         entry = ModelListEntry(**m.to_dict())
+        
+        # Provider-Zuweisung
+        is_lms = m.name in lms_names
+        is_oll = m.name in oll_names
+        if is_lms and is_oll:
+            entry.provider = "both"
+        elif is_oll:
+            entry.provider = "ollama"
+        else:
+            entry.provider = "lmstudio"
+
         enriched = _enrich_model_entry(entry, registry)
         entries.append(enriched)
 

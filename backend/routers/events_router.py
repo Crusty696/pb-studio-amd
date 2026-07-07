@@ -29,9 +29,15 @@ GPU_POLL_SECONDS = 5.0
 
 
 def _register_client_queue(prefix: str) -> str:
-    client_id = f"{prefix}:{uuid.uuid4().hex}"
-    get_event_queue(client_id)
-    return client_id
+    """Erzeugt nur die Client-ID.
+
+    AP1.5 (Audit 2026-06-10): Die Queue wird NICHT mehr hier registriert,
+    sondern erst in der ersten Generator-Iteration von _event_stream.
+    Vorher: Client bricht ab bevor Starlette den Stream startet -> finally
+    des Generators läuft nie -> Queue leakt dauerhaft in _event_queues
+    (und hielt has_client=True im Zombie-Watcher künstlich aufrecht).
+    """
+    return f"{prefix}:{uuid.uuid4().hex}"
 
 
 def _cleanup_client_queue(client_id: Optional[str]) -> None:
@@ -46,10 +52,13 @@ async def _event_stream(
     client_id: str,
     event_filter: Optional[set[str]] = None,
 ) -> AsyncIterator[str]:
-    """Generiert SSE Events aus einer dedizierten per-connection Queue."""
-    queue = get_event_queue(client_id)
+    """Generiert SSE Events aus einer dedizierten per-connection Queue.
 
+    Queue-Registrierung passiert hier (erste Generator-Iteration), damit
+    das finally-Cleanup garantiert zur Registrierung gehört (AP1.5).
+    """
     try:
+        queue = get_event_queue(client_id)
         while True:
             if await request.is_disconnected():
                 logger.debug("SSE Client getrennt: %s", client_id)

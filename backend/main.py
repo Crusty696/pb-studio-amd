@@ -67,11 +67,19 @@ _file_handler = setup_rotating_logging(
     datefmt=DEFAULT_DATE_FORMAT,
 )
 
+from .dependencies import SSELogHandler
+
+_sse_handler = SSELogHandler()
+_sse_handler.setLevel(_log_level)
+_sse_handler.setFormatter(
+    logging.Formatter("%(name)s: %(message)s")
+)
+
 logging.basicConfig(
     level=_log_level,
     format=DEFAULT_LOG_FORMAT,
     datefmt=DEFAULT_DATE_FORMAT,
-    handlers=[_console_handler, _file_handler],
+    handlers=[_console_handler, _file_handler, _sse_handler],
 )
 logger = logging.getLogger("pb_studio.backend")
 
@@ -364,11 +372,39 @@ def _check_gpu_available() -> bool:
 
 
 def _force_exit() -> None:
-    """Graceful Shutdown via SIGTERM (schließt SQLite WAL sauber)."""
+    """Graceful Shutdown: löst uvicorns Signal-Handler in-process aus.
+
+    AP1.4 (Audit 2026-06-10): os.kill(pid, SIGTERM) ist auf Windows
+    TerminateProcess (harter Kill) — Lifespan-Teardown/DB-Cleanup liefen NIE.
+    Sucht zuerst die uvicorn.Server-Instanz im GC und setzt `should_exit = True`.
+    Falls nicht gefunden, ruft signal.raise_signal(signal.SIGINT) auf →
+    sorgt für echten Lifespan-Shutdown (SQLite/WAL, SmartDirector.reset_instance).
+    Fallback: harter Exit nach 10s, falls der graceful Shutdown hängt.
+    """
     import os
     import signal
-    # SEC-003 Fix: os._exit(0) → SIGTERM (uvicorn Lifespan-Shutdown, DB-Cleanup)
-    os.kill(os.getpid(), signal.SIGTERM)
+    import threading as _threading
+    import gc
+
+    fallback = _threading.Timer(10.0, lambda: os._exit(0))
+    fallback.daemon = True
+    fallback.start()
+    
+    try:
+        import uvicorn
+        for obj in gc.get_objects():
+            # Verwende string-Vergleich für den Klassennamen, um Import-Probleme zu vermeiden
+            if type(obj).__name__ == "Server" and type(obj).__module__ == "uvicorn.server":
+                logger.info("Uvicorn-Server-Instanz im GC gefunden. Setze should_exit = True...")
+                obj.should_exit = True
+                return
+    except Exception as gc_err:
+        logger.warning(f"Fehler bei der GC-Suche nach dem Uvicorn-Server: {gc_err}")
+
+    try:
+        signal.raise_signal(signal.SIGINT)
+    except Exception:
+        os._exit(0)
 
 
 # Router importieren
