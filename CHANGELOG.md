@@ -3,6 +3,48 @@
 
 ---
 
+## 2026-06-12 - Audit-Fix Phase 3: Arbeitsplan AP1-AP5 (offene Funde aus FULL_AUDIT_2026-06-10)
+
+Alle im Arbeitsplan (`ARBEITSPLAN_AUDIT_2026-06-12.md`) als verifiziert-offen markierten Punkte umgesetzt.
+**Verifikationsstand: Code-Edits abgeschlossen und per File-Read verifiziert; Release-Build + pytest standen
+zum Edit-Zeitpunkt noch aus** (Sandbox-Mount eingefroren, Computer-Use-Freigabe nicht erteilt) —
+`AUDIT_FIX_VERIFY.bat` liegt bereit und schreibt `verify_audit_fix_2026-06-12.log` + `VERIFY_DONE.flag`.
+
+### AP1 — Backend (FastAPI)
+- `pacing_router.py`: `except HTTPException: raise` vor generischem 500-Handler (400-Validierung kam als 500 an); ffprobe-`_get_audio_duration` via `asyncio.to_thread` (blockierte Event-Loop/SSE); `state_conn`-Write hinter `db_write_lock`+`to_thread`.
+- `main.py:_force_exit`: `signal.raise_signal(SIGINT)` statt `os.kill(SIGTERM)` — SIGTERM war auf Windows TerminateProcess, Lifespan-Teardown lief NIE; 10s-Hard-Exit-Fallback.
+- `events_router.py`: SSE-Queue-Registrierung in die erste Generator-Iteration verlegt (Queue-Leak bei nie gestartetem Stream).
+
+### AP2 — Rendering/FFmpeg
+- `render_service.py`: alle bare `"ffmpeg"`/`"ffprobe"` → `_get_ffmpeg_path()`/`_get_ffprobe_path()` (5 Stellen); SAR-Check in `_check_needs_normalization`; Encoder-Fallback (AMF→CPU) wird via `progress_callback`/SSE gemeldet statt nur Log-Warning.
+- `preview_renderer.py`: `get_preview_encoder()` (h264_amf speed) statt hartem libx264, FFmpeg-Pfad aufgelöst.
+
+### AP3 — WPF
+- **K7-Nachfix:** `MainWindow.OnClosing` rief `BeginShutdown()` VOR `App.OnExit` → Save-on-Exit war trotz K7-Fix tot. BeginShutdown läuft jetzt nur noch in OnExit NACH SaveProjectAsync.
+- `App.OnExit`: von `async void` auf synchron-gebunden (Task.Run + Wait(12s)) — Prozess konnte vorher enden bevor Save/Shutdown/StopAsync liefen.
+- `PythonBridgeService`: Kill-on-Close **JobObject** (P/Invoke) — uvicorn-Prozessbaum stirbt garantiert mit, auch bei WPF-Hard-Crash; `BackendReadyMessage` wird jetzt nach Health-OK + im Attach-Modus gesendet (Settings-Tab zeigte sonst dauerhaft „Offline").
+- `SSEClient`: 50-Versuche-Hard-Cap entfernt (Stream starb nach ~25min Backend-Ausfall endgültig).
+- `IApiClient`+`TimelineViewModel`: `GetOnsetsAsync` ins Interface, VM nutzt `IApiClient` (eliminiert zweite ApiClient-Instanz). MainWindow: ungenutzter IApiClient-Parameter entfernt.
+- `WaveformRenderer`/`DepthRenderer`: `CollectionChanged`-Abo — In-place-Mutationen (Clear+Add) feuerten kein Redraw, Waveform erschien erst bei Zoom/Resize.
+- `VideoLibraryView.xaml`+`SceneInfo`: tote Bindings gefixt — `SceneIndex` jetzt client-seitig gesetzt, Balken+Wert zeigen `Confidence` (per-Scene-Motion existiert backend-seitig nicht); String-`Binding Source="100.0"` → typisierter `sys:Double`; `LoadScenesAsync` cleart vor Add (Szenen-Duplikate bei Re-Analyse).
+- NICHT umgesetzt: AP3.6 Video-Grid-Virtualisierung (bräuchte neue NuGet-Dependency `VirtualizingWrapPanel` → laut Projektregeln User-Entscheid).
+
+### AP4 — Audio
+- `streaming_analyzer.py`: neuer `energy_only`-Modus (überspringt beat_track) — `audio_router` berechnet die Energy-Curve jetzt vom **Original-Mix**, wenn Beats vom Drums-Stem kamen (vorher stille Semantik-Drift auf Drum-RMS).
+- `audio_router.py`: Beat-Strengths >600s-Snapshot jetzt neutral 1.0 statt Bogus-Clamping auf den letzten Snapshot-Frame.
+- `structure_analyzer.py`: `total_duration`-Parameter — DJ-Mix-Branch (`>600s`) war im API-Pfad unerreichbar, weil der Snapshot exakt 600.0s lang ist; Router übergibt jetzt die echte Datei-Dauer.
+- `beat_detector.py`: `librosa.get_duration` in try (korrupte Datei riss vorher die gesamte Beat-Analyse inkl. Energy mit).
+- `waveform_analyzer.py`: Langdatei-Guard (>30min → SR 11025) + float32-Downcast nach sosfiltfilt (float64-RAM-Peak).
+
+### AP5 — IRON-Rules-Hygiene & Scripts
+- `recovery_handler.py`: `torch.cuda`-Block entfernt (R1) + toter `global_cache`-Import raus.
+- 4 Model-Scripts (`download_clap_model`, `download_siglip_onnx`, `export_moondream_onnx`, `export_raft_onnx`): `enable_cpu_mem_arena = False` ergänzt (R2 verlangt BEIDE Flags).
+- `verify_release_smoke.ps1`: `$script:SmokeExitCode` statt `$global:LASTEXITCODE` (taskkill im finally überschrieb den Exit-Code → FAIL konnte als 0 enden); Default FAIL.
+- `embedding_cache.py`: voller media_hash im Dateinamen statt `[:16]` (Kollisions-Überschreibung) + `model_version` sanitisiert.
+- `brain_store.py`: `_patterns_lock` analog `_weights_lock` (patterns_conn war cross-thread ohne Lock).
+
+---
+
 ## 2026-05-29 - Epic 00012: Timeline High-Fidelity Playback & DJ-Beatgrid (Commit `40e4a8d`)
 
 Erfolgreicher Abschluss des finalen Feature-Epics der Entwicklungs-Roadmap. Etablierung aller UI- und Playback-Refactorings für eine DAW-Level Wellenform-Darstellung und ruckelfreie Wiedergabe.

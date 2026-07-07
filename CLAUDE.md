@@ -69,15 +69,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-06-09 (Epic 00013 Stems-Behebung & Pipeline-Integration abgeschlossen)
-- **Phase:** 🟢 Aktiv, System im stabilen "All-Green" Zustand, alle Aufgaben vollständig abgeschlossen.
-- **Status (2026-06-09):**
-  - **System-wide Bug Hunting & Codebase Audit (Epic 00013):** Vollständig abgeschlossen und verifiziert. Phase-Gates (`.completed`, `.qc-passed`, `qc-report.md`) erfolgreich aktualisiert.
-  - **Stem-Separation & Pipeline-Integration:** Modellauswahl für `htdemucs` auf `htdemucs.yaml` korrigiert (Generierungs-Crash behoben). Die Audio-Analyse-Pipeline liest nun bei Vorhandensein von Stems automatisch Drums für Beat-Erkennung und Instrumental für Key-Erkennung aus und analysiert diese.
-  - **WPF & Tests:** Alle 29 Backend-Router Tests und die gesamte Audio-Testsuite erfolgreich bestanden.
+- **Date:** 2026-06-12 (Audit-Fix Phase 3: Arbeitsplan AP1–AP5 umgesetzt)
+- **Phase:** 🟡 Code komplett, **Verifikation ausstehend** — Release-Build + pytest seit den AP1–AP5-Edits NICHT gelaufen.
+- **Status (2026-06-12):**
+  - **Full-Stack-Audit (2026-06-10, `FULL_AUDIT_2026-06-10.md`):** 11🔴/~49🟠/~79🟡 Funde. K1–K11 + Phase-2-Tasks via Epic 00015 gefixt (Code-verifiziert am 2026-06-12).
+  - **Arbeitsplan-Abgleich (`ARBEITSPLAN_AUDIT_2026-06-12.md`):** alle verifiziert-offenen 🟠-Punkte AP1–AP5 umgesetzt (Details CHANGELOG 2026-06-12). Wichtigster Einzelfund dabei: K7-Nachfix — `MainWindow.OnClosing` machte den Save-on-Exit-Fix wieder zunichte.
+  - **⚠ VERIFIKATION OFFEN:** `AUDIT_FIX_VERIFY.bat` (Projektroot) ausführen → schreibt `verify_audit_fix_2026-06-12.log` + `VERIFY_DONE.flag` (py_compile, dotnet Release-Build, pytest). Sandbox-Mount war eingefroren, Computer-Use-Freigabe lief 2× ins Timeout — kein „Build OK"-Claim ohne diesen Lauf (IRON Rule 10).
+  - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (neue NuGet-Dependency → User-Entscheid); AP6-Backlog (~45 🟡/🟢, vor Bearbeitung einzeln re-verifizieren); Obsidian-Vault-Sync (kein Vault-Zugriff in Cowork-Session).
 - **Next Task:**
-  - Bereit für neue Feature-Requests oder Codebase-Refactorings vom Benutzer.
-- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**).
+  - `AUDIT_FIX_VERIFY.bat` ausführen, Log prüfen, bei FAIL fixen; danach Commit + Vault-Sync.
+- **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 
 **Kern-Architektur-Entscheidungen:**

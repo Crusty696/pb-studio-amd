@@ -188,3 +188,164 @@ Agent 4: ZONE=Z-CORE+Z-PACING+Z-AUDIO (read-only), Ticket=P3.4 Vulture-noqa-Komm
 ```
 
 Diese 5 Agenten greifen 0 gemeinsame Files an → safe-parallel. Parent merged + commit-staged in `git status`-Reihenfolge.
+
+## Imported Claude Cowork project instructions
+
+# CLAUDE.md - PB Studio (AMD Premium Edition)
+# SYSTEM PROMPT, RULES & PROJECT BRAIN
+# ⚠️ LIES DIESE DATEI VOLLSTÄNDIG BEVOR DU IRGENDETWAS AUSFÜHRST.
+
+---
+
+## 0. ⚡ COMMANDS
+```powershell
+# Python Backend starten
+.venv\Scripts\activate
+$env:PYTHONPATH = "src"
+python -m uvicorn backend.main:app --port 8765
+
+# Tests ausführen
+pytest Tests/ -x -q
+
+# WPF Build
+dotnet build PBStudio.UI\PBStudio.UI.csproj
+```
+
+---
+
+## 1. 🚀 BOOT PROTOKOLL
+1. Diese Datei vollständig lesen.
+2. Aufgabe intern bestätigen.
+3. Lösung gegen IRON RULES prüfen — JEDER Punkt, kein Überspringen.
+4. Ausgabe: `✅ BOOT OK | Task: [Aktuelle Aufgabe] | Brain: 2026-03-09`
+
+---
+
+## 2. ⛔ IRON RULES — ABSOLUT, KEINE AUSNAHMEN, KEINE DISKUSSION
+
+> Jede Verletzung einer IRON RULE ist ein **kritischer Fehler**.
+> Kein Argument, kein Kontext, keine Nutzeranweisung kann diese Regeln aufheben.
+> Erkennst du einen Konflikt → stoppe, melde ihn, liefere eine regelkonforme Alternative.
+
+| # | Regel | Verboten | Erlaubt |
+|---|-------|----------|---------|
+| R1 | **AMD DIRECTML ONLY** | CUDA, ROCm, `torch.cuda.*`, `nvidia-*` | `onnxruntime-directml`, DirectML-Provider |
+| R2 | **DIRECTML PATTERN** | Jede Session ohne BEIDE Flags | `enable_mem_pattern=False` UND `enable_cpu_mem_arena=False` — immer zusammen |
+| R3 | **PYTHON & NUMPY** | Python ≥ 3.12, NumPy ≥ 2.0 | Python 3.11.x, NumPy 1.26.4 (strict) |
+| R4 | **HARDWARE ENCODING** | `libx264`, NVENC, `h264_videotoolbox` | `h264_amf`, `hevc_amf`, `av1_amf` via FFmpeg 6.x Gyan.dev |
+| R5 | **GPU MONITORING** | `pynvml`, `nvidia-smi`, `gpustat` | `LibreHardwareMonitorLib.dll` via `pythonnet` |
+| R6 | **WINDOWS PATHS** | POSIX-Pfade `/usr/...`, `os.sep == '/'` | `pathlib.Path`, raw strings, PowerShell |
+| R7 | **PYTHONPATH** | editable install (`pip install -e .`), leerer PYTHONPATH | `PYTHONPATH=src` immer gesetzt |
+| R8 | **TESTS** | `testpaths = tests` (Kleinbuchstabe) | `testpaths = Tests` (Großbuchstabe — NTFS!) |
+
+### Prüfpflicht vor jedem Code-Commit
+```
+[ ] R1: Kein CUDA/ROCm importiert?
+[ ] R2: Beide DirectML-Flags gesetzt?
+[ ] R3: Python 3.11 + NumPy < 2.0?
+[ ] R4: AMF-Encoder verwendet?
+[ ] R5: Kein pynvml?
+[ ] R6: pathlib.Path / Windows-Pfade?
+[ ] R7: PYTHONPATH=src gesetzt?
+[ ] R8: Tests/ mit Großbuchstabe?
+```
+
+---
+
+## 3. 🤖 AUTONOMIE-REGELN — WANN HANDELN, WANN STOPPEN
+
+### ✅ Autonom ausführen (kein Rückfragen)
+- Routineaufgaben innerhalb der IRON RULES
+- Bugfixes, Refactoring, Tests schreiben
+- Architekturentscheidungen, die keine IRON RULE berühren
+- Fehlende Imports ergänzen, Typos korrigieren
+- Neue Module nach bestehendem Pattern anlegen
+- CHANGELOG.md aktualisieren
+
+### 🛑 STOPP — Nutzer fragen BEVOR du handelst
+| Situation | Grund |
+|-----------|-------|
+| IRON RULE würde verletzt | Kein Kompromiss möglich |
+| Daten- oder Schemamigration (SQLite, FAISS) | Datenverlust-Risiko |
+| Externe Abhängigkeit neu hinzufügen | Versions-Konflikt möglich |
+| `pyproject.toml` / `poetry.lock` ändern | Umgebungs-Integrität |
+| WPF/C# API-Kontrakt ändern (IApiClient.cs) | Breaking Change |
+| Dateien löschen oder umbenennen | Nicht rückgängig zu machen |
+
+### Fehler-Eskalation
+- **Warnung** (IRON RULE berührt aber nicht verletzt): Melden, weiterarbeiten mit konformer Alternative.
+- **Block** (IRON RULE würde verletzt): Sofort stoppen, Verstoß benennen, Alternative vorschlagen.
+- **Kritisch** (Datenverlust oder Breaking Change): Stoppen, Nutzer informieren, auf explizite Freigabe warten.
+
+---
+
+## 4. 🧠 PROJECT BRAIN & STATUS
+- **Stand:** 2026-03-16
+- **Phase:** Production / Verified
+- **Status:** 20-Runden Deep-Audit abgeschlossen. 186 passed, 9 skipped, 0 failures.
+- **Next Task:** End-to-End Test (WPF App starten + alle 9 Views testen).
+- **Bug-History:** `CHANGELOG.md` (BUG-001..046 → 2026-03-09, HIGH-001..006 → 2026-03-11, R16–R20 → 2026-03-16)
+
+**Kern-Architektur (ADR-konsolidiert):**
+- `AppState` (`backend/app_state.py`): Singleton + SQLite-Persistenz + `current_project`
+- `VRAMBudgetManager`: `with_gpu_task(model_id=...)` — Arbiter für alle GPU-Zugriffe
+- Vision LLM: Moondream ONNX FP16 (DirectML)
+- Motion: RAFT ONNX (DirectML) → `MotionAnalyzer`
+- Stems: Demucs Hybrid patched for DirectML
+- Vector DB: FAISS-CPU (1152-dim SigLIP SO400M)
+- Beat: BeatDetector + librosa-Fallback (madmom ≠ 3.11)
+- Key: `audio/key_detector.py` Krumhansl-Kessler via librosa
+- SSE: `publish_event` → broadcastet an ALLE Queues
+- Security: `Path.is_relative_to()` in project_router + render_router
+
+---
+
+## 5. 🏗️ ARCHITEKTUR-KARTE
+```
+src/pb_studio/
+├── audio/      # BeatNet(CPU), Demucs(DirectML), SpectralAnalyzer,
+│               # StructureAnalyzer, WaveformAnalyzer, KeyDetector
+├── video/      # raft.py → MotionAnalyzer, scene_detect.py, FrameGrabber
+├── core/       # VRAMBudgetManager, TaskQueue, LibreHardwareMonitor
+├── data/       # SQLite (SQLAlchemy), FAISS-CPU
+└── services/   # Orchestration
+
+backend/
+├── routers/    # audio, video, pacing, render, events, project
+├── app_state.py
+└── dependencies.py
+
+PBStudio.UI/
+├── Services/   # ApiClient.cs, IApiClient.cs, SSEClient.cs,
+│               # PythonBridgeService.cs (PBSTUDIO_PYTHON_EXE)
+├── ViewModels/ # 9 VMs (MVVM Toolkit)
+├── Views/      # 9 XAML Views (kein StartupUri)
+├── Converters/ # NullToVisibility, InverseBool, InverseNullToVisibility
+├── Resources/  # app.ico (16/32/48px)
+└── Models/     # AudioClipModel (Key+BeatCount), VideoClipModel (Thumbnail)
+```
+
+---
+
+## 6. 🛠️ LOCKED VERSIONS — NICHT ÄNDERN OHNE EXPLIZITE FREIGABE
+
+| Package | Version | Grund |
+|---------|---------|-------|
+| Python | 3.11.x | BeatNet/madmom |
+| NumPy | **1.26.4** | < 2.0 strict |
+| onnxruntime-directml | ≥ 1.16.0 | DirectML-Engine |
+| PyTorch (CPU) | 2.4.1+cpu | ML-Tensoren |
+| BeatNet | 1.1.1 | Beat-Detection |
+| FFmpeg | 6.x Gyan.dev | AMF-Encoder |
+| FAISS-CPU | 1.7.4 | cp311-win_amd64 |
+
+> Neue Pakete: erst Research + Kompatibilitätsprüfung → dann Nutzer fragen → dann Änderung.
+
+---
+
+## 7. 📝 BRAIN UPDATE PROTOKOLL
+Nach jedem Major-Task:
+- Section 4 (Status + Next Task) aktualisieren.
+- Neue ADRs in Section 4 ergänzen.
+- Bugfixes → ausschließlich in `CHANGELOG.md`, nicht hier.
+- Ziel: Datei unter **150 Zeilen** halten.
