@@ -162,7 +162,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         var files = _dialogService.OpenFiles(
             "Audio-Dateien zur Bibliothek hinzufügen",
-            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac|Alle Dateien|*.*"
+            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac;*.aiff;*.aif|Alle Dateien|*.*"
         );
 
         if (files.Count == 0) return;
@@ -179,7 +179,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         StatusText = $"Scanne Ordner: {folder}...";
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"
+            ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".aiff", ".aif"
         };
 
         try

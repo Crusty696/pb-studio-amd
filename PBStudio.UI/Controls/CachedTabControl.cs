@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Automation.Peers;
 
 namespace PBStudio.UI.Controls;
 
@@ -182,5 +183,53 @@ public class CachedTabControl : TabControl
             return directItem;
 
         return ItemContainerGenerator.ContainerFromIndex(index) as TabItem;
+    }
+
+    /// <summary>
+    /// Gibt den aktuell aktiven ContentPresenter zurück (für UI-Automation).
+    /// </summary>
+    public ContentPresenter? GetActiveContentPresenter()
+    {
+        var selectedTab = GetTabItem(SelectedIndex);
+        if (selectedTab != null && _cachedPresenters.TryGetValue(selectedTab, out var presenter))
+        {
+            return presenter;
+        }
+        return null;
+    }
+
+    protected override AutomationPeer OnCreateAutomationPeer()
+    {
+        return new CachedTabControlAutomationPeer(this);
+    }
+}
+
+/// <summary>
+/// AutomationPeer für CachedTabControl, der den geladenen Content-Tree für UI-Automation (UIA) freigibt.
+/// </summary>
+public class CachedTabControlAutomationPeer : TabControlAutomationPeer
+{
+    private readonly CachedTabControl _control;
+
+    public CachedTabControlAutomationPeer(CachedTabControl control) : base(control)
+    {
+        _control = control;
+    }
+
+    protected override List<AutomationPeer> GetChildrenCore()
+    {
+        var children = base.GetChildrenCore() ?? new List<AutomationPeer>();
+
+        var activePresenter = _control.GetActiveContentPresenter();
+        if (activePresenter != null)
+        {
+            var peer = CreatePeerForElement(activePresenter);
+            if (peer != null)
+            {
+                children.Add(peer);
+            }
+        }
+
+        return children;
     }
 }

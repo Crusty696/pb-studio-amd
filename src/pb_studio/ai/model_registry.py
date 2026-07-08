@@ -32,14 +32,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
     "video_captioning": {
-        "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "balance": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "quality": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "speed":   ["qwen3.5-vl", "google/gemma-4-e4b", "qwen/qwen3-vl-8b"],
+        "balance": ["qwen3.6-vision", "qwen3.5-vl", "qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "quality": ["qwen3.6-vision", "qwen3.5-vl", "gemma-4-26b-a4b-it-ultra-uncensored-heretic", "qwen/qwen3-vl-8b"],
     },
     "image_captioning": {
-        "speed":   ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "balance": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
-        "quality": ["qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "speed":   ["qwen3.5-vl", "google/gemma-4-e4b", "qwen/qwen3-vl-8b"],
+        "balance": ["qwen3.6-vision", "qwen3.5-vl", "qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
+        "quality": ["qwen3.6-vision", "qwen3.5-vl", "gemma-4-26b-a4b-it-ultra-uncensored-heretic", "qwen/qwen3-vl-8b"],
     },
     "chat": {
         "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],

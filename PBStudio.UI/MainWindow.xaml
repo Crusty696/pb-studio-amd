@@ -52,6 +52,37 @@
                         <Ellipse Width="7" Height="7" Fill="{Binding BackendStatusColor}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                         <TextBlock Text="{Binding BackendStatusText}" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource AbletonTextDim}"/>
                     </StackPanel>
+
+                    <!-- Centered LLM Status Widget -->
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Height="26" Width="400" Margin="10,0">
+                        <!-- Progress Bar Background/Filler -->
+                        <ProgressBar Value="{Binding LlmLoadProgress}" Minimum="0" Maximum="100" 
+                                     Height="24" BorderThickness="0"
+                                     Background="#121212"
+                                     Foreground="{Binding LlmStatusColor}"
+                                     Opacity="0.4"/>
+                        
+                        <!-- Text overlay -->
+                        <Border BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1" CornerRadius="3" Padding="8,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <icon:PackIconMaterial Grid.Column="0" Kind="RobotOutline" Width="12" Height="12" VerticalAlignment="Center" Foreground="{Binding LlmStatusColor}" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AbletonText}">
+                                    <Run Text="LLM: " Foreground="{StaticResource AbletonTextDim}"/><Run Text="{Binding LlmModelName, Mode=OneWay}"/>
+                                </TextBlock>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                                    <Border Background="#25FFFFFF" CornerRadius="2" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding LlmProvider, Mode=OneWay}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource AbletonTextDim}"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding LlmStatusText, Mode=OneWay}" FontSize="10" FontWeight="Bold" Foreground="{Binding LlmStatusColor}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </DockPanel>
             </Border>
 

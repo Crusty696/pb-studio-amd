@@ -37,6 +37,7 @@ public class SSEClient : IDisposable
     public event EventHandler<ProgressEventArgs>? ProgressReceived;
     public event EventHandler<LogEventArgs>? LogReceived;
     public event EventHandler<GpuEventArgs>? GpuStatusReceived;
+    public event EventHandler<LlmStatusEventArgs>? LlmStatusReceived;
     public event EventHandler<bool>? ConnectionStateChanged;
     /// <summary>
     /// Spec 00010 T003: Feuert true sobald Backend wieder erreichbar ist; feuert false
@@ -265,6 +266,18 @@ public class SSEClient : IDisposable
 
             switch (streamKind)
             {
+                case StreamKind.Progress when eventType == "llm_status":
+                    {
+                        LlmStatusReceived?.Invoke(this, new LlmStatusEventArgs
+                        {
+                            Model = TryGetString(root, "model"),
+                            Provider = TryGetString(root, "provider"),
+                            Status = TryGetString(root, "status"),
+                            Percent = TryGetDouble(root, "percent"),
+                        });
+                    }
+                    break;
+
                 case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "pacing_progress" or "gpu_error":
                     {
                         var pct = TryGetDouble(root, "percent");
@@ -459,4 +472,12 @@ public class GpuEventArgs : EventArgs
     public int TemperatureC { get; init; }
     public double GpuLoadPercent { get; init; }
     public string Error { get; init; } = "";
+}
+
+public class LlmStatusEventArgs : EventArgs
+{
+    public string Model { get; init; } = "";
+    public string Provider { get; init; } = "";
+    public string Status { get; init; } = ""; // e.g. "loading", "active", "failed"
+    public double Percent { get; init; } = 0.0;
 }

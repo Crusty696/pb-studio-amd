@@ -44,6 +44,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _gpuStatusText = "GPU: Unbekannt";
 
     [ObservableProperty]
+    private string _llmModelName = "Keines (Moondream-Fallback)";
+
+    [ObservableProperty]
+    private string _llmProvider = "Lokal (GPU)";
+
+    [ObservableProperty]
+    private double _llmLoadProgress = 0.0;
+
+    [ObservableProperty]
+    private string _llmStatusText = "Bereit";
+
+    [ObservableProperty]
+    private Brush _llmStatusColor = Brushes.Gray;
+
+    [ObservableProperty]
     private int _selectedTabIndex = 0;
 
     public string? CurrentProjectName => _projects.CurrentProjectName;
@@ -66,6 +81,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _bridge.StatusChanged += OnBackendStatusChanged;
         _sse.ProgressReceived += OnProgressReceived;
         _sse.GpuStatusReceived += OnGpuStatusReceived;
+        _sse.LlmStatusReceived += OnLlmStatusReceived;
         // Spec 00010 T004: Latched-reachability fuer Overlay.
         _sse.BackendReachabilityChanged += OnBackendReachabilityChanged;
         _projects.ProjectChanged += OnProjectChanged;
@@ -212,6 +228,37 @@ public partial class MainViewModel : ObservableObject, IDisposable
         });
     }
 
+    private void OnLlmStatusReceived(object? sender, LlmStatusEventArgs e)
+    {
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        {
+            LlmModelName = string.IsNullOrEmpty(e.Model) || e.Model == "none" ? "Keines (Moondream-Fallback)" : e.Model;
+            LlmProvider = string.IsNullOrEmpty(e.Provider) ? "Lokal (GPU)" : e.Provider;
+            LlmLoadProgress = e.Percent;
+
+            if (e.Status == "loading")
+            {
+                LlmStatusText = $"Lade LLM ({e.Percent}%)";
+                LlmStatusColor = new SolidColorBrush(Color.FromRgb(255, 110, 0)); // Orange
+            }
+            else if (e.Status == "active")
+            {
+                LlmStatusText = "Aktiv";
+                LlmStatusColor = Brushes.LimeGreen;
+            }
+            else if (e.Status == "failed")
+            {
+                LlmStatusText = "Fehler / Fallback";
+                LlmStatusColor = Brushes.Red;
+            }
+            else
+            {
+                LlmStatusText = "Bereit";
+                LlmStatusColor = Brushes.Gray;
+            }
+        });
+    }
+
     private void OnBackendReachabilityChanged(object? sender, bool reachable)
     {
         // Spec 00010 T004: invertierte Flagge — bindbar an Overlay.Visibility
@@ -270,6 +317,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _bridge.StatusChanged -= OnBackendStatusChanged;
         _sse.ProgressReceived -= OnProgressReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
+        _sse.LlmStatusReceived -= OnLlmStatusReceived;
         _sse.BackendReachabilityChanged -= OnBackendReachabilityChanged;
         _projects.ProjectChanged -= OnProjectChanged;
         WeakReferenceMessenger.Default.UnregisterAll(this);

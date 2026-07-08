@@ -1030,11 +1030,28 @@ async def _run_color_and_caption_analysis(
             # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
             if moondream_frames_to_run:
                 try:
+                    from backend.dependencies import publish_event
+                    await publish_event("llm_status", {
+                        "model": "Moondream2 (ONNX)",
+                        "provider": "Local GPU (DirectML)",
+                        "status": "loading",
+                        "percent": 50.0
+                    })
+                    await asyncio.sleep(0.1)
+
                     moondream_tags_list = await with_gpu_task(
                         _run_moondream_inference_on_frames, moondream_frames_to_run,
                         model_id="moondream_fp16"
                     )
                     used_model = "moondream"
+                    
+                    await publish_event("llm_status", {
+                        "model": "Moondream2 (ONNX)",
+                        "provider": "Local GPU (DirectML)",
+                        "status": "active",
+                        "percent": 100.0
+                    })
+                    
                     for tags in moondream_tags_list:
                         if tags:
                             for tag in tags:
@@ -1044,6 +1061,13 @@ async def _run_color_and_caption_analysis(
                             if used_model not in tag_sources:
                                 tag_sources.append(used_model)
                 except Exception as moondream_err:
+                    from backend.dependencies import publish_event
+                    await publish_event("llm_status", {
+                        "model": "Moondream2 (ONNX)",
+                        "provider": "Local GPU (DirectML)",
+                        "status": "failed",
+                        "percent": 0.0
+                    })
                     logger.warning(f"Moondream Fallback GPU-Inferenz fehlgeschlagen: {moondream_err}")
 
             result["tags"] = all_tags[:10]

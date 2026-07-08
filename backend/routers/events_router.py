@@ -85,7 +85,7 @@ async def progress_stream(request: Request) -> StreamingResponse:
     """SSE Stream für Progress-Updates (Analyse, Rendering, Import)."""
     client_id = _register_client_queue("progress")
     logger.info("SSE Client verbunden: /events/progress (%s)", client_id)
-    progress_events = {"analysis_progress", "render_progress", "stem_progress", "import_progress", "pacing_progress", "gpu_error"}
+    progress_events = {"analysis_progress", "render_progress", "stem_progress", "import_progress", "pacing_progress", "gpu_error", "llm_status"}
     return StreamingResponse(
         _event_stream(request, client_id=client_id, event_filter=progress_events),
         media_type="text/event-stream",

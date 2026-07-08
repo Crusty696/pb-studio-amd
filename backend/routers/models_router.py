@@ -41,8 +41,22 @@ router = APIRouter(prefix="/models", tags=["Models (LM Studio)"])
 # ----------------------------------------------------------------------
 CURATED_VISION_MODELS: list[dict[str, Any]] = [
     {
+        "name": "qwen3.6-vision",
+        "description": "Qwen 3.6 Vision — Neuestes Vision-Modell, optimiert fuer komplexe Bild- und Video-Captioning-Tasks (~8 GB VRAM).",
+        "suggested_mode": "quality",
+        "size_estimate_gb": 8.0,
+        "vision": True,
+    },
+    {
+        "name": "qwen3.5-vl",
+        "description": "Qwen 3.5 VL — Hochmodernes und schnelles Vision-Modell der neuesten 3.5er Generation (~8 GB VRAM).",
+        "suggested_mode": "balance",
+        "size_estimate_gb": 8.0,
+        "vision": True,
+    },
+    {
         "name": "qwen/qwen3-vl-8b",
-        "description": "Qwen 3 VL 8B — primaeres Vision-Modell (DE/EN, schnell, ~8 GB VRAM).",
+        "description": "Qwen 3 VL 8B — Vision-Modell (DE/EN, schnell, ~8 GB VRAM).",
         "suggested_mode": "balance",
         "size_estimate_gb": 8.0,
         "vision": True,

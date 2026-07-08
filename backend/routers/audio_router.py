@@ -77,7 +77,7 @@ async def import_audio(
     except PermissionError:
         raise HTTPException(status_code=403, detail="Zugriff verweigert")
 
-    if audio_path.suffix.lower() not in {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"}:
+    if audio_path.suffix.lower() not in {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".aiff", ".aif"}:
         raise HTTPException(status_code=400, detail=f"Nicht unterstütztes Format: {audio_path.suffix}")
 
     try:

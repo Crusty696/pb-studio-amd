@@ -3,6 +3,27 @@
 
 ---
 
+## 2026-07-09 - LLM-Status-Widget (Antigravity-Arbeit fertiggestellt)
+
+Von Antigravity begonnenes Feature abgeschlossen: Live-LLM-Status in der WPF-Statusleiste.
+
+### Feature
+- `MainWindow.xaml` + `MainViewModel.cs`: Zentriertes LLM-Status-Widget (Modell, Provider, Ladefortschritt, Status-Farbe) in der Statusleiste.
+- `SSEClient.cs`: Neues `llm_status`-Event auf dem Progress-Stream (`LlmStatusEventArgs`: Model/Provider/Status/Percent).
+- `lmstudio_vision_wrapper.py` + `video_router.py`: `publish_event("llm_status", ...)` bei Modell-Auswahl, Cache-Hit, Erfolg, Timeout, Fehler und Moondream-Fallback.
+- **Fertigstellungs-Fix (fehlte bei Antigravity):** `events_router.py` — `llm_status` in den `progress_events`-Filter aufgenommen; ohne diesen Eintrag hätte der SSE-Stream das Event nie an das Frontend durchgelassen.
+
+### Nebenänderungen (ebenfalls aus Antigravity-Session übernommen)
+- AIFF-Support (`.aiff`/`.aif`) in `AudioLibraryViewModel.cs` (Dialog + Ordner-Scan) und `audio_router.py` (Import-Whitelist).
+- `models_router.py`/`model_registry.py`: Kuratierte Vision-Modelle `qwen3.6-vision` und `qwen3.5-vl` ergänzt, Task-Präferenzen aktualisiert (+ Testanpassung `test_model_registry.py`).
+- `CachedTabControl.cs`: `AutomationPeer` exponiert gecachten Tab-Content für UI-Automation (pywinauto-GUI-Tests).
+
+### Verifikation
+- `dotnet build -c Release`: 0 Fehler, 0 Warnungen; Release-DLL neu gebaut (2026-07-09 00:05).
+- `pytest Tests/`: 738 passed, 11 skipped (nach dem events_router-Fix gelaufen).
+
+---
+
 ## 2026-07-08 - Audit-Fix Phase 4: Block C (AP6) Hardening & Remaining Risks
 
 Alle verbleibenden Stabilitäts- und Korrektheitsmängel aus Block C (AP6) und offene Restrisiken behoben, verifiziert und eingecheckt.

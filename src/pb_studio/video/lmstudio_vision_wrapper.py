@@ -179,9 +179,18 @@ async def _async_extract_tags(
             logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
             return [], "none"
 
+        try:
+            from backend.dependencies import publish_event
+        except ImportError:
+            async def publish_event(event_type: str, data: dict[str, Any], client_id: str = "default") -> None:
+                pass
+
         exclude_models = set()
         max_attempts = 3
         attempt = 0
+
+        is_ollama = "11434" in client.base_url
+        provider_name = "Ollama" if is_ollama else "LM Studio"
 
         while attempt < max_attempts:
             attempt += 1
@@ -192,12 +201,39 @@ async def _async_extract_tags(
                     model = registry.select_best_for_task(task, mode, exclude=exclude_models)
                 except NoSuitableModelError as exc:
                     logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
+                    await publish_event("llm_status", {
+                        "model": "none",
+                        "provider": provider_name,
+                        "status": "failed",
+                        "percent": 0.0
+                    })
                     return [], "none"
+
+            await publish_event("llm_status", {
+                "model": model,
+                "provider": provider_name,
+                "status": "loading",
+                "percent": 25.0
+            })
+            await asyncio.sleep(0.1)
 
             cache_key = (_frame_hash(frame_rgb), model, mode)
             cached = _cache_get(cache_key)
             if cached is not None:
+                await publish_event("llm_status", {
+                    "model": model,
+                    "provider": provider_name,
+                    "status": "active",
+                    "percent": 100.0
+                })
                 return list(cached), model
+
+            await publish_event("llm_status", {
+                "model": model,
+                "provider": provider_name,
+                "status": "loading",
+                "percent": 75.0
+            })
 
             try:
                 # C-F3: Hard 15s timeout wrapper for the chat call to prevent hangs
@@ -214,9 +250,22 @@ async def _async_extract_tags(
                 raw = message.get("content") or response.get("response") or ""
                 tags = _parse_tags(str(raw))
                 _cache_put(cache_key, tags)
+                
+                await publish_event("llm_status", {
+                    "model": model,
+                    "provider": provider_name,
+                    "status": "active",
+                    "percent": 100.0
+                })
                 return tags, model
             except asyncio.TimeoutError as exc:
                 logger.warning("LM Studio Chat-Timeout (%ss) erreicht mit Modell '%s': %s", timeout_seconds, model, exc)
+                await publish_event("llm_status", {
+                    "model": model,
+                    "provider": provider_name,
+                    "status": "failed",
+                    "percent": 0.0
+                })
                 if model_override:
                     # Bei explizitem Override macht ein Fallback keinen Sinn
                     return [], model
@@ -225,6 +274,12 @@ async def _async_extract_tags(
                 exclude_models.add(model)
             except LMStudioError as exc:
                 logger.warning("LM Studio chat mit Modell '%s' fehlgeschlagen (Tags): %s", model, exc)
+                await publish_event("llm_status", {
+                    "model": model,
+                    "provider": provider_name,
+                    "status": "failed",
+                    "percent": 0.0
+                })
                 if model_override:
                     # Bei explizitem Override macht ein Fallback keinen Sinn
                     return [], model
