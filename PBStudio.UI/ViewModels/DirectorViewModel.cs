@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -116,6 +117,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    // Review-Fix MEDIUM (2026-07-09): User-Deselektionen ueber
+                    // Library-Refreshes erhalten — nur NEUE Clips defaulten auf true.
+                    var previousSelection = AvailableVideoClips.ToDictionary(c => c.Id, c => c.IsSelected);
                     AvailableVideoClips.Clear();
                     foreach (var clip in videoClips)
                     {
@@ -124,7 +128,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                             Id = clip.Id,
                             Name = clip.Name,
                             DurationSeconds = clip.DurationSeconds,
-                            IsSelected = true
+                            IsSelected = previousSelection.TryGetValue(clip.Id, out var wasSelected) ? wasSelected : true
                         });
                     }
                 });
