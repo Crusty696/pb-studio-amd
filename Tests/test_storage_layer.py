@@ -157,3 +157,42 @@ def test_brain_store_recovers_corrupt_weights(tmp_path: Path):
         assert (brain / "weights.db.corrupt").is_file()
     finally:
         store.close()
+
+
+def test_migration_runner_numerical_prefix(tmp_path: Path):
+    mig = tmp_path / "mig"
+    mig.mkdir()
+    (mig / "10_second.sql").write_text("CREATE TABLE x2 (id INTEGER);")
+    (mig / "2_first.sql").write_text("CREATE TABLE x1 (id INTEGER);")
+    db = tmp_path / "y.db"
+    
+    # 2_first.sql has version 2, 10_second.sql has version 10.
+    # They should be applied in numerical order: 2, then 10.
+    # If list index or string order was used, "10_second.sql" (string comparison "10" < "2")
+    # might be run first. But numerically, 2 is run first, then 10.
+    v = migrate(db, mig)
+    assert v == 10
+    
+    conn = sqlite3.connect(str(db))
+    # Both tables should exist
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = {r[0] for r in cursor.fetchall()}
+    assert "x1" in tables
+    assert "x2" in tables
+    
+    # Version should be set to 10
+    (user_version,) = conn.execute("PRAGMA user_version").fetchone()
+    assert user_version == 10
+    conn.close()
+
+
+def test_embedding_repository_close_reinitializes_local(tmp_path: Path):
+    repo = EmbeddingRepository(tmp_path / "emb.db")
+    # Access connection to initialize it in thread local
+    conn = repo.conn
+    assert conn is not None
+    repo.close()
+    
+    # Thread local should be reinitialized
+    assert not hasattr(repo._local, "conn")

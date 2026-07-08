@@ -84,9 +84,17 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
         init_connection(conn)
         (current,) = conn.execute("PRAGMA user_version").fetchone()
         scripts = sorted(migrations_dir.glob("*.sql"))
+        import re
+        parsed_scripts = []
+        for script in scripts:
+            m = re.match(r"^(\d+)", script.name)
+            if m:
+                parsed_scripts.append((int(m.group(1)), script))
+        parsed_scripts.sort(key=lambda x: x[0])
+
         applied = current
-        for i, script in enumerate(scripts, start=1):
-            if i <= current:
+        for version, script in parsed_scripts:
+            if version <= current:
                 continue
             sql = script.read_text(encoding="utf-8")
             statements = split_sql_statements(sql)
@@ -94,10 +102,10 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
                 conn.execute("BEGIN")
                 for stmt in statements:
                     conn.execute(stmt)
-                conn.execute(f"PRAGMA user_version = {i}")
+                conn.execute(f"PRAGMA user_version = {version}")
                 conn.execute("COMMIT")
-                applied = i
-                logger.info("Applied migration %s -> user_version=%d", script.name, i)
+                applied = version
+                logger.info("Applied migration %s -> user_version=%d", script.name, version)
             except Exception:
                 try:
                     conn.execute("ROLLBACK")

@@ -116,8 +116,16 @@ class EmbeddingRepository:
         try:
             (current,) = conn.execute("PRAGMA user_version").fetchone()
             scripts = sorted(migrations_dir.glob("*.sql"))
-            for i, script in enumerate(scripts, start=1):
-                if i <= current:
+            import re
+            parsed_scripts = []
+            for script in scripts:
+                m = re.match(r"^(\d+)", script.name)
+                if m:
+                    parsed_scripts.append((int(m.group(1)), script))
+            parsed_scripts.sort(key=lambda x: x[0])
+
+            for version, script in parsed_scripts:
+                if version <= current:
                     continue
                 sql = script.read_text(encoding="utf-8")
                 statements = split_sql_statements(sql)
@@ -125,11 +133,11 @@ class EmbeddingRepository:
                     conn.execute("BEGIN")
                     for stmt in statements:
                         conn.execute(stmt)
-                    conn.execute(f"PRAGMA user_version = {i}")
+                    conn.execute(f"PRAGMA user_version = {version}")
                     conn.execute("COMMIT")
                     logger.info(
                         "Applied migration %s in %s -> %d",
-                        script.name, migrations_dir.name, i,
+                        script.name, migrations_dir.name, version,
                     )
                 except Exception:
                     try:
@@ -148,6 +156,7 @@ class EmbeddingRepository:
                 except Exception:
                     pass
             self._all_conns.clear()
+        self._local = threading.local()
 
     # ---- Audio ----
 
