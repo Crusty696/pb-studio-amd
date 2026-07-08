@@ -1030,28 +1030,28 @@ async def _run_color_and_caption_analysis(
             # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
             if moondream_frames_to_run:
                 try:
-                    from backend.dependencies import publish_event
                     await publish_event("llm_status", {
                         "model": "Moondream2 (ONNX)",
                         "provider": "Local GPU (DirectML)",
                         "status": "loading",
-                        "percent": 50.0
+                        "percent": 50.0,
+                        "clip_id": clip_id,
                     })
-                    await asyncio.sleep(0.1)
 
                     moondream_tags_list = await with_gpu_task(
                         _run_moondream_inference_on_frames, moondream_frames_to_run,
                         model_id="moondream_fp16"
                     )
                     used_model = "moondream"
-                    
+
                     await publish_event("llm_status", {
                         "model": "Moondream2 (ONNX)",
                         "provider": "Local GPU (DirectML)",
                         "status": "active",
-                        "percent": 100.0
+                        "percent": 100.0,
+                        "clip_id": clip_id,
                     })
-                    
+
                     for tags in moondream_tags_list:
                         if tags:
                             for tag in tags:
@@ -1061,18 +1061,49 @@ async def _run_color_and_caption_analysis(
                             if used_model not in tag_sources:
                                 tag_sources.append(used_model)
                 except Exception as moondream_err:
-                    from backend.dependencies import publish_event
-                    await publish_event("llm_status", {
-                        "model": "Moondream2 (ONNX)",
-                        "provider": "Local GPU (DirectML)",
-                        "status": "failed",
-                        "percent": 0.0
-                    })
+                    # Log ZUERST — publish darf die Root-Cause nie maskieren
                     logger.warning(f"Moondream Fallback GPU-Inferenz fehlgeschlagen: {moondream_err}")
+                    try:
+                        await publish_event("llm_status", {
+                            "model": "Moondream2 (ONNX)",
+                            "provider": "Local GPU (DirectML)",
+                            "status": "failed",
+                            "percent": 0.0,
+                            "clip_id": clip_id,
+                        })
+                    except Exception:
+                        logger.debug("llm_status publish nach Moondream-Fehler fehlgeschlagen")
+                finally:
+                    # Review-Fix MEDIUM (2026-07-09): Terminal-State, damit das
+                    # Widget nach der Analyse nicht dauerhaft "Aktiv" zeigt.
+                    try:
+                        await publish_event("llm_status", {
+                            "model": "none",
+                            "provider": "Local GPU (DirectML)",
+                            "status": "idle",
+                            "percent": 0.0,
+                            "clip_id": clip_id,
+                        })
+                    except Exception:
+                        pass
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
-            
+
+            # Review-Fix MEDIUM (2026-07-09): Terminal-State auch fuer den
+            # reinen LM-Studio-Pfad (Wrapper endet mit "active").
+            if not moondream_frames_to_run:
+                try:
+                    await publish_event("llm_status", {
+                        "model": "none",
+                        "provider": "LM Studio",
+                        "status": "idle",
+                        "percent": 0.0,
+                        "clip_id": clip_id,
+                    })
+                except Exception:
+                    pass
+
             logger.info(
                 f"KMeans+LMStudio/Moondream-Split: {len(result['dominant_colors'])} colors, "
                 f"{len(result['tags'])} tags ({result['tag_source']}) fuer clip {clip_id}"
