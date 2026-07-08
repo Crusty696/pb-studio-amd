@@ -196,3 +196,26 @@ def test_embedding_repository_close_reinitializes_local(tmp_path: Path):
     
     # Thread local should be reinitialized
     assert not hasattr(repo._local, "conn")
+
+
+def test_dead_thread_connections_are_pruned(tmp_path):
+    """Review-Fix MEDIUM (2026-07-09): Conns toter Threads werden beim
+    naechsten Conn-Aufbau geschlossen und aus _all_conns entfernt."""
+    import threading
+
+    from pb_studio.storage.embedding_repository import EmbeddingRepository
+
+    repo = EmbeddingRepository(tmp_path / "emb.db")
+    try:
+        def use_repo():
+            _ = repo.conn  # erzeugt Thread-Conn
+
+        for _ in range(5):
+            t = threading.Thread(target=use_repo)
+            t.start()
+            t.join()
+
+        _ = repo.conn  # Main-Thread-Conn -> triggert Pruning
+        assert len(repo._all_conns) <= 2  # main + max. 1 Nachzuegler
+    finally:
+        repo.close()

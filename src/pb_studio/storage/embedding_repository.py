@@ -71,8 +71,24 @@ class EmbeddingRepository:
         self.db_path = Path(db_path)
         self._ensure_schema()
         self._local = threading.local()
-        self._all_conns: list[sqlite3.Connection] = []
+        # Review-Fix MEDIUM (2026-07-09): (thread_ident, conn)-Paare, damit
+        # Conns toter Threads beim naechsten Zugriff geprunt werden koennen.
+        self._all_conns: list[tuple[int, sqlite3.Connection]] = []
         self._conns_lock = threading.Lock()
+
+    def _prune_dead_locked(self) -> None:
+        """Schliesst Conns toter Threads. Caller haelt _conns_lock."""
+        alive = {t.ident for t in threading.enumerate()}
+        survivors: list[tuple[int, sqlite3.Connection]] = []
+        for ident, conn in self._all_conns:
+            if ident in alive:
+                survivors.append((ident, conn))
+            else:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        self._all_conns = survivors
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -83,7 +99,8 @@ class EmbeddingRepository:
             init_connection(conn)
             self._load_vec(conn)
             with self._conns_lock:
-                self._all_conns.append(conn)
+                self._prune_dead_locked()
+                self._all_conns.append((threading.get_ident(), conn))
             self._local.conn = conn
         return self._local.conn
 
@@ -150,7 +167,7 @@ class EmbeddingRepository:
 
     def close(self) -> None:
         with self._conns_lock:
-            for conn in self._all_conns:
+            for _ident, conn in self._all_conns:
                 try:
                     conn.close()
                 except Exception:
