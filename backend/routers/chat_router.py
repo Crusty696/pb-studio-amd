@@ -58,19 +58,10 @@ class _ChatHistoryStore:
     def __init__(self) -> None:
         self._entries: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
-        self._encoding = None  # lazy-init tiktoken encoder
-
-    def _get_encoding(self):
-        """Offline-Fallback: tiktoken-Download blockiert Eventloop."""
-        raise RuntimeError("tiktoken offline fallback forced")
 
     def _count_tokens(self, text: str) -> int:
-        """Token-count via tiktoken. Fallback char/3 heuristic on error."""
-        try:
-            return len(self._get_encoding().encode(text))
-        except Exception:
-            # tiktoken-Download offline + Cache miss → 3 chars/token (German-conservative).
-            return max(1, len(text) // 3)
+        """Token-count via max(1, len(text) // 3) heuristic."""
+        return max(1, len(text) // 3)
 
     async def append(self, role: str, content: str) -> None:
         async with self._lock:

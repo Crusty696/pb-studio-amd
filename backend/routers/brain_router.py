@@ -27,9 +27,11 @@ from ..schemas.brain_schemas import (
 from .._brain_singleton import get_brain_service
 
 logger = logging.getLogger(__name__)
+import time
+
 router = APIRouter(prefix="/brain", tags=["Brain"])
 
-_pending_reset_tokens: set[str] = set()
+_pending_reset_tokens: dict[str, float] = {}
 
 
 @router.post("/suggest", response_model=BrainSuggestResponse)
@@ -220,17 +222,23 @@ async def stats() -> BrainStatsResponse:
 @router.post("/reset", response_model=BrainResetResponse)
 async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
     """Two-step confirmation reset: 1st call returns token, 2nd resets."""
+    now = time.time()
+    # Clean expired tokens
+    expired = [t for t, exp in _pending_reset_tokens.items() if exp < now]
+    for t in expired:
+        _pending_reset_tokens.pop(t, None)
+
     svc = get_brain_service()
     if req is None or req.confirmation_token is None:
         token = secrets.token_urlsafe(16)
-        _pending_reset_tokens.add(token)
+        _pending_reset_tokens[token] = now + 300.0  # 5 minutes expiry
         return BrainResetResponse(status="pending_confirmation",
                                   confirmation_token=token)
 
     if req.confirmation_token not in _pending_reset_tokens:
         raise HTTPException(status_code=400, detail="invalid or expired token")
 
-    _pending_reset_tokens.discard(req.confirmation_token)
+    _pending_reset_tokens.pop(req.confirmation_token, None)
     from ..dependencies import db_write_lock
     import asyncio as _aio
     async with db_write_lock:

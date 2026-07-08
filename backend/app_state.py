@@ -453,6 +453,11 @@ class AppState:
                             or row.get("file_hash")
                             or clip_data.get("audio_hash")
                         ),
+                        # L-AUDIO-8 (CD-1): stems_paths mit-uebernehmen
+                        "stems_paths": (
+                            meta.get("stems_paths")
+                            or clip_data.get("stems_paths")
+                        ),
                     }
                     self.set_audio_clip(clip_id, clip)
                     with self._lock:
