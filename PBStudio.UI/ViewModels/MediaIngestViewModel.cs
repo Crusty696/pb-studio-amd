@@ -54,7 +54,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     {
         var files = _dialogService.OpenFiles(
             "Audio-Dateien importieren",
-            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac|Alle Dateien|*.*"
+            "Audio-Dateien|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac;*.aiff;*.aif|Alle Dateien|*.*"
         );
 
         if (files.Count == 0) return;
@@ -110,9 +110,10 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
                         });
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     failedImport++;
+                    StatusText = $"Fehler bei {Path.GetFileName(validFiles[i])}: {ex.Message}";
                 }
                 ImportProgress = (i + 1.0) / validFiles.Count * 100;
             }
@@ -120,6 +121,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
             if (importedCount > 0)
             {
                 WeakReferenceMessenger.Default.Send(new AudioImportedMessage());
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
                 WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
 
@@ -271,6 +273,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
                 if (results.Count > 0)
                 {
                     WeakReferenceMessenger.Default.Send(new VideoImportedMessage());
+                    WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
                     WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
                     VideoImportPath = string.Empty;
                 }
