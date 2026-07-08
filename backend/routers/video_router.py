@@ -1012,7 +1012,7 @@ async def _run_color_and_caption_analysis(
             from pb_studio.video.lmstudio_vision_wrapper import extract_tags_and_model_via_lmstudio
             
             async def run_lm_studio(f):
-                return await asyncio.to_thread(extract_tags_and_model_via_lmstudio, f, current_mode)
+                return await asyncio.to_thread(extract_tags_and_model_via_lmstudio, f, mode=current_mode)
 
             moondream_frames_to_run = []
             for f_rgb in frames_rgb:

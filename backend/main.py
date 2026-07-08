@@ -277,9 +277,8 @@ app.add_middleware(
     allow_origins=[
         "http://127.0.0.1",
         "http://localhost",
-        "null",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
     allow_headers=["Content-Type", "Accept"],
 )
 

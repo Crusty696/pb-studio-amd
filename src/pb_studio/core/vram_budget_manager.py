@@ -205,59 +205,60 @@ class VRAMBudgetManager:
             monitor: SystemMonitor instance for real VRAM readings
             max_vram_mb: Maximum VRAM to use (None = auto-detect)
         """
-        if self._initialized:
-            # Monitor nachtraeglich setzen wenn noch keiner vorhanden
-            if monitor is not None and self.monitor is None:
-                self.monitor = monitor
-                logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
-            return
+        with self._lock:
+            if self._initialized:
+                # Monitor nachtraeglich setzen wenn noch keiner vorhanden
+                if monitor is not None and self.monitor is None:
+                    self.monitor = monitor
+                    logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
+                return
 
-        from pb_studio.config_manager import ConfigManager
+            from pb_studio.config_manager import ConfigManager
 
-        self.config = ConfigManager()
-        self.monitor = monitor
+            self.config = ConfigManager()
+            self.monitor = monitor
 
-        # VRAM limits
-        self._max_vram_mb = max_vram_mb or self._detect_vram_limit()
-        self._safety_buffer_mb = 500  # Reserve for OS/Desktop
-        self._usable_vram_mb = self._max_vram_mb - self._safety_buffer_mb
+            # VRAM limits
+            self._max_vram_mb = max_vram_mb or self._detect_vram_limit()
+            self._safety_buffer_mb = 500  # Reserve for OS/Desktop
+            self._usable_vram_mb = self._max_vram_mb - self._safety_buffer_mb
 
-        # Model registry (ordered for LRU eviction)
-        self._models: OrderedDict[str, ModelBudget] = OrderedDict()
+            # Model registry (ordered for LRU eviction)
+            self._models: OrderedDict[str, ModelBudget] = OrderedDict()
 
-        # Tracking
-        self._reserved_mb = 0
-        self._committed_mb = 0
+            # Tracking
+            self._reserved_mb = 0
+            self._committed_mb = 0
 
-        # Threading
-        self._registry_lock = threading.RLock()
+            # Threading
+            self._registry_lock = threading.RLock()
 
-        # Telemetry --- pro model_id eine TelemetryEntry, separater Lock
-        self._telemetry: Dict[str, TelemetryEntry] = {}
-        self._telemetry_lock = threading.RLock()
+            # Telemetry --- pro model_id eine TelemetryEntry, separater Lock
+            self._telemetry: Dict[str, TelemetryEntry] = {}
+            self._telemetry_lock = threading.RLock()
 
-        self._initialized = True
-        logger.info(
-            f"VRAMBudgetManager initialized: "
-            f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
-        )
-
-        # B1-Fix (2026-05-19): Pre-register alle bekannten Model-Budgets aus
-        # KNOWN_MODEL_BUDGETS, damit reserve() nicht fuer jeden video/analyze-Call
-        # mit "not registered"-Error pollutet (vorher 624x in einem Log-File).
-        # Direct dict-set statt register_model() — vermeidet 16x INFO-log beim Boot.
-        with self._registry_lock:
-            for _mid, _mb in KNOWN_MODEL_BUDGETS.items():
-                self._models[_mid] = ModelBudget(
-                    model_id=_mid,
-                    name=_mid,
-                    estimated_vram_mb=_mb,
-                    priority=ModelPriority.MEDIUM,
-                )
+            self._initialized = True
             logger.info(
-                f"VRAMBudgetManager: pre-registered {len(KNOWN_MODEL_BUDGETS)} "
-                f"known model-budgets from KNOWN_MODEL_BUDGETS"
+                f"VRAMBudgetManager initialized: "
+                f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
             )
+
+            # B1-Fix (2026-05-19): Pre-register alle bekannten Model-Budgets aus
+            # KNOWN_MODEL_BUDGETS, damit reserve() nicht fuer jeden video/analyze-Call
+            # mit "not registered"-Error pollutet (vorher 624x in einem Log-File).
+            # Direct dict-set statt register_model() — vermeidet 16x INFO-log beim Boot.
+            with self._registry_lock:
+                for _mid, _mb in KNOWN_MODEL_BUDGETS.items():
+                    self._models[_mid] = ModelBudget(
+                        model_id=_mid,
+                        name=_mid,
+                        estimated_vram_mb=_mb,
+                        priority=ModelPriority.MEDIUM,
+                    )
+                logger.info(
+                    f"VRAMBudgetManager: pre-registered {len(KNOWN_MODEL_BUDGETS)} "
+                    f"known model-budgets from KNOWN_MODEL_BUDGETS"
+                )
 
     @classmethod
     def reset_for_testing(cls):

@@ -322,10 +322,6 @@ async def _run_render_task(
                 asyncio.get_running_loop(),
             )
 
-        # Finaler Cancel-Check
-        if state.get_cancel_flag(task_id):
-            raise _RenderCancelled()
-
         elapsed = time.monotonic() - start_time
         state.update_render_task(task_id, {
             "status": TaskStatus.COMPLETED.value,
