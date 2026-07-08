@@ -42,3 +42,38 @@ def test_anchor_manager_atomic_save(tmp_path):
     loaded_anchor = new_manager.get_all_anchors()[0]
     assert loaded_anchor.id == anchor_id
     assert loaded_anchor.label == "test_label"
+
+
+def test_concurrent_saves_produce_valid_json(tmp_path):
+    """Review-Fix MEDIUM (2026-07-09): eindeutige Temp-Namen — parallele
+    Saves duerfen sich nicht denselben .tmp teilen (Korruptions-Risiko)."""
+    import threading
+
+    manager = AnchorManager(project_id=123, data_dir=str(tmp_path))
+    audio_feat = np.ones(AUDIO_FEATURE_DIM, dtype=np.float32)
+    video_emb = np.ones(EMBEDDING_DIM, dtype=np.float32)
+    manager.add_anchor(
+        audio_start=0.0, audio_end=2.0, video_path="v.mp4",
+        audio_features=audio_feat, video_embedding=video_emb, label="l",
+    )
+
+    errors = []
+
+    def do_save():
+        try:
+            assert manager._save_anchors() is True
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=do_save) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    anchor_file = tmp_path / "anchors_project_123.json"
+    data = json.loads(anchor_file.read_text(encoding="utf-8"))
+    assert data["project_id"] == 123
+    # keine liegengebliebenen tmp-Dateien
+    assert [p for p in tmp_path.iterdir() if ".tmp" in p.name] == []

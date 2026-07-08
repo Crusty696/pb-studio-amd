@@ -14,6 +14,9 @@ AMD-Anpassung: JSON-Persistenz statt DB-CRUD (AMD hat keine Anchor-DB-Tabelle).
 
 import json
 import logging
+import os
+import tempfile
+import time
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass
@@ -160,21 +163,39 @@ class AnchorManager:
                 "anchors": entries
             }
             
-            import os
             anchor_file = self._get_anchor_file()
-            temp_file = anchor_file.with_suffix(".tmp")
+            # Review-Fix MEDIUM (2026-07-09): eindeutiger Temp-Name via mkstemp
+            # (fixer .tmp-Name clobberte bei parallelen Saves) + fsync
+            # (Atomicity ohne Durability: Crash konnte leere Datei promoten)
+            # + Retry bei PermissionError (Windows: os.replace schlaegt fehl,
+            # wenn ein Reader die Ziel-Datei gerade offen hat).
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(anchor_file.parent),
+                prefix=anchor_file.name + ".",
+                suffix=".tmp",
+            )
             try:
-                with open(temp_file, "w", encoding="utf-8") as f:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
-                os.replace(temp_file, anchor_file)
-            except Exception:
-                if temp_file.exists():
+                    f.flush()
+                    os.fsync(f.fileno())
+                last_err: Optional[Exception] = None
+                for attempt in range(3):
                     try:
-                        temp_file.unlink()
-                    except Exception:
-                        pass
+                        os.replace(tmp_name, anchor_file)
+                        break
+                    except PermissionError as e:
+                        last_err = e
+                        time.sleep(0.1 * (attempt + 1))
+                else:
+                    raise last_err  # type: ignore[misc]
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
                 raise
-            
+
             return True
         except Exception as e:
             logger.error(f"Anchor-Save fehlgeschlagen: {e}")
@@ -245,8 +266,9 @@ class AnchorManager:
         ))
         
         self._build_matrices()
-        self._save_anchors()
-        
+        if not self._save_anchors():
+            logger.error("Anchor-Save fehlgeschlagen — Anchor %s ist NICHT persistiert (project_id=%s)", anchor_id, self.project_id)
+
         logger.info(f"Anchor hinzugefügt: {audio_start:.1f}-{audio_end:.1f}s -> {Path(video_path).name}")
         return anchor_id
     
@@ -257,7 +279,8 @@ class AnchorManager:
         
         if len(self._anchors) < before:
             self._build_matrices()
-            self._save_anchors()
+            if not self._save_anchors():
+                logger.error("Anchor-Save fehlgeschlagen — Loeschung von Anchor %s ist NICHT persistiert (project_id=%s)", anchor_id, self.project_id)
             return True
         return False
     
@@ -267,7 +290,8 @@ class AnchorManager:
         self._anchors.clear()
         self._audio_matrix = None
         self._video_matrix = None
-        self._save_anchors()
+        if not self._save_anchors():
+            logger.error("Anchor-Save fehlgeschlagen — clear_all ist NICHT persistiert (project_id=%s)", self.project_id)
         return count
     
     def find_best_anchor(
