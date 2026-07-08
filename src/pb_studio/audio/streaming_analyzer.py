@@ -71,7 +71,7 @@ class _BeatAccumulator:
 
     __slots__ = ('_beats', '_dedup_threshold')
 
-    def __init__(self, dedup_threshold: float = 0.05) -> None:
+    def __init__(self, dedup_threshold: float = 0.15) -> None:
         self._beats: list[float] = []
         self._dedup_threshold = dedup_threshold
 
@@ -80,14 +80,20 @@ class _BeatAccumulator:
         self._beats.extend(beat_times_abs)
 
     def get_deduplicated(self) -> list[float]:
-        """Sortiert und dedupliziert Beats (merge bei <threshold Abstand)."""
+        """Sortiert und dedupliziert Beats (merge bei <threshold Abstand, indem nahegelegene gemittelt werden)."""
         if not self._beats:
             return []
         self._beats.sort()
-        deduped: list[float] = [self._beats[0]]
+        deduped: list[float] = []
+        current_group: list[float] = [self._beats[0]]
         for b in self._beats[1:]:
-            if (b - deduped[-1]) > self._dedup_threshold:
-                deduped.append(b)
+            if (b - current_group[-1]) <= self._dedup_threshold:
+                current_group.append(b)
+            else:
+                deduped.append(sum(current_group) / len(current_group))
+                current_group = [b]
+        if current_group:
+            deduped.append(sum(current_group) / len(current_group))
         return deduped
 
 
@@ -154,7 +160,7 @@ class StreamingAudioAnalyzer:
 
     DEFAULT_WINDOW_SEC = 30.0   # 30 Sekunden Chunks
     DEFAULT_OVERLAP_SEC = 5.0   # 5 Sekunden Overlap
-    BEAT_DEDUP_THRESHOLD_SEC = 0.05  # 50ms Deduplizierung
+    BEAT_DEDUP_THRESHOLD_SEC = 0.15  # 150ms Deduplizierung
 
     # STFT-Parameter
     SR = 22050

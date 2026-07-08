@@ -73,3 +73,27 @@ def test_streaming_missing_file_raises(tmp_path):
     analyzer = StreamingAudioAnalyzer()
     with pytest.raises(FileNotFoundError):
         analyzer.analyze(str(tmp_path / "nonexistent.wav"))
+
+
+def test_beat_accumulator_dedup_and_average():
+    from pb_studio.audio.streaming_analyzer import _BeatAccumulator
+    # Threshold should default to 0.15 (150ms)
+    accum = _BeatAccumulator()
+    assert accum._dedup_threshold == 0.15
+    
+    # Let's add beats with some jitter
+    # Group 1: 1.0, 1.05, 1.11 (all within 150ms of each other sequentially)
+    # Group 2: 2.5, 2.52 (within 150ms)
+    # Group 3: 4.0
+    accum.add_chunk_beats([1.0, 1.11, 2.5, 4.0])
+    accum.add_chunk_beats([1.05, 2.52])
+    
+    deduped = accum.get_deduplicated()
+    # Expected groups:
+    # Group 1: mean(1.0, 1.05, 1.11) = 1.05333...
+    # Group 2: mean(2.5, 2.52) = 2.51
+    # Group 3: mean(4.0) = 4.0
+    assert len(deduped) == 3
+    assert deduped[0] == pytest.approx(1.05333, abs=0.001)
+    assert deduped[1] == pytest.approx(2.51, abs=0.001)
+    assert deduped[2] == pytest.approx(4.0, abs=0.001)
