@@ -22,7 +22,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
 
@@ -30,6 +30,32 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TASK = "video_captioning"
 DEFAULT_MODE = "balance"
+
+# Review-Fix 2026-07-09: injizierbarer Status-Publisher statt Direktimport von
+# backend.dependencies (Layering-Inversion). Backend wired beim Startup
+# publish_event_threadsafe hier ein; ohne Wiring (pytest, CLI) -> no-op.
+_status_publisher: Callable[[str, dict[str, Any]], None] | None = None
+
+
+def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> None:
+    global _status_publisher
+    _status_publisher = fn
+
+
+def _publish_status(model: str, provider: str, status: str, percent: float) -> None:
+    """Best-effort llm_status-Event. Darf NIE die Tag-Extraktion abbrechen."""
+    fn = _status_publisher
+    if fn is None:
+        return
+    try:
+        fn("llm_status", {
+            "model": model,
+            "provider": provider,
+            "status": status,
+            "percent": percent,
+        })
+    except Exception as exc:  # noqa: BLE001 - Status ist rein kosmetisch
+        logger.debug("llm_status publish fehlgeschlagen: %s", exc)
 
 # Deutscher Prompt — Tags kommagetrennt, knapp, keine Erklaerung.
 DEFAULT_PROMPT = (
@@ -171,26 +197,24 @@ async def _async_extract_tags(
     else:
         client = get_llm_client(timeout_seconds=timeout_seconds)
 
+    # Review-Fix LOW (2026-07-09): Provider-Name VOR registry.refresh, damit
+    # auch der Provider-down-Fall ein failed-Event senden kann.
+    base_url_lower = client.base_url.lower()
+    is_ollama = "11434" in base_url_lower or "ollama" in base_url_lower
+    provider_name = "Ollama" if is_ollama else "LM Studio"
+
     async with client:
         registry = ModelRegistry(ai_cfg, client=client)
         try:
             await registry.refresh()
         except LMStudioError as exc:
             logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
+            _publish_status("none", provider_name, "failed", 0.0)
             return [], "none"
-
-        try:
-            from backend.dependencies import publish_event
-        except ImportError:
-            async def publish_event(event_type: str, data: dict[str, Any], client_id: str = "default") -> None:
-                pass
 
         exclude_models = set()
         max_attempts = 3
         attempt = 0
-
-        is_ollama = "11434" in client.base_url
-        provider_name = "Ollama" if is_ollama else "LM Studio"
 
         while attempt < max_attempts:
             attempt += 1
@@ -201,39 +225,18 @@ async def _async_extract_tags(
                     model = registry.select_best_for_task(task, mode, exclude=exclude_models)
                 except NoSuitableModelError as exc:
                     logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
-                    await publish_event("llm_status", {
-                        "model": "none",
-                        "provider": provider_name,
-                        "status": "failed",
-                        "percent": 0.0
-                    })
+                    _publish_status("none", provider_name, "failed", 0.0)
                     return [], "none"
 
-            await publish_event("llm_status", {
-                "model": model,
-                "provider": provider_name,
-                "status": "loading",
-                "percent": 25.0
-            })
-            await asyncio.sleep(0.1)
-
+            # Review-Fix LOW (2026-07-09): Cache-Lookup VOR loading-Event —
+            # Cache-Hits erzeugen sonst pro Frame ein loading/active-Flicker.
             cache_key = (_frame_hash(frame_rgb), model, mode)
             cached = _cache_get(cache_key)
             if cached is not None:
-                await publish_event("llm_status", {
-                    "model": model,
-                    "provider": provider_name,
-                    "status": "active",
-                    "percent": 100.0
-                })
+                _publish_status(model, provider_name, "active", 100.0)
                 return list(cached), model
 
-            await publish_event("llm_status", {
-                "model": model,
-                "provider": provider_name,
-                "status": "loading",
-                "percent": 75.0
-            })
+            _publish_status(model, provider_name, "loading", 25.0)
 
             try:
                 # C-F3: Hard 15s timeout wrapper for the chat call to prevent hangs
@@ -250,22 +253,12 @@ async def _async_extract_tags(
                 raw = message.get("content") or response.get("response") or ""
                 tags = _parse_tags(str(raw))
                 _cache_put(cache_key, tags)
-                
-                await publish_event("llm_status", {
-                    "model": model,
-                    "provider": provider_name,
-                    "status": "active",
-                    "percent": 100.0
-                })
+
+                _publish_status(model, provider_name, "active", 100.0)
                 return tags, model
             except asyncio.TimeoutError as exc:
                 logger.warning("LM Studio Chat-Timeout (%ss) erreicht mit Modell '%s': %s", timeout_seconds, model, exc)
-                await publish_event("llm_status", {
-                    "model": model,
-                    "provider": provider_name,
-                    "status": "failed",
-                    "percent": 0.0
-                })
+                _publish_status(model, provider_name, "failed", 0.0)
                 if model_override:
                     # Bei explizitem Override macht ein Fallback keinen Sinn
                     return [], model
@@ -274,12 +267,7 @@ async def _async_extract_tags(
                 exclude_models.add(model)
             except LMStudioError as exc:
                 logger.warning("LM Studio chat mit Modell '%s' fehlgeschlagen (Tags): %s", model, exc)
-                await publish_event("llm_status", {
-                    "model": model,
-                    "provider": provider_name,
-                    "status": "failed",
-                    "percent": 0.0
-                })
+                _publish_status(model, provider_name, "failed", 0.0)
                 if model_override:
                     # Bei explizitem Override macht ein Fallback keinen Sinn
                     return [], model
