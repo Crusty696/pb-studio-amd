@@ -160,9 +160,20 @@ class AnchorManager:
                 "anchors": entries
             }
             
+            import os
             anchor_file = self._get_anchor_file()
-            with open(anchor_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            temp_file = anchor_file.with_suffix(".tmp")
+            try:
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                os.replace(temp_file, anchor_file)
+            except Exception:
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+                raise
             
             return True
         except Exception as e:
