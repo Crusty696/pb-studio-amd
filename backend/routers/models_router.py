@@ -40,18 +40,21 @@ router = APIRouter(prefix="/models", tags=["Models (LM Studio)"])
 # entsprechen denen, die LM Studio in GET /v1/models liefert.
 # ----------------------------------------------------------------------
 CURATED_VISION_MODELS: list[dict[str, Any]] = [
+    # Review-Fix MEDIUM (2026-07-09): "qwen3.6-vision"/"qwen3.5-vl" waren
+    # erfundene Ids — reale LM-Studio-Katalog-Ids verifiziert via
+    # GET /v1/models + lmstudio.ai/models (Qwen3.5/3.6 sind Vision-faehig).
     {
-        "name": "qwen3.6-vision",
-        "description": "Qwen 3.6 Vision — Neuestes Vision-Modell, optimiert fuer komplexe Bild- und Video-Captioning-Tasks (~8 GB VRAM).",
+        "name": "qwen/qwen3.6-27b",
+        "description": "Qwen 3.6 27B — neuestes Vision+Reasoning-Modell, beste Qualitaet fuer Bild-/Video-Captioning (~16 GB VRAM, q4).",
         "suggested_mode": "quality",
-        "size_estimate_gb": 8.0,
+        "size_estimate_gb": 16.0,
         "vision": True,
     },
     {
-        "name": "qwen3.5-vl",
-        "description": "Qwen 3.5 VL — Hochmodernes und schnelles Vision-Modell der neuesten 3.5er Generation (~8 GB VRAM).",
+        "name": "qwen/qwen3.5-9b",
+        "description": "Qwen 3.5 9B — schnelles Vision-Reasoning-Modell der 3.5er Generation (~6 GB VRAM).",
         "suggested_mode": "balance",
-        "size_estimate_gb": 8.0,
+        "size_estimate_gb": 6.0,
         "vision": True,
     },
     {

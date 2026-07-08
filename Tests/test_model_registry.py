@@ -269,15 +269,15 @@ def test_no_suitable_with_allow_any_but_empty_still_raises():
 # ======================================================================
 def test_recommendation_reports_top_preference():
     async def go():
-        async with _client_with_models(["qwen3.6-vision"]) as client:
+        async with _client_with_models(["qwen/qwen3.5-9b"]) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.recommendation_with_reason("video_captioning", "balance")
 
     out = _run(go())
-    assert out["model"] == "qwen3.6-vision"
+    assert out["model"] == "qwen/qwen3.5-9b"
     assert "top preference" in out["reason"]
-    assert out["installed"] == ["qwen3.6-vision"]
+    assert out["installed"] == ["qwen/qwen3.5-9b"]
 
 
 def test_recommendation_reports_fallback_index():
