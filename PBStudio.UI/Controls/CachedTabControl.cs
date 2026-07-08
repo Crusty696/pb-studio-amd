@@ -114,6 +114,13 @@ public class CachedTabControl : TabControl
             EnsureAllTabsCached();
             UpdateVisibility();
         }
+
+        // Review-Fix (2026-07-09): UIA-Clients mit gecachtem Tree sehen den
+        // neuen Tab-Content sonst erst beim naechsten Re-Walk.
+        if (AutomationPeer.ListenerExists(AutomationEvents.StructureChanged))
+        {
+            UIElementAutomationPeer.FromElement(this)?.ResetChildrenCache();
+        }
     }
 
     /// <summary>
@@ -223,11 +230,14 @@ public class CachedTabControlAutomationPeer : TabControlAutomationPeer
         var activePresenter = _control.GetActiveContentPresenter();
         if (activePresenter != null)
         {
-            var peer = CreatePeerForElement(activePresenter);
-            if (peer != null)
-            {
-                children.Add(peer);
-            }
+            // Review-Fix HIGH-2 (2026-07-09): ContentPresenter hat keinen
+            // Default-AutomationPeer (CreatePeerForElement liefert null) —
+            // der urspruengliche Fix war dadurch ein No-Op und Tab-Content
+            // blieb fuer UIA/pywinauto unsichtbar. FrameworkElementAutomationPeer
+            // walkt den Visual Tree und sammelt die Descendant-Peers ein.
+            var peer = CreatePeerForElement(activePresenter)
+                       ?? new FrameworkElementAutomationPeer(activePresenter);
+            children.Add(peer);
         }
 
         return children;
