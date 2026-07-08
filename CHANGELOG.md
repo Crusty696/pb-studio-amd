@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-07-08 - Audit-Fix Phase 4: Block C (AP6) Hardening & Remaining Risks
+
+Alle verbleibenden Stabilitäts- und Korrektheitsmängel aus Block C (AP6) und offene Restrisiken behoben, verifiziert und eingecheckt.
+
+### Block C (AP6) & Stabilitäts-Fixes
+- `verify_release_smoke.ps1`: targeted PID-based Termination eingeführt. Der Uvicorn-Backend-Prozess wird gezielt über seine PID beendet, was systemweite `taskkill /F /IM python.exe` und das Beenden unbeteiligter Python-Instanzen verhindert.
+- `brain_store.py`: SQLite-Threading-Sicherheit implementiert. `_patterns_lock` und `_weights_lock` sichern Datenbank-Close-Operationen gegen Thread-Konflikte ab.
+- `CLAUDE.md`: PyTorch CPU-Inferenz-Einschränkungen für htdemucs dokumentiert (DirectML-Beschleunigung greift nur bei ONNX-MDX-Net Pfaden).
+- `brain_router.py`: Reset-Token TTL hinzugefügt. Confirmation Tokens laufen nach 5 Minuten ab, inklusive automatischer Bereinigung abgelaufener Tokens bei Aufruf.
+- `chat_router.py` & `requirements.txt`: Unbenutzte `tiktoken` Abhängigkeit entfernt, um Latenzen und Download-Fehler in Offline-Umgebungen zu vermeiden; die Zeichen-Heuristik dient als primärer Token-Zähler.
+- `app_state.py`: `stems_paths` wird beim Re-Import und Wiederverwendung von Audio-Clips aus der Datenbank übernommen, was redundante Stem-Separationsläufe verhindert.
+- `main.py`: CORS-Integrität gehärtet. Der unsichere `"null"`-Origin wurde entfernt; `DELETE` und `PUT` wurden in `allow_methods` aufgenommen.
+- `render_router.py`: Finaler Cancel-Check nach erfolgreichem `_execute_render` entfernt, um das Löschen bereits fertiggestellter Render-Videos bei Timing-Races zu verhindern.
+- `vram_budget_manager.py`: Instanziierungs-Race in `__init__` über einen Thread-Lock abgesichert, um thread-sicheren Singleton-Zugriff zu gewährleisten.
+- `embedding_repository.py`: Thread-lokale SQLite-Verbindung wird bei `close()` zurückgesetzt (`self._local = threading.local()`), um Fehler durch geschlossene Verbindungen bei Folge-Aufrufen zu verhindern.
+- `migration_runner.py` & `embedding_repository.py`: Migrations-Parsing von glob-Listenindizes auf explizite Versionsnummern-Präfixe (z. B. `001_initial.sql` -> 1) umgestellt.
+- `media_repository.py`: Early exit in `bulk_update_status()` bei leeren Listen hinzugefügt, um SQL syntax errors bei `IN ()` zu vermeiden.
+- `streaming_analyzer.py`: Chunk-Grenz-Deduplizierung auf 150ms erhöht und Beat-Jitter über Mittelwertbildung zusammengelegt.
+- `video_router.py`: Keyword-Argument-Fix für `extract_tags_and_model_via_lmstudio` (`mode=current_mode`), um TypeErrors zu verhindern.
+- `anchor_manager.py`: Atomares Schreiben der Anchor-JSON-Dateien über temporäre Dateien und `replace()` implementiert, um Datenverlust bei Abstürzen zu verhindern.
+
+---
+
 ## 2026-06-12 - Audit-Fix Phase 3: Arbeitsplan AP1-AP5 (offene Funde aus FULL_AUDIT_2026-06-10)
 
 Alle im Arbeitsplan (`ARBEITSPLAN_AUDIT_2026-06-12.md`) als verifiziert-offen markierten Punkte umgesetzt.
