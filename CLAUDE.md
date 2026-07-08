@@ -86,7 +86,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *VRAM Arbiter:* `with_gpu_task(model_id=...)` prüft VRAMBudgetManager
 - *Vision LLM:* Moondream ONNX (FP16) via DirectML
 - *Motion Analysis:* RAFT ONNX via DirectML (`raft.py → MotionAnalyzer`)
-- *Stem Separation:* Demucs Hybrid patched for DirectML
+- *Stem Separation:* htdemucs runs on CPU because PyTorch CPU is used in the pinned environment. DirectML acceleration only applies to ONNX-MDX paths in StemSeparator.
 - *Vector DB:* FAISS-CPU (1152-dim SigLIP SO400M embeddings) + sqlite-vec (Brain-Modul KNN)
 - *Beat Detection:* BeatDetector mit librosa-Fallback (madmom nicht installierbar auf 3.11)
 - *Key Detection:* `src/pb_studio/audio/key_detector.py` Krumhansl-Kessler via librosa
@@ -99,7 +99,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ## 4. 🏗️ ARCHITECTURE MAP
 ```
 src/pb_studio/
-├── audio/      # BeatNet(CPU), Demucs(DirectML), SpectralAnalyzer, StructureAnalyzer,
+├── audio/      # BeatNet(CPU), htdemucs(CPU)/ONNX-MDX(DirectML), SpectralAnalyzer, StructureAnalyzer,
 │               # WaveformAnalyzer, KeyDetector (alle VOLLSTÄNDIG implementiert)
 ├── video/      # raft.py→MotionAnalyzer, scene_detect.py→SceneDetector, FrameGrabber
 ├── core/       # VRAM Arbiter, Task Queue, LibreHardwareMonitor
