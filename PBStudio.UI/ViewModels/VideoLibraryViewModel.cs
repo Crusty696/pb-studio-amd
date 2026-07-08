@@ -490,6 +490,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
+                // Review-Fix MEDIUM (2026-07-09): Selektion + Markierungen
+                // ueberleben den Self-Refresh nach Analyse (L-M6-Erhalt).
+                var previousSelectedId = SelectedClip?.Id;
+                var previousMarked = VideoClips.Where(c => c.IsMarked).Select(c => c.Id).ToHashSet();
+
                 VideoClips.Clear();
                 foreach (var c in clips)
                 {
@@ -510,6 +515,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         MotionCategory = c.MotionCategory,
                         VideoHash = c.VideoHash,
                         TagSource = c.TagSource,
+                        IsMarked = previousMarked.Contains(c.Id),
                     };
 
                     clip.PropertyChanged += (s, e) =>
@@ -527,6 +533,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         clip.Thumbnail = null;
 
                     VideoClips.Add(clip);
+                }
+
+                if (previousSelectedId != null)
+                {
+                    SelectedClip = VideoClips.FirstOrDefault(c => c.Id == previousSelectedId);
                 }
             });
             StatusText = $"{VideoClips.Count} Clips geladen";
