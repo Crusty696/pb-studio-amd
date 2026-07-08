@@ -46,9 +46,15 @@ class WeightStore:
         *,
         cold_start_defaults: Optional[dict[str, float]] = None,
         cache_max: int = _DEFAULT_CACHE_MAX,
+        lock: Optional[threading.Lock] = None,
     ):
         self.conn = conn
         self.defaults = dict(cold_start_defaults or COLD_START_DEFAULTS)
+        # Review-Fix HIGH-3 (2026-07-09): Conn-Lock kann von BrainStore geteilt
+        # werden (brain_service uebergibt _weights_lock), damit close() nicht
+        # unter laufenden Queries zuschlaegt. Getrennt vom Cache-Lock, um
+        # Nesting/Reentranz-Probleme zu vermeiden.
+        self._conn_lock = lock if lock is not None else threading.Lock()
         # R-Brain-08 caching
         self._version: int = 0
         self._lock = threading.Lock()
@@ -82,11 +88,12 @@ class WeightStore:
     def get_alpha_beta(
         self, axis: str, level: int, key: str
     ) -> Optional[tuple[float, float]]:
-        row = self.conn.execute(
-            "SELECT positive_count, negative_count FROM axis_weights "
-            "WHERE axis = ? AND context_level = ? AND context_key = ?",
-            (axis, level, key),
-        ).fetchone()
+        with self._conn_lock:
+            row = self.conn.execute(
+                "SELECT positive_count, negative_count FROM axis_weights "
+                "WHERE axis = ? AND context_level = ? AND context_key = ?",
+                (axis, level, key),
+            ).fetchone()
         if row is None:
             return None
         return float(row[0]), float(row[1])
@@ -151,8 +158,9 @@ class WeightStore:
         invalidate: bool = True,
     ) -> None:
         ts = now_iso or datetime.now(timezone.utc).isoformat()
-        self.conn.execute(
-            "INSERT INTO axis_weights (axis, context_level, context_key, "
+        with self._conn_lock:
+            self.conn.execute(
+                "INSERT INTO axis_weights (axis, context_level, context_key, "
             "positive_count, negative_count, last_updated) VALUES (?,?,?,?,?,?) "
             "ON CONFLICT(axis, context_level, context_key) DO UPDATE SET "
             "positive_count = positive_count + ?, "
@@ -164,16 +172,18 @@ class WeightStore:
             self._invalidate()
 
     def reset(self) -> None:
-        self.conn.execute("DELETE FROM axis_weights")
+        with self._conn_lock:
+            self.conn.execute("DELETE FROM axis_weights")
         self._invalidate()
 
     # ---------- diagnostics ----------
 
     def total_clicks(self) -> int:
-        row = self.conn.execute(
-            "SELECT COALESCE(SUM(positive_count + negative_count), 0) "
-            "FROM axis_weights WHERE context_level = 0 AND context_key = ''"
-        ).fetchone()
+        with self._conn_lock:
+            row = self.conn.execute(
+                "SELECT COALESCE(SUM(positive_count + negative_count), 0) "
+                "FROM axis_weights WHERE context_level = 0 AND context_key = ''"
+            ).fetchone()
         if row is None:
             return 0
         return int(round(float(row[0]) / max(1, len(self.defaults))))

@@ -40,7 +40,9 @@ class BrainService:
         state_db_path: Optional[str | Path] = None,
     ):
         self.brain = BrainStore(brain_dir or default_brain_dir())
-        self.weights = WeightStore(self.brain.weights_conn)
+        # Review-Fix HIGH-3 (2026-07-09): Lock teilen, damit BrainStore.close()
+        # nicht unter laufenden WeightStore-Queries zuschlaegt.
+        self.weights = WeightStore(self.brain.weights_conn, lock=self.brain._weights_lock)
         self.reranker = BrainReranker(weight_store=self.weights)
         self.sampler = SmartSampler(self.weights)
 

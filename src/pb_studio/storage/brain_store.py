@@ -64,9 +64,10 @@ class BrainStore:
             check_same_thread=False,
         )
         init_connection(self.patterns_conn)
-        # AP5.5 (Audit 2026-06-10): patterns_conn ist check_same_thread=False,
-        # hatte aber im Gegensatz zu weights_conn keinen Lock — konkurrierende
-        # Cursor-Nutzung derselben sqlite3-Connection ist nicht thread-safe.
+        # AP5.5 (Audit 2026-06-10) + Review-Fix HIGH-3 (2026-07-09):
+        # Locks serialisieren close() gegen Queries. _weights_lock wird an
+        # WeightStore durchgereicht (brain_service.py); patterns_conn hat
+        # aktuell keine externen Query-Consumer.
         self._patterns_lock = __import__("threading").Lock()
 
         self.cache = EmbeddingCache(self.cache_path, self.embeddings_dir)

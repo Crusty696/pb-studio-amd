@@ -98,3 +98,28 @@ def test_concurrent_patterns(tmp_path: Path):
     # We expect this assert to fail when there are errors (collisions / db closed)
     assert len(errors) == 0, f"Concurrent operations failed: {errors}"
 
+
+
+def test_weight_store_shares_brain_store_lock(tmp_path: Path):
+    """Review-Fix HIGH-3 (2026-07-09): WeightStore muss denselben Conn-Lock
+    nutzen wie BrainStore.close(), sonst Race close-vs-query."""
+    from pb_studio.brain.weight_store import WeightStore
+
+    store = BrainStore(tmp_path / "brain")
+    try:
+        ws = WeightStore(store.weights_conn, lock=store._weights_lock)
+        assert ws._conn_lock is store._weights_lock
+    finally:
+        store.close()
+
+
+def test_weight_store_query_serialized_against_close(tmp_path: Path):
+    """Queries unter geteiltem Lock: close() waehrend Query wartet, danach
+    liefern Queries sauber None/Fehler statt Segfault/Race."""
+    from pb_studio.brain.weight_store import WeightStore
+
+    store = BrainStore(tmp_path / "brain")
+    ws = WeightStore(store.weights_conn, lock=store._weights_lock)
+    ws.update("energy_match", 0, "", alpha_delta=1.0, beta_delta=0.0)
+    assert ws.get_alpha_beta("energy_match", 0, "") is not None
+    store.close()

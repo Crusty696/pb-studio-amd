@@ -172,7 +172,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning(f"  temp-Cleanup-on-Startup übersprungen: {e}")
 
     # Zombie-Prozess-Wächter (Heartbeat-Schutz)
-    import asyncio
     async def _zombie_watcher():
         logger.info("  Zombie-Prozess-Wächter aktiv (Toleranz: 120s ab Start / 120s nach Client-Verlust)")
         from .dependencies import _event_queues, gpu_lock
