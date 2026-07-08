@@ -12,6 +12,7 @@ $ProjectPath = (Resolve-Path $ProjectPath).Path
 
 $script:StartedBackend = $false
 $script:BackendProcess = $null
+$script:DummyProcess = $null
 $script:SmokeExitCode = 1  # AP5.3: Default FAIL — nur expliziter PASS setzt 0
 
 function Step($name, [scriptblock]$action) {
@@ -216,6 +217,12 @@ try {
     $verifyName = 'ReleaseSmoke_{0}' -f (Get-Date -Format 'yyyyMMdd_HHmmss')
     $sampleAudioPath = Resolve-SampleAudioPath
     $sampleVideoPaths = Resolve-SampleVideoPaths
+
+    Step 'Start dummy Python process for PID isolation verification' {
+        $pythonExe = Resolve-PythonExe
+        $script:DummyProcess = Start-Process -FilePath $pythonExe -ArgumentList '-c', '"import time; time.sleep(60)"' -WindowStyle Minimized -PassThru
+        Write-Host "  dummy process started with PID $($script:DummyProcess.Id)"
+    }
 
     Step 'Health / backend startup' {
         Ensure-Backend
@@ -429,13 +436,31 @@ finally {
             Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
             Start-Sleep -Seconds 2
         } catch {}
+
+        Write-Host "[SMOKE] Terminating backend process PID $($script:BackendProcess.Id)..."
         try {
             $script:BackendProcess.Refresh()
             if (-not $script:BackendProcess.HasExited) {
-                # Beende den gesamten Prozessbaum (einschließlich Uvicorn-Worker) via taskkill /F /T, da Kill() nur den Parent-Prozess beendet!
-                taskkill /pid $script:BackendProcess.Id /f /t 2>$null | Out-Null
+                Stop-Process -Id $script:BackendProcess.Id -Force -ErrorAction SilentlyContinue
             }
-        } catch {}
+        } catch {
+            # Fallback if Stop-Process fails
+            taskkill /F /PID $script:BackendProcess.Id /T 2>$null | Out-Null
+        }
+    }
+
+    # Verify dummy process is still alive
+    if ($script:DummyProcess) {
+        $script:DummyProcess.Refresh()
+        if ($script:DummyProcess.HasExited) {
+            Write-Host "[SMOKE] FAIL: Dummy Python process (PID $($script:DummyProcess.Id)) was terminated!" -ForegroundColor Red
+            $script:SmokeExitCode = 1
+        } else {
+            Write-Host "[SMOKE] PASS: Dummy Python process is still alive." -ForegroundColor Green
+            try {
+                Stop-Process -Id $script:DummyProcess.Id -Force -ErrorAction SilentlyContinue
+            } catch {}
+        }
     }
     exit $script:SmokeExitCode
 }
