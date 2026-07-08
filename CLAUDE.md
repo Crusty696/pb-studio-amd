@@ -69,15 +69,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-06-12 (Audit-Fix Phase 3: Arbeitsplan AP1–AP5 umgesetzt)
-- **Phase:** 🟡 Code komplett, **Verifikation ausstehend** — Release-Build + pytest seit den AP1–AP5-Edits NICHT gelaufen.
-- **Status (2026-06-12):**
-  - **Full-Stack-Audit (2026-06-10, `FULL_AUDIT_2026-06-10.md`):** 11🔴/~49🟠/~79🟡 Funde. K1–K11 + Phase-2-Tasks via Epic 00015 gefixt (Code-verifiziert am 2026-06-12).
-  - **Arbeitsplan-Abgleich (`ARBEITSPLAN_AUDIT_2026-06-12.md`):** alle verifiziert-offenen 🟠-Punkte AP1–AP5 umgesetzt (Details CHANGELOG 2026-06-12). Wichtigster Einzelfund dabei: K7-Nachfix — `MainWindow.OnClosing` machte den Save-on-Exit-Fix wieder zunichte.
-  - **⚠ VERIFIKATION OFFEN:** `AUDIT_FIX_VERIFY.bat` (Projektroot) ausführen → schreibt `verify_audit_fix_2026-06-12.log` + `VERIFY_DONE.flag` (py_compile, dotnet Release-Build, pytest). Sandbox-Mount war eingefroren, Computer-Use-Freigabe lief 2× ins Timeout — kein „Build OK"-Claim ohne diesen Lauf (IRON Rule 10).
-  - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (neue NuGet-Dependency → User-Entscheid); AP6-Backlog (~45 🟡/🟢, vor Bearbeitung einzeln re-verifizieren); Obsidian-Vault-Sync (kein Vault-Zugriff in Cowork-Session).
+- **Date:** 2026-07-09 (Review-Fixes komplett + Merge nach main)
+- **Phase:** 🟢 Stabil, verifiziert, gemergt.
+- **Status (2026-07-09):**
+  - **LLM-Status-Widget (Antigravity-Arbeit) fertiggestellt:** SSE `llm_status` (thread-safe via `publish_event_threadsafe`) → WPF-Statusleiste. Fertigstellungs-Fix: Event fehlte im `events_router`-Progress-Filter.
+  - **4-Experten-Review** über alle Commits 2026-07-08/09: 4 HIGH / 8 MEDIUM / ~13 LOW — **alle gefixt** (Plan: `docs/superpowers/plans/2026-07-09-review-fixes-commits-0708-0709.md`). Kernfixes: Cross-Thread-SSE-Race, AutomationPeer-No-Op (UIA/pywinauto), WeightStore-Close-Lock, Smoke-Script-False-FAIL, anchor_manager-Parallel-Save, Selektions-Erhalt Director/VideoLibrary, echte LM-Studio-Modell-Ids (`qwen/qwen3.5-9b`, `qwen/qwen3.6-27b` — erfundene Antigravity-Ids ersetzt).
+  - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
+  - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
+  - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
 - **Next Task:**
-  - `AUDIT_FIX_VERIFY.bat` ausführen, Log prüfen, bei FAIL fixen; danach Commit + Vault-Sync.
+  - Kein offener Pflicht-Task. Kandidaten: AP6-Backlog, Video-Grid-Virtualisierung (User-Entscheid), End-to-End-QA-Loop.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 

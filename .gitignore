@@ -319,3 +319,9 @@ PBStudio.UI/Generated/*.g.cs
 # Agent Skills
 .agents/
 .claude/skills/
+
+# Antigravity/Codex/Agent-Tool Runtime-Artefakte (2026-07-09)
+scratch/
+scratch_test.ps1
+.codex/
+.agent/
