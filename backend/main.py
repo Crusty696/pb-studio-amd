@@ -8,6 +8,7 @@ WICHTIG: Dieser Server ist NUR für lokale Desktop-Nutzung gedacht.
 Kein Auth, kein HTTPS, kein Multi-User.
 """
 
+import asyncio
 import logging
 import sys
 import threading
@@ -101,6 +102,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"  Python: {sys.version}")
     logger.info(f"  FFmpeg: {config.ffmpeg_path}")
     logger.info("=" * 60)
+
+    # Review-Fix HIGH-1 (2026-07-09): Main-Loop für thread-sichere SSE-Publishes
+    from backend.dependencies import publish_event_threadsafe, set_main_loop
+    set_main_loop(asyncio.get_running_loop())
+    # Review-Fix 2026-07-09: llm_status-Publisher in den Vision-Wrapper injizieren
+    try:
+        from pb_studio.video.lmstudio_vision_wrapper import set_status_publisher
+        set_status_publisher(publish_event_threadsafe)
+    except ImportError as e:
+        logger.warning(f"  llm_status-Publisher nicht verdrahtet: {e}")
 
     # Prüfe ob src/ importierbar ist
     try:
@@ -202,6 +213,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         watcher_task.cancel()
     except Exception:
         pass
+
+    # Review-Fix 2026-07-09: Publisher/Loop-Referenzen zurücksetzen
+    try:
+        from pb_studio.video.lmstudio_vision_wrapper import set_status_publisher
+        set_status_publisher(None)
+    except ImportError:
+        pass
+    set_main_loop(None)
 
     # BUG-099 FIX: Expliziter Cleanup beim Shutdown
     logger.info("PB Studio AMD Backend wird heruntergefahren...")

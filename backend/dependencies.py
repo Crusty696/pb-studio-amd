@@ -161,12 +161,41 @@ async def with_gpu_task(
 # SSE Event Queue für Progress-Updates
 _event_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
 
+# Review-Fix HIGH-1 (2026-07-09): Referenz auf den uvicorn-Main-Loop, damit
+# Worker-Threads (asyncio.to_thread + eigener Loop) Events thread-safe via
+# call_soon_threadsafe einspeisen können. put_nowait aus fremdem Thread weckt
+# den Selector nicht -> Events kamen bis zu 15s verspätet (Keepalive-Timeout).
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    """Wird im Lifespan-Startup gesetzt (und in Tests)."""
+    global _main_loop
+    _main_loop = loop
+
 
 def get_event_queue(client_id: str = "default") -> asyncio.Queue[dict[str, Any]]:
     """Gibt die Event-Queue für einen Client zurück (per-Client Queue)."""
     if client_id not in _event_queues:
         _event_queues[client_id] = asyncio.Queue(maxsize=500)
     return _event_queues[client_id]
+
+
+def _fanout_event(event: dict[str, Any]) -> None:
+    """Synchroner Fan-out an alle Queues. NUR im Main-Loop-Thread aufrufen."""
+    for queue in list(_event_queues.values()):
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.warning(
+                f"Event-Queue voll (maxsize=500) — ältestes Event wird verworfen. "
+                f"Event-Typ: {event['event']}"
+            )
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            queue.put_nowait(event)
 
 
 async def publish_event(event_type: str, data: dict[str, Any], client_id: str = "default") -> None:
@@ -177,21 +206,31 @@ async def publish_event(event_type: str, data: dict[str, Any], client_id: str = 
     """
     if not _event_queues:
         return
+    _fanout_event({"event": event_type, "data": data})
+
+
+def publish_event_threadsafe(event_type: str, data: dict[str, Any]) -> None:
+    """Thread-sichere Variante für Worker-Threads/-Loops (Review-Fix HIGH-1).
+
+    Best-effort: ohne gesetzten Main-Loop oder ohne Queues wird still verworfen
+    (Status-Events sind rein kosmetisch, dürfen nie Inferenz abbrechen).
+    """
+    loop = _main_loop
+    if loop is None or loop.is_closed() or not _event_queues:
+        return
     event = {"event": event_type, "data": data}
-    # Fan-out: alle registrierten Queues beliefern
-    for queue in list(_event_queues.values()):
-        try:
-            queue.put_nowait(event)
-        except asyncio.QueueFull:
-            logger.warning(
-                f"Event-Queue voll (maxsize=500) — ältestes Event wird verworfen. "
-                f"Event-Typ: {event_type}"
-            )
-            try:
-                queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-            queue.put_nowait(event)
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    try:
+        if running is loop:
+            _fanout_event(event)
+        else:
+            loop.call_soon_threadsafe(_fanout_event, event)
+    except RuntimeError:
+        # Loop wird gerade heruntergefahren — Event verwerfen
+        pass
 
 
 async def publish_log(message: str, *, level: str = "info", detail: str | None = None, source: str | None = None) -> None:
