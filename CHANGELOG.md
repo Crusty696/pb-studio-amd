@@ -3,6 +3,36 @@
 
 ---
 
+## 2026-07-09 - Review-Fixes (4-Experten-Review der Commits 2026-07-08/09)
+
+Alle 4 HIGH-, 8 MEDIUM- und relevanten LOW-Findings aus dem Multi-Agent-Review gefixt (Plan: `docs/superpowers/plans/2026-07-09-review-fixes-commits-0708-0709.md`).
+
+### HIGH
+- `dependencies.py`/`main.py`: `publish_event_threadsafe` + Main-Loop-Capture im Lifespan — Worker-Thread-Publishes kamen bis 15s verspätet und konnten via `InvalidStateError` die Tag-Extraktion abbrechen.
+- `lmstudio_vision_wrapper.py`: injizierbarer Status-Publisher statt `backend`-Direktimport (Layering); 100ms-Sleep pro Frame entfernt; Cache-Hit-Flicker beseitigt; failed-Event bei Provider-down; Ollama-Heuristik angeglichen.
+- `CachedTabControl.cs`: `CreatePeerForElement(ContentPresenter)` liefert null — UIA-Fix war No-Op; jetzt `FrameworkElementAutomationPeer`-Fallback + `ResetChildrenCache` bei Tab-Wechsel. Live mit pywinauto verifiziert (Tab-Content-Buttons im UIA-Tree).
+- `weight_store.py`/`brain_service.py`: Conn-Lock von BrainStore wird an WeightStore durchgereicht — der AP5.5-Close-vs-Query-Race war nie wirklich gefixt.
+- `verify_release_smoke.ps1`: Dummy `sleep(3600)` statt 60s (False-FAIL), `taskkill /T /F` Prozessbaum-Kill, Dummy-Stop immer im finally. script-validator 3× clean.
+
+### MEDIUM
+- `video_router.py`: llm_status Terminal-idle-Event + `clip_id` im Payload; Log-vor-Publish; Duplikat-Imports entfernt.
+- `anchor_manager.py`: `mkstemp` statt fixer `.tmp`-Name (Parallel-Save-Clobber reproduziert: WinError 32/5), fsync, 3× Replace-Retry, Save-Fehlschläge werden an allen Callern geloggt.
+- `DirectorViewModel.cs`: Clip-Selektion überlebt Library-Refreshes (nur neue Clips defaulten auf selected).
+- `VideoLibraryViewModel.cs`: `SelectedClip` + `IsMarked` überleben den Self-Refresh nach Analyse (L-M6-Erhalt).
+- `embedding_repository.py`: Conns toter Threads werden beim nächsten Zugriff geprunt.
+- `migration_runner.py`/`embedding_repository.py`: Warning bei nicht-numerischem Migrations-Präfix, ValueError bei Duplikat.
+- `models_router.py`/`model_registry.py`: erfundene Modell-Ids (`qwen3.6-vision`, `qwen3.5-vl`, 26b-heretic) durch reale installierte LM-Studio-Ids ersetzt (`qwen/qwen3.5-9b`, `qwen/qwen3.6-27b`; live gegen GET /v1/models verifiziert).
+
+### LOW
+- chat_router-Docstring (tiktoken-Behauptung), brain_router `import time` an Dateianfang, frozen-static Loading-Brush, Beat-Dedup-Verhaltens-Kommentar, `.gitattributes` (EOL-Pinning gegen LF/CRLF-Rewrite-Commits).
+
+### Verifikation
+- pytest: **750 passed**, 11 skipped (12 neue Tests); dotnet Release-Build 0 Fehler.
+- Live-Smoke (run-pb-studio): Fenster ok, Tab-Content im UIA-Tree, LLM-Widget rendert (`logs/agent_review_fix_smoke.png`).
+- Bewusst nicht gefixt (Begründungen im Plan): Doppel-Send Refresh-Messages, CORS-127.0.0.1-Port, VRAM-Init-Lock-Fragilität, MediaIngest-Line-Ending-History.
+
+---
+
 ## 2026-07-09 - LLM-Status-Widget (Antigravity-Arbeit fertiggestellt)
 
 Von Antigravity begonnenes Feature abgeschlossen: Live-LLM-Status in der WPF-Statusleiste.
