@@ -84,11 +84,21 @@ class BrainStore:
             migrate(db_path, mig_dir)
 
     def close(self) -> None:
-        for conn in (self.weights_conn, self.patterns_conn):
-            try:
-                conn.close()
-            except Exception:
-                pass
-        self.weights_conn = None
-        self.patterns_conn = None
+        with self._weights_lock:
+            if self.weights_conn is not None:
+                try:
+                    self.weights_conn.close()
+                except Exception:
+                    pass
+                self.weights_conn = None
+
+        with self._patterns_lock:
+            if self.patterns_conn is not None:
+                try:
+                    self.patterns_conn.close()
+                except Exception:
+                    pass
+                self.patterns_conn = None
+
         self.cache.close()
+

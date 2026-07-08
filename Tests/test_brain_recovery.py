@@ -51,3 +51,50 @@ def test_brain_handles_corrupt_patterns(tmp_path: Path):
         assert (brain / "patterns.db.corrupt").is_file()
     finally:
         store.close()
+
+
+def test_concurrent_patterns(tmp_path: Path):
+    import threading
+    import time
+    
+    brain = tmp_path / "brain"
+    store = BrainStore(brain)
+    errors = []
+
+    def run_queries():
+        for i in range(100):
+            try:
+                # Concurrently execute queries under patterns_lock
+                with store._patterns_lock:
+                    if store.patterns_conn is not None:
+                        store.patterns_conn.execute(
+                            "INSERT OR REPLACE INTO pattern_correlations (audio_profile_hash, video_profile_hash, last_seen) "
+                            "VALUES (?, ?, ?)",
+                            (f"audio_{i}", f"video_{i}", "2026-07-08T12:00:00")
+                        )
+                        store.patterns_conn.execute("SELECT * FROM pattern_correlations").fetchall()
+            except Exception as e:
+                errors.append(e)
+                break
+            time.sleep(0.001)
+
+
+    def run_close():
+        time.sleep(0.01)
+        store.close()
+
+    threads = [
+        threading.Thread(target=run_queries),
+        threading.Thread(target=run_queries),
+        threading.Thread(target=run_close),
+    ]
+
+    for t in threads:
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    # We expect this assert to fail when there are errors (collisions / db closed)
+    assert len(errors) == 0, f"Concurrent operations failed: {errors}"
+
