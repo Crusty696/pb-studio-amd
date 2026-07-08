@@ -320,6 +320,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 }
                 done++;
             }
+            WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+            WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100.0;
             StatusText = $"Markierte fertig: {total} Clips.";
             UpdateAnalyzedCounts();
@@ -572,6 +574,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 SelectedClip.IsAnalyzed = true;
                 ApplyMotionResult(SelectedClip, result);
                 StatusText = $"Analyse fertig: {result.SceneCount} Scenes | Motion: {result.AvgMotion:F1}";
+                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
 
                 // L-M6: Auto-Reload scenes nach Analyse - OnSelectedClipChanged triggert
                 // nur bei Selection-Wechsel, nicht bei IsAnalyzed-Update der aktuellen Selection.
@@ -634,6 +638,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 done++;
             }
 
+            WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+            WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100;
             StatusText = $"Alle {total} Clips analysiert";
         }

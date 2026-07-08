@@ -124,6 +124,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                             Id = clip.Id,
                             Name = clip.Name,
                             DurationSeconds = clip.DurationSeconds,
+                            IsSelected = true
                         });
                     }
                 });
