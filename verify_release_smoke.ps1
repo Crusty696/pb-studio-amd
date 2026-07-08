@@ -220,7 +220,10 @@ try {
 
     Step 'Start dummy Python process for PID isolation verification' {
         $pythonExe = Resolve-PythonExe
-        $script:DummyProcess = Start-Process -FilePath $pythonExe -ArgumentList '-c', '"import time; time.sleep(60)"' -WindowStyle Minimized -PassThru
+        # Review-Fix HIGH-4 (2026-07-09): sleep(3600) statt sleep(60) - der
+        # Smoke-Lauf dauert regulaer >60s; ein natuerlich beendeter Dummy
+        # wurde als Fremd-Termination fehlinterpretiert (False-FAIL).
+        $script:DummyProcess = Start-Process -FilePath $pythonExe -ArgumentList '-c', '"import time; time.sleep(3600)"' -WindowStyle Minimized -PassThru
         Write-Host "  dummy process started with PID $($script:DummyProcess.Id)"
     }
 
@@ -441,15 +444,21 @@ finally {
         try {
             $script:BackendProcess.Refresh()
             if (-not $script:BackendProcess.HasExited) {
-                Stop-Process -Id $script:BackendProcess.Id -Force -ErrorAction SilentlyContinue
+                # Review-Fix MEDIUM (2026-07-09): taskkill /T killt den ganzen
+                # Prozessbaum (uvicorn kann ffmpeg-Kinder offen haben);
+                # Stop-Process traf nur den Parent und der alte catch-Fallback
+                # war toter Code (SilentlyContinue wirft nie).
+                taskkill /PID $script:BackendProcess.Id /T /F 2>$null | Out-Null
+                if (-not $?) {
+                    Stop-Process -Id $script:BackendProcess.Id -Force -ErrorAction SilentlyContinue
+                }
             }
         } catch {
-            # Fallback if Stop-Process fails
-            taskkill /F /PID $script:BackendProcess.Id /T 2>$null | Out-Null
+            Stop-Process -Id $script:BackendProcess.Id -Force -ErrorAction SilentlyContinue
         }
     }
 
-    # Verify dummy process is still alive
+    # Verify dummy process is still alive, then ALWAYS stop it
     if ($script:DummyProcess) {
         $script:DummyProcess.Refresh()
         if ($script:DummyProcess.HasExited) {
@@ -457,10 +466,10 @@ finally {
             $script:SmokeExitCode = 1
         } else {
             Write-Host "[SMOKE] PASS: Dummy Python process is still alive." -ForegroundColor Green
-            try {
-                Stop-Process -Id $script:DummyProcess.Id -Force -ErrorAction SilentlyContinue
-            } catch {}
         }
+        try {
+            Stop-Process -Id $script:DummyProcess.Id -Force -ErrorAction SilentlyContinue
+        } catch {}
     }
     exit $script:SmokeExitCode
 }
