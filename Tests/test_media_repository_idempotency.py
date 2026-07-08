@@ -517,3 +517,22 @@ def test_media_metadata_compression(tmp_path, monkeypatch):
     DatabaseCore().shutdown()
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
 
+
+def test_bulk_update_status_empty(tmp_path, monkeypatch):
+    """Empty list of media_ids in bulk_update_status should return early and not crash."""
+    from pb_studio.data.repositories.media_repository import MediaRepository
+    from pb_studio.config_manager import ConfigManager
+    from pb_studio.data.database_core import DatabaseCore
+    
+    # Setup clean db
+    db_file = tmp_path / "pb_test_media.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_file), raising=False)
+    DatabaseCore._instance = None
+    
+    repo = MediaRepository()
+    # This should not raise sqlite3.OperationalError/SyntaxError
+    repo.bulk_update_status([], "completed")
+    
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+

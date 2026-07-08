@@ -363,6 +363,8 @@ class MediaRepository:
     @_retry_on_database_lock
     def bulk_update_status(self, media_ids: List[int], status: str):
         """Update status for multiple media files in a single transaction."""
+        if not media_ids:
+            return
         try:
             with self.db.transaction(immediate=True) as conn:
                 placeholders = ','.join('?' * len(media_ids))
