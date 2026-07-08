@@ -219,3 +219,34 @@ def test_dead_thread_connections_are_pruned(tmp_path):
         assert len(repo._all_conns) <= 2  # main + max. 1 Nachzuegler
     finally:
         repo.close()
+
+
+def test_migration_unparsable_name_warns(tmp_path, caplog):
+    """Review-Fix MEDIUM (2026-07-09): nicht-numerische Praefixe -> Warning statt silent skip."""
+    import logging
+
+    from pb_studio.storage.migration_runner import migrate
+
+    mig = tmp_path / "migs"
+    mig.mkdir()
+    (mig / "001_ok.sql").write_text("CREATE TABLE a (x INT);", encoding="utf-8")
+    (mig / "notes.sql").write_text("CREATE TABLE b (x INT);", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        migrate(tmp_path / "m.db", mig)
+    assert any("notes.sql" in r.message for r in caplog.records)
+
+
+def test_migration_duplicate_prefix_raises(tmp_path):
+    """Review-Fix MEDIUM (2026-07-09): doppelter Versions-Praefix -> harter Fehler."""
+    import pytest
+
+    from pb_studio.storage.migration_runner import migrate
+
+    mig = tmp_path / "migs"
+    mig.mkdir()
+    (mig / "001_a.sql").write_text("CREATE TABLE a (x INT);", encoding="utf-8")
+    (mig / "001_b.sql").write_text("CREATE TABLE b (x INT);", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="[Dd]oppelt"):
+        migrate(tmp_path / "m.db", mig)

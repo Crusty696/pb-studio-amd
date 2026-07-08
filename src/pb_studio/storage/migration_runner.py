@@ -86,10 +86,24 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
         scripts = sorted(migrations_dir.glob("*.sql"))
         import re
         parsed_scripts = []
+        seen_versions: dict[int, str] = {}
         for script in scripts:
             m = re.match(r"^(\d+)", script.name)
-            if m:
-                parsed_scripts.append((int(m.group(1)), script))
+            if not m:
+                # Review-Fix MEDIUM (2026-07-09): vorher silent skip
+                logger.warning(
+                    "Migration %s hat keinen numerischen Praefix und wird IGNORIERT",
+                    script.name,
+                )
+                continue
+            version = int(m.group(1))
+            if version in seen_versions:
+                raise ValueError(
+                    f"Doppelter Migrations-Praefix {version}: "
+                    f"{seen_versions[version]} vs {script.name}"
+                )
+            seen_versions[version] = script.name
+            parsed_scripts.append((version, script))
         parsed_scripts.sort(key=lambda x: x[0])
 
         applied = current
