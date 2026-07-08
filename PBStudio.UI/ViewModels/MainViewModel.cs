@@ -58,6 +58,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private Brush _llmStatusColor = Brushes.Gray;
 
+    // Review-Fix LOW (2026-07-09): frozen statt pro Event neu allokiert (GC-Churn)
+    private static readonly SolidColorBrush LlmLoadingBrush = CreateFrozen(Color.FromRgb(255, 110, 0));
+
+    private static SolidColorBrush CreateFrozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     [ObservableProperty]
     private int _selectedTabIndex = 0;
 
@@ -239,7 +249,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (e.Status == "loading")
             {
                 LlmStatusText = $"Lade LLM ({e.Percent}%)";
-                LlmStatusColor = new SolidColorBrush(Color.FromRgb(255, 110, 0)); // Orange
+                LlmStatusColor = LlmLoadingBrush; // Orange
             }
             else if (e.Status == "active")
             {

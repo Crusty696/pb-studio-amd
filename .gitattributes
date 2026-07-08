@@ -1,0 +1,10 @@
+# Review-Fix LOW (2026-07-09): MediaIngestViewModel-Commit 440b956 war ein
+# 99%-Line-Ending-Rewrite (LF<->CRLF) — festnageln verhindert Wiederholung.
+*.cs   text eol=crlf
+*.xaml text eol=crlf
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.py   text eol=lf
+*.md   text
+*.json text

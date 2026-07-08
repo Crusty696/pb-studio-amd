@@ -13,6 +13,7 @@ from __future__ import annotations
 import json as _json
 import logging
 import secrets
+import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -27,7 +28,6 @@ from ..schemas.brain_schemas import (
 from .._brain_singleton import get_brain_service
 
 logger = logging.getLogger(__name__)
-import time
 
 router = APIRouter(prefix="/brain", tags=["Brain"])
 

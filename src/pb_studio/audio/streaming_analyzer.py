@@ -84,6 +84,11 @@ class _BeatAccumulator:
         if not self._beats:
             return []
         self._beats.sort()
+        # Hinweis (Review 2026-07-09): Chained Grouping — Vergleich gegen das
+        # LETZTE Element der Gruppe. Ketten mit je <=threshold Abstand
+        # kollabieren zu EINEM Beat; erst ab effektiv >400 BPM relevant, fuer
+        # Overlap-Jitter-Dedup gewollt. Bei Problemen: gegen current_group[0]
+        # vergleichen.
         deduped: list[float] = []
         current_group: list[float] = [self._beats[0]]
         for b in self._beats[1:]:

@@ -43,7 +43,8 @@ class _ChatHistoryStore:
     Begrenzte Laenge — aelteste Eintraege fallen weg.
 
     I-H1 (Audit V2): snapshot_for_llm(max_tokens) trimmt token-aware via
-    tiktoken (cl100k_base, GPT-4/LM-Studio-kompatibel) statt blind 200 entries.
+    Zeichen-Heuristik (~3 Zeichen/Token, max(1, len//3)) statt blind 200
+    entries. tiktoken wurde 2026-07-08 entfernt (Offline-Robustheit, Latenz).
     Sonst silent context-overflow bei LM-Studio (typ. 32k Modelle).
     """
     MAX_ENTRIES = 200
