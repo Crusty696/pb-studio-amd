@@ -51,6 +51,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
             System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+
+        // Root-Cause-Fix (2026-07-09): Scoped-VM (seit T019/3752db1) entsteht
+        // erst beim Tab-Load und verpasst die ProjectOpenedMessage vom
+        // App-Start -> Audio-Quellen blieben leer. Initial-Load holt nach.
+        _ = RequestAudioReloadAsync();
     }
 
     partial void OnSelectedAudioClipChanged(AudioClipModel? value)

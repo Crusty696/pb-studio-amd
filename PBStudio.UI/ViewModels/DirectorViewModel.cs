@@ -96,6 +96,12 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             // Send() kann von Background-Thread (ProjectService) - UI-Touches via Dispatcher
             System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState);
         });
+
+        // Root-Cause-Fix (2026-07-09): Seit T019 (3752db1) ist dieser VM scoped
+        // und wird erst beim Tab-Load erzeugt — die ProjectOpenedMessage vom
+        // App-Start ist dann laengst verpasst -> Tab blieb leer, Timeline-
+        // Generierung unmoeglich. Initial-Load holt den aktuellen Stand nach.
+        HandleReload();
     }
 
     [RelayCommand]

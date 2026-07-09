@@ -3,6 +3,23 @@
 
 ---
 
+## 2026-07-09 - KRITISCH: Timeline-Generierung seit 2026-06-09 kaputt (Director-Tab leer)
+
+**User-Report:** "jedes Mal konnte ich keine Timeline generieren und die Daten wurden nicht weitergegeben."
+
+### Root Cause
+Der Memory-Leak-Fix T019 (Commit `3752db1`, 2026-06-09) stellte 8 Views auf lazy `IServiceScope`-DataContexts um: `DirectorViewModel`/`AnchorViewModel` entstehen erst beim ersten Tab-Öffnen. Die `ProjectOpenedMessage` (App-Start/Projekt-Öffnen) feuert davor — der Konstruktor macht keinen Initial-Load → KI-REGIE-Tab blieb leer (Audio-Combo leer, 0 Video-Clips), Generate-Button gesperrt. AUDIO/VIDEO-Tabs blieben eager und funktionierten — deshalb wirkte es wie "Daten werden nicht weitergegeben".
+
+### Fix
+- `DirectorViewModel.cs` + `AnchorViewModel.cs`: Initial-Load (`HandleReload()` / `RequestAudioReloadAsync()`) am Konstruktor-Ende — robust gegen jedes Message-Timing. `ProductionViewModel` hatte bereits Initial-Sync.
+
+### Verifikation (Live-GUI, echtes User-Projekt "212121", 41 Clips)
+- Repro VOR Fix: KI-REGIE "0 ausgewählt", Audio-Combo leer, Generate unmöglich (pywinauto).
+- NACH Fix: "41 Video / 1 Audio Clips geladen", BPM 135.99 übernommen, Klick auf Generate → **327 Cuts generiert (476.4s)**, Trigger-Liste + Vorschläge gefüllt (Screenshot `logs/timeline_fixed.png`).
+- Backend-Kette separat headless verifiziert (Projekt→Import→Analyse→`/pacing/generate`→save→`/pacing/timeline`): 4/4 Schritte OK.
+
+---
+
 ## 2026-07-09 - Review-Fixes (4-Experten-Review der Commits 2026-07-08/09)
 
 Alle 4 HIGH-, 8 MEDIUM- und relevanten LOW-Findings aus dem Multi-Agent-Review gefixt (Plan: `docs/superpowers/plans/2026-07-09-review-fixes-commits-0708-0709.md`).
