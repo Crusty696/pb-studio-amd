@@ -88,6 +88,53 @@ TRIGGER_PROMPTS: Dict[str, str] = {
 DEFAULT_PROMPT = "dynamic movement action visual interest"
 
 
+def _feature_at_time(
+    curve,
+    time_sec: Optional[float],
+    duration_sec: float,
+    *,
+    default: float,
+) -> float:
+    if curve is None or time_sec is None or duration_sec <= 0:
+        return default
+    values = np.asarray(curve, dtype=np.float32).reshape(-1)
+    if values.size == 0:
+        return default
+    index = int(min(values.size - 1, max(0, time_sec / duration_sec * values.size)))
+    value = float(values[index])
+    if not np.isfinite(value):
+        return default
+    return max(0.0, min(1.0, value))
+
+
+def _nearest_scene_distance(time_sec: Optional[float], scenes: list) -> float:
+    if time_sec is None or not scenes:
+        return 1.0
+    distances: list[float] = []
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        for key in ("start_time", "end_time", "time"):
+            try:
+                if scene.get(key) is not None:
+                    distances.append(abs(float(scene[key]) - float(time_sec)))
+            except (TypeError, ValueError):
+                continue
+    return min(distances, default=1.0)
+
+
+def _video_pace_score(features: dict) -> float:
+    if features.get("pace_class_score") is not None:
+        return float(features["pace_class_score"])
+    category = str(features.get("motion_category") or "medium").lower()
+    return {
+        "low": 0.2,
+        "medium": 0.5,
+        "high": 0.8,
+        "extreme": 1.0,
+    }.get(category, 0.5)
+
+
 # =============================================================================
 # THEMATISCHE NARRATIVE CLUSTER & KEYWORDS (Stufe 3)
 # =============================================================================
@@ -226,6 +273,7 @@ class ClipSelector:
         self.brain_context_keys: Optional[list[str]] = None
         self.brain_audio_features: dict = {}
         self.brain_video_features_by_clip: dict = {}
+        self.brain_min_confidence: float = 0.0
 
         # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
         # use_key_matching: Master-Switch (vom PacingService gesetzt).
@@ -364,7 +412,11 @@ class ClipSelector:
         if self.brain_reranker is not None and self.brain_context_keys:
             try:
                 selected = self._select_via_brain(
-                    candidates, trigger_strength, trigger_type
+                    candidates,
+                    trigger_strength,
+                    trigger_type,
+                    current_time=current_time,
+                    cut_duration_sec=float(_unused.get("cut_duration_sec", 1.0)),
                 )
                 # Blacklist + Roter Faden updates passieren am Funktions-Ende.
             except Exception as e:
@@ -413,12 +465,22 @@ class ClipSelector:
         candidates: List[dict],
         trigger_strength: float,
         trigger_type: str,
+        *,
+        current_time: Optional[float] = None,
+        cut_duration_sec: float = 1.0,
     ) -> "SelectedClip":
         """Brain reranker scores every candidate, returns highest. Plan Phase 4 deep hook."""
         from pb_studio.brain.bridge_dimensions import CandidateFeatures
 
         af = self.brain_audio_features or {}
         vf_by_id = self.brain_video_features_by_clip or {}
+        audio_duration = float(af.get("duration_seconds") or self.duration_seconds or 0.0)
+        audio_energy = _feature_at_time(
+            af.get("energy_curve"), current_time, audio_duration, default=0.5
+        )
+        audio_centroid = _feature_at_time(
+            af.get("centroid_curve"), current_time, audio_duration, default=0.5
+        )
 
         rerank_inputs = []
         for clip in candidates:
@@ -427,23 +489,29 @@ class ClipSelector:
             feats = CandidateFeatures(
                 trigger_type=trigger_type,
                 trigger_strength=float(trigger_strength),
-                audio_energy=float(af.get("audio_energy", 0.5)),
-                audio_centroid=float(af.get("audio_centroid", 0.5)),
-                motion_score=float(vf.get("avg_motion") or 0.0),
-                scene_distance_sec=float(vf.get("scene_distance_sec", 0.5)),
+                audio_energy=audio_energy,
+                audio_centroid=audio_centroid,
+                audio_embedding=af.get("audio_embedding"),
+                motion_score=float(vf.get("avg_motion") or vf.get("motion_score") or 0.0),
+                scene_distance_sec=_nearest_scene_distance(
+                    current_time, vf.get("scenes") or vf.get("scene_changes") or []
+                ),
                 brightness=float(vf.get("avg_brightness") or 0.5),
                 saturation=float(vf.get("avg_saturation") or 0.5),
                 color_temp=float(vf.get("avg_color_temp") or 0.0),
-                pace_class_score=float(vf.get("pace_class_score", 0.5)),
+                pace_class_score=_video_pace_score(vf),
+                video_embedding=vf.get("video_embedding"),
                 mood_tags=list(vf.get("mood_tags") or []),
                 audio_mood_tags=list(af.get("mood_tags") or []),
-                cut_duration_sec=float(af.get("cut_duration_sec", 1.0)),
+                cut_duration_sec=max(float(cut_duration_sec), 0.01),
             )
             from pb_studio.brain.reranker import RerankInput
             rerank_inputs.append(RerankInput(candidate=clip, features=feats))
 
         scored = self.brain_reranker.rerank(
-            rerank_inputs, context_keys=self.brain_context_keys,
+            rerank_inputs,
+            context_keys=self.brain_context_keys,
+            min_confidence=self.brain_min_confidence,
         )
         if not scored:
             return self._fallback_select(candidates, trigger_strength, trigger_type)

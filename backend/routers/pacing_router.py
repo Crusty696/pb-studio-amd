@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pacing", tags=["Pacing"])
 
 
+def _requires_video_analysis(config: PacingConfigSchema) -> bool:
+    return bool(config.use_motion_matching or config.use_brain)
+
+
 @router.post(
     "/generate",
     response_model=CutListResponse,
@@ -70,8 +74,12 @@ async def generate_cut_list(
     # Gecachte Audio-Analyse-Daten extrahieren (Beats, BPM, Energie)
     cached_analysis = state.get_audio_analysis(config.audio_clip_id) or {}
 
-    # Video-Analyse-Cache Snapshot für Motion Matching
-    video_analysis_snapshot = state.get_video_analysis_snapshot() if config.use_motion_matching else {}
+    # Motion matching and Brain reranking both consume the persisted video analysis.
+    video_analysis_snapshot = (
+        state.get_video_analysis_snapshot()
+        if _requires_video_analysis(config)
+        else {}
+    )
 
     try:
         import time as _time
@@ -494,6 +502,14 @@ def _run_pacing_generation(
                 clip_data["tags"] = va.get("tags", [])  # A4
                 clip_data["has_embedding"] = bool(va.get("has_embedding", False))  # A4
                 clip_data["audio_key"] = va.get("audio_key")  # L-K4
+                clip_data["scenes"] = va.get("scenes", [])
+                clip_data["avg_brightness"] = va.get("avg_brightness", 0.5)
+                clip_data["avg_saturation"] = va.get("avg_saturation", 0.5)
+                clip_data["avg_color_temp"] = va.get("avg_color_temp", 0.0)
+                clip_data["mood_tags"] = va.get("mood_tags", [])
+                clip_data["motion_category"] = va.get("motion_category", "medium")
+                clip_data["pace_class_score"] = va.get("pace_class_score")
+                clip_data["video_embedding"] = va.get("video_embedding")
             clips.append(clip_data)
 
     pacing_config = {

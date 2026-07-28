@@ -52,6 +52,15 @@ def select_theme_for_chapter(energy: float, prev_theme: Optional[str]) -> str:
     return prev_theme
 
 
+def _uses_advanced_pacing(pacing_config: dict, semantic_enabled: bool) -> bool:
+    return bool(
+        pacing_config.get("use_motion_matching", False)
+        or semantic_enabled
+        or pacing_config.get("use_structure_awareness", False)
+        or pacing_config.get("use_brain", False)
+    )
+
+
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
@@ -232,10 +241,14 @@ class PacingService:
         # Beats + BPM + Duration (+ Audit L-N8: per-beat strength)
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
+        pre_cached_downbeats: List[float] = []
         has_real_strengths = False
         for b in cached_analysis.get("beats", []):
             if isinstance(b, dict):
-                pre_cached_beats.append(b.get("time", 0.0))
+                beat_time = float(b.get("time", 0.0))
+                pre_cached_beats.append(beat_time)
+                if str(b.get("beat_type") or "").lower() in {"downbeat", "bar"}:
+                    pre_cached_downbeats.append(beat_time)
                 # L-N8: preserve per-beat strength. Engine uses it as
                 # trigger-weight multiplier instead of the previous
                 # hardcoded 1.0.
@@ -251,6 +264,8 @@ class PacingService:
         pre_cached_bpm = cached_analysis.get("bpm") or None
         if pre_cached_beats:
             pacing_engine._pre_cached_beats = pre_cached_beats
+            if pre_cached_downbeats:
+                pacing_engine._pre_cached_downbeats = pre_cached_downbeats
             if has_real_strengths:
                 pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
             if pre_cached_bpm:
@@ -355,6 +370,71 @@ class PacingService:
             cs.energy_curve = pacing_engine._pre_cached_energy
         if hasattr(pacing_engine, "_pre_cached_duration"):
             cs.duration_seconds = pacing_engine._pre_cached_duration
+
+    def _configure_brain_selector(
+        self,
+        pacing_engine: AdvancedPacingEngine,
+        pacing_config: dict,
+        cached_analysis: Dict | None,
+        clips: list,
+        total_duration: float,
+        song_mood: Optional[str],
+    ) -> None:
+        """Bind Brain reranker and forward real analysis features to ClipSelector."""
+        if not pacing_config.get("use_brain", False):
+            return
+
+        try:
+            from pb_studio.brain.brain_service import BrainService
+
+            selector = pacing_engine.clip_selector
+            selector.brain_reranker = BrainService.get().reranker
+            selector.brain_context_keys = [""]
+            selector.brain_min_confidence = float(
+                pacing_config.get("brain_min_confidence", 0.0)
+            )
+
+            analysis = cached_analysis or {}
+            spectral = analysis.get("spectral_data") or {}
+            centroids = spectral.get("centroids") or []
+            normalized_centroids: list[float] = []
+            if centroids:
+                centroid_array = np.asarray(centroids, dtype=np.float32)
+                centroid_array = np.nan_to_num(
+                    centroid_array, nan=0.0, posinf=0.0, neginf=0.0
+                )
+                scale = float(np.percentile(centroid_array, 95))
+                if scale > 1e-6:
+                    normalized_centroids = np.clip(
+                        centroid_array / scale, 0.0, 1.0
+                    ).tolist()
+
+            mood_tags = list(analysis.get("mood_tags") or [])
+            if not mood_tags and song_mood:
+                mood_tags = [str(song_mood)]
+
+            selector.brain_audio_features = {
+                "energy_curve": list(analysis.get("energy_curve") or []),
+                "centroid_curve": normalized_centroids,
+                "duration_seconds": float(
+                    analysis.get("duration_seconds") or total_duration or 0.0
+                ),
+                "mood_tags": mood_tags,
+                "audio_embedding": analysis.get("audio_embedding"),
+            }
+            selector.brain_video_features_by_clip = {
+                str(clip.get("id")): dict(clip)
+                for clip in clips
+                if clip.get("id") is not None
+            }
+            logger.info(
+                "Brain reranker bound: audio_features=%s video_features=%d threshold=%.3f",
+                bool(selector.brain_audio_features["energy_curve"]),
+                len(selector.brain_video_features_by_clip),
+                selector.brain_min_confidence,
+            )
+        except Exception as exc:
+            logger.warning("Brain deep-hook bind fehlgeschlagen: %s", exc)
 
     def segment_timeline_into_chapters(
         self,
@@ -590,16 +670,6 @@ class PacingService:
         pacing_engine.clip_selector.vector_store = vstore
         pacing_engine.clip_selector.use_semantic = semantic_enabled
 
-        # Brain reranker hook (gleich wie generate_cut_list)
-        if pacing_config.get("use_brain", False):
-            try:
-                from pb_studio.brain.brain_service import BrainService
-                svc = BrainService.get()
-                pacing_engine.clip_selector.brain_reranker = svc.reranker
-                pacing_engine.clip_selector.brain_context_keys = [""]
-            except Exception as e:
-                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
-
         # Key-matching hook (E1 + L-K4) — auch fuer stem-pacing relevant
         if pacing_config.get("use_key_matching", False):
             pacing_engine.clip_selector.use_key_matching = True
@@ -619,6 +689,14 @@ class PacingService:
 
         # Pre-cached injection (Beats/Energy/Bass/Subtracks)
         self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
+        self._configure_brain_selector(
+            pacing_engine,
+            pacing_config,
+            cached_analysis,
+            clips,
+            total_duration,
+            song_mood,
+        )
 
         target_duration = duration_limit or total_duration
         min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
@@ -662,7 +740,7 @@ class PacingService:
             last_manual_end = 0.0
             last_manual_clip = None
 
-            for cut in pacing_cuts:
+            for cut_index, cut in enumerate(pacing_cuts):
                 # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
                 active_anchor = None
                 for ma in manual_anchors:
@@ -707,7 +785,17 @@ class PacingService:
                 pacing_engine.clip_selector.bridging_out_of = bridging_out_of
 
                 sel = pacing_engine.clip_selector.select_clip(
-                    clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
+                    clips,
+                    cut.strength,
+                    cut.trigger_type,
+                    prompt=prompt,
+                    current_time=cut.time,
+                    active_theme=active_theme,
+                    cut_duration_sec=(
+                        pacing_cuts[cut_index + 1].time - cut.time
+                        if cut_index + 1 < len(pacing_cuts)
+                        else 1.0
+                    ),
                 )
                 cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
 
@@ -836,19 +924,6 @@ class PacingService:
         pacing_engine.clip_selector.vector_store = vstore
         pacing_engine.clip_selector.use_semantic = semantic_enabled
 
-        # Plan Phase 4 deep hook: BrainReranker an clip_selector binden, wenn use_brain=true.
-        # Pro Cut wird vom Caller context_keys + audio/video features gesetzt.
-        if pacing_config.get("use_brain", False):
-            try:
-                from pb_studio.brain.brain_service import BrainService
-                svc = BrainService.get()
-                pacing_engine.clip_selector.brain_reranker = svc.reranker
-                # Default-Kontext (level-0 only, übersteuert pro Cut wenn vorhanden):
-                pacing_engine.clip_selector.brain_context_keys = [""]
-                logger.info("Brain reranker an clip_selector gebunden (deep hook)")
-            except Exception as e:
-                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
-        
         target_duration = duration_limit or total_duration
 
         # Gecachte Beats aus vorheriger Audio-Analyse extrahieren
@@ -888,6 +963,14 @@ class PacingService:
 
         # Pre-cached Beats + Dauer + Kurven injizieren
         self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
+        self._configure_brain_selector(
+            pacing_engine,
+            pacing_config,
+            cached_analysis,
+            clips,
+            total_duration,
+            song_mood,
+        )
 
         # Audit E1 + L-K4: use_key_matching — Camelot-Wheel key compatibility scoring.
         if pacing_config.get("use_key_matching", False):
@@ -914,11 +997,7 @@ class PacingService:
 
         try:
             # Entscheide welche Generierungsmethode genutzt wird
-            use_advanced = (
-                pacing_config.get("use_motion_matching", False) or 
-                semantic_enabled or
-                pacing_config.get("use_structure_awareness", False)
-            )
+            use_advanced = _uses_advanced_pacing(pacing_config, semantic_enabled)
 
             if use_advanced:
                 if pacing_config.get("use_motion_matching", False):
@@ -988,7 +1067,7 @@ class PacingService:
                 last_manual_end = 0.0
                 last_manual_clip = None
 
-                for cut in pacing_cuts:
+                for cut_index, cut in enumerate(pacing_cuts):
                     # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
                     active_anchor = None
                     for ma in manual_anchors:
@@ -1034,7 +1113,17 @@ class PacingService:
                     pacing_engine.clip_selector.bridging_out_of = bridging_out_of
 
                     sel = pacing_engine.clip_selector.select_clip(
-                        clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
+                        clips,
+                        cut.strength,
+                        cut.trigger_type,
+                        prompt=prompt,
+                        current_time=cut.time,
+                        active_theme=active_theme,
+                        cut_duration_sec=(
+                            pacing_cuts[cut_index + 1].time - cut.time
+                            if cut_index + 1 < len(pacing_cuts)
+                            else 1.0
+                        ),
                     )
                     cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
 

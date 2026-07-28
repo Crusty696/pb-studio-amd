@@ -50,6 +50,8 @@ ENERGY_PHASE_MULTIPLIERS = {
     "plateau": 0.8
 }
 
+STRONG_BEAT_THRESHOLD = 0.75
+
 # =============================================================================
 # Audit E1: Camelot-Wheel Key Compatibility (Tonart-Matching)
 # =============================================================================
@@ -1039,6 +1041,9 @@ class AdvancedPacingEngine:
         # 1. Pre-cached Beats von PacingService (aus /audio/analyze Cache)
         if hasattr(self, "_pre_cached_beats") and self._pre_cached_beats:
             beats = self._pre_cached_beats
+            downbeats = getattr(self, "_pre_cached_downbeats", None) or []
+            if not downbeats:
+                downbeats = self._identify_downbeats(beats)
             logger.info(f"Pre-cached Beats: {len(beats)}")
         else:
             try:
@@ -1821,6 +1826,7 @@ class AdvancedPacingEngine:
 
         ts = self.trigger_settings
         downbeat_set = set(downbeats)
+        mode = ts.beat_trigger_mode
 
         # L-N8: per-beat strengths from audio_router (via pacing_service)
         strengths = getattr(self, "_pre_cached_beat_strengths", None)
@@ -1842,7 +1848,12 @@ class AdvancedPacingEngine:
                 multiplier = max(0.0, min(1.0, float(strengths[i])))
                 strength = ts.beat_weight * base * multiplier
             else:
+                multiplier = base
                 strength = ts.beat_weight * base
+            if mode == "downbeat_only" and not is_downbeat:
+                continue
+            if mode == "strong_only" and multiplier < STRONG_BEAT_THRESHOLD:
+                continue
             out.append(PacingCut(
                 time=float(t),
                 trigger_type="downbeat" if is_downbeat else "beat",
