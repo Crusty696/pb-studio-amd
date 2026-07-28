@@ -306,41 +306,59 @@ class StreamingAudioAnalyzer:
         on_progress: Optional[Callable[[float], None]],
         energy_only: bool = False,
     ) -> StreamingAnalysisResult:
+        """Prepare an O(1)-seek source and always remove its temp transcode."""
+        import soundfile as sf
+
+        temp_wav_path: Optional[str] = None
+        try:
+            try:
+                native_sr = sf.info(str(path)).samplerate
+            except Exception:
+                native_sr = None
+            if native_sr is None:
+                temp_wav_path = self._transcode_to_wav(path)
+                if temp_wav_path is None:
+                    raise RuntimeError(
+                        "Streaming-Transcode fehlgeschlagen; "
+                        "langsames Offset-Decoding ist deaktiviert"
+                    )
+                path = Path(temp_wav_path)
+                native_sr = sf.info(str(path)).samplerate
+            return self._analyze_streaming_prepared(
+                path,
+                duration,
+                on_progress,
+                energy_only,
+                native_sr,
+            )
+        finally:
+            if temp_wav_path is not None:
+                try:
+                    Path(temp_wav_path).unlink(missing_ok=True)
+                except Exception as exc:
+                    logger.warning(
+                        "Streaming-Tempdatei konnte nicht entfernt werden: %s",
+                        exc,
+                    )
+
+    def _analyze_streaming_prepared(
+        self,
+        path: Path,
+        duration: float,
+        on_progress: Optional[Callable[[float], None]],
+        energy_only: bool,
+        native_sr: int,
+    ) -> StreamingAnalysisResult:
         """Echtes Chunk-Streaming mit soundfile block-I/O.
 
         Nur der aktuelle Chunk + Overlap lebt im RAM.
         """
         import librosa
-        import soundfile as sf
 
         step = self.window_sec - self.overlap_sec
         if step <= 0:
             step = self.window_sec  # Safety: overlap darf nicht >= window sein
         n_windows = max(1, math.ceil((duration - self.overlap_sec) / step))
-
-        # BUGFIX H5: if soundfile cannot open this file (typical for MP3/OGG/FLAC
-        # builds), the per-chunk fallback was librosa.load(offset=...). With the
-        # audioread backend, offset seeking decodes-and-discards from file start,
-        # so chunk i costs O(i) -> total O(n^2) and a long MP3 mix appears frozen.
-        # Transcode ONCE to a temp WAV up front so every chunk uses O(1) soundfile
-        # block-I/O. Cleaned up in the finally below.
-        temp_wav_path: Optional[str] = None
-        try:
-            native_sr = sf.info(str(path)).samplerate
-        except Exception:
-            native_sr = None
-        if native_sr is None:
-            temp_wav_path = self._transcode_to_wav(path)
-            if temp_wav_path is not None:
-                path = Path(temp_wav_path)
-                try:
-                    native_sr = sf.info(str(path)).samplerate
-                except Exception:
-                    native_sr = self.SR
-            else:
-                # Transcode failed — keep original path; _load_chunk's librosa
-                # fallback still works (slow), correctness preserved.
-                native_sr = self.SR
 
         # Aggregations-Objekte
         bpm_est = _RunningBPMEstimator()
@@ -453,13 +471,6 @@ class StreamingAudioAnalyzer:
 
             if on_progress:
                 on_progress((i + 1) * 100.0 / n_windows)
-
-        # BUGFIX H5: remove the one-time transcode temp WAV.
-        if temp_wav_path is not None:
-            try:
-                Path(temp_wav_path).unlink(missing_ok=True)
-            except Exception:
-                pass
 
         (
             spectral_times,
