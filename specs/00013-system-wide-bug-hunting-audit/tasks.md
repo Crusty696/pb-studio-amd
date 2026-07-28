@@ -260,11 +260,11 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T246 [OBJ-69] {(FR-266)} Fix H-14 Brain-required video analysis loading in `backend/routers/pacing_router.py`
 - [X] T247 [OBJ-69] {(FR-267)} Fix H-15 durable idempotent learning outbox across `src/pb_studio/brain/` persistence boundaries
 - [X] T248 [OBJ-69] {(FR-268)} Fix H-16 exact projector model/dimension enforcement in `src/pb_studio/brain/`
-- [ ] T249 [P] [OBJ-69] {(FR-269)} Fix H-17 `pacing.generate` long-running chat behavior in `src/pb_studio/ai/tool_registry.py` and `chat_agent.py`
-- [ ] T250 [P] [OBJ-69] {(FR-270)} Fix H-18 runtime environment ordering before backend startup in `PBStudio.UI/`
-- [ ] T251 [OBJ-69] {(FR-271)} Fix H-19 project generation and CTS for audio, stems, and pacing in `PBStudio.UI/ViewModels/`
+- [X] T249 [P] [OBJ-69] {(FR-269)} Fix H-17 `pacing.generate` long-running chat behavior in `src/pb_studio/ai/tool_registry.py` and `chat_agent.py`
+- [X] T250 [P] [OBJ-69] {(FR-270)} Fix H-18 runtime environment ordering before backend startup in `PBStudio.UI/`
+- [X] T251 [OBJ-69] {(FR-271)} Fix H-19 project generation and CTS for audio, stems, and pacing in `PBStudio.UI/ViewModels/`
 - [X] T252 [P] [OBJ-69] {(FR-272)} Fix H-20 project-create conflict handling in `backend/routers/project_router.py`
-- [ ] T253 [P] [OBJ-69] {(FR-273)} Fix H-21 idempotent pending media delete operations in project/data persistence
+- [X] T253 [P] [OBJ-69] {(FR-273)} Fix H-21 idempotent pending media delete operations in project/data persistence
 - [X] T254 [P] [OBJ-69] {(FR-274)} Fix H-22 functional `include_audio` and `quality` rendering in render schemas/router/service
 - [X] T255 [OBJ-69] {(FR-275)} Fix H-23 atomic render output publication in `src/pb_studio/rendering/render_service.py` and `backend/routers/render_router.py`
 - [X] T256 [OBJ-69] {(FR-276)} Fix H-24 queue dedupe scheduling in `backend/routers/render_router.py` and render queue
@@ -281,13 +281,13 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T267 [OBJ-69] {(FR-287)} Fix M-09 true motion peak frames in video analysis
 - [X] T268 [OBJ-69] {(FR-288)} Fix M-10 active `beat_trigger_mode` wiring in pacing models and engine
 - [X] T269 [OBJ-69] {(FR-289)} Fix M-11 synchronous Brain reads blocking the event loop in `backend/routers/brain_router.py`
-- [ ] T270 [OBJ-69] {(FR-290)} Fix M-12 empty chat pacing clip-ID validation in `src/pb_studio/ai/tool_registry.py`
+- [X] T270 [OBJ-69] {(FR-290)} Fix M-12 empty chat pacing clip-ID validation in `src/pb_studio/ai/tool_registry.py`
 - [X] T271 [OBJ-69] {(FR-291)} Fix M-13 capability-aware model provider selection in model registry/provider code
-- [ ] T272 [OBJ-69] {(FR-292)} Fix M-14 real embedding status in WPF DTO/model/view
-- [ ] T273 [OBJ-69] {(FR-293)} Fix M-15 single cancellable Timeline asset load in `PBStudio.UI/ViewModels/TimelineViewModel.cs`
-- [ ] T274 [OBJ-69] {(FR-294)} Fix M-16 Brain learning selection binding in `PBStudio.UI/Views/BrainView.xaml`
+- [X] T272 [OBJ-69] {(FR-292)} Fix M-14 real embedding status in WPF DTO/model/view
+- [X] T273 [OBJ-69] {(FR-293)} Fix M-15 single cancellable Timeline asset load in `PBStudio.UI/ViewModels/TimelineViewModel.cs`
+- [X] T274 [OBJ-69] {(FR-294)} Fix M-16 Brain learning selection binding in `PBStudio.UI/Views/BrainView.xaml`
 - [X] T275 [OBJ-69] {(FR-295)} Fix M-17 project save failure propagation in `backend/app_state.py` and `backend/routers/project_router.py`
-- [ ] T276 [OBJ-69] {(FR-296)} Fix M-18 crash-consistent vector dedupe in video/data persistence
+- [X] T276 [OBJ-69] {(FR-296)} Fix M-18 crash-consistent vector dedupe in video/data persistence
 - [X] T277 [OBJ-69] {(FR-297)} Fix M-19 VectorStore dirty-state retry in `src/pb_studio/data/vector_store.py`
 - [X] T278 [OBJ-69] {(FR-298)} Fix M-20 adaptive tombstone overfetch in `src/pb_studio/data/vector_store.py`
 - [X] T279 [OBJ-69] {(FR-299)} Fix M-21 atomic Brain backup and valid-backup recovery in `src/pb_studio/brain/`
@@ -299,8 +299,8 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T285 [OBJ-69] {(FR-305)} Fix L-02 collision-safe locked waveform cache in `src/pb_studio/audio/waveform_cache.py`
 - [X] T286 [OBJ-69] {(FR-306)} Fix L-03 computed or nullable scene confidence in video analysis
 - [X] T287 [OBJ-69] {(FR-307)} Fix L-04 input-position video import progress in `backend/routers/video_router.py`
-- [ ] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
-- [ ] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
+- [X] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
+- [X] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
 - [X] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
 - [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
 - [X] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
@@ -308,11 +308,11 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
 - [X] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
 - [X] T296 [OBJ-69] {(TR-316)} Run the single W5 Pacing/Brain micro-gate
-- [ ] T297 [OBJ-69] {(TR-317)} Run the single W6 Chat/Models/Terminal micro-gate
-- [ ] T298 [OBJ-69] {(TR-318)} Run the single W7 project/data fault-injection micro-gate on copies
+- [X] T297 [OBJ-69] {(TR-317)} Run the single W6 Chat/Models/Terminal micro-gate
+- [X] T298 [OBJ-69] {(TR-318)} Run the single W7 project/data fault-injection micro-gate on copies
 - [X] T299 [OBJ-69] {(TR-319)} Run the single W8 render/export micro-gate
-- [ ] T300 [OBJ-69] {(TR-320)} Run the single W9 WPF/lifecycle contract micro-gate
-- [ ] T301 [OBJ-69] {(TR-321)} Prove 60/60 implementation completion and create `.completed`
+- [X] T300 [OBJ-69] {(TR-320)} Run the single W9 WPF/lifecycle contract micro-gate
+- [X] T301 [OBJ-69] {(TR-321)} Prove 60/60 implementation completion and create `.completed`
 - [ ] T302 [OBJ-69] {(TR-322)} Execute the complete bundled static, regression, security, data, hardware, GUI, model, and export QC
 - [ ] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
 - [ ] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
