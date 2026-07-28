@@ -877,6 +877,7 @@ public class ApiClient : IApiClient
             "model" => ChatEventType.Model,
             "text" => ChatEventType.Text,
             "tool_call" => ChatEventType.ToolCall,
+            "tool_confirmation_required" => ChatEventType.ToolConfirmationRequired,
             "tool_result" => ChatEventType.ToolResult,
             "error" => ChatEventType.Error,
             "done" => ChatEventType.Done,
@@ -891,11 +892,47 @@ public class ApiClient : IApiClient
             ChatEventType.Model => new ChatStreamEvent(type, eventName!, ModelName: Str("model"), ModelReason: Str("reason")),
             ChatEventType.Text => new ChatStreamEvent(type, eventName!, Text: Str("content")),
             ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments")),
+            ChatEventType.ToolConfirmationRequired => new ChatStreamEvent(
+                type,
+                eventName!,
+                ToolName: Str("name"),
+                ToolArgumentsJson: RawJson("arguments"),
+                ConfirmationId: Str("confirmation_id"),
+                ConfirmationExpiresInSeconds: root.TryGetProperty("expires_in_seconds", out var expires)
+                    && expires.TryGetDouble(out var seconds) ? seconds : null),
             ChatEventType.ToolResult => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolResultJson: RawJson("result")),
             ChatEventType.Error => new ChatStreamEvent(type, eventName!, ErrorMessage: Str("message"), ErrorStage: Str("stage")),
             ChatEventType.Done => new ChatStreamEvent(type, eventName!, Text: Str("final_text"), DoneReason: Str("reason")),
             _ => new ChatStreamEvent(type, eventName ?? "unknown"),
         };
+    }
+
+    public async Task<bool> DecideChatToolConfirmationAsync(
+        string confirmationId, bool approve, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(confirmationId)) return false;
+        using var requestCts = ct.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
+        var decision = approve ? "approve" : "reject";
+        try
+        {
+            using var response = await _http.PostAsync(
+                $"/chat/confirm/{Uri.EscapeDataString(confirmationId)}/{decision}",
+                content: null,
+                token).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, ct))
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Chat tool confirmation failed");
+            return false;
+        }
     }
 
     public async Task<bool> ClearChatHistoryAsync(CancellationToken ct = default)

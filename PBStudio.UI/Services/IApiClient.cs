@@ -138,6 +138,10 @@ public interface IApiClient : IDisposable
         bool saveHistory = true,
         CancellationToken ct = default);
 
+    /// <summary>Approves or rejects server-stored tool arguments by one-time ID.</summary>
+    Task<bool> DecideChatToolConfirmationAsync(
+        string confirmationId, bool approve, CancellationToken ct = default);
+
     /// <summary>Leert die Server-Side Chat-History.</summary>
     Task<bool> ClearChatHistoryAsync(CancellationToken ct = default);
     #endregion

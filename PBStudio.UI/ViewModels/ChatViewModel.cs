@@ -143,6 +143,23 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                         assistantVm.AddOrUpdateToolCall(tc);
                         StatusText = $"Tool: {tc.Name}";
                         break;
+                    case ChatEventType.ToolConfirmationRequired:
+                        var confirmationText =
+                            $"PB Studio soll das mutierende Tool '{ev.ToolName}' ausfuehren.\n\n" +
+                            $"Argumente:\n{ev.ToolArgumentsJson}\n\n" +
+                            "Ausfuehrung erlauben?";
+                        var approved = MessageBox.Show(
+                            confirmationText,
+                            "Tool-Ausfuehrung bestaetigen",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                        var decisionSent = !string.IsNullOrWhiteSpace(ev.ConfirmationId)
+                            && await _api.DecideChatToolConfirmationAsync(
+                                ev.ConfirmationId, approved, token).ConfigureAwait(true);
+                        StatusText = decisionSent
+                            ? approved ? "Tool bestaetigt." : "Tool abgelehnt."
+                            : "Bestaetigung nicht mehr gueltig.";
+                        break;
                     case ChatEventType.ToolResult:
                         var lastIdx = toolCalls.FindLastIndex(t => t.Name == (ev.ToolName ?? ""));
                         if (lastIdx >= 0)

@@ -82,7 +82,7 @@ class Tool:
     description: str
     parameters: dict[str, Any]
     handler: ToolHandler
-    destructive: bool = False
+    destructive: Optional[bool] = None
     category: str = "general"
     long_running: bool = False
 
@@ -114,6 +114,10 @@ class ToolRegistry:
         self._by_llm_name: dict[str, Tool] = {}
 
     def register(self, tool: Tool) -> None:
+        if tool.destructive is None:
+            raise ValueError(
+                f"Tool {tool.name!r} muss destructive=True oder destructive=False explizit klassifizieren"
+            )
         if tool.name in self._tools:
             raise ValueError(f"Tool {tool.name!r} bereits registriert")
         self._tools[tool.name] = tool
@@ -625,6 +629,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_project_info,
         category="project",
+        destructive=False,
     ))
     reg.register(Tool(
         name="project.create",
@@ -645,6 +650,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["path"]),
         handler=_h_project_open,
         category="project",
+        destructive=True,
     ))
     reg.register(Tool(
         name="project.save",
@@ -652,6 +658,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_project_save,
         category="project",
+        destructive=True,
     ))
     reg.register(Tool(
         name="project.close",
@@ -659,6 +666,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_project_close,
         category="project",
+        destructive=True,
     ))
 
     # Audio -------------------------------------------------------------
@@ -671,6 +679,7 @@ def build_default_registry() -> ToolRegistry:
         }),
         handler=_h_audio_list_clips,
         category="audio",
+        destructive=False,
     ))
     reg.register(Tool(
         name="audio.import",
@@ -693,6 +702,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_audio_analyze,
         category="audio",
+        destructive=True,
     ))
     reg.register(Tool(
         name="audio.get_beats",
@@ -702,6 +712,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_audio_get_beats,
         category="audio",
+        destructive=False,
     ))
     reg.register(Tool(
         name="audio.get_structure",
@@ -711,6 +722,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_audio_get_structure,
         category="audio",
+        destructive=False,
     ))
     reg.register(Tool(
         name="audio.get_spectral",
@@ -720,6 +732,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_audio_get_spectral,
         category="audio",
+        destructive=False,
     ))
     reg.register(Tool(
         name="audio.separate_stems",
@@ -744,6 +757,7 @@ def build_default_registry() -> ToolRegistry:
         }),
         handler=_h_video_list_clips,
         category="video",
+        destructive=False,
     ))
     reg.register(Tool(
         name="video.import",
@@ -771,6 +785,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_video_analyze,
         category="video",
+        destructive=True,
     ))
     reg.register(Tool(
         name="video.get_scenes",
@@ -780,6 +795,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_video_get_scenes,
         category="video",
+        destructive=False,
     ))
     reg.register(Tool(
         name="video.get_motion",
@@ -789,6 +805,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["clip_id"]),
         handler=_h_video_get_motion,
         category="video",
+        destructive=False,
     ))
 
     # Pacing ------------------------------------------------------------
@@ -813,6 +830,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["audio_clip_id"]),
         handler=_h_pacing_generate,
         category="pacing",
+        destructive=True,
     ))
     reg.register(Tool(
         name="pacing.timeline",
@@ -820,6 +838,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_pacing_timeline,
         category="pacing",
+        destructive=False,
     ))
     reg.register(Tool(
         name="pacing.preview",
@@ -830,6 +849,7 @@ def build_default_registry() -> ToolRegistry:
         }),
         handler=_h_pacing_preview,
         category="pacing",
+        destructive=True,
     ))
 
     # Brain -------------------------------------------------------------
@@ -843,6 +863,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["audio_clip_id"]),
         handler=_h_brain_suggest,
         category="brain",
+        destructive=False,
     ))
     reg.register(Tool(
         name="brain.feedback",
@@ -853,6 +874,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["cut_id", "rating"]),
         handler=_h_brain_feedback,
         category="brain",
+        destructive=True,
     ))
     reg.register(Tool(
         name="brain.learning_session",
@@ -860,6 +882,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_brain_learning_session,
         category="brain",
+        destructive=False,
     ))
     reg.register(Tool(
         name="brain.stats",
@@ -867,6 +890,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_brain_stats,
         category="brain",
+        destructive=False,
     ))
     reg.register(Tool(
         name="brain.explain",
@@ -878,6 +902,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["cut_id"]),
         handler=_h_brain_explain,
         category="brain",
+        destructive=False,
     ))
 
     # Render ------------------------------------------------------------
@@ -911,6 +936,7 @@ def build_default_registry() -> ToolRegistry:
         }, required=["task_id"]),
         handler=_h_render_status,
         category="render",
+        destructive=False,
     ))
     reg.register(Tool(
         name="render.cancel",
@@ -930,6 +956,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_models_list,
         category="models",
+        destructive=False,
     ))
     reg.register(Tool(
         name="models.available",
@@ -937,6 +964,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_models_available,
         category="models",
+        destructive=False,
     ))
     reg.register(Tool(
         name="models.recommendations",
@@ -947,6 +975,7 @@ def build_default_registry() -> ToolRegistry:
         }),
         handler=_h_models_recommendations,
         category="models",
+        destructive=False,
     ))
 
     # System ------------------------------------------------------------
@@ -956,6 +985,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_system_health,
         category="system",
+        destructive=False,
     ))
     reg.register(Tool(
         name="system.gpu_status",
@@ -963,6 +993,7 @@ def build_default_registry() -> ToolRegistry:
         parameters=_empty_schema(),
         handler=_h_system_gpu_status,
         category="system",
+        destructive=False,
     ))
 
     return reg

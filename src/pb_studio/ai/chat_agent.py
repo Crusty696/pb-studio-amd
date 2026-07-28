@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
 
@@ -82,6 +83,101 @@ class ChatEvent:
         return {"type": self.type, **self.payload}
 
 
+@dataclass
+class _PendingToolConfirmation:
+    confirmation_id: str
+    stream_id: str
+    tool_name: str
+    canonical_args: dict[str, Any]
+    expires_at: float
+    decision: asyncio.Future[bool]
+    state: str = "pending"
+
+
+class ToolConfirmationBroker:
+    """Atomic one-time authority for mutating chat-tool dispatch."""
+
+    def __init__(self) -> None:
+        self._entries: dict[str, _PendingToolConfirmation] = {}
+        self._lock = asyncio.Lock()
+
+    async def request(
+        self, *, stream_id: str, tool_name: str, args: dict[str, Any],
+        timeout_seconds: float,
+    ) -> _PendingToolConfirmation:
+        canonical = json.loads(json.dumps(
+            args, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ))
+        loop = asyncio.get_running_loop()
+        entry = _PendingToolConfirmation(
+            secrets.token_urlsafe(32), stream_id, tool_name, canonical,
+            loop.time() + timeout_seconds, loop.create_future(),
+        )
+        async with self._lock:
+            self._entries[entry.confirmation_id] = entry
+        return entry
+
+    async def decide(self, confirmation_id: str, *, approve: bool) -> bool:
+        async with self._lock:
+            entry = self._entries.get(confirmation_id)
+            if entry is None or entry.state != "pending":
+                return False
+            if asyncio.get_running_loop().time() >= entry.expires_at:
+                entry.state = "expired"
+                if not entry.decision.done():
+                    entry.decision.set_result(False)
+                return False
+            entry.state = "approved" if approve else "rejected"
+            if not entry.decision.done():
+                entry.decision.set_result(approve)
+            return True
+
+    async def wait(self, entry: _PendingToolConfirmation) -> bool:
+        remaining = max(0.0, entry.expires_at - asyncio.get_running_loop().time())
+        try:
+            return await asyncio.wait_for(asyncio.shield(entry.decision), remaining)
+        except asyncio.TimeoutError:
+            async with self._lock:
+                if entry.state == "pending":
+                    entry.state = "expired"
+                    if not entry.decision.done():
+                        entry.decision.set_result(False)
+            return False
+
+    async def consume(
+        self, confirmation_id: str, *, stream_id: str
+    ) -> tuple[str, dict[str, Any]] | None:
+        async with self._lock:
+            entry = self._entries.get(confirmation_id)
+            if (
+                entry is None
+                or entry.stream_id != stream_id
+                or entry.state != "approved"
+                or asyncio.get_running_loop().time() >= entry.expires_at
+            ):
+                return None
+            entry.state = "consumed"
+            return entry.tool_name, json.loads(json.dumps(entry.canonical_args))
+
+    async def cancel_stream(self, stream_id: str) -> None:
+        async with self._lock:
+            owned_ids = [
+                confirmation_id
+                for confirmation_id, entry in self._entries.items()
+                if entry.stream_id == stream_id
+            ]
+            for confirmation_id in owned_ids:
+                entry = self._entries[confirmation_id]
+                if entry.state in {"pending", "approved"}:
+                    entry.state = "disconnected"
+                if not entry.decision.done():
+                    entry.decision.set_result(False)
+                del self._entries[confirmation_id]
+
+
+tool_confirmation_broker = ToolConfirmationBroker()
+
+
 class ChatAgent:
     """Stateless Agent - eine Instanz pro Conversation OK."""
 
@@ -96,6 +192,7 @@ class ChatAgent:
         system_prompt: Optional[str] = None,
         max_tool_turns: int = 6,
         backend_base_url: Optional[str] = None,
+        confirmation_timeout_seconds: float = 60.0,
     ) -> None:
         self._registry = registry or build_default_registry()
         injected_client = lmstudio_client if lmstudio_client is not None else ollama_client
@@ -108,6 +205,8 @@ class ChatAgent:
         self._system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self._max_tool_turns = max(1, int(max_tool_turns))
         self._backend_base_url = backend_base_url or _get_backend_base_url()
+        self._confirmation_timeout_seconds = max(0.01, float(confirmation_timeout_seconds))
+        self._confirmation_stream_id = secrets.token_urlsafe(24)
 
     @property
     def registry(self) -> ToolRegistry:
@@ -183,6 +282,7 @@ class ChatAgent:
             self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
 
     async def aclose(self) -> None:
+        await tool_confirmation_broker.cancel_stream(self._confirmation_stream_id)
         if self._owned_http and self._http is not None:
             try:
                 await self._http.aclose()
@@ -324,10 +424,9 @@ class ChatAgent:
                 f"Kein chat-faehiges Modell installiert: {exc}"
             ) from exc
 
-    async def _dispatch_tool(self, tool_call):
-        await self._ensure_resources()
-        assert self._http is not None
-
+    def _parse_tool_call(
+        self, tool_call: dict[str, Any]
+    ) -> tuple[str, dict[str, Any], Any]:
         function = tool_call.get("function") or {}
         name = function.get("name") or tool_call.get("name") or ""
         raw_args = function.get("arguments") if "arguments" in function else tool_call.get("arguments")
@@ -341,12 +440,38 @@ class ChatAgent:
                 args = {"_raw_arguments": raw_args}
         else:
             args = {}
+        return name, args, self._registry.get(name)
 
-        tool = self._registry.get(name)
+    async def _dispatch_tool(
+        self,
+        tool_call: Optional[dict[str, Any]] = None,
+        *,
+        confirmation_id: Optional[str] = None,
+    ):
+        await self._ensure_resources()
+        assert self._http is not None
+
+        if confirmation_id is not None:
+            confirmed = await tool_confirmation_broker.consume(
+                confirmation_id, stream_id=self._confirmation_stream_id
+            )
+            if confirmed is None:
+                return {"error": "Tool-Bestaetigung ungueltig, abgelaufen oder bereits verwendet"}
+            name, args = confirmed
+            tool = self._registry.get(name)
+        else:
+            if tool_call is None:
+                return {"error": "Tool-Aufruf fehlt"}
+            name, args, tool = self._parse_tool_call(tool_call)
         if tool is None:
             return {
                 "error": f"Unbekanntes Tool: {name!r}",
                 "available_tools": [t.name for t in self._registry.all()],
+            }
+        if tool.destructive and confirmation_id is None:
+            return {
+                "error": "Serverseitige Tool-Bestaetigung erforderlich",
+                "tool": tool.name,
             }
         # P-H2 (Audit V2): long-running Tools (Render, Stems) brauchen
         # erweiterten Timeout — default 60s killt sonst aktive GPU-Tasks
@@ -637,7 +762,31 @@ class ChatAgent:
                             "id": tool_call_id,
                         })
 
-                        result = await self._dispatch_tool(tc)
+                        _parsed_name, parsed_args, parsed_tool = self._parse_tool_call(tc)
+                        if parsed_tool is not None and parsed_tool.destructive:
+                            pending = await tool_confirmation_broker.request(
+                                stream_id=self._confirmation_stream_id,
+                                tool_name=parsed_tool.name,
+                                args=parsed_args,
+                                timeout_seconds=self._confirmation_timeout_seconds,
+                            )
+                            yield ChatEvent("tool_confirmation_required", {
+                                "confirmation_id": pending.confirmation_id,
+                                "name": parsed_tool.name,
+                                "arguments": pending.canonical_args,
+                                "expires_in_seconds": self._confirmation_timeout_seconds,
+                            })
+                            if await tool_confirmation_broker.wait(pending):
+                                result = await self._dispatch_tool(
+                                    confirmation_id=pending.confirmation_id
+                                )
+                            else:
+                                result = {
+                                    "error": "Tool-Aufruf abgelehnt oder Bestaetigung abgelaufen",
+                                    "tool": parsed_tool.name,
+                                }
+                        else:
+                            result = await self._dispatch_tool(tc)
                         # M3-Fix (P-M1, 2026-05-20): Wenn Tool-Result einen "error"-key
                         # hat (Tool-Handler-Exception oder unknown-tool), zusaetzlich
                         # ChatEvent("error",...) emittieren — sonst sieht UI im Frontend
@@ -726,4 +875,10 @@ class ChatAgent:
                 _publish_status(model, "failed", 0.0)
 
 
-__all__ = ["ChatAgent", "ChatEvent", "DEFAULT_SYSTEM_PROMPT"]
+__all__ = [
+    "ChatAgent",
+    "ChatEvent",
+    "DEFAULT_SYSTEM_PROMPT",
+    "ToolConfirmationBroker",
+    "tool_confirmation_broker",
+]

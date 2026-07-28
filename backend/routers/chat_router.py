@@ -237,6 +237,32 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
     )
 
 
+@router.post("/confirm/{confirmation_id}/approve", response_model=StatusResponse)
+async def approve_tool_confirmation(confirmation_id: str) -> StatusResponse:
+    """Approves exactly the server-stored tool name and arguments."""
+    from pb_studio.ai.chat_agent import tool_confirmation_broker
+
+    if not await tool_confirmation_broker.decide(confirmation_id, approve=True):
+        raise HTTPException(
+            status_code=409,
+            detail="Bestaetigung ungueltig, abgelaufen oder bereits entschieden",
+        )
+    return StatusResponse(status="approved")
+
+
+@router.post("/confirm/{confirmation_id}/reject", response_model=StatusResponse)
+async def reject_tool_confirmation(confirmation_id: str) -> StatusResponse:
+    """Rejects a pending tool call; no arguments are accepted from the client."""
+    from pb_studio.ai.chat_agent import tool_confirmation_broker
+
+    if not await tool_confirmation_broker.decide(confirmation_id, approve=False):
+        raise HTTPException(
+            status_code=409,
+            detail="Bestaetigung ungueltig, abgelaufen oder bereits entschieden",
+        )
+    return StatusResponse(status="rejected")
+
+
 @router.get("/tools", response_model=ToolInventoryResponse)
 async def get_tools() -> ToolInventoryResponse:
     """Liefert das Inventar aller registrierten Chat-Tools (Debug/UI)."""
