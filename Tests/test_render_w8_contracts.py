@@ -340,7 +340,10 @@ def test_shutdown_cancel_stays_restartable_but_user_cancel_is_terminal(
 
         assert task.done()
 
-    asyncio.run(run())
+    try:
+        asyncio.run(run())
+    finally:
+        render_router._reset_render_runtime_for_startup()
 
     assert queue_updates[-1] == expected_queue_status
     if shutdown_cancel:
