@@ -45,6 +45,49 @@ def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: floa
     return max(float(configured_timeout), duration * _LONG_STEM_TIMEOUT_RATIO)
 
 
+def _find_reusable_stem_files(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+) -> list[str]:
+    """Return only complete model-matching stems from an earlier successful run."""
+    import soundfile as sf
+
+    source = Path(audio_path)
+    model_token = Path(model_name).stem.lower()
+    if "htdemucs" in model_token:
+        required_roles = {"vocals", "drums", "bass", "other"}
+    elif "mdx" in model_token or "inst" in model_token:
+        required_roles = {"vocals", "instrumental"}
+    else:
+        return []
+
+    candidates = [
+        path
+        for path in output_dir.glob(f"{source.stem}_*.wav")
+        if model_token in path.stem.lower()
+    ]
+    if not candidates:
+        return []
+
+    source_duration = float(sf.info(str(source)).duration)
+    tolerance = max(1.0, source_duration * 0.001)
+    roles: set[str] = set()
+    complete: list[str] = []
+    for path in candidates:
+        try:
+            if abs(float(sf.info(str(path)).duration) - source_duration) > tolerance:
+                continue
+        except (OSError, RuntimeError):
+            continue
+        stem = path.stem.lower()
+        for role in required_roles:
+            if f"({role})" in stem or role in stem:
+                roles.add(role)
+        complete.append(str(path.resolve()))
+    return sorted(complete) if required_roles.issubset(roles) else []
+
+
 def _get_beat_detector() -> "Any":
     """Return the module-level BeatDetector singleton (thread-safe init)."""
     global _beat_detector
@@ -1181,10 +1224,21 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
 
 def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> dict[str, Any]:
     """Führt Stem-Separation durch (blockierend, GPU)."""
+    from pb_studio.config_manager import ConfigManager
     from pb_studio.audio.separator import StemSeparator
 
-    separator = StemSeparator()
-    result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
+    config_manager = ConfigManager()
+    output_dir_raw = config_manager.get("paths", {}).get("temp_dir", "./temp")
+    output_dir = config_manager.resolve_path(output_dir_raw)
+    reusable = _find_reusable_stem_files(audio_path, model_name, output_dir)
+    if reusable:
+        logger.info("Verwende %d vollständig validierte Stem-Dateien erneut", len(reusable))
+        if on_progress is not None:
+            on_progress(100.0)
+        result = {"stems": reusable}
+    else:
+        separator = StemSeparator()
+        result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
 
     # Fehler vom Separator prüfen
     if "error" in result:
@@ -1192,9 +1246,6 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
 
     # StemSeparator.separate() kann relative Dateinamen zurückgeben.
     # Diese auf den konfigurierten Output-/Temp-Ordner normalisieren.
-    output_dir_raw = separator.config.get("paths", {}).get("temp_dir", "./temp")
-    output_dir = separator.config.resolve_path(output_dir_raw)
-
     # StemSeparator.separate() gibt {"stems": [path1, path2, ...]} zurück.
     # audio-separator benennt Output-Dateien mit (Vocals), (Instrumental), etc.
     stem_files = result.get("stems", [])

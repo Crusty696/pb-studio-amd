@@ -11,6 +11,33 @@ def test_long_mix_stem_timeout_scales_beyond_fixed_floor():
     assert _stem_timeout_for_duration(6335.0, 900.0) == pytest.approx(4751.25)
 
 
+def test_reusable_stems_require_complete_matching_outputs(tmp_path):
+    import soundfile as sf
+
+    from backend.routers.audio_router import _find_reusable_stem_files
+
+    source = tmp_path / "long_mix.wav"
+    samples = np.zeros(44100, dtype=np.float32)
+    sf.write(source, samples, 44100)
+    vocals = tmp_path / "long_mix_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    instrumental = tmp_path / "long_mix_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    sf.write(vocals, samples, 44100)
+
+    assert _find_reusable_stem_files(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+    ) == []
+
+    sf.write(instrumental, samples, 44100)
+    reusable = _find_reusable_stem_files(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+    )
+    assert reusable == sorted([str(instrumental.resolve()), str(vocals.resolve())])
+
+
 def test_long_mix_subtrack_detection_never_full_loads(monkeypatch, tmp_path):
     import librosa
 
