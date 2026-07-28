@@ -408,13 +408,13 @@ class AppState:
         except (TypeError, ValueError) as exc:
             raise RuntimeError("Aktive DB-Projekt-ID ist ungültig") from exc
 
-    def sync_project_db_record(self) -> None:
+    def sync_project_db_record(self) -> bool:
         """Schreibt current_project in die Projects-Tabelle, falls eine DB-Projekt-ID bekannt ist."""
         with self._state_lock:
             project = dict(self.current_project) if isinstance(self.current_project, dict) else None
 
         if not project:
-            return
+            return False
 
         project_id = resolve_project_db_id(project)
         project_data = {
@@ -428,9 +428,11 @@ class AppState:
         }
         try:
             ProjectRepository().update_project(project_id, name=project.get("name"), data=project_data)
+            return True
         except Exception as e:
             logger.error("Projekt-DB-Sync fehlgeschlagen: %s", e)
             _emit_persist_error("project_sync", "Projekt-DB-Sync fehlgeschlagen", str(e))
+            return False
 
     def _find_audio_clip_by_path(self, file_path: str) -> Optional[dict]:
         normalized = normalize_media_path(file_path)

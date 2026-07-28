@@ -334,7 +334,8 @@ async def save_project(state: AppState = Depends(get_app_state)) -> StatusRespon
     }
     _write_project_meta(project_path, project_data)
     state.current_project = project_data
-    state.sync_project_db_record()
+    if not state.sync_project_db_record():
+        raise HTTPException(status_code=500, detail="Projekt konnte nicht vollständig gespeichert werden")
 
     logger.info(f"Projekt gespeichert: {project_path}")
     return StatusResponse(success=True, message="Projekt gespeichert")

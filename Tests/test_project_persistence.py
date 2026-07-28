@@ -117,6 +117,18 @@ class TestProjectLifecyclePersistence:
         assert entry["clip_start"] == 0.25
         assert entry["trigger_type"] == "beat"
 
+    def test_save_returns_error_when_project_db_sync_fails(self, client, tmp_path, fresh_state, monkeypatch):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        assert client.post("/project/create", json={"name": "SyncFailure", "path": str(tmp_path)}).status_code == 200
+        monkeypatch.setattr(fresh_state, "sync_project_db_record", MagicMock(return_value=False))
+
+        response = client.post("/project/save")
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Projekt konnte nicht vollständig gespeichert werden"
+
     def test_create_project_resets_stale_in_memory_state(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
 
