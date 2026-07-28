@@ -42,6 +42,13 @@ from pb_studio.rendering.render_queue import (
 
 logger = logging.getLogger(__name__)
 
+_QUALITY_PRESETS = {
+    "preview": "speed",
+    "standard": "balanced",
+    "high": "quality",
+    "ultra": "quality",
+}
+
 
 def _compute_render_media_hash(audio_path: str, timeline: list[dict[str, Any]]) -> str:
     """Stabiler Identitäts-Hash über die Render-Eingaben.
@@ -105,6 +112,45 @@ def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) 
             "RenderQueue.update_status fehlgeschlagen für %s (%s): %s",
             queue_job_id, status, exc,
         )
+
+
+def _find_runtime_task_for_queue_job(
+    state: AppState,
+    queue_job_id: str,
+) -> Optional[dict[str, Any]]:
+    """Findet den bereits geplanten Runtime-Task eines Queue-Jobs."""
+    with state._state_lock:
+        for task in state.render_tasks.values():
+            if task.get("queue_job_id") == queue_job_id:
+                return dict(task)
+    return None
+
+
+async def _preflight_render_request(
+    request: RenderRequest,
+    timeline_snapshot: list[dict[str, Any]],
+) -> None:
+    """Prüft Clips und expliziten AMF-Override vor Queue-/Task-Erzeugung."""
+    from pb_studio.rendering.render_service import RenderService
+
+    try:
+        RenderService._validate_timeline_clips(timeline_snapshot)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if request.encoder is None:
+        return
+
+    encoder = request.encoder.value
+    functional = await asyncio.to_thread(RenderService.probe_encoder, encoder)
+    if functional:
+        return
+
+    if encoder == "av1_amf":
+        detail = "AV1 AMF ist auf dieser AMD-GPU/FFmpeg-Konfiguration nicht verfügbar"
+    else:
+        detail = f"AMF-Encoder {encoder} ist nicht funktionsfähig"
+    raise HTTPException(status_code=503, detail=detail)
 
 
 async def _resume_render_queue_on_startup(
@@ -249,11 +295,6 @@ async def start_render(
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
     """Startet ein Rendering als Background Task."""
-    while True:
-        task_id = str(uuid.uuid4())[:8]
-        if state.get_render_task(task_id) is None:
-            break
-
     # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
     timeline_snapshot = state.get_timeline_snapshot()
     if not timeline_snapshot:
@@ -264,6 +305,8 @@ async def start_render(
     allowed_render = resolve_active_project_root(state, config.project_dir)
     if not output_p_check.is_relative_to(allowed_render):
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
+
+    await _preflight_render_request(request, timeline_snapshot)
 
     # Render-Task Cleanup: alte abgeschlossene Tasks entfernen (max 50)
     _cleanup_old_render_tasks(state)
@@ -284,6 +327,7 @@ async def start_render(
     queue_job_id: Optional[str] = None
     try:
         media_hash = _compute_render_media_hash(request.audio_path, timeline_snapshot)
+        candidate_queue_job_id = str(uuid.uuid4())
         queue_job = _get_render_queue().enqueue(
             media_hash=media_hash,
             output_path=request.output_path,
@@ -292,10 +336,29 @@ async def start_render(
                 timeline_snapshot=timeline_snapshot,
                 project_root=allowed_render,
             ),
+            job_id=candidate_queue_job_id,
         )
         queue_job_id = queue_job.job_id
+        if queue_job_id != candidate_queue_job_id:
+            existing_task = _find_runtime_task_for_queue_job(state, queue_job_id)
+            if existing_task is not None:
+                return RenderProgress(**existing_task)
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Identischer Render-Job existiert bereits "
+                    f"(queue_job_id={queue_job_id}, status={queue_job.status})"
+                ),
+            )
+    except HTTPException:
+        raise
     except Exception as exc:  # pragma: no cover - logging only
         logger.warning("RenderQueue.enqueue fehlgeschlagen (unkritisch): %s", exc)
+
+    while True:
+        task_id = str(uuid.uuid4())[:8]
+        if state.get_render_task(task_id) is None:
+            break
 
     task_data = {
         "task_id": task_id,
@@ -445,10 +508,12 @@ async def _run_render_task(
     start_time = time.monotonic()
 
     try:
-        async with gpu_lock:
+        if state.get_cancel_flag(task_id):
+            raise _RenderCancelled()
+        await _acquire_gpu_lock_or_cancel(task_id, state)
+        try:
             logger.info(f"GPU-Lock erworben für Render {task_id}")
 
-            # Cancel-Check vor Start
             if state.get_cancel_flag(task_id):
                 raise _RenderCancelled()
 
@@ -460,6 +525,8 @@ async def _run_render_task(
                 timeline_snapshot,
                 asyncio.get_running_loop(),
             )
+        finally:
+            gpu_lock.release()
 
         elapsed = time.monotonic() - start_time
         state.update_render_task(task_id, {
@@ -543,6 +610,23 @@ class _RenderCancelled(Exception):
     pass
 
 
+async def _acquire_gpu_lock_or_cancel(
+    task_id: str,
+    state: AppState,
+    *,
+    poll_seconds: float = 0.1,
+) -> None:
+    """Erwirbt den GPU-Lock kooperativ abbrechbar."""
+    while True:
+        if state.get_cancel_flag(task_id):
+            raise _RenderCancelled()
+        try:
+            await asyncio.wait_for(gpu_lock.acquire(), timeout=poll_seconds)
+            return
+        except TimeoutError:
+            continue
+
+
 def _execute_render(
     task_id: str,
     request: RenderRequest,
@@ -562,6 +646,7 @@ def _execute_render(
     target_width = request.resolution_width
     target_height = request.resolution_height
     bitrate = f"{request.bitrate_mbps:.0f}M"
+    preset = _QUALITY_PRESETS[request.quality.value]
     audio_path = request.audio_path
 
     output_p = _Path(request.output_path)
@@ -691,8 +776,10 @@ def _execute_render(
             target_height=target_height,
             target_fps=request.fps,   # BUG-006 Fix: fps aus Request übergeben
             bitrate=bitrate,
+            preset=preset,
             progress_callback=on_progress,
             cancel_callback=is_cancelled,
+            include_audio=request.include_audio,
         )
         # Realtest-Härtung: Status direkt im synchronen Worker auf completed setzen,
         # damit /render/status nicht auf "running" hängen bleibt, falls der Async-

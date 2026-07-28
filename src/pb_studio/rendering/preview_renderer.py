@@ -46,8 +46,8 @@ class TimelineEntry:
 class PreviewGenerator:
     """Generiert schnelle Vorschauen für die Timeline."""
 
-    OUTPUT_WIDTH = 1920
-    OUTPUT_HEIGHT = 1080
+    OUTPUT_WIDTH = 640
+    OUTPUT_HEIGHT = 360
     OUTPUT_FPS = 30
     DEFAULT_DURATION = 90.0
 

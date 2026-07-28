@@ -44,8 +44,7 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
     for key in ("clip_path", "file_path", "path", "video_path"):
         val = clip.get(key)
         if val:
-            exists = Path(val).exists()
-            if exists:
+            if Path(val).is_file():
                 return str(val)
     # Auch in metadata suchen (Pacing-Engine speichert Pfade dort)
     meta = clip.get("metadata", {})
@@ -53,8 +52,7 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
         for key in ("file_path", "clip_path", "path", "video_path"):
             val = meta.get(key)
             if val:
-                exists = Path(val).exists()
-                if exists:
+                if Path(val).is_file():
                     return str(val)
     return None
 
@@ -92,28 +90,36 @@ class RenderService:
         ]
 
         for enc_name, desc in encoders:
-            test_cmd = [
-                _get_ffmpeg_path(), "-y",
-                "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.5",
-                "-c:v", enc_name,
-                "-f", "null", "-"
-            ]
-            try:
-                result = subprocess.run(
-                    test_cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=15
-                )
-                if result.returncode == 0:
-                    logger.info(f"Encoder-Test OK: {enc_name} ({desc})")
-                    return enc_name
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                continue
+            if self.probe_encoder(enc_name):
+                logger.info(f"Encoder-Test OK: {enc_name} ({desc})")
+                return enc_name
 
         raise RuntimeError(
             "No functional AMD AMF encoder available; software encoding is disabled"
         )
+
+    @classmethod
+    def probe_encoder(cls, encoder: str) -> bool:
+        """Führt einen echten Test-Encode für einen AMF-Encoder aus."""
+        if encoder not in cls._AMF_ENCODERS:
+            raise ValueError(f"Encoder {encoder!r} is not an allowed AMD AMF encoder")
+        test_cmd = [
+            _get_ffmpeg_path(), "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.5",
+            "-frames:v", "1", "-pix_fmt", "yuv420p",
+            "-c:v", encoder,
+            "-f", "null", "-",
+        ]
+        try:
+            result = subprocess.run(
+                test_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+            return False
 
     def _active_encoder(self) -> str:
         if self._encoder_override is not None:
@@ -147,15 +153,17 @@ class RenderService:
         progress_callback: Optional[Callable[..., None]] = None,
         audio_offset: float = 0.0,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        include_audio: bool = True,
     ) -> str:
         """Hauptfunktion für Timeline-Rendering."""
         final_output = self.output_dir / output_filename
         staging_output = final_output.with_name(
             f".{final_output.stem}.{uuid.uuid4().hex}.partial{final_output.suffix}"
         )
+        self._validate_timeline_clips(timeline)
         # R19/LOW-019-3: Cache audio_dur here — _run_ffmpeg_render reuses it
         # to avoid a second ffprobe subprocess on the same audio file.
-        audio_dur = self._get_audio_duration(audio_path)
+        audio_dur = self._get_audio_duration(audio_path) if include_audio else None
         total_duration = audio_dur if audio_dur and audio_dur > 0 else self._calculate_timeline_duration(timeline)
         total_frames = max(int(round(max(total_duration, 0.0) * max(target_fps, 0.0))), 0)
         render_start = time.monotonic()
@@ -204,9 +212,10 @@ class RenderService:
             )
 
             last_telemetry = self._run_ffmpeg_render(
-                concat_list_path, audio_path, staging_output,
+                concat_list_path, audio_path if include_audio else None, staging_output,
                 bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
                 audio_dur=audio_dur,
+                include_audio=include_audio,
             )
             if not staging_output.exists() or staging_output.stat().st_size == 0:
                 raise RuntimeError("FFmpeg hat keine vollständige Render-Ausgabe erzeugt")
@@ -245,6 +254,14 @@ class RenderService:
             total += out_pt - in_pt
         return max(total, 1.0)
 
+    @staticmethod
+    def _validate_timeline_clips(timeline: List[Dict]) -> None:
+        """Bricht vor Encoder-/Transcode-Arbeit ab, wenn ein Clip fehlt."""
+        missing = [index for index, clip in enumerate(timeline) if not _get_clip_path_str(clip)]
+        if missing:
+            indexes = ", ".join(str(index) for index in missing)
+            raise FileNotFoundError(f"Timeline-Clip(s) fehlen oder sind nicht lesbar: {indexes}")
+
     def _normalize_clips(
         self, timeline: List[Dict], w: int, h: int, fps: float,
         cb: Optional[Callable], cancel_callback: Optional[Callable[[], bool]] = None
@@ -268,8 +285,9 @@ class RenderService:
                 raise RenderCancelledError("Rendering cancelled during clip normalization")
             path = _get_clip_path_str(clip)
             if not path:
-                logger.warning(f"Clip {i} hat keinen Pfad-Eintrag!")
-                continue
+                raise FileNotFoundError(
+                    f"Timeline-Clip {i} fehlt oder ist nicht mehr lesbar"
+                )
 
             # Cache-Lookup: Wenn derselbe Clip bereits normalisiert wurde, Pfad wiederverwenden
             if path in normalized_cache:
@@ -482,7 +500,9 @@ class RenderService:
                 out_pt = clip.get("out_point") if clip.get("out_point") is not None else clip.get("out", in_pt + 2.0)
                 p = _get_clip_path_str(clip)
                 if not p:
-                    continue
+                    raise FileNotFoundError(
+                        "Timeline-Clip ist vor Erstellung der Concat-Liste verschwunden"
+                    )
                 p_str = str(Path(p).absolute()).replace("\\", "/")
                 # FFmpeg concat protocol: single quotes required (double quotes treated as literal chars)
                 p_escaped = p_str.replace("'", "'\\''")
@@ -495,6 +515,7 @@ class RenderService:
         bitrate: str, preset: str, audio_offset: float,
         total_duration: float, encoder: str,
         audio_dur: Optional[float] = None,
+        include_audio: bool = True,
     ) -> tuple[list[str], float]:
         """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
         cmd = [
@@ -504,12 +525,16 @@ class RenderService:
             "-i", str(list_path)
         ]
 
-        if audio_offset > 0:
-            cmd.extend(["-ss", f"{audio_offset:.3f}", "-i", audio_path])
+        if include_audio:
+            if not audio_path:
+                raise ValueError("Audio-Pfad fehlt trotz include_audio=True")
+            if audio_offset > 0:
+                cmd.extend(["-ss", f"{audio_offset:.3f}", "-i", audio_path])
+            else:
+                cmd.extend(["-i", audio_path])
+            cmd.extend(["-map", "0:v", "-map", "1:a"])
         else:
-            cmd.extend(["-i", audio_path])
-
-        cmd.extend(["-map", "0:v", "-map", "1:a"])
+            cmd.extend(["-map", "0:v"])
         cmd.extend(["-vf", "select=concatdec_select,setpts=N/FR/TB"])
 
         if encoder == "hevc_amf":
@@ -521,11 +546,11 @@ class RenderService:
         else:
             raise ValueError(f"Encoder {encoder!r} is not an allowed AMD AMF encoder")
 
-        cmd.extend([
-            "-c:a", "aac", "-b:a", "320k",
-            "-movflags", "+faststart",
-            "-stats_period", "0.5",
-        ])
+        if include_audio:
+            cmd.extend(["-c:a", "aac", "-b:a", "320k"])
+        else:
+            cmd.append("-an")
+        cmd.extend(["-movflags", "+faststart", "-stats_period", "0.5"])
 
         render_dur = total_duration
         if audio_dur and audio_dur > 0:
@@ -546,13 +571,14 @@ class RenderService:
         cancel_callback: Optional[Callable[[], bool]] = None,
         render_start_time: Optional[float] = None,
         audio_dur: Optional[float] = None,
+        include_audio: bool = True,
     ) -> dict[str, Any]:
         """Finaler Render mit Echtzeit-Progress über AMD AMF."""
         # BUG-070 FIX: Guard gegen Path(None)
-        if audio_path and not Path(audio_path).exists():
+        if include_audio and audio_path and not Path(audio_path).exists():
             raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
 
-        if audio_dur is None:
+        if include_audio and audio_dur is None:
             audio_dur = self._get_audio_duration(audio_path)
 
         primary = self._active_encoder()
@@ -567,6 +593,7 @@ class RenderService:
                 list_path, audio_path, output_path,
                 bitrate, preset, audio_offset, total_duration, encoder,
                 audio_dur=audio_dur,
+                include_audio=include_audio,
             )
 
             startupinfo = subprocess.STARTUPINFO()
