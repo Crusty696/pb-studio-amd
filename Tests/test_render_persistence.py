@@ -202,6 +202,69 @@ def test_startup_marks_legacy_job_without_resume_payload_failed(
     assert "Resume-Payload" in (restored["error"] or "")
 
 
+def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
+    queue: RenderQueue,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import importlib
+
+    from backend.app_state import AppState
+    from backend.schemas.render_schemas import RenderRequest
+
+    render_router = importlib.import_module("backend.routers.render_router")
+    output = tmp_path / "resume-shutdown.mp4"
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"audio")
+    request = RenderRequest(
+        output_path=str(output),
+        audio_path=str(audio),
+    )
+    timeline = [{
+        "start_time": 0.0,
+        "end_time": 1.0,
+        "metadata": {"file_path": str(tmp_path / "clip.mp4")},
+    }]
+    job = queue.enqueue(
+        "resume-shutdown-hash",
+        str(output),
+        render_router._request_settings_dict(
+            request,
+            timeline_snapshot=timeline,
+            project_root=tmp_path,
+        ),
+    )
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    async def stubborn_render(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(render_router, "_run_render_task", stubborn_render)
+
+    async def run() -> None:
+        render_router._reset_render_runtime_for_startup()
+        state = AppState()
+        resumed = await render_router._resume_render_queue_on_startup(
+            state,
+            queue=queue,
+        )
+        assert resumed == [job.job_id]
+        await render_router._shutdown_active_renders(
+            state,
+            cooperative_timeout=0.0,
+            forced_timeout=0.0,
+        )
+        await asyncio.sleep(0)
+        render_router._reset_render_runtime_for_startup()
+
+    asyncio.run(run())
+
+    restored = queue.get(job.job_id)
+    assert restored is not None
+    assert restored.status == STATE_INTERRUPTED
+    assert "shutdown" in (restored["error"] or "").lower()
+
+
 def test_completed_jobs_remain_completed_after_restart(queue: RenderQueue, tmp_path: Path) -> None:
     """'completed' darf von restore_running_as_interrupted nicht angefasst werden."""
     job = queue.enqueue("hash-done", str(tmp_path / "done.mp4"), _settings())

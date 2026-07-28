@@ -242,8 +242,7 @@ async def _resume_render_queue_on_startup(
     queue=None,
 ) -> list[str]:
     """Reconstruct and schedule queued/interrupted jobs from persisted payloads."""
-    if _render_shutdown_requested:
-        return []
+    _reset_render_runtime_for_startup()
     render_queue = queue or _get_render_queue()
     render_queue.restore_running_as_interrupted()
     resumed_job_ids: list[str] = []
