@@ -157,6 +157,13 @@ public partial class App : Application
             var sp = _serviceProvider;
             if (sp != null)
             {
+                var externalBackendFlag =
+                    Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY");
+                var externalBackendManaged = externalBackendFlag is not null &&
+                    (externalBackendFlag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                     externalBackendFlag.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                     externalBackendFlag.Equals("yes", StringComparison.OrdinalIgnoreCase));
+
                 var cleanup = Task.Run(async () =>
                 {
                     using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
@@ -176,18 +183,24 @@ public partial class App : Application
                         // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
                         (api as ApiClient)?.BeginShutdown();
 
-                        try
+                        if (!externalBackendManaged)
                         {
-                            await api.ShutdownAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-                        }
-                        catch (Exception shutdownEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Backend shutdown call failed: {shutdownEx.Message}");
+                            try
+                            {
+                                await api.ShutdownAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                            }
+                            catch (Exception shutdownEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[PBStudio] Backend shutdown call failed: {shutdownEx.Message}");
+                            }
                         }
                     }
                     var bridge = sp.GetService<PythonBridgeService>();
-                    if (bridge != null)
-                        await bridge.StopAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                    if (!externalBackendManaged)
+                    {
+                        if (bridge != null)
+                            await bridge.StopAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                    }
                 });
 
                 if (!cleanup.Wait(TimeSpan.FromSeconds(12)))

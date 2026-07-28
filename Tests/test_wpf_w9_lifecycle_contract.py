@@ -27,6 +27,18 @@ def test_runtime_environment_is_applied_before_backend_start():
         ]
 
 
+def test_app_exit_preserves_externally_managed_backend():
+    app = _read("App.xaml.cs")
+    on_exit = app[app.index("protected override void OnExit") :]
+
+    assert 'Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY")' in on_exit
+    assert on_exit.index("SaveProjectAsync()") < on_exit.index("BeginShutdown()")
+    assert on_exit.index("BeginShutdown()") < on_exit.index("if (!externalBackendManaged)")
+    assert on_exit.count("if (!externalBackendManaged)") == 2
+    assert on_exit.index("if (!externalBackendManaged)") < on_exit.index("ShutdownAsync()")
+    assert on_exit.rindex("if (!externalBackendManaged)") < on_exit.index("StopAsync()")
+
+
 def test_audio_stems_and_pacing_use_project_generation_and_cancellation():
     project = _read("Services/ProjectService.cs")
     api_contract = _read("Services/IApiClient.cs")
