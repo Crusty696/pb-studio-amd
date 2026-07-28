@@ -84,6 +84,12 @@ def test_parse_tags_drops_long_multiword():
     # 5-word chunk should be dropped
     assert not any(len(t.split()) > 4 for t in out)
 
+def test_parse_tags_falls_back_to_keywords_for_vision_prose():
+    out = _parse_tags(
+        "The flag is a square with a white center, surrounded by red and blue stripes."
+    )
+    assert out[:6] == ["flag", "square", "white", "center", "surrounded", "red"]
+
 
 # ======================================================================
 # extract_tags_via_lmstudio — Eingabe-Validierung

@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from typing import Any, Callable, Optional
 
 import numpy as np
@@ -68,6 +69,8 @@ _STOPWORDS = frozenset({
     "und", "oder", "die", "der", "das", "ein", "eine", "ist", "sind", "war",
     "mit", "ohne", "im", "in", "an", "auf", "von", "fuer", "auch",
     "image", "picture", "photo", "frame", "bild", "szene", "scene",
+    "the", "and", "or", "a", "an", "is", "are", "was", "with", "without",
+    "of", "to", "as", "it", "this", "that", "be", "can", "which",
 })
 
 
@@ -109,6 +112,14 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         seen.add(cleaned)
         if len(tags) >= max_tags:
             break
+    if not tags:
+        for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
+            if len(word) < 3 or word in _STOPWORDS or word in seen:
+                continue
+            tags.append(word)
+            seen.add(word)
+            if len(tags) >= max_tags:
+                break
     return tags
 
 
