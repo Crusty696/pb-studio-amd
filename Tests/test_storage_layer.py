@@ -126,6 +126,39 @@ def test_embedding_cache_store_and_lookup(tmp_path: Path):
     finally:
         cache.close()
 
+def test_embedding_cache_failed_replace_restores_previous_array(tmp_path: Path):
+    cache = EmbeddingCache(tmp_path / "cache.db", tmp_path / "embeddings")
+    try:
+        original = np.asarray([1.0, 2.0, 3.0], dtype=np.float32)
+        entry = cache.store(
+            media_hash="same-hash",
+            media_type="audio",
+            embedding=original,
+            model_name="model",
+            model_version="1",
+        )
+        cache.conn.execute(
+            "CREATE TRIGGER reject_failed_cache_write "
+            "BEFORE INSERT ON media_embedding_index "
+            "WHEN NEW.media_type='fail' "
+            "BEGIN SELECT RAISE(ABORT, 'forced cache failure'); END"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError, match="forced cache failure"):
+            cache.store(
+                media_hash="same-hash",
+                media_type="fail",
+                embedding=np.asarray([9.0, 9.0, 9.0], dtype=np.float32),
+                model_name="model",
+                model_version="1",
+            )
+
+        np.testing.assert_array_equal(np.load(entry.embedding_path), original)
+        assert not list((tmp_path / "embeddings").glob(".*.tmp"))
+        assert not list((tmp_path / "embeddings").glob(".*.bak"))
+    finally:
+        cache.close()
+
 
 def test_brain_store_initializes_three_dbs(tmp_path: Path):
     store = BrainStore(tmp_path / "brain")
