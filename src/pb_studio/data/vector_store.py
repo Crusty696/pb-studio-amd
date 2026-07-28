@@ -69,6 +69,7 @@ class VectorStore:
         # bursts coalesce and the on-disk file always reflects the newest state.
         self._save_debounce_sec = 2.0
         self._save_dirty = False
+        self._save_generation = 0
         self._save_cv = threading.Condition()
         self._writer_stop = False
         self._closed = False
@@ -517,10 +518,11 @@ class VectorStore:
             # BUG-101 FIX: Copy query_embedding before in-place normalization
             q_copy = query_embedding.copy().reshape(1, -1)
             faiss.normalize_L2(q_copy)
-            D, I = self.index.search(q_copy, k)
+            tombstoned = getattr(self, "_tombstoned_ids", set())
+            search_k = min(int(self.index.ntotal), max(int(k), int(k) + len(tombstoned)))
+            D, I = self.index.search(q_copy, search_k)
 
             results = []
-            tombstoned = getattr(self, "_tombstoned_ids", set())
             for i, idx in enumerate(I[0]):
                 # Y6 / L-STATE-2: Tombstoned IDs (vector_map-cascade-removed)
                 # ausfiltern — sonst liefert FAISS Hits zu geloeschten Clips.
@@ -528,6 +530,8 @@ class VectorStore:
                     score = float(D[0][i])
                     meta = self.metadata[idx]
                     results.append((meta, score))
+                    if len(results) >= k:
+                        break
 
             return results
 
@@ -635,6 +639,7 @@ class VectorStore:
         writer condition, and the writer never holds that condition while
         acquiring self._lock, so there is no lock-ordering deadlock."""
         with self._save_cv:
+            self._save_generation += 1
             self._save_dirty = True
             self._save_cv.notify()
 
@@ -650,8 +655,7 @@ class VectorStore:
                     self._save_cv.wait(timeout=30.0)
                 if self._writer_stop and not self._save_dirty:
                     return
-                # Claim the current dirty signal; further adds re-set it.
-                self._save_dirty = False
+                generation = self._save_generation
 
             # Debounce: let a burst of adds accumulate into one write.
             if self._save_debounce_sec > 0:
@@ -666,15 +670,22 @@ class VectorStore:
                     snap_tomb = list(getattr(self, "_tombstoned_ids", set()))
             except Exception as e:
                 logger.error(f"VectorStore writer snapshot failed: {e}", exc_info=True)
+                if self._writer_stop:
+                    return
                 continue
 
-            self._write_snapshot(snap_index, snap_meta, snap_tomb)
+            persisted = self._write_snapshot(snap_index, snap_meta, snap_tomb)
+            with self._save_cv:
+                if persisted and generation == self._save_generation:
+                    self._save_dirty = False
+                if self._writer_stop and (persisted or not self._save_dirty):
+                    return
 
-    def _write_snapshot(self, cloned_index, cloned_metadata, cloned_tombstones) -> None:
+    def _write_snapshot(self, cloned_index, cloned_metadata, cloned_tombstones) -> bool:
         """Atomically persist a snapshot (temp file + os.replace). Serialized
         against the synchronous save() via _write_lock."""
         if cloned_index is None or getattr(self, "index_path", None) is None:
-            return
+            return True
         with self._write_lock:
             try:
                 temp_index = str(self.index_path) + ".tmp"
@@ -692,6 +703,7 @@ class VectorStore:
                     [temp_index, temp_meta, temp_tomb],
                 )
                 logger.debug("FAISS Index saved (coalesced writer).")
+                return True
             except Exception as e:
                 logger.error(f"Failed to save FAISS index/metadata: {e}", exc_info=True)
                 for tmp in [str(self.index_path) + ".tmp", str(self.meta_path) + ".tmp", str(self.tombstone_path) + ".tmp"]:
@@ -699,6 +711,7 @@ class VectorStore:
                         Path(tmp).unlink(missing_ok=True)
                     except Exception:
                         pass
+                return False
 
     def _save_on_exit(
         self,

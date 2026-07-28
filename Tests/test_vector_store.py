@@ -170,6 +170,31 @@ class TestVectorStoreSearch:
             assert results[0][0]["id"] == "A"
             assert results[0][1] == 0.95
 
+    def test_search_expands_past_tombstoned_top_hits(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store.dimension = 2
+        store._lock = threading.Lock()
+        store._closed = False
+        store.index = faiss.IndexFlatIP(2)
+        store.index.add(
+            np.asarray(
+                [[1.0, 0.0], [0.99, 0.01], [0.8, 0.2]],
+                dtype=np.float32,
+            )
+        )
+        store.metadata = {
+            0: {"id": "deleted"},
+            1: {"id": "valid-1"},
+            2: {"id": "valid-2"},
+        }
+        store._tombstoned_ids = {0}
+
+        results = store.search(np.asarray([1.0, 0.0], dtype=np.float32), k=2)
+
+        assert [metadata["id"] for metadata, _score in results] == ["valid-1", "valid-2"]
+
 
 class TestVectorStoreTombstones:
     """Tests for tombstones and re-indexing."""
@@ -385,6 +410,46 @@ class TestVectorStoreSnapshotTransaction:
 
 
 class TestVectorStoreLifecycle:
+    def test_writer_retries_failed_snapshot_without_clearing_dirty(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store._save_cv = threading.Condition()
+        store._save_dirty = False
+        store._save_generation = 0
+        store._writer_stop = False
+        store._save_debounce_sec = 0.0
+        store._lock = threading.Lock()
+        store.index = faiss.IndexFlatIP(2)
+        store.metadata = {}
+        store._tombstoned_ids = set()
+        second_attempt = threading.Event()
+        release_second_attempt = threading.Event()
+        attempts = {"count": 0}
+
+        def persist(_index, _metadata, _tombstones):
+            attempts["count"] += 1
+            if attempts["count"] == 2:
+                second_attempt.set()
+                release_second_attempt.wait(timeout=10.0)
+                return True
+            return False
+
+        store._write_snapshot = persist
+        writer = threading.Thread(target=store._writer_loop, daemon=True)
+        writer.start()
+        store._request_save()
+        assert second_attempt.wait(timeout=10.0)
+        with store._save_cv:
+            store._writer_stop = True
+            store._save_cv.notify_all()
+        release_second_attempt.set()
+        writer.join(timeout=2.0)
+
+        assert not writer.is_alive()
+        assert attempts["count"] == 2
+        assert store._save_dirty is False
+
     def test_index_switch_closes_old_writer_and_close_allows_reopen(self):
         from pb_studio.data.vector_store import VectorStore
 
