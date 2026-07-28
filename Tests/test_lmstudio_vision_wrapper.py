@@ -16,6 +16,7 @@ from pb_studio.video.lmstudio_vision_wrapper import (
     _parse_tags,
     clear_tag_cache,
     extract_tags_via_lmstudio,
+    set_status_publisher,
 )
 
 
@@ -89,6 +90,39 @@ def test_parse_tags_falls_back_to_keywords_for_vision_prose():
         "The flag is a square with a white center, surrounded by red and blue stripes."
     )
     assert out[:6] == ["flag", "square", "white", "center", "surrounded", "red"]
+
+
+def test_parse_tags_tokenizes_comma_prose():
+    out = _parse_tags(
+        "A dancer in a red jacket, illuminated by neon lights in a crowded nightclub."
+    )
+    assert out == [
+        "dancer", "red", "jacket", "illuminated", "neon",
+        "lights", "crowded", "nightclub",
+    ]
+
+
+def test_parse_tags_tokenizes_german_prose_without_boilerplate():
+    out = _parse_tags(
+        "Das Bild zeigt eine tanzende Frau in einem hellen Club mit rotem Neonlicht."
+    )
+    assert out == ["tanzende", "frau", "hellen", "club", "rotem", "neonlicht"]
+
+
+def test_parse_tags_rejects_refusals_and_errors():
+    assert _parse_tags("Sorry, I cannot analyze this image.") == []
+    assert _parse_tags("Es tut mir leid, ich kann dieses Bild nicht analysieren.") == []
+    assert _parse_tags("Error: no image was provided.") == []
+
+
+def test_parse_tags_tokenizes_mixed_prose_instead_of_dropping_long_chunk():
+    out = _parse_tags(
+        "dancer, while bright red lights illuminate the crowded nightclub"
+    )
+    assert out == [
+        "dancer", "bright", "red", "lights",
+        "illuminate", "crowded", "nightclub",
+    ]
 
 
 # ======================================================================
@@ -170,6 +204,27 @@ def test_extract_tags_via_lmstudio_happy_path():
     with _patch_client_factory(transport):
         tags = extract_tags_via_lmstudio(frame, mode="balance")
     assert tags[:3] == ["tanzen", "club", "neonlicht"]
+
+
+@pytest.mark.parametrize("content", ["", "Sorry, I cannot analyze this image."])
+def test_extract_tags_invalid_response_is_not_cached_or_reported_active(content):
+    frame = np.zeros((32, 32, 3), dtype=np.uint8)
+    transport = _make_vision_transport(DEFAULT_VISION_MODEL, content)
+    events: list[tuple[str, dict]] = []
+    set_status_publisher(lambda event, payload: events.append((event, payload)))
+    try:
+        with _patch_client_factory(transport):
+            first = extract_tags_via_lmstudio(
+                frame, model_override=DEFAULT_VISION_MODEL, mode="balance"
+            )
+            second = extract_tags_via_lmstudio(
+                frame, model_override=DEFAULT_VISION_MODEL, mode="balance"
+            )
+    finally:
+        set_status_publisher(None)
+
+    assert first == second == []
+    assert not any(payload["status"] == "active" for _, payload in events)
 
 
 def test_extract_tags_via_lmstudio_no_models_installed_returns_empty():

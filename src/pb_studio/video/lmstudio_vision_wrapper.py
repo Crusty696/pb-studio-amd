@@ -67,11 +67,56 @@ DEFAULT_PROMPT = (
 
 _STOPWORDS = frozenset({
     "und", "oder", "die", "der", "das", "ein", "eine", "ist", "sind", "war",
-    "mit", "ohne", "im", "in", "an", "auf", "von", "fuer", "auch",
+    "einen", "einem", "einer", "eines", "mit", "ohne", "im", "in", "an",
+    "auf", "von", "fuer", "auch", "zeigt", "zeigen",
     "image", "picture", "photo", "frame", "bild", "szene", "scene",
     "the", "and", "or", "a", "an", "is", "are", "was", "with", "without",
-    "of", "to", "as", "it", "this", "that", "be", "can", "which",
+    "of", "to", "as", "it", "this", "that", "be", "can", "which", "while",
+    "show", "shows", "showing", "depicts", "depicting",
 })
+
+_INVALID_RESPONSE_PATTERNS = (
+    re.compile(r"\b(?:sorry|cannot|can['’]t|unable\s+to|not\s+able\s+to)\b", re.IGNORECASE),
+    re.compile(r"\b(?:tut\s+mir\s+leid|entschuldigung|nicht\s+in\s+der\s+lage)\b", re.IGNORECASE),
+    re.compile(r"\bich\s+kann\b.{0,80}\bnicht\b", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*(?:error|fehler)\s*:", re.IGNORECASE),
+    re.compile(
+        r"\b(?:no\s+image\s+(?:was\s+)?(?:provided|attached|available)|"
+        r"kein\s+bild\s+(?:bereitgestellt|angehaengt|verfuegbar))\b",
+        re.IGNORECASE,
+    ),
+)
+_INVALID_RESPONSES = frozenset({
+    "none", "n/a", "null", "no tags", "keine tags", "keine",
+})
+
+
+def _is_invalid_response(text: str) -> bool:
+    normalized = " ".join(text.lower().split()).strip(" .!?:;\"'()[]")
+    if not normalized or normalized in _INVALID_RESPONSES:
+        return True
+    return any(pattern.search(text) for pattern in _INVALID_RESPONSE_PATTERNS)
+
+
+def _looks_like_prose(
+    text: str,
+    parts: list[str],
+    *,
+    has_list_prefix: bool,
+) -> bool:
+    if has_list_prefix or re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+", text):
+        return False
+    word_counts = [
+        len(re.findall(r"[^\W\d_]+", part, flags=re.UNICODE))
+        for part in parts
+    ]
+    return (
+        any(count > 4 for count in word_counts)
+        or (
+            bool(re.search(r"[.!?]\s*$", text))
+            and sum(word_counts) > 2
+        )
+    )
 
 
 def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
@@ -84,19 +129,28 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
     if not raw:
         return []
     text = raw.strip()
+    if _is_invalid_response(text):
+        return []
     # Falls Modell mit ``"Tags: ..."``-Praefix antwortet, abschneiden.
+    has_list_prefix = False
     for prefix in ("tags:", "ergebnis:", "antwort:"):
         if text.lower().startswith(prefix):
+            has_list_prefix = True
             text = text[len(prefix):].strip()
+            break
     # Split: Komma -> dann Zeilenumbruch als Fallback
-    parts: list[str] = []
-    for chunk in text.replace("\n", ",").split(","):
-        parts.append(chunk.strip())
+    parts = [chunk.strip() for chunk in text.replace("\n", ",").split(",")]
     tags: list[str] = []
     seen: set[str] = set()
-    for part in parts:
+    prose = _looks_like_prose(text, parts, has_list_prefix=has_list_prefix)
+    candidates = (
+        re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE)
+        if prose
+        else parts
+    )
+    for candidate in candidates:
         # entferne fuehrende Bulletpoints/Nummern (-, *, 1., usw.)
-        cleaned = part.lstrip("-*0123456789. )").strip(".;:!?\"'()[]")
+        cleaned = candidate.lstrip("-*0123456789. )").strip(".;:!?\"'()[]")
         cleaned = cleaned.strip().lower()
         if not cleaned or len(cleaned) < 3:
             continue
@@ -112,7 +166,7 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         seen.add(cleaned)
         if len(tags) >= max_tags:
             break
-    if not tags:
+    if not tags and not prose:
         for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
             if len(word) < 3 or word in _STOPWORDS or word in seen:
                 continue
@@ -143,6 +197,8 @@ def _cache_get(key: tuple[str, str, str]) -> Optional[list[str]]:
 
 
 def _cache_put(key: tuple[str, str, str], value: list[str]) -> None:
+    if not value:
+        return
     if len(_TAG_CACHE) >= _CACHE_MAX:
         # LRU-ish: einfach den ersten Eintrag entfernen
         try:
@@ -228,7 +284,7 @@ async def _async_extract_tags(
             # Cache-Hits erzeugen sonst pro Frame ein loading/active-Flicker.
             cache_key = (_frame_hash(frame_rgb), model, mode)
             cached = _cache_get(cache_key)
-            if cached is not None:
+            if cached:
                 _publish_status(model, provider_name, "active", 100.0)
                 return list(cached), model
 
@@ -248,6 +304,16 @@ async def _async_extract_tags(
                 message = response.get("message") or {}
                 raw = message.get("content") or response.get("response") or ""
                 tags = _parse_tags(str(raw))
+                if not tags:
+                    logger.warning(
+                        "Vision-Modell '%s' lieferte keine nutzbaren Tags",
+                        model,
+                    )
+                    _publish_status(model, provider_name, "failed", 0.0)
+                    if model_override:
+                        return [], model
+                    exclude_models.add(model)
+                    continue
                 _cache_put(cache_key, tags)
 
                 _publish_status(model, provider_name, "active", 100.0)
