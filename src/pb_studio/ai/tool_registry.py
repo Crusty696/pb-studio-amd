@@ -466,9 +466,12 @@ async def _h_pacing_generate(args: dict[str, Any], *, http_client: httpx.AsyncCl
     audio_clip_id = _coerce_int(args.get("audio_clip_id"))
     if audio_clip_id is None:
         return {"error": "audio_clip_id ist erforderlich"}
+    video_clip_ids = _coerce_int_list(args.get("video_clip_ids"))
+    if not video_clip_ids:
+        return {"error": "video_clip_ids muss mindestens eine gueltige Video-Clip-ID enthalten"}
     body: dict[str, Any] = {
         "audio_clip_id": audio_clip_id,
-        "video_clip_ids": _coerce_int_list(args.get("video_clip_ids")),
+        "video_clip_ids": video_clip_ids,
         "expected_bpm": _coerce_float(args.get("expected_bpm"), default=120.0),
         "use_motion_matching": _coerce_bool(args.get("use_motion_matching"), default=False),
         "use_semantic_matching": _coerce_bool(args.get("use_semantic_matching"), default=False),
@@ -815,8 +818,10 @@ def build_default_registry() -> ToolRegistry:
         parameters=_schema({
             "audio_clip_id": {"type": "integer"},
             "video_clip_ids": {
-                "type": "array", "items": {"type": "integer"},
-                "description": "Leer = alle verfuegbaren Video-Clips.",
+                "type": "array",
+                "items": {"type": "integer"},
+                "minItems": 1,
+                "description": "Mindestens eine Video-Clip-ID aus video.list_clips.",
             },
             "expected_bpm": {"type": "number", "default": 120.0, "exclusiveMinimum": 0, "maximum": 400},
             "use_motion_matching": {"type": "boolean", "default": False},
@@ -827,10 +832,11 @@ def build_default_registry() -> ToolRegistry:
             "use_brain": {"type": "boolean", "default": False},
             "duration_limit": {"type": "number", "exclusiveMinimum": 0},
             "brain_min_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-        }, required=["audio_clip_id"]),
+        }, required=["audio_clip_id", "video_clip_ids"]),
         handler=_h_pacing_generate,
         category="pacing",
         destructive=True,
+        long_running=True,
     ))
     reg.register(Tool(
         name="pacing.timeline",

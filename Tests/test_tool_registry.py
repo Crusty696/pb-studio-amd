@@ -206,6 +206,38 @@ def test_pacing_generate_handler_sends_correct_body():
     assert captured["body"]["use_brain"] is True
 
 
+def test_pacing_generate_requires_clip_ids_and_is_long_running():
+    reg = build_default_registry()
+    tool = reg.get("pacing.generate")
+    assert tool is not None
+    assert tool.long_running is True
+
+    clip_schema = tool.parameters["properties"]["video_clip_ids"]
+    assert clip_schema["minItems"] == 1
+    assert "video_clip_ids" in tool.parameters["required"]
+    assert "alle" not in clip_schema["description"].lower()
+
+    backend_called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal backend_called
+        backend_called = True
+        return httpx.Response(200, json={"cuts": []})
+
+    async def go():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+            return await tool.handler(
+                {"audio_clip_id": 5, "video_clip_ids": []},
+                http_client=http,
+            )
+
+    result = _run(go())
+    assert "error" in result
+    assert "mindestens eine" in result["error"]
+    assert backend_called is False
+
+
 def test_handler_handles_backend_error_gracefully():
     reg = build_default_registry()
     tool = reg.get("audio.list_clips")

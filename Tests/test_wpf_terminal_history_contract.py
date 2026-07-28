@@ -33,3 +33,21 @@ def test_terminal_view_model_replays_and_clears_shared_history():
     assert "_buffer.Unsubscribe(OnEntryAdded);" in source
     assert "WeakReferenceMessenger" not in source
     assert "_sse.LogReceived" not in source
+
+
+def test_terminal_buffer_redacts_secrets_and_absolute_paths_centrally():
+    buffer_source = _source("PBStudio.UI/Services/TerminalLogBuffer.cs")
+    logger_source = _source("PBStudio.UI/Services/TerminalLoggerProvider.cs")
+
+    assert "TerminalLogRedactor.Redact(message)" in buffer_source
+    assert "message ?? string.Empty" not in buffer_source
+    assert "internal static class TerminalLogRedactor" in logger_source
+    assert 'RedactedSecret = "[REDACTED]"' in logger_source
+    assert 'RedactedPath = "[LOCAL_PATH]"' in logger_source
+    assert "BearerPattern.Replace" in logger_source
+    assert "SecretAssignmentPattern.Replace" in logger_source
+    assert "TokenPattern.Replace" in logger_source
+    assert "UrlCredentialsPattern.Replace" in logger_source
+    assert "AbsolutePathPattern.Replace" in logger_source
+    assert "RegexMatchTimeoutException" in logger_source
+    assert 'return "[REDACTION_FAILED]"' in logger_source

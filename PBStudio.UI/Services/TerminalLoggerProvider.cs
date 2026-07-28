@@ -1,7 +1,68 @@
 using System;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace PBStudio.UI.Services;
+
+internal static class TerminalLogRedactor
+{
+    internal const string RedactedSecret = "[REDACTED]";
+    internal const string RedactedPath = "[LOCAL_PATH]";
+
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(100);
+    private const RegexOptions Options =
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
+
+    private static readonly Regex BearerPattern = new Regex(
+        @"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}",
+        Options,
+        MatchTimeout);
+
+    private static readonly Regex SecretAssignmentPattern = new Regex(
+        @"\b(?<name>api[_-]?key|access[_-]?token|auth(?:orization)?|password|passwd|pwd|secret|client[_-]?secret)\b(?<separator>\s*[:=]\s*)(?:""[^""\r\n]*""|'[^'\r\n]*'|[^\s,;]+)",
+        Options,
+        MatchTimeout);
+
+    private static readonly Regex TokenPattern = new Regex(
+        @"(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{16,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})",
+        Options,
+        MatchTimeout);
+
+    private static readonly Regex UrlCredentialsPattern = new Regex(
+        @"\b(?<scheme>https?://)[^/\s:@]+:[^@\s/]+@",
+        Options,
+        MatchTimeout);
+
+    private static readonly Regex AbsolutePathPattern = new Regex(
+        @"(?:""|')?(?:file:/+)?(?:(?<![A-Z])[A-Z]:[\\/]|\\\\)[^\r\n]*",
+        Options,
+        MatchTimeout);
+
+    internal static string Redact(string message)
+    {
+        var result = message ?? string.Empty;
+        try
+        {
+            result = BearerPattern.Replace(result, RedactedSecret);
+            result = SecretAssignmentPattern.Replace(
+                result,
+                match =>
+                    match.Groups["name"].Value
+                    + match.Groups["separator"].Value
+                    + RedactedSecret);
+            result = TokenPattern.Replace(result, RedactedSecret);
+            result = UrlCredentialsPattern.Replace(
+                result,
+                match => match.Groups["scheme"].Value + RedactedSecret + "@");
+            return AbsolutePathPattern.Replace(result, RedactedPath);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            System.Diagnostics.Debug.WriteLine("Terminal log redaction timed out.");
+            return "[REDACTION_FAILED]";
+        }
+    }
+}
 
 /// <summary>
 /// LoggerProvider, der alle WPF Log-Nachrichten abfängt und an das Terminal streamt.

@@ -16,7 +16,7 @@ import pytest
 from pb_studio.ai.chat_agent import ChatAgent, ChatEvent
 from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError, LMStudioModelInfo
 from pb_studio.ai.model_registry import ModelRegistry, NoSuitableModelError
-from pb_studio.ai.tool_registry import build_default_registry
+from pb_studio.ai.tool_registry import Tool, ToolRegistry, build_default_registry
 
 
 def _run(coro):
@@ -637,3 +637,38 @@ def test_agent_readtimeout_does_not_churn_models(monkeypatch):
     # done mit reason=timeout
     assert events[-1].type == "done"
     assert events[-1].payload.get("reason") == "timeout"
+
+
+def test_long_running_tool_dispatch_uses_extended_timeout():
+    observed: dict[str, float | None] = {}
+
+    async def handler(args, *, http_client):
+        observed["read_timeout"] = http_client.timeout.read
+        return {"ok": True}
+
+    registry = ToolRegistry()
+    registry.register(Tool(
+        name="pacing.generate",
+        description="test",
+        parameters={"type": "object", "properties": {}, "required": []},
+        handler=handler,
+        destructive=False,
+        category="pacing",
+        long_running=True,
+    ))
+    fake = FakeLMStudioClient(responses=[])
+    http = _mock_backend({})
+
+    async def go():
+        async with ChatAgent(
+            registry=registry,
+            lmstudio_client=fake,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=fake),
+        ) as agent:
+            result = await agent._dispatch_tool(_tool_call("pacing_generate", {}))
+        await http.aclose()
+        return result
+
+    assert _run(go()) == {"ok": True}
+    assert observed["read_timeout"] == 600.0

@@ -18,7 +18,7 @@ public sealed class TerminalLogBuffer
         var entry = new TerminalLogEntry(
             DateTime.Now,
             string.IsNullOrWhiteSpace(level) ? "INFO" : level.ToUpperInvariant(),
-            message ?? string.Empty);
+            TerminalLogRedactor.Redact(message));
         Action<TerminalLogEntry>? handlers;
 
         lock (_lock)
