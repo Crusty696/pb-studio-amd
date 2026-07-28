@@ -163,13 +163,14 @@ def test_migration_runner_numerical_prefix(tmp_path: Path):
     mig = tmp_path / "mig"
     mig.mkdir()
     (mig / "10_second.sql").write_text("CREATE TABLE x2 (id INTEGER);")
-    (mig / "2_first.sql").write_text("CREATE TABLE x1 (id INTEGER);")
+    (mig / "9_first.sql").write_text("CREATE TABLE x1 (id INTEGER);")
     db = tmp_path / "y.db"
-    
-    # 2_first.sql has version 2, 10_second.sql has version 10.
-    # They should be applied in numerical order: 2, then 10.
-    # If list index or string order was used, "10_second.sql" (string comparison "10" < "2")
-    # might be run first. But numerically, 2 is run first, then 10.
+
+    conn = sqlite3.connect(str(db))
+    conn.execute("PRAGMA user_version = 8")
+    conn.close()
+
+    # 9_first.sql must run before 10_second.sql despite lexical ordering.
     v = migrate(db, mig)
     assert v == 10
     
@@ -250,3 +251,33 @@ def test_migration_duplicate_prefix_raises(tmp_path):
 
     with pytest.raises(ValueError, match="[Dd]oppelt"):
         migrate(tmp_path / "m.db", mig)
+
+
+def test_migration_gap_raises_without_advancing_version(tmp_path):
+    """L-07: a missing migration version must never be skipped permanently."""
+    mig = tmp_path / "migs"
+    mig.mkdir()
+    (mig / "001_initial.sql").write_text(
+        "CREATE TABLE first_table (x INT);", encoding="utf-8"
+    )
+    (mig / "003_gap.sql").write_text(
+        "CREATE TABLE skipped_table (x INT);", encoding="utf-8"
+    )
+    db = tmp_path / "m.db"
+
+    with pytest.raises(ValueError, match="Migrationsluecke"):
+        migrate(db, mig)
+
+    conn = sqlite3.connect(str(db))
+    try:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 0
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "first_table" not in tables
+        assert "skipped_table" not in tables
+    finally:
+        conn.close()
