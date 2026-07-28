@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Globaler GPU-Lock: Nur 1 ONNX DirectML Session gleichzeitig
 gpu_lock = asyncio.Lock()
+_gpu_cleanup_tasks: set[asyncio.Task[None]] = set()
 
 # Globaler DB-Schreib-Lock: Verhindert WAL-Lock-Contention bei gleichzeitigen Schreibzugriffen
 db_write_lock = asyncio.Lock()
@@ -89,97 +90,126 @@ async def with_gpu_task(
         except Exception as e:  # pragma: no cover — defensiv, Manager sollte verfuegbar sein
             logger.debug(f"VRAM-Manager fuer Telemetrie nicht verfuegbar: {e}")
 
-    async with gpu_lock:
-        if vram_reserved and manager:
-            manager.commit(model_id)
+    await gpu_lock.acquire()
+    lock_handed_to_cleanup = False
+    try:
+        if vram_reserved and manager and not manager.commit(model_id):
+            manager.cancel_reservation(model_id)
+            raise RuntimeError(f"VRAM-Commit fehlgeschlagen: {model_id}")
 
         logger.debug(f"GPU-Lock erworben fuer: {func.__name__}")
-
         start_ts = time.perf_counter()
-        # Snapshot zu Beginn — committed_mb ist unter Lock konstant fuer dieses Modell
         vram_baseline_mb = float(manager.total_committed_mb) if manager else 0.0
-        success = False
-        error_payload: dict[str, Any] | None = None
+        task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
+
+        async def finalize_after_worker(
+            *,
+            success: bool,
+            error_payload: dict[str, Any] | None,
+        ) -> None:
+            try:
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    # Shutdown/caller cancellation must not shorten the physical
+                    # worker lifetime guarded by the GPU lock.
+                    try:
+                        await task
+                    except BaseException as worker_exc:
+                        logger.debug(
+                            "GPU-Hintergrund-Worker '%s' endete mit %s",
+                            func.__name__,
+                            type(worker_exc).__name__,
+                        )
+                except BaseException as worker_exc:
+                    logger.debug(
+                        "GPU-Hintergrund-Worker '%s' endete mit %s",
+                        func.__name__,
+                        type(worker_exc).__name__,
+                    )
+
+                duration_ms = (time.perf_counter() - start_ts) * 1000.0
+                if manager:
+                    vram_now_mb = float(manager.total_committed_mb)
+                    try:
+                        manager.record_task_observation(
+                            model_id=model_id,
+                            duration_ms=duration_ms,
+                            vram_peak_mb=max(vram_baseline_mb, vram_now_mb),
+                            success=success,
+                            error=error_payload,
+                        )
+                    except Exception as obs_err:  # pragma: no cover
+                        logger.debug(f"Telemetrie-Update fehlgeschlagen: {obs_err}")
+
+                if vram_reserved and manager:
+                    try:
+                        budget = manager.get_model(model_id)
+                    except Exception:
+                        budget = None
+                    if (
+                        budget is not None
+                        and getattr(budget, "unload_callback", None) is None
+                        and getattr(budget, "is_loaded", False)
+                    ):
+                        manager.release(model_id)
+                    else:
+                        manager.cancel_reservation(model_id)
+            finally:
+                gpu_lock.release()
+                logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
+
         try:
-            task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
             result = await asyncio.wait_for(asyncio.shield(task), timeout=timeout_seconds)
-            success = True
-            return result
         except asyncio.TimeoutError:
-            logger.error(f"GPU-Task '{func.__name__}' Timeout nach {timeout_seconds}s!")
             error_payload = {
                 "type": "TimeoutError",
                 "message": f"GPU-Task Timeout: {func.__name__} ({timeout_seconds}s)",
                 "task": func.__name__,
             }
-            await publish_event("gpu_error", {
-                "message": error_payload["message"],
-                "task": func.__name__,
-            })
+            logger.error(error_payload["message"])
+            await publish_event(
+                "gpu_error",
+                {"message": error_payload["message"], "task": func.__name__},
+            )
+            cleanup_task = asyncio.create_task(
+                finalize_after_worker(success=False, error_payload=error_payload)
+            )
+            _gpu_cleanup_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(_gpu_cleanup_tasks.discard)
+            lock_handed_to_cleanup = True
             raise TimeoutError(f"GPU-Task '{func.__name__}' Timeout")
         except asyncio.CancelledError:
-            logger.warning(f"GPU-Task '{func.__name__}' abgebrochen (CancelledError)!")
             error_payload = {
                 "type": "CancelledError",
                 "message": f"GPU-Task abgebrochen: {func.__name__}",
                 "task": func.__name__,
             }
+            cleanup_task = asyncio.create_task(
+                finalize_after_worker(success=False, error_payload=error_payload)
+            )
+            _gpu_cleanup_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(_gpu_cleanup_tasks.discard)
+            lock_handed_to_cleanup = True
             raise
         except Exception as exc:
-            error_payload = {
-                "type": type(exc).__name__,
-                "message": str(exc),
-                "task": func.__name__,
-            }
+            lock_handed_to_cleanup = True
+            await finalize_after_worker(
+                success=False,
+                error_payload={
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "task": func.__name__,
+                },
+            )
             raise
-        finally:
-            if 'task' in locals() and not task.done():
-                logger.warning(f"GPU-Thread fuer '{func.__name__}' laeuft noch. Warte auf Beendigung, um parallele GPU-Interferenz zu verhindern...")
-                try:
-                    await task
-                except Exception as thread_exc:
-                    logger.debug(f"Hintergrund-Thread warf Exception beim Warten: {thread_exc}")
-
-            duration_ms = (time.perf_counter() - start_ts) * 1000.0
-            # VRAM-Peak: groesserer Wert aus Anfangs-Snapshot und aktuellem committed_mb
-            if manager:
-                vram_now_mb = float(manager.total_committed_mb)
-                vram_peak_mb = max(vram_baseline_mb, vram_now_mb)
-                try:
-                    manager.record_task_observation(
-                        model_id=model_id,
-                        duration_ms=duration_ms,
-                        vram_peak_mb=vram_peak_mb,
-                        success=success,
-                        error=error_payload,
-                    )
-                except Exception as obs_err:  # pragma: no cover — Telemetrie darf Task nie kippen
-                    logger.debug(f"Telemetrie-Update fehlgeschlagen: {obs_err}")
-
-            if vram_reserved and manager:
-                # BUGFIX H6: release committed VRAM for TRANSIENT models — those
-                # with no unload_callback, i.e. NOT owned by ModelLoader/RAFT/
-                # SigLIP (which all register an unload_callback and release
-                # themselves). Previously the finally only called
-                # cancel_reservation(), a no-op after commit(), so every commit
-                # of a KNOWN_MODEL_BUDGETS id that no object owns leaked forever
-                # -> _committed_mb grew until VRAMAllocationError despite free VRAM.
-                # Persistent, owner-managed models (unload_callback set) must stay
-                # resident, so we leave those committed and only cancel the
-                # not-yet-committed early-failure case for them.
-                try:
-                    budget = manager.get_model(model_id)
-                except Exception:
-                    budget = None
-                if (
-                    budget is not None
-                    and getattr(budget, "unload_callback", None) is None
-                    and getattr(budget, "is_loaded", False)
-                ):
-                    manager.release(model_id)
-                else:
-                    manager.cancel_reservation(model_id)
-            logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
+        else:
+            lock_handed_to_cleanup = True
+            await finalize_after_worker(success=True, error_payload=None)
+            return result
+    finally:
+        if not lock_handed_to_cleanup and gpu_lock.locked():
+            gpu_lock.release()
 
 
 # SSE Event Queue für Progress-Updates

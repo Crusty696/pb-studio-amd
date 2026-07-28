@@ -35,6 +35,7 @@ class SystemMonitor:
         self.config = ConfigManager()
         self.computer = None
         self.gpu_sensor = None
+        self._gpu_count = 0
         # T3.4: 10s-Cache für PowerShell-Sensor-Fallbacks
         self._cached_stats: dict = {}
         self._cache_time: float = 0.0
@@ -102,6 +103,7 @@ class SystemMonitor:
         dedicated_amd = [g for g in candidates if "GpuAmd" in str(g.HardwareType) and ("RX" in g.Name or "XT" in g.Name)]
         any_amd = [g for g in candidates if "GpuAmd" in str(g.HardwareType)]
         any_gpu = candidates
+        self._gpu_count = len(candidates)
         
         if dedicated_amd:
             self.gpu_sensor = dedicated_amd[0]
@@ -121,7 +123,7 @@ class SystemMonitor:
         else:
             logger.warning("No suitable GPU found for monitoring.")
 
-    def get_stats(self) -> dict:
+    def get_stats(self, *, force_refresh: bool = False) -> dict:
         """Reads current hardware stats with 10s caching for PowerShell fallbacks.
         
         T3.4: PowerShell-Subprozesse (driver_version, VRAM-Total, VRAM-Used,
@@ -131,14 +133,26 @@ class SystemMonitor:
         """
         now = time.monotonic()
         
-        # Wenn Cache gültig ist, sofort zurückgeben
-        with self._cache_lock:
-            if self._cached_stats and (now - self._cache_time) < self._cache_ttl:
-                return self._cached_stats.copy()
+        if not force_refresh:
+            with self._cache_lock:
+                if self._cached_stats and (now - self._cache_time) < self._cache_ttl:
+                    return self._cached_stats.copy()
         
         # Erstaufruf oder Cache abgelaufen → Ergebnis berechnen
         # LHM-Abfragen sind schnell (in-process, kein subprocess)
         stats = self._collect_lhm_stats()
+
+        if force_refresh:
+            # Allocation gates must never use stale used/load sensor values.
+            # Total VRAM and driver version are static and may be retained, but
+            # only when the cached sample belongs to the same selected adapter.
+            with self._cache_lock:
+                cached = self._cached_stats.copy()
+            if cached.get("gpu_name") == stats.get("gpu_name"):
+                if stats["gpu_memory_total"] <= 0:
+                    stats["gpu_memory_total"] = cached.get("gpu_memory_total", 0.0)
+                stats["driver_version"] = cached.get("driver_version", "Unknown")
+            return stats
         
         # PowerShell Fallbacks im Hintergrund starten (stale-while-revalidate)
         with self._cache_lock:
@@ -238,14 +252,9 @@ class SystemMonitor:
             
             # BUG-080/BUG-100 FIX: Get Driver Version via PowerShell
             if stats["driver_version"] == "Unknown":
-                try:
-                    import subprocess
-                    cmd = ["powershell", "-Command", "(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"]
-                    res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                    if res.returncode == 0 and res.stdout.strip():
-                        stats["driver_version"] = res.stdout.strip()
-                except Exception:
-                    pass
+                stats["driver_version"] = self._query_driver_version(
+                    stats["gpu_name"]
+                )
 
             # BUG-205 Fix: VRAM-Total Fallback via Registry
             if stats["gpu_memory_total"] == 0.0:
@@ -254,19 +263,19 @@ class SystemMonitor:
                     stats["gpu_memory_total"] = wmi_total
 
             # BUG-205 Phase 2: VRAM-Used via Windows Performance Counter
-            if stats["gpu_memory_used"] == 0.0:
+            if stats["gpu_memory_used"] == 0.0 and self._gpu_count <= 1:
                 counter_used = self._counter_query_vram_used()
                 if counter_used > 0:
                     stats["gpu_memory_used"] = counter_used
 
             # Audit D1: GPU Temperature Fallback
-            if stats["gpu_temp"] == 0.0:
+            if stats["gpu_temp"] == 0.0 and self._gpu_count <= 1:
                 alt_temp = self._query_temperature_alternative()
                 if alt_temp > 0:
                     stats["gpu_temp"] = alt_temp
 
             # Audit D2: GPU Load Fallback
-            if stats["gpu_load"] == 0.0:
+            if stats["gpu_load"] == 0.0 and self._gpu_count <= 1:
                 alt_load = self._query_load_alternative()
                 if alt_load > 0:
                     stats["gpu_load"] = alt_load
@@ -281,6 +290,32 @@ class SystemMonitor:
             with self._cache_lock:
                 self._bg_refresh_running = False
 
+    def _query_driver_version(self, gpu_name_hint: str) -> str:
+        """Read driver version for the selected adapter only."""
+        if not gpu_name_hint or gpu_name_hint == "Unknown":
+            return "Unknown"
+        try:
+            import subprocess
+            ps_script = (
+                "$name=$args[0]; "
+                "(Get-CimInstance Win32_VideoController | "
+                "Where-Object { $_.Name -eq $name } | "
+                "Select-Object -First 1).DriverVersion"
+            )
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                ps_script,
+                gpu_name_hint,
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+        except Exception as exc:
+            logger.debug("Adapter-bound driver query failed: %s", exc)
+        return "Unknown"
+
     def _wmi_query_vram_total(self, gpu_name_hint: str) -> float:
         """Fallback: query GPU-VRAM via Registry HardwareInformation.qwMemorySize.
 
@@ -290,12 +325,13 @@ class SystemMonitor:
         hat REG_QWORD HardwareInformation.qwMemorySize mit 64-bit Wert (verifiziert
         per debug 2026-05-09: RX 7800 XT qwSize=17163091968 = 16370 MB).
 
-        Filtert auf DriverDesc match falls gpu_name_hint gegeben; sonst nimmt grosste
-        Karte (dedicated > iGPU). Returns MB. 0.0 bei Fehler.
+        Filtert strikt auf den bereits von LHM gewählten Adapter.
+        Returns MB. 0.0 bei Fehler.
         """
         try:
             import subprocess
             ps_script = (
+                "$name=$args[0];"
                 "$keys = Get-ChildItem "
                 "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' "
                 "-ErrorAction SilentlyContinue;"
@@ -303,15 +339,21 @@ class SystemMonitor:
                 "foreach ($k in $keys) {"
                 "  if ($k.Name -match '\\\\\\d{4}$') {"
                 "    $p = Get-ItemProperty -Path $k.PSPath -ErrorAction SilentlyContinue;"
-                "    if ($p.'HardwareInformation.qwMemorySize') {"
+                "    if ($p.DriverDesc -eq $name -and $p.'HardwareInformation.qwMemorySize') {"
                 "      $obj = [PSCustomObject]@{ Name=$p.DriverDesc; Bytes=$p.'HardwareInformation.qwMemorySize' };"
-                "      if ($null -eq $result -or $obj.Bytes -gt $result.Bytes) { $result = $obj }"
+                "      $result = $obj"
                 "    }"
                 "  }"
                 "};"
                 "if ($result) { Write-Output $result.Bytes }"
             )
-            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
+            cmd = [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                ps_script,
+                gpu_name_hint,
+            ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
             if res.returncode == 0 and res.stdout.strip():
                 bytes_total = int(res.stdout.strip())

@@ -83,7 +83,7 @@ class VRAMArbiter:
             budget_ok = self.budget_manager.available_vram_mb >= required_mb
 
         # Method 2: LHM Sensor Check (reactive, if reliable)
-        current_stats = self.monitor.get_stats()
+        current_stats = self.monitor.get_stats(force_refresh=True)
         used_real = current_stats.get("gpu_memory_used", 0)
         total_phys = current_stats.get("gpu_memory_total", 0)
 

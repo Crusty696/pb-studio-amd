@@ -10,8 +10,14 @@ def test_vram_allocation_and_eviction():
     assert mgr.available_vram_mb == 4096 - 500
     
     # Register models
-    mgr.register_model("m1", "Model 1", 1000, ModelPriority.LOW)
-    mgr.register_model("m2", "Model 2", 1500, ModelPriority.MEDIUM)
+    mgr.register_model(
+        "m1", "Model 1", 1000, ModelPriority.LOW,
+        unload_callback=lambda: True,
+    )
+    mgr.register_model(
+        "m2", "Model 2", 1500, ModelPriority.MEDIUM,
+        unload_callback=lambda: True,
+    )
     mgr.register_model("m3", "Model 3", 2000, ModelPriority.HIGH)
     
     # Reserve and commit m1
@@ -42,8 +48,14 @@ def test_eviction_lru():
     VRAMBudgetManager.reset_for_testing()
     mgr = VRAMBudgetManager(max_vram_mb=4096)
     
-    mgr.register_model("m1", "Model 1", 1000, ModelPriority.LOW)
-    mgr.register_model("m2", "Model 2", 1000, ModelPriority.LOW)
+    mgr.register_model(
+        "m1", "Model 1", 1000, ModelPriority.LOW,
+        unload_callback=lambda: True,
+    )
+    mgr.register_model(
+        "m2", "Model 2", 1000, ModelPriority.LOW,
+        unload_callback=lambda: True,
+    )
     mgr.register_model("m3", "Model 3", 2000, ModelPriority.LOW)
     
     assert mgr.reserve("m1")

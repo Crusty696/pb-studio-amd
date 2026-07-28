@@ -307,8 +307,14 @@ class ModelLoader:
                     self.vram_manager.cancel_reservation(model_id)
                     return None
 
-                # Commit VRAM
-                self.vram_manager.commit(model_id)
+                # Publish the session only after the reservation was committed.
+                if not self.vram_manager.commit(model_id):
+                    logger.error(f"VRAM commit failed after loading {spec.name}")
+                    session = None
+                    import gc
+                    gc.collect()
+                    self.vram_manager.cancel_reservation(model_id)
+                    return None
                 self._sessions[model_id] = session
 
                 logger.info(f"Loaded model: {spec.name} (Provider: {self._get_active_provider(session)})")
@@ -407,8 +413,10 @@ class ModelLoader:
         import gc
         gc.collect()
 
-        # Update VRAM budget after memory is actually released
-        self.vram_manager.release(model_id)
+        # Update VRAM budget after memory is actually released.
+        if not self.vram_manager.release(model_id):
+            logger.error(f"VRAM release confirmation failed for model: {model_id}")
+            return False
 
         logger.info(f"Unloaded model: {model_id}")
         return True
@@ -447,22 +455,31 @@ class ModelLoader:
                 "vram_stats": self.vram_manager.get_stats()
             }
 
-    def unload_all(self):
-        """Unload all models."""
+    def unload_all(self) -> bool:
+        """Unload all models and confirm every budget release."""
+        unloaded_ids = []
         with self._session_lock:
             for model_id in list(self._sessions.keys()):
-                # _do_unload acquires lock, but we already hold it — need to call inner logic
                 if model_id in self._sessions:
                     session = self._sessions.pop(model_id)
                     if isinstance(session, dict):
                         for key in list(session.keys()):
                             session[key] = None
                     session = None
-                    self.vram_manager.release(model_id)
+                    unloaded_ids.append(model_id)
 
         import gc
         gc.collect()
-        logger.info("All models unloaded")
+
+        released_all = True
+        for model_id in unloaded_ids:
+            if not self.vram_manager.release(model_id):
+                released_all = False
+                logger.error(f"VRAM release confirmation failed for model: {model_id}")
+
+        if released_all:
+            logger.info("All models unloaded")
+        return released_all
 
 
 # =========================================================================
