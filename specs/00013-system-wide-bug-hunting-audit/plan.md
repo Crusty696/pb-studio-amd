@@ -1,5 +1,58 @@
 # Implementierungsplan: System-wide Bug Hunting & Codebase Audit (Epic 00013)
 
+## Phase 66: Release-Readiness 2026-07-28
+
+### Ausführungsreihenfolge
+
+1. **W0 Governance/SDD:** Audit-Evidence und Baseline-Commit einfrieren; FR-251–FR-310, T228+ und DirectML-ADR registrieren.
+2. **W1 P0-Blocker:** C-01, C-02, H-20 und H-23 schließen.
+3. **W2 Audio:** H-01–H-06, M-01–M-03 und L-01–L-02 schließen.
+4. **W3 GPU/Core:** H-07–H-09 und M-04–M-05 schließen.
+5. **W4 Video/Vision:** H-10–H-11, M-06–M-09 und L-03–L-04 schließen.
+6. **W5 Pacing/Brain:** H-12–H-16 und M-10–M-11 schließen.
+7. **W6 Chat/Models/Terminal:** H-17, H-26, M-12–M-13 und L-06 schließen.
+8. **W7 Projekt/Data:** H-21, M-17–M-22 und L-07 schließen.
+9. **W8 Render/Export:** H-22, H-24–H-25 und M-23–M-25 schließen.
+10. **W9 WPF/Lifecycle:** H-18–H-19, M-14–M-16 und L-05 schließen.
+
+### Micro-Gates
+
+* Nach jedem Write: Syntax- beziehungsweise XML-Balance und Truncation-Prüfung.
+* Pro Cluster: genau ein enges Failure-/Regression-Subset.
+* Kein Full-Pytest und kein wiederholter WPF-Build während der Clusterarbeit.
+* Shared Files, Model-Registry und öffentliche C#-Verträge werden sequenziell geändert.
+* Zone-Commit erst nach bestandenem Cluster-Micro-Gate.
+
+### Release-Checkliste
+
+* Alle 60 Finding-Tasks und alle Cluster-Gates sind `[X]`.
+* Requirement-Matrix C-01–L-07 ist 60/60 belegt.
+* Erst danach wird `.completed` erstellt.
+* Statische Gates, Full-Pytest, Skip-Audit, Coverage und WPF Release-Build bestehen.
+* Security-, Daten-/Fault-Injection-, Hardware-/E2E-, Modell-/GUI- und Export-Gates bestehen.
+* `qc-report.md` enthält pro Finding den Testbeleg.
+* Nur bei vollständigem PASS werden `.qc-passed`, Brain-Log und QC-Commit erstellt.
+
+### Verbindliche Skill-Zuordnung
+
+* Immer aktiv: `caveman`, `pb-master`.
+* W0: `consulting-team`, `caveman-commit`.
+* W1: `pacing-expertise`, `gpu-expertise`, `chat-agent-expertise`, `projekt-expertise`, `rendering-expertise`, `codex-security:threat-model`, `codex-security:fix-finding`.
+* W2–W4: `audio-expertise`, `gpu-expertise`, `video-expertise`, `model-registry-expertise`.
+* W5–W6: `brain-expertise`, `pacing-expertise`, `chat-agent-expertise`, `model-registry-expertise`, `config-expertise`, `terminal-expertise`, `codex-security:validation`.
+* W7–W9: `projekt-expertise`, `brain-expertise`, `engineering:architecture`, `rendering-expertise`, `timeline-expertise`, `wpf-visual-blind-spot`.
+* End-QC: `auto-qa-loop`, `run-tests`, `health-check`, `run-pb-studio`, `wpf-gui-verification`, `codex-security:validation`.
+
+### Gebündeltes End-QC
+
+1. `git diff --check`, Iron-Rule-Scan, Python-Compile-Sweep, XAML-Parse, OpenAPI- und C#-DTO-Verträge.
+2. Vollständiges `pytest Tests/ -q`, Skip-Audit, Coverage und WPF Release-Build.
+3. Chat-Bestätigung: Approve, Reject, Timeout, Replay, Argument-Tampering, Parallelbestätigung und Disconnect.
+4. Daten/Fault-Injection nur auf Kopien: SQLite/FAISS/Outbox-Crashfenster, Writer-Diskfehler, Backup-Restore, Migrationslücke, FK-/Integrity-/Orphan-Prüfung.
+5. Reale Hardware/E2E: 60–120-Minuten-Mix, RAFT, SigLIP, Vision, Stems, Brain-Pacing, Render, VRAM-/Timeout-/Cancel-Pfade.
+6. Modelle/GUI: Vision- und Tool-Use-Modell live; Models-Tab terminiert bei Offline-Ollama; alle 12 Bereiche und Projektwechsel unter Last.
+7. Export: vollständige H.264-/HEVC-Dateien, atomarer Zielschutz, AV1 vor Start als unavailable.
+
 ## Phase 31: Aktive DTO-Schemas synchronisieren
 
 1. Regression für fehlende Audio-/Videoanalyse-Felder ergänzen.

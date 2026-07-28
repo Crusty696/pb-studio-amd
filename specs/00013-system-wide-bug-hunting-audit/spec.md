@@ -1,5 +1,71 @@
 # Spezifikation: System-wide Bug Hunting & Codebase Audit (Epic 00013)
 
+## Amendment 2026-07-28: Release-Readiness-Finding-Matrix
+
+* **OBJ-69:** Alle 60 Findings des eingefrorenen Berichts `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md` müssen ohne CPU-/Software-Fallbacks, Datenverlust oder falsche Erfolgszustände geschlossen werden.
+* **FR-251 [C-01]:** Semantic Pacing darf ausschließlich ein registriertes CLAP-ONNX-Modell über `DmlExecutionProvider` verwenden; fehlt es, ist Semantic Audio explizit deaktiviert.
+* **FR-252 [C-02]:** Jedes mutierende Chat-Tool benötigt eine serverseitig erzwungene, einmalige Benutzerbestätigung mit kanonischen Argumenten, Ablaufzeit und Replay-Schutz.
+* **FR-253 [H-01]:** Long-Mix-Subtrack-Erkennung muss Speicher und quadratische SSM-Arbeit begrenzen.
+* **FR-254 [H-02]:** Fehler der Streaming-Weiche dürfen nicht auf unbeschränktes Full-Load zurückfallen.
+* **FR-255 [H-03]:** Struktur, Key und Spektral müssen die volle Long-Mix-Laufzeit repräsentieren.
+* **FR-256 [H-04]:** Teilfehler der Audioanalyse müssen als `partial` oder `failed` erscheinen und dürfen keinen falschen Completed-Status erzeugen.
+* **FR-257 [H-05]:** Zusammengesetzte Stem-Separation besitzt genau einen VRAM-Budget-Owner; CPU-Demucs reserviert kein GPU-Budget.
+* **FR-258 [H-06]:** Ein fehlgeschlagenes Separator-Budget beendet den Pfad vor Modell- oder Inferenzarbeit.
+* **FR-259 [H-07]:** GPU-Deadlines antworten pünktlich, verwerfen Late Results und halten den Lock bis zum echten Worker-Ende.
+* **FR-260 [H-08]:** Eviction wird erst nach erfolgreichem Unload-Callback als freigegeben verbucht.
+* **FR-261 [H-09]:** VRAM-Allokationen verwenden frische Sensorwerte.
+* **FR-262 [H-10]:** RAFT-/SigLIP-Ausfälle werden als Stage-Fehler statt synthetische Nullwerte gemeldet.
+* **FR-263 [H-11]:** Die Videoanalyse besitzt ein Registry-bestätigtes, nutzbares Vision-Modell oder meldet den fehlenden Dienst explizit.
+* **FR-264 [H-12]:** `use_brain` aktiviert Advanced Pacing und ClipSelector statt Round-Robin.
+* **FR-265 [H-13]:** Reale Audio-/Videofeatures und der konfigurierte Threshold erreichen den Brain-Reranker.
+* **FR-266 [H-14]:** `use_brain` lädt Videoanalyse unabhängig vom Motion-Matching.
+* **FR-267 [H-15]:** Cross-DB-Lernupdates verwenden eine durable, idempotente Outbox.
+* **FR-268 [H-16]:** Projektormodell und Dimension müssen exakt passen; Kürzen, Padding und beliebiger Fallback sind unzulässig.
+* **FR-269 [H-17]:** `pacing.generate` läuft als korrekt überwachtes Long-Running-Chat-Tool.
+* **FR-270 [H-18]:** WPF setzt Runtime-Umgebung vor dem Backendstart.
+* **FR-271 [H-19]:** Audioanalyse, Stems und Pacing sind per Projektgeneration und CTS gegen Projektwechsel geschützt.
+* **FR-272 [H-20]:** `POST /project/create` lehnt bestehende Projektordner mit HTTP 409 ab und überschreibt nichts.
+* **FR-273 [H-21]:** Medienlöschung und Dedupe werden als idempotente Pending-Operationen über SQLite und FAISS konsistent abgeschlossen.
+* **FR-274 [H-22]:** `include_audio` und `quality` beeinflussen nachweisbar die Renderargumente und das Ergebnis.
+* **FR-275 [H-23]:** Render schreibt in eine temporäre Zieldatei und ersetzt ein vorhandenes Ziel erst nach vollständigem Erfolg.
+* **FR-276 [H-24]:** Queue-Dedupe plant bei vorhandener Task-ID keinen zweiten Runtime-Task.
+* **FR-277 [H-25]:** Fehlende Timeline-Clips brechen den Render-Preflight ab.
+* **FR-278 [H-26]:** Modellprovider werden parallel mit harten Deadlines geprüft; Offline-Ollama blockiert den Models-Tab nicht.
+* **FR-279 [M-01]:** Spektralanalyse verwendet einen 44,1-kHz-Pfad für Bänder bis 20 kHz.
+* **FR-280 [M-02]:** `/onsets` liefert persistierte `onset_times`.
+* **FR-281 [M-03]:** Streaming-Tempdateien werden in allen Erfolgs- und Fehlerpfaden garantiert bereinigt.
+* **FR-282 [M-04]:** ModelLoader prüft Commit-/Unload-Erfolg und gibt Budget erst nach physischer Freigabe zurück.
+* **FR-283 [M-05]:** Multi-GPU-Sensorwerte bleiben an denselben Adapter gebunden.
+* **FR-284 [M-06]:** Farbanalyse ist unabhängig von Captioning aktivierbar.
+* **FR-285 [M-07]:** Persistierte Video-Hashes ermöglichen sichere Embedding-Wiederverwendung.
+* **FR-286 [M-08]:** Langvideo-RAFT- und SigLIP-Sampling ist begrenzt und repräsentativ.
+* **FR-287 [M-09]:** `peak_frames` enthält echte Motion-Peaks.
+* **FR-288 [M-10]:** `beat_trigger_mode` steuert aktiv die Triggerauswahl.
+* **FR-289 [M-11]:** Synchrone Brain-Reads verlassen den Async-Eventloop.
+* **FR-290 [M-12]:** Eine leere `video_clip_ids`-Liste wird abgelehnt und nie als „alle“ beschrieben.
+* **FR-291 [M-13]:** Providerwahl prüft die für den Task benötigte Chat-/Vision-Capability.
+* **FR-292 [M-14]:** WPF zeigt den echten Embedding-Status aus dem API-DTO.
+* **FR-293 [M-15]:** Timeline lädt Assets einmal, projektgebunden und cancellable.
+* **FR-294 [M-16]:** Die Brain-Lernliste bindet `SelectedItem` an die bewertete Cut-ID.
+* **FR-295 [M-17]:** Projektspeichern propagiert SQLite-Sync-Fehler.
+* **FR-296 [M-18]:** Vector-Dedupe entfernt Mapping und Vektor crash-konsistent.
+* **FR-297 [M-19]:** Der VectorStore-Writer bleibt bis zu einem erfolgreichen Snapshot dirty.
+* **FR-298 [M-20]:** Vector-Suche überholt Tombstones adaptiv, bis `k` gültige Treffer oder der Bestand erschöpft ist.
+* **FR-299 [M-21]:** Brain-Backups werden temp+replace geschrieben; Recovery lädt das letzte valide Backup.
+* **FR-300 [M-22]:** Embedding-Cache schreibt `.npy` atomar und serialisiert Datei- und SQLite-Index-Update.
+* **FR-301 [M-23]:** Preview-Vertrag und tatsächliche Ausgabeauflösung stimmen überein.
+* **FR-302 [M-24]:** Render-Cancel wird vor und während der GPU-Lock-Wartezeit geprüft.
+* **FR-303 [M-25]:** Encoder-Overrides werden funktional vorgeprüft; nicht verfügbares AV1 scheitert vor Jobstart.
+* **FR-304 [L-01]:** Waveform liefert stabil höchstens die angeforderte Punktzahl ohne High-Band-Abschneidung.
+* **FR-305 [L-02]:** Waveform-Cache nutzt einen kollisionssicheren Inhaltsfingerprint und gesperrte Statistikzugriffe.
+* **FR-306 [L-03]:** Szenen-Confidence ist fachlich ermittelt oder explizit nullable.
+* **FR-307 [L-04]:** Importfortschritt basiert auf der Eingabeposition.
+* **FR-308 [L-05]:** MediaIngest, Anchor und Timeline-Vor/Zurück-Navigation sind in der aktiven UI erreichbar.
+* **FR-309 [L-06]:** Terminalausgaben redigieren Secrets und sensible absolute Pfade.
+* **FR-310 [L-07]:** Migrationen lehnen Versionslücken ab.
+* **SC-068 [OBJ-69]:** Die Finding-Matrix weist für C-01–C-02, H-01–H-26, M-01–M-25 und L-01–L-07 genau 60/60 PASS mit reproduzierbarem Testbeleg aus.
+* **SC-069 [OBJ-69]:** `.completed` entsteht erst nach allen Fix- und Cluster-Tasks; `.qc-passed` erst nach bestandenem gebündeltem End-QC und leerem Arbeitsbaum.
+
 ## Amendment 2026-07-28: Vollständige aktive API-DTOs
 
 * **OBJ-32:** Die vom handgeschriebenen `ApiClient` tatsächlich deserialisierten Analyse-DTOs müssen alle aktuell produzierten Audio-Trigger/Subtrack- und Video-Mood/Farb-Felder erhalten.

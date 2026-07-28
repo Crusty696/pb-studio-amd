@@ -237,6 +237,86 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T226 [OBJ-68] {(FR-249)} Remove incompatible launcher fallbacks and verify interpreter version
 - [X] T227 [OBJ-68] {(TR-250)} Verify WPF contracts, Release build and full regression suite
 
+## Release-Readiness 2026-07-28
+
+- [X] T228 [OBJ-69] {(OR-251)} Freeze the audit evidence and register FR-251–FR-310 in `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md` and `specs/00013-system-wide-bug-hunting-audit/spec.md`
+- [X] T229 [OBJ-69] {(OR-252)} Supersede CPU-SigLIP and torch-directml decisions with the ONNX-DirectML-only ADR in `specs/adrs/` and the PB Studio Brain
+- [X] T230 [OBJ-69] {(OR-253)} Register minimal cluster gates, final QC and the release checklist in `specs/00013-system-wide-bug-hunting-audit/plan.md`
+- [ ] T231 [P] [OBJ-69] {(FR-251)} Fix C-01 Semantic Audio to fail closed without CLAP ONNX and remove CPU fallback in `src/pb_studio/ai/clap_wrapper.py`, `src/pb_studio/ai/smart_director.py`, and pacing entry points
+- [ ] T232 [P] [OBJ-69] {(FR-252)} Fix C-02 with server-enforced one-time chat tool confirmation in `src/pb_studio/ai/`, `backend/routers/chat_router.py`, and the additive WPF chat contract
+- [ ] T233 [P] [OBJ-69] {(FR-253)} Fix H-01 bounded long-mix subtrack detection in `backend/routers/audio_router.py` and `src/pb_studio/audio/subtrack_detector.py`
+- [ ] T234 [OBJ-69] {(FR-254)} Fix H-02 streaming probe failures without full-load fallback in `backend/routers/audio_router.py`
+- [ ] T235 [OBJ-69] {(FR-255)} Fix H-03 full-duration structure, key, and spectral representation in `backend/routers/audio_router.py` and `src/pb_studio/audio/`
+- [ ] T236 [OBJ-69] {(FR-256)} Fix H-04 truthful partial/failed audio stage status in `backend/routers/audio_router.py` and audio schemas
+- [ ] T237 [OBJ-69] {(FR-257)} Fix H-05 single VRAM-budget ownership for stems in `backend/routers/audio_router.py` and `src/pb_studio/audio/separator.py`
+- [ ] T238 [OBJ-69] {(FR-258)} Fix H-06 separator fail-stop on reservation failure in `src/pb_studio/audio/separator.py`
+- [ ] T239 [P] [OBJ-69] {(FR-259)} Fix H-07 deadline and late-result lock lifetime in `backend/dependencies.py`
+- [ ] T240 [OBJ-69] {(FR-260)} Fix H-08 eviction accounting after callback success in `src/pb_studio/core/vram_budget_manager.py`
+- [ ] T241 [OBJ-69] {(FR-261)} Fix H-09 fresh sensor reads before allocation in `src/pb_studio/core/system_monitor.py` and `src/pb_studio/core/vram_arbiter.py`
+- [ ] T242 [P] [OBJ-69] {(FR-262)} Fix H-10 explicit RAFT/SigLIP stage failures in `src/pb_studio/video/` and `backend/routers/video_router.py`
+- [ ] T243 [OBJ-69] {(FR-263)} Fix H-11 registry-confirmed Vision capability in `src/pb_studio/video/`, model registry, and video routing
+- [ ] T244 [P] [OBJ-69] {(FR-264)} Fix H-12 `use_brain` activation of Advanced Pacing and ClipSelector in `src/pb_studio/services/pacing_service.py`
+- [ ] T245 [OBJ-69] {(FR-265)} Fix H-13 real Brain features and threshold propagation in `src/pb_studio/services/pacing_service.py` and `src/pb_studio/pacing/clip_selector.py`
+- [ ] T246 [OBJ-69] {(FR-266)} Fix H-14 Brain-required video analysis loading in `backend/routers/pacing_router.py`
+- [ ] T247 [OBJ-69] {(FR-267)} Fix H-15 durable idempotent learning outbox across `src/pb_studio/brain/` persistence boundaries
+- [ ] T248 [OBJ-69] {(FR-268)} Fix H-16 exact projector model/dimension enforcement in `src/pb_studio/brain/`
+- [ ] T249 [P] [OBJ-69] {(FR-269)} Fix H-17 `pacing.generate` long-running chat behavior in `src/pb_studio/ai/tool_registry.py` and `chat_agent.py`
+- [ ] T250 [P] [OBJ-69] {(FR-270)} Fix H-18 runtime environment ordering before backend startup in `PBStudio.UI/`
+- [ ] T251 [OBJ-69] {(FR-271)} Fix H-19 project generation and CTS for audio, stems, and pacing in `PBStudio.UI/ViewModels/`
+- [ ] T252 [P] [OBJ-69] {(FR-272)} Fix H-20 project-create conflict handling in `backend/routers/project_router.py`
+- [ ] T253 [P] [OBJ-69] {(FR-273)} Fix H-21 idempotent pending media delete operations in project/data persistence
+- [ ] T254 [P] [OBJ-69] {(FR-274)} Fix H-22 functional `include_audio` and `quality` rendering in render schemas/router/service
+- [ ] T255 [OBJ-69] {(FR-275)} Fix H-23 atomic render output publication in `src/pb_studio/rendering/render_service.py` and `backend/routers/render_router.py`
+- [ ] T256 [OBJ-69] {(FR-276)} Fix H-24 queue dedupe scheduling in `backend/routers/render_router.py` and render queue
+- [ ] T257 [OBJ-69] {(FR-277)} Fix H-25 missing-clip render preflight in `src/pb_studio/rendering/render_service.py`
+- [ ] T258 [P] [OBJ-69] {(FR-278)} Fix H-26 parallel deadline-bound provider probes in `backend/routers/models_router.py` and provider clients
+- [ ] T259 [OBJ-69] {(FR-279)} Fix M-01 44.1-kHz spectral path in `backend/routers/audio_router.py` and `src/pb_studio/audio/spectral_analyzer.py`
+- [ ] T260 [OBJ-69] {(FR-280)} Fix M-02 persisted onset responses in `backend/routers/audio_router.py`
+- [ ] T261 [OBJ-69] {(FR-281)} Fix M-03 guaranteed streaming temp cleanup in `src/pb_studio/audio/streaming_analyzer.py`
+- [ ] T262 [OBJ-69] {(FR-282)} Fix M-04 checked model commit/unload completion in `src/pb_studio/core/model_loader.py`
+- [ ] T263 [OBJ-69] {(FR-283)} Fix M-05 adapter-bound GPU telemetry in `src/pb_studio/core/system_monitor.py`
+- [ ] T264 [OBJ-69] {(FR-284)} Fix M-06 color analysis independent from captions in video schema/router
+- [ ] T265 [OBJ-69] {(FR-285)} Fix M-07 hash-based embedding reuse in `backend/routers/video_router.py`
+- [ ] T266 [OBJ-69] {(FR-286)} Fix M-08 bounded representative long-video sampling in `backend/routers/video_router.py`
+- [ ] T267 [OBJ-69] {(FR-287)} Fix M-09 true motion peak frames in video analysis
+- [ ] T268 [OBJ-69] {(FR-288)} Fix M-10 active `beat_trigger_mode` wiring in pacing models and engine
+- [ ] T269 [OBJ-69] {(FR-289)} Fix M-11 synchronous Brain reads blocking the event loop in `backend/routers/brain_router.py`
+- [ ] T270 [OBJ-69] {(FR-290)} Fix M-12 empty chat pacing clip-ID validation in `src/pb_studio/ai/tool_registry.py`
+- [ ] T271 [OBJ-69] {(FR-291)} Fix M-13 capability-aware model provider selection in model registry/provider code
+- [ ] T272 [OBJ-69] {(FR-292)} Fix M-14 real embedding status in WPF DTO/model/view
+- [ ] T273 [OBJ-69] {(FR-293)} Fix M-15 single cancellable Timeline asset load in `PBStudio.UI/ViewModels/TimelineViewModel.cs`
+- [ ] T274 [OBJ-69] {(FR-294)} Fix M-16 Brain learning selection binding in `PBStudio.UI/Views/BrainView.xaml`
+- [ ] T275 [OBJ-69] {(FR-295)} Fix M-17 project save failure propagation in `backend/app_state.py` and `backend/routers/project_router.py`
+- [ ] T276 [OBJ-69] {(FR-296)} Fix M-18 crash-consistent vector dedupe in video/data persistence
+- [ ] T277 [OBJ-69] {(FR-297)} Fix M-19 VectorStore dirty-state retry in `src/pb_studio/data/vector_store.py`
+- [ ] T278 [OBJ-69] {(FR-298)} Fix M-20 adaptive tombstone overfetch in `src/pb_studio/data/vector_store.py`
+- [ ] T279 [OBJ-69] {(FR-299)} Fix M-21 atomic Brain backup and valid-backup recovery in `src/pb_studio/brain/`
+- [ ] T280 [OBJ-69] {(FR-300)} Fix M-22 atomic locked embedding cache publication in `src/pb_studio/brain/embedding_cache.py`
+- [ ] T281 [OBJ-69] {(FR-301)} Fix M-23 preview resolution contract in pacing preview router/renderer
+- [ ] T282 [OBJ-69] {(FR-302)} Fix M-24 cancellation before and during render lock wait in `backend/routers/render_router.py`
+- [ ] T283 [OBJ-69] {(FR-303)} Fix M-25 encoder override capability probe and early AV1 unavailable response
+- [ ] T284 [OBJ-69] {(FR-304)} Fix L-01 stable bounded waveform points in `src/pb_studio/audio/waveform_analyzer.py`
+- [ ] T285 [OBJ-69] {(FR-305)} Fix L-02 collision-safe locked waveform cache in `src/pb_studio/audio/waveform_cache.py`
+- [ ] T286 [OBJ-69] {(FR-306)} Fix L-03 computed or nullable scene confidence in video analysis
+- [ ] T287 [OBJ-69] {(FR-307)} Fix L-04 input-position video import progress in `backend/routers/video_router.py`
+- [ ] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
+- [ ] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
+- [ ] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
+- [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
+- [ ] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
+- [ ] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
+- [ ] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
+- [ ] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
+- [ ] T296 [OBJ-69] {(TR-316)} Run the single W5 Pacing/Brain micro-gate
+- [ ] T297 [OBJ-69] {(TR-317)} Run the single W6 Chat/Models/Terminal micro-gate
+- [ ] T298 [OBJ-69] {(TR-318)} Run the single W7 project/data fault-injection micro-gate on copies
+- [ ] T299 [OBJ-69] {(TR-319)} Run the single W8 render/export micro-gate
+- [ ] T300 [OBJ-69] {(TR-320)} Run the single W9 WPF/lifecycle contract micro-gate
+- [ ] T301 [OBJ-69] {(TR-321)} Prove 60/60 implementation completion and create `.completed`
+- [ ] T302 [OBJ-69] {(TR-322)} Execute the complete bundled static, regression, security, data, hardware, GUI, model, and export QC
+- [ ] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
+- [ ] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
+
 
 
 
