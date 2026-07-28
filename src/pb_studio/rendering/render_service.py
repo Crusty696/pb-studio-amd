@@ -15,11 +15,13 @@ Features:
 
 import inspect
 import json
+import os
 import re
 import subprocess
 import threading
 import time
 import queue
+import uuid
 from pathlib import Path
 from typing import Any, List, Dict, Optional, Callable
 
@@ -148,6 +150,9 @@ class RenderService:
     ) -> str:
         """Hauptfunktion für Timeline-Rendering."""
         final_output = self.output_dir / output_filename
+        staging_output = final_output.with_name(
+            f".{final_output.stem}.{uuid.uuid4().hex}.partial{final_output.suffix}"
+        )
         # R19/LOW-019-3: Cache audio_dur here — _run_ffmpeg_render reuses it
         # to avoid a second ffprobe subprocess on the same audio file.
         audio_dur = self._get_audio_duration(audio_path)
@@ -199,10 +204,13 @@ class RenderService:
             )
 
             last_telemetry = self._run_ffmpeg_render(
-                concat_list_path, audio_path, final_output,
+                concat_list_path, audio_path, staging_output,
                 bitrate, preset, audio_offset, total_duration, target_fps, progress_callback, cancel_callback, render_start,
                 audio_dur=audio_dur,
             )
+            if not staging_output.exists() or staging_output.stat().st_size == 0:
+                raise RuntimeError("FFmpeg hat keine vollständige Render-Ausgabe erzeugt")
+            os.replace(staging_output, final_output)
 
             elapsed = max(time.monotonic() - render_start, 0.0)
             final_fps = last_telemetry.get("fps", 0.0) if last_telemetry else 0.0
@@ -226,6 +234,7 @@ class RenderService:
             logger.error(f"Render Error: {e}", exc_info=True)
             raise
         finally:
+            staging_output.unlink(missing_ok=True)
             self._cleanup_temp(normalized_clips)
 
     def _calculate_timeline_duration(self, timeline: List[Dict]) -> float:

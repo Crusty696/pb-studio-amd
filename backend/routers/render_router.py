@@ -444,12 +444,6 @@ async def _run_render_task(
     _safe_queue_update(queue_job_id, _RQ_RUNNING)
     start_time = time.monotonic()
 
-    # Record the output file's mtime BEFORE the render starts.
-    # _cleanup_render_temps will only delete it if it was modified DURING this render
-    # — protecting any previously completed output file at the same path.
-    _output_p = Path(request.output_path)
-    _output_mtime_before: float | None = _output_p.stat().st_mtime if _output_p.exists() else None
-
     try:
         async with gpu_lock:
             logger.info(f"GPU-Lock erworben für Render {task_id}")
@@ -503,8 +497,6 @@ async def _run_render_task(
         # (Die RenderQueue-Schemata wären strenger; failed deckt 'nicht erfolgreich abgeschlossen'
         #  korrekt ab und blockiert Auto-Retry — exakt was wir bei einem User-Cancel wollen.)
         _safe_queue_update(queue_job_id, _RQ_FAILED, error="cancelled")
-        # Temp-Files aufräumen (schützt vorherige Outputs durch mtime-Check)
-        _cleanup_render_temps(request.output_path, _output_mtime_before)
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
         await publish_event("render_progress", {
@@ -522,7 +514,6 @@ async def _run_render_task(
 
     except Exception as e:
         elapsed = time.monotonic() - start_time
-        _cleanup_render_temps(request.output_path, _output_mtime_before)
         state.update_render_task(task_id, {
             "status": TaskStatus.FAILED.value,
             "error": str(e),
@@ -550,39 +541,6 @@ async def _run_render_task(
 class _RenderCancelled(Exception):
     """Interne Exception für abgebrochenes Rendering."""
     pass
-
-
-def _cleanup_render_temps(
-    output_path: str,
-    output_mtime_before: "float | None" = None,
-) -> None:
-    """Räumt temporäre Render-Dateien auf.
-
-    Args:
-        output_path:         Pfad zur Output-Datei.
-        output_mtime_before: Mtime der Output-Datei VOR dem Render-Start (None = Datei
-                             existierte vorher nicht).  Die Output-Datei wird NUR gelöscht,
-                             wenn sie NACH dem Render-Start geschrieben wurde — d.h.
-                             eine vorherige erfolgreiche Render-Ausgabe an demselben Pfad
-                             bleibt erhalten.
-    """
-    try:
-        output_p = Path(output_path)
-        if output_p.exists():
-            current_mtime = output_p.stat().st_mtime
-            # Delete only if the file was created or modified during this render task
-            if output_mtime_before is None or current_mtime > output_mtime_before:
-                output_p.unlink(missing_ok=True)
-                logger.debug(f"Unvollständige Render-Ausgabe gelöscht: {output_p.name}")
-            else:
-                logger.debug(f"Vorherige Render-Ausgabe beibehalten (nicht von diesem Task): {output_p.name}")
-        # Temp-Dir immer aufräumen
-        temp_dir = output_p.parent / ".temp_render"
-        if temp_dir.exists():
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-    except Exception as e:
-        logger.warning(f"Cleanup nach Cancel fehlgeschlagen: {e}")
 
 
 def _execute_render(
