@@ -474,7 +474,7 @@ async def get_waveform(
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
             clip_id=clip_id,
-            sample_rate=22050,  # WaveformAnalyzer analysiert bei 22050 Hz
+            sample_rate=44100,
             bands=waveform,
             duration_seconds=clip["duration_seconds"],
         )
