@@ -246,7 +246,7 @@ def test_auto_pacing_pipeline_chronological_no_violations(tmp_path, monkeypatch)
             },
         )
     except Exception as e:
-        pytest.skip(f"PacingService pipeline error (synthetic test-data): {e}")
+        pytest.fail(f"PacingService pipeline error (synthetic test-data): {e}")
 
     if not cut_list or len(cut_list) < 2:
         pytest.skip(

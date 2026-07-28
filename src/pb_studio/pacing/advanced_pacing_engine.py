@@ -629,7 +629,7 @@ class AdvancedPacingEngine:
             return beats
 
         # Use beat strength from analysis if available
-        beat_data = self.audio_analysis.get("beat_data", [])
+        beat_data = (self.audio_analysis or {}).get("beat_data", [])
 
         if beat_data and all(len(b) >= 2 for b in beat_data[:10]):
             # BeatNet provides beat position (1, 2, 3, 4)
