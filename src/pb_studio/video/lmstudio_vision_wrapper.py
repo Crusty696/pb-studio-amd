@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
-from pathlib import Path
 from typing import Any, Callable, Optional
 
 import numpy as np
+from pb_studio.ai.config_loader import load_ai_config as _load_ai_config
 
 logger = logging.getLogger(__name__)
 
@@ -140,32 +139,6 @@ def _cache_put(key: tuple[str, str, str], value: list[str]) -> None:
         except StopIteration:
             pass
     _TAG_CACHE[key] = list(value)
-
-
-def _load_ai_config() -> dict[str, Any]:
-    """Liest die ``ai``-Sektion aus ``config.json`` (best-effort)."""
-    try:
-        from pb_studio.config_manager import ConfigManager
-
-        cfg = ConfigManager()
-        ai_section = cfg.get("ai") or {}
-        if isinstance(ai_section, dict):
-            return ai_section
-    except Exception as exc:
-        logger.debug("config_manager nicht verfuegbar: %s", exc)
-    # Fallback: config.json direkt lesen (Test-Fixtures patchen ConfigManager)
-    try:
-        root = Path(__file__).resolve().parents[3]
-        cfg_file = root / "config.json"
-        if cfg_file.exists():
-            with cfg_file.open("r", encoding="utf-8") as fp:
-                data = json.load(fp)
-            ai = data.get("ai") or {}
-            if isinstance(ai, dict):
-                return ai
-    except Exception as exc:
-        logger.debug("config.json direct-read fehlgeschlagen: %s", exc)
-    return {}
 
 
 async def _async_extract_tags(

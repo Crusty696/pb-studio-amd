@@ -36,6 +36,7 @@ async def with_gpu_task(
     func: Callable[..., Any],
     *args: Any,
     model_id: str = "",
+    manage_vram: bool = True,
     timeout_seconds: int | None = None,
     **kwargs: Any,
 ) -> Any:
@@ -43,12 +44,16 @@ async def with_gpu_task(
     Führt eine GPU-Funktion thread-sicher unter dem globalen GPU-Lock aus.
     Integrierte VRAM-Budget-Verwaltung (Reserve -> Commit -> Release) plus
     Telemetrie (Histogram über Dauer + VRAM-Peak pro model_id).
+
+    ``manage_vram=False`` ist für zusammengesetzte Tasks, deren interne
+    Modell-Owner ihre einzelnen Sessions selbst reservieren und freigeben.
+    GPU-Lock und Telemetrie bleiben dabei aktiv.
     """
     manager = None
     vram_reserved = False
 
     # VRAM-Reservierung (vor dem Lock-Erwerb)
-    if model_id:
+    if model_id and manage_vram:
         try:
             from pb_studio.core.vram_budget_manager import get_vram_manager, VRAMAllocationError
             manager = get_vram_manager()
@@ -152,9 +157,28 @@ async def with_gpu_task(
                     logger.debug(f"Telemetrie-Update fehlgeschlagen: {obs_err}")
 
             if vram_reserved and manager:
-                # B-5 Fix: Storniere Reservierung (wirkt nur wenn nicht committed). 
-                # Freigabe passiert erst im ModelLoader beim Entladen.
-                manager.cancel_reservation(model_id)
+                # BUGFIX H6: release committed VRAM for TRANSIENT models — those
+                # with no unload_callback, i.e. NOT owned by ModelLoader/RAFT/
+                # SigLIP (which all register an unload_callback and release
+                # themselves). Previously the finally only called
+                # cancel_reservation(), a no-op after commit(), so every commit
+                # of a KNOWN_MODEL_BUDGETS id that no object owns leaked forever
+                # -> _committed_mb grew until VRAMAllocationError despite free VRAM.
+                # Persistent, owner-managed models (unload_callback set) must stay
+                # resident, so we leave those committed and only cancel the
+                # not-yet-committed early-failure case for them.
+                try:
+                    budget = manager.get_model(model_id)
+                except Exception:
+                    budget = None
+                if (
+                    budget is not None
+                    and getattr(budget, "unload_callback", None) is None
+                    and getattr(budget, "is_loaded", False)
+                ):
+                    manager.release(model_id)
+                else:
+                    manager.cancel_reservation(model_id)
             logger.debug(f"GPU-Lock freigegeben fuer: {func.__name__}")
 
 
@@ -269,12 +293,14 @@ class SSELogHandler(logging.Handler):
             }
             event = {"event": "log", "data": payload}
 
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
+            # BUGFIX M13: use the shared main loop (set via set_main_loop), not
+            # asyncio.get_running_loop(). emit() runs in worker threads (all heavy
+            # work goes through asyncio.to_thread), where get_running_loop() raises
+            # RuntimeError -> loop=None -> every worker-thread log was silently
+            # dropped from the SSE live-log. Mirror publish_event_threadsafe().
+            loop = _main_loop
 
-            if loop and loop.is_running():
+            if loop and not loop.is_closed():
                 for queue in list(_event_queues.values()):
                     try:
                         loop.call_soon_threadsafe(queue.put_nowait, event)

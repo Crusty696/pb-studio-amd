@@ -186,27 +186,29 @@ async def stats() -> BrainStatsResponse:
             posterior_variance=variance,
         )
 
-    rows = svc.brain.weights_conn.execute(
+    with svc.brain._weights_lock:
+        rows = svc.brain.weights_conn.execute(
         "SELECT axis, context_level, context_key, positive_count, "
         "negative_count FROM axis_weights "
         "ORDER BY (positive_count - negative_count) DESC LIMIT 5"
-    ).fetchall()
-    top_pos = [_bucket(r) for r in rows]
+        ).fetchall()
+        top_pos = [_bucket(r) for r in rows]
 
-    rows = svc.brain.weights_conn.execute(
+        rows = svc.brain.weights_conn.execute(
         "SELECT axis, context_level, context_key, positive_count, "
         "negative_count FROM axis_weights "
         "ORDER BY (negative_count - positive_count) DESC LIMIT 5"
-    ).fetchall()
-    top_neg = [_bucket(r) for r in rows]
+        ).fetchall()
+        top_neg = [_bucket(r) for r in rows]
+
+        learned = set()
+        for r in svc.brain.weights_conn.execute(
+            "SELECT DISTINCT axis FROM axis_weights "
+            "WHERE positive_count + negative_count >= 10"
+        ).fetchall():
+            learned.add(r[0])
 
     from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
-    learned = set()
-    for r in svc.brain.weights_conn.execute(
-        "SELECT DISTINCT axis FROM axis_weights "
-        "WHERE positive_count + negative_count >= 10"
-    ).fetchall():
-        learned.add(r[0])
     cold_list = [a for a in BRIDGE_AXES if a not in learned]
 
     return BrainStatsResponse(

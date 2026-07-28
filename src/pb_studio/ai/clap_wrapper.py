@@ -194,7 +194,16 @@ class CLAPAnalyzer:
         if self._pytorch_fallback:
             results = self._pytorch_fallback.classify_audio(audio_path, labels)
             return sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
-        return [(labels[i % len(labels)], 1.0 / (i + 1)) for i in range(top_k)]
+        # BUGFIX M3: the ONNX classification path is not implemented. Previously
+        # this returned fabricated results (labels in file order with fake
+        # descending scores), which callers consumed as real mood/genre tags and
+        # fed into pacing/semantic matching. Return [] so failure is visible
+        # instead of silently poisoning cut selection (Iron Rule: no fake success).
+        logger.warning(
+            "CLAP classify_audio called in ONNX mode without a working classifier; "
+            "returning [] (ONNX classification is not implemented)."
+        )
+        return []
 
     def get_mood_tags(self, audio_path: Union[str, Path], top_k: int = 5) -> List[str]:
         results = self.classify_audio(audio_path, DEFAULT_MOOD_LABELS, top_k=top_k)

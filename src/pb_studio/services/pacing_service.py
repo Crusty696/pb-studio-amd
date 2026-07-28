@@ -140,8 +140,12 @@ class PacingService:
             if hasattr(current_cut, "segment_type") and current_cut.segment_type:
                 metadata["segment_type"] = current_cut.segment_type
 
+            normalized_clip_id = str(clip_id)
+            if not normalized_clip_id.startswith("clip_"):
+                normalized_clip_id = f"clip_{normalized_clip_id}"
+
             cut = CutListEntry(
-                clip_id=f"clip_{clip_id}",
+                clip_id=normalized_clip_id,
                 start_time=current_cut.time,
                 end_time=current_cut.time + duration,
                 metadata=metadata,
@@ -171,11 +175,17 @@ class PacingService:
         last.end_time = audio_duration
         return cut_list
 
-    def _finalize_cut_list(self, cut_list: list, total_duration: float) -> list:
+    def _finalize_cut_list(self, cut_list: list, target_duration: float) -> list:
         """Single exit-point post-processing for all auto-pacing return paths.
         Future cut-list invariants (e.g. min-gap normalization, last-cut stretch)
-        belong here, not at each return site."""
-        return self._stretch_last_cut_to_audio(cut_list, total_duration)
+        belong here, not at each return site.
+
+        BUGFIX H1: target_duration MUST be the same budget the cuts were generated
+        against (duration_limit or total_duration), NOT the full song length.
+        Passing total_duration here stretched the last cut of a duration_limit'd
+        (preview/short) render across the entire song -> giant runaway final clip.
+        """
+        return self._stretch_last_cut_to_audio(cut_list, target_duration)
 
     def _inject_cached_into_engine(
         self,
@@ -218,7 +228,6 @@ class PacingService:
                 pre_cached_beat_strengths.append(1.0)
         pre_cached_bpm = cached_analysis.get("bpm") or None
         if pre_cached_beats:
-            pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
             if has_real_strengths:
                 pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
@@ -301,6 +310,20 @@ class PacingService:
             self._last_used_cached_tempo = True
         else:
             self._last_used_cached_tempo = False
+
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-1): Onset/Kick/Snare/HiHat-
+        # Trigger-Kandidaten mit-injizieren. Ersetzt den toten
+        # `core.session_manager`-Import in AdvancedPacingEngine — vorher blieben
+        # diese Trigger im normalen (pre-cached) Pacing-Pfad komplett wirkungslos.
+        for _field, _attr in (
+            ("onset_times", "_pre_cached_onset_times"),
+            ("kick_times", "_pre_cached_kick_times"),
+            ("snare_times", "_pre_cached_snare_times"),
+            ("hihat_times", "_pre_cached_hihat_times"),
+        ):
+            _values = cached_analysis.get(_field)
+            if _values:
+                setattr(pacing_engine, _attr, list(_values))
 
         # Stufe 2 Audio-Heuristik: Kurven an Selector spiegeln
         cs = pacing_engine.clip_selector
@@ -682,10 +705,10 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
             cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-            return self._finalize_cut_list(cut_list, total_duration)
+            return self._finalize_cut_list(cut_list, duration_limit or total_duration)
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
@@ -695,7 +718,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
                 raise RuntimeError(
                     f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
@@ -1010,10 +1033,10 @@ class PacingService:
                         min_cut_interval=min_cut_interval,
                         on_progress=on_progress,
                     )
-                    return self._finalize_cut_list(cut_list, total_duration)
+                    return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
                 cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             else:
                 cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
@@ -1021,7 +1044,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
@@ -1032,7 +1055,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 

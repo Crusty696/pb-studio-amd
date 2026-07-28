@@ -69,8 +69,31 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-07-09 (Review-Fixes komplett + Merge nach main)
-- **Phase:** 🟢 Stabil, verifiziert, gemergt.
+- **Date:** 2026-07-28 (Neue vollständige Statusaufnahme)
+- **Phase:** 🔴 Regression grün, aber Audit/QC offen; nicht release-ready. Dirty branch `00013-system-wide-bug-hunting-audit`.
+- **Status (2026-07-28 — Vollständige App-Statusaufnahme):**
+  - Sechs disjunkte read-only Fach-Audits über alle Produktzonen; Masterbericht `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`.
+  - Verifiziert: pytest **853 passed/11 skipped**, Release-Build 0/0, Backend Health 200, 17 SQLite-DBs integer, FAISS/SQLite 0 Orphans, 12 WPF-Tabs gerendert.
+  - Live-Lücken: MODELLE-Endpunkte hängen bei offline Ollama; nur Embedding-Modell geladen; Chat/Vision-LLM nicht nutzbar; H.264/HEVC AMF PASS, AV1 AMF FAIL.
+  - Befunde: **2 CRITICAL, 26 HIGH, 25 MEDIUM, 7 LOW**. Kernthemen: CPU-CLAP-Iron-Verstoß, unbestätigte Chat-Mutationen, Long-Mix-OOM, Brain-Deep-Hook, Projekt-/Render-Datenrisiken, WPF-Projektwechsel.
+  - SDD: 227/227 Tasks markiert, aber `.completed` und `.qc-passed` fehlen bewusst; kontinuierliches Audit offen.
+- **Status (2026-07-10, Teil 3 — Onset-Caching-Fix nach Sweep):**
+  - **2 Agent-Teams gebaut** (`dev-*`/`analyst-*` x 12 WPF-Tab-Domains = 24 Subagents + 12 Skills), siehe `docs/agent-teams/README.md`.
+  - **Voller 24-Agent-Sweep** über alle 12 Domains, Fokus Pacing-Datennutzung. Kernfund: `advanced_pacing_engine.py:1022` importierte totes `core.session_manager`-Modul (existiert nicht im Repo), ImportError von `except Exception: pass` verschluckt → Onset/Kick/Snare/HiHat/Energy-Trigger im normalen (pre-cached) Pacing-Pfad wirkungslos. Volle priorisierte Findings-Liste (14 HIGH + 12 MEDIUM + 4 LOW) in `docs/agent-teams/README.md` Abschnitt "Sweep 2026-07-10".
+  - **Selbstkorrektur:** eigener `CrossModalProjector`-Fix von Teil-1 dieser Session (768→1152) war falsch (SigLIP-Modell-Verwechslung `siglip_wrapper.py` vs. echtem Brain-Feeder `video_embedder.py`). Zurückgesetzt auf 768.
+  - **Onset-Caching-Fix umgesetzt** (User-Entscheid: größere Lösung statt Workaround): Audio-Pipeline (`audio_router.py`) berechnet jetzt Onset/Kick/Snare/HiHat-Trigger-Kandidaten einmalig beim `/audio/analyze`-Lauf (gleiche librosa-Parameter wie der Live-Fallback), persistiert über `app_state.py` (JSON-Blob, kein DB-Schema-Migration nötig), injiziert via `pacing_service._inject_cached_into_engine` in die Pacing-Engine. `advanced_pacing_engine.py`: toter SessionManager-Import entfernt, Audio-Load-Gate korrigiert (lädt Audio nur noch, wenn für eine AKTIVE Trigger-Gewichtung wirklich kein Cache existiert — sonst RAM-Optimierung für lange DJ-Mixes erhalten), `_build_triggers_from_cache` um Kick/Snare/HiHat erweitert. Neue Schema-Felder in `AudioAnalysisResult` (`onset_times`/`kick_times`/`snare_times`/`hihat_times`), C#-DTOs regeneriert.
+  - **Verifiziert:** pytest **749 passed**/12 skipped (voller Lauf); Release-Build 0 Fehler; Backend-Live-Smoke sauber (kein Import-/Wiring-Fehler); openapi-Snapshot aktualisiert + Drift-Test grün.
+  - **Nicht verifiziert (offen):** kein Live-Test mit echter langer DJ-Mix-Datei, ob Onset/Kick/Snare/HiHat-Regler jetzt tatsächlich sichtbar unterschiedliche Cut-Listen erzeugen (nur Unit-Test-Ebene + Code-Pfad-Verifikation).
+- **Status (2026-07-10, Teil 2 — KI-Model-Wiring-Audit):**
+  - **Chirurgischer KI-Model-Audit (Vision/Audio-Analyse/LLM/Brain)** via `full-stack-auditor`: 6 Findings, alle gefixt und verifiziert.
+    1. **config.json lmstudio_base_url war FALSCH** (`12341` statt echtem `1234` — Live-`curl` bestätigt). Gefixt.
+    2. **Model-Registry-Preferenzen** (`model_registry.py` DEFAULT_TASK_PREFERENCES + config.json task_preferences) für chat/chat_general/chat_tool_use/brain_explanation zeigten auf nie-installierte Fantasie-Fine-Tunes — live gegen `GET /v1/models` neu abgeglichen, echte IDs eingesetzt (`google/gemma-4-e4b`, `qwen/qwen3-coder-30b`, `qwen/qwen3-4b-thinking-2507`, `distil-home-assistant-functiongemma`, `gemma-4-12b-it-uncensored@q4_k_s`). Wichtig: `qwen/qwen3.5-9b`/`qwen/qwen3.6-27b` waren entgegen erstem Audit-Verdacht ECHT installiert (alter Log war stale). `task_overrides` (zeigte auf nie-installiertes `gemma4:12b`) geleert.
+    3. **Moondream-ONNX-Fallback war dead code** (ONNX-Dateien fehlen, nur `.pt`-Checkpoint vorhanden) UND meldete fälschlich "active"/Erfolg per SSE trotz 0 Tags. Fix: `onnx_models_available()`-Cheap-Check vorgeschaltet (`moondream.py`), `video_router.py` published jetzt ehrlich `unavailable`/`failed` statt Fake-Erfolg. Kein CPU-Fallback eingebaut (IRON RULE 1 respektiert).
+    4. **CrossModalProjector Dimensions-Bug**: `DEFAULT_VIDEO_DIM=768` vs. real SigLIP-SO400M `1152` — echte Embeddings wurden bei jeder Brain-Projektion stillschweigend um 384 Dims abgeschnitten (`_fit_to_size`). Fix: Default auf 1152 korrigiert (`cross_modal_projector.py`), kein persistiertes Weight-File betroffen (verifiziert: keins vorhanden).
+    5. **llm_status-SSE-Coverage** war nur für Video-Frame-Tagging verdrahtet. Publisher-Pattern (analog `lmstudio_vision_wrapper.py`) jetzt auch in `chat_agent.py` (`process_message`) und `brain/llm_narrator.py` (`_async_generate_explanation`) verdrahtet + in `backend/main.py` Startup injiziert.
+    6. Zwei Regressions-Tests durch Preferenz-Änderung angepasst (`test_model_registry.py::test_recommendation_reports_fallback_index` testete versehentlich eine der erfundenen IDs; `test_llm_narrator.py` brauchte `google/gemma-4-e4b` weiterhin im Fallback-Pfad).
+  - **Verifiziert:** pytest **749 passed**/11 skipped (voller Lauf); Release-Build 0 Fehler/0 Warnungen; `openapi.snapshot.json`-Drift-Test grün nach Build (war reiner mtime-Phantom aus EOL-Renormalisierung, kein Content-Diff).
+  - **Nicht verifiziert (offen):** Live-Smoke der WPF-Statusleiste für Chat/Brain-Explain-Pfad (neue `llm_status`-Publishes noch nicht am laufenden Backend beobachtet, nur Code-Pfad + Unit-Tests).
 - **Status (2026-07-09):**
   - **LLM-Status-Widget (Antigravity-Arbeit) fertiggestellt:** SSE `llm_status` (thread-safe via `publish_event_threadsafe`) → WPF-Statusleiste. Fertigstellungs-Fix: Event fehlte im `events_router`-Progress-Filter.
   - **4-Experten-Review** über alle Commits 2026-07-08/09: 4 HIGH / 8 MEDIUM / ~13 LOW — **alle gefixt** (Plan: `docs/superpowers/plans/2026-07-09-review-fixes-commits-0708-0709.md`). Kernfixes: Cross-Thread-SSE-Race, AutomationPeer-No-Op (UIA/pywinauto), WeightStore-Close-Lock, Smoke-Script-False-FAIL, anchor_manager-Parallel-Save, Selektions-Erhalt Director/VideoLibrary, echte LM-Studio-Modell-Ids (`qwen/qwen3.5-9b`, `qwen/qwen3.6-27b` — erfundene Antigravity-Ids ersetzt).
@@ -78,7 +101,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
 - **Next Task:**
-  - Kein offener Pflicht-Task. Kandidaten: AP6-Backlog, Video-Grid-Virtualisierung (User-Entscheid), End-to-End-QA-Loop.
+  - P0 aus `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`: DirectML-Verstoß C-01, Chat-Mutationsgrenze C-02, Projektordner-Overwrite H-20 und Render-Output-Verlust H-23 spezifizieren und sequenziell verifizieren. Danach Long-Mix-/Brain-/VRAM-P1. Formellen Security-Scan nach Codex-Security-Setup fortsetzen.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 

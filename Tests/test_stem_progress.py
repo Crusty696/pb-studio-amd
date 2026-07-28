@@ -16,8 +16,8 @@ def test_stem_separator_calls_on_progress(tmp_path):
     # Bypass __init__ so we don't trigger the real audio-separator/onnx loader.
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False  # skip the SessionOptions monkeypatch
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
@@ -49,8 +49,8 @@ def test_stem_separator_works_without_callback(tmp_path):
 
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
@@ -91,8 +91,8 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
 
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
 
     test_file = tmp_path / "test.wav"
     test_file.touch()

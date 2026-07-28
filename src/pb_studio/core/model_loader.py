@@ -199,17 +199,15 @@ class ModelLoader:
         return opts
 
     def _get_providers(self) -> list:
-        """Get execution providers with DirectML priority."""
+        """Return the mandatory DirectML execution provider."""
         available = ort.get_available_providers()
-        providers = []
+        if "DmlExecutionProvider" not in available:
+            raise RuntimeError(
+                "DmlExecutionProvider is unavailable; CPU ONNX fallback is disabled"
+            )
 
-        if "DmlExecutionProvider" in available:
-            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-            providers.append(("DmlExecutionProvider", {"device_id": device_id}))
-
-        providers.append("CPUExecutionProvider")
-
-        return providers
+        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
+        return [("DmlExecutionProvider", {"device_id": device_id})]
 
     def can_load(self, model_id: str) -> bool:
         """

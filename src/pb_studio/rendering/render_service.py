@@ -60,20 +60,26 @@ def _get_clip_path_str(clip: dict) -> Optional[str]:
 class RenderService:
     """Timeline-Rendering Service mit AMD AMF Hardware-Encoding."""
 
+    _AMF_ENCODERS = frozenset({"h264_amf", "hevc_amf", "av1_amf"})
     _working_encoder: Optional[str] = None
+    _working_encoder_checked_at: Optional[float] = None
+    # Audit-Fix 2026-07-10 (Sweep-Finding EXPORT-8): war ein reiner Prozess-
+    # Lifetime-Cache ohne jede Invalidierung — Treiber-Update/GPU-Handoff
+    # waehrend der Backend-Session blieb bis zum Neustart unsichtbar.
+    _ENCODER_CACHE_TTL_SECONDS = 600.0
     _encoder_lock: threading.Lock = threading.Lock()
 
     def __init__(self, output_dir: str = "exports", encoder_override: Optional[str] = None):
+        if encoder_override is not None and encoder_override not in self._AMF_ENCODERS:
+            raise ValueError(
+                f"Encoder {encoder_override!r} is prohibited; "
+                "only AMD AMF hardware encoders are allowed"
+            )
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True, parents=True)
         self.temp_dir = self.output_dir / ".temp_render"
         self.temp_dir.mkdir(exist_ok=True)
         self._encoder_override = encoder_override
-
-        with RenderService._encoder_lock:
-            if RenderService._working_encoder is None:
-                RenderService._working_encoder = self._detect_best_encoder()
-                logger.info(f"Encoder erkannt und gecacht: {RenderService._working_encoder}")
 
     def _detect_best_encoder(self) -> str:
         """Testet verfügbare AMD-Encoder und gibt den besten zurück."""
@@ -81,15 +87,12 @@ class RenderService:
             ("hevc_amf", "AMD GPU H.265 (beste Kompression)"),
             ("av1_amf", "AMD GPU AV1 (modernste Kompression)"),
             ("h264_amf", "AMD GPU H.264"),
-            ("h264_mf", "Windows Media Foundation"),
-            ("libx265", "CPU H.265 (langsam)"),
-            ("libx264", "CPU H.264 (langsam)"),
         ]
 
         for enc_name, desc in encoders:
             test_cmd = [
                 _get_ffmpeg_path(), "-y",
-                "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.1",
+                "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.5",
                 "-c:v", enc_name,
                 "-f", "null", "-"
             ]
@@ -106,8 +109,28 @@ class RenderService:
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 continue
 
-        logger.warning("Kein GPU-Encoder verfügbar, verwende libx264")
-        return "libx264"
+        raise RuntimeError(
+            "No functional AMD AMF encoder available; software encoding is disabled"
+        )
+
+    def _active_encoder(self) -> str:
+        if self._encoder_override is not None:
+            return self._encoder_override
+        with RenderService._encoder_lock:
+            cache_stale = (
+                RenderService._working_encoder is None
+                or RenderService._working_encoder_checked_at is None
+                or (time.monotonic() - RenderService._working_encoder_checked_at)
+                >= RenderService._ENCODER_CACHE_TTL_SECONDS
+            )
+            if cache_stale:
+                RenderService._working_encoder = self._detect_best_encoder()
+                RenderService._working_encoder_checked_at = time.monotonic()
+                logger.info(f"Encoder erkannt und gecacht: {RenderService._working_encoder}")
+            encoder = RenderService._working_encoder
+        if encoder not in self._AMF_ENCODERS:
+            raise RuntimeError("No valid AMD AMF encoder is active")
+        return encoder
 
     def render_timeline(
         self,
@@ -223,8 +246,8 @@ class RenderService:
         total = len(timeline)
 
         # Ermittle Ziel-Codec basierend auf dem aktiven Encoder
-        primary_enc = self._encoder_override or self.__class__._working_encoder or "libx264"
-        if "hevc" in primary_enc or "x265" in primary_enc:
+        primary_enc = self._active_encoder()
+        if "hevc" in primary_enc:
             target_codec = "hevc"
         elif "av1" in primary_enc:
             target_codec = "av1"
@@ -340,15 +363,11 @@ class RenderService:
     def _encoder_args(encoder: str) -> list[str]:
         if encoder == "hevc_amf":
             return ["-c:v", "hevc_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
-        elif encoder == "h264_amf":
+        if encoder == "h264_amf":
             return ["-c:v", "h264_amf", "-rc", "cbr", "-quality", "balanced", "-b:v", "12M"]
         if encoder == "av1_amf":
             return ["-c:v", "av1_amf", "-quality", "balanced", "-b:v", "12M"]
-        if encoder == "h264_mf":
-            return ["-c:v", "h264_mf", "-b:v", "10M"]
-        if encoder == "libx265":
-            return ["-c:v", "libx265", "-preset", "fast", "-crf", "24", "-tag:v", "hvc1"]
-        return ["-c:v", "libx264", "-preset", "fast", "-crf", "18"]
+        raise ValueError(f"Encoder {encoder!r} is not an allowed AMD AMF encoder")
 
     def _transcode_clip(
         self,
@@ -361,18 +380,9 @@ class RenderService:
     ):
         # BUG-026 Fix: fps als float formatiert (z.B. 23.976 → "23.976")
         vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps:.3f}"
-        primary = self._encoder_override or self.__class__._working_encoder or "libx264"
+        primary = self._active_encoder()
 
-        # T4.1-Fix (2026-05-23): Codec-spezifische Fallback-Kette.
-        # HEVC-Encoder (hevc_amf) duerfen NUR auf libx265 (CPU HEVC) fallen,
-        # NICHT auf H.264 — das verursacht Codec-Konflikte beim Concat-Demuxer.
-        # H.264-Encoder behalten ihre eigene H.264-Chain.
-        if primary == "hevc_amf":
-            chain = [primary, "libx265"]
-        elif primary in ("h264_amf", "h264_mf"):
-            chain = [primary, "h264_mf", "libx264"]
-        else:
-            chain = [primary]
+        chain = [primary]
 
         last_error: Optional[Exception] = None
         for attempt_idx, encoder in enumerate(chain):
@@ -415,14 +425,6 @@ class RenderService:
                     raise subprocess.CalledProcessError(process.returncode, cmd, stderr=stderr_text)
                 if not output_path.exists() or output_path.stat().st_size == 0:
                     raise RuntimeError(f"Encoder {encoder} hat leere Datei erstellt")
-                # Erfolg — bei Fallback-Attempt cachen wir den funktionierenden
-                # Encoder, damit Folge-Clips nicht erneut den ersten probieren.
-                if attempt_idx > 0:
-                    logger.warning(
-                        f"Encoder-Fallback erfolgreich: {primary} → {encoder} "
-                        f"(Clip: {Path(input_path).name})"
-                    )
-                    RenderService._working_encoder = encoder
                 return
             except RenderCancelledError:
                 try:
@@ -507,12 +509,8 @@ class RenderService:
             cmd.extend(["-c:v", "h264_amf", "-rc", "cbr", "-quality", preset, "-b:v", bitrate])
         elif encoder == "av1_amf":
             cmd.extend(["-c:v", "av1_amf", "-quality", preset, "-b:v", bitrate])
-        elif encoder == "h264_mf":
-            cmd.extend(["-c:v", "h264_mf", "-b:v", "10M"])
-        elif encoder == "libx265":
-            cmd.extend(["-c:v", "libx265", "-preset", "fast", "-crf", "22", "-tag:v", "hvc1"])
         else:
-            cmd.extend(["-c:v", "libx264", "-preset", "fast", "-crf", "18"])
+            raise ValueError(f"Encoder {encoder!r} is not an allowed AMD AMF encoder")
 
         cmd.extend([
             "-c:a", "aac", "-b:a", "320k",
@@ -540,7 +538,7 @@ class RenderService:
         render_start_time: Optional[float] = None,
         audio_dur: Optional[float] = None,
     ) -> dict[str, Any]:
-        """Finaler Render mit Echtzeit-Progress und Encoder-Fallback."""
+        """Finaler Render mit Echtzeit-Progress über AMD AMF."""
         # BUG-070 FIX: Guard gegen Path(None)
         if audio_path and not Path(audio_path).exists():
             raise FileNotFoundError(f"Audio-Datei nicht gefunden: {audio_path!r}")
@@ -548,36 +546,13 @@ class RenderService:
         if audio_dur is None:
             audio_dur = self._get_audio_duration(audio_path)
 
-        primary = self._encoder_override or self.__class__._working_encoder or "libx264"
+        primary = self._active_encoder()
 
-        # T4.1 (2026-05-23): Codec-spezifische Fallback-Kette fuer finalen Render.
-        # HEVC bleibt bei HEVC (hevc_amf → libx265), NICHT auf H.264 fallen
-        # — das verursacht Codec-Konflikte beim Concat-Demuxer.
-        if primary == "hevc_amf":
-            chain = [primary, "libx265"]
-        elif primary in ("h264_amf", "h264_mf"):
-            chain = [primary, "h264_mf", "libx264"]
-        else:
-            chain = [primary]
+        chain = [primary]
 
         last_error: Optional[Exception] = None
         for attempt_idx, encoder in enumerate(chain):
             logger.info(f"Final Render Encoder: {encoder} (attempt {attempt_idx + 1}/{len(chain)})")
-
-            # AP2.3 (Audit 2026-06-10): Encoder-Fallback war nur ein Log-Warning —
-            # ein stiller CPU-Encode (10x langsamer) blieb für den User unsichtbar.
-            # Jetzt via progress_callback in die Render-Progress-Kette (SSE) gemeldet.
-            if attempt_idx > 0 and progress_callback:
-                try:
-                    self._emit_progress(
-                        progress_callback,
-                        f"⚠ Encoder-Fallback aktiv: {primary} → {encoder}"
-                        + (" (CPU-Encoding, deutlich langsamer)" if encoder.startswith("libx") else ""),
-                        0.0,
-                        {"encoder_fallback": True, "encoder": encoder, "primary": primary},
-                    )
-                except Exception:
-                    pass
 
             cmd, effective_duration = self._build_render_cmd(
                 list_path, audio_path, output_path,
@@ -603,12 +578,6 @@ class RenderService:
                     cancel_callback,
                     render_start_time=render_start_time,
                 )
-                # Erfolg — bei Fallback-Attempt cachen
-                if attempt_idx > 0:
-                    logger.warning(
-                        f"Render-Encoder-Fallback erfolgreich: {primary} → {encoder}"
-                    )
-                    RenderService._working_encoder = encoder
                 return result
             except RenderCancelledError:
                 try:

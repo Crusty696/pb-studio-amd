@@ -80,9 +80,9 @@ def test_build_args_prefixes_with_codec_flag():
 
 
 def test_build_args_with_empty_params():
-    cfg = EncoderConfig(encoder="libx264", params=[], is_hardware=False, description="x264")
+    cfg = EncoderConfig(encoder="h264_amf", params=[], is_hardware=True, description="AMF")
     args = build_ffmpeg_encode_args(cfg)
-    assert args == ["-c:v", "libx264"]
+    assert args == ["-c:v", "h264_amf"]
 
 
 # ---------- reset_availability_cache ----------
@@ -112,18 +112,18 @@ def test_get_encoder_info_returns_dict_with_required_keys(monkeypatch):
     assert "encoders" in info
     assert info["encoders"]["h264"] == "h264_amf"
     assert info["encoders"]["hevc"] == "hevc_amf"
-    assert info["encoders"]["av1"] == "libsvtav1"  # av1_amf=False -> fallback
+    assert info["encoders"]["av1"] is None
 
 
-def test_get_encoder_info_no_amf_uses_libx264_fallback(monkeypatch):
+def test_get_encoder_info_no_amf_reports_no_encoder(monkeypatch):
     monkeypatch.setattr(encoder_utils, "check_ffmpeg_available", lambda: True)
     monkeypatch.setattr(encoder_utils, "check_amf_available", lambda: False)
     monkeypatch.setattr(encoder_utils, "check_av1_amf_available", lambda: False)
 
     info = get_encoder_info()
-    assert info["encoders"]["h264"] == "libx264"
-    assert info["encoders"]["hevc"] == "libx265"
-    assert info["encoders"]["av1"] == "libsvtav1"
+    assert info["encoders"]["h264"] is None
+    assert info["encoders"]["hevc"] is None
+    assert info["encoders"]["av1"] is None
 
 
 # ---------- get_preview_encoder ----------
@@ -137,12 +137,10 @@ def test_preview_encoder_uses_amf_when_available(monkeypatch):
     assert "vbr_latency" in cfg.params
 
 
-def test_preview_encoder_falls_back_to_libx264(monkeypatch):
+def test_preview_encoder_fails_when_amf_unavailable(monkeypatch):
     monkeypatch.setattr(encoder_utils, "check_amf_available", lambda: False)
-    cfg = get_preview_encoder()
-    assert cfg.encoder == "libx264"
-    assert cfg.is_hardware is False
-    assert "ultrafast" in cfg.params
+    with pytest.raises(RuntimeError, match="AMF"):
+        get_preview_encoder()
 
 
 # ---------- get_export_encoder (delegates to get_encoder_config) ----------
@@ -152,4 +150,28 @@ def test_export_encoder_default_codec_h264(monkeypatch):
     monkeypatch.setattr(encoder_utils, "check_amf_available", lambda: True)
     cfg = get_export_encoder()
     # Either h264_amf (AMF) or libx264 (fallback) — both are valid h264 encoders
-    assert cfg.encoder in ("h264_amf", "libx264")
+    assert cfg.encoder == "h264_amf"
+    assert cfg.is_hardware is True
+
+
+def test_encoder_config_fails_when_amf_unavailable(monkeypatch):
+    monkeypatch.setattr(encoder_utils, "check_amf_available", lambda: False)
+    with pytest.raises(RuntimeError, match="AMF"):
+        encoder_utils.get_encoder_config("h264")
+
+
+def test_av1_config_fails_when_av1_amf_unavailable(monkeypatch):
+    monkeypatch.setattr(encoder_utils, "check_amf_available", lambda: True)
+    monkeypatch.setattr(encoder_utils, "check_av1_amf_available", lambda: False)
+    with pytest.raises(RuntimeError, match="AV1 AMF"):
+        encoder_utils.get_encoder_config("av1")
+
+
+def test_render_encoder_schema_is_amf_only():
+    from backend.schemas.render_schemas import RenderEncoder
+
+    assert {encoder.value for encoder in RenderEncoder} == {
+        "h264_amf",
+        "hevc_amf",
+        "av1_amf",
+    }

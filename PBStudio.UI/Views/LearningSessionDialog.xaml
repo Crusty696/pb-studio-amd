@@ -85,7 +85,7 @@
 
                     <Separator Margin="0,12,0,8"/>
 
-                    <Button Content="▶ Play / Pause"
+                    <Button Content="{Binding PlayPauseLabel}"
                             Command="{Binding PlayPauseCommand}"
                             Padding="12,4" Margin="0,0,0,4"/>
                     <Button Content="↻ Restart"

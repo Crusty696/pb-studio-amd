@@ -69,6 +69,12 @@ class AudioAnalysisResult(BaseModel):
     spectral_data: Optional["SpectralData"] = None
     subtrack_segments: list[SubtrackSegment] = []
     tempo_curve: list[float] = []
+    # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten fuer den Pacing-Cache-Pfad
+    # (ersetzt den toten core.session_manager-Import in advanced_pacing_engine.py).
+    onset_times: list[float] = []
+    kick_times: list[float] = []
+    snare_times: list[float] = []
+    hihat_times: list[float] = []
 
 
 class WaveformRequest(BaseModel):

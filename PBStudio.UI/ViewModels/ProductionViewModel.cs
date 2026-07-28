@@ -40,7 +40,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
     // L-N6: Verfuegbare Encoder. "auto" -> null im Request (Backend default-Logik).
-    public List<string> AvailableEncoders { get; } = ["auto", "h264_amf", "hevc_amf", "av1_amf", "libx264"];
+    public List<string> AvailableEncoders { get; } = ["auto", "h264_amf", "hevc_amf", "av1_amf"];
 
     public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects, IDialogService dialogService)
     {

@@ -110,9 +110,31 @@ class VideoEmbedder:
                 try:
                     from pb_studio.core.vram_budget_manager import get_vram_manager
                     mgr = get_vram_manager()
+                    # BUGFIX H6: previously only reserve() was called — never
+                    # commit()/release() and no unload path. The ~1.1GB stayed in
+                    # the "reserved-but-never-committed" state forever, mis-accounting
+                    # free VRAM and making SigLIP-2 impossible to evict. Mirror the
+                    # RAFT pattern: register an unload_callback, then reserve+commit.
+                    budget = mgr.get_model("brain_siglip2")
+                    if budget is not None:
+                        budget.unload_callback = self.unload
                     mgr.reserve("brain_siglip2", force=False)
+                    mgr.commit("brain_siglip2")
                 except Exception as ve:
                     logger.warning("VRAM-Manager-Registrierung fehlgeschlagen (unkritisch): %s", ve)
+
+    def unload(self) -> None:
+        """BUGFIX H6: release SigLIP-2 VRAM and drop the model so the budget
+        manager can reclaim it (wired as the budget's unload_callback)."""
+        self._model = None
+        try:
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+            get_vram_manager().release("brain_siglip2")
+        except Exception as ve:
+            logger.warning("VRAM-Manager-Freigabe fuer SigLIP-2 fehlgeschlagen: %s", ve)
+        # DirectML gibt VRAM erst bei GC frei
+        import gc
+        gc.collect()
 
     def embed_scenes(
         self,

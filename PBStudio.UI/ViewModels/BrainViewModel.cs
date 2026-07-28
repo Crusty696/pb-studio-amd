@@ -1,10 +1,12 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -21,6 +23,9 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
     private bool _disposed;
+    private int _statsLoadVersion;
+    private int _learningLoadVersion;
+    private int _loadingVersion;
 
     [ObservableProperty] private int _totalClicks;
     [ObservableProperty] private int _coldStartAxes = 17;
@@ -41,15 +46,56 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         _projectService = projectService;
         _timelineState = timelineState;
         _ = RefreshStatsAsync();
+
+        // Audit-Fix 2026-07-10 (Sweep-Finding HIGH-11): BrainViewModel abonnierte
+        // weder ProjectOpenedMessage noch ProjectClosedMessage, obwohl Backend den
+        // Brain-State pro Projekt bindet/entbindet — Tab zeigte Confidence/
+        // Suggestions vom vorherigen Projekt bis zum manuellen Reload. Muster
+        // uebernommen von TimelineViewModel.
+        // AUDIT-FIX C#-1: Messages koennen vom Background-Thread gesendet werden (ProjectService).
+        // RefreshStatsAsync/ResetForProjectClose mutieren an die UI gebundene ObservableCollections
+        // → auf den Dispatcher marshallen, sonst NotSupportedException (Cross-Thread-Collection).
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(() => _ = RefreshStatsAsync()));
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetForProjectClose));
+    }
+
+    /// <summary>Setzt alle projektgebundenen Anzeigen auf Leerzustand zurueck (Audit-Fix 2026-07-10).</summary>
+    private void ResetForProjectClose()
+    {
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
+        IsLoading = false;
+        TotalClicks = 0;
+        ColdStartAxes = 17;
+        LearnedAxes = 0;
+        TopPositive.Clear();
+        TopNegative.Clear();
+        ColdStartAxesList.Clear();
+        LearningSessionCuts.Clear();
+        SelectedCutId = 0;
+        IsResetPending = false;
+        _pendingResetToken = null;
+        Status = "Kein Projekt geladen.";
     }
 
     [RelayCommand]
     public async Task RefreshStatsAsync()
     {
+        if (_disposed)
+            return;
+
+        var statsVersion = Interlocked.Increment(ref _statsLoadVersion);
+        var loadVersion = Interlocked.Increment(ref _loadingVersion);
         IsLoading = true;
         try
         {
             var stats = await _api.BrainStatsAsync();
+            if (_disposed || statsVersion != Volatile.Read(ref _statsLoadVersion))
+                return;
+
             if (stats == null)
             {
                 Status = "Hirn-Stats nicht verfügbar.";
@@ -71,7 +117,8 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (!_disposed && loadVersion == Volatile.Read(ref _loadingVersion))
+                IsLoading = false;
         }
     }
 
@@ -107,10 +154,18 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task LoadLearningSessionAsync()
     {
+        if (_disposed)
+            return;
+
+        var learningVersion = Interlocked.Increment(ref _learningLoadVersion);
+        var loadVersion = Interlocked.Increment(ref _loadingVersion);
         IsLoading = true;
         try
         {
             var resp = await _api.BrainLearningSessionAsync();
+            if (_disposed || learningVersion != Volatile.Read(ref _learningLoadVersion))
+                return;
+
             LearningSessionCuts.Clear();
             if (resp?.Cuts != null)
             {
@@ -120,7 +175,8 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (!_disposed && loadVersion == Volatile.Read(ref _loadingVersion))
+                IsLoading = false;
         }
     }
 
@@ -210,6 +266,9 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
         WeakReferenceMessenger.Default.UnregisterAll(this);
         GC.SuppressFinalize(this);
     }

@@ -31,6 +31,34 @@ from .tool_registry import ToolRegistry, build_default_registry, _get_backend_ba
 
 logger = logging.getLogger(__name__)
 
+# Audit-Fix (2026-07-10): gleiches injizierbares Publisher-Pattern wie
+# lmstudio_vision_wrapper.py, damit die WPF-Statusleiste auch waehrend
+# Chat-Turns (nicht nur Video-Frame-Tagging) llm_status-Events bekommt.
+from typing import Callable
+
+_status_publisher: Callable[[str, dict[str, Any]], None] | None = None
+
+
+def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> None:
+    global _status_publisher
+    _status_publisher = fn
+
+
+def _publish_status(model: str, status: str, percent: float) -> None:
+    """Best-effort llm_status-Event. Darf NIE den Chat-Turn abbrechen."""
+    fn = _status_publisher
+    if fn is None:
+        return
+    try:
+        fn("llm_status", {
+            "model": model,
+            "provider": "LM Studio",
+            "status": status,
+            "percent": percent,
+        })
+    except Exception as exc:  # noqa: BLE001 - Status ist rein kosmetisch
+        logger.debug("llm_status publish fehlgeschlagen: %s", exc)
+
 
 DEFAULT_SYSTEM_PROMPT = (
     "Du bist der KI-Assistent von PB Studio - einer Desktop-App fuer "
@@ -375,11 +403,13 @@ class ChatAgent:
             else:
                 model, reason = await self._pick_chat_model(mode)
         except NoSuitableModelError as exc:
+            _publish_status("none", "failed", 0.0)
             yield ChatEvent("error", {"message": str(exc), "stage": "model_selection"})
             yield ChatEvent("done", {"reason": "no_model"})
             return
 
         yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+        _publish_status(model, "loading", 50.0)
 
         messages = [{"role": "system", "content": self._system_prompt}]
         if history:
@@ -397,270 +427,303 @@ class ChatAgent:
         # Bei Model-Fehlern wird das naechste Modell probiert statt sofort Provider-Fallback.
         _failed_models: set[str] = set()
         MAX_MODEL_RETRIES = 3
+        # Audit-Fix 2026-07-10 (Sweep-Finding CHAT-7): 8 von 9 Fehler-Pfaden unten
+        # (return nach yield ChatEvent("done",...)) publizierten nie einen
+        # finalen llm_status — Widget blieb bei "loading" haengen. Statt jeden
+        # der 8 Pfade einzeln zu patchen: try/finally garantiert GENAU EINEN
+        # finalen Status-Publish, egal welcher Pfad greift oder ob spaeter ein
+        # neuer Pfad hinzukommt. finally darf NICHT yielden (Generator-Semantik
+        # bei aclose()) — nur der reine _publish_status()-Funktionsaufruf.
+        _status_final_published = False
 
-        for turn in range(self._max_tool_turns):
-            try:
-                response = await self._llm.chat(
-                    model=model,
-                    messages=messages,
-                    tools=tools_schema,
-                    options={"temperature": 0.2},
-                )
-            except LMStudioError as exc:
-                msg_lower = str(exc).lower()
+        try:
+            for turn in range(self._max_tool_turns):
+                try:
+                    response = await self._llm.chat(
+                        model=model,
+                        messages=messages,
+                        tools=tools_schema,
+                        options={"temperature": 0.2},
+                    )
+                except LMStudioError as exc:
+                    msg_lower = str(exc).lower()
 
-                # Fall 1: Modell unterstuetzt keine Tools → Retry ohne Tools
-                if "tools" in msg_lower or "function" in msg_lower:
-                    logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
-                    try:
-                        response = await self._llm.chat(
-                            model=model,
-                            messages=messages,
-                            options={"temperature": 0.2},
-                        )
-                    except LMStudioError as exc2:
-                        yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
-                        yield ChatEvent("done", {"reason": "llm_error"})
-                        return
-
-                # Fall 1b: Read-Timeout → Modell ist zu langsam, NICHT "nicht geladen".
-                # Auf andere (evtl. ungeladene) Modelle zu wechseln macht es schlimmer,
-                # daher ehrlich melden und abbrechen statt durch alle Modelle zu churnen.
-                elif ("timeout" in msg_lower) and not isinstance(exc, LMStudioConnectionError):
-                    logger.warning("Read-Timeout bei Modell %r (Turn %s): %s", model, turn, exc)
-                    yield ChatEvent("error", {
-                        "message": (
-                            f"Modell '{model}' hat nicht rechtzeitig geantwortet (Timeout). "
-                            f"Das Modell ist geladen, braucht aber laenger als erlaubt — "
-                            f"evtl. ein langsames Reasoning-Modell oder gerade beim Laden. "
-                            f"Bitte erneut versuchen oder ein schnelleres Modell waehlen."
-                        ),
-                        "stage": "chat"
-                    })
-                    yield ChatEvent("done", {"reason": "timeout"})
-                    return
-
-                # Fall 2: Connection-Error → Provider-Fallback
-                elif isinstance(exc, LMStudioConnectionError):
-                    logger.warning("Connection-Fehler im Chat-Turn %s: %s. Versuche Provider-Fallback...", turn, exc)
-                    from .llm_provider import get_base_url
-                    ollama_url = get_base_url("ollama").rstrip("/")
-                    current_base = self._llm.base_url.rstrip("/") if self._llm else ""
-                    other_prov = "lmstudio" if current_base == ollama_url else "ollama"
-                    yield ChatEvent("error", {
-                        "message": f"Verbindung zu {self._llm.base_url if self._llm else 'LLM'} verloren. Wechsle automatisch auf {other_prov}...",
-                        "stage": "fallback"
-                    })
-
-                    if await self._attempt_fallback():
-                        _failed_models.clear()  # Neuer Provider → alte Fehler zuruecksetzen
+                    # Fall 1: Modell unterstuetzt keine Tools → Retry ohne Tools
+                    if "tools" in msg_lower or "function" in msg_lower:
+                        logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
                         try:
-                            if model_override:
-                                model = model_override
-                                reason = "explicit override (fallback)"
-                            else:
-                                model, reason = await self._pick_chat_model(mode)
-
-                            yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
-
                             response = await self._llm.chat(
                                 model=model,
                                 messages=messages,
-                                tools=tools_schema,
                                 options={"temperature": 0.2},
                             )
-                        except Exception as exc_fallback:
-                            yield ChatEvent("error", {
-                                "message": f"Fehler bei Chat nach Fallback auf {other_prov}: {exc_fallback}",
-                                "stage": "chat_fallback"
-                            })
-                            yield ChatEvent("done", {"reason": "llm_error"})
-                            return
-                    else:
-                        error_msg = (
-                            f"Verbindung zum lokalen KI-Dienst (LM Studio / Ollama) verloren.\n\n"
-                            f"Mögliche Ursachen & Lösungen:\n"
-                            f"1. LM Studio oder Ollama läuft nicht. Bitte starten Sie Ihre lokale KI-Anwendung.\n"
-                            f"2. In LM Studio ist kein Modell geladen. Bitte laden Sie ein Chat-Modell (z. B. 'gemma-4-e4b' oder 'moondream').\n"
-                            f"3. Falls Sie Ollama nutzen, stellen Sie sicher, dass mindestens ein Modell installiert ist (z. B. via 'ollama run gemma:2b').\n\n"
-                            f"Originaler Fehler: {exc}"
-                        )
-                        yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
-                        yield ChatEvent("done", {"reason": "llm_error"})
-                        return
-
-                # Fall 3: Model-Fehler (z.B. nicht geladen) → naechstes Modell versuchen
-                else:
-                    _failed_models.add(model)
-                    logger.warning(
-                        "Modell %r fehlgeschlagen (Turn %s): %s. Versuche naechstes Modell... (fehlgeschlagen: %s)",
-                        model, turn, exc, _failed_models
-                    )
-
-                    if len(_failed_models) >= MAX_MODEL_RETRIES:
-                        # Zu viele Modell-Fehler → Provider-Fallback versuchen
-                        logger.warning(
-                            "%d Modelle fehlgeschlagen auf diesem Provider. Versuche Provider-Fallback...",
-                            len(_failed_models)
-                        )
-                        from .llm_provider import get_base_url
-                        ollama_url_f = get_base_url("ollama").rstrip("/")
-                        current_base_f = self._llm.base_url.rstrip("/") if self._llm else ""
-                        other_prov_f = "lmstudio" if current_base_f == ollama_url_f else "ollama"
-
-                        if await self._attempt_fallback():
-                            _failed_models.clear()
-                            try:
-                                model, reason = await self._pick_chat_model(mode)
-                                yield ChatEvent("model", {"model": model, "reason": f"{reason} (provider-fallback)", "mode": mode})
-                                continue  # Retry den Turn mit neuem Modell+Provider
-                            except NoSuitableModelError as exc_no_model:
-                                yield ChatEvent("error", {"message": str(exc_no_model), "stage": "model_selection"})
-                                yield ChatEvent("done", {"reason": "no_model"})
-                                return
-                        else:
-                            yield ChatEvent("error", {
-                                "message": f"Kein Modell konnte den Chat ausfuehren. {len(_failed_models)} Modelle fehlgeschlagen: {_failed_models}. Alternativer Provider ({other_prov_f}) ebenfalls offline.",
-                                "stage": "chat"
-                            })
+                        except LMStudioError as exc2:
+                            yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
                             yield ChatEvent("done", {"reason": "llm_error"})
                             return
 
-                    # Naechstes Modell auswaehlen (ohne die fehlgeschlagenen)
-                    try:
-                        if not model_override:
-                            new_model, new_reason = await self._pick_chat_model(mode, exclude=_failed_models)
-                            yield ChatEvent("error", {
-                                "message": f"Modell '{model}' nicht verfuegbar (evtl. nicht geladen). Wechsle auf '{new_model}'...",
-                                "stage": "model_retry"
-                            })
-                            model = new_model
-                            reason = new_reason
-                            yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
-                            continue  # Retry den Turn mit neuem Modell
-                        else:
-                            # Bei model_override kein Retry mit anderem Modell
-                            yield ChatEvent("error", {"message": f"Explizites Modell '{model}' fehlgeschlagen: {exc}", "stage": "chat"})
-                            yield ChatEvent("done", {"reason": "llm_error"})
-                            return
-                    except NoSuitableModelError:
+                    # Fall 1b: Read-Timeout → Modell ist zu langsam, NICHT "nicht geladen".
+                    # Auf andere (evtl. ungeladene) Modelle zu wechseln macht es schlimmer,
+                    # daher ehrlich melden und abbrechen statt durch alle Modelle zu churnen.
+                    elif ("timeout" in msg_lower) and not isinstance(exc, LMStudioConnectionError):
+                        logger.warning("Read-Timeout bei Modell %r (Turn %s): %s", model, turn, exc)
                         yield ChatEvent("error", {
-                            "message": f"Kein weiteres Modell verfuegbar. Fehlgeschlagen: {_failed_models}.",
+                            "message": (
+                                f"Modell '{model}' hat nicht rechtzeitig geantwortet (Timeout). "
+                                f"Das Modell ist geladen, braucht aber laenger als erlaubt — "
+                                f"evtl. ein langsames Reasoning-Modell oder gerade beim Laden. "
+                                f"Bitte erneut versuchen oder ein schnelleres Modell waehlen."
+                            ),
                             "stage": "chat"
                         })
-                        yield ChatEvent("done", {"reason": "no_model"})
+                        yield ChatEvent("done", {"reason": "timeout"})
                         return
 
-            message = response.get("message") or {}
-            content = message.get("content") or ""
-            tool_calls = message.get("tool_calls") or []
-
-            if content and not tool_calls:
-                final_text = content
-                yield ChatEvent("text", {"content": content})
-                break
-
-            if tool_calls:
-                assistant_msg = {
-                    "role": "assistant",
-                    "content": content or "",
-                    "tool_calls": tool_calls,
-                }
-                messages.append(assistant_msg)
-
-                for tc in tool_calls:
-                    function = tc.get("function") or {}
-                    tool_name = function.get("name") or tc.get("name") or ""
-                    raw_args = function.get("arguments")
-                    tool_call_id = tc.get("id") or ""
-                    yield ChatEvent("tool_call", {
-                        "name": tool_name,
-                        "arguments": raw_args,
-                        "id": tool_call_id,
-                    })
-
-                    result = await self._dispatch_tool(tc)
-                    # M3-Fix (P-M1, 2026-05-20): Wenn Tool-Result einen "error"-key
-                    # hat (Tool-Handler-Exception oder unknown-tool), zusaetzlich
-                    # ChatEvent("error",...) emittieren — sonst sieht UI im Frontend
-                    # nur ein normales tool_result und der User merkt nicht, dass
-                    # das Tool versagt hat.
-                    if isinstance(result, dict) and "error" in result:
+                    # Fall 1c (Audit-Fix 2026-07-10, CHAT-7): HTTP 400 = Server hat
+                    # den Request selbst abgelehnt (z.B. Context-Length-Overflow,
+                    # ungueltige Parameter) — NICHT "Modell nicht geladen". Vorher
+                    # fiel das in Fall 3 und churnte durch alle Modelle, obwohl das
+                    # Problem am Request lag und bei jedem Modell wiederkehren wuerde.
+                    elif getattr(exc, "status_code", None) == 400:
+                        logger.warning("Request von LM Studio abgelehnt (HTTP 400) bei Modell %r: %s", model, exc)
                         yield ChatEvent("error", {
-                            "message": str(result.get("error", "Tool failure")),
-                            "stage": "tool_dispatch",
-                            "tool": tool_name,
-                            "tool_call_id": tool_call_id,
+                            "message": (
+                                f"LM Studio hat die Anfrage abgelehnt (HTTP 400): {exc}\n\n"
+                                f"Haeufigste Ursache: Chat-Verlauf ist zu lang fuer das Kontext-"
+                                f"fenster von '{model}'. Bitte Verlauf kuerzen oder ein Modell mit "
+                                f"groesserem Kontext waehlen."
+                            ),
+                            "stage": "chat"
                         })
-                    yield ChatEvent("tool_result", {
-                        "name": tool_name,
-                        "result": result,
-                        "id": tool_call_id,
-                    })
+                        yield ChatEvent("done", {"reason": "request_rejected"})
+                        return
 
-                    tool_msg = {
-                        "role": "tool",
-                        "content": self._truncate_tool_result(result),
-                        "name": tool_name,
-                    }
-                    if tool_call_id:
-                        tool_msg["tool_call_id"] = tool_call_id
-                    messages.append(tool_msg)
-                continue
+                    # Fall 2: Connection-Error → Provider-Fallback
+                    elif isinstance(exc, LMStudioConnectionError):
+                        logger.warning("Connection-Fehler im Chat-Turn %s: %s. Versuche Provider-Fallback...", turn, exc)
+                        from .llm_provider import get_base_url
+                        ollama_url = get_base_url("ollama").rstrip("/")
+                        current_base = self._llm.base_url.rstrip("/") if self._llm else ""
+                        other_prov = "lmstudio" if current_base == ollama_url else "ollama"
+                        yield ChatEvent("error", {
+                            "message": f"Verbindung zu {self._llm.base_url if self._llm else 'LLM'} verloren. Wechsle automatisch auf {other_prov}...",
+                            "stage": "fallback"
+                        })
 
-            yield ChatEvent("text", {"content": ""})
-            break
-        else:
-            try:
-                response = await self._llm.chat(
-                    model=model,
-                    messages=messages + [{
-                        "role": "user",
-                        "content": (
-                            "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
-                            "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
-                        ),
-                    }],
-                    options={"temperature": 0.2},
-                )
-                final_text = (response.get("message") or {}).get("content") or ""
-                yield ChatEvent("text", {"content": final_text})
-            except LMStudioError as exc:
-                logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
-                from .llm_provider import get_base_url
-                ollama_url_s = get_base_url("ollama").rstrip("/")
-                current_base_s = self._llm.base_url.rstrip("/") if self._llm else ""
-                other_prov = "lmstudio" if current_base_s == ollama_url_s else "ollama"
-                yield ChatEvent("error", {
-                    "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
-                    "stage": "fallback"
-                })
-                if await self._attempt_fallback():
-                    try:
-                        if model_override:
-                            model = model_override
+                        if await self._attempt_fallback():
+                            _failed_models.clear()  # Neuer Provider → alte Fehler zuruecksetzen
+                            try:
+                                if model_override:
+                                    model = model_override
+                                    reason = "explicit override (fallback)"
+                                else:
+                                    model, reason = await self._pick_chat_model(mode)
+
+                                yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+
+                                response = await self._llm.chat(
+                                    model=model,
+                                    messages=messages,
+                                    tools=tools_schema,
+                                    options={"temperature": 0.2},
+                                )
+                            except Exception as exc_fallback:
+                                yield ChatEvent("error", {
+                                    "message": f"Fehler bei Chat nach Fallback auf {other_prov}: {exc_fallback}",
+                                    "stage": "chat_fallback"
+                                })
+                                yield ChatEvent("done", {"reason": "llm_error"})
+                                return
                         else:
-                            model, _ = await self._pick_chat_model(mode)
+                            error_msg = (
+                                f"Verbindung zum lokalen KI-Dienst (LM Studio / Ollama) verloren.\n\n"
+                                f"Mögliche Ursachen & Lösungen:\n"
+                                f"1. LM Studio oder Ollama läuft nicht. Bitte starten Sie Ihre lokale KI-Anwendung.\n"
+                                f"2. In LM Studio ist kein Modell geladen. Bitte laden Sie ein Chat-Modell (z. B. 'gemma-4-e4b' oder 'moondream').\n"
+                                f"3. Falls Sie Ollama nutzen, stellen Sie sicher, dass mindestens ein Modell installiert ist (z. B. via 'ollama run gemma:2b').\n\n"
+                                f"Originaler Fehler: {exc}"
+                            )
+                            yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
+                            yield ChatEvent("done", {"reason": "llm_error"})
+                            return
 
-                        response = await self._llm.chat(
-                            model=model,
-                            messages=messages + [{
-                                "role": "user",
-                                "content": (
-                                    "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
-                                    "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
-                                ),
-                            }],
-                            options={"temperature": 0.2},
+                    # Fall 3: Model-Fehler (z.B. nicht geladen) → naechstes Modell versuchen
+                    else:
+                        _failed_models.add(model)
+                        logger.warning(
+                            "Modell %r fehlgeschlagen (Turn %s): %s. Versuche naechstes Modell... (fehlgeschlagen: %s)",
+                            model, turn, exc, _failed_models
                         )
-                        final_text = (response.get("message") or {}).get("content") or ""
-                        yield ChatEvent("text", {"content": final_text})
-                    except Exception as exc_fallback:
-                        yield ChatEvent("error", {"message": f"Fehler bei Summary nach Fallback: {exc_fallback}", "stage": "summary_fallback"})
-                else:
-                    yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
 
-        yield ChatEvent("done", {"final_text": final_text})
+                        if len(_failed_models) >= MAX_MODEL_RETRIES:
+                            # Zu viele Modell-Fehler → Provider-Fallback versuchen
+                            logger.warning(
+                                "%d Modelle fehlgeschlagen auf diesem Provider. Versuche Provider-Fallback...",
+                                len(_failed_models)
+                            )
+                            from .llm_provider import get_base_url
+                            ollama_url_f = get_base_url("ollama").rstrip("/")
+                            current_base_f = self._llm.base_url.rstrip("/") if self._llm else ""
+                            other_prov_f = "lmstudio" if current_base_f == ollama_url_f else "ollama"
+
+                            if await self._attempt_fallback():
+                                _failed_models.clear()
+                                try:
+                                    model, reason = await self._pick_chat_model(mode)
+                                    yield ChatEvent("model", {"model": model, "reason": f"{reason} (provider-fallback)", "mode": mode})
+                                    continue  # Retry den Turn mit neuem Modell+Provider
+                                except NoSuitableModelError as exc_no_model:
+                                    yield ChatEvent("error", {"message": str(exc_no_model), "stage": "model_selection"})
+                                    yield ChatEvent("done", {"reason": "no_model"})
+                                    return
+                            else:
+                                yield ChatEvent("error", {
+                                    "message": f"Kein Modell konnte den Chat ausfuehren. {len(_failed_models)} Modelle fehlgeschlagen: {_failed_models}. Alternativer Provider ({other_prov_f}) ebenfalls offline.",
+                                    "stage": "chat"
+                                })
+                                yield ChatEvent("done", {"reason": "llm_error"})
+                                return
+
+                        # Naechstes Modell auswaehlen (ohne die fehlgeschlagenen)
+                        try:
+                            if not model_override:
+                                new_model, new_reason = await self._pick_chat_model(mode, exclude=_failed_models)
+                                yield ChatEvent("error", {
+                                    "message": f"Modell '{model}' nicht verfuegbar (evtl. nicht geladen). Wechsle auf '{new_model}'...",
+                                    "stage": "model_retry"
+                                })
+                                model = new_model
+                                reason = new_reason
+                                yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+                                continue  # Retry den Turn mit neuem Modell
+                            else:
+                                # Bei model_override kein Retry mit anderem Modell
+                                yield ChatEvent("error", {"message": f"Explizites Modell '{model}' fehlgeschlagen: {exc}", "stage": "chat"})
+                                yield ChatEvent("done", {"reason": "llm_error"})
+                                return
+                        except NoSuitableModelError:
+                            yield ChatEvent("error", {
+                                "message": f"Kein weiteres Modell verfuegbar. Fehlgeschlagen: {_failed_models}.",
+                                "stage": "chat"
+                            })
+                            yield ChatEvent("done", {"reason": "no_model"})
+                            return
+
+                message = response.get("message") or {}
+                content = message.get("content") or ""
+                tool_calls = message.get("tool_calls") or []
+
+                if content and not tool_calls:
+                    final_text = content
+                    yield ChatEvent("text", {"content": content})
+                    break
+
+                if tool_calls:
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": content or "",
+                        "tool_calls": tool_calls,
+                    }
+                    messages.append(assistant_msg)
+
+                    for tc in tool_calls:
+                        function = tc.get("function") or {}
+                        tool_name = function.get("name") or tc.get("name") or ""
+                        raw_args = function.get("arguments")
+                        tool_call_id = tc.get("id") or ""
+                        yield ChatEvent("tool_call", {
+                            "name": tool_name,
+                            "arguments": raw_args,
+                            "id": tool_call_id,
+                        })
+
+                        result = await self._dispatch_tool(tc)
+                        # M3-Fix (P-M1, 2026-05-20): Wenn Tool-Result einen "error"-key
+                        # hat (Tool-Handler-Exception oder unknown-tool), zusaetzlich
+                        # ChatEvent("error",...) emittieren — sonst sieht UI im Frontend
+                        # nur ein normales tool_result und der User merkt nicht, dass
+                        # das Tool versagt hat.
+                        if isinstance(result, dict) and "error" in result:
+                            yield ChatEvent("error", {
+                                "message": str(result.get("error", "Tool failure")),
+                                "stage": "tool_dispatch",
+                                "tool": tool_name,
+                                "tool_call_id": tool_call_id,
+                            })
+                        yield ChatEvent("tool_result", {
+                            "name": tool_name,
+                            "result": result,
+                            "id": tool_call_id,
+                        })
+
+                        tool_msg = {
+                            "role": "tool",
+                            "content": self._truncate_tool_result(result),
+                            "name": tool_name,
+                        }
+                        if tool_call_id:
+                            tool_msg["tool_call_id"] = tool_call_id
+                        messages.append(tool_msg)
+                    continue
+
+                yield ChatEvent("text", {"content": ""})
+                break
+            else:
+                try:
+                    response = await self._llm.chat(
+                        model=model,
+                        messages=messages + [{
+                            "role": "user",
+                            "content": (
+                                "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
+                                "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
+                            ),
+                        }],
+                        options={"temperature": 0.2},
+                    )
+                    final_text = (response.get("message") or {}).get("content") or ""
+                    yield ChatEvent("text", {"content": final_text})
+                except LMStudioError as exc:
+                    logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
+                    from .llm_provider import get_base_url
+                    ollama_url_s = get_base_url("ollama").rstrip("/")
+                    current_base_s = self._llm.base_url.rstrip("/") if self._llm else ""
+                    other_prov = "lmstudio" if current_base_s == ollama_url_s else "ollama"
+                    yield ChatEvent("error", {
+                        "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
+                        "stage": "fallback"
+                    })
+                    if await self._attempt_fallback():
+                        try:
+                            if model_override:
+                                model = model_override
+                            else:
+                                model, _ = await self._pick_chat_model(mode)
+
+                            response = await self._llm.chat(
+                                model=model,
+                                messages=messages + [{
+                                    "role": "user",
+                                    "content": (
+                                        "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
+                                        "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
+                                    ),
+                                }],
+                                options={"temperature": 0.2},
+                            )
+                            final_text = (response.get("message") or {}).get("content") or ""
+                            yield ChatEvent("text", {"content": final_text})
+                        except Exception as exc_fallback:
+                            yield ChatEvent("error", {"message": f"Fehler bei Summary nach Fallback: {exc_fallback}", "stage": "summary_fallback"})
+                    else:
+                        yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
+
+            _publish_status(model, "active" if final_text else "failed", 100.0 if final_text else 0.0)
+            _status_final_published = True
+            yield ChatEvent("done", {"final_text": final_text})
+        finally:
+            if not _status_final_published:
+                _publish_status(model, "failed", 0.0)
 
 
 __all__ = ["ChatAgent", "ChatEvent", "DEFAULT_SYSTEM_PROMPT"]

@@ -11,6 +11,7 @@
 
     <UserControl.Resources>
         <converters:TimeToPixelConverter x:Key="TimeToPixelConverter"/>
+        <converters:StatusTextToBrushConverter x:Key="StatusTextToBrushConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         
         <Style x:Key="AbletonCheckBox" TargetType="CheckBox">
@@ -102,6 +103,11 @@
 
                 <!-- Stats -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Audit-Fix 2026-07-10 (Sweep-Finding HIGH-12): StatusText war vorher
+                         an kein UI-Element gebunden - Refresh-Fehler blieben unsichtbar. -->
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="{Binding StatusText, Converter={StaticResource StatusTextToBrushConverter}}"
+                               FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <TextBlock Text="{Binding PreviewStatus}"
                                Foreground="{StaticResource AbletonAccent}"
                                FontSize="10" VerticalAlignment="Center" Margin="0,0,14,0"/>

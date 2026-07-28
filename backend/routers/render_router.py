@@ -65,9 +65,17 @@ def _compute_render_media_hash(audio_path: str, timeline: list[dict[str, Any]]) 
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _request_settings_dict(request: RenderRequest) -> dict[str, Any]:
+_RENDER_RESUME_PAYLOAD_VERSION = 1
+
+
+def _request_settings_dict(
+    request: RenderRequest,
+    *,
+    timeline_snapshot: Optional[list[dict[str, Any]]] = None,
+    project_root: Optional[Path] = None,
+) -> dict[str, Any]:
     """Render-Settings als reines Dict für die Queue-Persistenz."""
-    return {
+    settings = {
         "resolution_width": request.resolution_width,
         "resolution_height": request.resolution_height,
         "fps": request.fps,
@@ -76,6 +84,14 @@ def _request_settings_dict(request: RenderRequest) -> dict[str, Any]:
         "include_audio": request.include_audio,
         "quality": request.quality.value if request.quality is not None else None,
     }
+    if timeline_snapshot is not None and project_root is not None:
+        settings["_resume"] = {
+            "version": _RENDER_RESUME_PAYLOAD_VERSION,
+            "request": request.model_dump(mode="json"),
+            "timeline_snapshot": timeline_snapshot,
+            "project_root": str(Path(project_root).resolve()),
+        }
+    return settings
 
 
 def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) -> None:
@@ -89,6 +105,131 @@ def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) 
             "RenderQueue.update_status fehlgeschlagen für %s (%s): %s",
             queue_job_id, status, exc,
         )
+
+
+async def _resume_render_queue_on_startup(
+    state: AppState,
+    *,
+    queue=None,
+) -> list[str]:
+    """Reconstruct and schedule queued/interrupted jobs from persisted payloads."""
+    render_queue = queue or _get_render_queue()
+    render_queue.restore_running_as_interrupted()
+    resumed_job_ids: list[str] = []
+
+    for job in render_queue.list_pending():
+        try:
+            payload = job.settings.get("_resume")
+            if (
+                not isinstance(payload, dict)
+                or payload.get("version") != _RENDER_RESUME_PAYLOAD_VERSION
+            ):
+                raise ValueError("Resume-Payload fehlt oder hat unbekannte Version")
+
+            request_data = payload.get("request")
+            timeline_snapshot = payload.get("timeline_snapshot")
+            project_root_raw = payload.get("project_root")
+            if not isinstance(request_data, dict):
+                raise ValueError("Resume-Payload enthält keinen RenderRequest")
+            if not isinstance(timeline_snapshot, list) or not timeline_snapshot:
+                raise ValueError("Resume-Payload enthält keine Timeline")
+            if not project_root_raw:
+                raise ValueError("Resume-Payload enthält keine Projektwurzel")
+
+            request = RenderRequest.model_validate(request_data)
+            project_root = Path(project_root_raw).resolve()
+            output_path = Path(request.output_path).resolve()
+            if output_path != Path(job.output_path).resolve():
+                raise ValueError("Resume-Output stimmt nicht mit Queue-Job überein")
+            if not output_path.is_relative_to(project_root):
+                raise ValueError("Resume-Output liegt außerhalb der Projektwurzel")
+
+            base_task_id = f"resume-{job.job_id[:8]}"
+            task_id = base_task_id
+            suffix = 2
+            while state.get_render_task(task_id) is not None:
+                task_id = f"{base_task_id}-{suffix}"
+                suffix += 1
+
+            total_seconds = sum(
+                max(
+                    float(entry.get("end_time", 0.0))
+                    - float(entry.get("start_time", 0.0)),
+                    0.0,
+                )
+                for entry in timeline_snapshot
+                if isinstance(entry, dict)
+            )
+            task_data = {
+                "task_id": task_id,
+                "status": TaskStatus.PENDING.value,
+                "percent": 0.0,
+                "current_frame": 0,
+                "total_frames": max(int(round(total_seconds * request.fps)), 0),
+                "fps": 0.0,
+                "elapsed_seconds": 0.0,
+                "eta_seconds": 0.0,
+                "output_path": request.output_path,
+                "error": None,
+                "queue_job_id": job.job_id,
+            }
+            state.set_render_task(task_id, task_data)
+            state.set_cancel_flag(task_id, False)
+            render_queue.update_status(
+                job.job_id,
+                job.status,
+                progress_percent=0.0,
+                error="",
+            )
+
+            task = asyncio.create_task(
+                _run_render_task(task_id, request, state, timeline_snapshot)
+            )
+
+            def _on_resumed_done(
+                finished: asyncio.Task,
+                *,
+                runtime_task_id: str = task_id,
+                queue_job_id: str = job.job_id,
+            ) -> None:
+                if finished.cancelled():
+                    _safe_queue_update(
+                        queue_job_id,
+                        _RQ_FAILED,
+                        error="Backend shutdown during resumed render",
+                    )
+                    return
+                exc = finished.exception()
+                if exc is not None:
+                    logger.error(
+                        "Resumed render %s unerwartet fehlgeschlagen: %s",
+                        runtime_task_id,
+                        exc,
+                    )
+                    state.update_render_task(runtime_task_id, {
+                        "status": TaskStatus.FAILED.value,
+                        "error": str(exc),
+                    })
+                    _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
+
+            task.add_done_callback(_on_resumed_done)
+            resumed_job_ids.append(job.job_id)
+        except Exception as exc:
+            logger.error(
+                "RenderQueue Resume für %s nicht möglich: %s",
+                job.job_id,
+                exc,
+            )
+            render_queue.update_status(
+                job.job_id,
+                _RQ_FAILED,
+                error=f"Resume-Payload ungültig: {exc}",
+            )
+
+    await asyncio.sleep(0)
+    return resumed_job_ids
+
+
 router = APIRouter(prefix="/render", tags=["Render"])
 
 
@@ -146,7 +287,11 @@ async def start_render(
         queue_job = _get_render_queue().enqueue(
             media_hash=media_hash,
             output_path=request.output_path,
-            settings=_request_settings_dict(request),
+            settings=_request_settings_dict(
+                request,
+                timeline_snapshot=timeline_snapshot,
+                project_root=allowed_render,
+            ),
         )
         queue_job_id = queue_job.job_id
     except Exception as exc:  # pragma: no cover - logging only

@@ -139,41 +139,45 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // T2.2: Live-VRAM-Slider Debounce (500ms) und API-Call
     partial void OnVramLimitMbChanged(int value)
     {
-        _vramDebounceCts?.Cancel();
-        _vramDebounceCts = new CancellationTokenSource();
-        var ct = _vramDebounceCts.Token;
+        var previous = _vramDebounceCts;
+        var current = new CancellationTokenSource();
+        _vramDebounceCts = current;
+        previous?.Cancel();
+        previous?.Dispose();
+        _ = UpdateVramLimitAfterDelayAsync(value, current.Token);
+    }
 
-        _ = Task.Run(async () =>
+    private async Task UpdateVramLimitAfterDelayAsync(int value, CancellationToken ct)
+    {
+        try
         {
-            try
-            {
-                await Task.Delay(500, ct).ConfigureAwait(true);
-                
-                if (ct.IsCancellationRequested) return;
-                
-                StatusText = "Aktualisiere VRAM-Limit...";
-                var res = await _api.UpdateVramLimitAsync(value, ct).ConfigureAwait(true);
-                
-                if (ct.IsCancellationRequested) return;
+            await Task.Delay(500, ct);
+            if (_disposed || ct.IsCancellationRequested)
+                return;
 
-                if (res != null)
-                {
-                    StatusText = $"VRAM-Limit live gedrosselt auf {value} MB.";
-                }
-                else
-                {
-                    StatusText = "Warnung: Live-Drosselung fehlgeschlagen. Wert liegt evtl. unter dem aktiven VRAM-Bedarf.";
-                }
-            }
-            catch (OperationCanceledException)
+            StatusText = "Aktualisiere VRAM-Limit...";
+            var res = await _api.UpdateVramLimitAsync(value, ct);
+            if (_disposed || ct.IsCancellationRequested)
+                return;
+
+            if (res != null)
             {
-                // Erwartet bei schnellem Schieben
+                StatusText = $"VRAM-Limit live gedrosselt auf {value} MB.";
             }
-            catch (Exception ex)
+            else
             {
+                StatusText = "Warnung: Live-Drosselung fehlgeschlagen. Wert liegt evtl. unter dem aktiven VRAM-Bedarf.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Erwartet bei schnellem Schieben oder Dispose
+        }
+        catch (Exception ex)
+        {
+            if (!_disposed && !ct.IsCancellationRequested)
                 StatusText = $"Fehler beim Live-Drosseln: {ex.Message}";
-            }
-        }, ct);
+        }
     }
 
     private void UpdateKiModeLabels()
@@ -223,6 +227,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // Live-Validation bei jeder Änderung des FFmpeg-Pfads
     partial void OnFfmpegPathChanged(string value)
     {
+        _probeCts?.Cancel();
         _settings.ValidateFFmpegPath(value, out var err);
         FfmpegPathError = err;
         FfmpegVersion = null; // Version invalidieren bis erneut geprüft
@@ -264,10 +269,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Cancel laufende Probe
-        _probeCts?.Cancel();
-        _probeCts = new CancellationTokenSource();
-        var ct = _probeCts.Token;
+        var previous = _probeCts;
+        var current = new CancellationTokenSource();
+        _probeCts = current;
+        previous?.Cancel();
+        var ct = current.Token;
 
         IsProbingFfmpeg = true;
         try
@@ -292,12 +298,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            FfmpegPathError = "Probe fehlgeschlagen: " + ex.Message;
-            FfmpegVersion = null;
+            if (!_disposed && !ct.IsCancellationRequested)
+            {
+                FfmpegPathError = "Probe fehlgeschlagen: " + ex.Message;
+                FfmpegVersion = null;
+            }
         }
         finally
         {
-            IsProbingFfmpeg = false;
+            if (ReferenceEquals(_probeCts, current))
+            {
+                _probeCts = null;
+                if (!_disposed)
+                    IsProbingFfmpeg = false;
+            }
+            current.Dispose();
         }
     }
 

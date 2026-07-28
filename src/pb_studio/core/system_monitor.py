@@ -368,27 +368,35 @@ class SystemMonitor:
         # Versuch 1: iGPU/anderes GPU-Device temperature aus LHM
         if self.computer:
             try:
-                for hardware in self.computer.Hardware:
-                    h_type_str = str(hardware.HardwareType)
-                    if not h_type_str.startswith("Gpu"):
-                        continue
-                    if hardware == self.gpu_sensor:
-                        # Dedicated wurde bereits oben abgefragt - 0 sensors
-                        continue
-                    hardware.Update()
-                    for s in hardware.Sensors:
-                        if str(s.SensorType) != "Temperature":
+                # BUGFIX H4: serialize ALL native LibreHardwareMonitor traversal
+                # under _lhm_lock. This runs in the background refresh thread while
+                # _collect_lhm_stats (which holds _lhm_lock) may iterate/Update() the
+                # same native Computer/Hardware objects on the foreground thread.
+                # On AMD Adrenalin gpu_temp==0 is common, so this fallback fires on
+                # nearly every refresh -> concurrent unlocked Update() corrupts LHM's
+                # internal sensor buffers (garbage readings or a native crash).
+                with self._lhm_lock:
+                    for hardware in self.computer.Hardware:
+                        h_type_str = str(hardware.HardwareType)
+                        if not h_type_str.startswith("Gpu"):
                             continue
-                        name = (s.Name or "").lower()
-                        if "core" in name or "edge" in name or "gpu" in name:
-                            val = s.Value or 0.0
-                            if val and val > 0:
-                                logger.debug(
-                                    "GPU temp Fallback ueber alternatives GPU-Device "
-                                    "'%s' (sensor=%s): %.1f C",
-                                    hardware.Name, s.Name, float(val),
-                                )
-                                return float(val)
+                        if hardware == self.gpu_sensor:
+                            # Dedicated wurde bereits oben abgefragt - 0 sensors
+                            continue
+                        hardware.Update()
+                        for s in hardware.Sensors:
+                            if str(s.SensorType) != "Temperature":
+                                continue
+                            name = (s.Name or "").lower()
+                            if "core" in name or "edge" in name or "gpu" in name:
+                                val = s.Value or 0.0
+                                if val and val > 0:
+                                    logger.debug(
+                                        "GPU temp Fallback ueber alternatives GPU-Device "
+                                        "'%s' (sensor=%s): %.1f C",
+                                        hardware.Name, s.Name, float(val),
+                                    )
+                                    return float(val)
             except Exception as e:
                 logger.debug("iGPU-Temp-Fallback fehlgeschlagen: %s", e)
 

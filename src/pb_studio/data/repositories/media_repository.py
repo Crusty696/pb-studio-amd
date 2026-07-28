@@ -24,6 +24,33 @@ _LOCK_RETRY_DELAYS = (0.05, 0.10, 0.20, 0.40, 0.80)
 # column is preserved by base64-wrapping the gzip bytes.
 _META_COMPRESS_THRESHOLD_BYTES = 10 * 1024  # 10 KB
 _META_GZIP_MAGIC = "GZ1:"
+_VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".flv")
+
+
+def _is_video_path(file_path: str) -> bool:
+    return str(file_path).lower().endswith(_VIDEO_EXTENSIONS)
+
+
+def _migrate_metadata_for_path(file_path: str, metadata: Optional[Dict]) -> Dict:
+    from pb_studio.data.schemas.media_json_schema import (
+        migrate_audio_metadata,
+        migrate_video_metadata,
+    )
+
+    payload = dict(metadata or {})
+    migrator = migrate_video_metadata if _is_video_path(file_path) else migrate_audio_metadata
+    return migrator(payload)
+
+
+def _migrate_ai_data_for_path(file_path: str, ai_data: Optional[Dict]) -> Dict:
+    from pb_studio.data.schemas.media_json_schema import (
+        migrate_audio_ai_data,
+        migrate_video_ai_data,
+    )
+
+    payload = dict(ai_data or {})
+    migrator = migrate_video_ai_data if _is_video_path(file_path) else migrate_audio_ai_data
+    return migrator(payload)
 
 
 def _serialize_meta(meta: Optional[Dict]) -> str:
@@ -158,8 +185,8 @@ class MediaRepository:
         if not row:
             return None
         d = dict(row)
-        file_path = d.get("file_path", "").lower()
-        is_video = any(file_path.endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm"))
+        file_path = d.get("file_path", "")
+        is_video = _is_video_path(file_path)
 
         if "metadata_json" in d:
             meta_str = _deserialize_meta_str(d.get("metadata_json"))
@@ -215,7 +242,9 @@ class MediaRepository:
         is *not* retried.
         """
         normalized_path = self._normalize_path(file_path)
-        json_meta = _serialize_meta(meta)
+        json_meta = _serialize_meta(
+            _migrate_metadata_for_path(normalized_path, meta)
+        )
 
         try:
             with self.db.transaction(immediate=True) as conn:
@@ -299,7 +328,14 @@ class MediaRepository:
         try:
             with self.db.transaction(immediate=True) as conn:
                 if ai_data:
-                    json_ai = json.dumps(ai_data)
+                    row = conn.execute(
+                        "SELECT file_path FROM media WHERE id = ?",
+                        (media_id,),
+                    ).fetchone()
+                    file_path = row[0] if row else ""
+                    json_ai = json.dumps(
+                        _migrate_ai_data_for_path(file_path, ai_data)
+                    )
                     conn.execute(
                         "UPDATE media SET status = ?, ai_data_json = ? WHERE id = ?",
                         (status, json_ai, media_id)
@@ -324,7 +360,14 @@ class MediaRepository:
         """Update technical metadata for a media file."""
         try:
             with self.db.transaction(immediate=True) as conn:
-                json_meta = _serialize_meta(metadata)
+                row = conn.execute(
+                    "SELECT file_path FROM media WHERE id = ?",
+                    (media_id,),
+                ).fetchone()
+                file_path = row[0] if row else ""
+                json_meta = _serialize_meta(
+                    _migrate_metadata_for_path(file_path, metadata)
+                )
                 conn.execute(
                     "UPDATE media SET metadata_json = ? WHERE id = ?",
                     (json_meta, media_id)

@@ -491,6 +491,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void ResetProjectState()
     {
+        _audioLibraryState.Clear();
         AudioClips.Clear();
         SelectedClip = null;
         StatusText = "Kein Projekt geöffnet";

@@ -157,9 +157,13 @@ class TestReset:
 
 
 class TestLoadFromDb:
-    """DB-Restore darf keine verwaisten Test-/Temp-Dateien laden."""
+    """DB-Restore darf nicht erreichbare Medien nicht in-memory laden."""
 
-    def test_verwaiste_media_eintraege_werden_uebersprungen_und_geloescht(self, tmp_path, monkeypatch):
+    def test_fehlende_medien_werden_uebersprungen_aber_persistiert(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
         existing_audio = tmp_path / "real.wav"
         existing_audio.write_bytes(b"RIFF")
         missing_audio = tmp_path / "missing.wav"
@@ -171,7 +175,7 @@ class TestLoadFromDb:
                 "duration_sec": 12.0,
                 "metadata_json": json.dumps({
                     "clip_type": "audio",
-                    "clip_id": 7,
+                    "clip_id": 12,
                     "name": "missing",
                     "sample_rate": 44100,
                     "channels": 2,
@@ -207,10 +211,10 @@ class TestLoadFromDb:
         state = AppState()
         state.load_from_db()
 
-        assert 7 not in state.audio_clips
+        assert 12 not in state.audio_clips
         assert state.audio_clips[8]["path"] == str(existing_audio)
-        assert deleted_ids == [10]
-        assert state._audio_next_id == 9
+        assert deleted_ids == []
+        assert state._audio_next_id == 13
 
     def test_load_from_db_verwendet_aktive_db_project_id(self, tmp_path, monkeypatch):
         existing_audio = tmp_path / "active.wav"
@@ -284,6 +288,79 @@ class TestLoadFromDb:
         assert list(state.video_clips) == [12]
         assert state.video_clips[12]["path"] == str(existing_video)
         assert state._video_next_id == 13
+
+
+class TestDeletePersistence:
+    def test_audio_db_failure_preserves_memory_and_cache(self, monkeypatch):
+        state = AppState()
+        state.audio_clips[7] = {"id": 7, "path": r"C:\media\track.wav"}
+        state.audio_analysis_cache[7] = {"bpm": 128.0}
+
+        class FakeRepo:
+            def find_by_project_and_path(self, project_id, file_path):
+                return {"id": 70}
+
+            def delete_media(self, media_id):
+                raise RuntimeError("sqlite write failed")
+
+        monkeypatch.setattr(
+            "pb_studio.data.repositories.media_repository.MediaRepository",
+            FakeRepo,
+        )
+
+        with pytest.raises(RuntimeError, match="sqlite write failed"):
+            state.delete_audio_clip(7)
+
+        assert state.audio_clips[7]["path"] == r"C:\media\track.wav"
+        assert state.audio_analysis_cache[7] == {"bpm": 128.0}
+
+    def test_video_tombstone_failure_preserves_memory_cache_and_db(self, monkeypatch):
+        state = AppState()
+        state.video_clips[9] = {"id": 9, "path": r"C:\media\clip.mp4"}
+        state.video_analysis_cache[9] = {"scene_count": 3}
+        deleted_media_ids = []
+
+        class FakeRepo:
+            def find_by_project_and_path(self, project_id, file_path):
+                return {"id": 90}
+
+            def delete_media(self, media_id):
+                deleted_media_ids.append(media_id)
+
+        class FakeTransaction:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, query, params):
+                return [(901,)]
+
+        class FakeDatabaseCore:
+            def transaction(self):
+                return FakeTransaction()
+
+        class FakeVectorStore:
+            def __init__(self, index_name):
+                assert index_name == "video_index"
+
+            def mark_tombstoned(self, faiss_ids):
+                raise RuntimeError("tombstone write failed")
+
+        monkeypatch.setattr(
+            "pb_studio.data.repositories.media_repository.MediaRepository",
+            FakeRepo,
+        )
+        monkeypatch.setattr("pb_studio.data.database_core.DatabaseCore", FakeDatabaseCore)
+        monkeypatch.setattr("pb_studio.data.vector_store.VectorStore", FakeVectorStore)
+
+        with pytest.raises(RuntimeError, match="tombstone write failed"):
+            state.delete_video_clip(9)
+
+        assert state.video_clips[9]["path"] == r"C:\media\clip.mp4"
+        assert state.video_analysis_cache[9] == {"scene_count": 3}
+        assert deleted_media_ids == []
 
 
 class TestGetAppState:

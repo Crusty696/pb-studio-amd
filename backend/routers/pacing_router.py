@@ -172,7 +172,9 @@ async def generate_cut_list(
         total_dur = cuts[-1]["end_time"] if cuts else 0.0
         avg_dur = sum(c["end_time"] - c["start_time"] for c in cuts) / len(cuts) if cuts else 0.0
 
-        await publish_event("analysis_progress", {
+        await publish_event("pacing_progress", {
+            "task_id": f"pacing:{config.audio_clip_id}",
+            "clip_id": config.audio_clip_id,
             "step": "pacing",
             "percent": 100.0,
             "message": f"{len(cuts)} Cuts generiert",
@@ -416,7 +418,7 @@ def _cap_entries_against_source(
     return entries
 
 
-def _emit_pacing_progress(loop, pct: float) -> None:
+def _emit_pacing_progress(loop, pct: float, audio_clip_id: int) -> None:
     """Audit L-M7: Sendet ein pacing_progress SSE-Event aus dem Worker-Thread
     (fire-and-forget). loop ist der asyncio-Event-Loop des Request-Handlers.
     """
@@ -425,6 +427,8 @@ def _emit_pacing_progress(loop, pct: float) -> None:
     try:
         asyncio.run_coroutine_threadsafe(
             publish_event("pacing_progress", {
+                "task_id": f"pacing:{audio_clip_id}",
+                "clip_id": audio_clip_id,
                 "percent": float(pct),
                 "message": f"Pacing {pct:.1f}%",
             }),
@@ -455,7 +459,7 @@ def _run_pacing_generation(
 
     # Audit L-M7: on_progress callback fuer Engine -> Router -> SSE.
     def _on_pacing_progress(pct: float) -> None:
-        _emit_pacing_progress(loop, pct)
+        _emit_pacing_progress(loop, pct, config.audio_clip_id)
 
     audio_path = ""
     audio_dur = 0.0
@@ -500,6 +504,7 @@ def _run_pacing_generation(
         "use_structure_awareness": config.use_structure_awareness,
         # Audit E1: Forward Tonart-Matching flag to PacingService → AdvancedPacingEngine.
         "use_key_matching": getattr(config, "use_key_matching", False),
+        "canvas_path": config.canvas_path,
         "min_cut_interval": config.min_cut_interval,
         # Plan Phase 4 deep-hook: forward brain flags to PacingService
         "use_brain": getattr(config, "use_brain", False),

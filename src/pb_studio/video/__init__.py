@@ -21,7 +21,7 @@ except ImportError:
     pass  # scenedetect nicht verfügbar (z.B. Linux CI ohne Windows-.venv)
 
 try:
-    from .raft import MotionAnalyzer, FarnebackFlowAnalyzer, create_motion_analyzer
+    from .raft import MotionAnalyzer, create_motion_analyzer
 except ImportError:
     pass
 
@@ -60,7 +60,6 @@ __all__ = [
     'VideoGenerator',
     'SceneDetector',
     'MotionAnalyzer',
-    'FarnebackFlowAnalyzer',
     'create_motion_analyzer',
     'MoondreamAnalyzer',
     'get_encoder_config',

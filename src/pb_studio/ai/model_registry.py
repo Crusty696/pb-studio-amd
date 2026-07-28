@@ -31,9 +31,15 @@ from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioModelInfo
 logger = logging.getLogger(__name__)
 
 DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
-    # Review-Fix MEDIUM (2026-07-09): erfundene Ids ("qwen3.6-vision",
-    # "qwen3.5-vl", "gemma-4-26b-...-heretic") durch reale, installierte
-    # LM-Studio-Ids ersetzt (verifiziert gegen GET /v1/models am 2026-07-09).
+    # Audit-Fix (2026-07-10): erneut gegen `curl http://127.0.0.1:1234/v1/models`
+    # abgeglichen (live, nicht nur Log-Datei). chat/chat_general/chat_tool_use/
+    # brain_explanation zeigten davor auf Fine-Tune-Namen, die zu diesem
+    # Zeitpunkt NICHT installiert waren (z.B. "gemma-4-31b-it-uncensored").
+    # LM-Studio-Modell-Sets aendern sich zwischen Sessions haeufig (belegt:
+    # Log vom 2026-06-08 vs. Live-Check 2026-07-10 haben fast keine Ueberschneidung)
+    # -> diese Liste ist ein Best-Effort-Startpunkt, keine Garantie. Der
+    # 3-Stufen-Fallback (Praeferenz -> Keyword -> irgendein installiertes Modell,
+    # siehe select_best_for_task) faengt veraltete Eintraege automatisch ab.
     "video_captioning": {
         "speed":   ["qwen/qwen3.5-9b", "google/gemma-4-e4b", "qwen/qwen3-vl-8b"],
         "balance": ["qwen/qwen3.5-9b", "qwen/qwen3-vl-8b", "google/gemma-4-e4b"],
@@ -45,24 +51,24 @@ DEFAULT_TASK_PREFERENCES: dict[str, dict[str, list[str]]] = {
         "quality": ["qwen/qwen3.6-27b", "qwen/qwen3.5-9b", "qwen/qwen3-vl-8b"],
     },
     "chat": {
-        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
-        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-        "quality": ["gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"],
+        "speed":   ["google/gemma-4-e4b", "qwen/qwen3.5-9b"],
+        "balance": ["gemma-4-12b-it-uncensored@q4_k_s", "google/gemma-4-e4b"],
+        "quality": ["qwen/qwen3.6-27b", "gemma-4-12b-it-uncensored@q4_k_s"],
     },
     "chat_general": {
-        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
-        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-        "quality": ["gemma-4-31b-it-uncensored", "gemma-4-26b-a4b-it-ultra-uncensored-heretic"],
+        "speed":   ["google/gemma-4-e4b", "qwen/qwen3.5-9b"],
+        "balance": ["gemma-4-12b-it-uncensored@q4_k_s", "google/gemma-4-e4b"],
+        "quality": ["qwen/qwen3.6-27b", "gemma-4-12b-it-uncensored@q4_k_s"],
     },
     "chat_tool_use": {
-        "speed":   ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-        "balance": ["raw-uncensored-qwen3-14b-heretic-recovered", "qwen3.5-9b-uncensored-hauhaucs-aggressive"],
-        "quality": ["raw-uncensored-qwen3-14b-heretic-recovered", "gemma-4-31b-it-uncensored"],
+        "speed":   ["distil-home-assistant-functiongemma", "google/gemma-4-e4b"],
+        "balance": ["qwen/qwen3-coder-30b", "distil-home-assistant-functiongemma"],
+        "quality": ["qwen/qwen3-coder-30b", "qwen/qwen3.6-27b"],
     },
     "brain_explanation": {
-        "speed":   ["google/gemma-4-e4b", "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"],
-        "balance": ["qwen3.5-9b-uncensored-hauhaucs-aggressive", "google/gemma-4-e4b"],
-        "quality": ["gemma-4-26b-a4b-it-ultra-uncensored-heretic", "google/gemma-4-e4b"],
+        "speed":   ["qwen/qwen3-4b-thinking-2507", "google/gemma-4-e4b"],
+        "balance": ["qwen/qwen3-4b-thinking-2507", "qwen/qwen3.6-27b", "google/gemma-4-e4b"],
+        "quality": ["qwen/qwen3.6-27b", "qwen/qwen3-4b-thinking-2507", "google/gemma-4-e4b"],
     },
 }
 

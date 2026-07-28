@@ -135,6 +135,34 @@ def test_can_load_unknown_model_returns_false(loader):
     assert loader.can_load("nonexistent_model_xyz") is False
 
 
+# ---------- DirectML contract ----------
+
+def test_session_options_disable_both_directml_memory_optimizations(loader):
+    options = loader._create_session_options()
+
+    assert options.enable_mem_pattern is False
+    assert options.enable_cpu_mem_arena is False
+
+
+def test_get_providers_is_directml_only(loader):
+    with patch(
+        "pb_studio.core.model_loader.ort.get_available_providers",
+        return_value=["DmlExecutionProvider", "CPUExecutionProvider"],
+    ):
+        providers = loader._get_providers()
+
+    assert providers == [("DmlExecutionProvider", {"device_id": 0})]
+
+
+def test_get_providers_fails_when_directml_is_unavailable(loader):
+    with patch(
+        "pb_studio.core.model_loader.ort.get_available_providers",
+        return_value=["CPUExecutionProvider"],
+    ):
+        with pytest.raises(RuntimeError, match="DmlExecutionProvider"):
+            loader._get_providers()
+
+
 # ---------- Singleton ----------
 
 def test_get_model_loader_returns_same_instance():

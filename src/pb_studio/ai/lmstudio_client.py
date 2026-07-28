@@ -58,6 +58,15 @@ class LMStudioConnectionError(LMStudioError):
 class LMStudioResponseError(LMStudioError):
     """HTTP-Status != 2xx oder ungueltige Antwort."""
 
+    def __init__(self, message: str, *, status_code: Optional[int] = None) -> None:
+        # Audit-Fix 2026-07-10 (Sweep-Finding CHAT-7): vorher ging der HTTP-Status
+        # komplett verloren — chat_agent.py konnte 404 (Modell nicht geladen) von
+        # 400 (z.B. Context-Length-Overflow) oder 500 nur per String-Match auf die
+        # Fehlermeldung unterscheiden, was Context-Overflows faelschlich als
+        # "Modell nicht geladen" behandelte und durch alle Modelle churnte.
+        super().__init__(message)
+        self.status_code = status_code
+
 
 @dataclass(frozen=True)
 class LMStudioModelInfo:
@@ -367,7 +376,8 @@ class LMStudioClient:
             except Exception:
                 pass
             raise LMStudioResponseError(
-                f"{context}: HTTP {response.status_code} — {body}"
+                f"{context}: HTTP {response.status_code} — {body}",
+                status_code=response.status_code,
             )
 
     # ------------------------------------------------------------------

@@ -65,6 +65,11 @@ async def import_audio(
     state: AppState = Depends(get_app_state),
 ) -> AudioClipInfo:
     """Importiert eine Audio-Datei."""
+    try:
+        state.require_current_project_db_id()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     audio_path = Path(request.path)
 
     # SEC-001: Nur absolute Pfade erlauben (Path-Traversal-Schutz)
@@ -95,6 +100,7 @@ async def import_audio(
         try:
             asyncio.run_coroutine_threadsafe(
                 publish_event("import_progress", {
+                    "task_id": "audio_import",
                     "step": "hash",
                     "percent": pct,
                     "message": f"Hashing {_file_name}: {pct:.2f}%",
@@ -167,7 +173,12 @@ async def import_audio(
         source="audio.import",
         detail=f"clip_id={clip['id']} duration={probe_info['duration']:.2f}s",
     )
-    await publish_event("import_progress", {"clip_id": clip['id'], "percent": 100.0, "message": "Import abgeschlossen"})
+    await publish_event("import_progress", {
+        "task_id": "audio_import",
+        "clip_id": clip["id"],
+        "percent": 100.0,
+        "message": "Import abgeschlossen",
+    })
     return AudioClipInfo(**clip)
 
 
@@ -354,6 +365,11 @@ async def analyze_audio(
             # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
             subtrack_segments=result.get("subtrack_segments"),
             tempo_curve=result.get("tempo_curve"),
+            # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten mit-persistieren.
+            onset_times=result.get("onset_times"),
+            kick_times=result.get("kick_times"),
+            snare_times=result.get("snare_times"),
+            hihat_times=result.get("hihat_times"),
         )
 
         await publish_log(
@@ -712,6 +728,7 @@ def _run_audio_analysis(
     _stream_beats = None
     _stream_bpm = None
     _stream_energy = None
+    _stream_triggers = None
 
     if _use_streaming:
         try:
@@ -739,6 +756,12 @@ def _run_audio_analysis(
             _stream_beats = list(_stream_res.beats)
             _stream_bpm = float(_stream_res.bpm)
             _stream_energy = list(_stream_res.energy_curve)
+            _stream_triggers = {
+                "onset_times": list(_stream_res.onset_times),
+                "kick_times": list(_stream_res.kick_times),
+                "snare_times": list(_stream_res.snare_times),
+                "hihat_times": list(_stream_res.hihat_times),
+            }
 
             # AP4.1 (Audit 2026-06-10): Kamen die Beats vom Drums-/Instrumental-Stem,
             # repraesentierte die Energy-Curve nur Stem-RMS statt Mix-Energie —
@@ -764,6 +787,7 @@ def _run_audio_analysis(
             _stream_beats = None
             _stream_bpm = None
             _stream_energy = None
+            _stream_triggers = None
 
     if not _use_streaming:
         # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
@@ -860,6 +884,58 @@ def _run_audio_analysis(
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
 
+    # 1b. Onset/Drum-Trigger-Kandidaten (Audit-Fix 2026-07-10, Sweep-Finding HIGH-1):
+    # advanced_pacing_engine.py erwartete diese Daten von einem toten
+    # `core.session_manager`-Import (Modul existierte nie) — Onset/Kick/Snare/HiHat-
+    # Trigger waren im normalen (pre-cached) Pacing-Pfad dadurch wirkungslos, weil
+    # das Audio dort bewusst nicht neu geladen wird (RAM-Optimierung fuer lange
+    # DJ-Mixe). Hier werden dieselben librosa-Parameter wie im Live-Fallback
+    # (`AdvancedPacingEngine._extract_other_triggers`) einmalig auf dem bereits
+    # geladenen y/sr berechnet und mit-persistiert, damit der Cache-Pfad echte
+    # Trigger-Kandidaten hat statt sie stillschweigend zu verlieren.
+    onset_times: list[float] = []
+    kick_times: list[float] = []
+    snare_times: list[float] = []
+    hihat_times: list[float] = []
+    if request.detect_beats and _use_streaming and _stream_triggers is not None:
+        onset_times = _stream_triggers["onset_times"]
+        kick_times = _stream_triggers["kick_times"]
+        snare_times = _stream_triggers["snare_times"]
+        hihat_times = _stream_triggers["hihat_times"]
+    elif request.detect_beats:
+        try:
+            onset_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(y=y, sr=sr, units="frames"), sr=sr
+            ).tolist()
+        except Exception as e:
+            logger.warning(f"Onset-Detection fehlgeschlagen: {e}")
+        try:
+            _hop = 512
+            kick_env = librosa.onset.onset_strength(
+                y=librosa.effects.preemphasis(y), sr=sr, hop_length=_hop,
+                aggregate=np.median, fmax=150, n_mels=64,
+            )
+            kick_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=kick_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+            snare_env = librosa.onset.onset_strength(
+                y=y, sr=sr, hop_length=_hop, fmin=200, fmax=400, n_mels=64,
+            )
+            snare_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=snare_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+            hihat_env = librosa.onset.onset_strength(
+                y=y, sr=sr, hop_length=_hop, fmin=5000, n_mels=64,
+            )
+            hihat_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=hihat_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+        except Exception as e:
+            logger.warning(f"Drum-Onset-Detection fehlgeschlagen: {e}")
+
     _emit_analysis_progress(_loop, "beats", 45.0, "Beats erkannt — starte Struktur-Analyse…")
 
     # 2. Struktur-Analyse (Novelty + Clustering)
@@ -928,6 +1004,10 @@ def _run_audio_analysis(
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
         "spectral_data": spectral_data,
+        "onset_times": onset_times,
+        "kick_times": kick_times,
+        "snare_times": snare_times,
+        "hihat_times": hihat_times,
     }
 
 

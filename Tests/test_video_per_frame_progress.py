@@ -6,7 +6,7 @@ Verifiziert:
 3. Default on_progress=None crasht nicht (Backward Compat).
 4. Exception im on_progress Callback bricht Analyse nicht ab.
 
-Mock-Strategie: get_motion_magnitude + detect_scene_change werden gepatcht damit
+Mock-Strategie: analyze_frame_pair wird gepatcht damit
 keine ONNX-Inference (RAFT-Modell auf DirectML) noetig ist. Die Logik der
 Loop-Steuerung + on_progress-Aufrufe ist unabhaengig vom Inference-Output.
 """
@@ -30,8 +30,11 @@ def test_motion_analyzer_calls_on_progress_per_frame():
 
     analyzer = MotionAnalyzer()
     # Mock Inference-Methoden — wir testen NUR die Loop+Callback-Logik, nicht RAFT/ONNX.
-    with patch.object(analyzer, "get_motion_magnitude", return_value=1.5), \
-         patch.object(analyzer, "detect_scene_change", return_value=(False, 0.0)):
+    with patch.object(
+        analyzer,
+        "analyze_frame_pair",
+        return_value=(1.5, False, 0.0),
+    ):
         try:
             result = analyzer.analyze_video_segment(
                 frames, stride=1, on_progress=lambda pct: progress_calls.append(pct)
@@ -64,8 +67,11 @@ def test_motion_analyzer_works_without_callback():
     frames = _make_frames(3)
 
     analyzer = MotionAnalyzer()
-    with patch.object(analyzer, "get_motion_magnitude", return_value=2.0), \
-         patch.object(analyzer, "detect_scene_change", return_value=(False, 0.0)):
+    with patch.object(
+        analyzer,
+        "analyze_frame_pair",
+        return_value=(2.0, False, 0.0),
+    ):
         try:
             result = analyzer.analyze_video_segment(frames, stride=1)  # KEIN on_progress
         finally:
@@ -89,8 +95,11 @@ def test_motion_analyzer_callback_exception_is_swallowed():
         raise RuntimeError("simulated SSE-Publish failure")
 
     analyzer = MotionAnalyzer()
-    with patch.object(analyzer, "get_motion_magnitude", return_value=1.0), \
-         patch.object(analyzer, "detect_scene_change", return_value=(False, 0.0)):
+    with patch.object(
+        analyzer,
+        "analyze_frame_pair",
+        return_value=(1.0, False, 0.0),
+    ):
         try:
             # Darf NICHT raisen trotz immer crashendem callback
             result = analyzer.analyze_video_segment(frames, stride=1, on_progress=_bad_callback)
@@ -100,3 +109,25 @@ def test_motion_analyzer_callback_exception_is_swallowed():
     assert call_count["n"] == 3, f"Callback should be called 3x (4 frames, stride=1), got {call_count['n']}"
     assert result is not None
     assert len(result["frame_motions"]) == 3
+
+
+def test_motion_segment_calculates_flow_once_per_frame_pair():
+    from pb_studio.video.raft import MotionAnalyzer
+
+    frames = _make_frames(5)
+    analyzer = MotionAnalyzer()
+    flow_calls = {"count": 0}
+
+    def fake_flow(frame1, frame2):
+        flow_calls["count"] += 1
+        shape = frame1.shape[:2]
+        return np.ones(shape, dtype=np.float32), np.zeros(shape, dtype=np.float32)
+
+    with patch.object(analyzer, "calculate_flow", side_effect=fake_flow):
+        try:
+            result = analyzer.analyze_video_segment(frames, stride=1)
+        finally:
+            analyzer.unload()
+
+    assert flow_calls["count"] == 4
+    assert len(result["frame_motions"]) == 4

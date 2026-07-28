@@ -3,6 +3,339 @@
 
 ---
 
+## 2026-07-28 - M-33/M-34 Import-Hygiene und Python-Runtime-Gate
+
+### Fixed
+- Temporären PyAudio-Stub nach dem BeatNet-Importversuch aus `sys.modules` entfernt.
+- Python-3.12- und unversionierte Launcher-Fallbacks aus dem WPF-Backend-Start entfernt.
+- Interpreter vor Start per `--version` auf Python 3.11.x validiert.
+
+### Verified
+- Audio-Cluster: 26 passed, 1 skipped.
+- Launcher-/Lifecycle-Verträge: 7 passed.
+- Vollsuite: 853 passed, 11 skipped, 0 failed.
+- WPF Release: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - M-31/M-32 DirectML-Patch und atomarer Projekt-Open
+
+### Fixed
+- Prozessglobalen ONNX-`SessionOptions`-Patch über mehrere StemSeparator-Instanzen serialisiert und garantiert auf das Original zurückgesetzt.
+- Projekt-Medienkatalog vor Brain-/Runtime-Wechsel in einem isolierten `AppState` geladen.
+- DB-Ladefehler liefern HTTP 500 und bewahren aktives Projekt, Medienkatalog, Analyse-Caches und Brain-Bindung.
+
+### Verified
+- DirectML-/Separator-Cluster: 37 passed.
+- Projekt-/DB-Cluster: 44 passed.
+- Vollsuite: 851 passed, 11 skipped, 0 failed.
+- WPF Release: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - LOW-04 Gemeinsamer AI-Config-Fallback
+
+### Fixed
+- Doppelte AI-Config-Reader aus Brain-Narrator und LM-Studio-Vision in einen Helper konsolidiert.
+- ConfigManager-first und Direktdatei-only-as-fallback unverändert erhalten.
+- Private `_load_ai_config`-Aliase und deprecated Ollama-Shim kompatibel gehalten.
+
+### Verified
+- AI-/Vision-Zielcluster: 43 passed.
+- Erweiterter Chat-/Provider-/Registry-Cluster: 94 passed.
+- Python-Compile: PASS.
+
+## 2026-07-28 - LOW-08 Terminal-History vor ViewModel-Erzeugung
+
+### Fixed
+- WPF- und Backend-SSE-Logs in einem thread-sicheren Singleton-Puffer zusammengeführt.
+- History auf 100.000 Zeichen begrenzt und beim Terminal-ViewModel-Start replayed.
+- Clear und Dispose wirken jetzt auf die zentrale History/Subscription.
+
+### Verified
+- Terminal-Verträge: 2 passed.
+- Gesamter WPF-Vertragscluster: 13 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - LOW-07 Wahrheitsgemäßer Projekt-Timeline-Status
+
+### Fixed
+- Projektübersicht zeigt getrennte Zustände für kein Projekt, fehlende Timeline und generierte Timeline.
+- „Jetzt generieren“ ist ohne geöffnetes Projekt nicht mehr sichtbar.
+
+### Verified
+- Projektübersicht-/Lifecycle-Verträge: 6 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - LOW-02 Erreichbarer Canvas-Pacing-Pfad
+
+### Fixed
+- `canvas_path` durch Backend-Schema, Router, OpenAPI-Snapshot und aktiven C#-Requestvertrag verdrahtet.
+- Canvas-Pfad im Director-ViewModel und der View erreichbar gemacht.
+- Rohe und bereits präfixierte Clip-IDs zentral auf genau ein `clip_` normalisiert.
+
+### Verified
+- Pacing-Cluster: 98 passed.
+- Canvas-/OpenAPI-Verträge: 7 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - M-12 Vollständiger VectorStore-Writer-Lifecycle
+
+### Fixed
+- Indexwechsel schließt und speichert die vorige Singleton-Instanz vor der Neuerzeugung.
+- `close()` beendet den Coalescing-Writer und verhindert die Wiederverwendung geschlossener Instanzen.
+- Atexit stoppt den aktiven Writer vor dem finalen Snapshot.
+
+### Verified
+- VectorStore-/Data-/AppState-/Router-Cluster: 74 passed.
+- Vollsuite: 802 passed, 11 skipped, 1 absichtlicher SDD-Marker-Gate-Fehler.
+- Python-Compile-Sweep: PASS.
+
+## 2026-07-28 - M-11 Nicht-blockierendes WPF-Dateilogging
+
+### Fixed
+- Globalen manuellen Klick-Audit-Hook aus dem Produktionsfenster entfernt.
+- Dateilogging über eine begrenzte Queue auf einen einzelnen Hintergrund-Writer verschoben.
+- Provider schließt die Queue beim Dispose und wartet begrenzt auf das geordnete Leeren.
+
+### Verified
+- WPF-Vertragscluster: 10 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - M-10 Vollständige aktive API-DTOs
+
+### Fixed
+- Audioanalyse-DTO behält Subtracks, Tempo- und Onset/Drum-Triggerlisten.
+- Videoanalyse-DTO behält Embedding-Samples, Audio-Key, Tag-Source, Mood- und Farbmetriken.
+
+### Verified
+- DTO-Vertragstest: 1 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+- Vollsuite: 799 passed, 11 skipped, 1 absichtlicher SDD-Marker-Gate-Fehler.
+- Python-Compile-Sweep und `git diff --check`: PASS.
+
+## 2026-07-28 - M-09 SSE-Progress-Korrelation
+
+### Fixed
+- Videoimport- und Pacing-Events tragen stabile Task-/Clip-Korrelation.
+- VideoLibrary und Director ignorieren Progress fremder oder veralteter Requests.
+
+### Verified
+- Router-/Pacing-/Vertragstests: 36 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - M-08 Lernsession Play/Pause
+
+### Fixed
+- `PlayPauseCommand` toggelt zwischen Play- und Pause-Ereignis.
+- Buttonlabel folgt `IsPlaying`; Cut-Wechsel setzt den Playback-State zurück.
+
+### Verified
+- WPF-Vertragstest: 1 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-28 - M-07 Ein RAFT-Flow pro Frame-Paar
+
+### Fixed
+- Segmentanalyse berechnet Optical Flow nur einmal pro Frame-Paar.
+- P95-Motion und Scene-Change werden aus gemeinsamen Flow-Statistiken abgeleitet.
+
+### Verified
+- Progress-/DirectML-/VRAM-/Video-Cluster: 30 passed.
+- Python-Compile-Sweep für Backend, Source und Tests: PASS.
+
+## 2026-07-28 - M-06 Zeitstabile Streaming-Energy
+
+### Fixed
+- Fehlgeschlagene Chunk-Loads und RMS-Berechnungen erzeugen eine downsample-kompatible Null-Lücke statt die Energy-Zeitachse zu verkürzen.
+- Progress wird auch nach einem fehlgeschlagenen Chunk fortgeschrieben.
+
+### Verified
+- Streaming-/Audio-/Pacing-/Router-Cluster: 44 passed.
+- Python-Compile-Sweep für Backend, Source und Tests: PASS.
+
+## 2026-07-27 - M-05 Persistente Medien-JSON-Versionen
+
+### Fixed
+- `.wmv` und `.flv` werden in Repository-Reads und -Writes als Video klassifiziert.
+- Neue und regulär aktualisierte Metadata-/AI-Blobs werden vor dem Speichern auf das aktuelle Schema migriert.
+
+### Verified
+- Repository-/Schema-/Storage-/Persistenz-Cluster: 57 passed.
+- Bestehende 2.544 Live-Blobs wurden ohne Migrationsfreigabe nicht verändert.
+
+## 2026-07-27 - M-04 Brain-Stats Connection-Lock
+
+### Fixed
+- `/brain/stats` serialisiert alle direkten `axis_weights`-Reads mit dem geteilten `BrainStore._weights_lock`.
+- Stats konkurrieren dadurch nicht mehr ungesichert mit Feedback, Reset, Rebind oder Close.
+
+### Verified
+- Brain-Router-/Recovery-/Core-/Binding-Cluster: 45 passed.
+- Python-Compile-Sweep für Backend, Source und Tests: PASS.
+
+## 2026-07-27 - M-03 Atomarer FAISS-Medienlink
+
+### Fixed
+- Verlinkte Embeddings ohne `media_id` werden vor dem FAISS-Write abgelehnt.
+- Fehlgeschlagene `vector_map`-Inserts entfernen den neuen letzten Vektor oder tombstonieren ihn konkurrenzsicher und propagieren den Fehler.
+
+### Verified
+- VectorStore-/MediaRepository-/AppState-/Router-Cluster: 72 passed.
+- Vorhandene Live-Daten wurden nicht verändert; Orphan 897 bleibt bis zur Freigabe offen.
+
+## 2026-07-27 - M-02 Projektgebundener Medienimport
+
+### Fixed
+- Audio- und Videoimport antworten ohne geöffnetes Projekt mit HTTP 409, bevor Datei-, Hash- oder State-Arbeit beginnt.
+- AppState-Registrierung und Clip-Persistenz verlangen eine aktive DB-Projekt-ID und verwenden nicht mehr still DB-Projekt 1.
+
+### Verified
+- Router-/AppState-/Projekt-Persistenz-Cluster: 59 passed.
+- Python-Compile-Sweep für Backend, Source und Tests: PASS.
+
+## 2026-07-27 - M-01 Persistenzsichere Medien-Löschung
+
+### Fixed
+- Audio-/Video-Clips werden erst nach erfolgreicher SQLite-/FAISS-Verarbeitung aus dem In-Memory-Katalog und Analyse-Cache entfernt.
+- DB- und Tombstone-Fehler werden als `persist_error` gemeldet und bis zum API-Fehlerpfad weitergereicht.
+
+### Verified
+- AppState-/Router-/Projekt-Persistenz-Cluster: 55 passed.
+- Python-Compile-Sweep für Backend, Source und Tests: PASS.
+
+## 2026-07-27 - C-01 Live-Pacing Cache-Vertrag
+
+### Fixed
+- `AdvancedPacingEngine` initialisiert `_cached_audio_path`, `_cached_y` und `_cached_sr` atomar.
+- `PacingService._inject_cached_into_engine()` verwechselt injizierte Analysemetadaten nicht mehr mit einer geladenen Waveform.
+- Nicht schluckender Regressionstest deckt Cache-Injektion → fehlenden aktiven Trigger-Cache → Live-Audio-Load ab.
+
+### Verified
+- Pacing-Regression: 4 passed; Pacing-Cluster: 101 passed, 1 skipped.
+- Python-Compile: 274/274; WPF Release-Build: 0 Warnungen, 0 Fehler.
+- Release-Smoke: Audioanalyse, Pacing (3 Cuts), Timeline-Save und Render-Start/Cancel PASS.
+- Full-Suite: 737 passed, 11 skipped, 2 bekannte unabhängige Fehler.
+
+## 2026-07-27 - C-02 AMF-only Render-Vertrag
+
+### Fixed
+- Live-Schema, WPF-Encoderliste und Chat-Tool erlauben nur `h264_amf`, `hevc_amf`, `av1_amf`.
+- RenderService und VideoGenerator enthalten keine Software-/MediaFoundation-Fallbacks mehr; fehlendes AMF bricht explizit ab.
+- Encoder-Erkennung läuft lazy erst beim Rendern und nutzt valide 320x240-Probe statt AMF-inkompatibler 64x64-Probe.
+- OpenAPI-Snapshot und generierte C#-DTOs synchronisiert.
+
+### Verified
+- AMF/OpenAPI-Regressions: 30 passed; Render-/Timeline-Cluster: 71 passed.
+- Live-Encoderprobe: `hevc_amf`; Release-Smoke: PASS.
+- Full-Suite: 751 passed, 11 skipped, 2 bekannte unabhängige Fehler.
+- Python-Compile: 275/275; WPF Release-Build: 0 Warnungen, 0 Fehler.
+
+## 2026-07-27 - C-03 DirectML-only Provider- und Motion-Vertrag (teilweise)
+
+### Fixed
+- `ModelLoader` verwendet ausschließlich `DmlExecutionProvider` und bricht ohne DirectML explizit ab.
+- Farneback und `ALLOW_CPU_FALLBACK` aus RAFT-Factory, Video-Export und SmartDirector entfernt.
+- SmartDirector nutzt eine RAFT-Session pro Clip-Batch und entlädt sie garantiert; ohne DirectML wird ein neutraler Motion-Wert geliefert.
+
+### Verified
+- DirectML-/Motion-Cluster: 26 passed; reale Providerprüfung: nur `DmlExecutionProvider`.
+- Python-Compile: 276/276; Full-Suite: 762 passed, 11 skipped, 2 bekannte unabhängige Fehler.
+- Offen: `audio/separator.py` bleibt wegen Skill-Lock bis zur expliziten Nutzerfreigabe unverändert.
+
+## 2026-07-27 - H-01 Nicht-destruktiver Medien-Restore
+
+### Fixed
+- Projekt-Open löscht SQLite-Medienzeilen nicht mehr, wenn Dateien temporär nicht erreichbar sind.
+- Persistierte Clip-IDs fehlender Medien fließen in die ID-Zähler ein und verhindern Kollisionen bei späteren Imports.
+
+### Verified
+- AppState-/Projekt-/MediaRepository-Persistenzcluster: 46 passed.
+
+## 2026-07-27 - H-02 Atomarer Projekt↔Brain-Rebind
+
+### Fixed
+- Neue Brain-`state.db` wird vollständig geöffnet und initialisiert, bevor die alte Connection geschlossen wird.
+- Der globale Brain-Projektpfad wird erst nach erfolgreichem Bind aktualisiert.
+- Projekt-Create/Open bindet Brain vor dem Runtime-State-Reset und liefert bei Fehler HTTP 500, ohne das bisherige Projekt zu verwerfen.
+
+### Verified
+- Sämtliche Brain- plus Projekt-Binding-/Persistenztests: 137 passed.
+
+## 2026-07-27 - H-03 FAISS/SQLite-Kompaktierungs-Gate
+
+### Fixed
+- Ein fehlgeschlagenes `vector_map`-Remapping stoppt die Kompaktierung vor dem In-Memory-Index-Swap.
+- Index, Metadaten und Tombstones bleiben für einen sicheren Retry unverändert.
+- Ungültige VectorStore-`__new__`-Testfixture mockt den absichtlich nicht initialisierten Save-Notifier.
+
+### Verified
+- VectorStore-/MediaRepository-/Embedding-Persistenzcluster: 22 passed.
+- Vollständiger VectorStore-Cluster: 6 passed.
+
+## 2026-07-27 - Verlustfreier Generation-Cancel
+
+### Fixed
+- Wiederverwendbarer `VideoGenerator` setzt alten Cancel-Zustand synchron bei neuer Jobannahme zurück.
+- Cancel während AI-/Audioanalyse wird nicht mehr am Render-Einstieg gelöscht.
+- Basic- und SmartDirector-Render liefern früh `cancelled=True` und starten keine Finalisierung nach erkanntem Cancel.
+
+### Verified
+- SmartDirector-/GenerationService-/VideoGenerator-Integration: 24 passed.
+- Encoder-/AMF- und Render-Persistenzcluster: 36 passed.
+- Vollsuite: 773 passed, 11 skipped, 1 absichtlicher SDD-Marker-Gate-Fehler; Python-Compile 278/278.
+
+## 2026-07-27 - H-04 Crash-konsistenter FAISS-Snapshot
+
+### Fixed
+- `.faiss`, Metadata-JSON und Tombstone-JSON werden über einen gemeinsamen Journal-/Backup-Commit veröffentlicht.
+- Fehler zwischen Live-Replaces rollen sofort auf die vorige Dreiergeneration zurück.
+- Ein beim Start gefundenes Transaktionsjournal wird vor dem Index-Load idempotent recovered.
+
+### Verified
+- Snapshot-Crash-/Recovery-Regressionen: 3 passed.
+- VectorStore-/Embedding-/MediaRepository-Persistenzcluster: 25 passed.
+
+## 2026-07-27 - H-05 Eindeutige Video-VRAM-Verantwortung
+
+### Fixed
+- `with_gpu_task()` kann zusammengesetzte Tasks nur serialisieren und telemetrieren, während interne Modell-Owner ihre Budgets verwalten.
+- Videoanalyse reserviert `video_analysis_full` nicht mehr zusätzlich zu RAFT und SigLIP.
+
+### Verified
+- Regression misst 2400 MB interne Commitments statt 5300 MB Doppelzählung.
+- VRAM-/DirectML-/Video-Cluster: 36 passed; Python-Compile: 278/278.
+
+## 2026-07-27 - H-06 Vollständige Trigger langer Mixe
+
+### Fixed
+- Streaming-Audioanalyse extrahiert Onset-, Kick-, Snare- und HiHat-Kandidaten pro Chunk über die gesamte Datei.
+- Absolute Zeitstempel werden an 5-s-Overlap-Grenzen dedupliziert.
+- Audio-Router übernimmt für lange Mixe die Streaming-Trigger statt des 600-s-Snapshots.
+
+### Verified
+- Regression bestätigt Onset bei 701 s und leere Trigger im `energy_only`-Pass.
+- Audio-/Streaming-/Pacing-Cluster: 28 passed.
+
+## 2026-07-27 - H-07 Ausführbarer Render-Restart
+
+### Fixed
+- Persistente Queue speichert versionierten RenderRequest-, Timeline- und Projektwurzel-Snapshot ohne DB-Schemamigration.
+- Lifespan rekonstruiert und plant `queued`/`interrupted` Jobs wirklich neu ein.
+- Historische Jobs ohne Resume-Payload werden explizit `failed` statt dauerhaft wartend.
+
+### Verified
+- Render-Persistenz-/Router-/AMF-Cluster: 52 passed.
+- Python-Compile: 278/278.
+
+## 2026-07-27 - H-08/H-09 WPF-Projektwechsel
+
+### Fixed
+- Direkter Projektwechsel publiziert Closing→Closed→Opened in definierter Reihenfolge.
+- Audio-/Video-State-Services verwerfen Late-Write alter Refresh-Generationen.
+- Audio Shared State sowie Video Thumbnail-/Failure-Caches werden beim Wechsel geleert.
+- Sämtliche ProjectService-Lifecycle-Nachrichten laufen über den WPF-Dispatcher.
+
+### Verified
+- WPF-Projektcache-/Dispatcher-Vertrag: 5 passed.
+- WPF Release-Build: 0 Warnungen, 0 Fehler.
+
 ## 2026-07-09 - KRITISCH: Timeline-Generierung seit 2026-06-09 kaputt (Director-Tab leer)
 
 **User-Report:** "jedes Mal konnte ich keine Timeline generieren und die Daten wurden nicht weitergegeben."

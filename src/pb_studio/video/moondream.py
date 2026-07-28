@@ -56,6 +56,25 @@ DEFAULT_TEMPERATURE = 0.0  # Greedy decoding
 EOS_TOKEN_ID = 50256  # GPT2/Phi EOS token
 
 
+def onnx_models_available(models_dir: Optional[str] = None) -> bool:
+    """Cheap filesystem check ob Moondream-ONNX-Dateien vorhanden sind.
+
+    Vermeidet, dass Aufrufer einen with_gpu_task-Slot fuer eine Inferenz
+    reservieren, die per IRON RULE (kein CPU-Fallback) ohnehin nur
+    fehlschlagen kann, wenn die ONNX-Modelle fehlen.
+    """
+    if models_dir is None:
+        from pb_studio.config_manager import ConfigManager
+        models_dir = ConfigManager().get("paths", {}).get("models_dir", "./models")
+    models_path = Path(models_dir)
+    encoder_candidates = [
+        models_path / "moondream_encoder.onnx",
+        models_path / "moondream_vision.onnx",
+    ]
+    combined_path = models_path / "moondream.onnx"
+    return any(c.exists() for c in encoder_candidates) or combined_path.exists()
+
+
 class MoondreamAnalyzer:
     """
     Moondream2 Vision-Language Model for image captioning and analysis.
@@ -751,23 +770,3 @@ class MoondreamAnalyzer:
         gc.collect()
 
         logger.info("Moondream model unloaded")
-
-
-# Convenience function for quick usage
-def analyze_image(
-    image_path: str,
-    prompt: str = "Describe this image."
-) -> str:
-    """
-    Quick image analysis function.
-
-    Args:
-        image_path: Path to image file
-        prompt: Analysis prompt
-
-    Returns:
-        Generated analysis text
-    """
-    analyzer = MoondreamAnalyzer()
-    image = Image.open(image_path)
-    return analyzer.generate_caption(image, prompt)

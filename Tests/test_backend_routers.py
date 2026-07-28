@@ -45,6 +45,11 @@ def fresh_state():
     """Gibt einen frischen AppState zurück und überschreibt die DI."""
     from backend.app_state import get_app_state
     state = AppState()
+    state.current_project = {
+        "name": "RouterTests",
+        "path": r"C:\PBStudioTests\RouterTests",
+        "db_project_id": 1,
+    }
     app.dependency_overrides[get_app_state] = lambda: state
     yield state
     app.dependency_overrides.clear()
@@ -75,6 +80,15 @@ class TestHealth:
 # ─────────────────────────────────────────────────────────────────
 
 class TestAudioRouter:
+
+    def test_import_ohne_projekt_409_und_keine_state_mutation(self, client, fresh_state):
+        fresh_state.current_project = None
+
+        response = client.post("/audio/import", json={"path": r"C:\media\track.wav"})
+
+        assert response.status_code == 409
+        assert "projekt" in response.json()["detail"].lower()
+        assert fresh_state.audio_clips == {}
 
     def test_reimport_gleiche_datei_reused_clip_id(self, client, tmp_path, fresh_state):
         audio_mod = _get_module("backend.routers.audio_router")
@@ -251,6 +265,15 @@ class TestAudioRouter:
 # ─────────────────────────────────────────────────────────────────
 
 class TestVideoRouter:
+
+    def test_import_ohne_projekt_409_und_keine_state_mutation(self, client, fresh_state):
+        fresh_state.current_project = None
+
+        response = client.post("/video/import", json={"paths": [r"C:\media\clip.mp4"]})
+
+        assert response.status_code == 409
+        assert "projekt" in response.json()["detail"].lower()
+        assert fresh_state.video_clips == {}
     def test_reimport_gleiches_video_reused_clip_id(self, client, tmp_path, fresh_state):
         video_mod = _get_module("backend.routers.video_router")
         orig_info = video_mod._get_video_info

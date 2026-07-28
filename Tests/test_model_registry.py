@@ -282,17 +282,17 @@ def test_recommendation_reports_top_preference():
 
 def test_recommendation_reports_fallback_index():
     async def go():
-        # chat_general speed: ["google/gemma-4-e4b", "gemma-3-1b-..."]
+        # chat_general speed: ["google/gemma-4-e4b", "qwen/qwen3.5-9b"]
         # nur das zweite installiert — fallback #1
         async with _client_with_models(
-            ["gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"]
+            ["qwen/qwen3.5-9b"]
         ) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.recommendation_with_reason("chat_general", "speed")
 
     out = _run(go())
-    assert "gemma-3-1b" in out["model"]
+    assert "qwen/qwen3.5-9b" in out["model"]
     assert "fallback" in out["reason"]
 
 

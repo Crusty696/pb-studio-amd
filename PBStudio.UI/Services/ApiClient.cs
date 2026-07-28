@@ -944,8 +944,24 @@ public record AudioClipInfo(
     // "Stems-Ordner oeffnen"-Button wenn nicht null und nicht-leer.
     Dictionary<string, string>? StemsPaths = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
+public record SubtrackSegment(double StartTime, double EndTime, double Confidence = 0.0, double? SubBpm = null, string? SubKey = null);
 public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
-public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
+public record AudioAnalysisResult(
+    int ClipId,
+    double DurationSeconds,
+    double Bpm,
+    int BeatCount,
+    List<BeatData> Beats,
+    string? Key = null,
+    List<float>? EnergyCurve = null,
+    List<StructureSegment>? StructureSegments = null,
+    SpectralData? SpectralData = null,
+    List<SubtrackSegment>? SubtrackSegments = null,
+    List<double>? TempoCurve = null,
+    List<double>? OnsetTimes = null,
+    List<double>? KickTimes = null,
+    List<double>? SnareTimes = null,
+    List<double>? HihatTimes = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(
@@ -966,12 +982,28 @@ public record VideoClipInfo(
     string? VideoHash = null,
     string? TagSource = null);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
-public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
+public record VideoAnalysisResult(
+    int ClipId,
+    int SceneCount,
+    double AvgMotion,
+    List<string> DominantColors,
+    List<string> Tags,
+    bool HasEmbedding,
+    int EmbeddingDim = 1152,
+    List<SceneInfo>? Scenes = null,
+    MotionData? Motion = null,
+    int EmbeddingSamples = 0,
+    string? AudioKey = null,
+    string? TagSource = null,
+    List<string>? MoodTags = null,
+    double AvgBrightness = 0.5,
+    double AvgSaturation = 0.5,
+    double AvgColorTemp = 0.0);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null, double BrainConfidence = 0.0, int? CutId = null);
-public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false);
+public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false, string? CanvasPath = null);
 public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5, double ClipLengthVariation = 0.0, double MaxCutInterval = 10.0, string BeatTriggerMode = "all");
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);

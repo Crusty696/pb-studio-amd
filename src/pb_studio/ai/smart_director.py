@@ -202,7 +202,16 @@ class SmartDirector:
         self._active_model: Optional[str] = None  # "clap" or "siglip"
 
         # B-12 FIX: Thread-Sicherheit bei Inferenz & Eviction
-        self._inference_lock = threading.Lock()
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-4): war ein privates
+        # Instanz-Lock, das NICHT gegen andere GPU-Consumer (siglip_wrapper.py,
+        # raft.py, moondream.py, clap_wrapper.py, separator.py) serialisiert,
+        # die alle bereits `pb_studio.core.gpu_lock.gpu_inference_lock` nutzen.
+        # `SmartDirector.encode_text()` (aufgerufen aus `clip_selector.py`
+        # waehrend Pacing-Generierung) konnte dadurch parallel zu z.B. einer
+        # RAFT-Motion-Analyse auf der GPU laufen — OOM-Risiko. Jetzt dasselbe
+        # geteilte Lock wie alle anderen direkten ONNX/DirectML-Consumer.
+        from ..core.gpu_lock import gpu_inference_lock
+        self._inference_lock = gpu_inference_lock
 
         # VRAM budgets (MB)
         # CLAPPyTorch laeuft auf CPU - kein VRAM noetig
@@ -706,17 +715,50 @@ class SmartDirector:
         # Switch to SigLIP model
         self._ensure_siglip_loaded()
 
+        from pb_studio.video.raft import MotionAnalyzer
+
+        motion_analyzer = None
+        analyze_motion = False
+        try:
+            motion_analyzer = MotionAnalyzer(lazy_load=False)
+            analyze_motion = motion_analyzer.is_ready
+            if not analyze_motion:
+                logger.warning(
+                    "Batch motion analysis disabled because RAFT DirectML is unavailable"
+                )
+        except Exception as motion_error:
+            logger.warning("RAFT DirectML initialization failed: %s", motion_error)
+
         results = []
-        for path in video_paths:
-            try:
-                analysis = self._analyze_single_clip(path)
-                results.append(analysis)
-            except Exception as e:
-                logger.error("Failed to analyze clip %s: %s", path, e)
+        try:
+            for path in video_paths:
+                try:
+                    analysis = self._analyze_single_clip(
+                        path,
+                        motion_analyzer=motion_analyzer,
+                        analyze_motion=analyze_motion,
+                    )
+                    results.append(analysis)
+                except Exception as e:
+                    logger.error("Failed to analyze clip %s: %s", path, e)
+        finally:
+            if motion_analyzer is not None:
+                try:
+                    motion_analyzer.unload()
+                except Exception as unload_error:
+                    logger.warning(
+                        "Batch motion analyzer unload failed: %s",
+                        unload_error,
+                    )
 
         return results
 
-    def _analyze_single_clip(self, video_path: str) -> ClipAnalysis:
+    def _analyze_single_clip(
+        self,
+        video_path: str,
+        motion_analyzer=None,
+        analyze_motion: bool = True,
+    ) -> ClipAnalysis:
         """Analyze a single video clip."""
         import cv2
 
@@ -751,7 +793,11 @@ class SmartDirector:
         content_tags, content_scores = self._classify_clip_content(sample_frames)
 
         # Analyze motion
-        motion_score = self._analyze_motion(video_path)
+        motion_score = (
+            self._analyze_motion(video_path, motion_analyzer=motion_analyzer)
+            if analyze_motion
+            else 0.5
+        )
 
         # Analyze visual properties
         brightness = self._analyze_brightness(sample_frames)
@@ -865,45 +911,63 @@ class SmartDirector:
             logger.error("Content classification failed: %s", e)
             return [], {}
 
-    def _analyze_motion(self, video_path: str) -> float:
+    def _analyze_motion(self, video_path: str, motion_analyzer=None) -> float:
         """Analyze average motion intensity in clip."""
         try:
-            from pb_studio.video.raft import FarnebackFlowAnalyzer
+            from pb_studio.video.raft import MotionAnalyzer
             import cv2
 
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                return 0.5
+            owns_analyzer = motion_analyzer is None
+            analyzer = (
+                MotionAnalyzer(lazy_load=False)
+                if owns_analyzer
+                else motion_analyzer
+            )
 
             try:
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if not analyzer.is_ready:
+                    logger.warning(
+                        "Motion analysis disabled because RAFT DirectML is unavailable"
+                    )
+                    return 0.5
 
-                # Sample frame pairs for motion analysis
-                motion_scores = []
-                analyzer = FarnebackFlowAnalyzer()  # Use CPU fallback to save VRAM
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    return 0.5
 
-                prev_frame = None
-                sample_interval = max(1, total_frames // 10)
+                try:
+                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    motion_scores = []
+                    prev_frame = None
+                    sample_interval = max(1, total_frames // 10)
 
-                for i in range(0, total_frames, sample_interval):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
+                    for i in range(0, total_frames, sample_interval):
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
 
-                    if prev_frame is not None:
-                        motion = analyzer.get_motion_magnitude(prev_frame, frame)
-                        # Normalize motion score (typical range 0-100)
-                        normalized = min(1.0, motion / 50.0)
-                        motion_scores.append(normalized)
+                        if prev_frame is not None:
+                            motion = analyzer.get_motion_magnitude(prev_frame, frame)
+                            normalized = min(1.0, motion / 50.0)
+                            motion_scores.append(normalized)
 
-                    prev_frame = frame
+                        prev_frame = frame
+                finally:
+                    cap.release()
+
+                if motion_scores:
+                    return float(np.mean(motion_scores))
+                return 0.5
             finally:
-                cap.release()
-
-            if motion_scores:
-                return float(np.mean(motion_scores))
-            return 0.5
+                if owns_analyzer:
+                    try:
+                        analyzer.unload()
+                    except Exception as unload_error:
+                        logger.warning(
+                            "Motion analyzer unload failed: %s",
+                            unload_error,
+                        )
 
         except Exception as e:
             logger.warning("Motion analysis failed: %s", e)

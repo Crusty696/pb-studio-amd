@@ -8,6 +8,8 @@ Tests:
 - Separation process
 """
 
+import threading
+
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -56,11 +58,116 @@ class TestStemSeparatorSeparation:
         ]
         mock_sep.onnx_execution_provider = ["DmlExecutionProvider"]
         sep.separator = mock_sep
+        sep._has_directml = True
 
         result = sep.separate(str(test_file))
 
         assert "stems" in result
         assert len(result["stems"]) == 2
+
+    def test_onnx_separation_fails_before_model_load_without_directml(
+        self, reset_config_singleton, temp_dir
+    ):
+        """ONNX models must never fall back to CPU when DML is unavailable."""
+        from pb_studio.audio.separator import StemSeparator
+
+        test_file = temp_dir / "test.wav"
+        model_file = temp_dir / "model.onnx"
+        test_file.touch()
+        model_file.touch()
+
+        sep = StemSeparator.__new__(StemSeparator)
+        sep.separator = MagicMock()
+        sep._has_directml = False
+        sep.config = MagicMock()
+        sep.config.get.return_value = {"models_dir": str(temp_dir)}
+
+        result = sep.separate(str(test_file), model_name=model_file.name)
+
+        assert "error" in result
+        assert "directml" in result["error"].lower()
+        sep.separator.load_model.assert_not_called()
+        sep.separator.separate.assert_not_called()
+
+    def test_demucs_cpu_path_remains_available_without_directml(
+        self, reset_config_singleton, temp_dir
+    ):
+        """Demucs is an intentional PyTorch CPU path, not an ONNX fallback."""
+        from pb_studio.audio.separator import StemSeparator
+
+        test_file = temp_dir / "test.wav"
+        model_file = temp_dir / "htdemucs.yaml"
+        test_file.touch()
+        model_file.touch()
+
+        sep = StemSeparator.__new__(StemSeparator)
+        sep.separator = MagicMock()
+        sep.separator.separate.return_value = [str(temp_dir / "vocals.wav")]
+        sep._has_directml = False
+        sep.config = MagicMock()
+        sep.config.get.return_value = {"models_dir": str(temp_dir)}
+
+        result = sep.separate(str(test_file), model_name=model_file.name)
+
+        assert result == {"stems": [str(temp_dir / "vocals.wav")]}
+        sep.separator.load_model.assert_called_once_with(model_file.name)
+
+
+def test_separator_source_is_directml_only_for_onnx():
+    """Static guard against reintroducing ORT CPU provider fallback."""
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "pb_studio"
+        / "audio"
+        / "separator.py"
+    ).read_text(encoding="utf-8")
+
+    assert '["DmlExecutionProvider", "CPUExecutionProvider"]' not in source
+    assert '["DmlExecutionProvider"]' in source
+
+
+def test_directml_session_options_patch_is_serialized_across_instances():
+    """A process-global ORT constructor patch must not overlap across separators."""
+    import pb_studio.audio.separator as separator_module
+
+    class FakeSessionOptions:
+        def __init__(self):
+            self.enable_mem_pattern = True
+            self.enable_cpu_mem_arena = True
+
+    original_init = FakeSessionOptions.__init__
+    first = separator_module.StemSeparator.__new__(separator_module.StemSeparator)
+    second = separator_module.StemSeparator.__new__(separator_module.StemSeparator)
+    first._has_directml = True
+    second._has_directml = True
+    second_applied = threading.Event()
+    release_second = threading.Event()
+
+    def apply_and_restore_second():
+        second._apply_directml_patch()
+        second_applied.set()
+        release_second.wait(timeout=2)
+        second._restore_directml_patch()
+
+    with patch.object(separator_module.ort, "SessionOptions", FakeSessionOptions):
+        worker = None
+        try:
+            first._apply_directml_patch()
+            worker = threading.Thread(target=apply_and_restore_second)
+            worker.start()
+
+            assert not second_applied.wait(timeout=0.1)
+            first._restore_directml_patch()
+            assert second_applied.wait(timeout=1)
+        finally:
+            first._restore_directml_patch()
+            release_second.set()
+            if worker is not None:
+                worker.join(timeout=2)
+
+        assert not worker.is_alive()
+        assert FakeSessionOptions.__init__ is original_init
 
 
 class TestStemSeparatorModelListing:

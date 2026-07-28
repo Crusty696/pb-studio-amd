@@ -208,6 +208,9 @@ class AdvancedPacingEngine:
         self.audio_analysis: Optional[Dict] = None
         self.energy_curve: Optional[np.ndarray] = None
         self.timeline: List[CutPoint] = []
+        self._cached_audio_path: Optional[str] = None
+        self._cached_y: Optional[np.ndarray] = None
+        self._cached_sr = 22050
         # Audit A3: Optional pre-injected song structure (cached_analysis["structure_segments"]).
         # Wenn gesetzt (Liste von Dicts oder SongSection), überspringt
         # generate_cut_list_with_structure die librosa-Re-Analyse.
@@ -1012,28 +1015,24 @@ class AdvancedPacingEngine:
 
         _emit(5.0, force=True)
 
-        # --- Cache-Check: SessionManager ---
-        cached_audio_data = None
-        onset_times = None
+        # --- Cache-Check: echte pre-cached Audio-Analyse-Daten ---
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-1): dieser Block importierte
+        # frueher `..core.session_manager.get_session_manager` — ein Modul das
+        # nirgends im Repo existiert. Der ImportError wurde von `except Exception:
+        # pass` stillschweigend verschluckt, wodurch Onset/Kick/Snare/HiHat/Energy-
+        # Trigger im normalen (pre-cached) Pacing-Pfad komplett wirkungslos waren.
+        # Jetzt: echte, von `pacing_service._inject_cached_into_engine` injizierte
+        # Werte aus der Audio-Analyse (`/audio/analyze`).
+        onset_times = getattr(self, "_pre_cached_onset_times", None) or []
+        kick_times = getattr(self, "_pre_cached_kick_times", None) or []
+        snare_times = getattr(self, "_pre_cached_snare_times", None) or []
+        hihat_times = getattr(self, "_pre_cached_hihat_times", None) or []
         energy_curve = None
+        if getattr(self, "_pre_cached_energy", None) is not None and len(self._pre_cached_energy) > 0:
+            energy_curve = self._pre_cached_energy
         duration = 0.0
 
-        try:
-            from ..core.session_manager import get_session_manager
-            mgr = get_session_manager()
-            cached_audio_data = (
-                mgr.get_audio_data() if hasattr(mgr, "get_audio_data") else
-                getattr(mgr, "_audio_data", None)
-            )
-            if cached_audio_data:
-                onset_times = cached_audio_data.get("onset_times", [])
-                energy_curve = cached_audio_data.get("energy_curve", [])
-                duration = cached_audio_data.get("duration", 0.0)
-                logger.info(f"SessionManager-Cache: {len(onset_times)} Onsets, {duration:.0f}s")
-        except Exception:
-            pass
-
-        # --- Beats holen (pre-cached > SessionManager-Cache > BeatDetector) ---
+        # --- Beats holen (pre-cached > BeatDetector) ---
         beats: List[float] = []
         downbeats: List[float] = []
 
@@ -1041,10 +1040,6 @@ class AdvancedPacingEngine:
         if hasattr(self, "_pre_cached_beats") and self._pre_cached_beats:
             beats = self._pre_cached_beats
             logger.info(f"Pre-cached Beats: {len(beats)}")
-        elif cached_audio_data and cached_audio_data.get("beat_times"):
-            beats = cached_audio_data["beat_times"]
-            downbeats = cached_audio_data.get("downbeat_times", [])
-            logger.info(f"Cache-Beats: {len(beats)}")
         else:
             try:
                 from ..audio.beat_detector import get_beat_detector
@@ -1080,12 +1075,22 @@ class AdvancedPacingEngine:
                 duration = beats[-1] + 1.0
                 logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
 
-        if not has_pre_cached and not (onset_times and energy_curve and duration > 0):
-            if not hasattr(self, "_cached_audio_path"):
-                self._cached_audio_path = None
-                self._cached_y = None
-                self._cached_sr = 22050
+        # Audit-Fix 2026-07-10: Audio nur dann neu laden, wenn fuer eine aktuell
+        # aktive Trigger-Gewichtung (Onset/Kick/Snare/HiHat/Energy) keine
+        # gecachten Kandidaten vorliegen. Vorher wurde bei has_pre_cached=True
+        # (Normalfall) NIE Audio geladen, unabhaengig davon ob Onset/Drum-Cache
+        # ueberhaupt existierte — die entsprechenden Regler wirkten nie.
+        _ts_gate = self.trigger_settings
+        _missing_for_active_weights = (
+            (_ts_gate.onset_weight > 0 and not onset_times)
+            or (_ts_gate.kick_weight > 0 and not kick_times)
+            or (_ts_gate.snare_weight > 0 and not snare_times)
+            or (_ts_gate.hihat_weight > 0 and not hihat_times)
+            or (_ts_gate.energy_weight > 0 and energy_curve is None)
+        )
+        _no_cache_at_all = not (onset_times and energy_curve is not None and duration > 0)
 
+        if (not has_pre_cached and _no_cache_at_all) or _missing_for_active_weights:
             if self._cached_audio_path != audio_path or self._cached_y is None:
                 if self._cached_y is not None:
                     del self._cached_y
@@ -1101,10 +1106,8 @@ class AdvancedPacingEngine:
 
         # --- BPM schätzen ---
         if expected_bpm is None:
-            if cached_audio_data and cached_audio_data.get("bpm"):
-                bpm = float(cached_audio_data["bpm"])
             # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
-            elif hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
+            if hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
                 bpm = float(self._pre_cached_bpm)
                 logger.info(f"BPM aus gecachter Audio-Analyse: {bpm:.1f}")
             elif len(beats) >= 2:
@@ -1132,12 +1135,21 @@ class AdvancedPacingEngine:
         if not triggers or (triggers[0].time > 0.5):
             triggers.insert(0, PacingCut(time=0.0, trigger_type="start", strength=0.8))
 
-        if onset_times and energy_curve:
-            triggers.extend(
-                self._build_triggers_from_cache(onset_times, energy_curve, bpm)
-            )
-        elif y is not None:
+        # Audit-Fix 2026-07-10: wenn Audio geladen wurde (weil fuer eine aktive
+        # Gewichtung kein Cache existierte), IMMER die vollstaendige Live-
+        # Extraktion nutzen — verhindert doppelte/inkonsistente Trigger aus
+        # Cache+Audio gleichzeitig. Nur wenn y NICHT geladen wurde (Cache war
+        # fuer alle aktiven Gewichtungen ausreichend), den Cache-Pfad nutzen.
+        if y is not None:
             triggers.extend(self._extract_other_triggers(y, sr, bpm))
+        elif onset_times or energy_curve is not None or kick_times or snare_times or hihat_times:
+            triggers.extend(
+                self._build_triggers_from_cache(
+                    onset_times, energy_curve, bpm,
+                    kick_times=kick_times, snare_times=snare_times,
+                    hihat_times=hihat_times, duration=duration,
+                )
+            )
 
         # Audit L-M7: Trigger-Pool steht -> ca. 60%
         _emit(60.0, force=True)
@@ -1843,10 +1855,18 @@ class AdvancedPacingEngine:
         onset_times: List[float],
         energy_curve: List[float],
         bpm: float,
+        *,
+        kick_times: Optional[List[float]] = None,
+        snare_times: Optional[List[float]] = None,
+        hihat_times: Optional[List[float]] = None,
+        duration: float = 0.0,
     ) -> List["PacingCut"]:
         """
         Baut Trigger aus gecachten Audio-Analyse-Daten (ohne Audio neu zu laden).
         RAM-Optimierung für DJ-Mixes (z.B. 105 Minuten = 6335s).
+
+        Audit-Fix 2026-07-10: Kick/Snare/HiHat-Kandidaten + echte Dauer als
+        Parameter statt aus dem toten `core.session_manager`-Cache zu raten.
         """
         from .pacing_models import PacingCut
 
@@ -1862,22 +1882,28 @@ class AdvancedPacingEngine:
                     strength=min(ts.onset_weight * 0.5, 1.0),
                 ))
 
+        # 1b. Kick/Snare/HiHat (gleiche Strength-Formeln wie _extract_other_triggers)
+        for _times, _weight, _ttype, _mult in (
+            (kick_times, ts.kick_weight, "kick", 0.9),
+            (snare_times, ts.snare_weight, "snare", 0.85),
+            (hihat_times, ts.hihat_weight, "hihat", 0.4),
+        ):
+            if _weight > 0 and _times:
+                for t in _times:
+                    triggers.append(PacingCut(
+                        time=float(t),
+                        trigger_type=_ttype,
+                        strength=_weight * _mult,
+                    ))
+
         # 2. Energie-Spitzen
-        if ts.energy_weight > 0 and energy_curve:
+        if ts.energy_weight > 0 and energy_curve is not None and len(energy_curve) > 0:
             try:
                 energy_array = np.array(energy_curve)
                 energy_norm = energy_array / (np.max(energy_array) + 1e-10)
                 peaks = np.where(energy_norm > ts.energy_threshold)[0]
 
-                duration_estimate = 180.0
-                try:
-                    from ..core.session_manager import get_session_manager
-                    mgr = get_session_manager()
-                    ad = mgr.get_audio_data() if hasattr(mgr, "get_audio_data") else None
-                    if ad and "duration" in ad:
-                        duration_estimate = ad["duration"]
-                except Exception:
-                    duration_estimate = max(180.0, len(energy_curve) / 10.0)
+                duration_estimate = duration if duration > 0 else max(180.0, len(energy_curve) / 10.0)
 
                 time_per_sample = duration_estimate / len(energy_curve)
                 peak_groups = np.split(peaks, np.where(np.diff(peaks) > 5)[0] + 1) if len(peaks) > 0 else []

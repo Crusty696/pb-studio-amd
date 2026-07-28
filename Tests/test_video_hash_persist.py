@@ -17,6 +17,7 @@ def test_persist_video_clip_meta_contains_video_hash(monkeypatch):
     from backend.app_state import AppState
 
     state = AppState()
+    state.current_project = {"db_project_id": 1, "path": r"C:\PBStudioTests\Hash"}
     captured = {}
 
     class FakeRepo:
@@ -27,8 +28,6 @@ def test_persist_video_clip_meta_contains_video_hash(monkeypatch):
         "pb_studio.data.repositories.media_repository.MediaRepository",
         lambda: FakeRepo(),
     )
-    monkeypatch.setattr(state, "get_current_project_db_id", lambda: 1)
-
     clip = {"id": 5, "name": "x.mp4", "path": "/x.mp4",
             "duration_seconds": 1.0, "video_hash": "deadbeef"}
     state.persist_video_clip(clip)

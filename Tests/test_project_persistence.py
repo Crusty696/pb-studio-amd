@@ -151,16 +151,19 @@ class TestProjectLifecyclePersistence:
 
         captured = []
 
-        def fake_load_from_db(project_id=None):
+        def fake_load_from_db(self, project_id=None):
             captured.append(project_id)
+            self.audio_clips[8] = {"id": 8, "path": "restored.wav"}
+            return True
 
-        fresh_state.load_from_db = fake_load_from_db
+        monkeypatch.setattr(AppState, "load_from_db", fake_load_from_db)
 
         response = client.post("/project/open", json={"path": str(project_dir)})
 
         assert response.status_code == 200
         assert captured == [100]
         assert fresh_state.current_project["db_project_id"] == 100
+        assert fresh_state.audio_clips == {8: {"id": 8, "path": "restored.wav"}}
 
     def test_load_from_db_replaces_old_in_memory_catalog_instead_of_merging(self, monkeypatch, tmp_path):
         existing_audio = tmp_path / "real.wav"

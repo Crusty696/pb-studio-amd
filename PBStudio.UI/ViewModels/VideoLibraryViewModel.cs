@@ -29,6 +29,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private int _loadVersion;
     private volatile bool _reloadQueued;
     private volatile bool _isShuttingDown;
+    private int? _activeAnalysisClipId;
+    private int _sceneLoadSequence;
 
     private const int ThumbnailBatchSize = 12;
     private static readonly TimeSpan ThumbnailBatchPause = TimeSpan.FromMilliseconds(150);
@@ -93,6 +95,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedClipChanged(VideoClipModel? value)
     {
+        Interlocked.Increment(ref _sceneLoadSequence);
+        IsLoadingScenes = false;
         SelectedClipScenes.Clear();
         if (value != null && value.IsAnalyzed)
         {
@@ -102,14 +106,23 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
     private async Task LoadScenesAsync(int clipId)
     {
+        var sequence = Interlocked.Increment(ref _sceneLoadSequence);
         try
         {
             IsLoadingScenes = true;
             var scenes = await _api.GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}");
-            if (scenes != null)
+            if (scenes != null
+                && sequence == Volatile.Read(ref _sceneLoadSequence)
+                && SelectedClip?.Id == clipId)
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (sequence != Volatile.Read(ref _sceneLoadSequence)
+                        || SelectedClip?.Id != clipId)
+                    {
+                        return;
+                    }
+
                     // AP3.3 (Audit 2026-06-10): Clear vor Add — Re-Analyse desselben
                     // Clips hängte die Szenen sonst doppelt an. SceneIndex (1-basiert)
                     // client-seitig setzen, Backend sendet keinen Index.
@@ -129,7 +142,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoadingScenes = false;
+            if (sequence == Volatile.Read(ref _sceneLoadSequence))
+                IsLoadingScenes = false;
         }
     }
 
@@ -190,6 +204,22 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
+        if (e.EventType == "analysis_progress")
+        {
+            if (!IsAnalyzing || !_activeAnalysisClipId.HasValue ||
+                e.ClipId != _activeAnalysisClipId.Value)
+                return;
+        }
+        else if (e.EventType == "import_progress")
+        {
+            if (!IsImporting || e.TaskId != "video_import")
+                return;
+        }
+        else
+        {
+            return;
+        }
+
         if (e.EventType is "analysis_progress" or "import_progress")
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -300,6 +330,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             foreach (var clip in markedClips)
             {
                 if (clip.IsAnalyzed) { done++; continue; }
+                _activeAnalysisClipId = clip.Id;
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100.0;
                 var result = await _api.AnalyzeVideoAsync(
@@ -328,6 +359,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activeAnalysisClipId = null;
             IsAnalyzingAll = false;
             IsAnalyzing = false;
         }
@@ -569,6 +601,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         if (SelectedClip == null) return;
 
         IsAnalyzing = true;
+        _activeAnalysisClipId = SelectedClip.Id;
         StatusText = $"Analysiere: {SelectedClip.Name}...";
 
         try
@@ -606,6 +639,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activeAnalysisClipId = null;
             IsAnalyzing = false;
         }
     }
@@ -625,6 +659,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             foreach (var clip in VideoClips.ToList())
             {
                 if (clip.IsAnalyzed) { done++; continue; }
+                _activeAnalysisClipId = clip.Id;
 
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100;
@@ -660,6 +695,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activeAnalysisClipId = null;
             IsAnalyzingAll = false;
             IsAnalyzing = false;
         }
@@ -811,7 +847,6 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         _sseClient.ProgressReceived -= OnSseProgressReceived;
         WeakReferenceMessenger.Default.UnregisterAll(this);
         BeginShutdown();
-        _loadGate.Dispose();
     }
 
     private static BitmapImage BytesToBitmapImage(byte[] bytes)

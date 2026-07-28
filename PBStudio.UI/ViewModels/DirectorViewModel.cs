@@ -23,6 +23,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private volatile bool _reloadQueued;
     private volatile bool _isShuttingDown;
     private bool _disposed;
+    private int? _activePacingAudioClipId;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -51,6 +52,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     // Cut-Trigger. Backend-Schema: use_stem_pacing (default false).
     [ObservableProperty] private bool _useStemPacing;
     [ObservableProperty] private double? _durationLimit;
+    [ObservableProperty] private string? _canvasPath;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCutListCommand))]
@@ -107,6 +109,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task LoadClipsAsync()
     {
+        if (_isShuttingDown)
+            return;
+
         _reloadQueued = false;
         var version = Interlocked.Increment(ref _loadVersion);
 
@@ -119,10 +124,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         try
         {
             var videoClips = await _videoLibraryState.RefreshAsync();
-            if (videoClips != null && version == _loadVersion)
+            if (videoClips != null && version == _loadVersion && !_isShuttingDown)
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (version != Volatile.Read(ref _loadVersion) || _isShuttingDown)
+                        return;
+
                     // Review-Fix MEDIUM (2026-07-09): User-Deselektionen ueber
                     // Library-Refreshes erhalten — nur NEUE Clips defaulten auf true.
                     var previousSelection = AvailableVideoClips.ToDictionary(c => c.Id, c => c.IsSelected);
@@ -141,11 +149,14 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             }
 
             var audioClips = await _audioLibraryState.RefreshAsync();
-            if (audioClips != null && version == _loadVersion)
+            if (audioClips != null && version == _loadVersion && !_isShuttingDown)
             {
                 var previousAudioClipId = SelectedAudioClip?.Id;
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (version != Volatile.Read(ref _loadVersion) || _isShuttingDown)
+                        return;
+
                     AvailableAudioClips.Clear();
                     foreach (var clip in audioClips)
                     {
@@ -177,7 +188,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 });
             }
 
-            if (version == _loadVersion)
+            if (version == _loadVersion && !_isShuttingDown)
             {
                 UpdateSelectedCount();
                 StatusText = $"{AvailableVideoClips.Count} Video / {AvailableAudioClips.Count} Audio Clips geladen";
@@ -188,7 +199,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             _loadGate.Release();
         }
 
-        if (_reloadQueued)
+        if (_reloadQueued && !_isShuttingDown)
             await LoadClipsAsync();
     }
 
@@ -270,6 +281,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
 
         IsGenerating = true;
+        _activePacingAudioClipId = SelectedAudioClip.Id;
         StatusText = "Generiere Cut-Liste...";
 
         try
@@ -298,7 +310,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 UseBrain: UseBrain,
                 BrainMinConfidence: BrainMinConfidence,
                 UseKeyMatching: UseKeyMatching,
-                UseStemPacing: UseStemPacing
+                UseStemPacing: UseStemPacing,
+                CanvasPath: CanvasPath
             );
 
             var result = await _api.GenerateCutListAsync(config);
@@ -346,6 +359,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activePacingAudioClipId = null;
             IsGenerating = false;
         }
     }
@@ -432,15 +446,17 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if ((e.EventType == "analysis_progress" || e.EventType == "pacing_progress") && IsGenerating)
+        if (e.EventType != "pacing_progress" || !IsGenerating ||
+            !_activePacingAudioClipId.HasValue ||
+            e.ClipId != _activePacingAudioClipId.Value)
+            return;
+
+        Application.Current.Dispatcher.Invoke(() =>
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                StatusText = e.Message;
-                if (e.Percent >= 0) GenerationProgress = e.Percent;
-                if (!string.IsNullOrEmpty(e.Step)) CurrentStep = e.Step;
-            });
-        }
+            StatusText = e.Message;
+            if (e.Percent >= 0) GenerationProgress = e.Percent;
+            if (!string.IsNullOrEmpty(e.Step)) CurrentStep = e.Step;
+        });
     }
 
     public void Dispose()
@@ -448,9 +464,10 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _isShuttingDown = true;
+        Interlocked.Increment(ref _loadVersion);
+        _reloadQueued = false;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
         WeakReferenceMessenger.Default.UnregisterAll(this);
-        _loadGate.Dispose();
     }
 }
 

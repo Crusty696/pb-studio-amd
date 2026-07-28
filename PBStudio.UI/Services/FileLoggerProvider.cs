@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace PBStudio.UI;
@@ -7,30 +8,96 @@ namespace PBStudio.UI;
 public class FileLoggerProvider : ILoggerProvider
 {
     private readonly string _filePath;
-    private readonly object _lock = new();
+    private readonly Channel<string> _messages;
+    private readonly Task _writerTask;
+    private int _disposed;
 
     public FileLoggerProvider(string filePath)
     {
         _filePath = filePath;
-        // Log-Datei bei jedem Start leeren
-        File.WriteAllText(_filePath, $"=== PB Studio WPF Log — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}");
+        // AUDIT-FIX C#-2: Best-Effort — ein gesperrtes/nicht schreibbares Log darf den Start
+        // (OnStartup, vor jedem Fenster/Exception-Handler) nicht abreissen. Fehler schlucken;
+        // FileLogger.Log faengt Schreibfehler ohnehin ab.
+        try
+        {
+            File.WriteAllText(_filePath, $"=== PB Studio WPF Log — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FileLoggerProvider: Log-Init fehlgeschlagen: {ex.Message}");
+        }
+
+        _messages = Channel.CreateBounded<string>(new BoundedChannelOptions(4096)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait,
+            AllowSynchronousContinuations = false,
+        });
+        _writerTask = Task.Run(ProcessQueueAsync);
     }
 
-    public ILogger CreateLogger(string categoryName) => new FileLogger(_filePath, categoryName, _lock);
-    public void Dispose() { }
+    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _messages.Writer);
+
+    private async Task ProcessQueueAsync()
+    {
+        StreamWriter? writer = null;
+        try
+        {
+            await foreach (var line in _messages.Reader.ReadAllAsync().ConfigureAwait(false))
+            {
+                try
+                {
+                    writer ??= new StreamWriter(
+                        new FileStream(_filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+                    {
+                        AutoFlush = true,
+                    };
+                    await writer.WriteLineAsync(line).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    writer?.Dispose();
+                    writer = null;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"FileLoggerProvider: Log-Write fehlgeschlagen: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            if (writer != null)
+                await writer.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        _messages.Writer.TryComplete();
+        try
+        {
+            if (!_writerTask.Wait(TimeSpan.FromSeconds(2)))
+                System.Diagnostics.Debug.WriteLine("FileLoggerProvider: Log-Drain Timeout");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FileLoggerProvider: Log-Drain fehlgeschlagen: {ex.Message}");
+        }
+    }
 }
 
 internal class FileLogger : ILogger
 {
-    private readonly string _filePath;
     private readonly string _category;
-    private readonly object _lock;
+    private readonly ChannelWriter<string> _writer;
 
-    public FileLogger(string filePath, string category, object lockObj)
+    public FileLogger(string category, ChannelWriter<string> writer)
     {
-        _filePath = filePath;
         _category = category;
-        _lock = lockObj;
+        _writer = writer;
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -44,9 +111,6 @@ internal class FileLogger : ILogger
         if (exception != null)
             line += Environment.NewLine + exception.ToString();
 
-        lock (_lock)
-        {
-            try { File.AppendAllText(_filePath, line + Environment.NewLine); } catch { }
-        }
+        _writer.TryWrite(line);
     }
 }

@@ -22,11 +22,13 @@ namespace PBStudio.UI.ViewModels;
 ///
 /// User kann in DE oder EN tippen, der Bot antwortet in derselben Sprache.
 /// </summary>
-public partial class ChatViewModel : ObservableObject
+public partial class ChatViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly ILogger<ChatViewModel>? _logger;
     private CancellationTokenSource? _streamCts;
+    private int _streamGeneration;
+    private bool _disposed;
 
     [ObservableProperty] private string _inputText = string.Empty;
     [ObservableProperty] private bool _isStreaming;
@@ -69,6 +71,8 @@ public partial class ChatViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSend))]
     public async Task SendAsync()
     {
+        if (_disposed) return;
+
         var userText = (InputText ?? string.Empty).Trim();
         if (userText.Length == 0) return;
         InputText = string.Empty;
@@ -89,9 +93,12 @@ public partial class ChatViewModel : ObservableObject
 
         IsStreaming = true;
         StatusText = "Frage Modell...";
-        _streamCts?.Cancel();
-        _streamCts = new CancellationTokenSource();
-        var token = _streamCts.Token;
+        var generation = Interlocked.Increment(ref _streamGeneration);
+        var previous = _streamCts;
+        var current = new CancellationTokenSource();
+        _streamCts = current;
+        previous?.Cancel();
+        var token = current.Token;
 
         var textBuilder = new System.Text.StringBuilder();
         var toolCalls = new List<ToolCallInfo>();
@@ -106,7 +113,12 @@ public partial class ChatViewModel : ObservableObject
                 saveHistory: true,
                 ct: token).ConfigureAwait(true))
             {
-                if (token.IsCancellationRequested) break;
+                if (_disposed
+                    || generation != Volatile.Read(ref _streamGeneration)
+                    || token.IsCancellationRequested)
+                {
+                    break;
+                }
 
                 switch (ev.Type)
                 {
@@ -168,21 +180,27 @@ public partial class ChatViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // erwartet bei Stop
-            assistantVm.AppendContent("\n[abgebrochen]");
+            if (!_disposed && generation == Volatile.Read(ref _streamGeneration))
+                assistantVm.AppendContent("\n[abgebrochen]");
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Chat-Stream fehlgeschlagen");
-            assistantVm.SetError($"Chat-Stream-Fehler: {ex.Message}");
+            if (!_disposed && generation == Volatile.Read(ref _streamGeneration))
+                assistantVm.SetError($"Chat-Stream-Fehler: {ex.Message}");
         }
         finally
         {
-            assistantVm.MarkComplete();
-            IsStreaming = false;
-            if (errorMessage is null)
+            current.Dispose();
+            if (ReferenceEquals(_streamCts, current))
+                _streamCts = null;
+
+            if (!_disposed && generation == Volatile.Read(ref _streamGeneration))
             {
-                StatusText = $"Bereit. ({toolCalls.Count} Tool-Calls)";
+                assistantVm.MarkComplete();
+                IsStreaming = false;
+                if (errorMessage is null)
+                    StatusText = $"Bereit. ({toolCalls.Count} Tool-Calls)";
             }
         }
     }
@@ -196,11 +214,26 @@ public partial class ChatViewModel : ObservableObject
     [RelayCommand]
     public async Task ClearAsync()
     {
+        if (_disposed) return;
+
+        Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
+        IsStreaming = false;
         await _api.ClearChatHistoryAsync().ConfigureAwait(true);
+        if (_disposed) return;
+
         Messages.Clear();
         AddWelcomeMessage();
         StatusText = "History geleert.";
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Interlocked.Increment(ref _streamGeneration);
+        _streamCts?.Cancel();
+        _streamCts = null;
     }
 }
 

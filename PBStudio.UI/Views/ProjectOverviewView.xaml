@@ -27,6 +27,12 @@
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding OpenProjectCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonText}"
                             Margin="0,0,8,0" Content="Projekt öffnen"/>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding CloseProjectCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonText}"
+                            Margin="0,0,8,0" Content="Projekt schließen"/>
+                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding SaveProjectCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonAccent}"
+                            Margin="0,0,8,0" Content="Speichern"/>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding CreateProjectCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonBg}" Background="{StaticResource AbletonAccent}"
                             Margin="0,0,8,0" Content="Neues Projekt"/>
@@ -91,12 +97,12 @@
                         <icon:PackIconMaterial Kind="AlertCircleOutline" Width="18" Height="18" Foreground="{StaticResource AbletonYellow}" 
                                                Visibility="{Binding HasTimeline, Converter={StaticResource InverseBooleanConverter}}"
                                                VerticalAlignment="Center" Margin="0,0,12,0"/>
-                        <TextBlock Text="Video Timeline generiert" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource AbletonText}"/>
+                        <TextBlock Text="{Binding TimelineStatusText}" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource AbletonText}"/>
                         
                         <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignOutlinedButton}" 
                                 Foreground="{StaticResource AbletonAccent}" Content="Jetzt generieren"
                                 Command="{Binding GoToDirectorCommand}"
-                                Visibility="{Binding HasTimeline, Converter={StaticResource InverseBooleanConverter}}"
+                                Visibility="{Binding CanGenerateTimeline, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Padding="12,2" Height="28" FontSize="11" HorizontalAlignment="Right"/>
                     </DockPanel>
 

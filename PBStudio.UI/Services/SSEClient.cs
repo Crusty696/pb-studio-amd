@@ -16,12 +16,15 @@ public class SSEClient : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SSEClient> _logger;
+    private readonly TerminalLogBuffer _terminalLogBuffer;
     private CancellationTokenSource? _cts;
     private readonly List<Task> _listenTasks = [];
     private volatile bool _isListening;
     private readonly object _stateLock = new object(); // BUG-056 FIX
     private volatile bool _disposed;
     private readonly Dictionary<string, DateTime> _lastReconnectLogUtc = [];
+    private readonly HashSet<StreamKind> _connectedStreams = [];
+    private int _listenGeneration;
     
     // Throttling fields
     private readonly object _progressLock = new object();
@@ -47,38 +50,17 @@ public class SSEClient : IDisposable
     /// </summary>
     public event EventHandler<bool>? BackendReachabilityChanged;
 
-    private bool _isConnected;
-    public bool IsConnected
-    {
-        get => _isConnected;
-        private set
-        {
-            if (_isConnected != value)
-            {
-                _isConnected = value;
-                ConnectionStateChanged?.Invoke(this, _isConnected);
-            }
-        }
-    }
+    private volatile bool _isConnected;
+    public bool IsConnected => _isConnected;
 
-    private bool _isBackendReachable = true;
+    private volatile bool _isBackendReachable = true;
     /// <summary>Spec 00010 T003: latched reachability gegen UI-Flicker (5-Attempt-Threshold).</summary>
-    public bool IsBackendReachable
-    {
-        get => _isBackendReachable;
-        private set
-        {
-            if (_isBackendReachable != value)
-            {
-                _isBackendReachable = value;
-                BackendReachabilityChanged?.Invoke(this, _isBackendReachable);
-            }
-        }
-    }
+    public bool IsBackendReachable => _isBackendReachable;
 
-    public SSEClient(ILogger<SSEClient> logger)
+    public SSEClient(ILogger<SSEClient> logger, TerminalLogBuffer terminalLogBuffer)
     {
         _logger = logger;
+        _terminalLogBuffer = terminalLogBuffer;
         _httpClient = new HttpClient
         {
             BaseAddress = new Uri("http://127.0.0.1:8765"),
@@ -90,6 +72,9 @@ public class SSEClient : IDisposable
     {
         lock (_stateLock)
         {
+            if (_disposed)
+                return;
+
             if (_isListening)
             {
                 _logger.LogDebug("SSE Client läuft bereits");
@@ -99,11 +84,14 @@ public class SSEClient : IDisposable
             // R16/CRITICAL-001: Dispose previous CTS before overwriting — a stop+start
             // cycle would leak the old CancellationTokenSource without this guard.
             _cts?.Dispose();
-            _cts = new CancellationTokenSource();
+            var listenCts = new CancellationTokenSource();
+            _cts = listenCts;
+            var generation = ++_listenGeneration;
+            _connectedStreams.Clear();
             _listenTasks.Clear();
-            _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, _cts.Token)));
-            _listenTasks.Add(Task.Run(() => ListenAsync("/events/log", StreamKind.Log, _cts.Token)));
-            _listenTasks.Add(Task.Run(() => ListenAsync("/events/gpu", StreamKind.Gpu, _cts.Token)));
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/progress", StreamKind.Progress, generation, listenCts.Token)));
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/log", StreamKind.Log, generation, listenCts.Token)));
+            _listenTasks.Add(Task.Run(() => ListenAsync("/events/gpu", StreamKind.Gpu, generation, listenCts.Token)));
             _isListening = true;
         }
         _logger.LogInformation("SSE Client gestartet (progress, log, gpu)");
@@ -111,6 +99,7 @@ public class SSEClient : IDisposable
 
     public void StopListening()
     {
+        bool connectionChanged;
         lock (_stateLock)
         {
             if (!_isListening)
@@ -118,11 +107,17 @@ public class SSEClient : IDisposable
 
             _cts?.Cancel();
             _isListening = false;
+            _listenGeneration++;
+            _connectedStreams.Clear();
+            connectionChanged = _isConnected;
+            _isConnected = false;
         }
+        if (connectionChanged)
+            ConnectionStateChanged?.Invoke(this, false);
         _logger.LogInformation("SSE Client gestoppt");
     }
 
-    private async Task ListenAsync(string endpoint, StreamKind streamKind, CancellationToken ct)
+    private async Task ListenAsync(string endpoint, StreamKind streamKind, int generation, CancellationToken ct)
     {
         var reconnectDelayMs = InitialReconnectDelayMs;
         var reconnectAttempts = 0;
@@ -135,9 +130,7 @@ public class SSEClient : IDisposable
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                IsConnected = true;
-                // Spec 00010 T003: Erfolgreicher Connect — Reachability laut markieren.
-                IsBackendReachable = true;
+                UpdateStreamState(streamKind, true, generation, markUnreachable: false);
 
                 using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream);
@@ -187,22 +180,21 @@ public class SSEClient : IDisposable
                 }
 
                 DispatchBufferedEvent(streamKind, eventType, dataBuilder);
+                UpdateStreamState(streamKind, false, generation, markUnreachable: false);
             }
             catch (OperationCanceledException)
             {
+                UpdateStreamState(streamKind, false, generation, markUnreachable: false);
                 break;
             }
             catch (Exception ex)
             {
-                IsConnected = false;
                 reconnectAttempts++;
-                // Spec 00010 T003 (TR-001): UI erst nach 5 fehlgeschlagenen Versuchen
-                // benachrichtigen — kurze Drops (Backend-Restart, transientes Netzproblem)
-                // werden so vor dem User versteckt.
-                if (reconnectAttempts >= NotifyUiAfterAttempts)
-                {
-                    IsBackendReachable = false;
-                }
+                UpdateStreamState(
+                    streamKind,
+                    false,
+                    generation,
+                    markUnreachable: reconnectAttempts >= NotifyUiAfterAttempts);
                 // AP3.7 (Audit 2026-06-10): Hard-Cap (50 Versuche → break) entfernt.
                 // Vorher starb der Stream nach ~25min Backend-Ausfall ENDGÜLTIG
                 // (_isListening blieb true → StartListening war No-Op → SSE bis zum
@@ -218,6 +210,46 @@ public class SSEClient : IDisposable
         }
     }
 
+    private void UpdateStreamState(
+        StreamKind streamKind,
+        bool connected,
+        int generation,
+        bool markUnreachable)
+    {
+        bool connectionChanged;
+        bool connectionValue;
+        bool reachabilityChanged;
+        bool reachabilityValue;
+
+        lock (_stateLock)
+        {
+            if (generation != _listenGeneration)
+                return;
+
+            if (connected)
+                _connectedStreams.Add(streamKind);
+            else
+                _connectedStreams.Remove(streamKind);
+
+            connectionValue = _connectedStreams.Count > 0;
+            connectionChanged = _isConnected != connectionValue;
+            _isConnected = connectionValue;
+
+            reachabilityValue = _isBackendReachable;
+            if (connected)
+                reachabilityValue = true;
+            else if (markUnreachable && !connectionValue)
+                reachabilityValue = false;
+            reachabilityChanged = _isBackendReachable != reachabilityValue;
+            _isBackendReachable = reachabilityValue;
+        }
+
+        if (connectionChanged)
+            ConnectionStateChanged?.Invoke(this, connectionValue);
+        if (reachabilityChanged)
+            BackendReachabilityChanged?.Invoke(this, reachabilityValue);
+    }
+
     private void DispatchBufferedEvent(StreamKind streamKind, string eventType, StringBuilder dataBuilder)
     {
         if (dataBuilder.Length == 0)
@@ -230,14 +262,18 @@ public class SSEClient : IDisposable
     {
         var now = DateTime.UtcNow;
         var isConnectionRefused = ex is HttpRequestException httpEx && httpEx.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused };
-        var shouldLog = !_lastReconnectLogUtc.TryGetValue(endpoint, out var lastLogUtc)
-            || now - lastLogUtc >= TimeSpan.FromSeconds(30)
-            || reconnectAttempts <= 2;
+        bool shouldLog;
+        lock (_stateLock)
+        {
+            shouldLog = !_lastReconnectLogUtc.TryGetValue(endpoint, out var lastLogUtc)
+                || now - lastLogUtc >= TimeSpan.FromSeconds(30)
+                || reconnectAttempts <= 2;
+            if (shouldLog)
+                _lastReconnectLogUtc[endpoint] = now;
+        }
 
         if (!shouldLog)
             return;
-
-        _lastReconnectLogUtc[endpoint] = now;
 
         if (isConnectionRefused)
         {
@@ -339,11 +375,13 @@ public class SSEClient : IDisposable
                     break;
 
                 case StreamKind.Log when eventType == "log":
-                    LogReceived?.Invoke(this, new LogEventArgs
+                    var logEvent = new LogEventArgs
                     {
                         Level = string.IsNullOrWhiteSpace(TryGetString(root, "level")) ? "info" : TryGetString(root, "level"),
                         Message = FirstNonEmpty(TryGetString(root, "message"), TryGetString(root, "detail")),
-                    });
+                    };
+                    _terminalLogBuffer.Append(logEvent.Level, logEvent.Message);
+                    LogReceived?.Invoke(this, logEvent);
                     break;
 
                 case StreamKind.Gpu when eventType == "gpu_status":

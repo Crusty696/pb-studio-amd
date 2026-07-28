@@ -57,6 +57,15 @@ class VideoAnalysisResult(BaseModel):
     _run_video_analysis-Pfad, kein direkter Konsument in Pacing/Brain
     (Brain hat eigene CandidateFeatures-Datenklasse). Entfernt: mood_tags,
     style_tags, object_tags, brightness_curve, saturation_curve, color_temp_curve.
+
+    Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): mood_tags + die neuen
+    avg_brightness/avg_saturation/avg_color_temp-Felder wieder aufgenommen —
+    die "kein Konsument"-Begruendung von L-VIDEO-4 traf nur auf dieses
+    API-Response-Schema zu, NICHT auf den internen video_analysis_cache-Dict,
+    den bridge_dimensions.py/post_processor.py/clip_selector.py direkt lesen
+    (unabhaengig von diesem Pydantic-Schema). Jetzt gibt es einen echten
+    Producer (compute_color_features in moondream_wrapper.py), die Felder
+    sind wieder sinnvoll.
     """
     clip_id: int
     scene_count: int = 0
@@ -73,6 +82,10 @@ class VideoAnalysisResult(BaseModel):
     # Wird im Pacing fuer use_key_matching (Camelot-Wheel Compatibility) genutzt.
     audio_key: Optional[str] = None
     tag_source: Optional[str] = None
+    mood_tags: list[str] = []
+    avg_brightness: float = 0.5
+    avg_saturation: float = 0.5
+    avg_color_temp: float = 0.0
 
 
 class SceneInfo(BaseModel):

@@ -81,9 +81,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         UpdatePositionMarker();
     }
 
-    [RelayCommand]
     private async Task LoadAudioSourcesAsync()
     {
+        if (_disposed)
+            return;
+
         _reloadQueued = false;
 
         if (!await _loadGate.WaitAsync(0))
@@ -95,6 +97,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         try
         {
             var clips = await _audioLibraryState.RefreshAsync();
+            if (_disposed)
+                return;
+
             if (clips == null)
             {
                 StatusText = "Audio-Quellen laden fehlgeschlagen";
@@ -105,6 +110,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
 
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
+                if (_disposed)
+                    return;
+
                 AvailableAudioClips.Clear();
                 foreach (var clip in clips)
                 {
@@ -124,6 +132,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
                     });
                 }
             });
+
+            if (_disposed)
+                return;
 
             var nextSelection = selectedClipId.HasValue
                 ? AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value)
@@ -145,7 +156,7 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
             _loadGate.Release();
         }
 
-        if (_reloadQueued)
+        if (_reloadQueued && !_disposed)
             await LoadAudioSourcesAsync();
     }
 
@@ -411,10 +422,10 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _loadSequence);
+        _reloadQueued = false;
         WeakReferenceMessenger.Default.UnregisterAll(this);
         _shutdownCts.Cancel();
-        _shutdownCts.Dispose();
-        _loadGate.Dispose();
     }
 }
 

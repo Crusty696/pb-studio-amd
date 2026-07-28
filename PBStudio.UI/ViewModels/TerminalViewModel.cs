@@ -3,72 +3,63 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
 using PBStudio.UI.Services;
-using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
 public partial class TerminalViewModel : ObservableObject, IDisposable
 {
-    private readonly SSEClient _sse;
+    private readonly TerminalLogBuffer _buffer;
     private readonly StringBuilder _logBuilder = new();
-    private const int MaxLogLength = 100000; // Schutz vor Memory-Bloat (max 100k Zeichen)
+    private const int MaxLogLength = 100_000;
 
     [ObservableProperty]
     private string _logContent = "";
 
-    public TerminalViewModel(SSEClient sse)
+    public TerminalViewModel(TerminalLogBuffer buffer)
     {
-        _sse = sse;
-        _sse.LogReceived += OnLogReceived;
-        
-        WeakReferenceMessenger.Default.Register<WpfLogMessage>(this, (r, m) =>
+        _buffer = buffer;
+        var history = _buffer.Subscribe(OnEntryAdded);
+        foreach (var entry in history)
         {
-            AppendLog(m.Level, m.Message);
-        });
+            AppendEntry(entry);
+        }
 
-        // Initial-Meldung im Terminal
-        AppendLog("SYSTEM", "Terminal initialisiert. Warte auf Logs...");
+        if (history.Length == 0)
+            _buffer.Append("SYSTEM", "Terminal initialisiert. Warte auf Logs...");
     }
 
-    private void OnLogReceived(object? sender, LogEventArgs e)
+    private void OnEntryAdded(TerminalLogEntry entry)
     {
-        AppendLog(e.Level, e.Message);
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null)
+            _ = dispatcher.InvokeAsync(() => AppendEntry(entry));
     }
 
-    private void AppendLog(string level, string message)
+    private void AppendEntry(TerminalLogEntry entry)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        var line = $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}\n";
+        if (_logBuilder.Length + line.Length > MaxLogLength)
         {
-            var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            var line = $"[{timestamp}] [{level.ToUpper()}] {message}\n";
-
-            // Schutz vor Überlauf
-            if (_logBuilder.Length + line.Length > MaxLogLength)
-            {
-                // Die ältere Hälfte des Logs abschneiden
-                var current = _logBuilder.ToString();
-                _logBuilder.Clear();
-                _logBuilder.Append(current.Substring(current.Length / 2));
-            }
-
-            _logBuilder.Append(line);
-            LogContent = _logBuilder.ToString();
-        });
+            var current = _logBuilder.ToString();
+            _logBuilder.Clear();
+            _logBuilder.Append(current[(current.Length / 2)..]);
+        }
+        _logBuilder.Append(line);
+        LogContent = _logBuilder.ToString();
     }
 
     [RelayCommand]
     private void Clear()
     {
+        _buffer.Clear();
         _logBuilder.Clear();
         LogContent = "";
-        AppendLog("SYSTEM", "Terminal-Inhalt geleert.");
+        _buffer.Append("SYSTEM", "Terminal-Inhalt geleert.");
     }
 
     public void Dispose()
     {
-        _sse.LogReceived -= OnLogReceived;
-        WeakReferenceMessenger.Default.Unregister<WpfLogMessage>(this);
+        _buffer.Unsubscribe(OnEntryAdded);
     }
 }

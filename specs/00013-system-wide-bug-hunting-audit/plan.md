@@ -1,5 +1,177 @@
 # Implementierungsplan: System-wide Bug Hunting & Codebase Audit (Epic 00013)
 
+## Phase 31: Aktive DTO-Schemas synchronisieren
+
+1. Regression für fehlende Audio-/Videoanalyse-Felder ergänzen.
+2. Handgeschriebene Records additiv mit dem OpenAPI-Snapshot synchronisieren.
+3. Vertragstest und WPF Release-Build ausführen.
+
+## Phase 30: SSE-Progress-Korrelation
+
+1. Statischen Vertrag für aktive IDs und Domain-Filter ergänzen.
+2. Videoimport- und Pacing-Events mit Task-/Clip-Korrelation versehen.
+3. VideoLibrary und Director auf den aktiven Request begrenzen.
+4. Router-/Vertragstests und WPF Release-Build ausführen.
+
+## Phase 29: Lernsession Playback-Toggle
+
+1. Statischen WPF-Vertrag für Toggle-State, beide Events und Buttonlabel ergänzen.
+2. `LearningSessionViewModel` um `IsPlaying` und echten Toggle erweitern.
+3. XAML-Buttontext an den Playback-State binden.
+4. Vertragstest und WPF Release-Build ausführen.
+
+## Phase 28: RAFT-Flow-Wiederverwendung
+
+1. Regression für exakt einen Flow-Aufruf pro Frame-Paar ergänzen.
+2. Flow-basierte Statistik- und Scene-Change-Helfer extrahieren.
+3. Segmentanalyse über einen gemeinsamen Pair-Analyzer verdrahten.
+4. RAFT-/Video-/DirectML-Tests und Compile-Sweep ausführen.
+
+## Phase 27: Streaming-Energy-Zeitachse
+
+1. Regression mit fehlerhaftem mittleren Chunk und spätem Peak ergänzen.
+2. Energy-Aggregator um deterministische Null-Lücken erweitern.
+3. Load- und RMS-Fehlerpfade an die Lückenaggregation anbinden.
+4. Streaming-/Audio-/Pacing-Tests und Compile-Sweep ausführen.
+
+## Phase 26: Medien-JSON-Schreibschema
+
+1. Persistenzregression für `.wmv`-Metadata und AI-Data ergänzen.
+2. Medienart-Klassifikation zentralisieren und `.wmv`/`.flv` aufnehmen.
+3. Schema-Migration vor allen normalen JSON-Schreibpfaden anwenden.
+4. Repository-/Schema-Tests und Compile-Sweep ausführen; Live-Batchmigration auslassen.
+
+## Phase 25: Brain-Stats Lock-Sicherheit
+
+1. Regression mit einer Connection ergänzen, die ungesperrte Queries ablehnt.
+2. Alle direkten Stats-Queries in einen gemeinsamen `_weights_lock`-Scope verschieben.
+3. Brain-Router-, Recovery- und Core-Tests sowie Compile-Sweep ausführen.
+
+## Phase 24: FAISS-Link als Commit-Gate
+
+1. Regressionen für fehlende `media_id` und fehlgeschlagenen `vector_map`-Insert ergänzen.
+2. Unverlinkte Writes vor dem Index-Add ablehnen.
+3. Linkfehler durch sicheren Last-Vector-Rollback oder Tombstone kompensieren und propagieren.
+4. VectorStore-/Data-Tests und Compile-Sweep ausführen.
+
+## Phase 23: Projekt-Guard für Medienimporte
+
+1. API-Regressionen für Audio-/Videoimport ohne aktives Projekt ergänzen.
+2. Strikten AppState-Zugriff auf die aktive DB-Projekt-ID ergänzen.
+3. Import, Registrierung und Persistenz auf den strikten Projektkontext verdrahten.
+4. Router-, AppState- und Persistenztests sowie Compile-Sweep ausführen.
+
+## Phase 22: Persistenzsichere Medien-Löschung
+
+1. Regressionen für Audio-DB-Fehler und Video-Tombstone-Fehler ergänzen.
+2. SQLite-/FAISS-Arbeit vor der In-Memory-Entfernung ausführen.
+3. Persistenzfehler protokollieren, als `persist_error` publizieren und erneut auslösen.
+4. AppState-, Router- und Persistenztests sowie den Python-Compile-Sweep ausführen.
+
+## Phase 7: C-01 Live-Pacing Cache-Vertrag
+
+* **Analyse:** Fehler im echten Ablauf Audio-Analyse → `_inject_cached_into_engine()` → `AdvancedPacingEngine._generate_cut_list_from_audio()` reproduzieren.
+* **Test:** Regressionstest für vorab injizierte Beats/Energie bei fehlenden Onset-/Drum-Kandidaten; Exceptions dürfen nicht geschluckt werden.
+* **Implementierung:** Waveform-Cache-Felder atomar im Engine-Konstruktor initialisieren. Analysemetadaten-Injektion darf `_cached_audio_path` nicht als geladen markieren.
+* **QC:** Pacing-Subset, Python-Compile-Sweep, vollständige Pytest-Suite und Release-Smoke ausführen.
+
+## Phase 8: C-02 AMF-only Render-Vertrag
+
+* **Analyse:** Encoder-Werte vom WPF-Request über Pydantic/Tool-Schema bis FFmpeg-Argumente verfolgen und Software-Fallbacks reproduzieren.
+* **Test:** AMF-only Enum-/Utility-/RenderService-Regressionen; fehlendes AMF muss explizit fehlschlagen.
+* **Implementierung:** Nur `h264_amf`, `hevc_amf`, `av1_amf` zulassen; `libx264`, `libx265`, `libsvtav1`, `h264_mf` und `force_software` aus Live-Pfaden entfernen.
+* **QC:** Encoder-/Render-/OpenAPI-Tests, Python-Compile, WPF Release-Build, vollständige Suite und Release-Smoke.
+
+## Phase 9: C-03 DirectML-only Provider- und Motion-Vertrag
+
+* **Analyse:** Providerketten in `ModelLoader`, RAFT-Factory, `SmartDirector` und Audio-Separator gegen den DirectML-Vertrag prüfen.
+* **Test:** Regressionen für verpflichtenden DirectML-Provider und CPU-freie Motion-Analyse ergänzen.
+* **Implementierung:** CPU-Provider und Farneback aus nicht gesperrten Live-Pfaden entfernen; `audio/separator.py` erst nach expliziter Nutzerfreigabe ändern.
+* **QC:** DirectML-Zieltests, Python-Compile und vollständige Pytest-Suite; C-03 bis zur Separator-Freigabe als teilweise behoben führen.
+
+## Phase 10: C-04 SDD/QC-Gate-Konsistenz
+
+* **Analyse:** Task-Checkboxen, QC-Aussagen und Markerdateien gegen den aktuellen Test- und Finding-Stand prüfen.
+* **Test:** Repository-Regression für Checkboxformat, invalidierten historischen Pass und abwesende Erfolgsmarker ergänzen.
+* **Implementierung:** Checkboxen normalisieren, historischen QC-Pass eindeutig invalidieren und falsche Marker nach expliziter Löschfreigabe entfernen.
+* **QC:** SDD-Gate-Test, Marker-Suche und vollständige Metadatenprüfung ausführen.
+
+## Phase 11: H-01 Nicht-destruktiver Medien-Restore
+
+* **Analyse:** Projekt-Open über `project_router.open_project()` bis `AppState.load_from_db()` und `MediaRepository.delete_media()` verfolgen.
+* **Test:** Temporär fehlendes Medium muss übersprungen, aber weder gelöscht noch seine Clip-ID wiederverwendet werden.
+* **Implementierung:** Metadaten und Clip-ID vor dem Dateisystem-Gate validieren; fehlende Dateien nur als nicht verfügbar protokollieren.
+* **QC:** AppState-/Projektpersistenz-Cluster, Compile-Sweep und relevante DB-Restore-Regressionen ausführen.
+
+## Phase 12: H-02 Atomarer Projekt↔Brain-Rebind
+
+* **Analyse:** `_bind_brain_to_project()` über `_brain_singleton.set_project_state()` bis `BrainService.bind_project_state()` verfolgen.
+* **Test:** Bind-Fehler muss alten Pfad, alte Connection und alten `AppState` erhalten; erfolgreicher Swap schließt die alte Connection erst nach Initialisierung der neuen.
+* **Implementierung:** Connection und globalen Pfad atomar tauschen; Projekt-Create/Open vor jedem Runtime-State-Reset bindend preflighten und Fehler als HTTP 500 melden.
+* **QC:** Projekt-Lifecycle- und Brain-Binding-Regressionen sowie Compile-Sweep ausführen.
+
+## Phase 13: H-03 FAISS/SQLite-Kompaktierungs-Gate
+
+* **Analyse:** Tombstone-Reindexing, `vector_map`-Remap und Snapshot-Save als eine Commit-Kette verfolgen.
+* **Test:** Erzwungener SQLite-Remap-Fehler darf weder Index/Metadaten tauschen noch Tombstones löschen oder einen Save anfordern.
+* **Implementierung:** Remap-Fehler bis zur äußeren Kompaktierungsgrenze propagieren und den In-Memory-Swap ausschließlich nach erfolgreichem Commit ausführen.
+* **QC:** VectorStore-Tombstone-Regressionen und Compile-Sweep ausführen.
+
+## Phase 14: VectorStore-Testfixture reparieren
+
+* **Analyse:** Bekannten `_save_cv`-Fehler gegen den echten `VectorStore.__init__`-Vertrag prüfen.
+* **Implementierung:** Beim absichtlich per `__new__` erzeugten Unit-Testobjekt `_request_save()` mocken und dessen Aufruf verifizieren.
+* **QC:** Vollständigen VectorStore-Testcluster ausführen.
+
+## Phase 15: Generation-Cancel-Race
+
+* **Analyse:** Cancel-Signal von `GenerationService.cancel()` über SmartDirector-Analyse bis `VideoGenerator.generate_from_timeline()` verfolgen.
+* **Test:** Timeline-Render respektiert ein bereits gesetztes Cancel; jede neue Jobannahme ruft genau einmal `reset_cancel()` auf.
+* **Implementierung:** Cancel ausschließlich bei synchroner Jobannahme zurücksetzen und in beiden Generator-Einstiegen früh prüfen.
+* **QC:** SmartDirector-/GenerationService-/VideoGenerator-Cluster und Compile-Sweep ausführen.
+
+## Phase 16: H-04 Crash-konsistenter FAISS-Snapshot
+
+* **Analyse:** Synchrone und coalesced Save-Pfade sowie Loader-Recovery über alle drei Snapshot-Dateien verfolgen.
+* **Test:** Erzwungener Fehler zwischen Live-Replaces und simuliertes Neustart-Journal müssen exakt die alte Dreiergeneration wiederherstellen.
+* **Implementierung:** Gemeinsames Commit-Journal, Backups und idempotente Recovery vor `_load_index()` ergänzen; beide Writer verwenden denselben Commit-Helper.
+* **QC:** Snapshot-/VectorStore-Regressionen und Compile-Sweep ausführen.
+
+## Phase 17: H-05 Doppelte VRAM-Reservierung
+
+* **Analyse:** Budget-Lebensdauer von `video_analysis_full`, RAFT und SigLIP über Router, GPU-Lock und Modell-Loader verfolgen.
+* **Test:** Zusammengesetzter GPU-Task muss Lock und Telemetrie nutzen, ohne sein äußeres Budget zu reservieren oder zu committen.
+* **Implementierung:** `with_gpu_task()` erhält einen expliziten Schalter für intern verwaltete Modellbudgets; Videoanalyse deaktiviert nur die äußere Reservierung.
+* **QC:** VRAM-Telemetrie-, Video-Router- und DirectML-Zieltests sowie Compile-Sweep ausführen.
+
+## Phase 18: H-06 Trigger-Coverage langer Mixe
+
+* **Analyse:** 600-s-Snapshot, Streaming-Result, Audio-Cache-Persistenz und Pacing-Injektion als eine Triggerkette verfolgen.
+* **Test:** Mehrfenster-Audio muss Onsets aus späten Chunks liefern; `energy_only` hält Triggerlisten leer.
+* **Implementierung:** Trigger pro Streaming-Chunk mit absoluten Zeitstempeln sammeln und an Overlap-Grenzen deduplizieren; Audio-Router verwendet diese Listen statt des 600-s-Snapshots.
+* **QC:** Streaming-, Audioanalyse- und Pacing-Cache-Cluster sowie Compile-Sweep ausführen.
+
+## Phase 19: H-07 Render-Queue-Restart
+
+* **Analyse:** Persistierten Queue-Datensatz, Startup-Restore und `_run_render_task()` auf vollständige Rekonstruierbarkeit verfolgen.
+* **Test:** `running`-Job mit Resume-Payload muss nach Startup erneut geplant werden; Altjob ohne Payload muss terminal und erklärbar fehlschlagen.
+* **Implementierung:** Versionierten Request-, Timeline- und Projektwurzel-Snapshot in `settings_json` speichern und Pending-Jobs im Lifespan rekonstruieren.
+* **QC:** Render-Persistenz-, Router- und Cancel/AMF-Cluster sowie Compile-Sweep ausführen.
+
+## Phase 20: H-08 WPF-Projektcache-Invalidierung
+
+* **Analyse:** Direkten Projektwechsel über `ProjectService`, Messenger-Empfänger, Shared-State-Services und Thumbnail-Cache verfolgen.
+* **Test:** Statischer Lifecycle-Vertrag fordert Closing→Closed→Opened, Audio-State-Clear, Generation-Invalidierung und Thumbnail-Clear.
+* **Implementierung:** Erfolgreichen Switch atomar publizieren; State-Service-Generationen verhindern Late-Write alter Refreshes.
+* **QC:** WPF-Vertragstests und Release-Build ausführen.
+
+## Phase 21: H-09 UI-Thread-sichere Projektmeldungen
+
+* **Analyse:** Alle Sender von ProjectClosing/Closed und direkte Collection-Mutationen der Empfänger auf Thread-Herkunft prüfen.
+* **Test:** Statischer Vertrag fordert Dispatcher-Marshalling für Close und Direct-Switch.
+* **Implementierung:** Zentralen `RunOnUiThread`-Pfad des `ProjectService` für alle Lifecycle-Publikationen verwenden.
+* **QC:** WPF-Lifecycle-Vertrag und Release-Build ausführen.
+
 ## Technical Context
 * **WPF Frontend:** .NET 9 SDK WPF Core
 * **Python Backend:** Python 3.11.x, NumPy 1.26.4
@@ -60,6 +232,223 @@ Um eine lückenlose Verifikation zu gewährleisten, gliedern wir das System-Audi
 ### Manuelle Verifikation
 * Stem-Separation über Swagger-UI oder App testen mit dem Demucs-Modell.
 * Audio-Analyse nach der Stem-Separation ausführen und prüfen, ob die Ausgaben die Drums/Instrumental-Pfade verwenden.
+
+## Phase 32: Nicht-blockierendes WPF-Dateilogging
+
+1. Den manuellen globalen Klick-Audit-Hook aus `MainWindow.xaml.cs` entfernen.
+2. `FileLoggerProvider` auf eine begrenzte Multi-Writer-/Single-Reader-Queue mit Hintergrund-Dateiwriter umstellen.
+3. Statischen WPF-Vertrag testen und den Release-Build ausführen.
+
+## Phase 33: VectorStore-Writer-Lifecycle
+
+1. Regressionen für Indexwechsel, Thread-Ende und Neuerzeugung nach Close ergänzen.
+2. Beim Singleton-Wechsel die alte Instanz geordnet schließen und final speichern.
+3. VectorStore-/Persistenztests und Python-Compile-Sweep ausführen.
+
+## Phase 34: Canvas-Pacing-Datenfluss
+
+1. Vertragstests für Canvas-Weitergabe und einmalige Clip-ID-Präfixierung ergänzen.
+2. Backend-Schema, Router, OpenAPI-Snapshot und aktives C#-DTO synchronisieren.
+3. Canvas-Pfad im Director-ViewModel/View erreichbar machen und an den Request binden.
+4. Pacing-/OpenAPI-/WPF-Verträge, Compile-Sweep und Release-Build ausführen.
+
+## Phase 35: Projektübersicht-Timeline-Status
+
+1. Statischen WPF-Vertrag für die drei Timeline-Zustände ergänzen.
+2. Abgeleiteten Statustext und Generate-Sichtbarkeit im ViewModel implementieren.
+3. XAML-Bindings und WPF Release-Build verifizieren.
+
+## Phase 36: Terminal-Log-History
+
+1. Vertrag für zentrale History, beide Logquellen und Replay ergänzen.
+2. Begrenzten thread-sicheren TerminalLogBuffer als Singleton implementieren.
+3. TerminalLoggerProvider und SSEClient in den Puffer schreiben lassen; ViewModel auf Replay/Subscription umstellen.
+4. Terminal-/WPF-Verträge und Release-Build ausführen.
+
+## Phase 37: AI-Config-Reader konsolidieren
+
+1. ConfigManager-Priorität, Disk-Fallback und Alias-Kompatibilität regressieren.
+2. Gemeinsamen AI-Config-Helper anlegen und beide identischen Funktionskörper durch lokale Aliase ersetzen.
+3. Brain-/Vision-/Provider-Tests und Compile-Sweep ausführen.
+
+## Phase 38: Projekt-Lifecycle-Command-Wiring
+
+1. Statischen Vertrag für Save/Close-Bindings und den internen Anchor-Reload ergänzen.
+2. Save/Close im zuständigen Projektübersicht-ViewModel implementieren und in der View binden.
+3. Ungenutzte MainViewModel-Projektcommand-Duplikate sowie das ungebundene Anchor-Reload-Command entfernen.
+4. WPF-Verträge und Release-Build ausführen.
+
+## Phase 39: Tote Modell-Convenience-Helper
+
+1. Aufrufer und Exporte der gemeldeten SigLIP-/Moondream-Helper vollständig prüfen.
+2. Ausschließlich nachweislich unreferenzierte Convenience-Funktionen entfernen.
+3. Statischen Vertrag, Moondream-/SigLIP-Tests und Compile-Sweep ausführen.
+
+## Phase 40: Zombie-Wächter-Shutdown
+
+1. Lifespan-Vertrag für Cancel-before-cleanup und vollständiges Task-Join ergänzen.
+2. Zombie-Wächter gezielt canceln und vor Ressourcen-Cleanup awaiten.
+3. Backend-Vertrag, Main-/Lifespan-Tests und Compile-Sweep ausführen.
+
+## Phase 41: Atomarer WPF-Projekt-Close
+
+1. Fehlervertrag für erfolglosen Close und ausbleibende Lifecycle-Meldungen ergänzen.
+2. API-Erfolg vor lokaler Closing/Closed-Zustandsänderung prüfen.
+3. Projektübersicht auf den booleschen Close-Vertrag umstellen.
+4. WPF-Projektverträge und Release-Build ausführen.
+
+## Phase 42: WPF-Projekt-Refresh-Lifecycle
+
+1. Vertrag für Dispatcher-Zustellung, fehlertoleranten Refresh und genau eine Open-Meldung ergänzen.
+2. Refresh über den zentralen `SwitchToProject()`-Pfad leiten.
+3. Doppelte Open-Meldung aus `MainViewModel` entfernen.
+4. WPF-Projektverträge und Release-Build ausführen.
+
+## Phase 43: WPF-Projekt-Save-Dispatcher
+
+1. Vertrag für atomaren UI-Thread-Save-State ergänzen.
+2. Save-Info und ProjectChanged gemeinsam über `RunOnUiThread()` veröffentlichen.
+3. WPF-Projektverträge und Release-Build ausführen.
+
+## Phase 44: Settings-VRAM-Debounce
+
+1. Vertrag für UI-kontextbewahrendes Debounce und CTS-Lifecycle ergänzen.
+2. Threadpool-Wrapper durch eine cancelbare Async-Methode ersetzen.
+3. WPF-Settings-Vertrag und Release-Build ausführen.
+
+## Phase 45: VRAM-Telemetrie-Load-Lifecycle
+
+1. Vertrag für CTS-Ownership und generationssicheren Loading-State ergänzen.
+2. Ersetzte Loads canceln und ihre CTS im jeweiligen `finally` disposen.
+3. WPF-Telemetrie-Vertrag und Release-Build ausführen.
+
+## Phase 46: Chat-Stream-View-Lifecycle
+
+1. Vertrag für Scope-Dispose, Stream-CTS und Generation-Ownership ergänzen.
+2. ChatViewModel disposable machen und späte Stream-/Clear-Updates sperren.
+3. Chat-Verträge, Backend-Chat-Cluster und WPF Release-Build ausführen.
+
+## Phase 47: Model-Manager-Load-Lifecycle
+
+1. Vertrag für CTS-Ownership und generationssicheren Loading-State ergänzen.
+2. Pro Load eine lokale CTS besitzen und nur dem aktuellen Load Status-Cleanup erlauben.
+3. Modell-Verträge, Registry-/Router-Tests und WPF Release-Build ausführen.
+
+## Phase 48: Settings-FFmpeg-Probe-Lifecycle
+
+1. Vertrag für Pfad-Cancellation, CTS-Ownership und aktuellen Probe-State ergänzen.
+2. Aktive Probe bei Pfadänderung canceln und Ressourcen pro Ausführung besitzen.
+3. Settings-/Config-Verträge und WPF Release-Build ausführen.
+
+## Phase 49: Video-Szenen-Selection-Race
+
+1. Vertrag für Szenenload-Sequenz, Clip-ID-Prüfung und Loading-Ownership ergänzen.
+2. Auswahlwechsel und Szenen-Refresh über eine monotone Sequenz absichern.
+3. Video-/WPF-Verträge und Release-Build ausführen.
+
+## Phase 50: Timeline-Reset-Async-Races
+
+1. Vertrag für Reset-Invalidierung, Dispatcher-Rechecks und sicheren Gate-Lifecycle ergänzen.
+2. Timeline-, Waveform- und Motion-Generationen bei Reset/Dispose invalidieren.
+3. Timeline-/WPF-Verträge und Release-Build ausführen.
+
+## Phase 51: WPF-Load-Gate-Dispose-Races
+
+1. Vertrag für scope-sichere Load-Gates und Shutdown-Invalidierung ergänzen.
+2. Anchor-, VideoLibrary- und Director-Gates nicht während laufender Tasks disposen.
+3. Anchor/Director bei Dispose invalidieren und Folge-Reloads nach Shutdown sperren.
+4. WPF-Lifecycle-Verträge und Release-Build ausführen.
+
+## Phase 52: PythonBridge-OnExit-Gate-Race
+
+1. Vertrag für OnExit-Timeout und noch laufende Bridge-Operationen ergänzen.
+2. Lifecycle-Gate beim synchronen Service-Dispose nicht vor In-flight-Releases zerstören.
+3. Bridge-/App-Lifecycle-Verträge und Release-Build ausführen.
+
+## Phase 53: SSE-Listener-Token-Generation
+
+1. Vertrag für lokale CTS-Bindung pro SSE-Startgeneration ergänzen.
+2. Listener-Tasks mit dem unveränderlichen lokalen Token starten und Starts nach Dispose sperren.
+3. SSE-Lifecycle-Verträge und Release-Build ausführen.
+
+## Phase 54: SSE-Reconnect-Dictionary-Race
+
+1. Vertrag für atomare Reconnect-Throttle-Zugriffe ergänzen.
+2. Dictionary-Lookup und -Update unter dem vorhandenen State-Lock bündeln.
+3. SSE-Threading-Verträge und Release-Build ausführen.
+
+## Phase 55: SSE-Multi-Stream-Verbindungsstatus
+
+1. Vertrag für aggregierten Stream-Status und Generation-Isolation ergänzen.
+2. Verbindungszustand pro Stream-Art unter State-Lock führen.
+3. EOF, Cancellation und Fehler generationstreu austragen; Unerreichbarkeit nur ohne offene Streams melden.
+4. SSE-Statusverträge und Release-Build ausführen.
+
+## Phase 56: ProjectOverview-Refresh-Coalescing
+
+1. Vertrag für generationssicheren, verlustfreien Dashboard-Refresh ergänzen.
+2. Aktiven Refresh atomar besitzen und überlappende Signale coalescen.
+3. Ergebnisse nach jedem Await gegen Generation/Dispose prüfen und letzten Refresh nachholen.
+4. Projekt-Dashboard-Verträge und Release-Build ausführen.
+
+## Phase 57: ProjectOverview-Dead-DI
+
+1. Vertrag gegen ungenutzte Dashboard-DI ergänzen.
+2. Totes Video-State-Feld und Konstruktorparameter entfernen.
+3. Dashboard-Vertrag und Release-Build ausführen.
+
+## Phase 58: Brain-UI-Load-Generationen
+
+1. Vertrag für projektgebundene Stats-/Learning-Loads und Loading-Ownership ergänzen.
+2. Stats und Learning Session vor Late-Writes durch eigene Generationen schützen.
+3. Projekt-Close und Dispose invalidieren Loads; nur aktuelle Loading-Generation beendet den Spinner.
+4. Brain-/WPF-Verträge und Release-Build ausführen.
+
+## Phase 59: Freigegebene Live-Datenreparaturen
+
+1. Backend-Ausstand prüfen und timestamped SQLite-/FAISS-Backups erzeugen.
+2. Backup-Integrität und Dateihashes vor Mutation verifizieren.
+3. Mehrdeutigen FAISS-Orphan 897 tombstonieren und Snapshot geordnet schließen.
+4. JSON-Blobs mit zentralen Migratoren in einer SQLite-Transaktion persistieren.
+5. Live-DB, Index, Tombstones, Schlüsselbewahrung und Versionszählungen verifizieren.
+
+## Phase 60: DirectML-Separator und Dead-Code
+
+1. Separator-Vertrag für ONNX-DML-only und Demucs-CPU-Ausnahme ergänzen.
+2. CPU-Provider/-Fallback nur aus ONNX-Pfad entfernen; Session-Flags erhalten.
+3. Aktive Referenzen der freigegebenen Dead-Dateien erneut prüfen und Dateien/Baum löschen.
+4. Audio-/Dead-Code-Verträge, Compile und WPF-Build ausführen.
+
+## Phase 61: SDD-Gate und Gesamt-QC
+
+1. Falsche Erfolgsmarker löschen.
+2. Audit-Gate, Zielcluster, Vollsuite und Release-Build ausführen.
+3. QC-Bericht nur anhand realer Resultate aktualisieren; Marker erst bei vollständigem Pass neu erzeugen.
+
+## Phase 62: Separator-Patch-Parallelität
+
+1. Einen Parallelitätsvertrag für zwei DirectML-Separator-Instanzen ergänzen.
+2. Den globalen `SessionOptions`-Patch über seinen vollständigen Lebenszyklus serialisieren.
+3. Separator-Zieltests, Python-Compile und vollständige Regression erneut ausführen.
+
+## Phase 63: Atomarer Projekt-Open
+
+1. DB-Ladefehler und Erhalt des aktiven Projekts als Router-Vertrag abdecken.
+2. Den neuen Medienkatalog in einem isolierten `AppState` vorladen.
+3. Brain und Live-State erst nach erfolgreichem Preload umschalten.
+4. Projekt-, DB- und vollständige Regressionstests erneut ausführen.
+
+## Phase 64: BeatNet-Import-Hygiene
+
+1. Die reale `sys.modules`-Kontamination bei fehlendem PyAudio abdecken.
+2. Den PyAudio-Stub auf den BeatNet-Importversuch begrenzen.
+3. Beat-/Audio-Zieltests, Compile und Gesamtregression ausführen.
+
+## Phase 65: Python-3.11-Launcher-Gate
+
+1. Den WPF-Launcher-Vertrag gegen Python 3.12 und unversionierte Fallbacks absichern.
+2. Kandidaten auf eine reale `Python 3.11.x`-Versionsausgabe prüfen.
+3. WPF-Verträge, Release-Build und Gesamtregression ausführen.
 
 ---
 

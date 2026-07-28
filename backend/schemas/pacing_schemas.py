@@ -57,6 +57,7 @@ class PacingConfigSchema(BaseModel):
     use_stem_pacing: bool = False
     # S-H2 (Audit V2): duration_limit cap muss positiv sein, sonst Render-Pfad NoOp.
     duration_limit: Optional[float] = Field(None, gt=0.0)
+    canvas_path: Optional[str] = Field(None, max_length=32767)
     min_cut_interval: float = Field(0.5, ge=0.0)
     # Plan Phase 4: brain integration toggles
     use_brain: bool = False

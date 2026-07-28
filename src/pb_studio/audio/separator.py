@@ -8,6 +8,7 @@ import importlib.util
 import logging
 import os
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
 
+_directml_session_options_patch_lock = threading.RLock()
 
 
 def _box_iou(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -157,14 +159,17 @@ class StemSeparator:
 
             if "DmlExecutionProvider" in available_providers:
                 logger.info("AMD DirectML detected. Patching audio-separator for GPU acceleration.")
-                self.separator.onnx_execution_provider = ["DmlExecutionProvider", "CPUExecutionProvider"]
+                self.separator.onnx_execution_provider = ["DmlExecutionProvider"]
                 logger.info(f"ONNX Provider set to: {self.separator.onnx_execution_provider}")
 
                 # SessionOptions Patch wird nur während separate() aktiv gehalten
                 # (siehe _apply_directml_patch / _restore_directml_patch)
                 self._has_directml = True
             else:
-                logger.warning("DirectML not available. Running in CPU mode.")
+                logger.warning(
+                    "DirectML not available. ONNX stem models are disabled; "
+                    "the intentional PyTorch CPU path for Demucs remains available."
+                )
                 self._has_directml = False
             # === END PATCH ===
             
@@ -181,21 +186,37 @@ class StemSeparator:
         """Apply SessionOptions monkey-patch for DirectML (scoped)."""
         if not getattr(self, '_has_directml', False):
             return
-        self._original_session_options_init = ort.SessionOptions.__init__
-        def _patched_init(self_opts, *args, **kwargs):
-            self._original_session_options_init(self_opts, *args, **kwargs)
-            self_opts.enable_mem_pattern = False
-            self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
-        ort.SessionOptions.__init__ = _patched_init
-        logger.debug("SessionOptions patch applied for DirectML separation")
+        _directml_session_options_patch_lock.acquire()
+        try:
+            original = ort.SessionOptions.__init__
+            self._original_session_options_init = original
+
+            def _patched_init(self_opts, *args, **kwargs):
+                original(self_opts, *args, **kwargs)
+                self_opts.enable_mem_pattern = False
+                self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
+
+            ort.SessionOptions.__init__ = _patched_init
+            self._directml_patch_lock_held = True
+            logger.debug("SessionOptions patch applied for DirectML separation")
+        except Exception:
+            self._original_session_options_init = None
+            _directml_session_options_patch_lock.release()
+            raise
 
     def _restore_directml_patch(self):
         """Restore original SessionOptions.__init__ after separation."""
         original = getattr(self, '_original_session_options_init', None)
-        if original is not None:
-            ort.SessionOptions.__init__ = original
+        lock_held = getattr(self, '_directml_patch_lock_held', False)
+        try:
+            if original is not None:
+                ort.SessionOptions.__init__ = original
+                logger.debug("SessionOptions patch restored")
+        finally:
             self._original_session_options_init = None
-            logger.debug("SessionOptions patch restored")
+            self._directml_patch_lock_held = False
+            if lock_held:
+                _directml_session_options_patch_lock.release()
 
     def unload(self):
         """Release VRAM and reset separator."""
@@ -275,6 +296,12 @@ class StemSeparator:
 
             if not Path(file_path).exists():
                 return {"error": f"File not found: {file_path}"}
+
+            if Path(model_name).suffix.lower() == ".onnx" and not getattr(self, "_has_directml", False):
+                return {
+                    "error": "DirectML is required for ONNX stem separation; "
+                             "CPUExecutionProvider fallback is disabled."
+                }
 
             # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
             config = getattr(self, "config", None) or ConfigManager()

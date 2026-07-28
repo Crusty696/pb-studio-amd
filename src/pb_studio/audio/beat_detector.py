@@ -51,6 +51,7 @@ try:
         np.bool = bool
 
     # Patch 3: PyAudio Mock (BeatNet importiert pyaudio global)
+    _pyaudio_stub = None
     try:
         import pyaudio
     except ImportError:
@@ -58,13 +59,18 @@ try:
         from types import ModuleType
         m_pa = ModuleType("pyaudio")
         sys.modules["pyaudio"] = m_pa
+        _pyaudio_stub = m_pa
         class MockPyAudio:
             """Mock-Klasse für PyAudio (nur für BeatNet Import benötigt)."""
             def open(self, *args, **kwargs): return None
         m_pa.PyAudio = MockPyAudio
         m_pa.paFloat32 = 1
 
-    from BeatNet.BeatNet import BeatNet
+    try:
+        from BeatNet.BeatNet import BeatNet
+    finally:
+        if _pyaudio_stub is not None and sys.modules.get("pyaudio") is _pyaudio_stub:
+            sys.modules.pop("pyaudio", None)
     BEATNET_AVAILABLE = True
     logger.info("BeatNet verfügbar")
 except ImportError as e:

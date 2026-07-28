@@ -449,6 +449,14 @@ class MotionAnalyzer:
             - dominant_direction: Primary motion direction in degrees
         """
         flow_u, flow_v = self.calculate_flow(frame1, frame2)
+        return self._motion_statistics_from_flow(flow_u, flow_v)
+
+    @staticmethod
+    def _motion_statistics_from_flow(
+        flow_u: np.ndarray,
+        flow_v: np.ndarray,
+    ) -> Dict[str, float]:
+        """Leitet alle Motion-Metriken aus einem bereits berechneten Flow ab."""
         magnitude = np.sqrt(flow_u**2 + flow_v**2)
         angle = np.arctan2(flow_v, flow_u) * 180 / np.pi  # In Grad
 
@@ -465,6 +473,31 @@ class MotionAnalyzer:
         }
 
         return stats
+
+    @staticmethod
+    def _scene_change_from_statistics(
+        stats: Dict[str, float],
+        threshold: float,
+    ) -> Tuple[bool, float]:
+        magnitude = stats["p95_magnitude"]
+        variance = stats["std_magnitude"]
+        score = magnitude * (1 + variance / 10.0)
+        return score > threshold, float(min(score / threshold, 2.0))
+
+    def analyze_frame_pair(
+        self,
+        frame1: np.ndarray,
+        frame2: np.ndarray,
+        scene_threshold: float = 50.0,
+    ) -> Tuple[float, bool, float]:
+        """Berechnet Flow einmal und leitet Motion plus Scene-Change daraus ab."""
+        flow_u, flow_v = self.calculate_flow(frame1, frame2)
+        stats = self._motion_statistics_from_flow(flow_u, flow_v)
+        is_change, confidence = self._scene_change_from_statistics(
+            stats,
+            scene_threshold,
+        )
+        return stats["p95_magnitude"], is_change, confidence
 
     def detect_scene_change(
         self,
@@ -489,18 +522,7 @@ class MotionAnalyzer:
         """
         stats = self.get_motion_statistics(frame1, frame2)
 
-        # Hohe Bewegung mit hoher Varianz = wahrscheinlich Szenenwechsel
-        magnitude = stats["p95_magnitude"]
-        variance = stats["std_magnitude"]
-
-        # Szenenwechsel-Score
-        # Kombiniert Magnitude und Varianz
-        score = magnitude * (1 + variance / 10.0)
-
-        is_change = score > threshold
-        confidence = min(score / threshold, 2.0)  # 0-2 range
-
-        return is_change, float(confidence)
+        return self._scene_change_from_statistics(stats, threshold)
 
     def _make_colorwheel(self) -> np.ndarray:
         """
@@ -657,10 +679,12 @@ class MotionAnalyzer:
             frame1 = frames[i]
             frame2 = frames[min(i + stride, len(frames) - 1)]
 
-            magnitude = self.get_motion_magnitude(frame1, frame2)
+            magnitude, is_change, confidence = self.analyze_frame_pair(
+                frame1,
+                frame2,
+            )
             motions.append(magnitude)
 
-            is_change, confidence = self.detect_scene_change(frame1, frame2)
             if is_change:
                 scene_changes.append({
                     "frame_index": i,
@@ -715,68 +739,6 @@ class MotionAnalyzer:
         logger.info("RAFT model unloaded")
 
 
-# CPU Fallback using OpenCV's Farneback method
-class FarnebackFlowAnalyzer:
-    """
-    Fallback optical flow analyzer using OpenCV's Farneback method.
-
-    Use this when RAFT model is not available or GPU resources are limited.
-    Less accurate but works on CPU without additional dependencies.
-    """
-
-    def __init__(self):
-        """Initialize the Farneback flow analyzer."""
-        logger.info("Using Farneback optical flow (CPU fallback)")
-
-    def calculate_flow(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Calculate optical flow using Farneback algorithm.
-
-        Args:
-            frame1: First frame (BGR)
-            frame2: Second frame (BGR)
-
-        Returns:
-            Tuple of (flow_u, flow_v)
-        """
-        # Zu Graustufen konvertieren
-        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-
-        # Farneback Optical Flow
-        flow = cv2.calcOpticalFlowFarneback(
-            gray1, gray2,
-            None,
-            pyr_scale=0.5,
-            levels=3,
-            winsize=15,
-            iterations=3,
-            poly_n=5,
-            poly_sigma=1.2,
-            flags=0
-        )
-
-        flow_u = flow[:, :, 0]
-        flow_v = flow[:, :, 1]
-
-        return flow_u, flow_v
-
-    def get_motion_magnitude(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray,
-        percentile: float = 95.0
-    ) -> float:
-        """Calculate motion magnitude between frames."""
-        flow_u, flow_v = self.calculate_flow(frame1, frame2)
-        magnitude = np.sqrt(flow_u**2 + flow_v**2)
-        return float(np.percentile(magnitude, percentile))
-
-
 def create_motion_analyzer(prefer_gpu: bool = True) -> MotionAnalyzer:
     """
     Factory function to create a DirectML RAFT motion analyzer.
@@ -792,16 +754,6 @@ def create_motion_analyzer(prefer_gpu: bool = True) -> MotionAnalyzer:
     Returns:
         MotionAnalyzer (ggf. nicht initialisiert wenn DirectML fehlt)
     """
-    import os
-    allow_cpu = os.environ.get("ALLOW_CPU_FALLBACK", "0").strip().lower() in ("1", "true", "yes")
-    if allow_cpu:
-        # Nur per explizitem Env-Flag erlaubt (z.B. fuer Unit-Tests)
-        logger.warning("ALLOW_CPU_FALLBACK=1 gesetzt — Farneback CPU-Fallback aktiviert")
-        analyzer = MotionAnalyzer(lazy_load=False)
-        if analyzer.is_ready:
-            return analyzer
-        return FarnebackFlowAnalyzer()  # type: ignore[return-value]
-
     analyzer = MotionAnalyzer(lazy_load=False)
     if not analyzer.is_ready:
         logger.warning(

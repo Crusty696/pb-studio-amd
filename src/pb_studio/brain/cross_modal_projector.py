@@ -1,8 +1,9 @@
 """Cross-Modal Projector CLAP <-> SigLIP (R-Brain-04 + R-Brain-05 + R-Brain-08).
 
-Audio (CLAP, 512-dim) und Video (SigLIP, 768-dim) leben in unterschiedlichen
-Raeumen. Beide werden in einen gemeinsamen 256-dim Raum projiziert. Initial
-random (Johnson-Lindenstrauss); spaeter aus Brain-Feedback gelernt (R-Brain-05).
+Audio (CLAP, 512-dim) und Video (SigLIP2-Base, 768-dim via video_embedder.py)
+leben in unterschiedlichen Raeumen. Beide werden in einen gemeinsamen 256-dim
+Raum projiziert. Initial random (Johnson-Lindenstrauss); spaeter aus
+Brain-Feedback gelernt (R-Brain-05).
 
 R-Brain-08: per-instance hash-keyed projection cache. Cleared bei _load_weights()
 und nach fit_pairs().
@@ -24,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_COMMON_DIM = 256
 DEFAULT_AUDIO_DIM = 512
+# Korrektur (2026-07-10, selbst-korrigiert nach Sweep-Audit): faelschlich
+# kurzzeitig auf 1152 gesetzt, weil siglip_wrapper.py (SO400M, 1152-dim,
+# nur fuer FAISS/clip_selector-Suche) mit dem tatsaechlichen Brain-Feeder
+# verwechselt wurde. post_processor.py._load_video_embedding() liest via
+# CURRENT_MODEL_NAME/CURRENT_MODEL_VERSION aus video_embedder.py
+# (google/siglip2-base-patch16-384, EMBED_DIM=768) - DAS ist die reale
+# Quelle fuer Cross-Modal-Similarity. 768 war die ganze Zeit richtig.
 DEFAULT_VIDEO_DIM = 768
 DEFAULT_SEED = 42
 WEIGHTS_FILENAME = "cross_modal_projector.npz"

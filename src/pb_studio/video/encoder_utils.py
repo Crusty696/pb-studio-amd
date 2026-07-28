@@ -2,7 +2,7 @@
 AMD AMF Encoder Utilities for PB Studio.
 
 Provides hardware-accelerated video encoding using AMD's Advanced Media Framework.
-Falls back to software encoders if AMF is not available.
+AMF unavailability is a hard error; software encoders are prohibited.
 
 Supported encoders:
 - h264_amf: H.264/AVC hardware encoding (best compatibility)
@@ -56,10 +56,26 @@ class EncoderConfig:
 # Cache for encoder availability check
 _amf_available: Optional[bool] = None
 _av1_amf_available: Optional[bool] = None
+# Audit-Fix 2026-07-10 (Sweep-Finding EXPORT-8): invalidate_encoder_cache() war
+# definiert aber nie aufgerufen — Treiber-Update/GPU-Handoff waehrend der
+# (langlaufenden) Backend-Session blieb bis zum Neustart unsichtbar. TTL statt
+# neuem UI/Endpoint: einfachster Fix ohne neue Oberflaeche.
+_ENCODER_CACHE_TTL_SECONDS = 600.0
+_amf_checked_at: Optional[float] = None
+_av1_amf_checked_at: Optional[float] = None
 
 
 def _get_ffmpeg_path() -> str:
-    """Absoluten FFmpeg-Pfad ermitteln (ConfigManager > PATH > shutil.which)."""
+    """Absoluten FFmpeg-Pfad ermitteln (Env-Var > ConfigManager > PATH > shutil.which).
+
+    Audit-Fix 2026-07-10 (Sweep-Finding, SETTINGS-Domain): das WPF-Settings-Tab
+    setzt `PBSTUDIO_FFMPEG_PATH` (analog `PBSTUDIO_PYTHON_EXE` fuer den Python-
+    Interpreter), aber kein Python-Code las diese Env-Var je — die Einstellung
+    war komplett wirkungslos.
+    """
+    env_path = os.environ.get("PBSTUDIO_FFMPEG_PATH")
+    if env_path and Path(env_path).is_file():
+        return env_path
     try:
         from ..config_manager import ConfigManager
         cfg = ConfigManager()
@@ -112,14 +128,18 @@ def check_amf_available() -> bool:
     Returns:
         True if h264_amf encoder works, False otherwise.
     """
-    global _amf_available
+    global _amf_available, _amf_checked_at
 
-    if _amf_available is not None:
-        return _amf_available
+    import time as _time
+    if _amf_available is not None and _amf_checked_at is not None:
+        if (_time.monotonic() - _amf_checked_at) < _ENCODER_CACHE_TTL_SECONDS:
+            return _amf_available
+        logger.debug("AMF-Cache TTL abgelaufen — Neu-Erkennung")
 
     if not check_ffmpeg_available():
         logger.warning("FFmpeg not found in PATH")
         _amf_available = False
+        _amf_checked_at = _time.monotonic()
         return False
 
     try:
@@ -134,6 +154,7 @@ def check_amf_available() -> bool:
         if "h264_amf" not in result.stdout:
             logger.info("AMD AMF encoder not found in FFmpeg, using software fallback")
             _amf_available = False
+            _amf_checked_at = _time.monotonic()
             return False
 
         # Schritt 2: Tatsaechliches Encoding testen (faengt Error 30 ab)
@@ -158,11 +179,13 @@ def check_amf_available() -> bool:
             if Path(test_out).exists():
                 os.remove(test_out)
 
+        _amf_checked_at = _time.monotonic()
         return _amf_available
 
     except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
         logger.warning(f"Failed to check AMF availability: {e}")
         _amf_available = False
+        _amf_checked_at = _time.monotonic()
         return False
 
 
@@ -173,13 +196,16 @@ def check_av1_amf_available() -> bool:
     Returns:
         True if av1_amf encoder is available, False otherwise.
     """
-    global _av1_amf_available
+    global _av1_amf_available, _av1_amf_checked_at
 
-    if _av1_amf_available is not None:
-        return _av1_amf_available
+    import time as _time
+    if _av1_amf_available is not None and _av1_amf_checked_at is not None:
+        if (_time.monotonic() - _av1_amf_checked_at) < _ENCODER_CACHE_TTL_SECONDS:
+            return _av1_amf_available
 
     if not check_ffmpeg_available():
         _av1_amf_available = False
+        _av1_amf_checked_at = _time.monotonic()
         return False
 
     try:
@@ -195,11 +221,13 @@ def check_av1_amf_available() -> bool:
         if _av1_amf_available:
             logger.info("AMD AV1 AMF encoder available (RDNA3+)")
 
+        _av1_amf_checked_at = _time.monotonic()
         return _av1_amf_available
 
     except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
         logger.warning(f"Failed to check AV1 AMF availability: {e}")
         _av1_amf_available = False
+        _av1_amf_checked_at = _time.monotonic()
         return False
 
 
@@ -208,25 +236,29 @@ def get_encoder_config(
     quality: str = "balanced",
     rate_control: str = "vbr_peak",
     bitrate: Optional[int] = None,
-    force_software: bool = False
 ) -> EncoderConfig:
     """
     Get FFmpeg encoder configuration for the specified codec.
 
-    Automatically selects AMD AMF hardware encoder if available,
-    otherwise falls back to software encoder.
+    Selects an AMD AMF hardware encoder or fails explicitly.
 
     Args:
         codec: 'h264', 'hevc', or 'av1'
         quality: 'speed', 'balanced', or 'quality'
         rate_control: 'cqp', 'cbr', 'vbr_peak', or 'vbr_latency'
         bitrate: Target bitrate in bits/s (e.g., 8000000 for 8 Mbps)
-        force_software: Force software encoder even if hardware is available
-
     Returns:
         EncoderConfig with encoder name and optimal parameters
     """
-    use_amf = check_amf_available() and not force_software
+    if codec not in {"h264", "hevc", "av1"}:
+        raise ValueError(f"Unsupported AMF codec: {codec!r}")
+    if not check_amf_available():
+        raise RuntimeError(
+            "AMD AMF encoder unavailable or non-functional; "
+            "software encoding is disabled by project policy"
+        )
+    if codec == "av1" and not check_av1_amf_available():
+        raise RuntimeError("AV1 AMF encoder unavailable on this AMD GPU/FFmpeg build")
 
     # Default bitrates for 1080p
     default_bitrates = {
@@ -239,108 +271,41 @@ def get_encoder_config(
     max_bitrate = int(target_bitrate * 1.5)
     buf_size = int(target_bitrate * 2)
 
-    # H.264 Encoder
     if codec == "h264":
-        if use_amf:
-            return EncoderConfig(
-                encoder="h264_amf",
-                params=[
-                    "-quality", quality,
-                    "-rc", rate_control,
-                    "-b:v", str(target_bitrate),
-                    "-maxrate", str(max_bitrate),
-                    "-bufsize", str(buf_size),
-                    "-g", "120",  # GOP size
-                ],
-                is_hardware=True,
-                description="AMD AMF H.264 Hardware Encoder"
-            )
-        else:
-            # Software fallback: libx264
-            preset_map = {
-                "speed": "ultrafast",
-                "balanced": "medium",
-                "quality": "slow"
-            }
-            return EncoderConfig(
-                encoder="libx264",
-                params=[
-                    "-preset", preset_map.get(quality, "medium"),
-                    "-crf", "23",
-                    "-b:v", str(target_bitrate),
-                    "-maxrate", str(max_bitrate),
-                    "-bufsize", str(buf_size),
-                ],
-                is_hardware=False,
-                description="libx264 Software Encoder"
-            )
-
-    # H.265/HEVC Encoder
-    elif codec == "hevc":
-        if use_amf:
-            return EncoderConfig(
-                encoder="hevc_amf",
-                params=[
-                    "-quality", quality,
-                    "-rc", rate_control,
-                    "-b:v", str(target_bitrate),
-                    "-maxrate", str(max_bitrate),
-                ],
-                is_hardware=True,
-                description="AMD AMF HEVC Hardware Encoder"
-            )
-        else:
-            # Software fallback: libx265
-            preset_map = {
-                "speed": "ultrafast",
-                "balanced": "medium",
-                "quality": "slow"
-            }
-            return EncoderConfig(
-                encoder="libx265",
-                params=[
-                    "-preset", preset_map.get(quality, "medium"),
-                    "-crf", "28",
-                    "-b:v", str(target_bitrate),
-                ],
-                is_hardware=False,
-                description="libx265 Software Encoder"
-            )
-
-    # AV1 Encoder
-    elif codec == "av1":
-        # AV1 AMF requires RDNA3+
-        if use_amf and check_av1_amf_available():
-            return EncoderConfig(
-                encoder="av1_amf",
-                params=[
-                    "-quality", quality,
-                    "-b:v", str(target_bitrate),
-                ],
-                is_hardware=True,
-                description="AMD AMF AV1 Hardware Encoder (RDNA3+)"
-            )
-        else:
-            # Software fallback: SVT-AV1
-            preset_map = {
-                "speed": "10",
-                "balanced": "6",
-                "quality": "4"
-            }
-            return EncoderConfig(
-                encoder="libsvtav1",
-                params=[
-                    "-preset", preset_map.get(quality, "6"),
-                    "-crf", "30",
-                    "-b:v", str(target_bitrate),
-                ],
-                is_hardware=False,
-                description="SVT-AV1 Software Encoder"
-            )
-
-    # Unknown codec - default to H.264
-    logger.warning(f"Unknown codec '{codec}', defaulting to H.264")
-    return get_encoder_config("h264", quality, rate_control, bitrate, force_software)
+        return EncoderConfig(
+            encoder="h264_amf",
+            params=[
+                "-quality", quality,
+                "-rc", rate_control,
+                "-b:v", str(target_bitrate),
+                "-maxrate", str(max_bitrate),
+                "-bufsize", str(buf_size),
+                "-g", "120",
+            ],
+            is_hardware=True,
+            description="AMD AMF H.264 Hardware Encoder",
+        )
+    if codec == "hevc":
+        return EncoderConfig(
+            encoder="hevc_amf",
+            params=[
+                "-quality", quality,
+                "-rc", rate_control,
+                "-b:v", str(target_bitrate),
+                "-maxrate", str(max_bitrate),
+            ],
+            is_hardware=True,
+            description="AMD AMF HEVC Hardware Encoder",
+        )
+    return EncoderConfig(
+        encoder="av1_amf",
+        params=[
+            "-quality", quality,
+            "-b:v", str(target_bitrate),
+        ],
+        is_hardware=True,
+        description="AMD AMF AV1 Hardware Encoder (RDNA3+)",
+    )
 
 
 def get_preview_encoder() -> EncoderConfig:
@@ -352,27 +317,12 @@ def get_preview_encoder() -> EncoderConfig:
     Returns:
         EncoderConfig optimized for preview (fast, lower quality)
     """
-    if check_amf_available():
-        return EncoderConfig(
-            encoder="h264_amf",
-            params=[
-                "-quality", "speed",
-                "-rc", "vbr_latency",
-                "-b:v", "4000000",  # 4 Mbps for preview
-            ],
-            is_hardware=True,
-            description="AMD AMF H.264 (Preview)"
-        )
-    else:
-        return EncoderConfig(
-            encoder="libx264",
-            params=[
-                "-preset", "ultrafast",
-                "-crf", "28",
-            ],
-            is_hardware=False,
-            description="libx264 (Preview)"
-        )
+    return get_encoder_config(
+        codec="h264",
+        quality="speed",
+        rate_control="vbr_latency",
+        bitrate=4_000_000,
+    )
 
 
 def get_export_encoder(
@@ -415,9 +365,11 @@ def build_ffmpeg_encode_args(config: EncoderConfig) -> list:
 
 def reset_availability_cache():
     """Reset cached encoder availability (for testing)."""
-    global _amf_available, _av1_amf_available
+    global _amf_available, _av1_amf_available, _amf_checked_at, _av1_amf_checked_at
     _amf_available = None
     _av1_amf_available = None
+    _amf_checked_at = None
+    _av1_amf_checked_at = None
 
 
 def get_encoder_info() -> dict:
@@ -427,13 +379,15 @@ def get_encoder_info() -> dict:
     Returns:
         Dict with encoder availability status
     """
+    amf_available = check_amf_available()
+    av1_amf_available = check_av1_amf_available() if amf_available else False
     return {
         "ffmpeg_available": check_ffmpeg_available(),
-        "amf_available": check_amf_available(),
-        "av1_amf_available": check_av1_amf_available(),
+        "amf_available": amf_available,
+        "av1_amf_available": av1_amf_available,
         "encoders": {
-            "h264": "h264_amf" if check_amf_available() else "libx264",
-            "hevc": "hevc_amf" if check_amf_available() else "libx265",
-            "av1": "av1_amf" if check_av1_amf_available() else "libsvtav1",
+            "h264": "h264_amf" if amf_available else None,
+            "hevc": "hevc_amf" if amf_available else None,
+            "av1": "av1_amf" if av1_amf_available else None,
         }
     }

@@ -43,7 +43,9 @@ class SpectralAnalyzer:
     musikalische Events (Drops, Buildups, Breakdowns).
     """
 
-    def __init__(self, sr: int = 22050, hop_length: int = 512, n_fft: int = 2048):
+    def __init__(self, sr: int = 44100, hop_length: int = 512, n_fft: int = 2048):
+        # AUDIT-FIX #5: sr=22050 (Nyquist 11025) machte die Baender 'air' (12-20 kHz) und den
+        # oberen Teil von 'brilliance' permanent zu Null. 44100 Hz deckt das volle 8-Band-Modell ab.
         self.sr = sr
         self.hop_length = hop_length
         self.n_fft = n_fft

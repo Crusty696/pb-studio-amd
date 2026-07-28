@@ -157,33 +157,33 @@ class TestCLAPAnalyzer:
                 norm = np.linalg.norm(embedding)
                 assert 0.99 <= norm <= 1.01
 
-    def test_classify_audio_mock(self, analyzer_lazy):
-        """Test classification with mocked embeddings"""
-        # Create mock embeddings
-        audio_embedding = np.random.randn(CLAP_EMBEDDING_DIM).astype(np.float32)
-        audio_embedding /= np.linalg.norm(audio_embedding)  # Normalize
+    def test_classify_audio_onnx_mode_returns_empty(self, analyzer_lazy):
+        """BUGFIX M3 (2026-07-24): ONNX classification is not implemented.
 
+        classify_audio must return [] in ONNX mode (no PyTorch fallback)
+        instead of fabricating fake tags that poison pacing/semantic matching.
+        """
         test_labels = ["happy", "sad", "energetic"]
-        num_labels = len(test_labels)
 
-        # Mock encode methods
-        with patch.object(analyzer_lazy, 'encode_audio') as mock_encode_audio:
-            mock_encode_audio.return_value = audio_embedding
+        analyzer_lazy._initialized = True
+        assert analyzer_lazy._pytorch_fallback is None  # pure ONNX mode
 
-            with patch.object(analyzer_lazy, 'encode_text') as mock_encode_text:
-                # Create random text embeddings
-                text_embeddings = np.random.randn(num_labels, CLAP_EMBEDDING_DIM).astype(np.float32)
-                text_embeddings /= np.linalg.norm(text_embeddings, axis=1, keepdims=True)
-                mock_encode_text.return_value = text_embeddings
+        results = analyzer_lazy.classify_audio("test.mp3", test_labels, top_k=2)
 
-                analyzer_lazy._initialized = True
+        assert results == []
 
-                results = analyzer_lazy.classify_audio("test.mp3", test_labels, top_k=2)
+    def test_classify_audio_pytorch_fallback_top_k(self, analyzer_lazy):
+        """With a working PyTorch fallback, classify_audio sorts and trims to top_k."""
+        analyzer_lazy._initialized = True
+        fallback = MagicMock()
+        fallback.classify_audio.return_value = [
+            ("happy", 0.4), ("energetic", 0.9), ("sad", 0.1),
+        ]
+        analyzer_lazy._pytorch_fallback = fallback
 
-                assert len(results) == 2  # top_k=2
-                assert all(isinstance(label, str) for label, score in results)
-                assert all(isinstance(score, float) for label, score in results)
-                assert all(label in test_labels for label, score in results)
+        results = analyzer_lazy.classify_audio("test.mp3", ["happy", "sad", "energetic"], top_k=2)
+
+        assert results == [("energetic", 0.9), ("happy", 0.4)]
 
     def test_get_mood_tags(self, analyzer_lazy):
         """Test mood tag extraction"""

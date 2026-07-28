@@ -4,7 +4,7 @@ PreviewGenerator - Schnelle Vorschau ab beliebigem Zeitpunkt (AMD Version).
 Erzeugt 90-Sekunden-Previews mit Smart Slicing.
 Kein ffmpeg-python — nutzt subprocess direkt.
 Kein NVENC — AP2.4 (Audit 2026-06-10): nutzt get_preview_encoder()
-(h264_amf -quality speed wenn AMF verfügbar, sonst libx264 ultrafast).
+mit h264_amf; fehlendes AMF ist ein expliziter Fehler.
 """
 
 import logging

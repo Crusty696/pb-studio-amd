@@ -36,17 +36,18 @@ def _utc_now_iso() -> str:
 
 
 def _bind_brain_to_project(project_path: Path) -> None:
-    """Plan Phase 4: bind brain singleton to this project's state.db.
-
-    Brain failure must not block project open. Logs and continues.
-    """
+    """Bind Brain to this project's state.db before switching runtime state."""
     try:
         from .._brain_singleton import set_project_state
         state_db = project_path / "state.db"
         set_project_state(state_db)
         logger.info(f"Brain bound to {state_db}")
     except Exception as e:
-        logger.warning(f"Brain bind fehlgeschlagen: {e}")
+        logger.error("Brain bind fehlgeschlagen: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Brain-State konnte nicht an das Projekt gebunden werden: {e}",
+        ) from e
 
 
 def _project_meta_path(project_path: Path) -> Path:
@@ -195,11 +196,13 @@ async def create_project(
     project_data["db_project_id"] = _find_or_create_project_db_record(project_path, request.name, project_data)
     _write_project_meta(project_path, project_data)
 
+    # Brain zuerst binden: bei Fehler bleibt der bisherige Runtime-State unverändert.
+    _bind_brain_to_project(project_path)
+
     # Neues Projekt muss immer mit sauberem Runtime-State starten.
     # Sonst übernimmt ein frisch erstelltes Projekt Clips/Timeline/Render-Tasks aus dem vorherigen Projekt.
     state.reset()
     state.current_project = project_data
-    _bind_brain_to_project(project_path)
     logger.info(f"Projekt erstellt: {project_path}")
     return ProjectInfo(**project_data)
 
@@ -222,10 +225,35 @@ async def open_project(
     meta = _read_project_meta(project_path)
     db_project_id = _find_or_create_project_db_record(project_path, meta.get("name", project_path.name), meta)
 
-    # State frisch laden: erst reset, dann kanonische Clip-Kataloge aus genau diesem Projekt wiederherstellen.
+    # Medienkatalog isoliert vorladen. DB-/Schemafehler dürfen weder das aktive
+    # Runtime-Projekt leeren noch Brain auf das neue Projekt umbiegen.
+    candidate_project = {"path": str(project_path), "db_project_id": db_project_id}
+    candidate_state = AppState(current_project=candidate_project)
+    catalog_loaded = await asyncio.to_thread(
+        candidate_state.load_from_db,
+        project_id=db_project_id,
+    )
+    if not catalog_loaded:
+        raise HTTPException(
+            status_code=500,
+            detail="Projekt-Medienkatalog konnte nicht aus der Datenbank geladen werden",
+        )
+
+    # Brain-Preflight vor Live-State-Wechsel: ein Bind-Fehler lässt das bisher
+    # aktive Runtime-Projekt weiterhin unverändert.
+    _bind_brain_to_project(project_path)
+
+    # Erst nach beiden erfolgreichen Preflights den Live-State ersetzen.
     state.reset()
-    state.current_project = {"path": str(project_path), "db_project_id": db_project_id}
-    await asyncio.to_thread(state.load_from_db, project_id=db_project_id)
+    with state._state_lock:
+        with state._lock:
+            state.current_project = candidate_project
+            state.audio_clips.update(candidate_state.audio_clips)
+            state.audio_analysis_cache.update(candidate_state.audio_analysis_cache)
+            state.video_clips.update(candidate_state.video_clips)
+            state.video_analysis_cache.update(candidate_state.video_analysis_cache)
+            state._audio_next_id = candidate_state._audio_next_id
+            state._video_next_id = candidate_state._video_next_id
 
     meta = _read_project_meta(project_path)
     has_timeline = _load_timeline_into_state(project_path, state)
@@ -249,7 +277,6 @@ async def open_project(
         "modified_at": meta.get("modified_at"),
     }
     state.current_project = project_data
-    _bind_brain_to_project(project_path)
     logger.info(f"Projekt geöffnet: {project_path}")
     return ProjectInfo(**project_data)
 

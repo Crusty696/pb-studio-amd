@@ -41,6 +41,10 @@ class StreamingAnalysisResult:
     bpm: float = 0.0
     beats: list[float] = field(default_factory=list)
     energy_curve: list[float] = field(default_factory=list)
+    onset_times: list[float] = field(default_factory=list)
+    kick_times: list[float] = field(default_factory=list)
+    snare_times: list[float] = field(default_factory=list)
+    hihat_times: list[float] = field(default_factory=list)
     window_count: int = 0
 
 
@@ -145,6 +149,26 @@ class _EnergyAggregator:
         else:
             self._frames.extend(rms.tolist())
 
+    def add_gap(
+        self,
+        duration_seconds: float,
+        is_first_chunk: bool,
+        overlap_frames: int,
+        sample_rate: int,
+        hop_length: int,
+    ) -> None:
+        """Reserviert die Zeit eines fehlgeschlagenen Chunks als Stille."""
+        rms_frames = 1 + int(duration_seconds * sample_rate) // hop_length
+        if not is_first_chunk and overlap_frames > 0:
+            rms_frames = max(0, rms_frames - overlap_frames)
+        downsample_factor = 4
+        output_frames = (
+            rms_frames // downsample_factor
+            if rms_frames > downsample_factor
+            else rms_frames
+        )
+        self._frames.extend([0.0] * output_frames)
+
     def get_normalized(self) -> list[float]:
         """Global normalisierte Energy-Kurve [0..1]."""
         if not self._frames or self._global_max <= 0:
@@ -233,9 +257,11 @@ class StreamingAudioAnalyzer:
 
         if energy_only:
             tempo, beats = 0.0, []
+            trigger_times = ([], [], [], [])
         else:
             tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             beats = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+            trigger_times = self._detect_triggers(y)
 
         if on_progress:
             on_progress(70.0)
@@ -256,6 +282,10 @@ class StreamingAudioAnalyzer:
             bpm=bpm_val,
             beats=beats,
             energy_curve=energy,
+            onset_times=trigger_times[0],
+            kick_times=trigger_times[1],
+            snare_times=trigger_times[2],
+            hihat_times=trigger_times[3],
             window_count=1,
         )
 
@@ -281,14 +311,37 @@ class StreamingAudioAnalyzer:
             step = self.window_sec  # Safety: overlap darf nicht >= window sein
         n_windows = max(1, math.ceil((duration - self.overlap_sec) / step))
 
+        # BUGFIX H5: if soundfile cannot open this file (typical for MP3/OGG/FLAC
+        # builds), the per-chunk fallback was librosa.load(offset=...). With the
+        # audioread backend, offset seeking decodes-and-discards from file start,
+        # so chunk i costs O(i) -> total O(n^2) and a long MP3 mix appears frozen.
+        # Transcode ONCE to a temp WAV up front so every chunk uses O(1) soundfile
+        # block-I/O. Cleaned up in the finally below.
+        temp_wav_path: Optional[str] = None
         try:
             native_sr = sf.info(str(path)).samplerate
         except Exception:
-            native_sr = self.SR
+            native_sr = None
+        if native_sr is None:
+            temp_wav_path = self._transcode_to_wav(path)
+            if temp_wav_path is not None:
+                path = Path(temp_wav_path)
+                try:
+                    native_sr = sf.info(str(path)).samplerate
+                except Exception:
+                    native_sr = self.SR
+            else:
+                # Transcode failed — keep original path; _load_chunk's librosa
+                # fallback still works (slow), correctness preserved.
+                native_sr = self.SR
 
         # Aggregations-Objekte
         bpm_est = _RunningBPMEstimator()
         beat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        onset_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        kick_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        snare_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        hihat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
         energy_agg = _EnergyAggregator()
 
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
@@ -305,6 +358,15 @@ class StreamingAudioAnalyzer:
                 chunk = self._load_chunk(path, chunk_start, chunk_dur)
             except Exception as e:
                 logger.warning(f"Chunk {i} load fehlgeschlagen: {e}")
+                energy_agg.add_gap(
+                    chunk_dur,
+                    is_first_chunk=(i == 0),
+                    overlap_frames=overlap_frames,
+                    sample_rate=self.SR,
+                    hop_length=self.HOP_LENGTH,
+                )
+                if on_progress:
+                    on_progress((i + 1) * 100.0 / n_windows)
                 continue
 
             # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
@@ -312,13 +374,29 @@ class StreamingAudioAnalyzer:
                 self._process_beats(
                     chunk, chunk_start, bpm_est, beat_acc
                 )
+                self._process_triggers(
+                    chunk,
+                    chunk_start,
+                    onset_acc,
+                    kick_acc,
+                    snare_acc,
+                    hihat_acc,
+                )
 
             # --- RMS-Energy pro Chunk ---
-            self._process_energy(
+            energy_ok = self._process_energy(
                 chunk, is_first=(i == 0),
                 overlap_frames=overlap_frames,
                 energy_agg=energy_agg,
             )
+            if not energy_ok:
+                energy_agg.add_gap(
+                    chunk_dur,
+                    is_first_chunk=(i == 0),
+                    overlap_frames=overlap_frames,
+                    sample_rate=self.SR,
+                    hop_length=self.HOP_LENGTH,
+                )
 
             # Chunk-Buffer freigeben
             del chunk
@@ -327,13 +405,56 @@ class StreamingAudioAnalyzer:
             if on_progress:
                 on_progress((i + 1) * 100.0 / n_windows)
 
+        # BUGFIX H5: remove the one-time transcode temp WAV.
+        if temp_wav_path is not None:
+            try:
+                Path(temp_wav_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
         return StreamingAnalysisResult(
             duration_seconds=duration,
             bpm=bpm_est.median_bpm,
             beats=beat_acc.get_deduplicated(),
             energy_curve=energy_agg.get_normalized(),
+            onset_times=onset_acc.get_deduplicated(),
+            kick_times=kick_acc.get_deduplicated(),
+            snare_times=snare_acc.get_deduplicated(),
+            hihat_times=hihat_acc.get_deduplicated(),
             window_count=n_windows,
         )
+
+    def _transcode_to_wav(self, path: Path) -> Optional[str]:
+        """BUGFIX H5 helper: transcode any audio file to a temp mono WAV at
+        self.SR via ffmpeg, once, so streaming chunk-loads can use fast
+        soundfile block-I/O instead of O(n^2) librosa offset re-seeks.
+
+        Returns the temp WAV path, or None on failure (caller keeps original).
+        """
+        import subprocess
+        import tempfile
+        import uuid
+        try:
+            try:
+                from pb_studio.video.encoder_utils import _get_ffmpeg_path
+                ffmpeg = _get_ffmpeg_path()
+            except Exception:
+                ffmpeg = "ffmpeg"
+            temp_wav = str(Path(tempfile.gettempdir()) / f"pb_studio_stream_{uuid.uuid4().hex}.wav")
+            cmd = [
+                ffmpeg, "-y", "-i", str(path),
+                "-vn", "-acodec", "pcm_s16le", "-ar", str(self.SR), "-ac", "1",
+                temp_wav,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode == 0 and Path(temp_wav).exists() and Path(temp_wav).stat().st_size > 0:
+                logger.info("Streaming: transcoded to temp WAV for fast block-I/O: %s", temp_wav)
+                return temp_wav
+            logger.warning("Streaming transcode failed (rc=%s); using slow per-chunk fallback.", result.returncode)
+            return None
+        except Exception as e:
+            logger.warning("Streaming transcode error (%s); using slow per-chunk fallback.", e)
+            return None
 
     # ------------------------------------------------------------------
     # Chunk-Loading
@@ -428,6 +549,74 @@ class StreamingAudioAnalyzer:
         except Exception as e:
             logger.warning(f"Beat-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}")
 
+    def _detect_triggers(
+        self,
+        chunk: np.ndarray,
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
+        """Detect onset and drum candidates relative to one in-memory chunk."""
+        import librosa
+
+        hop = self.HOP_LENGTH
+        onset_times = librosa.frames_to_time(
+            librosa.onset.onset_detect(y=chunk, sr=self.SR, units="frames"),
+            sr=self.SR,
+        ).tolist()
+
+        def _band_times(*, signal: np.ndarray, fmin=None, fmax=None) -> list[float]:
+            kwargs = {
+                "y": signal,
+                "sr": self.SR,
+                "hop_length": hop,
+                "n_mels": 64,
+            }
+            if fmin is not None:
+                kwargs["fmin"] = fmin
+            if fmax is not None:
+                kwargs["fmax"] = fmax
+            envelope = librosa.onset.onset_strength(**kwargs)
+            frames = librosa.onset.onset_detect(
+                onset_envelope=envelope,
+                sr=self.SR,
+                hop_length=hop,
+            )
+            return librosa.frames_to_time(
+                frames,
+                sr=self.SR,
+                hop_length=hop,
+            ).tolist()
+
+        kick_times = _band_times(
+            signal=librosa.effects.preemphasis(chunk),
+            fmax=150,
+        )
+        snare_times = _band_times(signal=chunk, fmin=200, fmax=400)
+        hihat_times = _band_times(signal=chunk, fmin=5000)
+        return onset_times, kick_times, snare_times, hihat_times
+
+    def _process_triggers(
+        self,
+        chunk: np.ndarray,
+        chunk_start: float,
+        onset_acc: _BeatAccumulator,
+        kick_acc: _BeatAccumulator,
+        snare_acc: _BeatAccumulator,
+        hihat_acc: _BeatAccumulator,
+    ) -> None:
+        """Collect absolute trigger times and deduplicate overlap at result time."""
+        try:
+            relative_groups = self._detect_triggers(chunk)
+            for relative, accumulator in zip(
+                relative_groups,
+                (onset_acc, kick_acc, snare_acc, hihat_acc),
+            ):
+                accumulator.add_chunk_beats(
+                    [float(value) + chunk_start for value in relative]
+                )
+        except Exception as e:
+            logger.warning(
+                f"Trigger-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}"
+            )
+
     # ------------------------------------------------------------------
     # Energy-Processing pro Chunk
     # ------------------------------------------------------------------
@@ -437,7 +626,7 @@ class StreamingAudioAnalyzer:
         is_first: bool,
         overlap_frames: int,
         energy_agg: _EnergyAggregator,
-    ) -> None:
+    ) -> bool:
         """RMS-Energy auf einem Chunk berechnen."""
         import librosa
 
@@ -453,8 +642,10 @@ class StreamingAudioAnalyzer:
                 is_first_chunk=is_first,
                 overlap_frames=overlap_frames,
             )
+            return True
         except Exception as e:
             logger.warning(f"Energy-Berechnung fehlgeschlagen: {e}")
+            return False
 
     # ------------------------------------------------------------------
     # STFT-Streaming (fuer erweiterte Spektral-Analyse)

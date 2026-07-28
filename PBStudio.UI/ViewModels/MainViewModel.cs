@@ -1,15 +1,10 @@
-using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Services;
 using PBStudio.UI.Services.Messages;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace PBStudio.UI.ViewModels;
@@ -72,8 +67,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private int _selectedTabIndex = 0;
 
     public string? CurrentProjectName => _projects.CurrentProjectName;
-    public string? CurrentProjectPath => _projects.CurrentProjectPath;
-    public bool HasProject => _projects.HasProject;
 
     public MainViewModel(
         ILogger<MainViewModel> logger,
@@ -105,76 +98,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ = InitializeAsync();
     }
 
-    [RelayCommand]
-    private async Task CreateProject()
-    {
-        var name = PromptDialog.Show("Neues Projekt", "Projektname:");
-        if (string.IsNullOrEmpty(name)) return;
-
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "Basisverzeichnis für Projekt wählen",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        };
-
-        if (dialog.ShowDialog() == true)
-        {
-            var success = await _projects.CreateProjectAsync(name, dialog.FolderName);
-            if (!success)
-            {
-                MessageBox.Show("Projekt konnte nicht erstellt werden.", "PB Studio", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            StatusMessage = $"Projekt erstellt: {CurrentProjectName}";
-            OnPropertyChanged(nameof(CurrentProjectName));
-            OnPropertyChanged(nameof(CurrentProjectPath));
-            OnPropertyChanged(nameof(HasProject));
-        }
-    }
-
-    [RelayCommand]
-    private async Task OpenProject()
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "Projektordner öffnen",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        };
-
-        if (dialog.ShowDialog() == true)
-        {
-            var success = await _projects.OpenProjectAsync(dialog.FolderName);
-            if (success)
-            {
-                StatusMessage = $"Projekt geöffnet: {CurrentProjectName}";
-                OnPropertyChanged(nameof(CurrentProjectName));
-                OnPropertyChanged(nameof(CurrentProjectPath));
-                OnPropertyChanged(nameof(HasProject));
-            }
-        }
-    }
-
-    [RelayCommand]
-    private async Task SaveProject()
-    {
-        var success = await _projects.SaveProjectAsync();
-        if (success)
-        {
-            StatusMessage = "Projekt gespeichert.";
-        }
-    }
-
-    [RelayCommand]
-    private async Task CloseProject()
-    {
-        await _projects.CloseProjectAsync();
-        StatusMessage = "Projekt geschlossen.";
-        OnPropertyChanged(nameof(CurrentProjectName));
-        OnPropertyChanged(nameof(CurrentProjectPath));
-        OnPropertyChanged(nameof(HasProject));
-    }
-
     private async Task InitializeAsync()
     {
         try
@@ -187,10 +110,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     BackendStatusColor = Brushes.LimeGreen;
                     _sse.StartListening();
                     await RefreshGpuStatusAsync();
-                    if (await _projects.RefreshProjectInfoAsync())
-                    {
-                        WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
-                    }
+                    await _projects.RefreshProjectInfoAsync();
                     return;
                 }
 
@@ -298,8 +218,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ = App.Current.Dispatcher.InvokeAsync(() =>
         {
             OnPropertyChanged(nameof(CurrentProjectName));
-            OnPropertyChanged(nameof(CurrentProjectPath));
-            OnPropertyChanged(nameof(HasProject));
         });
     }
 

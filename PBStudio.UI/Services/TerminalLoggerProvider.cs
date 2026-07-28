@@ -1,7 +1,5 @@
 using System;
 using Microsoft.Extensions.Logging;
-using CommunityToolkit.Mvvm.Messaging;
-using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.Services;
 
@@ -10,17 +8,26 @@ namespace PBStudio.UI.Services;
 /// </summary>
 public class TerminalLoggerProvider : ILoggerProvider
 {
-    public ILogger CreateLogger(string categoryName) => new TerminalLogger(categoryName);
+    private readonly TerminalLogBuffer _buffer;
+
+    public TerminalLoggerProvider(TerminalLogBuffer buffer)
+    {
+        _buffer = buffer;
+    }
+
+    public ILogger CreateLogger(string categoryName) => new TerminalLogger(categoryName, _buffer);
     public void Dispose() { }
 }
 
 internal class TerminalLogger : ILogger
 {
     private readonly string _category;
+    private readonly TerminalLogBuffer _buffer;
 
-    public TerminalLogger(string category)
+    public TerminalLogger(string category, TerminalLogBuffer buffer)
     {
         _category = category;
+        _buffer = buffer;
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -43,9 +50,8 @@ internal class TerminalLogger : ILogger
             _ => "INFO"
         };
 
-        // Über WeakReferenceMessenger an TerminalViewModel senden.
         var categoryShort = GetShortCategory(_category);
-        WeakReferenceMessenger.Default.Send(new WpfLogMessage(levelStr, $"{categoryShort}: {message}"));
+        _buffer.Append(levelStr, $"{categoryShort}: {message}");
     }
 
     private static string GetShortCategory(string category)

@@ -36,7 +36,7 @@ def _render_encoder_values() -> list[str]:
         return [e.value for e in RenderEncoder]
     except ImportError:
         # Fallback (z.B. fuer Sandbox ohne backend-Pfad): hardcoded mirror.
-        return ["hevc_amf", "h264_amf", "av1_amf", "libx265", "libx264"]
+        return ["hevc_amf", "h264_amf", "av1_amf"]
 
 logger = logging.getLogger(__name__)
 

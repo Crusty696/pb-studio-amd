@@ -77,6 +77,9 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        var terminalLogBuffer = new TerminalLogBuffer();
+        services.AddSingleton(terminalLogBuffer);
+
         // Logging — Console + Datei
         var logPath = System.IO.Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "logs", "wpf_app.log");
@@ -89,7 +92,7 @@ public partial class App : Application
         {
             builder.AddConsole();
             builder.AddProvider(new FileLoggerProvider(logFile));
-            builder.AddProvider(new TerminalLoggerProvider());
+            builder.AddProvider(new TerminalLoggerProvider(terminalLogBuffer));
             builder.SetMinimumLevel(LogLevel.Debug);
             builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
             builder.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);

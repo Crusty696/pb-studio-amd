@@ -49,6 +49,11 @@ async def import_videos(
     state: AppState = Depends(get_app_state),
 ) -> list[VideoClipInfo]:
     """Importiert eine oder mehrere Video-Dateien."""
+    try:
+        state.require_current_project_db_id()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     imported = []
     supported = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv"}
 
@@ -89,6 +94,7 @@ async def import_videos(
                 overall = ((_file_idx - 1) + pct / 100.0) * 100.0 / _file_total
                 asyncio.run_coroutine_threadsafe(
                     publish_event("import_progress", {
+                        "task_id": "video_import",
                         "step": "hash",
                         "percent": overall,
                         "message": f"Hash {_file_idx}/{_file_total} {_vname}: {pct:.2f}%",
@@ -129,6 +135,7 @@ async def import_videos(
         )
 
         await publish_event("import_progress", {
+            "task_id": "video_import",
             "clip_id": clip["id"],
             "percent": len(imported) / len(request.paths) * 100,
             "message": f"Importiert: {video_path.name}",
@@ -137,6 +144,7 @@ async def import_videos(
     # R15/M-01: Finales 100%-Event sicherstellen — bei übersprungenen Pfaden
     # (falsches Format, Info-Fehler) würde der letzte Event nie 100% erreichen.
     await publish_event("import_progress", {
+        "task_id": "video_import",
         "clip_id": None,
         "percent": 100.0,
         "message": f"{len(imported)}/{len(request.paths)} Videos importiert",
@@ -464,7 +472,10 @@ async def analyze_video(
         _loop = asyncio.get_running_loop()
         gpu_res = await with_gpu_task(
             _run_video_gpu_analysis, clip["path"], request.clip_id, request, _loop,
-            model_id="video_analysis_full",  # VRAM-Budget-Check via VRAMBudgetManager (RAFT + SigLIP)
+            model_id="video_analysis_full",
+            # RAFT und SigLIP verwalten ihre Sessions/Budgets selbst. Der äußere
+            # Task braucht nur globalen GPU-Lock und gemeinsame Telemetrie.
+            manage_vram=False,
         )
 
         # Step 3: Color + Caption (CPU/HTTP & optional Moondream GPU Fallback)
@@ -486,6 +497,17 @@ async def analyze_video(
             "tags": color_caption_res["tags"],
             "tag_source": color_caption_res["tag_source"],
         }
+
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): Brightness/Saturation/
+        # Color-Temp/Mood-Tags aus den bereits berechneten dominanten Farben
+        # ableiten — Brain-Bridge-Achsen mood_match_weight/color_temp_match_weight
+        # waren vorher strukturell tot, weil niemand diese Felder befuellte.
+        from pb_studio.video.moondream_wrapper import compute_color_features
+        color_features = compute_color_features(result["dominant_colors"])
+        result["avg_brightness"] = color_features["avg_brightness"]
+        result["avg_saturation"] = color_features["avg_saturation"]
+        result["avg_color_temp"] = color_features["avg_color_temp"]
+        result["mood_tags"] = color_features["mood_tags"]
 
         # Y3 / GPU-F2: L-K4 audio_key Detection OUTSIDE with_gpu_task - ffmpeg
         # extract 30s mono WAV + Krumhansl-Kessler ist pure CPU-Arbeit und darf
@@ -519,6 +541,11 @@ async def analyze_video(
             embedding_dim=int(result.get("embedding_dim", 0) or 0),       # L-M8
             embedding_samples=int(result.get("embedding_samples", 0) or 0),  # L-M8
             tag_source=result.get("tag_source"),
+            # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10)
+            avg_brightness=result.get("avg_brightness"),
+            avg_saturation=result.get("avg_saturation"),
+            avg_color_temp=result.get("avg_color_temp"),
+            mood_tags=result.get("mood_tags"),
         )
 
         await publish_log(
@@ -1010,7 +1037,8 @@ async def _run_color_and_caption_analysis(
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
 
             from pb_studio.video.lmstudio_vision_wrapper import extract_tags_and_model_via_lmstudio
-            
+            from pb_studio.video.moondream import onnx_models_available as moondream_onnx_models_available
+
             async def run_lm_studio(f):
                 return await asyncio.to_thread(extract_tags_and_model_via_lmstudio, f, mode=current_mode)
 
@@ -1028,7 +1056,23 @@ async def _run_color_and_caption_analysis(
                     moondream_frames_to_run.append(f_rgb)
 
             # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
-            if moondream_frames_to_run:
+            if moondream_frames_to_run and not moondream_onnx_models_available():
+                # Audit-Fix (2026-07-10): ONNX-Modelldateien fehlen (nur .pt-Checkpoint
+                # vorhanden, kein CPU-Fallback erlaubt - IRON RULE). Vorher wurde hier
+                # trotzdem with_gpu_task gestartet, das lautlos 0 Tags lieferte, aber
+                # danach "active"/100% als Erfolg publizierte - falsches Erfolgssignal.
+                logger.info(
+                    "Moondream ONNX-Modelle nicht gefunden - GPU-Fallback uebersprungen "
+                    "(kein CPU-Fallback erlaubt, IRON RULE)."
+                )
+                await publish_event("llm_status", {
+                    "model": "Moondream2 (ONNX)",
+                    "provider": "Local GPU (DirectML)",
+                    "status": "unavailable",
+                    "percent": 0.0,
+                    "clip_id": clip_id,
+                })
+            elif moondream_frames_to_run:
                 try:
                     await publish_event("llm_status", {
                         "model": "Moondream2 (ONNX)",
@@ -1044,11 +1088,12 @@ async def _run_color_and_caption_analysis(
                     )
                     used_model = "moondream"
 
+                    collected_any = any(tags for tags in moondream_tags_list)
                     await publish_event("llm_status", {
                         "model": "Moondream2 (ONNX)",
                         "provider": "Local GPU (DirectML)",
-                        "status": "active",
-                        "percent": 100.0,
+                        "status": "active" if collected_any else "failed",
+                        "percent": 100.0 if collected_any else 0.0,
                         "clip_id": clip_id,
                     })
 

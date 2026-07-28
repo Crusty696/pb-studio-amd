@@ -293,6 +293,12 @@
                                  Style="{StaticResource ParamTextBox}"
                                  ToolTip="Dauer-Limit&#x0a;• Was es macht: Begrenzt die Gesamtlänge des generierten Videos auf eine feste Sekundenanzahl.&#x0a;• Wozu es dient: Ideal, um kurze Preview-Clips (z. B. 30 Sekunden für Social Media) aus langen Songs zu schneiden.&#x0a;• Wann nutzen: Leer lassen für den vollen Song, sonst Wunschdauer eintragen."
                                  Margin="0,0,0,4"/>
+
+                        <TextBlock Text="Storyboard Canvas (.canvas)" Style="{StaticResource ParamLabel}"/>
+                        <TextBox Text="{Binding CanvasPath, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                 Style="{StaticResource ParamTextBox}"
+                                 ToolTip="Optionaler vollständiger Pfad zu einer Obsidian-.canvas-Datei mit Zeitankern und manuellen Clip-Zuweisungen."
+                                 Margin="0,0,0,4"/>
                     </StackPanel>
                 </md:Card>
 

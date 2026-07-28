@@ -20,8 +20,9 @@ def get_brain_service() -> BrainService:
 
 def set_project_state(path: str | Path) -> None:
     global _PROJECT_STATE_PATH
-    _PROJECT_STATE_PATH = Path(path)
-    BrainService.get().bind_project_state(_PROJECT_STATE_PATH)
+    new_path = Path(path)
+    BrainService.get().bind_project_state(new_path)
+    _PROJECT_STATE_PATH = new_path
 
 
 def current_project_state_path() -> Optional[Path]:

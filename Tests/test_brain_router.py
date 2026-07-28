@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -93,6 +95,53 @@ def test_stats_returns_structured(brain_client):
     body = resp.json()
     assert body["total_clicks"] >= 1
     assert body["cold_start_axes"] + body["learned_axes"] == len(BRIDGE_AXES)
+
+
+def test_stats_holds_weights_connection_lock(monkeypatch):
+    brain_router = __import__(
+        "backend.routers.brain_router",
+        fromlist=["stats"],
+    )
+
+    class TrackingLock:
+        def __init__(self):
+            self.depth = 0
+            self.entries = 0
+
+        def __enter__(self):
+            self.depth += 1
+            self.entries += 1
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.depth -= 1
+            return False
+
+    class LockedConnection:
+        def __init__(self, lock):
+            self.lock = lock
+
+        def execute(self, query):
+            assert self.lock.depth > 0, "weights_conn query without _weights_lock"
+            return self
+
+        def fetchall(self):
+            return []
+
+    lock = TrackingLock()
+    service = SimpleNamespace(
+        brain=SimpleNamespace(
+            _weights_lock=lock,
+            weights_conn=LockedConnection(lock),
+        ),
+        weights=SimpleNamespace(total_clicks=lambda: 0),
+    )
+    monkeypatch.setattr(brain_router, "get_brain_service", lambda: service)
+
+    result = asyncio.run(brain_router.stats())
+
+    assert result.total_clicks == 0
+    assert lock.entries == 1
 
 
 def test_reset_two_step(brain_client):

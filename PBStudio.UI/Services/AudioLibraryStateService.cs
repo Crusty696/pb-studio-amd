@@ -13,6 +13,7 @@ public class AudioLibraryStateService
     private readonly object _sync = new();
     private Task<IReadOnlyList<AudioClipInfo>?>? _inFlightRefresh;
     private DateTime _lastRefreshUtc = DateTime.MinValue;
+    private long _generation;
     private static readonly TimeSpan WarmCacheDuration = TimeSpan.FromSeconds(2);
 
     public IReadOnlyList<AudioClipInfo> CurrentAudioClips { get; private set; } = [];
@@ -35,19 +36,25 @@ public class AudioLibraryStateService
             if (CurrentAudioClips.Count > 0 && DateTime.UtcNow - _lastRefreshUtc < WarmCacheDuration)
                 return Task.FromResult<IReadOnlyList<AudioClipInfo>?>(CurrentAudioClips);
 
-            _inFlightRefresh = RefreshCoreAsync();
+            var generation = _generation;
+            _inFlightRefresh = RefreshCoreAsync(generation);
             return _inFlightRefresh;
         }
     }
 
     public void Clear()
     {
-        CurrentAudioClips = [];
-        _lastRefreshUtc = DateTime.MinValue;
+        lock (_sync)
+        {
+            _generation++;
+            _inFlightRefresh = null;
+            CurrentAudioClips = [];
+            _lastRefreshUtc = DateTime.MinValue;
+        }
         AudioClipsChanged?.Invoke(this, CurrentAudioClips);
     }
 
-    private async Task<IReadOnlyList<AudioClipInfo>?> RefreshCoreAsync()
+    private async Task<IReadOnlyList<AudioClipInfo>?> RefreshCoreAsync(long generation)
     {
         try
         {
@@ -68,8 +75,13 @@ public class AudioLibraryStateService
                 page++;
             }
 
-            CurrentAudioClips = allClips;
-            _lastRefreshUtc = DateTime.UtcNow;
+            lock (_sync)
+            {
+                if (generation != _generation)
+                    return null;
+                CurrentAudioClips = allClips;
+                _lastRefreshUtc = DateTime.UtcNow;
+            }
             AudioClipsChanged?.Invoke(this, CurrentAudioClips);
             return CurrentAudioClips;
         }
@@ -81,7 +93,10 @@ public class AudioLibraryStateService
         finally
         {
             lock (_sync)
-                _inFlightRefresh = null;
+            {
+                if (generation == _generation)
+                    _inFlightRefresh = null;
+            }
         }
     }
 }

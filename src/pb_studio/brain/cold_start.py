@@ -16,8 +16,11 @@ COLD_START_DEFAULTS: dict[str, float] = {
     "energy_weight": 0.8,
     "energy_threshold": 0.6,
     "onset_sensitivity": 0.5,
-    "min_clip_length": 1.0,
-    "max_clip_length": 8.0,
+    # AUDIT-FIX #6: Diese Achsen fliessen als Gewicht (bridge_value * weight) in den Score ein.
+    # Roh-Sekunden (bis 8.0) sprengten [0,1] und dominierten das Cold-Start-Ranking.
+    # Neutraler In-Range-Wert wie die Video-Achsen.
+    "min_clip_length": 0.5,
+    "max_clip_length": 0.5,
     # Video (7) — neutral midpoint
     "motion_match_weight": 0.5,
     "scene_cut_weight": 0.5,

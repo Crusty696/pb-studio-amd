@@ -206,6 +206,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }
         else
         {
+            Interlocked.Increment(ref _motionLoadSequence);
             MotionCurve = null;
         }
 
@@ -385,6 +386,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
+                if (version != Volatile.Read(ref _loadVersion))
+                    return;
+
                 TimelineEntries.Clear();
                 foreach (var entry in timeline.Entries)
                 {
@@ -533,6 +537,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
+                if (seq != Volatile.Read(ref _waveformSequence))
+                    return;
+
                 WaveformBars.Clear();
                 BeatMarkers.Clear();
                 UIBeatMarkers.Clear();
@@ -607,7 +614,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoadingWaveform = false;
+            if (seq == Volatile.Read(ref _waveformSequence))
+                IsLoadingWaveform = false;
         }
     }
 
@@ -831,6 +839,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
     private void ResetTimelineState()
     {
+        Interlocked.Increment(ref _loadVersion);
+        Interlocked.Increment(ref _waveformSequence);
+        Interlocked.Increment(ref _motionLoadSequence);
+        _reloadQueued = false;
         TimelineEntries.Clear();
         WaveformBars.Clear();
         BeatMarkers.Clear();
@@ -843,6 +855,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         SelectedTimelinePosition = 0;
         MotionCurve = null;
         IsLoading = false;
+        IsLoadingWaveform = false;
         StatusText = "Kein Projekt geöffnet";
         OnPropertyChanged(nameof(HasTimeline));
         OnPropertyChanged(nameof(CanPreviewSelectedClip));
@@ -858,7 +871,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _loadVersion);
+        Interlocked.Increment(ref _waveformSequence);
+        Interlocked.Increment(ref _motionLoadSequence);
+        _reloadQueued = false;
         WeakReferenceMessenger.Default.UnregisterAll(this);
-        _loadGate.Dispose();
     }
 }

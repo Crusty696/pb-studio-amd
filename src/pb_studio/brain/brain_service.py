@@ -58,16 +58,31 @@ class BrainService:
             / "storage" / "migrations" / "state"
         )
         migrate(path, mig)
-        if self.state_conn is not None:
+
+        new_connection: Optional[sqlite3.Connection] = None
+        try:
+            new_connection = sqlite3.connect(
+                str(path), isolation_level=None, check_same_thread=False
+            )
+            init_connection(new_connection)
+        except Exception:
+            if new_connection is not None:
+                try:
+                    new_connection.close()
+                except Exception:
+                    pass
+            raise
+
+        old_connection = self.state_conn
+        self.state_conn = new_connection
+        if old_connection is not None:
             try:
-                self.state_conn.close()
-            except Exception:
-                pass
-        conn = sqlite3.connect(
-            str(path), isolation_level=None, check_same_thread=False
-        )
-        init_connection(conn)
-        self.state_conn = conn
+                old_connection.close()
+            except Exception as close_error:
+                logger.warning(
+                    "Previous project state connection could not be closed: %s",
+                    close_error,
+                )
 
     @property
     def feedback_logger(self) -> FeedbackLogger:

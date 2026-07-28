@@ -19,8 +19,6 @@ class RenderEncoder(str, Enum):
     HEVC_AMF = "hevc_amf"    # AMD Hardware H.265
     H264_AMF = "h264_amf"    # AMD Hardware H.264
     AV1_AMF = "av1_amf"      # AMD Hardware AV1
-    LIBX265 = "libx265"      # Software H.265
-    LIBX264 = "libx264"      # Software H.264
 
 
 class RenderRequest(BaseModel):

@@ -68,9 +68,11 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
 
-        _loadCts?.Cancel();
-        _loadCts = new CancellationTokenSource();
-        var token = _loadCts.Token;
+        var previous = _loadCts;
+        var current = new CancellationTokenSource();
+        _loadCts = current;
+        previous?.Cancel();
+        var token = current.Token;
 
         IsLoading = true;
         ErrorText = null;
@@ -144,7 +146,13 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (ReferenceEquals(_loadCts, current))
+            {
+                _loadCts = null;
+                if (!_disposed)
+                    IsLoading = false;
+            }
+            current.Dispose();
         }
     }
 

@@ -28,6 +28,13 @@ class GenerationService:
         AI pipeline is used for audio mood analysis, clip matching,
         and intelligent timeline generation before rendering.
         """
+        if self.engine is None:
+            raise RuntimeError("VideoGenerator is unavailable")
+
+        # Reset synchronously when the job is accepted. Any cancel arriving
+        # after this point must survive analysis and reach the render phase.
+        self.engine.reset_cancel()
+
         use_ai = config.get("use_smart_director", False)
 
         if use_ai:

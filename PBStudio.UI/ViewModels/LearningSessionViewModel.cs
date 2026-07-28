@@ -36,8 +36,13 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     [ObservableProperty] private Uri? _currentVideoUri;
     [ObservableProperty] private Uri? _currentAudioUri;
     [ObservableProperty] private string _status = "";
+    [ObservableProperty] private bool _isPlaying;
 
     public string CurrentIndexDisplay => (CurrentIndex + 1).ToString();
+    public string PlayPauseLabel => IsPlaying ? "⏸ Pause" : "▶ Play";
+
+    partial void OnIsPlayingChanged(bool value) =>
+        OnPropertyChanged(nameof(PlayPauseLabel));
 
     public LearningSessionViewModel(IApiClient api)
     {
@@ -80,6 +85,7 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         CurrentAudioUri = !string.IsNullOrEmpty(_projectAudioPath)
             ? new Uri(_projectAudioPath, UriKind.Absolute)
             : null;
+        IsPlaying = false;
 
         Status = $"Cut {CurrentIndex + 1}/{TotalCount}: {c.ClipId} @ {c.StartTime:F2}s";
         OnPropertyChanged(nameof(CurrentIndexDisplay));
@@ -155,17 +161,36 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void PlayPause() => PlayRequested?.Invoke();
+    public void PlayPause()
+    {
+        if (IsPlaying)
+        {
+            PauseRequested?.Invoke();
+            IsPlaying = false;
+            return;
+        }
+
+        PlayRequested?.Invoke();
+        IsPlaying = true;
+    }
 
     // B5-Fix (2026-05-19): PauseRequested event wurde in Dispose auf null gesetzt
     // (line 177) aber nie raised → CS0414. Explizite Pause()-Methode komplettiert
     // das Play/Pause/Restart-Event-Trio, LearningSessionDialog hat den Subscriber
     // bereits (LearningSessionDialog.xaml.cs:22).
     [RelayCommand]
-    public void Pause() => PauseRequested?.Invoke();
+    public void Pause()
+    {
+        PauseRequested?.Invoke();
+        IsPlaying = false;
+    }
 
     [RelayCommand]
-    public void Restart() => RestartRequested?.Invoke();
+    public void Restart()
+    {
+        RestartRequested?.Invoke();
+        IsPlaying = true;
+    }
 
     [RelayCommand]
     public void Close() => RequestClose?.Invoke();

@@ -13,6 +13,7 @@ public class VideoLibraryStateService
     private readonly object _sync = new();
     private Task<IReadOnlyList<VideoClipInfo>?>? _inFlightRefresh;
     private DateTime _lastRefreshUtc = DateTime.MinValue;
+    private long _generation;
     private static readonly TimeSpan WarmCacheDuration = TimeSpan.FromSeconds(2);
 
     public IReadOnlyList<VideoClipInfo> CurrentVideoClips { get; private set; } = [];
@@ -35,19 +36,27 @@ public class VideoLibraryStateService
             if (CurrentVideoClips.Count > 0 && DateTime.UtcNow - _lastRefreshUtc < WarmCacheDuration)
                 return Task.FromResult<IReadOnlyList<VideoClipInfo>?>(CurrentVideoClips);
 
-            _inFlightRefresh = RefreshCoreAsync(cancellationToken);
+            var generation = _generation;
+            _inFlightRefresh = RefreshCoreAsync(cancellationToken, generation);
             return _inFlightRefresh;
         }
     }
 
     public void Clear()
     {
-        CurrentVideoClips = [];
-        _lastRefreshUtc = DateTime.MinValue;
+        lock (_sync)
+        {
+            _generation++;
+            _inFlightRefresh = null;
+            CurrentVideoClips = [];
+            _lastRefreshUtc = DateTime.MinValue;
+        }
         VideoClipsChanged?.Invoke(this, CurrentVideoClips);
     }
 
-    private async Task<IReadOnlyList<VideoClipInfo>?> RefreshCoreAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<VideoClipInfo>?> RefreshCoreAsync(
+        CancellationToken cancellationToken,
+        long generation)
     {
         try
         {
@@ -68,8 +77,13 @@ public class VideoLibraryStateService
                 page++;
             }
 
-            CurrentVideoClips = allClips;
-            _lastRefreshUtc = DateTime.UtcNow;
+            lock (_sync)
+            {
+                if (generation != _generation)
+                    return null;
+                CurrentVideoClips = allClips;
+                _lastRefreshUtc = DateTime.UtcNow;
+            }
             VideoClipsChanged?.Invoke(this, CurrentVideoClips);
             return CurrentVideoClips;
         }
@@ -85,7 +99,10 @@ public class VideoLibraryStateService
         finally
         {
             lock (_sync)
-                _inFlightRefresh = null;
+            {
+                if (generation == _generation)
+                    _inFlightRefresh = null;
+            }
         }
     }
 }

@@ -143,6 +143,43 @@ class TestTelemetryReset:
 # -----------------------------------------------------------------------------
 
 class TestWithGpuTaskTelemetry:
+    def test_externally_managed_budget_is_not_double_counted(self, fresh_manager):
+        from backend.dependencies import with_gpu_task
+
+        fresh_manager.register_model(
+            "siglip_vision", "SigLIP Vision", 2000, ModelPriority.MEDIUM,
+        )
+        observed_committed = []
+
+        def composite_work() -> int:
+            assert fresh_manager.reserve("raft_small")
+            assert fresh_manager.commit("raft_small")
+            assert fresh_manager.reserve("siglip_vision")
+            assert fresh_manager.commit("siglip_vision")
+            observed_committed.append(fresh_manager.total_committed_mb)
+            fresh_manager.release("siglip_vision")
+            fresh_manager.release("raft_small")
+            return 42
+
+        result = asyncio.run(
+            with_gpu_task(
+                composite_work,
+                model_id="video_analysis_full",
+                manage_vram=False,
+                timeout_seconds=5,
+            ),
+        )
+
+        assert result == 42
+        assert observed_committed == [2400]
+        outer_budget = fresh_manager.get_model("video_analysis_full")
+        assert outer_budget is not None
+        assert outer_budget.is_reserved is False
+        assert outer_budget.is_loaded is False
+        assert fresh_manager.total_reserved_mb == 0
+        assert fresh_manager.total_committed_mb == 0
+        assert fresh_manager.get_telemetry("video_analysis_full")["count"] == 1
+
     def test_erfolgsfall_traegt_observation_ein(self, fresh_manager):
         from backend.dependencies import with_gpu_task
 

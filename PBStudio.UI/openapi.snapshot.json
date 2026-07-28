@@ -2453,6 +2453,46 @@
                                                                                                           "default":  [
 
                                                                                                                       ]
+                                                                                                      },
+                                                                                      "onset_times":  {
+                                                                                                          "items":  {
+                                                                                                                        "type":  "number"
+                                                                                                                    },
+                                                                                                          "type":  "array",
+                                                                                                          "title":  "Onset Times",
+                                                                                                          "default":  [
+
+                                                                                                                      ]
+                                                                                                      },
+                                                                                      "kick_times":  {
+                                                                                                         "items":  {
+                                                                                                                       "type":  "number"
+                                                                                                                   },
+                                                                                                         "type":  "array",
+                                                                                                         "title":  "Kick Times",
+                                                                                                         "default":  [
+
+                                                                                                                     ]
+                                                                                                     },
+                                                                                      "snare_times":  {
+                                                                                                          "items":  {
+                                                                                                                        "type":  "number"
+                                                                                                                    },
+                                                                                                          "type":  "array",
+                                                                                                          "title":  "Snare Times",
+                                                                                                          "default":  [
+
+                                                                                                                      ]
+                                                                                                      },
+                                                                                      "hihat_times":  {
+                                                                                                          "items":  {
+                                                                                                                        "type":  "number"
+                                                                                                                    },
+                                                                                                          "type":  "array",
+                                                                                                          "title":  "Hihat Times",
+                                                                                                          "default":  [
+
+                                                                                                                      ]
                                                                                                       }
                                                                                   },
                                                                    "type":  "object",
@@ -3562,11 +3602,17 @@
                                                                                                              "default":  false
                                                                                                          },
                                                                                      "duration_limit":  {
-                                                                                                            "type":  "number",
-                                                                                                            "exclusiveMinimum":  0.0,
-                                                                                                            "nullable":  true,
-                                                                                                            "title":  "Duration Limit"
-                                                                                                        },
+                                                                                                             "type":  "number",
+                                                                                                             "exclusiveMinimum":  0.0,
+                                                                                                             "nullable":  true,
+                                                                                                             "title":  "Duration Limit"
+                                                                                                         },
+                                                                                     "canvas_path":  {
+                                                                                                         "type":  "string",
+                                                                                                         "maxLength":  32767,
+                                                                                                         "nullable":  true,
+                                                                                                         "title":  "Canvas Path"
+                                                                                                     },
                                                                                      "min_cut_interval":  {
                                                                                                               "type":  "number",
                                                                                                               "minimum":  0.0,
@@ -3789,9 +3835,7 @@
                                                              "enum":  [
                                                                           "hevc_amf",
                                                                           "h264_amf",
-                                                                          "av1_amf",
-                                                                          "libx265",
-                                                                          "libx264"
+                                                                           "av1_amf"
                                                                       ],
                                                              "title":  "RenderEncoder",
                                                              "description":  "VerfÃ¼gbare Video-Encoder."
@@ -4615,14 +4659,39 @@
                                                                                                          "type":  "string",
                                                                                                          "nullable":  true,
                                                                                                          "title":  "Tag Source"
-                                                                                                     }
+                                                                                                     },
+                                                                                      "mood_tags":  {
+                                                                                                        "items":  {
+                                                                                                                      "type":  "string"
+                                                                                                                  },
+                                                                                                        "type":  "array",
+                                                                                                        "title":  "Mood Tags",
+                                                                                                        "default":  [
+
+                                                                                                                    ]
+                                                                                                    },
+                                                                                      "avg_brightness":  {
+                                                                                                             "type":  "number",
+                                                                                                             "title":  "Avg Brightness",
+                                                                                                             "default":  0.5
+                                                                                                         },
+                                                                                      "avg_saturation":  {
+                                                                                                             "type":  "number",
+                                                                                                             "title":  "Avg Saturation",
+                                                                                                             "default":  0.5
+                                                                                                         },
+                                                                                      "avg_color_temp":  {
+                                                                                                             "type":  "number",
+                                                                                                             "title":  "Avg Color Temp",
+                                                                                                             "default":  0.0
+                                                                                                         }
                                                                                   },
                                                                    "type":  "object",
                                                                    "required":  [
                                                                                     "clip_id"
                                                                                 ],
                                                                    "title":  "VideoAnalysisResult",
-                                                                   "description":  "Response: Video-Analyse Ergebnis.\n\nL-VIDEO-4 (HIGH): 6 ehemals leere Felder entfernt â kein Producer im\n_run_video_analysis-Pfad, kein direkter Konsument in Pacing/Brain\n(Brain hat eigene CandidateFeatures-Datenklasse). Entfernt: mood_tags,\nstyle_tags, object_tags, brightness_curve, saturation_curve, color_temp_curve."
+                                                                   "description":  "Response: Video-Analyse Ergebnis.\n\nL-VIDEO-4 (HIGH): 6 ehemals leere Felder entfernt â kein Producer im\n_run_video_analysis-Pfad, kein direkter Konsument in Pacing/Brain\n(Brain hat eigene CandidateFeatures-Datenklasse). Entfernt: mood_tags,\nstyle_tags, object_tags, brightness_curve, saturation_curve, color_temp_curve.\n\nAudit-Fix 2026-07-10 (Sweep-Finding HIGH-10): mood_tags + die neuen\navg_brightness/avg_saturation/avg_color_temp-Felder wieder aufgenommen â\ndie \"kein Konsument\"-Begruendung von L-VIDEO-4 traf nur auf dieses\nAPI-Response-Schema zu, NICHT auf den internen video_analysis_cache-Dict,\nden bridge_dimensions.py/post_processor.py/clip_selector.py direkt lesen\n(unabhaengig von diesem Pydantic-Schema). Jetzt gibt es einen echten\nProducer (compute_color_features in moondream_wrapper.py), die Felder\nsind wieder sinnvoll."
                                                                },
                                        "VideoAnalyzeRequest":  {
                                                                    "properties":  {

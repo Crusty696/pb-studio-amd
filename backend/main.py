@@ -113,6 +113,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except ImportError as e:
         logger.warning(f"  llm_status-Publisher nicht verdrahtet: {e}")
 
+    # Audit-Fix (2026-07-10): gleiches Wiring fuer Chat-Agent und Brain-Narrator,
+    # damit die WPF-Statusleiste auch bei Chat/Brain-Explain-LLM-Calls reagiert
+    # (vorher nur Video-Frame-Tagging abgedeckt).
+    try:
+        from pb_studio.ai.chat_agent import set_status_publisher as set_chat_status_publisher
+        set_chat_status_publisher(publish_event_threadsafe)
+    except ImportError as e:
+        logger.warning(f"  llm_status-Publisher (chat_agent) nicht verdrahtet: {e}")
+    try:
+        from pb_studio.brain.llm_narrator import set_status_publisher as set_narrator_status_publisher
+        set_narrator_status_publisher(publish_event_threadsafe)
+    except ImportError as e:
+        logger.warning(f"  llm_status-Publisher (llm_narrator) nicht verdrahtet: {e}")
+
     # Prüfe ob src/ importierbar ist
     try:
         import pb_studio
@@ -137,11 +151,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kein automatischer Medien-Restore beim Startup:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
 
-    # Render-Queue Resume-on-Startup (Aufgabe I): Jobs, die beim letzten Crash
-    # 'running' waren, werden auf 'interrupted' überführt und damit re-queued.
+    # Render-Queue Resume-on-Startup: Jobs werden nicht nur als interrupted
+    # markiert, sondern aus ihrem persistierten Request-/Timeline-Snapshot
+    # rekonstruiert und erneut eingeplant.
     try:
         from .app_state import get_app_state
-        get_app_state().restore_render_queue_on_startup()
+        from .routers.render_router import _resume_render_queue_on_startup
+        await _resume_render_queue_on_startup(get_app_state())
     except Exception as e:
         logger.warning(f"  Render-Queue Restore-on-Startup übersprungen: {e}")
 
@@ -208,9 +224,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    watcher_task.cancel()
     try:
-        watcher_task.cancel()
-    except Exception:
+        await watcher_task
+    except asyncio.CancelledError:
         pass
 
     # Review-Fix 2026-07-09: Publisher/Loop-Referenzen zurücksetzen

@@ -32,10 +32,37 @@ import asyncio
 import hashlib
 import json
 import logging
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
+
+from pb_studio.ai.config_loader import load_ai_config as _load_ai_config
 
 logger = logging.getLogger(__name__)
+
+# Audit-Fix (2026-07-10): gleiches injizierbares Publisher-Pattern wie
+# lmstudio_vision_wrapper.py / chat_agent.py, damit die WPF-Statusleiste
+# auch bei Brain-Explain-LLM-Calls reagiert.
+_status_publisher: Callable[[str, dict[str, Any]], None] | None = None
+
+
+def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> None:
+    global _status_publisher
+    _status_publisher = fn
+
+
+def _publish_status(model: str, status: str, percent: float) -> None:
+    """Best-effort llm_status-Event. Darf NIE die Explain-Generierung abbrechen."""
+    fn = _status_publisher
+    if fn is None:
+        return
+    try:
+        fn("llm_status", {
+            "model": model,
+            "provider": "LM Studio",
+            "status": status,
+            "percent": percent,
+        })
+    except Exception as exc:  # noqa: BLE001 - Status ist rein kosmetisch
+        logger.debug("llm_status publish fehlgeschlagen: %s", exc)
 
 DEFAULT_TASK = "brain_explanation"
 DEFAULT_MODE = "balance"
@@ -91,32 +118,6 @@ def _cache_put(key: tuple[int, str, str], value: str) -> None:
 def clear_narrative_cache() -> None:
     """Test-Helper: leert den Cache vollstaendig."""
     _NARRATIVE_CACHE.clear()
-
-
-def _load_ai_config() -> dict[str, Any]:
-    """Liest die ``ai``-Sektion aus ``config.json`` (best-effort)."""
-    try:
-        from pb_studio.config_manager import ConfigManager
-
-        cfg = ConfigManager()
-        ai_section = cfg.get("ai") or {}
-        if isinstance(ai_section, dict):
-            return ai_section
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("config_manager nicht verfuegbar: %s", exc)
-    # Fallback: config.json direkt lesen (Test-Fixtures patchen ConfigManager)
-    try:
-        root = Path(__file__).resolve().parents[3]
-        cfg_file = root / "config.json"
-        if cfg_file.exists():
-            with cfg_file.open("r", encoding="utf-8") as fp:
-                data = json.load(fp)
-            ai = data.get("ai") or {}
-            if isinstance(ai, dict):
-                return ai
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("config.json direct-read fehlgeschlagen: %s", exc)
-    return {}
 
 
 def _humanize_axis(axis: str) -> str:
@@ -372,6 +373,7 @@ async def _async_generate_explanation(
                 )
                 return get_offline_explanation()
 
+        _publish_status(model, "loading", 50.0)
         try:
             response = await client.chat(
                 model=model,
@@ -386,6 +388,7 @@ async def _async_generate_explanation(
             )
         except LMStudioError as exc:
             logger.warning("LLM-Narrator: chat() fehlgeschlagen: %s — Fallback auf offline Text", exc)
+            _publish_status(model, "failed", 0.0)
             return get_offline_explanation()
 
         message = response.get("message") or {}
@@ -400,7 +403,9 @@ async def _async_generate_explanation(
                 "LLM-Narrator: leere Antwort vom Modell %s — Fallback auf offline Text",
                 model,
             )
+            _publish_status(model, "failed", 0.0)
             return get_offline_explanation()
+        _publish_status(model, "active", 100.0)
         _cache_put(cache_key, text)
         return text
     finally:

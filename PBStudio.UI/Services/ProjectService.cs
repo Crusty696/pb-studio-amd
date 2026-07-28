@@ -32,9 +32,7 @@ public class ProjectService
         if (project == null)
             return false;
 
-        CurrentProject = project;
-        ProjectChanged?.Invoke(this, CurrentProject);
-        WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
+        SwitchToProject(project);
         _logger.LogInformation("Projekt erstellt: {Name} ({Path})", project.Name, project.Path);
         return true;
     }
@@ -45,9 +43,7 @@ public class ProjectService
         if (project == null)
             return false;
 
-        CurrentProject = project;
-        ProjectChanged?.Invoke(this, CurrentProject);
-        WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
+        SwitchToProject(project);
         _logger.LogInformation("Projekt geöffnet: {Path}", path);
         return true;
     }
@@ -58,8 +54,12 @@ public class ProjectService
         if (result?.Success != true)
             return false;
 
-        CurrentProject = await _api.GetProjectInfoAsync().ConfigureAwait(false) ?? CurrentProject;
-        ProjectChanged?.Invoke(this, CurrentProject);
+        var refreshedProject = await _api.GetProjectInfoAsync().ConfigureAwait(false);
+        RunOnUiThread(() =>
+        {
+            CurrentProject = refreshedProject ?? CurrentProject;
+            ProjectChanged?.Invoke(this, CurrentProject);
+        });
         _logger.LogInformation("Projekt gespeichert: {Path}", CurrentProject?.Path);
         return true;
     }
@@ -67,22 +67,61 @@ public class ProjectService
     public async Task<bool> RefreshProjectInfoAsync()
     {
         var project = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        CurrentProject = project;
-        ProjectChanged?.Invoke(this, CurrentProject);
-        
-        if (project != null)
-            WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
-            
-        return project != null;
+        if (project == null)
+            return false;
+
+        SwitchToProject(project);
+        return true;
     }
 
-    public async Task CloseProjectAsync()
+    public async Task<bool> CloseProjectAsync()
     {
-        WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
-        await _api.CloseProjectAsync().ConfigureAwait(false);
-        CurrentProject = null;
-        ProjectChanged?.Invoke(this, null);
-        WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+        var result = await _api.CloseProjectAsync().ConfigureAwait(false);
+        if (result?.Success != true)
+            return false;
+
+        RunOnUiThread(() =>
+            WeakReferenceMessenger.Default.Send(new ProjectClosingMessage()));
+        RunOnUiThread(() =>
+        {
+            CurrentProject = null;
+            ProjectChanged?.Invoke(this, null);
+            WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+        });
         _logger.LogInformation("Projekt geschlossen");
+        return true;
+    }
+
+    private void SwitchToProject(ProjectInfo project)
+    {
+        RunOnUiThread(() =>
+        {
+            var isDirectSwitch = CurrentProject != null
+                && !string.Equals(
+                    CurrentProject.Path,
+                    project.Path,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (isDirectSwitch)
+            {
+                WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
+                CurrentProject = null;
+                ProjectChanged?.Invoke(this, null);
+                WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+            }
+
+            CurrentProject = project;
+            ProjectChanged?.Invoke(this, CurrentProject);
+            WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
+        });
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+            action();
+        else
+            dispatcher.Invoke(action);
     }
 }

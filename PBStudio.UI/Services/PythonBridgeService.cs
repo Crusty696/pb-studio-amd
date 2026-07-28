@@ -24,7 +24,7 @@ public class PythonBridgeService : IDisposable
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private bool _disposed;
 
-    private static readonly string PythonExe = ResolvePythonExe();
+    private static readonly string? PythonExe = ResolvePythonExe();
     private static readonly bool PreferExternalBackend = IsEnabled(Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY"));
     private const int Port = 8765;
     private const int StartupTimeoutMs = 30_000;
@@ -109,6 +109,15 @@ public class PythonBridgeService : IDisposable
                 return;
             }
 
+            var pythonExe = PythonExe;
+            if (string.IsNullOrWhiteSpace(pythonExe) || !IsPython311(pythonExe))
+            {
+                _logger.LogError(
+                    "Python 3.11 wurde nicht gefunden oder der konfigurierte Interpreter ist inkompatibel. " +
+                    "PBSTUDIO_PYTHON_EXE muss auf Python 3.11.x zeigen.");
+                return;
+            }
+
             var backendDir = FindBackendDirectory();
             if (backendDir == null)
             {
@@ -121,7 +130,7 @@ public class PythonBridgeService : IDisposable
 
             var startInfo = new ProcessStartInfo
             {
-                FileName = PythonExe,
+                FileName = pythonExe,
                 Arguments = $"-m uvicorn backend.main:app --host 127.0.0.1 --port {Port}",
                 WorkingDirectory = projectRoot,
                 UseShellExecute = false,
@@ -344,7 +353,7 @@ public class PythonBridgeService : IDisposable
                 value.Equals("yes", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string ResolvePythonExe()
+    private static string? ResolvePythonExe()
     {
         var envPath = Environment.GetEnvironmentVariable("PBSTUDIO_PYTHON_EXE");
         if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
@@ -362,28 +371,56 @@ public class PythonBridgeService : IDisposable
         var candidates = new[]
         {
             $@"C:\Users\{userName}\AppData\Local\Programs\Python\Python311\python.exe",
-            $@"C:\Users\{userName}\AppData\Local\Programs\Python\Python312\python.exe",
             @"C:\Python311\python.exe",
             @"C:\Program Files\Python311\python.exe",
         };
         foreach (var c in candidates)
             if (File.Exists(c)) return c;
 
-        var pyLauncher = @"C:\Windows\py.exe";
-        if (File.Exists(pyLauncher)) return pyLauncher;
-
-        return "python";
+        return null;
     }
 
-    // R16/HIGH-002: PythonBridgeService owned an HttpClient and SemaphoreSlim but
-    // had no IDisposable implementation. On app exit both were silently leaked.
+    private static bool IsPython311(string pythonExe)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = pythonExe,
+                Arguments = "--version",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            if (process == null)
+                return false;
+
+            if (!process.WaitForExit(5_000))
+            {
+                process.Kill(entireProcessTree: true);
+                return false;
+            }
+
+            var version = process.StandardOutput.ReadToEnd().Trim();
+            if (string.IsNullOrWhiteSpace(version))
+                version = process.StandardError.ReadToEnd().Trim();
+            return version.StartsWith("Python 3.11.", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // The lifecycle gate remains valid because bounded OnExit cleanup can still
+    // be executing StartAsync/StopAsync when the service provider disposes this service.
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _isStopping = true;
         _httpClient.Dispose();
-        _lifecycleGate.Dispose();
     }
 
     // ── AP3.1: Kill-on-Close JobObject ───────────────────────────────────────

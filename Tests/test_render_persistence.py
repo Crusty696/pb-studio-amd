@@ -15,6 +15,7 @@ nach dem Restart automatisch wieder lesbar.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -126,6 +127,79 @@ def test_running_jobs_are_requeued_on_startup(queue: RenderQueue, tmp_path: Path
     # interrupted gilt als laufbereit
     pending_ids = {j.job_id for j in new_queue.list_pending()}
     assert pending_ids == {job1.job_id, job2.job_id, job3.job_id}
+
+
+def test_startup_reconstructs_and_schedules_render_payload(
+    queue: RenderQueue,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import importlib
+
+    from backend.app_state import AppState
+    from backend.schemas.render_schemas import RenderRequest
+
+    render_router = importlib.import_module("backend.routers.render_router")
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"audio")
+    output = tmp_path / "resume.mp4"
+    timeline = [{
+        "clip_id": "clip-1",
+        "start_time": 0.0,
+        "end_time": 2.0,
+        "metadata": {"file_path": str(tmp_path / "clip.mp4")},
+    }]
+    request = RenderRequest(output_path=str(output), audio_path=str(audio))
+    settings = render_router._request_settings_dict(
+        request,
+        timeline_snapshot=timeline,
+        project_root=tmp_path,
+    )
+    job = queue.enqueue("resume-hash", str(output), settings)
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    scheduled = []
+
+    async def fake_run(task_id, restored_request, state, restored_timeline):
+        scheduled.append((task_id, restored_request, state, restored_timeline))
+
+    monkeypatch.setattr(render_router, "_run_render_task", fake_run)
+    state = AppState()
+    resumed = asyncio.run(
+        render_router._resume_render_queue_on_startup(state, queue=queue)
+    )
+
+    assert resumed == [job.job_id]
+    assert len(scheduled) == 1
+    task_id, restored_request, restored_state, restored_timeline = scheduled[0]
+    assert restored_state is state
+    assert restored_request.audio_path == str(audio)
+    assert restored_request.output_path == str(output)
+    assert restored_timeline == timeline
+    task = state.get_render_task(task_id)
+    assert task is not None
+    assert task["queue_job_id"] == job.job_id
+
+
+def test_startup_marks_legacy_job_without_resume_payload_failed(
+    queue: RenderQueue,
+    tmp_path: Path,
+) -> None:
+    from backend.app_state import AppState
+    from backend.routers.render_router import _resume_render_queue_on_startup
+
+    job = queue.enqueue("legacy-hash", str(tmp_path / "legacy.mp4"), _settings())
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    resumed = asyncio.run(
+        _resume_render_queue_on_startup(AppState(), queue=queue)
+    )
+
+    assert resumed == []
+    restored = queue.get(job.job_id)
+    assert restored is not None
+    assert restored.status == STATE_FAILED
+    assert "Resume-Payload" in (restored["error"] or "")
 
 
 def test_completed_jobs_remain_completed_after_restart(queue: RenderQueue, tmp_path: Path) -> None:
