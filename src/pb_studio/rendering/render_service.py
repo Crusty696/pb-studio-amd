@@ -61,6 +61,8 @@ class RenderService:
     """Timeline-Rendering Service mit AMD AMF Hardware-Encoding."""
 
     _AMF_ENCODERS = frozenset({"h264_amf", "hevc_amf", "av1_amf"})
+    _active_processes: set[subprocess.Popen] = set()
+    _active_processes_lock: threading.Lock = threading.Lock()
     _working_encoder: Optional[str] = None
     _working_encoder_checked_at: Optional[float] = None
     # Audit-Fix 2026-07-10 (Sweep-Finding EXPORT-8): war ein reiner Prozess-
@@ -80,6 +82,47 @@ class RenderService:
         self.temp_dir = self.output_dir / ".temp_render"
         self.temp_dir.mkdir(exist_ok=True)
         self._encoder_override = encoder_override
+
+    @classmethod
+    def _register_process(cls, process: subprocess.Popen) -> None:
+        with cls._active_processes_lock:
+            cls._active_processes.add(process)
+
+    @classmethod
+    def _unregister_process(cls, process: subprocess.Popen) -> None:
+        with cls._active_processes_lock:
+            cls._active_processes.discard(process)
+
+    @classmethod
+    def terminate_active_processes(cls, grace_seconds: float = 1.0) -> int:
+        """Stoppt aktive Render-FFmpeg-Prozesse und wartet auf deren Ende."""
+        with cls._active_processes_lock:
+            processes = list(cls._active_processes)
+
+        for process in processes:
+            if process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception:
+                    logger.debug("FFmpeg terminate fehlgeschlagen", exc_info=True)
+
+        deadline = time.monotonic() + max(grace_seconds, 0.0)
+        for process in processes:
+            try:
+                process.wait(timeout=max(deadline - time.monotonic(), 0.0))
+            except subprocess.TimeoutExpired:
+                try:
+                    process.kill()
+                except Exception:
+                    logger.debug("FFmpeg kill fehlgeschlagen", exc_info=True)
+                try:
+                    process.wait(timeout=1.0)
+                except Exception:
+                    logger.warning("FFmpeg-Prozess konnte nicht beendet werden")
+            except Exception:
+                logger.warning("FFmpeg-Prozess konnte nicht abgewartet werden")
+
+        return len(processes)
 
     def _detect_best_encoder(self) -> str:
         """Testet verfügbare AMD-Encoder und gibt den besten zurück."""
@@ -432,6 +475,7 @@ class RenderService:
                     startupinfo=startupinfo,
                     bufsize=1,
                 )
+                self._register_process(process)
                 stderr_lines: list[str] = []
                 while process.poll() is None:
                     if cancel_callback and cancel_callback():
@@ -485,6 +529,8 @@ class RenderService:
                                 pipe.close()
                             except Exception:
                                 pass
+                if process is not None:
+                    self._unregister_process(process)
 
         # Alle Encoder fehlgeschlagen — gibt es kein last_error, war chain leer
         logger.error(
@@ -604,6 +650,7 @@ class RenderService:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, startupinfo=startupinfo, bufsize=1
             )
+            self._register_process(process)
 
             try:
                 result = self._parse_ffmpeg_progress(
@@ -646,6 +693,7 @@ class RenderService:
                             pipe.close()
                         except Exception:
                             pass
+                self._unregister_process(process)
 
         # Alle Encoder fehlgeschlagen
         raise RuntimeError(

@@ -37,6 +37,7 @@ from pb_studio.rendering.render_queue import (
     STATE_RUNNING as _RQ_RUNNING,
     STATE_COMPLETED as _RQ_COMPLETED,
     STATE_FAILED as _RQ_FAILED,
+    STATE_INTERRUPTED as _RQ_INTERRUPTED,
     get_render_queue as _get_render_queue,
 )
 
@@ -48,6 +49,88 @@ _QUALITY_PRESETS = {
     "high": "quality",
     "ultra": "quality",
 }
+
+_render_runtime_tasks: dict[str, asyncio.Task[None]] = {}
+_shutdown_cancelled_task_ids: set[str] = set()
+_render_shutdown_requested = False
+
+
+def _reset_render_runtime_for_startup() -> None:
+    """Setzt den pro Prozess-Lifespan geltenden Shutdown-Zustand zurück."""
+    global _render_shutdown_requested
+    _render_shutdown_requested = False
+    _shutdown_cancelled_task_ids.clear()
+
+
+def _track_render_runtime_task(
+    task_id: str,
+    task: asyncio.Task[None],
+) -> None:
+    """Hält Render-Tasks bis zu ihrem tatsächlichen Ende stark referenziert."""
+    _render_runtime_tasks[task_id] = task
+
+    def _forget(finished: asyncio.Task[None]) -> None:
+        if _render_runtime_tasks.get(task_id) is finished:
+            _render_runtime_tasks.pop(task_id, None)
+
+    task.add_done_callback(_forget)
+
+
+async def _shutdown_active_renders(
+    state: AppState,
+    *,
+    cooperative_timeout: float = 2.0,
+    forced_timeout: float = 3.0,
+) -> dict[str, int]:
+    """Unterbricht aktive Render sauber und verhindert verwaiste FFmpeg-Prozesse."""
+    global _render_shutdown_requested
+    _render_shutdown_requested = True
+
+    active = {
+        task_id: task
+        for task_id, task in list(_render_runtime_tasks.items())
+        if not task.done()
+    }
+    for task_id in active:
+        _shutdown_cancelled_task_ids.add(task_id)
+        state.set_cancel_flag(task_id, True)
+        task_meta = state.get_render_task(task_id) or {}
+        _safe_queue_update(
+            task_meta.get("queue_job_id"),
+            _RQ_INTERRUPTED,
+            error="Backend shutdown during render",
+        )
+
+    pending: set[asyncio.Task[None]] = set(active.values())
+    if pending:
+        _, pending = await asyncio.wait(
+            pending,
+            timeout=max(cooperative_timeout, 0.0),
+        )
+
+    terminated_processes = 0
+    if pending:
+        from pb_studio.rendering.render_service import RenderService
+
+        terminated_processes = await asyncio.to_thread(
+            RenderService.terminate_active_processes,
+            1.0,
+        )
+        _, pending = await asyncio.wait(
+            pending,
+            timeout=max(forced_timeout, 0.0),
+        )
+
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    return {
+        "tasks": len(active),
+        "forced_tasks": len(pending),
+        "terminated_processes": terminated_processes,
+    }
 
 
 def _compute_render_media_hash(audio_path: str, timeline: list[dict[str, Any]]) -> str:
@@ -159,6 +242,8 @@ async def _resume_render_queue_on_startup(
     queue=None,
 ) -> list[str]:
     """Reconstruct and schedule queued/interrupted jobs from persisted payloads."""
+    if _render_shutdown_requested:
+        return []
     render_queue = queue or _get_render_queue()
     render_queue.restore_running_as_interrupted()
     resumed_job_ids: list[str] = []
@@ -231,6 +316,7 @@ async def _resume_render_queue_on_startup(
             task = asyncio.create_task(
                 _run_render_task(task_id, request, state, timeline_snapshot)
             )
+            _track_render_runtime_task(task_id, task)
 
             def _on_resumed_done(
                 finished: asyncio.Task,
@@ -241,8 +327,16 @@ async def _resume_render_queue_on_startup(
                 if finished.cancelled():
                     _safe_queue_update(
                         queue_job_id,
-                        _RQ_FAILED,
-                        error="Backend shutdown during resumed render",
+                        (
+                            _RQ_INTERRUPTED
+                            if runtime_task_id in _shutdown_cancelled_task_ids
+                            else _RQ_FAILED
+                        ),
+                        error=(
+                            "Backend shutdown during resumed render"
+                            if runtime_task_id in _shutdown_cancelled_task_ids
+                            else "Resumed render task cancelled unexpectedly"
+                        ),
                     )
                     return
                 exc = finished.exception()
@@ -295,6 +389,9 @@ async def start_render(
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
     """Startet ein Rendering als Background Task."""
+    if _render_shutdown_requested:
+        raise HTTPException(status_code=503, detail="Backend wird heruntergefahren")
+
     # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
     timeline_snapshot = state.get_timeline_snapshot()
     if not timeline_snapshot:
@@ -379,6 +476,7 @@ async def start_render(
     # R14/HIGH-004: Snapshot beim Start übergeben — _run_render_task darf den State nicht
     # erneut lesen, damit kein Stale-Timeline-Race zwischen start_render und Task-Ausführung entsteht.
     task = asyncio.create_task(_run_render_task(task_id, request, state, timeline_snapshot))
+    _track_render_runtime_task(task_id, task)
 
     def _on_task_done(t: asyncio.Task) -> None:
         if t.cancelled():
@@ -555,15 +653,21 @@ async def _run_render_task(
 
     except _RenderCancelled:
         elapsed = time.monotonic() - start_time
+        shutdown_interrupted = task_id in _shutdown_cancelled_task_ids
         state.update_render_task(task_id, {
             "status": TaskStatus.CANCELLED.value,
             "elapsed_seconds": round(elapsed, 1),
             "finished_at": time.monotonic(),  # P-H1
         })
-        # Cancelled wird in der persistenten Queue als 'failed' mit Cancel-Hinweis markiert.
-        # (Die RenderQueue-Schemata wären strenger; failed deckt 'nicht erfolgreich abgeschlossen'
-        #  korrekt ab und blockiert Auto-Retry — exakt was wir bei einem User-Cancel wollen.)
-        _safe_queue_update(queue_job_id, _RQ_FAILED, error="cancelled")
+        # Shutdown bleibt restartbar; ein User-Cancel bleibt terminal.
+        if shutdown_interrupted:
+            _safe_queue_update(
+                queue_job_id,
+                _RQ_INTERRUPTED,
+                error="Backend shutdown during render",
+            )
+        else:
+            _safe_queue_update(queue_job_id, _RQ_FAILED, error="cancelled")
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
         await publish_event("render_progress", {

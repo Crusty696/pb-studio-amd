@@ -156,7 +156,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # rekonstruiert und erneut eingeplant.
     try:
         from .app_state import get_app_state
-        from .routers.render_router import _resume_render_queue_on_startup
+        from .routers.render_router import (
+            _reset_render_runtime_for_startup,
+            _resume_render_queue_on_startup,
+        )
+        _reset_render_runtime_for_startup()
         await _resume_render_queue_on_startup(get_app_state())
     except Exception as e:
         logger.warning(f"  Render-Queue Restore-on-Startup übersprungen: {e}")
@@ -229,6 +233,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await watcher_task
     except asyncio.CancelledError:
         pass
+
+    try:
+        from .app_state import get_app_state
+        from .routers.render_router import _shutdown_active_renders
+
+        render_shutdown = await _shutdown_active_renders(get_app_state())
+        if render_shutdown["tasks"]:
+            logger.info("  Render-Shutdown: %s", render_shutdown)
+    except Exception as e:
+        logger.warning(f"  Render-Shutdown fehlgeschlagen: {e}")
 
     # Review-Fix 2026-07-09: Publisher/Loop-Referenzen zurücksetzen
     try:
@@ -420,7 +434,14 @@ def _force_exit() -> None:
     import threading as _threading
     import gc
 
-    fallback = _threading.Timer(10.0, lambda: os._exit(0))
+    def _hard_exit() -> None:
+        try:
+            from pb_studio.rendering.render_service import RenderService
+            RenderService.terminate_active_processes(grace_seconds=1.0)
+        finally:
+            os._exit(0)
+
+    fallback = _threading.Timer(10.0, _hard_exit)
     fallback.daemon = True
     fallback.start()
     
@@ -438,7 +459,7 @@ def _force_exit() -> None:
     try:
         signal.raise_signal(signal.SIGINT)
     except Exception:
-        os._exit(0)
+        _hard_exit()
 
 
 # Router importieren

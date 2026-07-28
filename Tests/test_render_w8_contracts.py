@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -274,3 +275,73 @@ def test_render_queue_dedupe_returns_existing_runtime_task(
 
     assert result.task_id == "existing"
     assert len(state.render_tasks) == 1
+
+
+@pytest.mark.parametrize(
+    ("shutdown_cancel", "expected_queue_status"),
+    [(True, "interrupted"), (False, "failed")],
+)
+def test_shutdown_cancel_stays_restartable_but_user_cancel_is_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    shutdown_cancel: bool,
+    expected_queue_status: str,
+) -> None:
+    queue_updates: list[str] = []
+
+    def fake_execute(task_id, request, state, timeline, event_loop):
+        while not state.get_cancel_flag(task_id):
+            time.sleep(0.005)
+        raise render_router._RenderCancelled()
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(render_router, "_execute_render", fake_execute)
+    monkeypatch.setattr(
+        render_router,
+        "_safe_queue_update",
+        lambda _job_id, status, **kwargs: queue_updates.append(status),
+    )
+    monkeypatch.setattr(render_router, "publish_event", noop)
+    monkeypatch.setattr(render_router, "publish_log", noop)
+
+    async def run() -> None:
+        render_router._reset_render_runtime_for_startup()
+        monkeypatch.setattr(render_router, "gpu_lock", asyncio.Lock())
+        state = AppState()
+        state.set_render_task("task-1", {
+            "task_id": "task-1",
+            "status": "pending",
+            "queue_job_id": "queue-1",
+        })
+        state.set_cancel_flag("task-1", False)
+        task = asyncio.create_task(
+            render_router._run_render_task(
+                "task-1",
+                _request(tmp_path),
+                state,
+                [{"start_time": 0.0, "end_time": 1.0}],
+            )
+        )
+        render_router._track_render_runtime_task("task-1", task)
+        await asyncio.sleep(0.02)
+
+        if shutdown_cancel:
+            result = await render_router._shutdown_active_renders(
+                state,
+                cooperative_timeout=0.5,
+                forced_timeout=0.5,
+            )
+            assert result["tasks"] == 1
+        else:
+            state.set_cancel_flag("task-1", True)
+            await asyncio.wait_for(task, timeout=0.5)
+
+        assert task.done()
+
+    asyncio.run(run())
+
+    assert queue_updates[-1] == expected_queue_status
+    if shutdown_cancel:
+        assert "failed" not in queue_updates

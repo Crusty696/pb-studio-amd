@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -82,3 +83,36 @@ def test_each_render_uses_a_unique_staging_path(
 
     assert staging_paths[0] != staging_paths[1]
 
+
+def test_shutdown_terminates_kills_and_waits_active_ffmpeg() -> None:
+    class StubbornProcess:
+        terminated = False
+        killed = False
+        waited = False
+
+        def poll(self):
+            return 0 if self.killed else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            self.waited = True
+            if not self.killed:
+                raise subprocess.TimeoutExpired("ffmpeg", timeout)
+            return 0
+
+    process = StubbornProcess()
+    RenderService._register_process(process)
+    try:
+        count = RenderService.terminate_active_processes(grace_seconds=0.0)
+    finally:
+        RenderService._unregister_process(process)
+
+    assert count == 1
+    assert process.terminated
+    assert process.killed
+    assert process.waited
