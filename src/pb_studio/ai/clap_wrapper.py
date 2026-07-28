@@ -13,16 +13,7 @@ import librosa
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple, Union
 
-try:
-    import onnxruntime as ort
-except ImportError:
-    class _FallbackOrt:
-        SessionOptions = object
-        GraphOptimizationLevel = object
-        InferenceSession = object
-        @staticmethod
-        def get_available_providers() -> List[str]: return ["CPUExecutionProvider"]
-    ort = _FallbackOrt()
+import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
 
