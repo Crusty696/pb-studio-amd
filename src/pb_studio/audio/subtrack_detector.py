@@ -52,6 +52,10 @@ MIN_DISTANCE_SEC = 60.0
 class SubtrackDetector:
     """Heuristische Sub-Track-Erkennung. CPU-only (librosa+scipy)."""
 
+    LONG_MIX_THRESHOLD_SEC = 600.0
+    LONG_MIX_CHUNK_SEC = 120.0
+    MAX_SSM_FRAMES = 2048
+
     def __init__(
         self,
         sr: int = DEFAULT_SR,
@@ -79,6 +83,16 @@ class SubtrackDetector:
             SubtrackResult mit Boundaries, Segments und tempo_curve.
         """
         import librosa
+
+        try:
+            duration = float(librosa.get_duration(path=str(audio_path)))
+        except Exception as exc:
+            raise RuntimeError(
+                f"Audio-Dauer fuer Subtrack-Erkennung nicht ermittelbar: {audio_path}"
+            ) from exc
+
+        if duration > self.LONG_MIX_THRESHOLD_SEC:
+            return self._detect_long_mix(audio_path, duration, stem_paths)
 
         y, sr = librosa.load(str(audio_path), sr=self.sr, mono=True)
         if y.size == 0:
@@ -127,6 +141,249 @@ class SubtrackDetector:
             segments=segments,
             tempo_curve=[float(x) for x in tempo_curve],
         )
+
+    def _detect_long_mix(
+        self,
+        audio_path: str | Path,
+        duration: float,
+        stem_paths: Optional[dict[str, str]],
+    ) -> SubtrackResult:
+        """Bounded long-mix path: chunked decode and capped SSM resolution."""
+        chroma, activity, flux, tempo = self._bounded_chunk_features(
+            audio_path,
+            duration,
+            stem_paths,
+        )
+        if chroma.shape[1] == 0:
+            return SubtrackResult([], [(0.0, duration, 0.0)], [])
+
+        chroma, activity, flux, tempo = self._cap_feature_resolution(
+            chroma,
+            activity,
+            flux,
+            tempo,
+        )
+        t_axis = np.linspace(
+            0.0,
+            duration,
+            chroma.shape[1],
+            endpoint=False,
+            dtype=np.float64,
+        )
+        s1 = self._foote_novelty_from_features(chroma)
+        s2 = activity
+        s3 = np.zeros_like(tempo, dtype=np.float32)
+        if tempo.size > 1:
+            s3[1:] = np.abs(np.diff(tempo))
+        s4 = flux
+
+        components = [_normalize(value) for value in (s1, s2, s3, s4)]
+        fused = (
+            W_FOOTE * components[0]
+            + W_STEM * components[1]
+            + W_TEMPO * components[2]
+            + W_SPECTRAL * components[3]
+        )
+        peaks = self._pick_peaks(fused, t_axis, duration)
+        boundaries = [
+            SubtrackBoundary(
+                time=float(t_axis[index]),
+                confidence=float(fused[index]),
+                components={
+                    "foote": float(components[0][index]),
+                    "stem": float(components[1][index]),
+                    "tempo": float(components[2][index]),
+                    "spectral": float(components[3][index]),
+                },
+            )
+            for index in peaks
+        ]
+        return SubtrackResult(
+            boundaries=boundaries,
+            segments=self._boundaries_to_segments(boundaries, duration),
+            tempo_curve=[float(value) for value in tempo],
+        )
+
+    def _bounded_chunk_features(
+        self,
+        audio_path: str | Path,
+        duration: float,
+        stem_paths: Optional[dict[str, str]],
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Extract approximately one feature frame/second without full decode."""
+        import librosa
+
+        chroma_parts: list[np.ndarray] = []
+        activity_parts: list[np.ndarray] = []
+        flux_parts: list[np.ndarray] = []
+        tempo_parts: list[np.ndarray] = []
+        offset = 0.0
+        while offset < duration:
+            chunk_duration = min(self.LONG_MIX_CHUNK_SEC, duration - offset)
+            y, sr = librosa.load(
+                str(audio_path),
+                sr=self.sr,
+                mono=True,
+                offset=offset,
+                duration=chunk_duration,
+            )
+            if y.size == 0:
+                offset += chunk_duration
+                continue
+
+            chroma = librosa.feature.chroma_cqt(
+                y=y,
+                sr=sr,
+                hop_length=self.hop_length,
+            )
+            rms_sources = [
+                librosa.feature.rms(y=y, hop_length=self.hop_length)[0]
+            ]
+            if stem_paths:
+                rms_sources = []
+                for name in ("vocals", "drums", "bass", "other"):
+                    stem_path = stem_paths.get(name)
+                    if not stem_path or not Path(stem_path).is_file():
+                        continue
+                    stem, _ = librosa.load(
+                        str(stem_path),
+                        sr=sr,
+                        mono=True,
+                        offset=offset,
+                        duration=chunk_duration,
+                    )
+                    if stem.size:
+                        rms_sources.append(
+                            librosa.feature.rms(
+                                y=stem,
+                                hop_length=self.hop_length,
+                            )[0]
+                        )
+                if not rms_sources:
+                    rms_sources = [
+                        librosa.feature.rms(y=y, hop_length=self.hop_length)[0]
+                    ]
+
+            min_rms = min(value.size for value in rms_sources)
+            rms = np.mean(
+                np.stack([value[:min_rms] for value in rms_sources]),
+                axis=0,
+            )
+            activity = np.abs(np.diff(rms, prepend=rms[:1]))
+            onset = librosa.onset.onset_strength(
+                y=y,
+                sr=sr,
+                hop_length=self.hop_length,
+            )
+            frames_per_bin = max(1, int(round(sr / self.hop_length)))
+            chroma_binned = self._mean_bin_2d(chroma, frames_per_bin)
+            n_bins = chroma_binned.shape[1]
+            activity_parts.append(
+                self._mean_bin_1d(activity, frames_per_bin, n_bins)
+            )
+            flux_parts.append(self._mean_bin_1d(onset, frames_per_bin, n_bins))
+            chroma_parts.append(chroma_binned)
+            try:
+                chunk_tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+                tempo_value = float(np.asarray(chunk_tempo).reshape(-1)[0])
+            except Exception:
+                tempo_value = 0.0
+            tempo_parts.append(np.full(n_bins, tempo_value, dtype=np.float32))
+            offset += chunk_duration
+
+        if not chroma_parts:
+            empty = np.array([], dtype=np.float32)
+            return np.empty((12, 0), dtype=np.float32), empty, empty, empty
+        return (
+            np.concatenate(chroma_parts, axis=1).astype(np.float32),
+            np.concatenate(activity_parts).astype(np.float32),
+            np.concatenate(flux_parts).astype(np.float32),
+            np.concatenate(tempo_parts).astype(np.float32),
+        )
+
+    @staticmethod
+    def _mean_bin_2d(values: np.ndarray, size: int) -> np.ndarray:
+        n_bins = max(1, int(np.ceil(values.shape[1] / size)))
+        return np.stack(
+            [
+                np.mean(values[:, index * size : (index + 1) * size], axis=1)
+                for index in range(n_bins)
+            ],
+            axis=1,
+        )
+
+    @staticmethod
+    def _mean_bin_1d(values: np.ndarray, size: int, n_bins: int) -> np.ndarray:
+        return np.asarray(
+            [
+                float(np.mean(values[index * size : (index + 1) * size]))
+                if values[index * size : (index + 1) * size].size
+                else 0.0
+                for index in range(n_bins)
+            ],
+            dtype=np.float32,
+        )
+
+    def _cap_feature_resolution(
+        self,
+        chroma: np.ndarray,
+        activity: np.ndarray,
+        flux: np.ndarray,
+        tempo: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        if chroma.shape[1] <= self.MAX_SSM_FRAMES:
+            return chroma, activity, flux, tempo
+        edges = np.linspace(
+            0,
+            chroma.shape[1],
+            self.MAX_SSM_FRAMES + 1,
+            dtype=int,
+        )
+        return (
+            np.stack(
+                [
+                    np.mean(chroma[:, edges[i] : edges[i + 1]], axis=1)
+                    for i in range(self.MAX_SSM_FRAMES)
+                ],
+                axis=1,
+            ).astype(np.float32),
+            np.asarray(
+                [
+                    np.mean(activity[edges[i] : edges[i + 1]])
+                    for i in range(self.MAX_SSM_FRAMES)
+                ],
+                dtype=np.float32,
+            ),
+            np.asarray(
+                [
+                    np.mean(flux[edges[i] : edges[i + 1]])
+                    for i in range(self.MAX_SSM_FRAMES)
+                ],
+                dtype=np.float32,
+            ),
+            np.asarray(
+                [
+                    np.mean(tempo[edges[i] : edges[i + 1]])
+                    for i in range(self.MAX_SSM_FRAMES)
+                ],
+                dtype=np.float32,
+            ),
+        )
+
+    def _foote_novelty_from_features(self, chroma: np.ndarray) -> np.ndarray:
+        ssm = self._cosine_ssm(chroma.T)
+        kernel_size = min(64, max(8, ssm.shape[0] // 4))
+        kernel = self._foote_kernel(kernel_size)
+        half = kernel_size // 2
+        padded = np.pad(ssm, ((half, half), (half, half)), mode="edge")
+        novelty = np.zeros(ssm.shape[0], dtype=np.float32)
+        for index in range(ssm.shape[0]):
+            block = padded[
+                index : index + kernel_size,
+                index : index + kernel_size,
+            ]
+            novelty[index] = float(np.sum(block * kernel))
+        return np.maximum(novelty, 0.0)
 
     def _foote_novelty(
         self, y: np.ndarray, sr: int

@@ -45,6 +45,11 @@ class StreamingAnalysisResult:
     kick_times: list[float] = field(default_factory=list)
     snare_times: list[float] = field(default_factory=list)
     hihat_times: list[float] = field(default_factory=list)
+    chroma_mean: list[float] = field(default_factory=list)
+    spectral_times: list[float] = field(default_factory=list)
+    spectral_bands: dict[str, list[float]] = field(default_factory=dict)
+    spectral_centroids: list[float] = field(default_factory=list)
+    stage_errors: dict[str, list[str]] = field(default_factory=dict)
     window_count: int = 0
 
 
@@ -195,6 +200,7 @@ class StreamingAudioAnalyzer:
     SR = 22050
     N_FFT = 2048
     HOP_LENGTH = 512
+    MAX_REPRESENTATIVE_POINTS = 7200
 
     def __init__(
         self,
@@ -343,6 +349,12 @@ class StreamingAudioAnalyzer:
         snare_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
         hihat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
         energy_agg = _EnergyAggregator()
+        chroma_sum = np.zeros(12, dtype=np.float64)
+        chroma_weight = 0
+        spectral_times: list[float] = []
+        spectral_bands: dict[str, list[float]] = {}
+        spectral_centroids: list[float] = []
+        stage_errors: dict[str, list[str]] = {}
 
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
 
@@ -358,6 +370,7 @@ class StreamingAudioAnalyzer:
                 chunk = self._load_chunk(path, chunk_start, chunk_dur)
             except Exception as e:
                 logger.warning(f"Chunk {i} load fehlgeschlagen: {e}")
+                stage_errors.setdefault("load", []).append(f"chunk {i}: {e}")
                 energy_agg.add_gap(
                     chunk_dur,
                     is_first_chunk=(i == 0),
@@ -371,16 +384,48 @@ class StreamingAudioAnalyzer:
 
             # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
             if not energy_only:
-                self._process_beats(
+                beats_ok = self._process_beats(
                     chunk, chunk_start, bpm_est, beat_acc
                 )
-                self._process_triggers(
+                if not beats_ok:
+                    stage_errors.setdefault("beats", []).append(
+                        f"chunk {i}: beat detection failed"
+                    )
+                triggers_ok = self._process_triggers(
                     chunk,
                     chunk_start,
                     onset_acc,
                     kick_acc,
                     snare_acc,
                     hihat_acc,
+                )
+                if not triggers_ok:
+                    stage_errors.setdefault("beats", []).append(
+                        f"chunk {i}: trigger detection failed"
+                    )
+
+            try:
+                representative = self._extract_representative_features(
+                    chunk,
+                    chunk_start,
+                    skip_seconds=0.0 if i == 0 else self.overlap_sec,
+                )
+                feature_weight = int(representative["chroma_weight"])
+                chroma_sum += (
+                    np.asarray(representative["chroma_mean"], dtype=np.float64)
+                    * feature_weight
+                )
+                chroma_weight += feature_weight
+                spectral_times.extend(representative["times"])
+                spectral_centroids.extend(representative["centroids"])
+                for band_name, values in representative["bands"].items():
+                    spectral_bands.setdefault(band_name, []).extend(values)
+            except Exception as e:
+                logger.warning(
+                    f"Full-duration Features bei {chunk_start:.1f}s fehlgeschlagen: {e}"
+                )
+                stage_errors.setdefault("features", []).append(
+                    f"chunk {i}: {e}"
                 )
 
             # --- RMS-Energy pro Chunk ---
@@ -390,6 +435,9 @@ class StreamingAudioAnalyzer:
                 energy_agg=energy_agg,
             )
             if not energy_ok:
+                stage_errors.setdefault("energy", []).append(
+                    f"chunk {i}: RMS calculation failed"
+                )
                 energy_agg.add_gap(
                     chunk_dur,
                     is_first_chunk=(i == 0),
@@ -412,6 +460,15 @@ class StreamingAudioAnalyzer:
             except Exception:
                 pass
 
+        (
+            spectral_times,
+            spectral_bands,
+            spectral_centroids,
+        ) = self._cap_representative_points(
+            spectral_times,
+            spectral_bands,
+            spectral_centroids,
+        )
         return StreamingAnalysisResult(
             duration_seconds=duration,
             bpm=bpm_est.median_bpm,
@@ -421,7 +478,100 @@ class StreamingAudioAnalyzer:
             kick_times=kick_acc.get_deduplicated(),
             snare_times=snare_acc.get_deduplicated(),
             hihat_times=hihat_acc.get_deduplicated(),
+            chroma_mean=(
+                (chroma_sum / chroma_weight).tolist()
+                if chroma_weight > 0
+                else []
+            ),
+            spectral_times=spectral_times,
+            spectral_bands=spectral_bands,
+            spectral_centroids=spectral_centroids,
+            stage_errors=stage_errors,
             window_count=n_windows,
+        )
+
+    def _extract_representative_features(
+        self,
+        chunk: np.ndarray,
+        chunk_start: float,
+        skip_seconds: float,
+    ) -> dict:
+        """One-second spectral/chroma summaries for full-duration consumers."""
+        import librosa
+
+        from .spectral_analyzer import FREQUENCY_BANDS
+
+        stft = np.abs(
+            librosa.stft(
+                chunk,
+                n_fft=self.N_FFT,
+                hop_length=self.HOP_LENGTH,
+            )
+        )
+        frequencies = librosa.fft_frequencies(sr=self.SR, n_fft=self.N_FFT)
+        centroids = librosa.feature.spectral_centroid(
+            S=stft,
+            sr=self.SR,
+        )[0]
+        chroma = librosa.feature.chroma_stft(
+            S=stft,
+            sr=self.SR,
+            n_fft=self.N_FFT,
+        )
+        local_times = librosa.frames_to_time(
+            np.arange(stft.shape[1]),
+            sr=self.SR,
+            hop_length=self.HOP_LENGTH,
+        )
+        frames_per_second = max(1, int(round(self.SR / self.HOP_LENGTH)))
+        start_frame = int(skip_seconds * self.SR / self.HOP_LENGTH)
+        indices = range(start_frame, stft.shape[1], frames_per_second)
+        times: list[float] = []
+        centroid_points: list[float] = []
+        band_points = {name: [] for name in FREQUENCY_BANDS}
+        for start in indices:
+            end = min(start + frames_per_second, stft.shape[1])
+            if end <= start:
+                continue
+            times.append(float(chunk_start + np.mean(local_times[start:end])))
+            centroid_points.append(float(np.mean(centroids[start:end])))
+            for band_name, (low, high) in FREQUENCY_BANDS.items():
+                mask = (frequencies >= low) & (frequencies < high)
+                value = float(np.mean(np.sum(stft[mask, start:end], axis=0)))
+                band_points[band_name].append(value)
+        return {
+            "times": times,
+            "bands": band_points,
+            "centroids": centroid_points,
+            "chroma_mean": np.mean(chroma, axis=1).tolist(),
+            "chroma_weight": chroma.shape[1],
+        }
+
+    def _cap_representative_points(
+        self,
+        times: list[float],
+        bands: dict[str, list[float]],
+        centroids: list[float],
+    ) -> tuple[list[float], dict[str, list[float]], list[float]]:
+        if len(times) <= self.MAX_REPRESENTATIVE_POINTS:
+            return times, bands, centroids
+        edges = np.linspace(
+            0,
+            len(times),
+            self.MAX_REPRESENTATIVE_POINTS + 1,
+            dtype=int,
+        )
+
+        def reduce(values: list[float]) -> list[float]:
+            return [
+                float(np.mean(values[edges[i] : edges[i + 1]]))
+                for i in range(self.MAX_REPRESENTATIVE_POINTS)
+            ]
+
+        return (
+            reduce(times),
+            {name: reduce(values) for name, values in bands.items()},
+            reduce(centroids),
         )
 
     def _transcode_to_wav(self, path: Path) -> Optional[str]:
@@ -526,7 +676,7 @@ class StreamingAudioAnalyzer:
         chunk_start: float,
         bpm_est: _RunningBPMEstimator,
         beat_acc: _BeatAccumulator,
-    ) -> None:
+    ) -> bool:
         """Beat-Detection auf einem Chunk mit librosa.beat.beat_track."""
         import librosa
 
@@ -545,9 +695,11 @@ class StreamingAudioAnalyzer:
             # BPM extrahieren
             bpm_val = float(tempo) if np.ndim(tempo) == 0 else float(tempo[0])
             bpm_est.add(bpm_val)
+            return True
 
         except Exception as e:
             logger.warning(f"Beat-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}")
+            return False
 
     def _detect_triggers(
         self,
@@ -601,7 +753,7 @@ class StreamingAudioAnalyzer:
         kick_acc: _BeatAccumulator,
         snare_acc: _BeatAccumulator,
         hihat_acc: _BeatAccumulator,
-    ) -> None:
+    ) -> bool:
         """Collect absolute trigger times and deduplicate overlap at result time."""
         try:
             relative_groups = self._detect_triggers(chunk)
@@ -612,10 +764,12 @@ class StreamingAudioAnalyzer:
                 accumulator.add_chunk_beats(
                     [float(value) + chunk_start for value in relative]
                 )
+            return True
         except Exception as e:
             logger.warning(
                 f"Trigger-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}"
             )
+            return False
 
     # ------------------------------------------------------------------
     # Energy-Processing pro Chunk

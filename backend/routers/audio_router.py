@@ -208,7 +208,12 @@ async def list_clips(
         merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
-        merged["is_analyzed"] = analysis is not None or bool(clip.get("is_analyzed", False))
+        cached_status = analysis.get("_analysis_status") if analysis else None
+        merged["is_analyzed"] = (
+            cached_status == "completed"
+            if cached_status is not None
+            else bool(clip.get("is_analyzed", False))
+        )
         # L-N4: stems_paths kann JSON-String oder dict sein (pacing_router-Logik analog).
         # Pydantic-Schema erwartet Dict[str,str] -> normalisieren.
         raw_stems = merged.get("stems_paths")
@@ -342,7 +347,8 @@ async def analyze_audio(
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
-        clip["is_analyzed"] = True
+        analysis_status = result.get("_analysis_status", "completed")
+        clip["is_analyzed"] = analysis_status == "completed"
         # R4-HOCH-9: Update duration from librosa when ffprobe returned 0.0
         analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
         if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
@@ -358,7 +364,7 @@ async def analyze_audio(
             key=clip["key"],
             beat_count=clip["beat_count"],
             beats_json=beats_json,
-            is_analyzed=True,
+            is_analyzed=clip["is_analyzed"],
             energy_curve=result.get("energy_curve"),
             structure_segments=result.get("structure_segments"),
             spectral_data=result.get("spectral_data"),
@@ -373,17 +379,23 @@ async def analyze_audio(
         )
 
         await publish_log(
-            f"Audio-Analyse abgeschlossen: {clip['name']}",
-            level="info",
+            f"Audio-Analyse {analysis_status}: {clip['name']}",
+            level="warning" if analysis_status == "partial" else "info",
             source="audio.analyze",
             detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
         )
         await publish_event("analysis_progress", {
             "event": "analysis_progress",
             "task_id": str(request.clip_id),
-            "status": "completed",
+            "status": analysis_status,
             "percent": 100,
-            "message": f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}",
+            "message": (
+                f"Analyse teilweise abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}"
+                if analysis_status == "partial"
+                else f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}"
+            ),
+            "stage_status": result.get("_stage_status", {}),
+            "stage_errors": result.get("_stage_errors", {}),
         })
         return AudioAnalysisResult(**result)
     except Exception as e:
@@ -721,14 +733,36 @@ def _run_audio_analysis(
     except Exception:
         try:
             _probe_dur = float(librosa.get_duration(filename=audio_path))
-        except Exception:
-            _probe_dur = 0.0
+        except Exception as exc:
+            raise RuntimeError(
+                f"Audio-Dauer konnte nicht sicher ermittelt werden: {audio_path}"
+            ) from exc
+    if _probe_dur <= 0.0:
+        raise RuntimeError(
+            f"Audio-Dauer konnte nicht sicher ermittelt werden: {audio_path}"
+        )
 
     _use_streaming = _probe_dur > 600.0  # 10min
     _stream_beats = None
     _stream_bpm = None
     _stream_energy = None
     _stream_triggers = None
+    _stream_features = None
+    _stream_stage_errors: dict[str, list[str]] = {}
+    _stage_status: dict[str, str] = {}
+    _stage_errors: dict[str, str] = {}
+
+    def _mark_stage_completed(stage: str, stream_error_keys: tuple[str, ...]) -> None:
+        errors = [
+            error
+            for key in stream_error_keys
+            for error in _stream_stage_errors.get(key, [])
+        ]
+        if _use_streaming and errors:
+            _stage_status[stage] = "partial"
+            _stage_errors[stage] = "; ".join(errors)
+        else:
+            _stage_status[stage] = "completed"
 
     if _use_streaming:
         try:
@@ -762,6 +796,8 @@ def _run_audio_analysis(
                 "snare_times": list(_stream_res.snare_times),
                 "hihat_times": list(_stream_res.hihat_times),
             }
+            _stream_features = _stream_res
+            _stream_stage_errors = dict(_stream_res.stage_errors)
 
             # AP4.1 (Audit 2026-06-10): Kamen die Beats vom Drums-/Instrumental-Stem,
             # repraesentierte die Energy-Curve nur Stem-RMS statt Mix-Energie —
@@ -772,6 +808,9 @@ def _run_audio_analysis(
                     _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
                     _energy_res = StreamingAudioAnalyzer().analyze(audio_path, energy_only=True)
                     _stream_energy = list(_energy_res.energy_curve)
+                    _stream_features = _energy_res
+                    for stage_name, errors in _energy_res.stage_errors.items():
+                        _stream_stage_errors.setdefault(stage_name, []).extend(errors)
                 except Exception as energy_e:
                     logger.warning(
                         f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
@@ -780,14 +819,9 @@ def _run_audio_analysis(
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
             y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=600.0)
         except Exception as e:
-            logger.warning(
-                f"StreamingAudioAnalyzer-Pfad fehlgeschlagen ({e}) - fallback auf Full-Load"
-            )
-            _use_streaming = False
-            _stream_beats = None
-            _stream_bpm = None
-            _stream_energy = None
-            _stream_triggers = None
+            raise RuntimeError(
+                f"Streaming-Audioanalyse fehlgeschlagen; Full-Load ist gesperrt: {e}"
+            ) from e
 
     if not _use_streaming:
         # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
@@ -799,6 +833,7 @@ def _run_audio_analysis(
         duration = float(len(y)) / sr if sr > 0 else 0.0
 
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
+    _stage_status["load"] = "completed"
 
     # 1. BeatNet Beat-Detection
     beats: list[dict] = []
@@ -881,8 +916,13 @@ def _run_audio_analysis(
                 rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
                 rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
                 energy_curve = (rms / rms_max).tolist() if rms_max > 0 else rms.tolist()
+            _mark_stage_completed("beats", ("load", "beats", "energy"))
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
+            _stage_status["beats"] = "failed"
+            _stage_errors["beats"] = str(e)
+    else:
+        _stage_status["beats"] = "skipped"
 
     # 1b. Onset/Drum-Trigger-Kandidaten (Audit-Fix 2026-07-10, Sweep-Finding HIGH-1):
     # advanced_pacing_engine.py erwartete diese Daten von einem toten
@@ -946,12 +986,26 @@ def _run_audio_analysis(
             # AP4.3 (Audit 2026-06-10): echte Datei-Dauer uebergeben — y ist im
             # Streaming-Pfad nur der 600s-Snapshot, wodurch der DJ-Mix-Branch
             # (600.0 > 600 = False) nie erreichbar war.
-            struct_result = StructureAnalyzer().analyze_song_structure(
-                y, sr, total_duration=_probe_dur if _probe_dur > 0 else None
-            )
+            structure_analyzer = StructureAnalyzer()
+            if _use_streaming:
+                struct_result = structure_analyzer.analyze_streaming_energy(
+                    list(_stream_energy or []),
+                    duration,
+                )
+            else:
+                struct_result = structure_analyzer.analyze_song_structure(
+                    y, sr, total_duration=_probe_dur
+                )
             structure_segments = struct_result.get("segments", [])
+            if not structure_segments:
+                raise RuntimeError("Struktur-Analyse lieferte keine Segmente")
+            _mark_stage_completed("structure", ("load", "energy"))
         except Exception as e:
             logger.warning(f"Struktur-Analyse fehlgeschlagen: {e}")
+            _stage_status["structure"] = "failed"
+            _stage_errors["structure"] = str(e)
+    else:
+        _stage_status["structure"] = "skipped"
 
     _emit_analysis_progress(_loop, "structure", 70.0, "Struktur analysiert — starte Spektral-Analyse…")
 
@@ -960,7 +1014,32 @@ def _run_audio_analysis(
     if request.spectral_analysis:
         try:
             from pb_studio.audio.spectral_analyzer import SpectralAnalyzer, FREQUENCY_BANDS
-            spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
+            if _use_streaming:
+                if _stream_features is None or not _stream_features.spectral_times:
+                    raise RuntimeError("Streaming-Spektralrepräsentation ist leer")
+                band_arrays = {
+                    name: np.asarray(values, dtype=np.float64)
+                    for name, values in _stream_features.spectral_bands.items()
+                }
+                spec_result = {
+                    "times": list(_stream_features.spectral_times),
+                    "band_energies": {
+                        name: values.tolist()
+                        for name, values in band_arrays.items()
+                    },
+                    "centroids": list(_stream_features.spectral_centroids),
+                    "band_means": {
+                        name: float(np.mean(values)) if values.size else 0.0
+                        for name, values in band_arrays.items()
+                    },
+                    "band_variances": {
+                        name: float(np.var(values)) if values.size else 0.0
+                        for name, values in band_arrays.items()
+                    },
+                    "events": [],
+                }
+            else:
+                spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
             spectral_data = {
                 "clip_id": clip_id,
                 "times": spec_result.get("times", []),
@@ -973,8 +1052,15 @@ def _run_audio_analysis(
                 "band_variances": spec_result.get("band_variances", {}),
                 "events": spec_result.get("events", []),
             }
+            if not spectral_data["times"]:
+                raise RuntimeError("Spektral-Analyse lieferte keine Zeitachse")
+            _mark_stage_completed("spectral", ("load", "features"))
         except Exception as e:
             logger.warning(f"Spektral-Analyse fehlgeschlagen: {e}")
+            _stage_status["spectral"] = "failed"
+            _stage_errors["spectral"] = str(e)
+    else:
+        _stage_status["spectral"] = "skipped"
 
     _emit_analysis_progress(_loop, "spectral", 85.0, "Spektrum analysiert — starte Tonart-Erkennung…")
 
@@ -982,17 +1068,53 @@ def _run_audio_analysis(
     key = None
     try:
         from pb_studio.audio.key_detector import KeyDetector
-        if instrumental_path and Path(instrumental_path).exists():
+        if _use_streaming:
+            if _stream_features is None or not _stream_features.chroma_mean:
+                raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+            key = KeyDetector().detect_key_from_chroma(
+                _stream_features.chroma_mean
+            )
+        elif instrumental_path and Path(instrumental_path).exists():
             logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
             y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
             key = KeyDetector().detect_key(y_inst, sr_inst)
         else:
             key = KeyDetector().detect_key(y, sr)
+        if not key or key == "Unknown":
+            raise RuntimeError("Tonart konnte nicht ermittelt werden")
+        _mark_stage_completed("key", ("load", "features"))
     except Exception as e:
         logger.warning(f"Key-Detection fehlgeschlagen: {e}")
+        _stage_status["key"] = "failed"
+        _stage_errors["key"] = str(e)
 
 
     _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")
+
+    requested_stages = [
+        name
+        for name, enabled in (
+            ("beats", request.detect_beats),
+            ("structure", request.detect_structure),
+            ("spectral", request.spectral_analysis),
+            ("key", True),
+        )
+        if enabled
+    ]
+    degraded_stages = [
+        name
+        for name in requested_stages
+        if _stage_status.get(name) in {"partial", "failed"}
+    ]
+    failed_stages = [
+        name for name in requested_stages if _stage_status.get(name) == "failed"
+    ]
+    if failed_stages and len(failed_stages) == len(requested_stages):
+        raise RuntimeError(
+            "Alle angeforderten Audio-Stages fehlgeschlagen: "
+            + ", ".join(failed_stages)
+        )
+    analysis_status = "partial" if degraded_stages else "completed"
 
     return {
         "clip_id": clip_id,
@@ -1008,6 +1130,9 @@ def _run_audio_analysis(
         "kick_times": kick_times,
         "snare_times": snare_times,
         "hihat_times": hihat_times,
+        "_analysis_status": analysis_status,
+        "_stage_status": _stage_status,
+        "_stage_errors": _stage_errors,
     }
 
 

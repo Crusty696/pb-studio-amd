@@ -294,6 +294,61 @@ class StructureAnalyzer:
     # Public entry point
     # ------------------------------------------------------------------
 
+    def analyze_streaming_energy(
+        self,
+        energy_curve: list[float],
+        total_duration: float,
+        segment_seconds: float = 60.0,
+    ) -> dict:
+        """Build bounded structure segments spanning an entire streamed mix."""
+        if total_duration <= 0:
+            raise ValueError("total_duration must be positive")
+        energy = np.asarray(energy_curve, dtype=np.float64)
+        if energy.size == 0:
+            raise ValueError("streaming energy curve is empty")
+
+        segment_count = max(1, int(np.ceil(total_duration / segment_seconds)))
+        global_mean = float(np.mean(energy))
+        segments = []
+        previous_mean = global_mean
+        for index in range(segment_count):
+            start_time = index * segment_seconds
+            end_time = min(total_duration, (index + 1) * segment_seconds)
+            start_index = int(start_time / total_duration * energy.size)
+            end_index = max(
+                start_index + 1,
+                int(end_time / total_duration * energy.size),
+            )
+            local_mean = float(np.mean(energy[start_index:end_index]))
+            if index == 0:
+                label = "intro"
+            elif index == segment_count - 1:
+                label = "outro"
+            elif local_mean > global_mean * 1.25:
+                label = "high_energy"
+            elif local_mean < global_mean * 0.70:
+                label = "low_energy"
+            elif local_mean > previous_mean * 1.15:
+                label = "rising"
+            elif local_mean < previous_mean * 0.85:
+                label = "falling"
+            else:
+                label = "plateau"
+            segments.append(
+                {
+                    "segment_id": index + 1,
+                    "start_time": float(start_time),
+                    "end_time": float(end_time),
+                    "duration": float(end_time - start_time),
+                    "label": label,
+                    "cluster": 0,
+                    "confidence": 0.6,
+                    "energy_score": local_mean,
+                }
+            )
+            previous_mean = local_mean
+        return {"total_segments": len(segments), "segments": segments}
+
     def analyze_song_structure(
         self, y: FloatArray, sr: int, num_segments: int = 10,
         progress_callback: Callable[[str, float], None] | None = None,
