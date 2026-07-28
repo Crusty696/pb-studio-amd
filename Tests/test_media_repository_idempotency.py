@@ -172,7 +172,7 @@ def test_existing_db_is_migrated_and_guard_backfilled(tmp_path, monkeypatch):
         row["version"]
         for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
     ]
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3]
 
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(

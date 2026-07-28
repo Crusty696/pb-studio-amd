@@ -1145,22 +1145,20 @@ def _run_video_gpu_analysis(
                             vs = VectorStore(index_name="video_index")
 
                             if _media_id is not None:
-                                try:
-                                    from pb_studio.data.database_core import DatabaseCore
-                                    _db = DatabaseCore()
-                                    old_faiss_ids = []
-                                    with _db.transaction() as conn:
-                                        old_faiss_ids = [r[0] for r in conn.execute(
-                                            "SELECT faiss_id FROM vector_map WHERE media_id = ?", (_media_id,)
-                                        )]
-                                        if old_faiss_ids:
-                                            conn.execute("DELETE FROM vector_map WHERE media_id = ?", (_media_id,))
-                                    
-                                    if old_faiss_ids:
-                                        vs.mark_tombstoned(old_faiss_ids)
-                                        logger.info(f"Deduplizierung: {len(old_faiss_ids)} alte Embeddings fuer media_id {_media_id} tombstoned.")
-                                except Exception as dedup_err:
-                                    logger.warning(f"Embedding-Deduplizierung fehlgeschlagen: {dedup_err}")
+                                from pb_studio.data.vector_operation_outbox import (
+                                    VectorOperationOutbox,
+                                )
+
+                                operation_id = VectorOperationOutbox().dedupe_media_vectors(
+                                    _media_id
+                                )
+                                if operation_id is not None:
+                                    logger.info(
+                                        "Deduplizierung fuer media_id %s ueber "
+                                        "Vector-Outbox abgeschlossen: %s",
+                                        _media_id,
+                                        operation_id,
+                                    )
 
                             duration_seconds = duration_sec if 'duration_sec' in locals() else 0.0
                             vs.add_embedding_with_media_link(

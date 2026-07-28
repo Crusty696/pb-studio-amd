@@ -120,6 +120,31 @@ SCHEMA_MIGRATIONS = (
         END;
         """,
     ),
+    (
+        3,
+        "vector_operation_outbox",
+        """
+        CREATE TABLE IF NOT EXISTS vector_operation_outbox (
+            operation_id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            operation_type TEXT NOT NULL,
+            project_id INTEGER NOT NULL,
+            media_id INTEGER NOT NULL,
+            faiss_ids_json TEXT NOT NULL,
+            stage TEXT NOT NULL DEFAULT 'prepared',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CHECK(schema_version = 1),
+            CHECK(operation_type IN ('media_delete', 'vector_dedupe')),
+            CHECK(stage IN ('prepared', 'relational_applied', 'completed'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_vector_operation_outbox_pending
+        ON vector_operation_outbox(project_id, stage, created_at);
+        """,
+    ),
 )
 
 

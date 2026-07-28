@@ -237,10 +237,9 @@ class AppState:
     def delete_video_clip(self, clip_id: int) -> bool:
         """Loescht Video-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht.
 
-        Y6 / L-STATE-2: Vor repo.delete_media werden FAISS-IDs aus vector_map gelesen
-        und in VectorStore-Tombstone-Liste geschrieben — FAISS hat keine Remove-Op,
-        deshalb filtern wir Hits zur Such-Zeit raus. Verhindert Orphan-Pacing-Matches
-        auf geloeschte Clips.
+        SQLite-/FAISS-Mutationen laufen ueber eine durable, idempotente Outbox.
+        Bei einem Fehler bleibt der Runtime-Clip erhalten; die vorbereitete
+        Operation kann beim naechsten Projekt-Load sicher fortgesetzt werden.
         """
         with self._state_lock:
             clip = self.video_clips.get(clip_id)
@@ -254,16 +253,9 @@ class AppState:
                 file_path=clip["path"],
             )
             if row:
-                # Y6 / L-STATE-2: FAISS-Tombstone vor cascade-Delete
-                from pb_studio.data.database_core import DatabaseCore
-                from pb_studio.data.vector_store import VectorStore
-                db = DatabaseCore()
-                with db.transaction() as conn:
-                    faiss_ids = [r[0] for r in conn.execute(
-                        "SELECT faiss_id FROM vector_map WHERE media_id = ?", (row["id"],))]
-                if faiss_ids:
-                    VectorStore(index_name="video_index").mark_tombstoned(faiss_ids)
-                repo.delete_media(row["id"])
+                from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
+
+                VectorOperationOutbox().delete_media(row["id"])
         except Exception as e:
             logger.error("Video-Clip Persistenz-Delete fehlgeschlagen: %s", e, exc_info=True)
             _emit_persist_error(
@@ -984,8 +976,21 @@ class AppState:
         """
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
+            from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
+
             repo = MediaRepository()
             project_id = int(project_id or self.get_current_project_db_id())
+            repository_db = getattr(repo, "db", None)
+            if repository_db is not None:
+                recovered = VectorOperationOutbox(db=repository_db).recover_pending(
+                    project_id=project_id
+                )
+                if recovered:
+                    logger.info(
+                        "Vector-Outbox-Recovery fuer Projekt %s: %s Operation(en)",
+                        project_id,
+                        recovered,
+                    )
             rows = repo.get_by_project(project_id=project_id)
 
             max_audio_id = 0

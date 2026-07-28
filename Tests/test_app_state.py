@@ -314,7 +314,7 @@ class TestDeletePersistence:
         assert state.audio_clips[7]["path"] == r"C:\media\track.wav"
         assert state.audio_analysis_cache[7] == {"bpm": 128.0}
 
-    def test_video_tombstone_failure_preserves_memory_cache_and_db(self, monkeypatch):
+    def test_video_outbox_failure_preserves_memory_cache_and_db(self, monkeypatch):
         state = AppState()
         state.video_clips[9] = {"id": 9, "path": r"C:\media\clip.mp4"}
         state.video_analysis_cache[9] = {"scene_count": 3}
@@ -327,33 +327,19 @@ class TestDeletePersistence:
             def delete_media(self, media_id):
                 deleted_media_ids.append(media_id)
 
-        class FakeTransaction:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def execute(self, query, params):
-                return [(901,)]
-
-        class FakeDatabaseCore:
-            def transaction(self):
-                return FakeTransaction()
-
-        class FakeVectorStore:
-            def __init__(self, index_name):
-                assert index_name == "video_index"
-
-            def mark_tombstoned(self, faiss_ids):
+        class FakeOutbox:
+            def delete_media(self, media_id):
+                assert media_id == 90
                 raise RuntimeError("tombstone write failed")
 
         monkeypatch.setattr(
             "pb_studio.data.repositories.media_repository.MediaRepository",
             FakeRepo,
         )
-        monkeypatch.setattr("pb_studio.data.database_core.DatabaseCore", FakeDatabaseCore)
-        monkeypatch.setattr("pb_studio.data.vector_store.VectorStore", FakeVectorStore)
+        monkeypatch.setattr(
+            "pb_studio.data.vector_operation_outbox.VectorOperationOutbox",
+            FakeOutbox,
+        )
 
         with pytest.raises(RuntimeError, match="tombstone write failed"):
             state.delete_video_clip(9)
