@@ -552,7 +552,8 @@ async def separate_stems(
         from backend.config import config as _server_config
         result = await with_gpu_task(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,
-            model_id="mdx_net_inst",  # VRAM-Budget-Check via VRAMBudgetManager
+            model_id="stem_separation_full",
+            manage_vram=False,  # StemSeparator owns ONNX model budgets; Demucs is CPU.
             timeout_seconds=_server_config.stem_timeout,
         )
 

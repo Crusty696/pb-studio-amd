@@ -110,3 +110,37 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
     )
     assert "stems" in result
     assert len(legacy_calls) >= 2
+
+
+def test_stem_router_keeps_lock_and_telemetry_without_outer_budget(monkeypatch):
+    """H-05: the router must not reserve a second model budget."""
+    import asyncio
+    import importlib
+
+    from backend.schemas.audio_schemas import StemModel, StemSeparateRequest
+
+    audio_router = importlib.import_module("backend.routers.audio_router")
+    captured = {}
+
+    async def fake_gpu_task(func, *args, **kwargs):
+        captured.update(kwargs)
+        return {"model_used": args[1]}
+
+    state = MagicMock()
+    state.get_audio_clip.return_value = {
+        "id": 7,
+        "name": "mix",
+        "path": "mix.wav",
+    }
+    monkeypatch.setattr(audio_router, "with_gpu_task", fake_gpu_task)
+
+    result = asyncio.run(
+        audio_router.separate_stems(
+            StemSeparateRequest(clip_id=7, model=StemModel.HTDEMUCS),
+            state,
+        )
+    )
+
+    assert result.model_used == StemModel.HTDEMUCS.value
+    assert captured["model_id"] == "stem_separation_full"
+    assert captured["manage_vram"] is False
