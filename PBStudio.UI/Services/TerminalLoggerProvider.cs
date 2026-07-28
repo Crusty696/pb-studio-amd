@@ -19,7 +19,7 @@ internal static class TerminalLogRedactor
         MatchTimeout);
 
     private static readonly Regex SecretAssignmentPattern = new Regex(
-        @"\b(?<name>api[_-]?key|access[_-]?token|auth(?:orization)?|password|passwd|pwd|secret|client[_-]?secret)\b(?<separator>\s*[:=]\s*)(?:""[^""\r\n]*""|'[^'\r\n]*'|[^\s,;]+)",
+        @"(?<![A-Za-z0-9_])(?<name>(?:[A-Za-z0-9]+[_-])*(?:api[_-]?key|access[_-]?token|auth(?:orization)?|password|passwd|pwd|secret(?:[_-]access[_-]key)?|client[_-]?secret|private[_-]?key|token))(?![A-Za-z0-9_])(?<separator>\s*[:=]\s*)(?:""[^""\r\n]*""|'[^'\r\n]*'|[^\s,;]+)",
         Options,
         MatchTimeout);
 
