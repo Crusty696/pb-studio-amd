@@ -449,31 +449,7 @@ async def get_onsets(
     analysis = state.get_audio_analysis(clip_id)
     if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    
-    # Onsets werden aus der Energy-Curve extrahiert
-    energy = analysis.get("energy_curve", [])
-    if not energy:
-        return []
-    
-    duration = float(analysis.get("duration_seconds", 0.0))
-    if duration <= 0.0:
-        clip = state.get_audio_clip(clip_id)
-        duration = float(clip.get("duration_seconds", 0.0)) if clip else 0.0
-    if duration <= 0.0:
-        duration = len(energy) / ((22050 / 512) / 4.0)
-
-    # C1/FIX: Offload heavy math to threadpool
-    from fastapi.concurrency import run_in_threadpool
-    return await run_in_threadpool(_calculate_onsets_sync, energy, duration)
-
-
-def _calculate_onsets_sync(energy: list[float], duration: float) -> list[float]:
-    """Synchronous math for onset detection."""
-    from scipy.signal import find_peaks
-    
-    fps = len(energy) / duration if duration > 0 else ((22050 / 512) / 4.0)
-    peaks, _ = find_peaks(energy, height=0.3, distance=int(0.1 * fps))
-    return (peaks / fps).tolist()
+    return [float(value) for value in analysis.get("onset_times", [])]
 
 
 @router.get(
@@ -765,6 +741,8 @@ def _run_audio_analysis(
         else:
             _stage_status[stage] = "completed"
 
+    analysis_sr = 44100 if request.spectral_analysis else 22050
+
     if _use_streaming:
         try:
             from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
@@ -818,7 +796,12 @@ def _run_audio_analysis(
                     )
 
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
-            y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=600.0)
+            y, sr = librosa.load(
+                audio_path,
+                sr=analysis_sr,
+                mono=True,
+                duration=600.0,
+            )
         except Exception as e:
             raise RuntimeError(
                 f"Streaming-Audioanalyse fehlgeschlagen; Full-Load ist gesperrt: {e}"
@@ -827,7 +810,7 @@ def _run_audio_analysis(
     if not _use_streaming:
         # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
         try:
-            y, sr = librosa.load(audio_path, sr=22050, mono=True)
+            y, sr = librosa.load(audio_path, sr=analysis_sr, mono=True)
         except Exception as e:
             logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
             raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")

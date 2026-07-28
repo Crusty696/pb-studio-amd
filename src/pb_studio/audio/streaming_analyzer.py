@@ -197,7 +197,8 @@ class StreamingAudioAnalyzer:
     BEAT_DEDUP_THRESHOLD_SEC = 0.15  # 150ms Deduplizierung
 
     # STFT-Parameter
-    SR = 22050
+    # Full-duration spectral summaries include the 12–20 kHz "air" band.
+    SR = 44100
     N_FFT = 2048
     HOP_LENGTH = 512
     MAX_REPRESENTATIVE_POINTS = 7200
