@@ -1,5 +1,108 @@
 # QC Report: System-wide Bug Hunting & AI Optimizations (Epic 00013)
 
+## Authoritative Release Gate — 2026-07-28
+
+- **Overall result:** **PASSED / RELEASE-READY**.
+- **Finding matrix:** 60/60 PASS — 2 Critical, 26 High, 25 Medium, 7 Low.
+- **Final regression:** 966 passed, 11 justified skips, 0 failed, 45 warnings in 265.87 s.
+- **Coverage:** 62% — 20,191 statements, 7,662 missed.
+- **Static/build:** Python compile PASS; XAML 19/19; OpenAPI 59 paths/63 operations; WPF Release 0 warnings/0 errors; `git diff --check` PASS.
+- **Security:** destructive Chat confirmation 6/6 tests; approve, reject, timeout, replay, argument tampering, parallel decision and disconnect all PASS.
+- **Data:** 294 valid SQLite test/project databases inspected; 0 integrity failures, 0 FK violations. FAISS/SQLite active mapping remained 785/785 with 0 orphans.
+- **Hardware/E2E:** 6,335.027 s audio imported and analyzed; 12,646 beats; real MDX stems; six videos analyzed through RAFT/SigLIP/Vision; 4,816 Brain cuts cover full duration; resumed H.264 AMF render completed with AAC at 640×360/30 fps, 1,332,887,476 bytes.
+- **Models/GUI:** `moondream:latest` and `ornith:9b` active; Models tab completed loading; 12/12 views rendered, screenshot variance 300–734.
+- **Export:** H.264 and HEVC live PASS; AV1 correctly rejected as unavailable before render.
+
+### Evidence keys
+
+| Key | Evidence |
+|---|---|
+| E0 | Final full suite 966/11/0; compile/XAML/OpenAPI/WPF/static gates |
+| E1 | W1 P0/security/project/render micro-gate; C-01 7/7; Chat security 6/6 |
+| E2 | W2 audio gate 54 passed/4 skipped; late cache/timeout gate 20/20; real 105.6-min analysis/stems |
+| E3 | W3 GPU/Core gate 31/31; live AMD RX 7800 XT health/VRAM/timeout paths |
+| E4 | W4 Video gate 69/69; parser 23/23; six live RAFT/SigLIP/Vision analyses |
+| E5 | W5 Pacing/Brain gate 89/89; live 4,816-cut full-duration Brain pacing |
+| E6 | W6 Chat/Models/Terminal gate 41/41; model/GUI/security live checks |
+| E7 | W7 Project/Data gate 74/74; fault injection on copies; SQLite/FAISS integrity |
+| E8 | W8 Render gate 35/35 plus shutdown/restart gate 41/41; live H.264/HEVC/AV1 and 105.6-min resume render |
+| E9 | W9 WPF gate 6/6; live external-backend lifecycle; 12-view GUI; Release 0/0 |
+
+### Per-finding result
+
+| Finding | Result | Evidence |
+|---|---|---|
+| C-01 | PASS | E1, E2 |
+| C-02 | PASS | E1, E6 |
+| H-01 | PASS | E2 |
+| H-02 | PASS | E2 |
+| H-03 | PASS | E2 |
+| H-04 | PASS | E2 |
+| H-05 | PASS | E2, E3 |
+| H-06 | PASS | E2 |
+| H-07 | PASS | E3 |
+| H-08 | PASS | E3 |
+| H-09 | PASS | E3 |
+| H-10 | PASS | E4 |
+| H-11 | PASS | E4 |
+| H-12 | PASS | E5 |
+| H-13 | PASS | E5 |
+| H-14 | PASS | E5, E7 |
+| H-15 | PASS | E5 |
+| H-16 | PASS | E5 |
+| H-17 | PASS | E6 |
+| H-18 | PASS | E9 |
+| H-19 | PASS | E9 |
+| H-20 | PASS | E1 |
+| H-21 | PASS | E7 |
+| H-22 | PASS | E8 |
+| H-23 | PASS | E1, E8 |
+| H-24 | PASS | E8 |
+| H-25 | PASS | E8 |
+| H-26 | PASS | E6 |
+| M-01 | PASS | E2 |
+| M-02 | PASS | E2 |
+| M-03 | PASS | E2 |
+| M-04 | PASS | E3 |
+| M-05 | PASS | E3 |
+| M-06 | PASS | E4 |
+| M-07 | PASS | E4 |
+| M-08 | PASS | E4 |
+| M-09 | PASS | E4 |
+| M-10 | PASS | E5 |
+| M-11 | PASS | E5 |
+| M-12 | PASS | E6 |
+| M-13 | PASS | E6 |
+| M-14 | PASS | E9 |
+| M-15 | PASS | E9 |
+| M-16 | PASS | E9 |
+| M-17 | PASS | E7 |
+| M-18 | PASS | E7 |
+| M-19 | PASS | E7 |
+| M-20 | PASS | E7 |
+| M-21 | PASS | E7 |
+| M-22 | PASS | E7 |
+| M-23 | PASS | E8 |
+| M-24 | PASS | E8 |
+| M-25 | PASS | E8 |
+| L-01 | PASS | E2 |
+| L-02 | PASS | E2 |
+| L-03 | PASS | E4 |
+| L-04 | PASS | E4 |
+| L-05 | PASS | E9 |
+| L-06 | PASS | E6 |
+| L-07 | PASS | E7 |
+
+### End-QC discoveries closed
+
+- Stem cache now requires exact source/model identity, unique roles, atomic success marker and validated size/mtime/frame metadata.
+- Vision parser rejects refusals/errors, extracts useful English/German prose and never caches empty results.
+- WPF exit respects `PBSTUDIO_BACKEND_MANAGED_EXTERNALLY`; live close left backend and render running.
+- Backend shutdown tracks render tasks/FFmpeg, persists `interrupted`, terminates children boundedly and resumes without duplicate target publication.
+- Skip audit converted hidden Pacing `audio_analysis=None` exception into a passing regression.
+
+Sections below are historical snapshots and are superseded by this authoritative gate.
+
 ## Current Gate Override — 2026-07-28
 
 - **Overall result:** **PRODUCT REGRESSION PASSED / CONTINUOUS AUDIT OPEN**. Alle derzeit registrierten Tasks sind umgesetzt und verifiziert; Erfolgsmarker bleiben während der fortgesetzten systemweiten Suche entfernt.

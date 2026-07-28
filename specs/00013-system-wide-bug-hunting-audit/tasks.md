@@ -313,9 +313,9 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T299 [OBJ-69] {(TR-319)} Run the single W8 render/export micro-gate
 - [X] T300 [OBJ-69] {(TR-320)} Run the single W9 WPF/lifecycle contract micro-gate
 - [X] T301 [OBJ-69] {(TR-321)} Prove 60/60 implementation completion and create `.completed`
-- [ ] T302 [OBJ-69] {(TR-322)} Execute the complete bundled static, regression, security, data, hardware, GUI, model, and export QC
-- [ ] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
-- [ ] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
+- [X] T302 [OBJ-69] {(TR-322)} Execute the complete bundled static, regression, security, data, hardware, GUI, model, and export QC
+- [X] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
+- [X] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
 
 
 
