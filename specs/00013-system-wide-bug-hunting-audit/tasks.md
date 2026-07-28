@@ -270,9 +270,9 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T256 [OBJ-69] {(FR-276)} Fix H-24 queue dedupe scheduling in `backend/routers/render_router.py` and render queue
 - [ ] T257 [OBJ-69] {(FR-277)} Fix H-25 missing-clip render preflight in `src/pb_studio/rendering/render_service.py`
 - [ ] T258 [P] [OBJ-69] {(FR-278)} Fix H-26 parallel deadline-bound provider probes in `backend/routers/models_router.py` and provider clients
-- [ ] T259 [OBJ-69] {(FR-279)} Fix M-01 44.1-kHz spectral path in `backend/routers/audio_router.py` and `src/pb_studio/audio/spectral_analyzer.py`
-- [ ] T260 [OBJ-69] {(FR-280)} Fix M-02 persisted onset responses in `backend/routers/audio_router.py`
-- [ ] T261 [OBJ-69] {(FR-281)} Fix M-03 guaranteed streaming temp cleanup in `src/pb_studio/audio/streaming_analyzer.py`
+- [X] T259 [OBJ-69] {(FR-279)} Fix M-01 44.1-kHz spectral path in `backend/routers/audio_router.py` and `src/pb_studio/audio/spectral_analyzer.py`
+- [X] T260 [OBJ-69] {(FR-280)} Fix M-02 persisted onset responses in `backend/routers/audio_router.py`
+- [X] T261 [OBJ-69] {(FR-281)} Fix M-03 guaranteed streaming temp cleanup in `src/pb_studio/audio/streaming_analyzer.py`
 - [X] T262 [OBJ-69] {(FR-282)} Fix M-04 checked model commit/unload completion in `src/pb_studio/core/model_loader.py`
 - [X] T263 [OBJ-69] {(FR-283)} Fix M-05 adapter-bound GPU telemetry in `src/pb_studio/core/system_monitor.py`
 - [ ] T264 [OBJ-69] {(FR-284)} Fix M-06 color analysis independent from captions in video schema/router
@@ -295,8 +295,8 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T281 [OBJ-69] {(FR-301)} Fix M-23 preview resolution contract in pacing preview router/renderer
 - [ ] T282 [OBJ-69] {(FR-302)} Fix M-24 cancellation before and during render lock wait in `backend/routers/render_router.py`
 - [ ] T283 [OBJ-69] {(FR-303)} Fix M-25 encoder override capability probe and early AV1 unavailable response
-- [ ] T284 [OBJ-69] {(FR-304)} Fix L-01 stable bounded waveform points in `src/pb_studio/audio/waveform_analyzer.py`
-- [ ] T285 [OBJ-69] {(FR-305)} Fix L-02 collision-safe locked waveform cache in `src/pb_studio/audio/waveform_cache.py`
+- [X] T284 [OBJ-69] {(FR-304)} Fix L-01 stable bounded waveform points in `src/pb_studio/audio/waveform_analyzer.py`
+- [X] T285 [OBJ-69] {(FR-305)} Fix L-02 collision-safe locked waveform cache in `src/pb_studio/audio/waveform_cache.py`
 - [ ] T286 [OBJ-69] {(FR-306)} Fix L-03 computed or nullable scene confidence in video analysis
 - [ ] T287 [OBJ-69] {(FR-307)} Fix L-04 input-position video import progress in `backend/routers/video_router.py`
 - [ ] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
@@ -304,7 +304,7 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
 - [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
 - [X] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
-- [ ] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
+- [X] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
 - [X] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
 - [ ] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
 - [ ] T296 [OBJ-69] {(TR-316)} Run the single W5 Pacing/Brain micro-gate
