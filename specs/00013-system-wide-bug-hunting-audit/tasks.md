@@ -242,8 +242,8 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T228 [OBJ-69] {(OR-251)} Freeze the audit evidence and register FR-251–FR-310 in `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md` and `specs/00013-system-wide-bug-hunting-audit/spec.md`
 - [X] T229 [OBJ-69] {(OR-252)} Supersede CPU-SigLIP and torch-directml decisions with the ONNX-DirectML-only ADR in `specs/adrs/` and the PB Studio Brain
 - [X] T230 [OBJ-69] {(OR-253)} Register minimal cluster gates, final QC and the release checklist in `specs/00013-system-wide-bug-hunting-audit/plan.md`
-- [ ] T231 [P] [OBJ-69] {(FR-251)} Fix C-01 Semantic Audio to fail closed without CLAP ONNX and remove CPU fallback in `src/pb_studio/ai/clap_wrapper.py`, `src/pb_studio/ai/smart_director.py`, and pacing entry points
-- [ ] T232 [P] [OBJ-69] {(FR-252)} Fix C-02 with server-enforced one-time chat tool confirmation in `src/pb_studio/ai/`, `backend/routers/chat_router.py`, and the additive WPF chat contract
+- [X] T231 [P] [OBJ-69] {(FR-251)} Fix C-01 Semantic Audio to fail closed without CLAP ONNX and remove CPU fallback in `src/pb_studio/ai/clap_wrapper.py`, `src/pb_studio/ai/smart_director.py`, and pacing entry points
+- [X] T232 [P] [OBJ-69] {(FR-252)} Fix C-02 with server-enforced one-time chat tool confirmation in `src/pb_studio/ai/`, `backend/routers/chat_router.py`, and the additive WPF chat contract
 - [ ] T233 [P] [OBJ-69] {(FR-253)} Fix H-01 bounded long-mix subtrack detection in `backend/routers/audio_router.py` and `src/pb_studio/audio/subtrack_detector.py`
 - [ ] T234 [OBJ-69] {(FR-254)} Fix H-02 streaming probe failures without full-load fallback in `backend/routers/audio_router.py`
 - [ ] T235 [OBJ-69] {(FR-255)} Fix H-03 full-duration structure, key, and spectral representation in `backend/routers/audio_router.py` and `src/pb_studio/audio/`
@@ -263,10 +263,10 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T249 [P] [OBJ-69] {(FR-269)} Fix H-17 `pacing.generate` long-running chat behavior in `src/pb_studio/ai/tool_registry.py` and `chat_agent.py`
 - [ ] T250 [P] [OBJ-69] {(FR-270)} Fix H-18 runtime environment ordering before backend startup in `PBStudio.UI/`
 - [ ] T251 [OBJ-69] {(FR-271)} Fix H-19 project generation and CTS for audio, stems, and pacing in `PBStudio.UI/ViewModels/`
-- [ ] T252 [P] [OBJ-69] {(FR-272)} Fix H-20 project-create conflict handling in `backend/routers/project_router.py`
+- [X] T252 [P] [OBJ-69] {(FR-272)} Fix H-20 project-create conflict handling in `backend/routers/project_router.py`
 - [ ] T253 [P] [OBJ-69] {(FR-273)} Fix H-21 idempotent pending media delete operations in project/data persistence
 - [ ] T254 [P] [OBJ-69] {(FR-274)} Fix H-22 functional `include_audio` and `quality` rendering in render schemas/router/service
-- [ ] T255 [OBJ-69] {(FR-275)} Fix H-23 atomic render output publication in `src/pb_studio/rendering/render_service.py` and `backend/routers/render_router.py`
+- [X] T255 [OBJ-69] {(FR-275)} Fix H-23 atomic render output publication in `src/pb_studio/rendering/render_service.py` and `backend/routers/render_router.py`
 - [ ] T256 [OBJ-69] {(FR-276)} Fix H-24 queue dedupe scheduling in `backend/routers/render_router.py` and render queue
 - [ ] T257 [OBJ-69] {(FR-277)} Fix H-25 missing-clip render preflight in `src/pb_studio/rendering/render_service.py`
 - [ ] T258 [P] [OBJ-69] {(FR-278)} Fix H-26 parallel deadline-bound provider probes in `backend/routers/models_router.py` and provider clients
@@ -303,7 +303,7 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
 - [ ] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
 - [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
-- [ ] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
+- [X] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
 - [ ] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
 - [ ] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
 - [ ] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
