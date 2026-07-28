@@ -244,15 +244,15 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T230 [OBJ-69] {(OR-253)} Register minimal cluster gates, final QC and the release checklist in `specs/00013-system-wide-bug-hunting-audit/plan.md`
 - [X] T231 [P] [OBJ-69] {(FR-251)} Fix C-01 Semantic Audio to fail closed without CLAP ONNX and remove CPU fallback in `src/pb_studio/ai/clap_wrapper.py`, `src/pb_studio/ai/smart_director.py`, and pacing entry points
 - [X] T232 [P] [OBJ-69] {(FR-252)} Fix C-02 with server-enforced one-time chat tool confirmation in `src/pb_studio/ai/`, `backend/routers/chat_router.py`, and the additive WPF chat contract
-- [ ] T233 [P] [OBJ-69] {(FR-253)} Fix H-01 bounded long-mix subtrack detection in `backend/routers/audio_router.py` and `src/pb_studio/audio/subtrack_detector.py`
-- [ ] T234 [OBJ-69] {(FR-254)} Fix H-02 streaming probe failures without full-load fallback in `backend/routers/audio_router.py`
-- [ ] T235 [OBJ-69] {(FR-255)} Fix H-03 full-duration structure, key, and spectral representation in `backend/routers/audio_router.py` and `src/pb_studio/audio/`
-- [ ] T236 [OBJ-69] {(FR-256)} Fix H-04 truthful partial/failed audio stage status in `backend/routers/audio_router.py` and audio schemas
-- [ ] T237 [OBJ-69] {(FR-257)} Fix H-05 single VRAM-budget ownership for stems in `backend/routers/audio_router.py` and `src/pb_studio/audio/separator.py`
-- [ ] T238 [OBJ-69] {(FR-258)} Fix H-06 separator fail-stop on reservation failure in `src/pb_studio/audio/separator.py`
-- [ ] T239 [P] [OBJ-69] {(FR-259)} Fix H-07 deadline and late-result lock lifetime in `backend/dependencies.py`
-- [ ] T240 [OBJ-69] {(FR-260)} Fix H-08 eviction accounting after callback success in `src/pb_studio/core/vram_budget_manager.py`
-- [ ] T241 [OBJ-69] {(FR-261)} Fix H-09 fresh sensor reads before allocation in `src/pb_studio/core/system_monitor.py` and `src/pb_studio/core/vram_arbiter.py`
+- [X] T233 [P] [OBJ-69] {(FR-253)} Fix H-01 bounded long-mix subtrack detection in `backend/routers/audio_router.py` and `src/pb_studio/audio/subtrack_detector.py`
+- [X] T234 [OBJ-69] {(FR-254)} Fix H-02 streaming probe failures without full-load fallback in `backend/routers/audio_router.py`
+- [X] T235 [OBJ-69] {(FR-255)} Fix H-03 full-duration structure, key, and spectral representation in `backend/routers/audio_router.py` and `src/pb_studio/audio/`
+- [X] T236 [OBJ-69] {(FR-256)} Fix H-04 truthful partial/failed audio stage status in `backend/routers/audio_router.py` and audio schemas
+- [X] T237 [OBJ-69] {(FR-257)} Fix H-05 single VRAM-budget ownership for stems in `backend/routers/audio_router.py` and `src/pb_studio/audio/separator.py`
+- [X] T238 [OBJ-69] {(FR-258)} Fix H-06 separator fail-stop on reservation failure in `src/pb_studio/audio/separator.py`
+- [X] T239 [P] [OBJ-69] {(FR-259)} Fix H-07 deadline and late-result lock lifetime in `backend/dependencies.py`
+- [X] T240 [OBJ-69] {(FR-260)} Fix H-08 eviction accounting after callback success in `src/pb_studio/core/vram_budget_manager.py`
+- [X] T241 [OBJ-69] {(FR-261)} Fix H-09 fresh sensor reads before allocation in `src/pb_studio/core/system_monitor.py` and `src/pb_studio/core/vram_arbiter.py`
 - [ ] T242 [P] [OBJ-69] {(FR-262)} Fix H-10 explicit RAFT/SigLIP stage failures in `src/pb_studio/video/` and `backend/routers/video_router.py`
 - [ ] T243 [OBJ-69] {(FR-263)} Fix H-11 registry-confirmed Vision capability in `src/pb_studio/video/`, model registry, and video routing
 - [ ] T244 [P] [OBJ-69] {(FR-264)} Fix H-12 `use_brain` activation of Advanced Pacing and ClipSelector in `src/pb_studio/services/pacing_service.py`
@@ -273,8 +273,8 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T259 [OBJ-69] {(FR-279)} Fix M-01 44.1-kHz spectral path in `backend/routers/audio_router.py` and `src/pb_studio/audio/spectral_analyzer.py`
 - [ ] T260 [OBJ-69] {(FR-280)} Fix M-02 persisted onset responses in `backend/routers/audio_router.py`
 - [ ] T261 [OBJ-69] {(FR-281)} Fix M-03 guaranteed streaming temp cleanup in `src/pb_studio/audio/streaming_analyzer.py`
-- [ ] T262 [OBJ-69] {(FR-282)} Fix M-04 checked model commit/unload completion in `src/pb_studio/core/model_loader.py`
-- [ ] T263 [OBJ-69] {(FR-283)} Fix M-05 adapter-bound GPU telemetry in `src/pb_studio/core/system_monitor.py`
+- [X] T262 [OBJ-69] {(FR-282)} Fix M-04 checked model commit/unload completion in `src/pb_studio/core/model_loader.py`
+- [X] T263 [OBJ-69] {(FR-283)} Fix M-05 adapter-bound GPU telemetry in `src/pb_studio/core/system_monitor.py`
 - [ ] T264 [OBJ-69] {(FR-284)} Fix M-06 color analysis independent from captions in video schema/router
 - [ ] T265 [OBJ-69] {(FR-285)} Fix M-07 hash-based embedding reuse in `backend/routers/video_router.py`
 - [ ] T266 [OBJ-69] {(FR-286)} Fix M-08 bounded representative long-video sampling in `backend/routers/video_router.py`
@@ -301,11 +301,11 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [ ] T287 [OBJ-69] {(FR-307)} Fix L-04 input-position video import progress in `backend/routers/video_router.py`
 - [ ] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
 - [ ] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
-- [ ] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
+- [X] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
 - [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
 - [X] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
 - [ ] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
-- [ ] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
+- [X] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
 - [ ] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
 - [ ] T296 [OBJ-69] {(TR-316)} Run the single W5 Pacing/Brain micro-gate
 - [ ] T297 [OBJ-69] {(TR-317)} Run the single W6 Chat/Models/Terminal micro-gate
