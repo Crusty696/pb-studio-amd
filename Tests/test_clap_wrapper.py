@@ -157,33 +157,18 @@ class TestCLAPAnalyzer:
                 norm = np.linalg.norm(embedding)
                 assert 0.99 <= norm <= 1.01
 
-    def test_classify_audio_onnx_mode_returns_empty(self, analyzer_lazy):
-        """BUGFIX M3 (2026-07-24): ONNX classification is not implemented.
-
-        classify_audio must return [] in ONNX mode (no PyTorch fallback)
-        instead of fabricating fake tags that poison pacing/semantic matching.
-        """
+    def test_classify_audio_onnx_mode_is_explicitly_unavailable(self, analyzer_lazy):
+        """Missing ONNX classification must be explicit, never neutral/fabricated."""
         test_labels = ["happy", "sad", "energetic"]
 
         analyzer_lazy._initialized = True
-        assert analyzer_lazy._pytorch_fallback is None  # pure ONNX mode
 
-        results = analyzer_lazy.classify_audio("test.mp3", test_labels, top_k=2)
+        with pytest.raises(RuntimeError, match="Semantic Audio"):
+            analyzer_lazy.classify_audio("test.mp3", test_labels, top_k=2)
 
-        assert results == []
-
-    def test_classify_audio_pytorch_fallback_top_k(self, analyzer_lazy):
-        """With a working PyTorch fallback, classify_audio sorts and trims to top_k."""
-        analyzer_lazy._initialized = True
-        fallback = MagicMock()
-        fallback.classify_audio.return_value = [
-            ("happy", 0.4), ("energetic", 0.9), ("sad", 0.1),
-        ]
-        analyzer_lazy._pytorch_fallback = fallback
-
-        results = analyzer_lazy.classify_audio("test.mp3", ["happy", "sad", "energetic"], top_k=2)
-
-        assert results == [("energetic", 0.9), ("happy", 0.4)]
+    def test_no_pytorch_fallback_state_exists(self, analyzer_lazy):
+        """C-01: Runtime wrapper cannot hold or activate a PyTorch fallback."""
+        assert not hasattr(analyzer_lazy, "_pytorch_fallback")
 
     def test_get_mood_tags(self, analyzer_lazy):
         """Test mood tag extraction"""
@@ -344,7 +329,7 @@ class TestCLAPIntegration:
     def test_real_model_loading(self, analyzer):
         """Test loading actual ONNX model"""
         assert analyzer.is_ready
-        assert analyzer.active_provider in ['DmlExecutionProvider', 'CPUExecutionProvider']
+        assert analyzer.active_provider == "DmlExecutionProvider"
 
     @pytest.mark.skipif(
         not Path("./test_audio/sample.mp3").exists(),

@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 # Data Classes
 # =============================================================================
 
+class SemanticAudioUnavailableError(RuntimeError):
+    """Raised when functional CLAP ONNX classification is unavailable."""
+
+
 class MoodCategory(Enum):
     """Mood categories for audio-video matching."""
     ENERGETIC = "energetic"
@@ -197,6 +201,7 @@ class SmartDirector:
         self._clap: Optional[Any] = clap_wrapper
         self._siglip: Optional[Any] = siglip_wrapper
         self._pacing_engine = pacing_engine
+        self._semantic_audio_unavailable_reason: Optional[str] = None
 
         # Track which model is currently loaded
         self._active_model: Optional[str] = None  # "clap" or "siglip"
@@ -214,8 +219,8 @@ class SmartDirector:
         self._inference_lock = gpu_inference_lock
 
         # VRAM budgets (MB)
-        # CLAPPyTorch laeuft auf CPU - kein VRAM noetig
-        self._clap_budget = 0     # CLAP PyTorch laeuft auf CPU, nicht GPU
+        # Actual CLAP sessions are registered and budgeted by ModelLoader.
+        self._clap_budget = 600
         self._siglip_budget = 900  # SigLIP SO400M needs more VRAM
 
         # Register models with VRAM manager
@@ -235,15 +240,6 @@ class SmartDirector:
     def _register_models_with_vram_manager(self):
         """Register SmartDirector models with the central VRAM manager."""
         from pb_studio.core import ModelPriority
-
-        # Register CLAP model
-        self.vram_manager.register_model(
-            model_id="smart_director_clap",
-            name="SmartDirector CLAP",
-            estimated_vram_mb=self._clap_budget,
-            priority=ModelPriority.MEDIUM,
-            unload_callback=self._unload_clap
-        )
 
         # Register SigLIP model
         self.vram_manager.register_model(
@@ -266,11 +262,10 @@ class SmartDirector:
             True if CLAP is ready
         """
         if self._active_model == "clap" and self._clap is not None:
-            return True
+            return bool(getattr(self._clap, "is_semantic_ready", False))
 
-        # CLAP PyTorch laeuft auf CPU (VRAM = 0). SigLIP muss nicht präventiv entladen werden,
-        # da es im GPU VRAM verbleiben kann und der VRAMBudgetManager es bei echtem Bedarf
-        # (Modellkonflikt) dynamisch evizieren kann.
+        if self._active_model == "siglip":
+            self._unload_siglip()
         return self._load_clap()
 
     def _ensure_siglip_loaded(self) -> bool:
@@ -290,42 +285,47 @@ class SmartDirector:
         return self._load_siglip()
 
     def _load_clap(self) -> bool:
-        """Load CLAP model with VRAM management."""
+        """Load registered CLAP ONNX model; never fall back to CPU."""
         if self._clap is not None and self._active_model == "clap":
-            return True
+            return bool(getattr(self._clap, "is_semantic_ready", False))
 
         try:
-            logger.info("Loading CLAP model...")
+            logger.info("Loading registered CLAP ONNX model...")
 
-            # Reserve VRAM
-            if not self.vram_manager.reserve("smart_director_clap", force=True):
-                logger.error("Cannot reserve VRAM for CLAP model")
-                return False
+            from pb_studio.ai.clap_wrapper import CLAPAnalyzer
 
-            # Import and create CLAP wrapper (PyTorch version - ONNX models not available)
-            from pb_studio.ai.clap_pytorch import CLAPPyTorch
+            self._clap = self._clap or CLAPAnalyzer(lazy_load=True)
 
-            self._clap = CLAPPyTorch()
-
-            if self._clap.load():
-                self.vram_manager.commit("smart_director_clap")
+            if self._clap.load() and self._clap.is_semantic_ready:
                 self._active_model = "clap"
-                # BUG-052 FIX: CLAPPyTorch hat kein active_provider Attribut
-                logger.info("CLAP model loaded successfully")
+                self._semantic_audio_unavailable_reason = None
+                logger.info(
+                    "CLAP ONNX classification loaded successfully (Provider: %s)",
+                    self._clap.active_provider,
+                )
                 return True
             else:
-                logger.warning("CLAP model failed to initialize")
-                self.vram_manager.cancel_reservation("smart_director_clap")
+                self._semantic_audio_unavailable_reason = (
+                    self._clap.unavailable_reason
+                    or "CLAP ONNX classification capability is unavailable"
+                )
+                logger.warning(
+                    "Semantic Audio unavailable: %s",
+                    self._semantic_audio_unavailable_reason,
+                )
+                self._clap.unload()
                 self._clap = None
                 return False
 
         except ImportError as e:
-            logger.error("Failed to import CLAPPyTorch: %s", e)
-            self.vram_manager.cancel_reservation("smart_director_clap")
+            self._semantic_audio_unavailable_reason = f"CLAP ONNX import failed: {e}"
+            logger.error("Failed to import CLAPAnalyzer: %s", e)
             return False
         except Exception as e:
-            logger.error("Failed to load CLAP: %s", e)
-            self.vram_manager.cancel_reservation("smart_director_clap")
+            self._semantic_audio_unavailable_reason = f"CLAP ONNX load failed: {e}"
+            logger.error("Failed to load CLAP ONNX: %s", e)
+            self._clap = None
+            self._active_model = None
             return False
 
     def _unload_clap(self):
@@ -340,7 +340,6 @@ class SmartDirector:
                     logger.warning("Error unloading CLAP: %s", e)
 
                 self._clap = None
-                self.vram_manager.release("smart_director_clap")
                 if self._active_model == "clap":
                     self._active_model = None
 
@@ -407,9 +406,7 @@ class SmartDirector:
             task: "audio" (uses CLAP) or "video" (uses SigLIP)
         """
         if task == "audio":
-            # Da CLAP auf CPU läuft (VRAM budget = 0), muss SigLIP nicht entladen werden!
-            # Verhindert unnötiges PCIe-Thrashing.
-            self._load_clap()
+            self._ensure_clap_loaded()
         elif task == "video":
             self._unload_clap()
             self._load_siglip()
@@ -420,9 +417,16 @@ class SmartDirector:
 
     def get_dominant_mood(self, audio_path: str) -> str:
         """Returns the dominant mood as a string for use in prompts."""
+        if not self._ensure_clap_loaded():
+            raise SemanticAudioUnavailableError(
+                self._semantic_audio_unavailable_reason
+                or "Semantic Audio is unavailable"
+            )
         moods = self._analyze_mood(audio_path)
         if not moods:
-            return "energetic music"
+            raise SemanticAudioUnavailableError(
+                "CLAP ONNX classification returned no mood scores"
+            )
         # Get mood with highest probability
         dominant = max(moods.items(), key=lambda x: x[1])[0]
         return f"{dominant} music"
@@ -449,7 +453,11 @@ class SmartDirector:
         beat_data = self._analyze_beats(audio_path)
 
         # Step 2: Mood classification with CLAP
-        self._ensure_clap_loaded()
+        if not self._ensure_clap_loaded():
+            raise SemanticAudioUnavailableError(
+                self._semantic_audio_unavailable_reason
+                or "Semantic Audio is unavailable"
+            )
         mood_data = self._analyze_mood(audio_path)
 
         # Step 3: Energy curve extraction
@@ -514,8 +522,10 @@ class SmartDirector:
     def _analyze_mood(self, audio_path: str) -> Dict[str, float]:
         """Classify audio mood using CLAP zero-shot classification."""
         if self._clap is None:
-            logger.warning("CLAP not loaded, returning neutral mood")
-            return {"neutral": 1.0}
+            raise SemanticAudioUnavailableError(
+                self._semantic_audio_unavailable_reason
+                or "CLAP ONNX classification is unavailable"
+            )
 
         try:
             # Define mood categories for CLAP classification
@@ -545,7 +555,9 @@ class SmartDirector:
             # Run CLAP classification - returns List[Tuple[str, float]]
             with self._inference_lock:
                 if self._clap is None:
-                    return {"neutral": 1.0}
+                    raise SemanticAudioUnavailableError(
+                        "CLAP ONNX was unloaded before classification"
+                    )
                 results = self._clap.classify_audio(
                     audio_path,
                     labels=mood_labels,
@@ -557,11 +569,19 @@ class SmartDirector:
                 mood_name = mood_mapping.get(label, label)
                 mood_scores[mood_name] = score
 
+            if not mood_scores:
+                raise SemanticAudioUnavailableError(
+                    "CLAP ONNX classification returned no mood scores"
+                )
             return mood_scores
 
+        except SemanticAudioUnavailableError:
+            raise
         except Exception as e:
             logger.error("Mood analysis failed: %s", e)
-            return {"neutral": 1.0}
+            raise SemanticAudioUnavailableError(
+                f"CLAP ONNX classification failed: {e}"
+            ) from e
 
     def _extract_energy_curve(
         self,
@@ -1595,6 +1615,25 @@ class SmartDirector:
     def active_model(self) -> Optional[str]:
         """Get currently loaded model name."""
         return self._active_model
+
+    @property
+    def semantic_audio_status(self) -> Dict[str, Any]:
+        """Expose explicit Semantic Audio capability state."""
+        available = bool(
+            self._clap is not None
+            and getattr(self._clap, "is_semantic_ready", False)
+        )
+        return {
+            "available": available,
+            "provider": (
+                getattr(self._clap, "active_provider", None)
+                if available else None
+            ),
+            "reason": None if available else (
+                self._semantic_audio_unavailable_reason
+                or "CLAP ONNX classification is not loaded"
+            ),
+        }
 
     def get_vram_usage(self) -> Dict[str, int]:
         """Get current VRAM usage estimate."""

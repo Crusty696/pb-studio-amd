@@ -74,6 +74,28 @@ class PacingService:
         # DJ-Tempo-Variation) in den Engine injiziert (fuer varying-BPM mixes)?
         self._last_used_cached_tempo: bool = False
 
+    def _resolve_semantic_audio(
+        self,
+        audio_path: str,
+        requested: bool,
+    ) -> tuple[bool, Optional[str]]:
+        """Resolve Semantic Audio once and fail closed when CLAP is unavailable."""
+        if not requested:
+            return False, None
+
+        try:
+            from pb_studio.ai.smart_director import SmartDirector
+
+            director = SmartDirector.get_instance()
+            prompt = director.get_dominant_mood(audio_path)
+            return True, prompt
+        except Exception as exc:
+            logger.warning(
+                "Semantic Audio unavailable; semantic matching disabled: %s",
+                exc,
+            )
+            return False, None
+
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
         key = str(clip_path)
@@ -557,11 +579,16 @@ class PacingService:
                 logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
                 total_duration = 30.0
 
+        semantic_enabled, song_mood = self._resolve_semantic_audio(
+            audio_path,
+            pacing_config.get("use_semantic_matching", False),
+        )
+
         pacing_engine = AdvancedPacingEngine(
             trigger_settings=pacing_config["trigger_settings"]
         )
         pacing_engine.clip_selector.vector_store = vstore
-        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+        pacing_engine.clip_selector.use_semantic = semantic_enabled
 
         # Brain reranker hook (gleich wie generate_cut_list)
         if pacing_config.get("use_brain", False):
@@ -627,15 +654,6 @@ class PacingService:
             )
 
             # Clip-Zuweisung via clip_selector (mit semantic prompt falls aktiv)
-            song_mood = "energetic music"
-            if pacing_config.get("use_semantic_matching", False):
-                try:
-                    from pb_studio.ai.smart_director import SmartDirector
-                    director = SmartDirector.get_instance()
-                    song_mood = director.get_dominant_mood(audio_path)
-                except Exception as e:
-                    logger.warning(f"SmartDirector mood-detection failed: {e}")
-
             # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
             canvas_path = pacing_config.get("canvas_path")
             manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
@@ -659,7 +677,7 @@ class PacingService:
                     last_manual_clip = active_anchor
                     continue
 
-                prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                prompt = song_mood if semantic_enabled else None
                 if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                     prompt = f"{cut.segment_type} {prompt}"
                 
@@ -805,13 +823,18 @@ class PacingService:
             except Exception as e:
                 logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
                 total_duration = 30.0 # Absoluter Notfall-Fallback
-        
+
+        semantic_enabled, song_mood = self._resolve_semantic_audio(
+            audio_path,
+            pacing_config.get("use_semantic_matching", False),
+        )
+
         pacing_engine = AdvancedPacingEngine(
             trigger_settings=pacing_config["trigger_settings"]
         )
         # VectorStore für semantische Auswahl injizieren
         pacing_engine.clip_selector.vector_store = vstore
-        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+        pacing_engine.clip_selector.use_semantic = semantic_enabled
 
         # Plan Phase 4 deep hook: BrainReranker an clip_selector binden, wenn use_brain=true.
         # Pro Cut wird vom Caller context_keys + audio/video features gesetzt.
@@ -860,7 +883,7 @@ class PacingService:
         logger.info(
             f"Cut-Liste für {target_duration:.2f}s generieren "
             f"(Motion={pacing_config.get('use_motion_matching', False)}, "
-            f"Semantic={pacing_config.get('use_semantic_matching', False)})"
+            f"Semantic={semantic_enabled})"
         )
 
         # Pre-cached Beats + Dauer + Kurven injizieren
@@ -893,7 +916,7 @@ class PacingService:
             # Entscheide welche Generierungsmethode genutzt wird
             use_advanced = (
                 pacing_config.get("use_motion_matching", False) or 
-                pacing_config.get("use_semantic_matching", False) or
+                semantic_enabled or
                 pacing_config.get("use_structure_awareness", False)
             )
 
@@ -957,12 +980,6 @@ class PacingService:
                 )
 
                 # Stimmung ermitteln für semantisches Matching
-                song_mood = "energetic music"
-                if pacing_config.get("use_semantic_matching", False):
-                    from pb_studio.ai.smart_director import SmartDirector
-                    director = SmartDirector.get_instance()
-                    song_mood = director.get_dominant_mood(audio_path)
-
                 # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
                 canvas_path = pacing_config.get("canvas_path")
                 manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
@@ -986,7 +1003,7 @@ class PacingService:
                         last_manual_clip = active_anchor
                         continue
 
-                    prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                    prompt = song_mood if semantic_enabled else None
                     # Falls Struktur aktiv, prompt verfeinern
                     if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                         prompt = f"{cut.segment_type} {prompt}"

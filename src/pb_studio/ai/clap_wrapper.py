@@ -69,11 +69,12 @@ class CLAPAnalyzer:
         self.audio_encoder_session: Optional[ort.InferenceSession] = None
         self.text_encoder_session: Optional[ort.InferenceSession] = None
         self.combined_session: Optional[ort.InferenceSession] = None
-        self._pytorch_fallback: Optional[Any] = None
 
         self._active_provider = "Unknown"
         self._initialized = False
         self._init_failed = False
+        self._classification_available = False
+        self._unavailable_reason: Optional[str] = "CLAP ONNX wurde noch nicht initialisiert"
 
         if not lazy_load:
             self._init_model()
@@ -102,52 +103,59 @@ class CLAPAnalyzer:
     def _init_model(self) -> bool:
         if self._initialized: return True
         if self._init_failed: return False
-        
-        models_path = Path(self._models_dir)
-        sess_options = self._create_session_options()
-        providers = self._get_providers()
 
         try:
+            self._get_providers()
             from pb_studio.core.model_loader import ModelLoader
             loader = ModelLoader()
 
-            audio_path = models_path / "clap_audio_encoder.onnx"
-            text_path = models_path / "clap_text_encoder.onnx"
-            combined_path = models_path / "clap_combined.onnx"
+            self.combined_session = loader.load_model("clap_combined", force=True)
+            if self.combined_session is not None:
+                self._validate_dml_session(self.combined_session)
+                self._active_provider = "DmlExecutionProvider"
+                self._initialized = True
+                return True
 
-            if combined_path.exists():
-                self.combined_session = loader.load_model("clap_combined", force=True)
-                if self.combined_session is None:
-                    self.combined_session = ort.InferenceSession(str(combined_path), sess_options, providers=providers)
-                self._active_provider = self.combined_session.get_providers()[0]
+            self.audio_encoder_session = loader.load_model("clap_audio", force=True)
+            self.text_encoder_session = loader.load_model("clap_text", force=True)
+            if self.audio_encoder_session is not None and self.text_encoder_session is not None:
+                self._validate_dml_session(self.audio_encoder_session)
+                self._validate_dml_session(self.text_encoder_session)
+                self._active_provider = "DmlExecutionProvider"
                 self._initialized = True
                 return True
-            elif audio_path.exists() and text_path.exists():
-                self.audio_encoder_session = loader.load_model("clap_audio", force=True)
-                if self.audio_encoder_session is None:
-                    self.audio_encoder_session = ort.InferenceSession(str(audio_path), sess_options, providers=providers)
-                
-                self.text_encoder_session = loader.load_model("clap_text", force=True)
-                if self.text_encoder_session is None:
-                    self.text_encoder_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
-                
-                self._active_provider = self.audio_encoder_session.get_providers()[0]
-                self._initialized = True
-                return True
-            else:
-                logger.info("CLAP ONNX models not found. Using PyTorch fallback.")
-                from pb_studio.ai.clap_pytorch import CLAPPyTorch
-                self._pytorch_fallback = CLAPPyTorch()
-                if self._pytorch_fallback.load():
-                    self._initialized = True
-                    self._active_provider = "PyTorch (CPU)"
-                    return True
-                self._init_failed = True
-                return False
-        except Exception as e:
-            logger.error(f"Failed to initialize CLAP: {e}")
+
+            self._unavailable_reason = (
+                "Registrierte CLAP-ONNX-Modelle fehlen oder konnten nicht über "
+                "DmlExecutionProvider geladen werden"
+            )
+            loader.unload_model("clap_combined")
+            loader.unload_model("clap_audio")
+            loader.unload_model("clap_text")
+            self.audio_encoder_session = None
+            self.text_encoder_session = None
+            self.combined_session = None
             self._init_failed = True
             return False
+        except Exception as e:
+            self._unavailable_reason = f"CLAP ONNX nicht verfügbar: {e}"
+            logger.error("Failed to initialize CLAP: %s", e)
+            self.unload()
+            self._init_failed = True
+            return False
+
+    @staticmethod
+    def _validate_dml_session(session: ort.InferenceSession) -> None:
+        providers = list(session.get_providers())
+        if providers != ["DmlExecutionProvider"]:
+            raise RuntimeError(
+                "CLAP ONNX Session ist nicht DirectML-only "
+                f"(aktive Provider: {providers})"
+            )
+
+    def load(self) -> bool:
+        """Load registered CLAP ONNX assets without any runtime fallback."""
+        return self._init_model()
 
     def load_audio(self, audio_path: Union[str, Path]) -> np.ndarray:
         """Load and normalize audio for CLAP."""
@@ -168,7 +176,6 @@ class CLAPAnalyzer:
 
     def encode_audio(self, audio_path: Union[str, Path]) -> Optional[np.ndarray]:
         if not self._initialized and not self._init_model(): return None
-        if self._pytorch_fallback: return self._pytorch_fallback.get_audio_embedding(audio_path)
 
         try:
             audio = self.load_audio(audio_path)
@@ -186,24 +193,15 @@ class CLAPAnalyzer:
 
     def encode_text(self, text_list: List[str]) -> Optional[np.ndarray]:
         if not self._initialized and not self._init_model(): return None
-        if self._pytorch_fallback: return self._pytorch_fallback.get_text_embeddings(text_list)
         return None
 
     def classify_audio(self, audio_path: Union[str, Path], labels: List[str], top_k: int = 5) -> List[Tuple[str, float]]:
-        if not self._initialized and not self._init_model(): return []
-        if self._pytorch_fallback:
-            results = self._pytorch_fallback.classify_audio(audio_path, labels)
-            return sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
-        # BUGFIX M3: the ONNX classification path is not implemented. Previously
-        # this returned fabricated results (labels in file order with fake
-        # descending scores), which callers consumed as real mood/genre tags and
-        # fed into pacing/semantic matching. Return [] so failure is visible
-        # instead of silently poisoning cut selection (Iron Rule: no fake success).
-        logger.warning(
-            "CLAP classify_audio called in ONNX mode without a working classifier; "
-            "returning [] (ONNX classification is not implemented)."
+        if not self._initialized and not self._init_model():
+            raise RuntimeError(self._unavailable_reason or "CLAP ONNX nicht verfügbar")
+        raise RuntimeError(
+            "CLAP ONNX Audio/Text-Klassifikation ist nicht funktionsfähig; "
+            "Semantic Audio ist deaktiviert"
         )
-        return []
 
     def get_mood_tags(self, audio_path: Union[str, Path], top_k: int = 5) -> List[str]:
         results = self.classify_audio(audio_path, DEFAULT_MOOD_LABELS, top_k=top_k)
@@ -234,6 +232,26 @@ class CLAPAnalyzer:
     @property
     def is_ready(self) -> bool: return self._initialized
 
+    @property
+    def is_semantic_ready(self) -> bool:
+        """True only when real ONNX zero-shot classification is functional."""
+        return self._initialized and self._classification_available
+
+    @property
+    def unavailable_reason(self) -> Optional[str]:
+        if self.is_semantic_ready:
+            return None
+        if self._initialized:
+            return (
+                "CLAP ONNX Encoder geladen, aber Audio/Text-Klassifikation "
+                "ist nicht implementiert"
+            )
+        return self._unavailable_reason
+
+    @property
+    def active_provider(self) -> str:
+        return self._active_provider
+
     def unload(self):
         try:
             from pb_studio.core.model_loader import ModelLoader
@@ -245,6 +263,7 @@ class CLAPAnalyzer:
             pass
         self.audio_encoder_session = self.text_encoder_session = self.combined_session = None
         self._initialized = False
+        self._classification_available = False
         import gc; gc.collect()
 
 def analyze_audio_mood(audio_path: Union[str, Path], top_k: int = 5) -> List[str]:
