@@ -45,6 +45,14 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 5.0
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
+MODEL_CAPABILITY_CHAT = "chat"
+MODEL_CAPABILITY_VISION = "vision"
+MODEL_CAPABILITY_EMBEDDING = "embedding"
+VALID_MODEL_CAPABILITIES = frozenset({
+    MODEL_CAPABILITY_CHAT,
+    MODEL_CAPABILITY_VISION,
+    MODEL_CAPABILITY_EMBEDDING,
+})
 
 
 class LMStudioError(RuntimeError):
@@ -483,6 +491,96 @@ class LMStudioClient:
                 if name:
                     vision.add(name)
         return vision
+
+    async def get_model_capabilities(self) -> dict[str, frozenset[str]]:
+        """Liefert autoritative Chat-/Vision-/Embedding-Capabilities.
+
+        LM Studio nutzt ``/api/v0/models`` mit ``type``. Ollama nutzt
+        ``/api/tags`` mit explizitem ``capabilities``-Array. Fehlt die native
+        API, liefert die Methode ein leeres Mapping.
+        """
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        is_ollama = "11434" in self.base_url or "ollama" in self.base_url.lower()
+        url = f"{base}/api/tags" if is_ollama else f"{base}/api/v0/models"
+        try:
+            client = await self._ensure_client()
+            response = await client.get(url)
+            if response.status_code != 200:
+                return {}
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001 - best-effort capability probe
+            logger.debug("get_model_capabilities: nativer Endpoint nicht verfuegbar: %s", exc)
+            return {}
+
+        raw_models = payload.get("models") if is_ollama else payload.get("data")
+        capabilities_by_name: dict[str, frozenset[str]] = {}
+        for raw in (raw_models or []):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("id") or raw.get("name") or raw.get("model") or "").strip()
+            if not name:
+                continue
+            capabilities: set[str] = set()
+            if is_ollama:
+                native = {
+                    str(value).strip().lower()
+                    for value in (raw.get("capabilities") or [])
+                }
+                if "completion" in native:
+                    capabilities.add(MODEL_CAPABILITY_CHAT)
+                if "vision" in native:
+                    capabilities.add(MODEL_CAPABILITY_VISION)
+                if "embedding" in native or "embeddings" in native:
+                    capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+            else:
+                model_type = str(raw.get("type") or "").strip().lower()
+                if model_type == "vlm":
+                    capabilities.update({
+                        MODEL_CAPABILITY_CHAT,
+                        MODEL_CAPABILITY_VISION,
+                    })
+                elif model_type == "llm":
+                    capabilities.add(MODEL_CAPABILITY_CHAT)
+                elif model_type in {"embedding", "embeddings"}:
+                    capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+            if capabilities:
+                capabilities_by_name[name] = frozenset(capabilities)
+        return capabilities_by_name
+
+    async def supports_capability(self, capability: str) -> bool:
+        """True wenn mindestens ein aktuell gelistetes Modell Capability besitzt."""
+        required = capability.strip().lower()
+        if required not in VALID_MODEL_CAPABILITIES:
+            raise ValueError(f"Unbekannte Modell-Capability: {capability!r}")
+
+        models, capabilities_by_name = await asyncio.gather(
+            self.list_models(),
+            self.get_model_capabilities(),
+        )
+        installed_names = {model.name for model in models}
+        if capabilities_by_name:
+            return any(
+                name in installed_names and required in model_capabilities
+                for name, model_capabilities in capabilities_by_name.items()
+            )
+
+        lowered_names = [name.lower() for name in installed_names]
+        if required == MODEL_CAPABILITY_VISION:
+            vision_tokens = (
+                "-vl", "vl-", "vl:", "vision", "vlm", "llava", "moondream",
+                "multimodal", "minicpm-v", "internvl", "pixtral", "smolvlm",
+                "gemma-3n", "gemma3n", "e4b", "e2b", "cpm-v",
+                "qwen/qwen3.5-", "qwen/qwen3.6-",
+            )
+            return any(
+                any(token in name for token in vision_tokens)
+                for name in lowered_names
+            )
+        if required == MODEL_CAPABILITY_EMBEDDING:
+            return any("embed" in name for name in lowered_names)
+        return any("embed" not in name for name in lowered_names)
 
     # ------------------------------------------------------------------
     # /v1/chat/completions — Chat (+ Vision via images)

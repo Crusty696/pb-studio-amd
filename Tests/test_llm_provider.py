@@ -8,6 +8,7 @@ Coverage:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +19,7 @@ from pb_studio.ai.llm_provider import (
     DEFAULT_LMSTUDIO_URL,
     DEFAULT_OLLAMA_URL,
     VALID_PROVIDERS,
+    get_alive_client,
     get_base_url,
     get_llm_client,
     get_provider,
@@ -110,3 +112,40 @@ def test_load_config_handles_missing_file(tmp_path, monkeypatch):
     # function callable + returns dict
     cfg = llm_provider._load_config()
     assert isinstance(cfg, dict)
+
+
+def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
+    started: list[str] = []
+    both_started = asyncio.Event()
+
+    class FakeClient:
+        def __init__(self, provider: str):
+            self.provider = provider
+            self.base_url = provider
+
+        async def supports_capability(self, capability: str) -> bool:
+            assert capability == "vision"
+            started.append(self.provider)
+            if len(started) == 2:
+                both_started.set()
+            await both_started.wait()
+            return self.provider == "ollama"
+
+        async def aclose(self) -> None:
+            return None
+
+    def fake_factory(*, provider=None, **_kwargs):
+        return FakeClient(provider or "lmstudio")
+
+    async def go():
+        with patch("pb_studio.ai.llm_provider.get_provider", return_value="auto"), \
+             patch("pb_studio.ai.llm_provider.get_llm_client", side_effect=fake_factory):
+            return await get_alive_client(
+                timeout_seconds=0.2,
+                required_capability="vision",
+            )
+
+    selected = asyncio.run(go())
+    assert set(started) == {"lmstudio", "ollama"}
+    assert selected is not None
+    assert selected.provider == "ollama"

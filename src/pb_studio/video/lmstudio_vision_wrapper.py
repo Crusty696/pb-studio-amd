@@ -164,9 +164,14 @@ async def _async_extract_tags(
     from pb_studio.ai.llm_provider import get_alive_client, get_llm_client, get_provider
 
     if get_provider() == "auto":
-        client = await get_alive_client(timeout_seconds=min(timeout_seconds, 5.0))
+        client = await get_alive_client(
+            timeout_seconds=min(timeout_seconds, 5.0),
+            required_capability="vision",
+        )
         if client is None:
-            client = get_llm_client(timeout_seconds=timeout_seconds)
+            logger.warning("Kein Provider mit nutzbarem Vision-Modell verfuegbar")
+            _publish_status("none", "LLM", "unavailable", 0.0)
+            return [], "none"
     else:
         client = get_llm_client(timeout_seconds=timeout_seconds)
 
@@ -192,13 +197,20 @@ async def _async_extract_tags(
         while attempt < max_attempts:
             attempt += 1
             if model_override:
+                if not registry.is_model_capable(model_override, "vision"):
+                    logger.warning(
+                        "Vision-Override %r ist nicht installiert oder nicht vision-faehig",
+                        model_override,
+                    )
+                    _publish_status(model_override, provider_name, "unavailable", 0.0)
+                    return [], "none"
                 model = model_override
             else:
                 try:
                     model = registry.select_best_for_task(task, mode, exclude=exclude_models)
                 except NoSuitableModelError as exc:
                     logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
-                    _publish_status("none", provider_name, "failed", 0.0)
+                    _publish_status("none", provider_name, "unavailable", 0.0)
                     return [], "none"
 
             # Review-Fix LOW (2026-07-09): Cache-Lookup VOR loading-Event —

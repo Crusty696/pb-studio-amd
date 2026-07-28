@@ -108,6 +108,55 @@ def test_list_models_handles_connect_error_retries_then_fails():
         _run(go())
 
 
+def test_lmstudio_capabilities_distinguish_embedding_from_chat_and_vision():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(200, json={"data": [
+                {"id": "embed-only", "type": "embeddings"},
+                {"id": "chat-model", "type": "llm"},
+                {"id": "vision-model", "type": "vlm"},
+            ]})
+        return httpx.Response(200, json={"data": [
+            {"id": "embed-only"},
+            {"id": "chat-model"},
+            {"id": "vision-model"},
+        ]})
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            capabilities = await client.get_model_capabilities()
+            has_chat = await client.supports_capability("chat")
+            has_vision = await client.supports_capability("vision")
+            return capabilities, has_chat, has_vision
+
+    capabilities, has_chat, has_vision = _run(go())
+    assert capabilities["embed-only"] == {"embedding"}
+    assert capabilities["chat-model"] == {"chat"}
+    assert capabilities["vision-model"] == {"chat", "vision"}
+    assert has_chat is True
+    assert has_vision is True
+
+
+def test_embedding_only_provider_is_alive_but_not_chat_or_vision_capable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(
+                200,
+                json={"data": [{"id": "embed-only", "type": "embeddings"}]},
+            )
+        return httpx.Response(200, json={"data": [{"id": "embed-only"}]})
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            return (
+                await client.is_alive(),
+                await client.supports_capability("chat"),
+                await client.supports_capability("vision"),
+            )
+
+    assert _run(go()) == (True, False, False)
+
+
 # ======================================================================
 # /v1/chat/completions  (non-streaming)
 # ======================================================================

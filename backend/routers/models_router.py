@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/models", tags=["Models (LM Studio)"])
+PROVIDER_PROBE_DEADLINE_SECONDS = 3.0
 
 
 # ----------------------------------------------------------------------
@@ -337,7 +338,7 @@ def _make_client():
     return LMStudioClient(base_url=_get_base_url())
 
 
-async def _make_alive_client():
+async def _make_alive_client(required_capability: Optional[str] = None):
     """W-QA-2 (2026-05-22): Auto-Fallback Client.
 
     Bei provider="auto" + LM-Studio down + Ollama up → Ollama-Client.
@@ -347,7 +348,24 @@ async def _make_alive_client():
     # Env-Override hat Vorrang — kein Fallback wenn explizit gesetzt
     explicit = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
     if explicit:
-        return _make_client(), True, False  # uns ist die Pruefung egal, env weist auf gewollten Server
+        explicit_client = _make_client()
+        try:
+            probe_call = (
+                explicit_client.supports_capability(required_capability)
+                if required_capability
+                else explicit_client.is_alive()
+            )
+            available = await asyncio.wait_for(
+                probe_call,
+                timeout=PROVIDER_PROBE_DEADLINE_SECONDS,
+            )
+        except Exception:
+            available = False
+        if not available:
+            await explicit_client.aclose()
+            return None, False, False
+        is_ollama = "11434" in explicit_client.base_url
+        return explicit_client, not is_ollama, is_ollama
 
     from pb_studio.ai.llm_provider import get_provider, get_llm_client, DEFAULT_LMSTUDIO_URL, DEFAULT_OLLAMA_URL
     from pb_studio.ai.lmstudio_client import LMStudioConnectionError
@@ -357,10 +375,25 @@ async def _make_alive_client():
     ollama_ok = False
 
     async def _probe(p: str) -> bool:
-        c = get_llm_client(provider=p, timeout_seconds=3.0)
+        c = get_llm_client(
+            provider=p,
+            timeout_seconds=PROVIDER_PROBE_DEADLINE_SECONDS,
+            retry_attempts=1,
+        )
         try:
-            return await c.is_alive()
-        except LMStudioConnectionError:
+            probe_call = (
+                c.supports_capability(required_capability)
+                if required_capability
+                else c.is_alive()
+            )
+            return await asyncio.wait_for(
+                probe_call,
+                timeout=PROVIDER_PROBE_DEADLINE_SECONDS,
+            )
+        except (LMStudioConnectionError, asyncio.TimeoutError):
+            return False
+        except Exception as exc:  # noqa: BLE001 - Provider-Fallback bleibt aktiv
+            logger.debug("Provider-Probe %s fehlgeschlagen: %s", p, exc)
             return False
         finally:
             try:
@@ -368,10 +401,15 @@ async def _make_alive_client():
             except Exception:
                 pass
 
-    if provider in ("auto", "lmstudio"):
-        lmstudio_ok = await _probe("lmstudio")
-    if provider in ("auto", "ollama"):
-        ollama_ok = await _probe("ollama")
+    probe_names = [
+        name
+        for name in ("lmstudio", "ollama")
+        if provider in ("auto", name)
+    ]
+    probe_values = await asyncio.gather(*(_probe(name) for name in probe_names))
+    probe_results = dict(zip(probe_names, probe_values))
+    lmstudio_ok = probe_results.get("lmstudio", False)
+    ollama_ok = probe_results.get("ollama", False)
 
     # Provider-Wahl
     if provider == "lmstudio":
@@ -409,18 +447,30 @@ async def list_models() -> ModelListResponse:
     lmstudio_ok = False
     ollama_ok = False
     
-    lmstudio_client = get_llm_client(provider="lmstudio", timeout_seconds=2.0)
-    ollama_client = get_llm_client(provider="ollama", timeout_seconds=2.0)
-    
-    try:
-        lmstudio_ok = await lmstudio_client.is_alive()
-    except Exception:
-        pass
-        
-    try:
-        ollama_ok = await ollama_client.is_alive()
-    except Exception:
-        pass
+    lmstudio_client = get_llm_client(
+        provider="lmstudio",
+        timeout_seconds=PROVIDER_PROBE_DEADLINE_SECONDS,
+        retry_attempts=1,
+    )
+    ollama_client = get_llm_client(
+        provider="ollama",
+        timeout_seconds=PROVIDER_PROBE_DEADLINE_SECONDS,
+        retry_attempts=1,
+    )
+
+    async def _bounded_alive(provider_client) -> bool:
+        try:
+            return await asyncio.wait_for(
+                provider_client.is_alive(),
+                timeout=PROVIDER_PROBE_DEADLINE_SECONDS,
+            )
+        except Exception:
+            return False
+
+    lmstudio_ok, ollama_ok = await asyncio.gather(
+        _bounded_alive(lmstudio_client),
+        _bounded_alive(ollama_client),
+    )
 
     if not lmstudio_ok and not ollama_ok:
         try:
@@ -452,8 +502,10 @@ async def list_models() -> ModelListResponse:
             logger.warning("Fehler beim Laden der Modelle von %s: %s", p_client.base_url, exc)
             return []
 
-    lms_models = await _fetch_from_provider(lmstudio_client, lmstudio_ok)
-    oll_models = await _fetch_from_provider(ollama_client, ollama_ok)
+    lms_models, oll_models = await asyncio.gather(
+        _fetch_from_provider(lmstudio_client, lmstudio_ok),
+        _fetch_from_provider(ollama_client, ollama_ok),
+    )
 
     lms_names = {m.name for m in lms_models}
     oll_names = {m.name for m in oll_models}
@@ -464,20 +516,41 @@ async def list_models() -> ModelListResponse:
             seen_names.add(m_name)
             merged_models.append(m)
 
-    vision_names = set()
-    if lmstudio_ok:
+    async def _fetch_capabilities(provider_client, provider_ok):
+        if not provider_ok:
+            return {}
         try:
-            async with lmstudio_client as c:
-                vision_names = await c.get_vision_model_names()
+            async with provider_client as c:
+                return await asyncio.wait_for(
+                    c.get_model_capabilities(),
+                    timeout=PROVIDER_PROBE_DEADLINE_SECONDS,
+                )
         except Exception as exc:
-            logger.debug("Konnte Vision-Modelle von LM Studio nicht abfragen: %s", exc)
+            logger.debug("Konnte Modell-Capabilities nicht abfragen: %s", exc)
+            return {}
+
+    lms_capabilities, oll_capabilities = await asyncio.gather(
+        _fetch_capabilities(lmstudio_client, lmstudio_ok),
+        _fetch_capabilities(ollama_client, ollama_ok),
+    )
+    capabilities_by_name: dict[str, frozenset[str]] = {}
+    for provider_capabilities in (lms_capabilities, oll_capabilities):
+        for name, capabilities in provider_capabilities.items():
+            capabilities_by_name[name] = frozenset(
+                set(capabilities_by_name.get(name, frozenset())) | set(capabilities)
+            )
 
     from pb_studio.ai.model_registry import ModelRegistry
     ai_cfg = _load_ai_config()
     
     registry = ModelRegistry(ai_cfg, client=None)
     registry._installed = merged_models
-    registry._vision_models = vision_names
+    registry._model_capabilities = capabilities_by_name
+    registry._vision_models = {
+        name
+        for name, capabilities in capabilities_by_name.items()
+        if "vision" in capabilities
+    }
     registry._loaded = True
 
     entries = []
@@ -520,18 +593,30 @@ async def list_available_models() -> AvailableModelsResponse:
     lmstudio_ok = False
     ollama_ok = False
     
-    lmstudio_client = get_llm_client(provider="lmstudio", timeout_seconds=2.0)
-    ollama_client = get_llm_client(provider="ollama", timeout_seconds=2.0)
-    
-    try:
-        lmstudio_ok = await lmstudio_client.is_alive()
-    except Exception:
-        pass
-        
-    try:
-        ollama_ok = await ollama_client.is_alive()
-    except Exception:
-        pass
+    lmstudio_client = get_llm_client(
+        provider="lmstudio",
+        timeout_seconds=PROVIDER_PROBE_DEADLINE_SECONDS,
+        retry_attempts=1,
+    )
+    ollama_client = get_llm_client(
+        provider="ollama",
+        timeout_seconds=PROVIDER_PROBE_DEADLINE_SECONDS,
+        retry_attempts=1,
+    )
+
+    async def _bounded_alive(provider_client) -> bool:
+        try:
+            return await asyncio.wait_for(
+                provider_client.is_alive(),
+                timeout=PROVIDER_PROBE_DEADLINE_SECONDS,
+            )
+        except Exception:
+            return False
+
+    lmstudio_ok, ollama_ok = await asyncio.gather(
+        _bounded_alive(lmstudio_client),
+        _bounded_alive(ollama_client),
+    )
 
     installed_names: list[str] = []
     
@@ -545,8 +630,10 @@ async def list_available_models() -> AvailableModelsResponse:
         except Exception:
             return []
 
-    lms_names = await _fetch_names(lmstudio_client, lmstudio_ok)
-    oll_names = await _fetch_names(ollama_client, ollama_ok)
+    lms_names, oll_names = await asyncio.gather(
+        _fetch_names(lmstudio_client, lmstudio_ok),
+        _fetch_names(ollama_client, ollama_ok),
+    )
     installed_names = list(set(lms_names + oll_names))
 
     active_base = lmstudio_client.base_url if lmstudio_ok else ollama_client.base_url
@@ -685,7 +772,12 @@ async def recommend_model(
 
     ai_cfg = _load_ai_config()
     # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback statt hard-coded LM Studio.
-    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    required_capability = (
+        "vision"
+        if task in {"video_captioning", "image_captioning"}
+        else "chat"
+    )
+    client, lmstudio_ok, ollama_ok = await _make_alive_client(required_capability)
     if client is None:
         registry_stub = ModelRegistry(ai_cfg)
         return RecommendationResponse(
@@ -822,7 +914,7 @@ async def test_model(request: TestRequest) -> ModelTestResponse:
     """Fuehrt einen minimalen Inferenz-Smoke-Test (max_tokens=1) auf der AMD-GPU durch, um die Funktion zu pruefen."""
     import time
     
-    client, lmstudio_ok, ollama_ok = await _make_alive_client()
+    client, lmstudio_ok, ollama_ok = await _make_alive_client("chat")
     if client is None:
         return ModelTestResponse(
             success=False,

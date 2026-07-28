@@ -194,6 +194,53 @@ def test_no_suitable_model_raises():
         _run(go())
 
 
+def test_embedding_only_native_metadata_cannot_preempt_chat_or_vision():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(
+                200,
+                json={"data": [
+                    {"id": "text-embedding-nomic", "type": "embeddings"},
+                ]},
+            )
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "text-embedding-nomic", "object": "model"}]},
+        )
+
+    async def go():
+        async with LMStudioClient(transport=httpx.MockTransport(handler)) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            with pytest.raises(NoSuitableModelError):
+                reg.select_best_for_task("chat_general", "balance")
+            with pytest.raises(NoSuitableModelError):
+                reg.select_best_for_task("video_captioning", "balance")
+
+    _run(go())
+
+
+def test_native_ollama_vision_capability_allows_tokenless_model_name():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/tags"):
+            return httpx.Response(200, json={"models": [{
+                "name": "camera-reader:latest",
+                "capabilities": ["completion", "vision"],
+            }]})
+        return httpx.Response(404)
+
+    async def go():
+        async with LMStudioClient(
+            base_url="http://localhost:11434/v1",
+            transport=httpx.MockTransport(handler),
+        ) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            return reg.select_best_for_task("video_captioning", "balance")
+
+    assert _run(go()) == "camera-reader:latest"
+
+
 
 def test_vision_task_skips_text_qwen_model():
     """Regression: 'qwen' im Namen eines TEXT-Modells (deepseek-r1-qwen3) darf

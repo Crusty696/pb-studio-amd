@@ -165,6 +165,7 @@ class ModelRegistry:
         self._client = client
         self._installed: list[LMStudioModelInfo] = []
         self._vision_models: set[str] = set()
+        self._model_capabilities: dict[str, frozenset[str]] = {}
         self._loaded = False
 
     @property
@@ -205,14 +206,20 @@ class ModelRegistry:
         except LMStudioError:
             self._installed = []
             self._vision_models = set()
+            self._model_capabilities = {}
             self._loaded = True
             raise
-        # Vision-Capability autoritativ via LM Studio /api/v0/models (type==vlm).
-        # Best-effort: leeres Set bei Ollama / fehlendem Endpoint -> Keyword-Fallback.
+        # Native Provider-Metadaten sind autoritativ. Fehlt deren Endpoint,
+        # bleiben konservative Namensheuristiken als Compatibility-Fallback.
         try:
-            self._vision_models = await client.get_vision_model_names()
+            self._model_capabilities = await client.get_model_capabilities()
         except Exception:  # noqa: BLE001
-            self._vision_models = set()
+            self._model_capabilities = {}
+        self._vision_models = {
+            name
+            for name, capabilities in self._model_capabilities.items()
+            if "vision" in capabilities
+        }
         self._loaded = True
         logger.info(
             "ModelRegistry refresh: %d Modelle verfuegbar (%s)",
@@ -227,7 +234,7 @@ class ModelRegistry:
     _VISION_NAME_TOKENS = (
         "-vl", "vl-", "vl:", "vision", "vlm", "llava", "moondream", "multimodal",
         "minicpm-v", "internvl", "pixtral", "smolvlm", "gemma-3n", "gemma3n",
-        "e4b", "e2b", "cpm-v", "-vl-",
+        "e4b", "e2b", "cpm-v", "-vl-", "qwen/qwen3.5-", "qwen/qwen3.6-",
     )
 
     def _is_vision_capable(self, model_name: str) -> bool:
@@ -236,10 +243,43 @@ class ModelRegistry:
         Primaer autoritativ ueber das von ``/api/v0/models`` gemeldete ``type==vlm``
         (``self._vision_models``); sekundaer ueber strikte Namens-Tokens.
         """
-        if model_name in self._vision_models:
-            return True
+        if self._vision_models:
+            return any(_name_matches(name, model_name) for name in self._vision_models)
+        matched_capabilities = self._capabilities_for_model(model_name)
+        if matched_capabilities is not None:
+            return "vision" in matched_capabilities
         low = model_name.lower()
         return any(tok in low for tok in self._VISION_NAME_TOKENS)
+
+    def _capabilities_for_model(self, model_name: str) -> Optional[frozenset[str]]:
+        for capability_name, capabilities in self._model_capabilities.items():
+            if _name_matches(capability_name, model_name):
+                return capabilities
+        return None
+
+    def _is_chat_capable(self, model_name: str) -> bool:
+        matched_capabilities = self._capabilities_for_model(model_name)
+        if matched_capabilities is not None:
+            return "chat" in matched_capabilities
+        return "embed" not in model_name.lower()
+
+    def is_model_capable(self, model_name: str, capability: str) -> bool:
+        """Prueft ein installiertes Modell gegen die benoetigte Task-Capability."""
+        installed_name = next(
+            (
+                model.name
+                for model in self._installed
+                if _name_matches(model_name, model.name)
+            ),
+            None,
+        )
+        if installed_name is None:
+            return False
+        if capability == "vision":
+            return self._is_vision_capable(installed_name)
+        if capability == "chat":
+            return self._is_chat_capable(installed_name)
+        raise ModelRegistryError(f"Unbekannte Modell-Capability: {capability!r}")
 
     def get_preference_list(self, task: str, mode: str) -> list[str]:
         if mode not in VALID_MODES:
@@ -286,22 +326,22 @@ class ModelRegistry:
                 f"Installiert: {[m.name for m in self._installed]}"
             )
 
-        # Vision-Tasks: NUR vision-faehige Modelle zulassen. Autoritativ via
-        # /api/v0/models (type==vlm); sonst Keyword-Heuristik. Verhindert, dass
-        # ein Text-Modell mit "qwen" im Namen (z.B. deepseek-r1-qwen3) fuer
-        # Bild-Captioning gewaehlt wird -> "Model does not support images".
-        if task in ("video_captioning", "image_captioning"):
-            vision_only = [n for n in installed_names if self._is_vision_capable(n)]
-            if vision_only:
-                installed_names = vision_only
-            elif self._vision_models:
-                # Es gibt vlm-Modelle, aber keines davon ist installiert/verfuegbar.
-                raise NoSuitableModelError(
-                    f"Kein vision-faehiges Modell verfuegbar fuer task={task!r}. "
-                    f"Bekannte Vision-Modelle: {sorted(self._vision_models)}. "
-                    f"Installiert: {installed_names}."
-                )
-            # else: keine Capability-Info -> unten Keyword-Fallback (gehaertet)
+        required_capability = (
+            "vision"
+            if task in ("video_captioning", "image_captioning")
+            else "chat"
+        )
+        eligible_names = [
+            name
+            for name in installed_names
+            if self.is_model_capable(name, required_capability)
+        ]
+        if not eligible_names:
+            raise NoSuitableModelError(
+                f"Kein {required_capability}-faehiges Modell verfuegbar "
+                f"fuer task={task!r}. Installiert: {installed_names}."
+            )
+        installed_names = eligible_names
 
         override = self.get_user_override(task)
         if override:
