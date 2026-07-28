@@ -112,6 +112,64 @@ class TestStemSeparatorSeparation:
         assert result == {"stems": [str(temp_dir / "vocals.wav")]}
         sep.separator.load_model.assert_called_once_with(model_file.name)
 
+    def test_onnx_reservation_failure_stops_before_model_load(
+        self, reset_config_singleton, temp_dir
+    ):
+        """H-06: failed GPU reservation must stop the direct separator path."""
+        from pb_studio.audio.separator import StemSeparator
+
+        test_file = temp_dir / "test.wav"
+        model_file = temp_dir / "model.onnx"
+        test_file.touch()
+        model_file.touch()
+
+        sep = StemSeparator.__new__(StemSeparator)
+        sep.separator = MagicMock()
+        sep._has_directml = True
+        sep.config = MagicMock()
+        sep.config.get.return_value = {"models_dir": str(temp_dir)}
+        manager = MagicMock()
+        manager.reserve.return_value = False
+
+        with patch(
+            "pb_studio.core.vram_budget_manager.get_vram_manager",
+            return_value=manager,
+        ):
+            result = sep.separate(str(test_file), model_name=model_file.name)
+
+        assert "error" in result
+        assert "reservation failed" in result["error"].lower()
+        sep.separator.load_model.assert_not_called()
+        sep.separator.separate.assert_not_called()
+        manager.commit.assert_not_called()
+        manager.release.assert_not_called()
+
+    def test_demucs_cpu_path_does_not_reserve_gpu_budget(
+        self, reset_config_singleton, temp_dir
+    ):
+        """H-05: documented PyTorch Demucs path has no GPU budget owner."""
+        from pb_studio.audio.separator import StemSeparator
+
+        test_file = temp_dir / "test.wav"
+        model_file = temp_dir / "htdemucs.yaml"
+        test_file.touch()
+        model_file.touch()
+
+        sep = StemSeparator.__new__(StemSeparator)
+        sep.separator = MagicMock()
+        sep.separator.separate.return_value = [str(temp_dir / "vocals.wav")]
+        sep._has_directml = False
+        sep.config = MagicMock()
+        sep.config.get.return_value = {"models_dir": str(temp_dir)}
+
+        with patch(
+            "pb_studio.core.vram_budget_manager.get_vram_manager"
+        ) as get_manager:
+            result = sep.separate(str(test_file), model_name=model_file.name)
+
+        assert "stems" in result
+        get_manager.assert_not_called()
+
 
 def test_separator_source_is_directml_only_for_onnx():
     """Static guard against reintroducing ORT CPU provider fallback."""

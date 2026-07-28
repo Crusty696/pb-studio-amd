@@ -12,21 +12,7 @@ import threading
 import types
 from pathlib import Path
 
-try:
-    import onnxruntime as ort
-except ImportError:  # pragma: no cover - optional dependency in test envs
-    class _FallbackSessionOptions:
-        def __init__(self):
-            self.enable_mem_pattern = False
-
-    class _FallbackOrt:
-        SessionOptions = _FallbackSessionOptions
-
-        @staticmethod
-        def get_available_providers():
-            return ["CPUExecutionProvider"]
-
-    ort = _FallbackOrt()
+import onnxruntime as ort
 
 import torch
 
@@ -273,55 +259,56 @@ class StemSeparator:
 
         _emit(0.0, "init")
 
-        # Scoped DirectML patch
+        if not self.separator:
+            return {"error": "Separator not initialized"}
+
+        if not Path(file_path).exists():
+            return {"error": f"File not found: {file_path}"}
+
+        is_onnx_model = Path(model_name).suffix.lower() == ".onnx"
+        if is_onnx_model and not getattr(self, "_has_directml", False):
+            return {
+                "error": "DirectML is required for ONNX stem separation; "
+                         "CPU fallback is disabled."
+            }
+
+        # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
+        config = getattr(self, "config", None) or ConfigManager()
+        model_dir = config.get("paths", {}).get("models_dir", "./models")
+        model_path = Path(model_dir) / model_name
+        if not model_path.exists():
+            return {
+                "error": f"Model file '{model_name}' not found in '{model_dir}'. "
+                         "Please run the setup scripts to download models before using PB Studio offline."
+            }
+
         self._apply_directml_patch()
-        
-        # VRAM Budget Manager integration
         vram_reserved = False
         model_id = None
+        vram_mgr = None
         try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager
-            vram_mgr = get_vram_manager()
-            model_id = _get_vram_model_id(model_name)
-            logger.info(f"Reserving VRAM budget for audio separation: {model_id}")
-            vram_reserved = vram_mgr.reserve(model_id, force=True)
-            if not vram_reserved:
-                logger.warning(f"VRAM reserve failed or returned False for {model_id}")
-        except Exception as ve:
-            logger.warning(f"Failed to integrate with VRAMBudgetManager reserve (proceeding): {ve}")
-
-        try:
-            if not self.separator:
-                return {"error": "Separator not initialized"}
-
-            if not Path(file_path).exists():
-                return {"error": f"File not found: {file_path}"}
-
-            if Path(model_name).suffix.lower() == ".onnx" and not getattr(self, "_has_directml", False):
-                return {
-                    "error": "DirectML is required for ONNX stem separation; "
-                             "CPUExecutionProvider fallback is disabled."
-                }
-
-            # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
-            config = getattr(self, "config", None) or ConfigManager()
-            model_dir = config.get("paths", {}).get("models_dir", "./models")
-            model_path = Path(model_dir) / model_name
-            if not model_path.exists():
-                return {
-                    "error": f"Model file '{model_name}' not found in '{model_dir}'. "
-                             "Please run the setup scripts to download models before using PB Studio offline."
-                }
+            # Demucs is the documented PyTorch-CPU exception. Only ONNX stem
+            # inference owns a GPU budget in this direct separator path.
+            if is_onnx_model:
+                from pb_studio.core.vram_budget_manager import get_vram_manager
+                vram_mgr = get_vram_manager()
+                model_id = _get_vram_model_id(model_name)
+                logger.info(f"Reserving VRAM budget for audio separation: {model_id}")
+                vram_reserved = vram_mgr.reserve(model_id, force=True)
+                if not vram_reserved:
+                    raise RuntimeError(
+                        f"VRAM reservation failed for audio separation model {model_id}"
+                    )
 
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
             
-            if vram_reserved and model_id:
-                try:
-                    vram_mgr.commit(model_id)
-                except Exception as ve:
-                    logger.warning(f"Failed to commit VRAM for {model_id}: {ve}")
+            if vram_reserved and model_id and vram_mgr is not None:
+                if not vram_mgr.commit(model_id):
+                    raise RuntimeError(
+                        f"VRAM commit failed for audio separation model {model_id}"
+                    )
 
             logger.info(f"Starting separation for: {file_path}")
             _emit(30.0, "running_inference")
@@ -342,7 +329,7 @@ class StemSeparator:
             return {"error": str(e)}
         finally:
             self._restore_directml_patch()
-            if vram_reserved and model_id:
+            if vram_reserved and model_id and vram_mgr is not None:
                 try:
                     vram_mgr.release(model_id)
                 except Exception as ve:
