@@ -33,6 +33,10 @@ from ..schemas.common import BatchDeleteRequest, DeleteResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
 
+MAX_MOTION_SAMPLES = 120
+MAX_EMBEDDING_SAMPLES = 24
+SIGLIP_EMBEDDING_DIM = 1152
+
 
 @router.post(
     "/import",
@@ -56,28 +60,57 @@ async def import_videos(
 
     imported = []
     supported = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv"}
+    input_total = len(request.paths)
 
-    for path_str in request.paths:
+    async def _publish_input_progress(
+        input_index: int,
+        message: str,
+        clip_id: Optional[int] = None,
+    ) -> None:
+        await publish_event("import_progress", {
+            "task_id": "video_import",
+            "clip_id": clip_id,
+            "step": "input",
+            "percent": input_index * 100.0 / input_total,
+            "message": message,
+        })
+
+    for input_index, path_str in enumerate(request.paths, start=1):
         video_path = Path(path_str)
         # SEC-001: Nur absolute Pfade erlauben
         if not video_path.is_absolute():
             logger.warning(f"Relativer Pfad abgelehnt: {path_str}")
+            await _publish_input_progress(
+                input_index, f"Uebersprungen {input_index}/{input_total}: relativer Pfad"
+            )
             continue
         try:
             if not video_path.exists():
                 logger.warning(f"Video nicht gefunden: {path_str}")
+                await _publish_input_progress(
+                    input_index, f"Uebersprungen {input_index}/{input_total}: nicht gefunden"
+                )
                 continue
         except PermissionError:
             logger.warning(f"Zugriff verweigert: {path_str}")
+            await _publish_input_progress(
+                input_index, f"Uebersprungen {input_index}/{input_total}: Zugriff verweigert"
+            )
             continue
         if video_path.suffix.lower() not in supported:
             logger.warning(f"Format nicht unterstützt: {video_path.suffix}")
+            await _publish_input_progress(
+                input_index, f"Uebersprungen {input_index}/{input_total}: Format"
+            )
             continue
 
         try:
             info = await asyncio.to_thread(_get_video_info, str(video_path))
         except Exception as e:
             logger.error(f"Video-Info fehlgeschlagen: {video_path.name}: {e}")
+            await _publish_input_progress(
+                input_index, f"Uebersprungen {input_index}/{input_total}: Metadatenfehler"
+            )
             continue
 
         # Plan Phase 1 #1: streaming sha256 hash for embedding-cache reuse.
@@ -85,8 +118,8 @@ async def import_videos(
         from pb_studio.core.media_hash import media_hash
         _loop = asyncio.get_running_loop()
         _vname = video_path.name
-        _file_idx = len(imported) + 1
-        _file_total = len(request.paths)
+        _file_idx = input_index
+        _file_total = input_total
 
         def _hash_progress(pct: float) -> None:
             try:
@@ -134,12 +167,11 @@ async def import_videos(
             detail=f"clip_id={clip['id']} duration={info.get('duration', 0.0):.2f}s fps={info.get('fps', 0.0):.2f}",
         )
 
-        await publish_event("import_progress", {
-            "task_id": "video_import",
-            "clip_id": clip["id"],
-            "percent": len(imported) / len(request.paths) * 100,
-            "message": f"Importiert: {video_path.name}",
-        })
+        await _publish_input_progress(
+            input_index,
+            f"Importiert {input_index}/{input_total}: {video_path.name}",
+            clip["id"],
+        )
 
     # R15/M-01: Finales 100%-Event sicherstellen — bei übersprungenen Pfaden
     # (falsches Format, Info-Fehler) würde der letzte Event nie 100% erreichen.
@@ -147,10 +179,10 @@ async def import_videos(
         "task_id": "video_import",
         "clip_id": None,
         "percent": 100.0,
-        "message": f"{len(imported)}/{len(request.paths)} Videos importiert",
+        "message": f"{len(imported)}/{input_total} Videos importiert",
     })
 
-    logger.info(f"{len(imported)} von {len(request.paths)} Videos importiert")
+    logger.info(f"{len(imported)} von {input_total} Videos importiert")
     return imported
 
 
@@ -470,8 +502,13 @@ async def analyze_video(
         })
         # Audit C1: _loop an _run_video_gpu_analysis durchreichen
         _loop = asyncio.get_running_loop()
+        gpu_args: tuple[Any, ...] = (
+            clip["path"], request.clip_id, request, _loop,
+        )
+        if request.generate_embeddings and clip.get("video_hash"):
+            gpu_args = (*gpu_args, clip["video_hash"])
         gpu_res = await with_gpu_task(
-            _run_video_gpu_analysis, clip["path"], request.clip_id, request, _loop,
+            _run_video_gpu_analysis, *gpu_args,
             model_id="video_analysis_full",
             # RAFT und SigLIP verwalten ihre Sessions/Budgets selbst. Der äußere
             # Task braucht nur globalen GPU-Lock und gemeinsame Telemetrie.
@@ -479,8 +516,31 @@ async def analyze_video(
         )
 
         # Step 3: Color + Caption (CPU/HTTP & optional Moondream GPU Fallback)
-        color_caption_res = await _run_color_and_caption_analysis(
-            clip["path"], request.clip_id, request.generate_captions
+        if request.analyze_colors:
+            color_caption_res = await _run_color_and_caption_analysis(
+                clip["path"], request.clip_id, request.generate_captions
+            )
+        else:
+            color_caption_res = await _run_color_and_caption_analysis(
+                clip["path"], request.clip_id, request.generate_captions, False
+            )
+
+        stage_status = dict(gpu_res.get("stage_status") or {})
+        stage_errors = dict(gpu_res.get("stage_errors") or {})
+        if request.analyze_motion and "motion" not in stage_status:
+            stage_status["motion"] = "completed" if gpu_res.get("motion") else "failed"
+            if stage_status["motion"] == "failed":
+                stage_errors["motion"] = "Motion stage returned no result"
+        if request.generate_embeddings and "embedding" not in stage_status:
+            stage_status["embedding"] = (
+                "completed" if gpu_res.get("has_embedding") else "failed"
+            )
+            if stage_status["embedding"] == "failed":
+                stage_errors["embedding"] = "Embedding stage returned no result"
+        analysis_status = (
+            "partial"
+            if any(value in {"partial", "failed"} for value in stage_status.values())
+            else "completed"
         )
 
         # Zusammenführen der Ergebnisse
@@ -496,6 +556,9 @@ async def analyze_video(
             "dominant_colors": color_caption_res["dominant_colors"],
             "tags": color_caption_res["tags"],
             "tag_source": color_caption_res["tag_source"],
+            "status": analysis_status,
+            "stage_status": stage_status,
+            "stage_errors": stage_errors,
         }
 
         # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): Brightness/Saturation/
@@ -549,8 +612,8 @@ async def analyze_video(
         )
 
         await publish_log(
-            f"Video-Analyse abgeschlossen: {clip['name']}",
-            level="info",
+            f"Video-Analyse {analysis_status}: {clip['name']}",
+            level="warning" if analysis_status == "partial" else "info",
             source="video.analyze",
             detail=f"clip_id={request.clip_id} scenes={int(result.get('scene_count', 0) or 0)} avg_motion={float(result.get('avg_motion', 0.0) or 0.0):.2f}",
         )
@@ -572,8 +635,11 @@ async def analyze_video(
             "step_index": 4,
             "step_total": 4,
             "percent": 100.0,
+            "status": analysis_status,
+            "stage_status": stage_status,
+            "stage_errors": stage_errors,
             "message": (
-                f"Video-Analyse fertig: {int(result.get('scene_count', 0) or 0)} Szenen, "
+                f"Video-Analyse {analysis_status}: {int(result.get('scene_count', 0) or 0)} Szenen, "
                 f"Motion {float(result.get('avg_motion', 0.0) or 0.0):.1f}"
             ),
         })
@@ -730,7 +796,8 @@ def _run_scene_detection(video_path: str, detect_scenes: bool) -> dict[str, Any]
                     "start_time": float(s[0]),
                     "end_time": float(s[1]),
                     "scene_type": "cut",
-                    "confidence": 0.85,
+                    # PySceneDetect liefert hier keinen kalibrierten Score.
+                    "confidence": None,
                 }
                 for s in scenes_raw
             ]
@@ -740,11 +807,153 @@ def _run_scene_detection(video_path: str, detect_scenes: bool) -> dict[str, Any]
     return result
 
 
+def _representative_frame_indices(
+    total_frames: int,
+    desired_samples: int,
+    max_samples: int,
+    min_samples: int,
+) -> list[int]:
+    """Return bounded, evenly spaced indices covering the complete input."""
+    if total_frames <= 0 or max_samples <= 0:
+        return []
+    sample_count = min(
+        total_frames,
+        max_samples,
+        max(1, min_samples, desired_samples),
+    )
+    if sample_count == 1:
+        return [0]
+    last = total_frames - 1
+    return sorted({
+        round(position * last / (sample_count - 1))
+        for position in range(sample_count)
+    })
+
+
+def _select_motion_peak_frames(
+    motion_values: list[float],
+    sampled_frame_indices: list[int],
+    fps: float,
+    max_peaks: int = 10,
+) -> list[dict[str, Any]]:
+    """Select real local maxima from RAFT motion values."""
+    if not motion_values or len(sampled_frame_indices) < 2 or max_peaks <= 0:
+        return []
+
+    values = [max(0.0, float(value)) for value in motion_values]
+    maximum = max(values)
+    if maximum <= 0.0:
+        return []
+
+    candidates: list[tuple[int, float]] = []
+    for index, value in enumerate(values):
+        previous = values[index - 1] if index > 0 else float("-inf")
+        following = values[index + 1] if index + 1 < len(values) else float("-inf")
+        if value >= previous and value >= following and (value > previous or value > following):
+            candidates.append((index, value))
+
+    if not candidates:
+        candidates = [(max(range(len(values)), key=values.__getitem__), maximum)]
+
+    strongest = sorted(candidates, key=lambda item: item[1], reverse=True)[:max_peaks]
+    strongest.sort(key=lambda item: item[0])
+    safe_fps = max(float(fps), 1.0)
+    peaks = []
+    for motion_index, value in strongest:
+        sampled_index = min(motion_index + 1, len(sampled_frame_indices) - 1)
+        frame_index = int(sampled_frame_indices[sampled_index])
+        peaks.append({
+            "frame_index": frame_index,
+            "time_seconds": round(frame_index / safe_fps, 3),
+            "motion": value,
+            "confidence": min(1.0, value / maximum),
+        })
+    return peaks
+
+
+def _get_reusable_embedding_metadata(
+    video_path: str,
+    clip_id: int,
+    video_hash: Optional[str],
+) -> Optional[dict[str, int]]:
+    """Return persisted embedding metadata only for a verified content/link hit."""
+    if not video_hash:
+        return None
+
+    try:
+        from backend.app_state import get_app_state as _get_state
+        from pb_studio.data.database_core import DatabaseCore
+        from pb_studio.data.repositories.media_repository import MediaRepository
+        from pb_studio.data.vector_store import VectorStore
+
+        state = _get_state()
+        clip = state.get_video_clip(clip_id) or {}
+        cached = state.get_video_analysis(clip_id) or {}
+        if clip.get("video_hash") != video_hash:
+            return None
+
+        embedding_dim = int(cached.get("embedding_dim", 0) or 0)
+        embedding_samples = int(cached.get("embedding_samples", 0) or 0)
+        if (
+            not cached.get("has_embedding")
+            or embedding_dim != SIGLIP_EMBEDDING_DIM
+            or embedding_samples <= 0
+        ):
+            return None
+
+        project_id = state.get_current_project_db_id()
+        media_row = MediaRepository().find_by_project_and_path(
+            project_id=project_id,
+            file_path=video_path,
+        )
+        if not media_row or media_row.get("file_hash") != video_hash:
+            return None
+
+        db = DatabaseCore()
+        conn = db.get_connection()
+        faiss_ids = [
+            int(row[0])
+            for row in conn.execute(
+                "SELECT faiss_id FROM vector_map WHERE media_id = ?",
+                (media_row["id"],),
+            )
+        ]
+        if not faiss_ids:
+            return None
+
+        vector_store = VectorStore(index_name="video_index")
+        expected_path = Path(video_path).resolve()
+        with vector_store._lock:
+            vector_store._ensure_open()
+            tombstones = getattr(vector_store, "_tombstoned_ids", set())
+            for faiss_id in faiss_ids:
+                if (
+                    faiss_id in tombstones
+                    or vector_store.index is None
+                    or faiss_id >= vector_store.index.ntotal
+                ):
+                    continue
+                metadata = vector_store.metadata.get(faiss_id) or {}
+                metadata_path = metadata.get("path")
+                metadata_hash = metadata.get("video_hash")
+                if metadata_hash not in (None, video_hash):
+                    continue
+                if metadata_path and Path(metadata_path).resolve() == expected_path:
+                    return {
+                        "embedding_dim": embedding_dim,
+                        "embedding_samples": embedding_samples,
+                    }
+    except Exception as exc:
+        logger.warning("Embedding-Reuse-Pruefung fehlgeschlagen: %s", exc)
+    return None
+
+
 def _run_video_gpu_analysis(
     video_path: str,
     clip_id: int,
     request: VideoAnalyzeRequest,
     _loop=None,
+    video_hash: Optional[str] = None,
 ) -> dict[str, Any]:
     """Motion + Embedding via RAFT und SigLIP (DirectML, GPU)."""
     result = {
@@ -752,6 +961,9 @@ def _run_video_gpu_analysis(
         "embedding_dim": 0,
         "embedding_samples": 0,
         "has_embedding": False,
+        "embedding_reused": False,
+        "stage_status": {},
+        "stage_errors": {},
     }
 
     # 1. Motion-Analyse via RAFT
@@ -765,19 +977,18 @@ def _run_video_gpu_analysis(
                 total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
                 duration_sec = total / max(fps, 1.0)
-                n_frames = max(2, int(duration_sec * 2))
-                step = max(1, total // n_frames)
+                frame_indices = _representative_frame_indices(
+                    total,
+                    desired_samples=max(2, int(duration_sec * 2)),
+                    max_samples=MAX_MOTION_SAMPLES,
+                    min_samples=2,
+                )
 
                 frames = []
-                curr_frame = 0
-                for i in range(0, total, step):
-                    while curr_frame < i:
-                        if not cap.grab():
-                            break
-                        curr_frame += 1
-                    
+                sampled_indices = []
+                for frame_index in frame_indices:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                     ret, frame = cap.read()
-                    curr_frame += 1
                     if ret and frame is not None:
                         h, w = frame.shape[:2]
                         if h > 360:
@@ -785,70 +996,86 @@ def _run_video_gpu_analysis(
                             new_w = int(w * scale)
                             frame = cv2.resize(frame, (new_w, 360), interpolation=cv2.INTER_AREA)
                         frames.append(frame)
-                    else:
-                        break
-                    if len(frames) >= n_frames:
-                        break
+                        sampled_indices.append(frame_index)
             finally:
                 cap.release()
 
-            if len(frames) >= 2:
-                motion_analyzer = MotionAnalyzer()
-                try:
-                    def _motion_progress(pct: float) -> None:
-                        if _loop is None:
-                            return
-                        overall = 35.0 + (pct / 100.0) * 30.0
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                publish_event("analysis_progress", {
-                                    "clip_id": clip_id,
-                                    "step": "motion_frame",
-                                    "step_index": 3,
-                                    "step_total": 4,
-                                    "percent": overall,
-                                    "message": f"RAFT frame {pct:.2f}%",
-                                }),
-                                _loop,
-                            )
-                        except Exception:
-                            pass
+            if len(frames) < 2:
+                raise RuntimeError(
+                    f"RAFT sampling produced {len(frames)} readable frames"
+                )
 
-                    motion_result = motion_analyzer.analyze_video_segment(
-                        frames, stride=1, on_progress=_motion_progress
-                    )
+            motion_analyzer = MotionAnalyzer()
+            try:
+                def _motion_progress(pct: float) -> None:
+                    if _loop is None:
+                        return
+                    overall = 35.0 + (pct / 100.0) * 30.0
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            publish_event("analysis_progress", {
+                                "clip_id": clip_id,
+                                "step": "motion_frame",
+                                "step_index": 3,
+                                "step_total": 4,
+                                "percent": overall,
+                                "message": f"RAFT frame {pct:.2f}%",
+                            }),
+                            _loop,
+                        )
+                    except Exception:
+                        pass
 
-                    translated_scene_changes = [
-                        {
-                            "frame_index": sc["frame_index"] * step,
-                            "time_seconds": round((sc["frame_index"] * step) / max(fps, 1.0), 3),
-                            "confidence": sc.get("confidence", 0.0),
-                        }
-                        for sc in motion_result.get("scene_changes", [])
-                        if isinstance(sc, dict)
-                    ]
+                motion_result = motion_analyzer.analyze_video_segment(
+                    frames, stride=1, on_progress=_motion_progress
+                )
+                motion_curve_vals = [
+                    float(value)
+                    for value in motion_result.get("frame_motions", [])
+                ]
+                if not motion_curve_vals:
+                    raise RuntimeError("RAFT returned no motion samples")
 
-                    motion_curve_vals = motion_result.get("frame_motions", [])
-                    peak_motion_value = float(max(motion_curve_vals)) if motion_curve_vals else 0.0
-
-                    result["motion"] = {
-                        "clip_id": clip_id,
-                        "avg_motion": float(motion_result.get("avg_motion", 0.0)),
-                        "peak_motion": peak_motion_value,
-                        "motion_curve": [float(v) for v in motion_curve_vals],
-                        "peak_frames": translated_scene_changes,
-                        "motion_category": _classify_motion(motion_result.get("avg_motion", 0.0)),
-                    }
-                    result["avg_motion"] = result["motion"]["avg_motion"]
-                finally:
-                    motion_analyzer.unload()
-                    import gc; gc.collect()
-                    del motion_analyzer
+                peak_motion_value = float(max(motion_curve_vals))
+                average_motion = float(motion_result.get("avg_motion", 0.0))
+                result["motion"] = {
+                    "clip_id": clip_id,
+                    "avg_motion": average_motion,
+                    "peak_motion": peak_motion_value,
+                    "motion_curve": motion_curve_vals,
+                    "peak_frames": _select_motion_peak_frames(
+                        motion_curve_vals,
+                        sampled_indices,
+                        fps,
+                    ),
+                    "motion_category": _classify_motion(average_motion),
+                }
+                result["avg_motion"] = average_motion
+                result["stage_status"]["motion"] = "completed"
+            finally:
+                motion_analyzer.unload()
+                import gc; gc.collect()
+                del motion_analyzer
         except Exception as e:
-            logger.warning(f"Motion-Analyse fehlgeschlagen: {e}")
+            logger.error(f"Motion-Analyse fehlgeschlagen: {e}")
+            result["stage_status"]["motion"] = "failed"
+            result["stage_errors"]["motion"] = str(e)
 
     # 2. Embedding (SigLIP DirectML)
     if request.generate_embeddings:
+        reusable = _get_reusable_embedding_metadata(video_path, clip_id, video_hash)
+        if reusable is not None:
+            result["has_embedding"] = True
+            result["embedding_dim"] = reusable["embedding_dim"]
+            result["embedding_samples"] = reusable["embedding_samples"]
+            result["embedding_reused"] = True
+            result["stage_status"]["embedding"] = "completed"
+            logger.info(
+                "SigLIP Embedding fuer Clip %s per Video-Hash wiederverwendet",
+                clip_id,
+            )
+            return result
+
         try:
             import cv2
             from pb_studio.ai.siglip_wrapper import SigLIPWrapper
@@ -856,6 +1083,11 @@ def _run_video_gpu_analysis(
 
             wrapper = SigLIPWrapper(lazy_load=False)
             try:
+                if not wrapper.is_ready:
+                    raise RuntimeError(
+                        "SigLIP DirectML model initialization failed; "
+                        "embedding stage unavailable"
+                    )
                 if wrapper.is_ready:
                     import numpy as _np
                     from PIL import Image as _PILImage
@@ -866,32 +1098,38 @@ def _run_video_gpu_analysis(
                         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
                         duration_sec = total_frames / max(fps, 1.0)
-                        n_emb_samples = max(3, int(duration_sec / 5.0))
-                        sample_step = max(1, total_frames // n_emb_samples)
-                        curr_frame = 0
-                        for i in range(0, max(total_frames, 1), sample_step):
-                            while curr_frame < i:
-                                if not cap.grab():
-                                    break
-                                curr_frame += 1
-                            
+                        embedding_indices = _representative_frame_indices(
+                            total_frames,
+                            desired_samples=max(3, int(duration_sec / 5.0)),
+                            max_samples=MAX_EMBEDDING_SAMPLES,
+                            min_samples=3,
+                        )
+                        for frame_index in embedding_indices:
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                             ret, frame = cap.read()
-                            curr_frame += 1
                             if not ret or frame is None:
-                                break
+                                raise RuntimeError(
+                                    f"SigLIP frame read failed at index {frame_index}"
+                                )
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             pil_img = _PILImage.fromarray(frame_rgb)
                             emb = wrapper.encode_image(pil_img)
-                            if emb is not None:
-                                embeddings_collected.append(emb)
-                            if len(embeddings_collected) >= n_emb_samples:
-                                break
+                            if emb is None:
+                                raise RuntimeError(
+                                    f"SigLIP inference failed at frame {frame_index}"
+                                )
+                            embeddings_collected.append(emb)
                     finally:
                         cap.release()
 
                     if embeddings_collected:
                         stacked = _np.stack(embeddings_collected, axis=0)
                         embedding = stacked.mean(axis=0)
+                        if embedding.shape != (SIGLIP_EMBEDDING_DIM,):
+                            raise RuntimeError(
+                                f"SigLIP embedding dimension {embedding.shape} != "
+                                f"({SIGLIP_EMBEDDING_DIM},)"
+                            )
                         norm = float(_np.linalg.norm(embedding))
                         if norm > 1e-3:
                             embedding = embedding / norm
@@ -930,6 +1168,7 @@ def _run_video_gpu_analysis(
                                 meta_info={
                                     "clip_id": clip_id,
                                     "path": video_path,
+                                    "video_hash": video_hash,
                                     "scene_id": f"clip_{clip_id}_full",
                                     "duration": duration_seconds,
                                     "samples": len(embeddings_collected),
@@ -942,14 +1181,15 @@ def _run_video_gpu_analysis(
                             result["has_embedding"] = True
                             result["embedding_dim"] = len(embedding)
                             result["embedding_samples"] = len(embeddings_collected)
+                            result["stage_status"]["embedding"] = "completed"
                             logger.info(
                                 f"SigLIP Embedding (Mittelwert ueber {len(embeddings_collected)} Frames) "
                                 f"gespeichert fuer Clip {clip_id} (dim={len(embedding)})"
                             )
                         else:
-                            result["has_embedding"] = False
+                            raise RuntimeError("SigLIP returned a zero-norm embedding")
                     else:
-                        result["has_embedding"] = False
+                        raise RuntimeError("SigLIP returned no valid embeddings")
                 else:
                     logger.info("SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen.")
                     result["has_embedding"] = False
@@ -962,8 +1202,10 @@ def _run_video_gpu_analysis(
                 del wrapper
                 import gc; gc.collect()
         except Exception as e:
-            logger.warning(f"Embedding-Generierung fehlgeschlagen (unkritisch): {e}")
+            logger.error(f"Embedding-Generierung fehlgeschlagen: {e}")
             result["has_embedding"] = False
+            result["stage_status"]["embedding"] = "failed"
+            result["stage_errors"]["embedding"] = str(e)
 
     return result
 
@@ -991,6 +1233,7 @@ async def _run_color_and_caption_analysis(
     video_path: str,
     clip_id: int,
     generate_captions: bool,
+    analyze_colors: bool = True,
 ) -> dict[str, Any]:
     """Extrahiert Farben und Tags (KMeans auf CPU, LM-Studio über HTTP, Moondream als GPU-Fallback)."""
     result = {
@@ -1000,6 +1243,7 @@ async def _run_color_and_caption_analysis(
     }
     if not generate_captions:
         result["tag_source"] = "skipped"
+    if not generate_captions and not analyze_colors:
         return result
 
     try:
@@ -1025,8 +1269,17 @@ async def _run_color_and_caption_analysis(
 
         if frames_rgb:
             # 1. Dominante Farben (KMeans, CPU)
-            combined_rgb = _np.vstack(frames_rgb)
-            result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
+            if analyze_colors:
+                combined_rgb = _np.vstack(frames_rgb)
+                result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
+
+            if not generate_captions:
+                logger.info(
+                    "KMeans: %s colors, Captioning uebersprungen fuer clip %s",
+                    len(result["dominant_colors"]),
+                    clip_id,
+                )
+                return result
 
             # 2. Tags extrahieren
             all_tags = []
@@ -1160,7 +1413,6 @@ async def _run_color_and_caption_analysis(
 
     except Exception as e:
         logger.warning(f"Color/Tag-Analyse fehlgeschlagen (unkritisch): {e}")
-        result["dominant_colors"] = []
         result["tags"] = []
         result["tag_source"] = "error"
 

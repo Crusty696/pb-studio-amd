@@ -1,7 +1,7 @@
 """Video-bezogene Schemas."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 
 
 class VideoImportRequest(BaseModel):
@@ -48,6 +48,7 @@ class VideoAnalyzeRequest(BaseModel):
     generate_embeddings: bool = True
     analyze_motion: bool = True
     generate_captions: bool = False
+    analyze_colors: bool = True
 
 
 class VideoAnalysisResult(BaseModel):
@@ -86,6 +87,9 @@ class VideoAnalysisResult(BaseModel):
     avg_brightness: float = 0.5
     avg_saturation: float = 0.5
     avg_color_temp: float = 0.0
+    status: Literal["completed", "partial"] = "completed"
+    stage_status: dict[str, str] = Field(default_factory=dict)
+    stage_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class SceneInfo(BaseModel):
@@ -93,7 +97,7 @@ class SceneInfo(BaseModel):
     start_time: float
     end_time: float
     scene_type: str = "cut"  # cut, fade, dissolve
-    confidence: float = 0.0
+    confidence: Optional[float] = None
 
 
 class MotionData(BaseModel):

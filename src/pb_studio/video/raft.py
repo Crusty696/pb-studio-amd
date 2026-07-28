@@ -278,7 +278,9 @@ class MotionAnalyzer:
             - flow_u: Horizontal flow component (H, W)
             - flow_v: Vertical flow component (H, W)
 
-            Returns (zeros, zeros) on error.
+        Raises:
+            RuntimeError: If DirectML/model initialization or inference fails.
+                A failure must not be represented as a valid static zero-flow.
         """
         # R15/GUARD: Downscale 4K input to maximum 1080p to prevent DirectML TDRs and excessive RAM allocation
         h, w = frame1.shape[:2]
@@ -291,8 +293,9 @@ class MotionAnalyzer:
 
         if not self._initialized:
             if not self._init_model():
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    "RAFT DirectML model initialization failed; motion stage unavailable"
+                )
 
         try:
             # Preprocess both frames
@@ -344,47 +347,38 @@ class MotionAnalyzer:
             elif outputs is not None:
                 flow = outputs
             else:
-                logger.warning("RAFT returned None output")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError("RAFT returned no flow output")
 
             # Output-Shape validieren
             if not isinstance(flow, np.ndarray):
-                logger.warning(f"RAFT returned non-ndarray output: {type(flow)}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    f"RAFT returned non-ndarray output: {type(flow).__name__}"
+                )
 
             if flow.ndim not in (3, 4):
-                logger.warning(f"RAFT output has unexpected ndim={flow.ndim}, shape={flow.shape}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    f"RAFT output has unexpected ndim={flow.ndim}, shape={flow.shape}"
+                )
 
             # Extrahiere U (horizontal) und V (vertikal) Komponenten
             if flow.ndim == 4:  # [B, 2, H, W]
                 if flow.shape[1] < 2:
-                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
-                    h, w = frame1.shape[:2]
-                    return np.zeros((h, w)), np.zeros((h, w))
+                    raise RuntimeError(f"RAFT output has <2 channels: {flow.shape}")
                 flow_u = flow[0, 0, :, :]
                 flow_v = flow[0, 1, :, :]
             elif flow.ndim == 3:  # [2, H, W]
                 if flow.shape[0] < 2:
-                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
-                    h, w = frame1.shape[:2]
-                    return np.zeros((h, w)), np.zeros((h, w))
+                    raise RuntimeError(f"RAFT output has <2 channels: {flow.shape}")
                 flow_u = flow[0, :, :]
                 flow_v = flow[1, :, :]
             else:
-                logger.warning(f"Unexpected flow shape: {flow.shape}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(f"Unexpected RAFT flow shape: {flow.shape}")
 
             # Skaliere Flow auf Original-Bildgroesse
             orig_h, orig_w = frame1.shape[:2]
             if flow_u.shape != (orig_h, orig_w):
                 if flow_u.shape[0] == 0 or flow_u.shape[1] == 0:
-                    logger.warning(f"RAFT returned zero-size flow: {flow_u.shape}")
-                    return np.zeros((orig_h, orig_w)), np.zeros((orig_h, orig_w))
+                    raise RuntimeError(f"RAFT returned zero-size flow: {flow_u.shape}")
                 scale_x = orig_w / flow_u.shape[1]
                 scale_y = orig_h / flow_u.shape[0]
 
@@ -395,8 +389,7 @@ class MotionAnalyzer:
 
         except Exception as e:
             logger.error(f"Flow calculation failed: {e}")
-            h, w = frame1.shape[:2]
-            return np.zeros((h, w)), np.zeros((h, w))
+            raise RuntimeError(f"RAFT flow calculation failed: {e}") from e
 
     def get_motion_magnitude(
         self,
