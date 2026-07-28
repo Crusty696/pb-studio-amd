@@ -175,7 +175,16 @@ async def create_project(
     if not project_path.is_relative_to(allowed_base):
         raise HTTPException(status_code=403, detail="Pfad außerhalb des erlaubten Projektverzeichnisses")
     try:
-        project_path.mkdir(parents=True, exist_ok=True)
+        project_path.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Projekt existiert bereits: {project_path}",
+        )
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"Ordner nicht erstellbar: {e}")
+
+    try:
         (project_path / "audio").mkdir(exist_ok=True)
         (project_path / "video").mkdir(exist_ok=True)
         (project_path / "output").mkdir(exist_ok=True)

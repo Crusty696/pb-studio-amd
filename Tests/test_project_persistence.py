@@ -1,6 +1,10 @@
+import copy
 import importlib
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -140,6 +144,108 @@ class TestProjectLifecyclePersistence:
         assert project["audio_count"] == 0
         assert project["video_count"] == 0
         assert project["has_timeline"] is False
+
+    def test_create_existing_project_returns_conflict_without_mutation(
+        self,
+        client,
+        tmp_path,
+        fresh_state,
+        monkeypatch,
+    ):
+        from backend.config import config
+
+        project_router = importlib.import_module("backend.routers.project_router")
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        db_lookup = MagicMock(return_value=300)
+        brain_bind = MagicMock()
+        monkeypatch.setattr(project_router, "_find_or_create_project_db_record", db_lookup)
+        monkeypatch.setattr(project_router, "_bind_brain_to_project", brain_bind)
+
+        project_dir = tmp_path / "ExistingProject"
+        nested_dir = project_dir / "custom"
+        nested_dir.mkdir(parents=True)
+        (project_dir / "project.json").write_text('{"name":"Original"}', encoding="utf-8")
+        (nested_dir / "sentinel.bin").write_bytes(b"keep-me")
+
+        fresh_state.current_project = {
+            "name": "OldProject",
+            "path": str(tmp_path / "OldProject"),
+            "db_project_id": 99,
+        }
+        fresh_state.audio_clips[7] = {"id": 7, "path": "old.wav"}
+        fresh_state.video_clips[8] = {"id": 8, "path": "old.mp4"}
+        fresh_state.current_timeline = [{"clip_id": "8", "start_time": 0.0, "end_time": 1.0}]
+        state_before = copy.deepcopy(
+            {
+                "current_project": fresh_state.current_project,
+                "audio_clips": fresh_state.audio_clips,
+                "video_clips": fresh_state.video_clips,
+                "timeline": fresh_state.current_timeline,
+            }
+        )
+        entries_before = {
+            (path.relative_to(project_dir), path.is_dir())
+            for path in project_dir.rglob("*")
+        }
+        file_contents_before = {
+            path.relative_to(project_dir): path.read_bytes()
+            for path in project_dir.rglob("*")
+            if path.is_file()
+        }
+
+        response = client.post(
+            "/project/create",
+            json={"name": "ExistingProject", "path": str(tmp_path)},
+        )
+
+        assert response.status_code == 409
+        assert entries_before == {
+            (path.relative_to(project_dir), path.is_dir())
+            for path in project_dir.rglob("*")
+        }
+        assert file_contents_before == {
+            path.relative_to(project_dir): path.read_bytes()
+            for path in project_dir.rglob("*")
+            if path.is_file()
+        }
+        assert fresh_state.current_project == state_before["current_project"]
+        assert fresh_state.audio_clips == state_before["audio_clips"]
+        assert fresh_state.video_clips == state_before["video_clips"]
+        assert fresh_state.current_timeline == state_before["timeline"]
+        db_lookup.assert_not_called()
+        brain_bind.assert_not_called()
+
+    def test_concurrent_create_allows_exactly_one_success(
+        self,
+        client,
+        tmp_path,
+        monkeypatch,
+    ):
+        from backend.config import config
+
+        project_router = importlib.import_module("backend.routers.project_router")
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        db_lookup = MagicMock(return_value=301)
+        brain_bind = MagicMock()
+        monkeypatch.setattr(project_router, "_find_or_create_project_db_record", db_lookup)
+        monkeypatch.setattr(project_router, "_bind_brain_to_project", brain_bind)
+        start = threading.Barrier(2)
+
+        def create() -> int:
+            start.wait()
+            response = client.post(
+                "/project/create",
+                json={"name": "ConcurrentProject", "path": str(tmp_path)},
+            )
+            return response.status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses = list(pool.map(lambda _: create(), range(2)))
+
+        assert sorted(statuses) == [200, 409]
+        assert (tmp_path / "ConcurrentProject" / "project.json").exists()
+        db_lookup.assert_called_once()
+        brain_bind.assert_called_once()
 
     def test_open_uses_project_specific_db_id_for_restore(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
