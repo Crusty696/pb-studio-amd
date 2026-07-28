@@ -47,6 +47,10 @@ public partial class VideoClipModel : ObservableObject
         OnPropertyChanged(nameof(HasCacheHash));
     }
 
+    [ObservableProperty] private bool _hasEmbedding;
+    [ObservableProperty] private int? _embeddingDim;
+    [ObservableProperty] private int? _embeddingSamples;
+
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public string ResolutionText => $"{Width}x{Height}";
 }

@@ -314,6 +314,10 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         {
             clip.AvgMotion = result.AvgMotion;
         }
+
+        clip.HasEmbedding = result.HasEmbedding;
+        clip.EmbeddingDim = result.EmbeddingDim > 0 ? result.EmbeddingDim : null;
+        clip.EmbeddingSamples = result.EmbeddingSamples > 0 ? result.EmbeddingSamples : null;
     }
 
     [RelayCommand]
@@ -547,6 +551,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         MotionCategory = c.MotionCategory,
                         VideoHash = c.VideoHash,
                         TagSource = c.TagSource,
+                        HasEmbedding = c.HasEmbedding || c.HasVideoEmbedding,
+                        EmbeddingDim = c.EmbeddingDim,
+                        EmbeddingSamples = c.EmbeddingSamples,
                         IsMarked = previousMarked.Contains(c.Id),
                     };
 

@@ -30,6 +30,14 @@ public class PythonBridgeService : IDisposable
     private const int StartupTimeoutMs = 30_000;
     private const int HealthCheckIntervalMs = 500;
 
+    public static void ApplyRuntimeEnvironment(PbSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        SetForcedVramEnvVar(settings.ForcedVramMb);
+        SetVramLimitEnvVar(settings.VramCapMb);
+        SetFfmpegPathEnvVar(settings.FfmpegPath);
+    }
+
     /// <summary>
     /// Setzt die PB_STUDIO_FORCED_VRAM Env-Var auf Process-Ebene. Diese wird vom
     /// Python-Backend beim NÄCHSTEN Start gelesen (vererbt sich auf den Child-Prozess).

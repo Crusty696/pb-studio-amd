@@ -212,6 +212,7 @@
                         </StackPanel>
                     </DockPanel>
                     <ListBox ItemsSource="{Binding LearningSessionCuts}"
+                             SelectedItem="{Binding SelectedLearningSessionCut, Mode=TwoWay}"
                              Background="Transparent"
                              BorderThickness="0">
                         <ListBox.ItemTemplate>

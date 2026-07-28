@@ -32,6 +32,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _learnedAxes;
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private int _selectedCutId;
+    [ObservableProperty] private BrainSuggestion? _selectedLearningSessionCut;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _isResetPending;
 
@@ -39,6 +40,11 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     public ObservableCollection<BrainStatsBucket> TopNegative { get; } = new();
     public ObservableCollection<string> ColdStartAxesList { get; } = new();
     public ObservableCollection<BrainSuggestion> LearningSessionCuts { get; } = new();
+
+    partial void OnSelectedLearningSessionCutChanged(BrainSuggestion? value)
+    {
+        SelectedCutId = value?.CutId ?? 0;
+    }
 
     public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
@@ -75,6 +81,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         TopNegative.Clear();
         ColdStartAxesList.Clear();
         LearningSessionCuts.Clear();
+        SelectedLearningSessionCut = null;
         SelectedCutId = 0;
         IsResetPending = false;
         _pendingResetToken = null;
@@ -171,6 +178,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
             {
                 foreach (var c in resp.Cuts) LearningSessionCuts.Add(c);
             }
+            SelectedLearningSessionCut = LearningSessionCuts.FirstOrDefault();
             Status = $"Lern-Session: {LearningSessionCuts.Count} unsichere Cuts geladen.";
         }
         finally

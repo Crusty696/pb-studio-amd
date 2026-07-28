@@ -55,6 +55,12 @@ public partial class App : Application
 
         Ioc.Default.ConfigureServices(_serviceProvider);
 
+        // H-18: Runtime-Environment muss gesetzt sein, bevor der Backend-Prozess
+        // erzeugt wird. SettingsViewModel entsteht erst beim ersten SETTINGS-Tab.
+        var settings = _serviceProvider.GetRequiredService<ISettingsService>();
+        settings.Load();
+        PythonBridgeService.ApplyRuntimeEnvironment(settings.Current);
+
         // MainWindow SOFORT zeigen
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
         mainWindow.Show();
@@ -111,6 +117,7 @@ public partial class App : Application
         services.AddSingleton<IApiClient>(sp => sp.GetRequiredService<ApiClient>());
         services.AddSingleton<SSEClient>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ProjectService>();
         services.AddSingleton<TimelineStateService>();
         services.AddSingleton<AudioLibraryStateService>();

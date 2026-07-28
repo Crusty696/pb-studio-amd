@@ -114,8 +114,8 @@ public class ApiClient : IApiClient
     public async Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200)
         => await GetAsync<List<AudioClipInfo>>($"/audio/clips?page={page}&limit={limit}").ConfigureAwait(false);
 
-    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId)
-        => await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }).ConfigureAwait(false);
+    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId, CancellationToken cancellationToken = default)
+        => await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }, cancellationToken).ConfigureAwait(false);
 
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
         => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
@@ -123,8 +123,8 @@ public class ApiClient : IApiClient
     public async Task<List<double>?> GetOnsetsAsync(int clipId)
         => await GetAsync<List<double>>($"/audio/onsets/{clipId}").ConfigureAwait(false);
 
-    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml")
-        => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
+    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml", CancellationToken cancellationToken = default)
+        => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }, cancellationToken).ConfigureAwait(false);
 
 
     // --- Audio (Erweitert) ---
@@ -203,16 +203,16 @@ public class ApiClient : IApiClient
     // Backend: backend/routers/video_router.py
     //   GET /video/thumbstrip/{clip_id}?n=8   -> Base64 JPEGs
     //   GET /video/clipwave/{clip_id}?n=256   -> Downsampled Mono-Peaks (0..1)
-    public async Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8)
-        => await GetAsync<ThumbstripResponse>($"/video/thumbstrip/{clipId}?n={n}").ConfigureAwait(false);
+    public async Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8, CancellationToken cancellationToken = default)
+        => await GetAsync<ThumbstripResponse>($"/video/thumbstrip/{clipId}?n={n}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256)
-        => await GetAsync<ClipwaveResponse>($"/video/clipwave/{clipId}?n={n}").ConfigureAwait(false);
+    public async Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256, CancellationToken cancellationToken = default)
+        => await GetAsync<ClipwaveResponse>($"/video/clipwave/{clipId}?n={n}", cancellationToken).ConfigureAwait(false);
 
     // --- Pacing ---
 
-    public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config)
-        => await PostAsync<CutListResponse>("/pacing/generate", config).ConfigureAwait(false);
+    public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default)
+        => await PostAsync<CutListResponse>("/pacing/generate", config, cancellationToken).ConfigureAwait(false);
 
     public async Task<TimelineResponse?> GetTimelineAsync()
         => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
@@ -695,15 +695,22 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> PostAsync<T>(string url, object? body) where T : class
+    private async Task<T?> PostAsync<T>(
+        string url,
+        object? body,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, _shutdownCts.Token).ConfigureAwait(false);
+            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }
@@ -1017,7 +1024,11 @@ public record VideoClipInfo(
     double? PeakMotion = null,
     string? MotionCategory = null,
     string? VideoHash = null,
-    string? TagSource = null);
+    string? TagSource = null,
+    bool HasVideoEmbedding = false,
+    int? EmbeddingDim = null,
+    int? EmbeddingSamples = null,
+    bool HasEmbedding = false);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
 public record VideoAnalysisResult(
     int ClipId,

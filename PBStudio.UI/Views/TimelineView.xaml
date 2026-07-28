@@ -39,7 +39,28 @@
                             <TextBlock Text="Timeline laden" VerticalAlignment="Center" FontSize="12"/>
                         </StackPanel>
                     </Button>
-                    
+
+                    <Button Command="{Binding PreviousCutCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonText}"
+                            ToolTip="Vorherigen Cut auswählen"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="ChevronLeft" Width="14" Height="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="Zurück" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding NextCutCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonText}"
+                            ToolTip="Nächsten Cut auswählen"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Weiter" VerticalAlignment="Center" FontSize="12"/>
+                            <icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
                     
                     <!-- Zoom Controls -->

@@ -392,7 +392,7 @@
                                             <Setter Property="Kind" Value="CheckCircleOutline"/>
                                             <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedClip.HasCacheHash}" Value="False">
+                                                <DataTrigger Binding="{Binding SelectedClip.HasEmbedding}" Value="False">
                                                     <Setter Property="Kind" Value="ClockOutline"/>
                                                     <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
                                                 </DataTrigger>

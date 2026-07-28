@@ -18,6 +18,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly VideoLibraryStateService _videoLibraryState;
     private readonly SSEClient _sseClient;
+    private readonly ProjectService _projectService;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
@@ -73,14 +74,21 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _generationProgress;
     [ObservableProperty] private string _currentStep = "";
 
-    public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState, SSEClient sseClient)
+    public DirectorViewModel(
+        IApiClient api,
+        AudioLibraryStateService audioLibraryState,
+        VideoLibraryStateService videoLibraryState,
+        SSEClient sseClient,
+        ProjectService projectService)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
         _videoLibraryState = videoLibraryState;
         _sseClient = sseClient;
+        _projectService = projectService;
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         void HandleReload()
         {
@@ -280,14 +288,16 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var operation = _projectService.CaptureOperationContext();
+        var audioClip = SelectedAudioClip;
         IsGenerating = true;
-        _activePacingAudioClipId = SelectedAudioClip.Id;
+        _activePacingAudioClipId = audioClip.Id;
         StatusText = "Generiere Cut-Liste...";
 
         try
         {
             var config = new PacingConfig(
-                AudioClipId: SelectedAudioClip.Id,
+                AudioClipId: audioClip.Id,
                 VideoClipIds: selectedVideoIds,
                 ExpectedBpm: ExpectedBpm,
                 UseMotionMatching: UseMotionMatching,
@@ -314,7 +324,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 CanvasPath: CanvasPath
             );
 
-            var result = await _api.GenerateCutListAsync(config);
+            var result = await _api.GenerateCutListAsync(config, operation.CancellationToken);
+            if (!_projectService.IsCurrent(operation))
+                return;
             if (result != null && result.Cuts.Count > 0)
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -359,8 +371,11 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            _activePacingAudioClipId = null;
-            IsGenerating = false;
+            if (_projectService.IsCurrent(operation))
+            {
+                _activePacingAudioClipId = null;
+                IsGenerating = false;
+            }
         }
     }
 
@@ -459,6 +474,14 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         });
     }
 
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        _activePacingAudioClipId = null;
+        IsGenerating = false;
+        GenerationProgress = 0;
+        CurrentStep = string.Empty;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -467,6 +490,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _loadVersion);
         _reloadQueued = false;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

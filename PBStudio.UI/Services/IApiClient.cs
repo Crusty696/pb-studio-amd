@@ -26,9 +26,9 @@ public interface IApiClient : IDisposable
     // --- Audio ---
     Task<AudioClipInfo?> ImportAudioAsync(string path);
     Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200);
-    Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId);
+    Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId, CancellationToken cancellationToken = default);
     Task<List<BeatData>?> GetBeatsAsync(int clipId);
-    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml");
+    Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml", CancellationToken cancellationToken = default);
 
     Task<DeleteResponse?> DeleteAudioClipAsync(int clipId);
     Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds);
@@ -49,13 +49,13 @@ public interface IApiClient : IDisposable
     Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
-    Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8);
-    Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256);
+    Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8, CancellationToken cancellationToken = default);
+    Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256, CancellationToken cancellationToken = default);
     Task<DeleteResponse?> DeleteVideoClipAsync(int clipId);
     Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds);
 
     // --- Pacing ---
-    Task<CutListResponse?> GenerateCutListAsync(PacingConfig config);
+    Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default);
     Task<TimelineResponse?> GetTimelineAsync();
     Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries);
     Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default);

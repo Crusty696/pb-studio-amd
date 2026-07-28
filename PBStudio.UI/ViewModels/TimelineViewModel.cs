@@ -29,6 +29,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     private volatile bool _reloadQueued;
     private bool _disposed;
     private bool _isSyncingSelection;
+    private readonly object _assetLoadLock = new();
+    private readonly Dictionary<TimelineEntryModel, Task> _assetLoads = [];
+    private CancellationTokenSource? _assetLoadCts = new();
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private double _totalDuration;
@@ -212,7 +215,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         if (value != null && !value.IsAssetsLoaded)
         {
-            _ = LoadClipAssetsAsync(value);
+            _ = QueueClipAssetLoad(value);
         }
     }
 
@@ -257,7 +260,22 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     /// Skips if already loaded. Fire-and-forget pattern: errors are logged and the
     /// entry's visual just falls back to the background rectangle.
     /// </summary>
-    private async Task LoadClipAssetsAsync(TimelineEntryModel entry)
+    private Task QueueClipAssetLoad(TimelineEntryModel entry)
+    {
+        lock (_assetLoadLock)
+        {
+            if (_disposed || entry.IsAssetsLoaded || _assetLoadCts == null)
+                return Task.CompletedTask;
+            if (_assetLoads.TryGetValue(entry, out var existing))
+                return existing;
+
+            var load = LoadClipAssetsAsync(entry, _assetLoadCts.Token);
+            _assetLoads[entry] = load;
+            return load;
+        }
+    }
+
+    private async Task LoadClipAssetsAsync(TimelineEntryModel entry, CancellationToken ct)
     {
         if (entry == null || entry.IsAssetsLoaded) return;
         if (!int.TryParse(entry.ClipId.Replace("clip_", ""),
@@ -269,42 +287,60 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
-            var stripTask = _api.GetThumbStripAsync(cid, n: 8);
-            var waveTask = _api.GetClipWaveAsync(cid, n: 256);
+            var stripTask = _api.GetThumbStripAsync(cid, n: 8, cancellationToken: ct);
+            var waveTask = _api.GetClipWaveAsync(cid, n: 256, cancellationToken: ct);
             await Task.WhenAll(stripTask, waveTask).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+
+            var decodedFrames = new List<System.Windows.Media.ImageSource>();
+            if (stripTask.Result?.Frames is { Count: > 0 } frames)
+            {
+                foreach (var f in frames)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var b64 = f.Replace("data:image/jpeg;base64,", "");
+                        byte[] bytes = Convert.FromBase64String(b64);
+                        using var ms = new System.IO.MemoryStream(bytes);
+                        var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        decodedFrames.Add(bmp);
+                    }
+                    catch (FormatException)
+                    {
+                        // Einzelnes beschädigtes Frame überspringen.
+                    }
+                }
+            }
+            var decodedPeaks = waveTask.Result?.Peaks is { Count: > 0 } peaks
+                ? new ObservableCollection<float>(peaks.Select(p => (float)p))
+                : null;
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                if (stripTask.Result?.Frames is { Count: > 0 } frames)
-                {
-                    entry.ThumbnailFrames = new ObservableCollection<System.Windows.Media.ImageSource>();
-                    foreach (var f in frames)
-                    {
-                        try
-                        {
-                            var b64 = f.Replace("data:image/jpeg;base64,", "");
-                            byte[] bytes = Convert.FromBase64String(b64);
-                            using var ms = new System.IO.MemoryStream(bytes);
-                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                            bmp.BeginInit();
-                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                            bmp.StreamSource = ms;
-                            bmp.EndInit();
-                            bmp.Freeze();
-                            entry.ThumbnailFrames.Add(bmp);
-                        }
-                        catch { }
-                    }
-                }
-                if (waveTask.Result?.Peaks is { Count: > 0 } peaks)
-                    entry.AudioPeaks = new ObservableCollection<float>(peaks.Select(p => (float)p));
+                if (ct.IsCancellationRequested)
+                    return;
+                if (decodedFrames.Count > 0)
+                    entry.ThumbnailFrames = new ObservableCollection<System.Windows.Media.ImageSource>(decodedFrames);
+                if (decodedPeaks != null)
+                    entry.AudioPeaks = decodedPeaks;
                 entry.IsAssetsLoaded = true;
             });
+        }
+        catch (OperationCanceledException)
+        {
+            // Projektwechsel/Dispose: alter Load darf neuen Timeline-State nicht berühren.
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Clip-Assets-Load fehlgeschlagen fuer clip {cid}: {ex.Message}");
-            entry.IsAssetsLoaded = true;  // mark so we don't retry every render
+            if (!ct.IsCancellationRequested)
+                entry.IsAssetsLoaded = true;  // mark so we don't retry every render
         }
     }
 
@@ -370,6 +406,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
+            ResetAssetLoads();
             IsLoading = true;
             StatusText = "Timeline wird geladen...";
 
@@ -416,7 +453,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 // Eagerly load assets for the first N visible clips (rest load on-demand).
                 foreach (var e in TimelineEntries.Take(20))
                 {
-                    _ = LoadClipAssetsAsync(e);
+                    _ = QueueClipAssetLoad(e);
                 }
 
                 StatusText = TimelineEntries.Count == 0
@@ -839,6 +876,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
     private void ResetTimelineState()
     {
+        ResetAssetLoads();
         Interlocked.Increment(ref _loadVersion);
         Interlocked.Increment(ref _waveformSequence);
         Interlocked.Increment(ref _motionLoadSequence);
@@ -875,6 +913,33 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _waveformSequence);
         Interlocked.Increment(ref _motionLoadSequence);
         _reloadQueued = false;
+        CancelAssetLoads();
         WeakReferenceMessenger.Default.UnregisterAll(this);
+    }
+
+    private void ResetAssetLoads()
+    {
+        CancellationTokenSource? previous;
+        lock (_assetLoadLock)
+        {
+            previous = _assetLoadCts;
+            _assetLoadCts = new CancellationTokenSource();
+            _assetLoads.Clear();
+        }
+        previous?.Cancel();
+        previous?.Dispose();
+    }
+
+    private void CancelAssetLoads()
+    {
+        CancellationTokenSource? previous;
+        lock (_assetLoadLock)
+        {
+            previous = _assetLoadCts;
+            _assetLoadCts = null;
+            _assetLoads.Clear();
+        }
+        previous?.Cancel();
+        previous?.Dispose();
     }
 }

@@ -94,26 +94,18 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         FfmpegPath = s.FfmpegPath ?? "";
         VramLimitMb = s.VramCapMb > 0 ? s.VramCapMb : 8192;
-        PythonBridgeService.SetVramLimitEnvVar(VramLimitMb);
-
-        // FFmpeg-Pfad sofort als Env-Var setzen, damit Backend beim ERSTEN Start
-        // den persistierten Pfad nutzt (analog SetForcedVramEnvVar unten).
-        PythonBridgeService.SetFfmpegPathEnvVar(FfmpegPath);
 
         if (s.ForcedVramMb.HasValue && s.ForcedVramMb.Value > 0)
         {
             ForceVramEnabled = true;
             ForcedVramMb = s.ForcedVramMb.Value;
-            // Setze sofort die Env-Var beim App-Start, damit ein
-            // Re-Start des Backends den persistierten Wert nutzt.
-            PythonBridgeService.SetForcedVramEnvVar(s.ForcedVramMb.Value);
         }
         else
         {
             ForceVramEnabled = false;
             ForcedVramMb = 8192;
-            PythonBridgeService.SetForcedVramEnvVar(null);
         }
+        PythonBridgeService.ApplyRuntimeEnvironment(s);
 
         // KI-Modus: String -> Slider-Index (speed=0, balance=1, quality=2). Default balance.
         KiModeIndex = (s.KiMode ?? "balance").ToLowerInvariant() switch
@@ -342,9 +334,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _settings.Save();
 
             // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
-            PythonBridgeService.SetForcedVramEnvVar(_settings.Current.ForcedVramMb);
-            PythonBridgeService.SetVramLimitEnvVar(_settings.Current.VramCapMb);
-            PythonBridgeService.SetFfmpegPathEnvVar(_settings.Current.FfmpegPath);
+            PythonBridgeService.ApplyRuntimeEnvironment(_settings.Current);
 
             // KI-Modus ins Backend synchronisieren
             var modeSyncSuccess = await _api.UpdateKiModeAsync(KiMode).ConfigureAwait(true);

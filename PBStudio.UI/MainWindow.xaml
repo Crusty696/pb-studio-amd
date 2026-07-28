@@ -188,6 +188,12 @@
                 <TabItem Header="TERMINAL">
                     <views:TerminalView/>
                 </TabItem>
+                <TabItem Header="INGEST">
+                    <views:MediaIngestView/>
+                </TabItem>
+                <TabItem Header="ANCHOR">
+                    <views:AnchorView/>
+                </TabItem>
             </controls:CachedTabControl>
 
             <!-- ── Status Bar ── -->
