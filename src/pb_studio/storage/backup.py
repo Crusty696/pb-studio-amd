@@ -29,21 +29,34 @@ def backup_brain_store(
     """
     brain_dir = Path(brain_dir)
     backup_dir = Path(backup_dir)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     target = backup_dir / f"brain_backup_{timestamp}"
-    target.mkdir(parents=True, exist_ok=True)
+    staging = backup_dir / f".{target.name}.tmp"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    staging.mkdir()
 
-    for db_file in files:
-        src = brain_dir / db_file
-        if not src.exists():
-            logger.info("Skipping missing %s", src)
-            continue
-        dst = target / db_file
-        conn = sqlite3.connect(str(src))
-        try:
-            conn.execute("VACUUM INTO ?", (str(dst),))
-        finally:
-            conn.close()
+    try:
+        for db_file in files:
+            src = brain_dir / db_file
+            if not src.exists():
+                logger.info("Skipping missing %s", src)
+                continue
+            dst = staging / db_file
+            conn = sqlite3.connect(str(src))
+            try:
+                conn.execute("VACUUM INTO ?", (str(dst),))
+            finally:
+                conn.close()
+            verify = sqlite3.connect(str(dst))
+            try:
+                if verify.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                    raise sqlite3.DatabaseError(f"Backup-Integritätsprüfung fehlgeschlagen: {db_file}")
+            finally:
+                verify.close()
+        staging.replace(target)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
     logger.info("Brain backup at %s", target)
     return target
