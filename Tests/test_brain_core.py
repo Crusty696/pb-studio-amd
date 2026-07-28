@@ -242,6 +242,91 @@ def test_feedback_invalid_rating_raises(tmp_path: Path):
         store.close()
 
 
+def test_feedback_outbox_recovers_without_double_weight_update(tmp_path: Path):
+    store = BrainStore(tmp_path / "brain")
+    state = _state_conn(tmp_path)
+    outbox = tmp_path / "brain" / "feedback_outbox.json"
+
+    def crash_after_weight_commit(stage: str) -> None:
+        if stage == "after_weights_commit":
+            raise RuntimeError("simulated crash")
+
+    try:
+        ws = WeightStore(store.weights_conn)
+        logger = FeedbackLogger(
+            weight_store=ws,
+            state_conn=state,
+            outbox_path=outbox,
+            fault_injector=crash_after_weight_commit,
+        )
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            logger.log_feedback(
+                cut_id=42,
+                rating="perfect",
+                context_keys=["", "section=drop"],
+            )
+
+        assert outbox.is_file()
+        assert ws.get_alpha_beta("kick_weight", 0, "") == (2.0, 0.0)
+        assert state.execute(
+            "SELECT COUNT(*) FROM feedback_events"
+        ).fetchone()[0] == 0
+
+        recovered = FeedbackLogger(
+            weight_store=ws,
+            state_conn=state,
+            outbox_path=outbox,
+        )
+        assert recovered.recover_pending() is True
+        assert recovered.recover_pending() is False
+        assert ws.get_alpha_beta("kick_weight", 0, "") == (2.0, 0.0)
+        assert state.execute(
+            "SELECT COUNT(*) FROM feedback_events"
+        ).fetchone()[0] == 1
+        assert not outbox.exists()
+    finally:
+        state.close()
+        store.close()
+
+
+def test_feedback_outbox_compensates_when_cut_disappears(tmp_path: Path):
+    store = BrainStore(tmp_path / "brain")
+    state = _state_conn(tmp_path)
+    outbox = tmp_path / "brain" / "feedback_outbox.json"
+
+    def crash_after_weight_commit(stage: str) -> None:
+        if stage == "after_weights_commit":
+            raise RuntimeError("simulated crash")
+
+    try:
+        ws = WeightStore(store.weights_conn)
+        logger = FeedbackLogger(
+            weight_store=ws,
+            state_conn=state,
+            outbox_path=outbox,
+            fault_injector=crash_after_weight_commit,
+        )
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            logger.log_feedback(
+                cut_id=42,
+                rating="fits",
+                context_keys=[""],
+            )
+        state.execute("DELETE FROM timeline_cuts WHERE id=42")
+
+        recovered = FeedbackLogger(
+            weight_store=ws,
+            state_conn=state,
+            outbox_path=outbox,
+        )
+        assert recovered.recover_pending() is True
+        assert ws.get_alpha_beta("kick_weight", 0, "") is None
+        assert not outbox.exists()
+    finally:
+        state.close()
+        store.close()
+
+
 # ----------------------- scorer -----------------------
 
 def test_scorer_uses_bridge_and_weights(tmp_path: Path):

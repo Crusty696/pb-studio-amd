@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import asyncio
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -129,6 +130,8 @@ def test_stats_holds_weights_connection_lock(monkeypatch):
             return []
 
     lock = TrackingLock()
+    event_loop_thread = threading.get_ident()
+
     service = SimpleNamespace(
         brain=SimpleNamespace(
             _weights_lock=lock,
@@ -138,6 +141,13 @@ def test_stats_holds_weights_connection_lock(monkeypatch):
     )
     monkeypatch.setattr(brain_router, "get_brain_service", lambda: service)
 
+    original_execute = service.brain.weights_conn.execute
+
+    def execute_off_event_loop(query):
+        assert threading.get_ident() != event_loop_thread
+        return original_execute(query)
+
+    service.brain.weights_conn.execute = execute_off_event_loop
     result = asyncio.run(brain_router.stats())
 
     assert result.total_clicks == 0

@@ -14,6 +14,15 @@ import pytest
 
 from pb_studio.brain import BRIDGE_AXES
 from pb_studio.brain.brain_service import BrainService
+from pb_studio.brain.cross_modal_projector import (
+    DEFAULT_AUDIO_DIM,
+    DEFAULT_AUDIO_MODEL_NAME,
+    DEFAULT_AUDIO_MODEL_VERSION,
+    DEFAULT_VIDEO_DIM,
+    DEFAULT_VIDEO_MODEL_NAME,
+    DEFAULT_VIDEO_MODEL_VERSION,
+)
+from pb_studio.brain.loader_cache import clear_default_loader_cache
 from pb_studio.brain.post_processor import (
     annotate_cuts_with_brain,
     _load_audio_embedding,
@@ -50,6 +59,13 @@ def brain_svc(tmp_path: Path, monkeypatch):
     BrainService.reset_singleton()
 
 
+@pytest.fixture(autouse=True)
+def _clear_embedding_loader_cache():
+    clear_default_loader_cache()
+    yield
+    clear_default_loader_cache()
+
+
 def test_load_audio_embedding_returns_none_on_miss(tmp_path):
     cache = _make_cache(tmp_path)
     try:
@@ -63,9 +79,7 @@ def test_load_audio_embedding_returns_none_on_miss(tmp_path):
         cache.close()
 
 
-def test_load_first_match_finds_arbitrary_model(tmp_path):
-    """Falls echte audio_embedder/video_embedder nicht ladbar sind,
-    nutzt _load_first_match jeden cache-eintrag mit passendem hash+type."""
+def test_load_audio_embedding_rejects_arbitrary_model(tmp_path):
     cache = _make_cache(tmp_path)
     try:
         emb = np.random.rand(512).astype(np.float32)
@@ -76,11 +90,7 @@ def test_load_first_match_finds_arbitrary_model(tmp_path):
             model_name="my-test-model",
             model_version="0.1",
         )
-        # _load_audio_embedding hat Probe-Fallback wenn der "richtige" Modellname
-        # nicht im Cache ist
-        loaded = _load_audio_embedding(cache, "abc123")
-        assert loaded is not None
-        assert loaded.shape == (512,)
+        assert _load_audio_embedding(cache, "abc123") is None
     finally:
         cache.close()
 
@@ -93,8 +103,8 @@ def test_load_video_embedding_returns_array(tmp_path):
             media_hash="vidhash1",
             media_type="video",
             embedding=emb,
-            model_name="siglip-test",
-            model_version="0.1",
+            model_name=DEFAULT_VIDEO_MODEL_NAME,
+            model_version=DEFAULT_VIDEO_MODEL_VERSION,
         )
         loaded = _load_video_embedding(cache, "vidhash1")
         assert loaded is not None
@@ -104,26 +114,25 @@ def test_load_video_embedding_returns_array(tmp_path):
 
 
 def test_annotate_uses_embeddings_when_cache_provided(brain_svc, tmp_path):
-    """Mit cache + hashes wird semantic_match_weight echte cosine-similarity
-    berechnen statt 0.5-Default."""
+    """Exact CLAP/SigLIP cache entries reach cross-modal projection."""
     cache = _make_cache(tmp_path)
     state = _make_state_conn(tmp_path)
     try:
-        # Identisches embedding fuer audio + video -> cosine = 1.0 -> score = 1.0
-        same_emb = np.ones(256, dtype=np.float32)
+        audio_emb = np.ones(DEFAULT_AUDIO_DIM, dtype=np.float32)
+        video_emb = np.ones(DEFAULT_VIDEO_DIM, dtype=np.float32)
         cache.store(
             media_hash="ahash",
             media_type="audio",
-            embedding=same_emb,
-            model_name="t",
-            model_version="1",
+            embedding=audio_emb,
+            model_name=DEFAULT_AUDIO_MODEL_NAME,
+            model_version=DEFAULT_AUDIO_MODEL_VERSION,
         )
         cache.store(
             media_hash="vhash1",
             media_type="video",
-            embedding=same_emb,
-            model_name="t",
-            model_version="1",
+            embedding=video_emb,
+            model_name=DEFAULT_VIDEO_MODEL_NAME,
+            model_version=DEFAULT_VIDEO_MODEL_VERSION,
         )
 
         cuts = [{
@@ -147,11 +156,6 @@ def test_annotate_uses_embeddings_when_cache_provided(brain_svc, tmp_path):
         assert len(out) == 1
         scores = out[0]["metadata"]["brain_scores"]
         assert set(scores.keys()) == set(BRIDGE_AXES)
-        # semantic_match_weight sollte > 0 sein (echte cosine, nicht 0.5*default)
-        # Bei identical-embeddings ist cosine=1.0, dann *posterior_mean (0.5 cold-start)
-        # = 0.5. Falls KEIN embedding genutzt waere, gaebe es ebenfalls 0.5*0.5 = 0.25.
-        # Wir verifizieren stattdessen: bei IDENTISCHEN embeddings ist der pre-weight
-        # value >= bei orthogonalen embeddings.
         assert scores["semantic_match_weight"] > 0.0
     finally:
         cache.close()
@@ -164,14 +168,25 @@ def test_annotate_orthogonal_embeddings_yield_lower_score(brain_svc, tmp_path):
     cache = _make_cache(tmp_path)
     state = _make_state_conn(tmp_path)
     try:
-        a = np.zeros(256, dtype=np.float32)
+        a = np.zeros(DEFAULT_AUDIO_DIM, dtype=np.float32)
         a[0] = 1.0
-        b = np.zeros(256, dtype=np.float32)
+        b = np.zeros(DEFAULT_VIDEO_DIM, dtype=np.float32)
         b[1] = 1.0  # orthogonal zu a -> cosine = 0 -> mapped 0.5
         cache.store(media_hash="ah", media_type="audio", embedding=a,
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         cache.store(media_hash="vh", media_type="video", embedding=b,
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_VIDEO_MODEL_NAME,
+                    model_version=DEFAULT_VIDEO_MODEL_VERSION)
+
+        class HeadProjector:
+            @staticmethod
+            def project_audio_for_hash(_media_hash, emb):
+                return emb[:256]
+
+            @staticmethod
+            def project_video_for_hash(_media_hash, emb):
+                return emb[:256]
 
         cuts = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 1.0,
                  "metadata": {"trigger_type": "kick", "trigger_strength": 1.0}}]
@@ -185,6 +200,7 @@ def test_annotate_orthogonal_embeddings_yield_lower_score(brain_svc, tmp_path):
             embedding_cache=cache,
             audio_hash="ah",
             video_hashes_by_clip={"clip_1": "vh"},
+            cross_modal_projector=HeadProjector(),
         )
 
         sm_orth = out[0]["metadata"]["brain_scores"]["semantic_match_weight"]

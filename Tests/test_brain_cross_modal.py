@@ -26,11 +26,19 @@ from pb_studio.brain import (
 )
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.brain.cross_modal_projector import (
+    DEFAULT_AUDIO_MODEL_NAME,
+    DEFAULT_AUDIO_MODEL_VERSION,
     DEFAULT_AUDIO_DIM,
     DEFAULT_COMMON_DIM,
+    DEFAULT_VIDEO_MODEL_NAME,
+    DEFAULT_VIDEO_MODEL_VERSION,
     DEFAULT_VIDEO_DIM,
 )
-from pb_studio.brain.post_processor import annotate_cuts_with_brain
+from pb_studio.brain.post_processor import (
+    _load_audio_embedding,
+    _load_video_embedding,
+    annotate_cuts_with_brain,
+)
 from pb_studio.storage.embedding_cache import EmbeddingCache
 from pb_studio.storage.migration_runner import migrate
 from pb_studio.storage.sqlite_init import init_connection
@@ -73,16 +81,12 @@ def test_projector_different_seeds_differ():
     assert not np.array_equal(p1.W_video, p2.W_video)
 
 
-def test_projector_handles_wrong_size_inputs():
+def test_projector_rejects_wrong_size_inputs():
     p = CrossModalProjector()
-    # Too short -> zero-padded
     short = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-    out = p.project_audio(short)
-    assert out is not None and out.shape == (DEFAULT_COMMON_DIM,)
-    # Too long -> truncated
+    assert p.project_audio(short) is None
     long = np.random.rand(DEFAULT_AUDIO_DIM + 100).astype(np.float32)
-    out = p.project_audio(long)
-    assert out is not None and out.shape == (DEFAULT_COMMON_DIM,)
+    assert p.project_audio(long) is None
 
 
 def test_projector_handles_nan_inf():
@@ -116,15 +120,24 @@ def test_save_load_roundtrip(tmp_path: Path):
     np.testing.assert_array_equal(p1.W_video, p2.W_video)
 
 
-def test_load_dim_mismatch_keeps_random(tmp_path: Path):
+def test_load_dim_mismatch_is_rejected(tmp_path: Path):
     weights = tmp_path / "cm.npz"
     p1 = CrossModalProjector(common_dim=128, weights_path=weights)
     p1.save()
 
-    # Try loading with different common_dim -> should NOT load, keeps fresh init
-    p2 = CrossModalProjector(common_dim=256, weights_path=weights)
-    assert p2.W_audio.shape == (DEFAULT_AUDIO_DIM, 256)
-    assert p2.W_video.shape == (DEFAULT_VIDEO_DIM, 256)
+    with pytest.raises(RuntimeError, match="dimension mismatch"):
+        CrossModalProjector(common_dim=256, weights_path=weights)
+
+
+def test_load_model_identity_mismatch_is_rejected(tmp_path: Path):
+    weights = tmp_path / "cm.npz"
+    CrossModalProjector(weights_path=weights).save()
+
+    with pytest.raises(RuntimeError, match="model identity mismatch"):
+        CrossModalProjector(
+            weights_path=weights,
+            video_model_name="arbitrary/siglip-model",
+        )
 
 
 def test_get_default_projector_singleton(tmp_path: Path):
@@ -203,9 +216,11 @@ def test_post_processor_uses_projector_for_clap_siglip_dim_mismatch(
         a_emb = np.random.RandomState(1).rand(DEFAULT_AUDIO_DIM).astype(np.float32)
         v_emb = np.random.RandomState(2).rand(DEFAULT_VIDEO_DIM).astype(np.float32)
         cache.store(media_hash="ah", media_type="audio", embedding=a_emb,
-                    model_name="clap-fake", model_version="1.0")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         cache.store(media_hash="vh", media_type="video", embedding=v_emb,
-                    model_name="siglip-fake", model_version="1.0")
+                    model_name=DEFAULT_VIDEO_MODEL_NAME,
+                    model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         projector = CrossModalProjector(seed=42)
         cuts = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 1.0,
@@ -243,9 +258,11 @@ def test_auto_projector_resolved_when_cache_provided(
         a_emb = np.random.RandomState(1).rand(DEFAULT_AUDIO_DIM).astype(np.float32)
         v_emb = np.random.RandomState(2).rand(DEFAULT_VIDEO_DIM).astype(np.float32)
         cache.store(media_hash="ah", media_type="audio", embedding=a_emb,
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         cache.store(media_hash="vh", media_type="video", embedding=v_emb,
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_VIDEO_MODEL_NAME,
+                    model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         cuts = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 1.0,
                  "metadata": {"trigger_type": "beat", "trigger_strength": 1.0}}]
@@ -267,3 +284,29 @@ def test_auto_projector_resolved_when_cache_provided(
     finally:
         cache.close()
         state.close()
+
+
+def test_embedding_lookup_rejects_arbitrary_model_and_wrong_dimension(
+    tmp_path: Path,
+):
+    cache = _make_cache(tmp_path)
+    try:
+        cache.store(
+            media_hash="audio-miss",
+            media_type="audio",
+            embedding=np.ones(DEFAULT_AUDIO_DIM, dtype=np.float32),
+            model_name="arbitrary/clap",
+            model_version="9",
+        )
+        cache.store(
+            media_hash="video-wrong-dim",
+            media_type="video",
+            embedding=np.ones(DEFAULT_VIDEO_DIM - 1, dtype=np.float32),
+            model_name=DEFAULT_VIDEO_MODEL_NAME,
+            model_version=DEFAULT_VIDEO_MODEL_VERSION,
+        )
+
+        assert _load_audio_embedding(cache, "audio-miss") is None
+        assert _load_video_embedding(cache, "video-wrong-dim") is None
+    finally:
+        cache.close()

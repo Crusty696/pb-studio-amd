@@ -45,6 +45,7 @@ class BrainService:
         self.weights = WeightStore(self.brain.weights_conn, lock=self.brain._weights_lock)
         self.reranker = BrainReranker(weight_store=self.weights)
         self.sampler = SmartSampler(self.weights)
+        self.feedback_outbox_path = self.brain.brain_dir / "feedback_outbox.json"
 
         self.state_conn: Optional[sqlite3.Connection] = None
         if state_db_path:
@@ -65,6 +66,12 @@ class BrainService:
                 str(path), isolation_level=None, check_same_thread=False
             )
             init_connection(new_connection)
+            if hasattr(self, "weights") and hasattr(self, "feedback_outbox_path"):
+                FeedbackLogger(
+                    weight_store=self.weights,
+                    state_conn=new_connection,
+                    outbox_path=self.feedback_outbox_path,
+                ).recover_pending()
         except Exception:
             if new_connection is not None:
                 try:
@@ -91,7 +98,9 @@ class BrainService:
                 "BrainService.bind_project_state() must be called first"
             )
         return FeedbackLogger(
-            weight_store=self.weights, state_conn=self.state_conn
+            weight_store=self.weights,
+            state_conn=self.state_conn,
+            outbox_path=self.feedback_outbox_path,
         )
 
     def close(self) -> None:

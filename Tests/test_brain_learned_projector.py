@@ -13,9 +13,14 @@ import pytest
 from pb_studio.brain.cross_modal_projector import (
     CrossModalProjector,
     DEFAULT_AUDIO_DIM,
+    DEFAULT_AUDIO_MODEL_NAME,
+    DEFAULT_AUDIO_MODEL_VERSION,
     DEFAULT_COMMON_DIM,
     DEFAULT_VIDEO_DIM,
+    DEFAULT_VIDEO_MODEL_NAME,
+    DEFAULT_VIDEO_MODEL_VERSION,
 )
+from pb_studio.brain.loader_cache import clear_default_loader_cache
 from pb_studio.brain.projector_trainer import (
     LABEL_MAP,
     collect_training_pairs,
@@ -27,6 +32,12 @@ from pb_studio.storage.sqlite_init import init_connection
 
 
 # ---------- fit_pairs unit tests ----------
+
+@pytest.fixture(autouse=True)
+def _clear_loader_cache():
+    clear_default_loader_cache()
+    yield
+    clear_default_loader_cache()
 
 def test_fit_pairs_empty():
     p = CrossModalProjector()
@@ -179,11 +190,13 @@ def test_collect_pairs_resolves_hashes_and_loads_embeddings(tmp_path: Path):
         # Audio + Video hashes pro clip
         cache.store(media_hash="ah_5", media_type="audio",
                     embedding=np.ones(DEFAULT_AUDIO_DIM, dtype=np.float32),
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         for vh in ("vh_a", "vh_b", "vh_c"):
             cache.store(media_hash=vh, media_type="video",
                         embedding=np.ones(DEFAULT_VIDEO_DIM, dtype=np.float32),
-                        model_name="t", model_version="1")
+                        model_name=DEFAULT_VIDEO_MODEL_NAME,
+                        model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         audio_hash = lambda audio_clip_id: f"ah_{audio_clip_id}"
         video_hash_map = {"clip_a": "vh_a", "clip_b": "vh_b", "clip_c": "vh_c"}
@@ -258,11 +271,13 @@ def test_collect_pairs_respects_limit(tmp_path: Path):
         _seed_db(state)
         cache.store(media_hash="ah_5", media_type="audio",
                     embedding=np.ones(DEFAULT_AUDIO_DIM, dtype=np.float32),
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         for vh in ("vh_a", "vh_b", "vh_c"):
             cache.store(media_hash=vh, media_type="video",
                         embedding=np.ones(DEFAULT_VIDEO_DIM, dtype=np.float32),
-                        model_name="t", model_version="1")
+                        model_name=DEFAULT_VIDEO_MODEL_NAME,
+                        model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         pairs = collect_training_pairs(
             state_conn=state,
@@ -286,12 +301,14 @@ def test_run_fit_step_end_to_end(tmp_path: Path):
         cache.store(media_hash="ah_5", media_type="audio",
                     embedding=np.random.RandomState(1).rand(DEFAULT_AUDIO_DIM)
                     .astype(np.float32),
-                    model_name="t", model_version="1")
+                    model_name=DEFAULT_AUDIO_MODEL_NAME,
+                    model_version=DEFAULT_AUDIO_MODEL_VERSION)
         for i, vh in enumerate(("vh_a", "vh_b", "vh_c")):
             cache.store(media_hash=vh, media_type="video",
                         embedding=np.random.RandomState(i + 2).rand(DEFAULT_VIDEO_DIM)
                         .astype(np.float32),
-                        model_name="t", model_version="1")
+                        model_name=DEFAULT_VIDEO_MODEL_NAME,
+                        model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         weights = tmp_path / "cm.npz"
         proj = CrossModalProjector(seed=7, weights_path=weights)

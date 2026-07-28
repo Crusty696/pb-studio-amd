@@ -80,27 +80,29 @@ def annotate_cuts_with_brain(
                 wp = _Path(cache_dir).parent / "cross_modal_projector.npz"
             projector = get_default_projector(weights_path=wp)
         except Exception as e:
-            logger.debug("auto-resolve cross_modal_projector failed: %s", e)
+            logger.warning("Cross-modal projector unavailable: %s", e)
             projector = None
 
     audio_embedding_raw = _load_audio_embedding(embedding_cache, audio_hash)
+    audio_embedding = None
     if projector is not None and audio_embedding_raw is not None:
         audio_embedding = projector.project_audio_for_hash(
             audio_hash, audio_embedding_raw
         )
-    else:
-        audio_embedding = audio_embedding_raw
 
     video_embedding_by_clip: dict[str, np.ndarray] = {}
-    if embedding_cache is not None and video_hashes_by_clip:
+    if (
+        projector is not None
+        and embedding_cache is not None
+        and video_hashes_by_clip
+    ):
         for cid, vh in video_hashes_by_clip.items():
             emb = _load_video_embedding(embedding_cache, vh)
             if emb is None:
                 continue
-            if projector is not None:
-                emb = projector.project_video_for_hash(vh, emb)
-                if emb is None:
-                    continue
+            emb = projector.project_video_for_hash(vh, emb)
+            if emb is None:
+                continue
             video_embedding_by_clip[cid] = emb
 
     out: list[dict[str, Any]] = []
@@ -108,18 +110,21 @@ def annotate_cuts_with_brain(
     if persist_to_state_conn is not None:
         try:
             # Expliziter Transaktions-Kontext für maximale I/O-Performance (reduziert N+2 Writes auf 1 Write)
-            with persist_to_state_conn:
-                timeline_id = _ensure_timeline(persist_to_state_conn, audio_clip_id)
-                for idx, cut in enumerate(cuts):
-                    new_cut = _annotate_and_maybe_persist_cut(
-                        idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
-                        energy_curve, subtrack_segments, audio_mood_tags,
-                        video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
-                        weight_store, min_confidence, persist_to_state_conn, timeline_id
-                    )
-                    if new_cut is not None:
-                        out.append(new_cut)
+            persist_to_state_conn.execute("BEGIN IMMEDIATE")
+            timeline_id = _ensure_timeline(persist_to_state_conn, audio_clip_id)
+            for idx, cut in enumerate(cuts):
+                new_cut = _annotate_and_maybe_persist_cut(
+                    idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
+                    energy_curve, subtrack_segments, audio_mood_tags,
+                    video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                    weight_store, min_confidence, persist_to_state_conn, timeline_id
+                )
+                if new_cut is not None:
+                    out.append(new_cut)
+            persist_to_state_conn.execute("COMMIT")
         except Exception as e:
+            if persist_to_state_conn.in_transaction:
+                persist_to_state_conn.execute("ROLLBACK")
             logger.error(f"Failed to persist annotated cuts to state db: {e}", exc_info=True)
             # Robustheits-Fallback: RAM-only im Fehlerfall, damit die Generierung nie fehlschlägt
             out = []
@@ -327,13 +332,14 @@ def _load_audio_embedding(
         return None
     try:
         from pb_studio.audio.audio_embedder import (
-            CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION,
+            CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION, EMBED_DIM,
         )
-    except Exception:
-        return _load_first_match(cache, media_hash, media_type="audio")
+    except Exception as exc:
+        logger.warning("Audio embedding identity unavailable: %s", exc)
+        return None
     return _cached_lookup(
         cache, media_hash, CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION,
-        media_type="audio",
+        media_type="audio", expected_dim=EMBED_DIM,
     )
 
 
@@ -347,13 +353,14 @@ def _load_video_embedding(
         return None
     try:
         from pb_studio.video.video_embedder import (
-            CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION,
+            CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION, EMBED_DIM,
         )
-    except Exception:
-        return _load_first_match(cache, media_hash, media_type="video")
+    except Exception as exc:
+        logger.warning("Video embedding identity unavailable: %s", exc)
+        return None
     return _cached_lookup(
         cache, media_hash, CURRENT_MODEL_NAME, CURRENT_MODEL_VERSION,
-        media_type="video",
+        media_type="video", expected_dim=EMBED_DIM,
     )
 
 
@@ -364,58 +371,60 @@ def _cached_lookup(
     model_version: str,
     *,
     media_type: str,
+    expected_dim: int,
 ) -> Optional[np.ndarray]:
-    """R-Brain-08: LRU-checked + DB-fallback lookup."""
+    """Load only the exact model/version and reject dimension drift."""
     from .loader_cache import get_default_loader_cache
     lc = get_default_loader_cache()
     cached = lc.get(media_hash, model_name, model_version)
     if cached is not None:
-        return cached
+        return _validate_embedding_dimension(
+            cached, expected_dim, media_hash=media_hash, media_type=media_type,
+        )
     try:
         entry = cache.lookup(media_hash, model_name, model_version)
         if entry is None:
-            return _load_first_match(cache, media_hash, media_type=media_type)
-        arr = cache.load_array(entry)
-        if arr is not None:
-            lc.put(media_hash, model_name, model_version, arr)
-        return arr
-    except Exception as e:
-        logger.debug("embedding lookup failed for %s: %s", media_hash, e)
-        return None
-
-
-def _load_first_match(
-    cache: Any, media_hash: str, *, media_type: str
-) -> Optional[np.ndarray]:
-    """Probe cache for any model_name/version with the given hash + type.
-    R-Brain-08: process-level LRU on the resolved (model_name, model_version).
-    """
-    try:
-        row = cache.conn.execute(
-            "SELECT model_name, model_version FROM media_embedding_index "
-            "WHERE media_hash = ? AND media_type = ? LIMIT 1",
-            (media_hash, media_type),
-        ).fetchone()
-    except Exception:
-        return None
-    if row is None:
-        return None
-    model_name, model_version = str(row[0]), str(row[1])
-    from .loader_cache import get_default_loader_cache
-    lc = get_default_loader_cache()
-    cached = lc.get(media_hash, model_name, model_version)
-    if cached is not None:
-        return cached
-    try:
-        entry = cache.lookup(media_hash, model_name, model_version)
-        if entry is None:
+            logger.warning(
+                "No exact %s embedding for hash %s and model %s@%s",
+                media_type, media_hash, model_name, model_version,
+            )
             return None
         arr = cache.load_array(entry)
-        if arr is not None:
-            lc.put(media_hash, model_name, model_version, arr)
+        arr = _validate_embedding_dimension(
+            arr, expected_dim, media_hash=media_hash, media_type=media_type,
+        )
+        if arr is None:
+            return None
+        lc.put(media_hash, model_name, model_version, arr)
         return arr
-    except Exception:
+    except Exception as e:
+        logger.warning("Embedding lookup failed for %s: %s", media_hash, e)
         return None
+
+
+def _validate_embedding_dimension(
+    embedding: Any,
+    expected_dim: int,
+    *,
+    media_hash: str,
+    media_type: str,
+) -> Optional[np.ndarray]:
+    if embedding is None:
+        return None
+    arr = np.asarray(embedding, dtype=np.float32).reshape(-1)
+    if arr.size != int(expected_dim):
+        logger.warning(
+            "Rejected %s embedding for hash %s: dimension %d, expected %d",
+            media_type, media_hash, arr.size, expected_dim,
+        )
+        return None
+    if not np.all(np.isfinite(arr)):
+        logger.warning(
+            "Rejected non-finite %s embedding for hash %s",
+            media_type, media_hash,
+        )
+        return None
+    return arr
 
 
 # ---------- DB persistence ----------

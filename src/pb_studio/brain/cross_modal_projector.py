@@ -21,10 +21,23 @@ from typing import Optional
 
 import numpy as np
 
+from pb_studio.audio.audio_embedder import (
+    CURRENT_MODEL_NAME as _AUDIO_MODEL_NAME,
+    CURRENT_MODEL_VERSION as _AUDIO_MODEL_VERSION,
+    EMBED_DIM as _AUDIO_EMBED_DIM,
+)
+from pb_studio.video.video_embedder import (
+    CURRENT_MODEL_NAME as _VIDEO_MODEL_NAME,
+    CURRENT_MODEL_VERSION as _VIDEO_MODEL_VERSION,
+    EMBED_DIM as _VIDEO_EMBED_DIM,
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_COMMON_DIM = 256
-DEFAULT_AUDIO_DIM = 512
+DEFAULT_AUDIO_DIM = _AUDIO_EMBED_DIM
+DEFAULT_AUDIO_MODEL_NAME = _AUDIO_MODEL_NAME
+DEFAULT_AUDIO_MODEL_VERSION = _AUDIO_MODEL_VERSION
 # Korrektur (2026-07-10, selbst-korrigiert nach Sweep-Audit): faelschlich
 # kurzzeitig auf 1152 gesetzt, weil siglip_wrapper.py (SO400M, 1152-dim,
 # nur fuer FAISS/clip_selector-Suche) mit dem tatsaechlichen Brain-Feeder
@@ -32,7 +45,9 @@ DEFAULT_AUDIO_DIM = 512
 # CURRENT_MODEL_NAME/CURRENT_MODEL_VERSION aus video_embedder.py
 # (google/siglip2-base-patch16-384, EMBED_DIM=768) - DAS ist die reale
 # Quelle fuer Cross-Modal-Similarity. 768 war die ganze Zeit richtig.
-DEFAULT_VIDEO_DIM = 768
+DEFAULT_VIDEO_DIM = _VIDEO_EMBED_DIM
+DEFAULT_VIDEO_MODEL_NAME = _VIDEO_MODEL_NAME
+DEFAULT_VIDEO_MODEL_VERSION = _VIDEO_MODEL_VERSION
 DEFAULT_SEED = 42
 WEIGHTS_FILENAME = "cross_modal_projector.npz"
 
@@ -48,12 +63,20 @@ class CrossModalProjector:
         video_dim: int = DEFAULT_VIDEO_DIM,
         seed: int = DEFAULT_SEED,
         weights_path: Optional[Path] = None,
+        audio_model_name: str = DEFAULT_AUDIO_MODEL_NAME,
+        audio_model_version: str = DEFAULT_AUDIO_MODEL_VERSION,
+        video_model_name: str = DEFAULT_VIDEO_MODEL_NAME,
+        video_model_version: str = DEFAULT_VIDEO_MODEL_VERSION,
     ):
         self.common_dim = int(common_dim)
         self.audio_dim = int(audio_dim)
         self.video_dim = int(video_dim)
         self.seed = int(seed)
         self.weights_path = Path(weights_path) if weights_path else None
+        self.audio_model_name = str(audio_model_name)
+        self.audio_model_version = str(audio_model_version)
+        self.video_model_name = str(video_model_name)
+        self.video_model_version = str(video_model_version)
 
         self._init_random_matrices()
         # R-Brain-08
@@ -212,6 +235,10 @@ class CrossModalProjector:
                 audio_dim=np.int32(self.audio_dim),
                 video_dim=np.int32(self.video_dim),
                 seed=np.int32(self.seed),
+                audio_model_name=np.str_(self.audio_model_name),
+                audio_model_version=np.str_(self.audio_model_version),
+                video_model_name=np.str_(self.video_model_name),
+                video_model_version=np.str_(self.video_model_version),
             )
             return True
         except Exception as e:
@@ -232,25 +259,41 @@ class CrossModalProjector:
 
     def _load_weights(self) -> None:
         try:
-            data = np.load(self.weights_path)
-            cd = int(data["common_dim"])
-            ad = int(data["audio_dim"])
-            vd = int(data["video_dim"])
-            if (cd, ad, vd) != (self.common_dim, self.audio_dim, self.video_dim):
-                logger.warning(
-                    "CrossModalProjector dim mismatch (file %dx%d/%d, "
-                    "expected %dx%d/%d) -- using fresh random matrices",
-                    cd, ad, vd, self.common_dim, self.audio_dim, self.video_dim,
+            with np.load(self.weights_path, allow_pickle=False) as data:
+                cd = int(data["common_dim"])
+                ad = int(data["audio_dim"])
+                vd = int(data["video_dim"])
+                file_identity = (
+                    str(data["audio_model_name"].item()),
+                    str(data["audio_model_version"].item()),
+                    str(data["video_model_name"].item()),
+                    str(data["video_model_version"].item()),
                 )
-                return
-            wa = np.asarray(data["W_audio"], dtype=np.float32)
-            wv = np.asarray(data["W_video"], dtype=np.float32)
+                expected_identity = (
+                    self.audio_model_name,
+                    self.audio_model_version,
+                    self.video_model_name,
+                    self.video_model_version,
+                )
+                if (cd, ad, vd) != (
+                    self.common_dim, self.audio_dim, self.video_dim,
+                ):
+                    raise ValueError(
+                        "CrossModalProjector dimension mismatch: "
+                        f"file={ad}/{vd}->{cd}, expected="
+                        f"{self.audio_dim}/{self.video_dim}->{self.common_dim}"
+                    )
+                if file_identity != expected_identity:
+                    raise ValueError(
+                        "CrossModalProjector model identity mismatch: "
+                        f"file={file_identity}, expected={expected_identity}"
+                    )
+                wa = np.asarray(data["W_audio"], dtype=np.float32)
+                wv = np.asarray(data["W_video"], dtype=np.float32)
             if wa.shape != (self.audio_dim, self.common_dim):
-                logger.warning("W_audio shape mismatch: %s", wa.shape)
-                return
+                raise ValueError(f"W_audio shape mismatch: {wa.shape}")
             if wv.shape != (self.video_dim, self.common_dim):
-                logger.warning("W_video shape mismatch: %s", wv.shape)
-                return
+                raise ValueError(f"W_video shape mismatch: {wv.shape}")
             self.W_audio = wa
             self.W_video = wv
             self._projection_cache.clear()
@@ -261,9 +304,9 @@ class CrossModalProjector:
                 self.weights_path, wa.shape, wv.shape,
             )
         except Exception as e:
-            logger.warning(
-                "CrossModalProjector load failed: %s -- keeping random init", e,
-            )
+            raise RuntimeError(
+                f"CrossModalProjector weights rejected: {self.weights_path}: {e}"
+            ) from e
 
     def _project(
         self, emb: Optional[np.ndarray], W: np.ndarray, *, expected_dim: int,
@@ -275,7 +318,12 @@ class CrossModalProjector:
             return None
         x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         if x.size != expected_dim:
-            x = self._fit_to_size(x, expected_dim)
+            logger.warning(
+                "CrossModalProjector rejected embedding dimension %d; expected %d",
+                x.size,
+                expected_dim,
+            )
+            return None
         n = float(np.linalg.norm(x)) + 1e-9
         if n < 1e-6:
             return None
@@ -285,14 +333,6 @@ class CrossModalProjector:
         if n2 < 1e-6:
             return None
         return (out / n2).astype(np.float32)
-
-    @staticmethod
-    def _fit_to_size(x: np.ndarray, target: int) -> np.ndarray:
-        if x.size > target:
-            return x[:target]
-        out = np.zeros(target, dtype=np.float32)
-        out[: x.size] = x
-        return out
 
     def _prepare_input(
         self, emb: Optional[np.ndarray], expected_dim: int
@@ -305,7 +345,13 @@ class CrossModalProjector:
             return None
         x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         if x.size != expected_dim:
-            x = self._fit_to_size(x, expected_dim)
+            logger.warning(
+                "CrossModalProjector training rejected embedding dimension %d; "
+                "expected %d",
+                x.size,
+                expected_dim,
+            )
+            return None
         n = float(np.linalg.norm(x)) + 1e-9
         if n < 1e-6:
             return None

@@ -10,6 +10,7 @@ GET  /brain/explain/{cut_id}    -- UX: warum diese Confidence? (R-Brain-09)
 
 from __future__ import annotations
 
+import asyncio
 import json as _json
 import logging
 import secrets
@@ -40,17 +41,20 @@ async def suggest(req: BrainSuggestRequest) -> BrainSuggestResponse:
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
+    state_conn = svc.state_conn
 
     # Video-IDs in "clip_X"-Format wandeln fuer DB-Match
     allowed_clips = {f"clip_{vid}" for vid in req.video_clip_ids} if req.video_clip_ids else None
 
     # Alle Cuts der aktuellen Timeline laden, filtern nach Audio-ID und current=1
-    rows = svc.state_conn.execute(
-        "SELECT id, clip_id, start_time, end_time, brain_scores_json, metadata_json "
-        "FROM timeline_cuts WHERE timeline_id IN "
-        "(SELECT id FROM timelines WHERE is_current=1 AND audio_clip_id=?)",
-        (int(req.audio_clip_id),),
-    ).fetchall()
+    rows = await asyncio.to_thread(
+        lambda: state_conn.execute(
+            "SELECT id, clip_id, start_time, end_time, brain_scores_json, metadata_json "
+            "FROM timeline_cuts WHERE timeline_id IN "
+            "(SELECT id FROM timelines WHERE is_current=1 AND audio_clip_id=?)",
+            (int(req.audio_clip_id),),
+        ).fetchall()
+    )
 
     out: list[BrainSuggestion] = []
     for r in rows:
@@ -85,11 +89,15 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
+    feedback_logger = svc.feedback_logger
+    state_conn = feedback_logger.state_conn
 
-    row = svc.state_conn.execute(
-        "SELECT brain_scores_json, metadata_json FROM timeline_cuts WHERE id = ?",
-        (int(req.cut_id),),
-    ).fetchone()
+    row = await asyncio.to_thread(
+        lambda: state_conn.execute(
+            "SELECT brain_scores_json, metadata_json FROM timeline_cuts WHERE id = ?",
+            (int(req.cut_id),),
+        ).fetchone()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Cut {req.cut_id} not found")
 
@@ -107,15 +115,14 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
     # asyncio.to_thread haelt den Event-Loop frei fuer parallele SSE-Streams.
     # Mit db_write_lock abgesichert gegen concurrent database write locks.
     from ..dependencies import db_write_lock
-    import asyncio as _aio
     async with db_write_lock:
-        bumps = await _aio.to_thread(
-            svc.feedback_logger.log_feedback,
+        bumps = await asyncio.to_thread(
+            feedback_logger.log_feedback,
             cut_id=req.cut_id,
             rating=req.rating,
             context_keys=context_keys,
         )
-    total = await _aio.to_thread(svc.weights.total_clicks)
+    total = await asyncio.to_thread(svc.weights.total_clicks)
     return BrainFeedbackResponse(
         status="ok",
         updated_buckets=bumps,
@@ -129,14 +136,17 @@ async def learning_session() -> BrainLearningSessionResponse:
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
+    state_conn = svc.state_conn
 
     from pb_studio.brain.smart_sampler import CutForSampling
 
-    rows = svc.state_conn.execute(
-        "SELECT id, clip_id, start_time, end_time, brain_scores_json, "
-        "metadata_json FROM timeline_cuts WHERE timeline_id IN "
-        "(SELECT id FROM timelines WHERE is_current=1)"
-    ).fetchall()
+    rows = await asyncio.to_thread(
+        lambda: state_conn.execute(
+            "SELECT id, clip_id, start_time, end_time, brain_scores_json, "
+            "metadata_json FROM timeline_cuts WHERE timeline_id IN "
+            "(SELECT id FROM timelines WHERE is_current=1)"
+        ).fetchall()
+    )
     if not rows:
         return BrainLearningSessionResponse(cuts=[])
 
@@ -149,8 +159,9 @@ async def learning_session() -> BrainLearningSessionResponse:
         by_id[int(r[0])] = r
 
     # Z2 / GPU-F4: select_uncertain ist CPU-heavy (Bayes-Variance pro Cut).
-    import asyncio as _aio
-    selected = await _aio.to_thread(svc.sampler.select_uncertain, cuts_for_samp, n=15)
+    selected = await asyncio.to_thread(
+        svc.sampler.select_uncertain, cuts_for_samp, n=15,
+    )
     out: list[BrainSuggestion] = []
     for s in selected:
         r = by_id[s.cut_id]
@@ -186,33 +197,38 @@ async def stats() -> BrainStatsResponse:
             posterior_variance=variance,
         )
 
-    with svc.brain._weights_lock:
-        rows = svc.brain.weights_conn.execute(
-        "SELECT axis, context_level, context_key, positive_count, "
-        "negative_count FROM axis_weights "
-        "ORDER BY (positive_count - negative_count) DESC LIMIT 5"
-        ).fetchall()
-        top_pos = [_bucket(r) for r in rows]
+    def _read_stats():
+        with svc.brain._weights_lock:
+            rows = svc.brain.weights_conn.execute(
+                "SELECT axis, context_level, context_key, positive_count, "
+                "negative_count FROM axis_weights "
+                "ORDER BY (positive_count - negative_count) DESC LIMIT 5"
+            ).fetchall()
+            positive = [_bucket(r) for r in rows]
 
-        rows = svc.brain.weights_conn.execute(
-        "SELECT axis, context_level, context_key, positive_count, "
-        "negative_count FROM axis_weights "
-        "ORDER BY (negative_count - positive_count) DESC LIMIT 5"
-        ).fetchall()
-        top_neg = [_bucket(r) for r in rows]
+            rows = svc.brain.weights_conn.execute(
+                "SELECT axis, context_level, context_key, positive_count, "
+                "negative_count FROM axis_weights "
+                "ORDER BY (negative_count - positive_count) DESC LIMIT 5"
+            ).fetchall()
+            negative = [_bucket(r) for r in rows]
 
-        learned = set()
-        for r in svc.brain.weights_conn.execute(
-            "SELECT DISTINCT axis FROM axis_weights "
-            "WHERE positive_count + negative_count >= 10"
-        ).fetchall():
-            learned.add(r[0])
+            learned_axes = {
+                r[0]
+                for r in svc.brain.weights_conn.execute(
+                    "SELECT DISTINCT axis FROM axis_weights "
+                    "WHERE positive_count + negative_count >= 10"
+                ).fetchall()
+            }
+        return positive, negative, learned_axes, svc.weights.total_clicks()
+
+    top_pos, top_neg, learned, total_clicks = await asyncio.to_thread(_read_stats)
 
     from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
     cold_list = [a for a in BRIDGE_AXES if a not in learned]
 
     return BrainStatsResponse(
-        total_clicks=svc.weights.total_clicks(),
+        total_clicks=total_clicks,
         cold_start_axes=len(cold_list),
         learned_axes=len(learned),
         top_positive=top_pos,
@@ -273,13 +289,16 @@ async def explain(
     svc = get_brain_service()
     if svc.state_conn is None:
         raise HTTPException(status_code=409, detail="No project bound")
+    state_conn = svc.state_conn
 
-    row = svc.state_conn.execute(
-        "SELECT id, clip_id, start_time, end_time, segment_type, "
-        "brain_scores_json, metadata_json "
-        "FROM timeline_cuts WHERE id = ?",
-        (int(cut_id),),
-    ).fetchone()
+    row = await asyncio.to_thread(
+        lambda: state_conn.execute(
+            "SELECT id, clip_id, start_time, end_time, segment_type, "
+            "brain_scores_json, metadata_json "
+            "FROM timeline_cuts WHERE id = ?",
+            (int(cut_id),),
+        ).fetchone()
+    )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Cut {cut_id} not found")
 
@@ -290,39 +309,46 @@ async def explain(
     # Pro Achse: posterior aus weight_store lesen.
     # Nutzt gespeicherte bridge_values aus den Metadaten, um mathematischen
     # Drift durch spaetere Klicks zu verhindern.
-    contributions: list[BrainAxisContribution] = []
-    cold_start: list[str] = []
     raw_bridge_values = metadata.get("bridge_values") or {}
 
-    for axis, score in scores.items():
-        posterior = float(svc.weights.get_posterior_mean(axis, context_keys))
-        
-        # Nutze gespeicherte bridge_values wenn vorhanden, sonst Fallback auf Rekonstruktion
-        if raw_bridge_values:
-            bridge_value = float(raw_bridge_values.get(axis, 0.0))
-            current_score = bridge_value * posterior
-        else:
-            if posterior > 1e-9:
-                bridge_value = max(0.0, min(1.0, float(score) / posterior))
+    def _read_contributions():
+        contributions: list[BrainAxisContribution] = []
+        cold_axes: list[str] = []
+        for axis, score in scores.items():
+            posterior = float(svc.weights.get_posterior_mean(axis, context_keys))
+
+            if raw_bridge_values:
+                bridge_value = float(raw_bridge_values.get(axis, 0.0))
+                current_score = bridge_value * posterior
             else:
-                bridge_value = 0.0
-            current_score = score
+                if posterior > 1e-9:
+                    bridge_value = max(0.0, min(1.0, float(score) / posterior))
+                else:
+                    bridge_value = 0.0
+                current_score = score
 
-        n_samples = _n_samples_at_most_specific(svc, axis, context_keys)
-        if n_samples < 10:
-            cold_start.append(axis)
-            
-        contributions.append(BrainAxisContribution(
-            axis=axis,
-            bridge_value=round(bridge_value, 6),
-            posterior=round(posterior, 6),
-            score=round(max(0.0, min(1.0, float(current_score))), 6),
-            n_samples=n_samples,
-        ))
+            n_samples = _n_samples_at_most_specific(svc, axis, context_keys)
+            if n_samples < 10:
+                cold_axes.append(axis)
 
-    contributions.sort(key=lambda c: c.score, reverse=True)
-    top_axes = contributions[:top_n]
-    bottom_axes = contributions[-top_n:][::-1] if len(contributions) >= top_n else []
+            contributions.append(BrainAxisContribution(
+                axis=axis,
+                bridge_value=round(bridge_value, 6),
+                posterior=round(posterior, 6),
+                score=round(max(0.0, min(1.0, float(current_score))), 6),
+                n_samples=n_samples,
+            ))
+        contributions.sort(key=lambda c: c.score, reverse=True)
+        top = contributions[:top_n]
+        bottom = (
+            contributions[-top_n:][::-1]
+            if len(contributions) >= top_n else []
+        )
+        return top, bottom, cold_axes
+
+    top_axes, bottom_axes, cold_start = await asyncio.to_thread(
+        _read_contributions,
+    )
 
     final_score = (
         sum(scores.values()) / len(scores) if scores else 0.0

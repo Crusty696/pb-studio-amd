@@ -105,6 +105,41 @@ def test_min_confidence_filters_low_scores(brain_svc, tmp_path: Path):
         state.close()
 
 
+def test_persist_batch_rolls_back_partial_timeline(
+    brain_svc, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    import pb_studio.brain.post_processor as post_processor
+
+    state = _make_state_conn(tmp_path)
+    original_persist = post_processor._persist_cut
+    calls = 0
+
+    def fail_on_second_cut(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise sqlite3.OperationalError("simulated write failure")
+        return original_persist(*args, **kwargs)
+
+    monkeypatch.setattr(post_processor, "_persist_cut", fail_on_second_cut)
+    cuts = [
+        {"clip_id": "a", "start_time": 0.0, "end_time": 1.0, "metadata": {}},
+        {"clip_id": "b", "start_time": 1.0, "end_time": 2.0, "metadata": {}},
+    ]
+    try:
+        out = annotate_cuts_with_brain(
+            cuts,
+            weight_store=brain_svc.weights,
+            audio_clip_id=1,
+            persist_to_state_conn=state,
+        )
+        assert len(out) == 2
+        assert state.execute("SELECT COUNT(*) FROM timelines").fetchone()[0] == 0
+        assert state.execute("SELECT COUNT(*) FROM timeline_cuts").fetchone()[0] == 0
+    finally:
+        state.close()
+
+
 # ----------------------------------------------------------------------------
 # R-Brain-01/02/09: Tests fuer die neuen Helper (centroid Normalisierung,
 # nearest-scene-distance, NaN-guard cosine, weight-store variance defensiv)
