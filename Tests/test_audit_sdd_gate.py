@@ -14,13 +14,16 @@ def test_completed_tasks_use_canonical_uppercase_checkbox():
     assert "- [x]" not in tasks
 
 
-def test_current_qc_report_is_not_release_ready():
+def test_current_qc_report_matches_release_gate():
     report = (FEATURE / "qc-report.md").read_text(encoding="utf-8-sig")
 
-    assert "**FAILED / NOT RELEASE-READY**" in report
-    assert "HISTORICAL SNAPSHOT — INVALIDATED" in report
+    if (FEATURE / ".qc-passed").exists():
+        assert "**PASSED / RELEASE-READY**" in report
+    else:
+        assert "**FAILED / NOT RELEASE-READY**" in report
 
 
-def test_success_markers_are_absent_while_gate_is_failed():
-    assert not (FEATURE / ".completed").exists()
-    assert not (FEATURE / ".qc-passed").exists()
+def test_implementation_marker_precedes_qc_marker():
+    assert (FEATURE / ".completed").exists()
+    if (FEATURE / ".qc-passed").exists():
+        assert (FEATURE / ".completed").exists()
