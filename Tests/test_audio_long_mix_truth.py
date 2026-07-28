@@ -4,6 +4,13 @@ import numpy as np
 import pytest
 
 
+def test_long_mix_stem_timeout_scales_beyond_fixed_floor():
+    from backend.routers.audio_router import _stem_timeout_for_duration
+
+    assert _stem_timeout_for_duration(600.0, 900.0) == 900.0
+    assert _stem_timeout_for_duration(6335.0, 900.0) == pytest.approx(4751.25)
+
+
 def test_long_mix_subtrack_detection_never_full_loads(monkeypatch, tmp_path):
     import librosa
 

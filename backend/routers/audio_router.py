@@ -36,6 +36,13 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
+_LONG_STEM_TIMEOUT_RATIO = 0.75
+
+
+def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
+    """Allow long mixes enough wall time while retaining the configured floor."""
+    duration = max(0.0, float(duration_seconds))
+    return max(float(configured_timeout), duration * _LONG_STEM_TIMEOUT_RATIO)
 
 
 def _get_beat_detector() -> "Any":
@@ -526,11 +533,15 @@ async def separate_stems(
         # statt gpu_timeout_seconds 300s) — Demucs auf 90min Mixe brauchte
         # in der Vergangenheit >300s und brach mit GPU-Task-Timeout ab.
         from backend.config import config as _server_config
+        stem_timeout = _stem_timeout_for_duration(
+            clip.get("duration_seconds", 0.0),
+            _server_config.stem_timeout,
+        )
         result = await with_gpu_task(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,
             model_id="stem_separation_full",
             manage_vram=False,  # StemSeparator owns ONNX model budgets; Demucs is CPU.
-            timeout_seconds=_server_config.stem_timeout,
+            timeout_seconds=stem_timeout,
         )
 
         # L-N4: stems_paths in audio_clip persistieren — pacing_router liest das
