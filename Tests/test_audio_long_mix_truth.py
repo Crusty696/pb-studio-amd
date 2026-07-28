@@ -14,7 +14,10 @@ def test_long_mix_stem_timeout_scales_beyond_fixed_floor():
 def test_reusable_stems_require_complete_matching_outputs(tmp_path):
     import soundfile as sf
 
-    from backend.routers.audio_router import _find_reusable_stem_files
+    from backend.routers.audio_router import (
+        _find_reusable_stem_files,
+        _write_stem_cache_marker,
+    )
 
     source = tmp_path / "long_mix.wav"
     samples = np.zeros(44100, dtype=np.float32)
@@ -30,12 +33,182 @@ def test_reusable_stems_require_complete_matching_outputs(tmp_path):
     ) == []
 
     sf.write(instrumental, samples, 44100)
+    assert _find_reusable_stem_files(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+    ) == []
+    _write_stem_cache_marker(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+        [str(vocals), str(instrumental)],
+    )
     reusable = _find_reusable_stem_files(
         str(source),
         "UVR-MDX-NET-Inst_HQ_3.onnx",
         tmp_path,
     )
     assert reusable == sorted([str(instrumental.resolve()), str(vocals.resolve())])
+
+
+def test_reusable_stems_are_bound_to_exact_source_identity(tmp_path):
+    import soundfile as sf
+
+    from backend.routers.audio_router import (
+        _find_reusable_stem_files,
+        _write_stem_cache_marker,
+    )
+
+    source_a = tmp_path / "a" / "same.wav"
+    source_b = tmp_path / "b" / "same.wav"
+    source_a.parent.mkdir()
+    source_b.parent.mkdir()
+    samples = np.zeros(44100, dtype=np.float32)
+    sf.write(source_a, samples, 44100)
+    sf.write(source_b, samples, 44100)
+    vocals = tmp_path / "same_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    instrumental = tmp_path / "same_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    sf.write(vocals, samples, 44100)
+    sf.write(instrumental, samples, 44100)
+    _write_stem_cache_marker(
+        str(source_a),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+        [str(vocals), str(instrumental)],
+    )
+
+    assert _find_reusable_stem_files(
+        str(source_b),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+    ) == []
+
+
+def test_reusable_stem_role_parsing_rejects_multi_role_filename(tmp_path):
+    import soundfile as sf
+
+    from backend.routers.audio_router import _write_stem_cache_marker
+
+    source = tmp_path / "mix.wav"
+    samples = np.zeros(44100, dtype=np.float32)
+    sf.write(source, samples, 44100)
+    ambiguous = tmp_path / "mix_(Vocals)_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    sf.write(ambiguous, samples, 44100)
+
+    with pytest.raises(ValueError, match="Rolle"):
+        _write_stem_cache_marker(
+            str(source),
+            "UVR-MDX-NET-Inst_HQ_3.onnx",
+            tmp_path,
+            [str(ambiguous)],
+        )
+
+
+def test_reusable_stems_reject_output_truncated_after_success(tmp_path):
+    import soundfile as sf
+
+    from backend.routers.audio_router import (
+        _find_reusable_stem_files,
+        _write_stem_cache_marker,
+    )
+
+    source = tmp_path / "mix.wav"
+    samples = np.zeros(44100, dtype=np.float32)
+    sf.write(source, samples, 44100)
+    vocals = tmp_path / "mix_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    instrumental = tmp_path / "mix_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    sf.write(vocals, samples, 44100)
+    sf.write(instrumental, samples, 44100)
+    _write_stem_cache_marker(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+        [str(vocals), str(instrumental)],
+    )
+
+    sf.write(instrumental, samples[:22050], 44100)
+
+    assert _find_reusable_stem_files(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+        tmp_path,
+    ) == []
+
+
+def test_stem_cache_marker_rejects_truncated_success_output(tmp_path):
+    import soundfile as sf
+
+    from backend.routers.audio_router import _write_stem_cache_marker
+
+    source = tmp_path / "mix.wav"
+    full_samples = np.zeros(44100 * 2, dtype=np.float32)
+    short_samples = full_samples[: int(44100 * 1.5)]
+    sf.write(source, full_samples, 44100)
+    vocals = tmp_path / "mix_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    instrumental = tmp_path / "mix_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    sf.write(vocals, full_samples, 44100)
+    sf.write(instrumental, short_samples, 44100)
+
+    with pytest.raises(ValueError, match="unvollstaendig"):
+        _write_stem_cache_marker(
+            str(source),
+            "UVR-MDX-NET-Inst_HQ_3.onnx",
+            tmp_path,
+            [str(vocals), str(instrumental)],
+        )
+
+
+def test_successful_stem_run_publishes_marker_and_reuses_outputs(
+    monkeypatch,
+    tmp_path,
+):
+    import soundfile as sf
+
+    import pb_studio.audio.separator as separator_module
+    import pb_studio.config_manager as config_module
+    from backend.routers.audio_router import _run_stem_separation
+
+    source = tmp_path / "mix.wav"
+    samples = np.zeros(44100, dtype=np.float32)
+    sf.write(source, samples, 44100)
+    vocals = tmp_path / "mix_(Vocals)_UVR-MDX-NET-Inst_HQ_3.wav"
+    instrumental = tmp_path / "mix_(Instrumental)_UVR-MDX-NET-Inst_HQ_3.wav"
+    separator_calls = []
+
+    class FakeConfigManager:
+        def get(self, *_args):
+            return {"temp_dir": str(tmp_path)}
+
+        def resolve_path(self, _path):
+            return tmp_path
+
+    class FakeSeparator:
+        def separate(self, *_args, **_kwargs):
+            separator_calls.append(True)
+            sf.write(vocals, samples, 44100)
+            sf.write(instrumental, samples, 44100)
+            return {"stems": [str(vocals), str(instrumental)]}
+
+    monkeypatch.setattr(config_module, "ConfigManager", FakeConfigManager)
+    monkeypatch.setattr(separator_module, "StemSeparator", FakeSeparator)
+
+    first = _run_stem_separation(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+    )
+    second = _run_stem_separation(
+        str(source),
+        "UVR-MDX-NET-Inst_HQ_3.onnx",
+    )
+
+    assert separator_calls == [True]
+    assert first["vocals_path"] == second["vocals_path"] == str(vocals.resolve())
+    assert (
+        first["instrumental_path"]
+        == second["instrumental_path"]
+        == str(instrumental.resolve())
+    )
 
 
 def test_long_mix_subtrack_detection_never_full_loads(monkeypatch, tmp_path):

@@ -50,42 +50,182 @@ def _find_reusable_stem_files(
     model_name: str,
     output_dir: Path,
 ) -> list[str]:
-    """Return only complete model-matching stems from an earlier successful run."""
+    """Return stems only when an exact successful-run marker still validates."""
+    import json
     import soundfile as sf
 
     source = Path(audio_path)
-    model_token = Path(model_name).stem.lower()
-    if "htdemucs" in model_token:
-        required_roles = {"vocals", "drums", "bass", "other"}
-    elif "mdx" in model_token or "inst" in model_token:
-        required_roles = {"vocals", "instrumental"}
-    else:
+    required_roles = _required_stem_roles(model_name)
+    if not required_roles:
         return []
 
-    candidates = [
-        path
-        for path in output_dir.glob(f"{source.stem}_*.wav")
-        if model_token in path.stem.lower()
-    ]
-    if not candidates:
+    marker_path = _stem_cache_marker_path(source, model_name, output_dir)
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
         return []
+
+    if (
+        marker.get("schema_version") != 1
+        or marker.get("source") != _stem_source_identity(source)
+        or marker.get("model") != Path(model_name).name.casefold()
+    ):
+        return []
+
+    outputs = marker.get("outputs")
+    if not isinstance(outputs, dict) or set(outputs) != required_roles:
+        return []
+
+    output_root = output_dir.resolve()
+    complete: list[str] = []
+    for role in sorted(required_roles):
+        record = outputs.get(role)
+        if not isinstance(record, dict):
+            return []
+        try:
+            path = Path(record["path"]).resolve()
+            if not path.is_relative_to(output_root):
+                return []
+            if _exact_stem_role(path) != role:
+                return []
+            stat = path.stat()
+            info = sf.info(str(path))
+            if (
+                stat.st_size <= 0
+                or stat.st_size != record.get("size")
+                or int(stat.st_mtime_ns) != record.get("mtime_ns")
+                or int(info.frames) <= 0
+                or int(info.frames) != record.get("frames")
+                or int(info.samplerate) != record.get("sample_rate")
+                or int(info.channels) != record.get("channels")
+            ):
+                return []
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return []
+        complete.append(str(path.resolve()))
+    return sorted(complete)
+
+
+def _required_stem_roles(model_name: str) -> set[str]:
+    model_token = Path(model_name).stem.casefold()
+    if "htdemucs" in model_token:
+        return {"vocals", "drums", "bass", "other"}
+    if "mdx" in model_token or "inst" in model_token:
+        return {"vocals", "instrumental"}
+    return set()
+
+
+def _exact_stem_role(path: Path) -> str | None:
+    import re
+
+    matches = re.findall(
+        r"\((vocals|instrumental|drums|bass|other)\)",
+        path.stem,
+        flags=re.IGNORECASE,
+    )
+    return matches[0].casefold() if len(matches) == 1 else None
+
+
+def _stem_source_identity(source: Path) -> dict[str, int | str]:
+    import os
+
+    resolved = source.resolve(strict=True)
+    stat = resolved.stat()
+    return {
+        "path": os.path.normcase(str(resolved)),
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+    }
+
+
+def _stem_cache_marker_path(
+    source: Path,
+    model_name: str,
+    output_dir: Path,
+) -> Path:
+    import hashlib
+    import json
+
+    identity = {
+        "source": _stem_source_identity(source),
+        "model": Path(model_name).name.casefold(),
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return output_dir.resolve() / f".{source.stem}.{digest}.stems-complete.json"
+
+
+def _write_stem_cache_marker(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+    stem_files: list[str],
+) -> None:
+    """Atomically publish validated output metadata after separator success."""
+    import json
+    import os
+    import soundfile as sf
+    import uuid
+
+    source = Path(audio_path)
+    required_roles = _required_stem_roles(model_name)
+    if not required_roles:
+        raise ValueError(f"Unbekanntes Stem-Modell: {model_name}")
 
     source_duration = float(sf.info(str(source)).duration)
-    tolerance = max(1.0, source_duration * 0.001)
-    roles: set[str] = set()
-    complete: list[str] = []
-    for path in candidates:
+    duration_tolerance = 0.25
+    output_root = output_dir.resolve()
+    outputs: dict[str, dict[str, int | str]] = {}
+    for file_name in stem_files:
+        path = Path(file_name).resolve()
+        role = _exact_stem_role(path)
+        if role is None:
+            raise ValueError(f"Stem-Datei hat keine eindeutige exakte Rolle: {path.name}")
+        if role not in required_roles or role in outputs:
+            raise ValueError(f"Stem-Rolle ist unerwartet oder doppelt: {role}")
+        if not path.is_relative_to(output_root):
+            raise ValueError(f"Stem-Datei liegt ausserhalb des Output-Ordners: {path}")
+        stat = path.stat()
+        info = sf.info(str(path))
+        if (
+            stat.st_size <= 0
+            or int(info.frames) <= 0
+            or abs(float(info.duration) - source_duration) > duration_tolerance
+        ):
+            raise ValueError(f"Stem-Datei ist unvollstaendig: {path.name}")
+        outputs[role] = {
+            "path": str(path),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+            "frames": int(info.frames),
+            "sample_rate": int(info.samplerate),
+            "channels": int(info.channels),
+        }
+
+    if set(outputs) != required_roles:
+        missing = ", ".join(sorted(required_roles - set(outputs)))
+        raise ValueError(f"Stem-Rollen fehlen: {missing}")
+
+    marker_path = _stem_cache_marker_path(source, model_name, output_dir)
+    marker = {
+        "schema_version": 1,
+        "source": _stem_source_identity(source),
+        "model": Path(model_name).name.casefold(),
+        "outputs": outputs,
+    }
+    temp_path = marker_path.with_name(f"{marker_path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            json.dump(marker, handle, sort_keys=True, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, marker_path)
+    finally:
         try:
-            if abs(float(sf.info(str(path)).duration) - source_duration) > tolerance:
-                continue
-        except (OSError, RuntimeError):
-            continue
-        stem = path.stem.lower()
-        for role in required_roles:
-            if f"({role})" in stem or role in stem:
-                roles.add(role)
-        complete.append(str(path.resolve()))
-    return sorted(complete) if required_roles.issubset(roles) else []
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _get_beat_detector() -> "Any":
@@ -1231,6 +1371,7 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
     output_dir_raw = config_manager.get("paths", {}).get("temp_dir", "./temp")
     output_dir = config_manager.resolve_path(output_dir_raw)
     reusable = _find_reusable_stem_files(audio_path, model_name, output_dir)
+    used_reusable_cache = bool(reusable)
     if reusable:
         logger.info("Verwende %d vollständig validierte Stem-Dateien erneut", len(reusable))
         if on_progress is not None:
@@ -1311,4 +1452,18 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
             logger.error(f"Fehler bei der Synthese des Instrumental-Stems: {synth_err}", exc_info=True)
 
     logger.info(f"Stem-Mapping: {len(normalized_stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
+    if not used_reusable_cache:
+        try:
+            _write_stem_cache_marker(
+                audio_path,
+                model_name,
+                output_dir,
+                normalized_stem_files,
+            )
+        except (OSError, RuntimeError, ValueError) as marker_error:
+            logger.warning(
+                "Stem-Erfolgsmarker konnte nicht publiziert werden; Reuse deaktiviert: %s",
+                marker_error,
+            )
+
     return mapped
