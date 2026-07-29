@@ -53,9 +53,12 @@ Repair-range `git diff --check`: **PASS**. The range contains 371 changed files,
 - Pre-push remote-only count: `0`
 - Pre-push local-only count: `55`
 - Fast-forward eligibility: **CONFIRMED**
-- Published repair SHA: `5e0af92b6744e815c5054cac27eb3893fa3496a8`
-- `ls-remote` SHA after push:
+- Published zoned-repair SHA:
   `5e0af92b6744e815c5054cac27eb3893fa3496a8`
+- T339 completion-ledger commit:
+  `c3267eff715d800e1a3d6542dd8107e4a6228aee`
+- `ls-remote` SHA after completion-ledger push:
+  `c3267eff715d800e1a3d6542dd8107e4a6228aee`
 - SHA match: **CONFIRMED**
 
 ### Brain
@@ -95,5 +98,6 @@ published:
 ## Verdict
 
 OR-331, SC-070 and SC-072: **PASS / CONFIRMED**. T305–T339 are complete.
-The final PB completion-ledger commit and its remote receipt are recorded by the
-immediately following publication receipt.
+The completion ledger `c3267eff715d800e1a3d6542dd8107e4a6228aee`
+was verified byte-identical to the remote branch before this receipt-only
+follow-up.

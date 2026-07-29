@@ -38,7 +38,7 @@ Updated: 2026-07-30T01:36:00+02:00
 | T336 | PASS | CONFIRMED | 3–8 h | 0,37 h | Parent | `evidence/T336-hevc-control-qc.md` | – |
 | T337 | PASS | CONFIRMED | 1–4 h | 7,6 h aktiv (9,2 h Wandzeit inkl. Pause/Neustart) | Parent | `evidence/T337-gui-models-qc.md` | – |
 | T338 | PASS | CONFIRMED | 1–3 h | 0,7 h | Parent | `evidence/T338-final-truth-gate.md` | – |
-| T339 | PASS | CONFIRMED | 1–3 h | 1,1 h aktiv | Parent | `evidence/T339-commit-push-verification.md` | T339 completion ledger |
+| T339 | PASS | CONFIRMED | 1–3 h | 1,1 h aktiv | Parent | `evidence/T339-commit-push-verification.md` | `c3267ef` |
 
 ## Classification
 
