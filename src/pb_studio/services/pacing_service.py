@@ -170,6 +170,8 @@ class PacingService:
             }
             if hasattr(current_cut, "segment_type") and current_cut.segment_type:
                 metadata["segment_type"] = current_cut.segment_type
+            if getattr(current_cut, "provenance", None):
+                metadata["trigger_provenance"] = dict(current_cut.provenance)
 
             normalized_clip_id = str(clip_id)
             if not normalized_clip_id.startswith("clip_"):
@@ -216,7 +218,38 @@ class PacingService:
         Passing total_duration here stretched the last cut of a duration_limit'd
         (preview/short) render across the entire song -> giant runaway final clip.
         """
-        return self._stretch_last_cut_to_audio(cut_list, target_duration)
+        if not cut_list or target_duration <= 0.0:
+            return cut_list
+
+        cut_list[:] = [
+            cut for cut in cut_list
+            if float(cut.start_time) < target_duration
+        ]
+        if not cut_list:
+            return cut_list
+
+        first = cut_list[0]
+        original_start = float(first.start_time)
+        if abs(original_start) > 0.001:
+            metadata = first.metadata if isinstance(first.metadata, dict) else {}
+            first.metadata = metadata
+            clip_start = float(metadata.get("clip_start", 0.0) or 0.0)
+            if original_start > 0.0:
+                metadata["clip_start"] = max(0.0, clip_start - original_start)
+            else:
+                metadata["clip_start"] = clip_start + abs(original_start)
+            metadata["boundary_original_start"] = original_start
+            metadata["boundary_normalized_start"] = 0.0
+            first.start_time = 0.0
+
+        last = cut_list[-1]
+        original_end = float(last.end_time)
+        last.end_time = target_duration
+        if isinstance(last.metadata, dict) and abs(original_end - target_duration) > 0.001:
+            last.metadata["boundary_original_end"] = original_end
+            last.metadata["boundary_normalized_end"] = target_duration
+
+        return cut_list
 
     def _inject_cached_into_engine(
         self,
@@ -242,12 +275,29 @@ class PacingService:
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
         pre_cached_downbeats: List[float] = []
+        downbeat_provenance = cached_analysis.get("downbeat_provenance") or {
+            "status": "unavailable",
+            "method": "cache_field_missing",
+            "synthetic": False,
+            "measured_count": 0,
+        }
+        if not isinstance(downbeat_provenance, dict):
+            downbeat_provenance = {
+                "status": "unavailable",
+                "method": "invalid_cache_field",
+                "synthetic": False,
+                "measured_count": 0,
+            }
         has_real_strengths = False
         for b in cached_analysis.get("beats", []):
             if isinstance(b, dict):
                 beat_time = float(b.get("time", 0.0))
                 pre_cached_beats.append(beat_time)
-                if str(b.get("beat_type") or "").lower() in {"downbeat", "bar"}:
+                if (
+                    downbeat_provenance.get("status") == "measured"
+                    and str(b.get("beat_type") or "").lower()
+                    in {"downbeat", "bar"}
+                ):
                     pre_cached_downbeats.append(beat_time)
                 # L-N8: preserve per-beat strength. Engine uses it as
                 # trigger-weight multiplier instead of the previous
@@ -264,8 +314,15 @@ class PacingService:
         pre_cached_bpm = cached_analysis.get("bpm") or None
         if pre_cached_beats:
             pacing_engine._pre_cached_beats = pre_cached_beats
+            measured_downbeats = cached_analysis.get("downbeats") or []
+            if downbeat_provenance.get("status") == "measured":
+                pre_cached_downbeats.extend(
+                    float(value) for value in measured_downbeats
+                )
+                pre_cached_downbeats = sorted(set(pre_cached_downbeats))
             if pre_cached_downbeats:
                 pacing_engine._pre_cached_downbeats = pre_cached_downbeats
+            pacing_engine._pre_cached_downbeat_provenance = downbeat_provenance
             if has_real_strengths:
                 pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
             if pre_cached_bpm:
@@ -386,6 +443,7 @@ class PacingService:
 
         try:
             from pb_studio.brain.brain_service import BrainService
+            from pb_studio.brain.feature_adapter import CanonicalFeatureAdapter
 
             selector = pacing_engine.clip_selector
             selector.brain_reranker = BrainService.get().reranker
@@ -395,38 +453,31 @@ class PacingService:
             )
 
             analysis = cached_analysis or {}
-            spectral = analysis.get("spectral_data") or {}
-            centroids = spectral.get("centroids") or []
-            normalized_centroids: list[float] = []
-            if centroids:
-                centroid_array = np.asarray(centroids, dtype=np.float32)
-                centroid_array = np.nan_to_num(
-                    centroid_array, nan=0.0, posinf=0.0, neginf=0.0
-                )
-                scale = float(np.percentile(centroid_array, 95))
-                if scale > 1e-6:
-                    normalized_centroids = np.clip(
-                        centroid_array / scale, 0.0, 1.0
-                    ).tolist()
-
             mood_tags = list(analysis.get("mood_tags") or [])
             if not mood_tags and song_mood:
                 mood_tags = [str(song_mood)]
 
-            selector.brain_audio_features = {
-                "energy_curve": list(analysis.get("energy_curve") or []),
-                "centroid_curve": normalized_centroids,
-                "duration_seconds": float(
-                    analysis.get("duration_seconds") or total_duration or 0.0
-                ),
-                "mood_tags": mood_tags,
-                "audio_embedding": analysis.get("audio_embedding"),
-            }
-            selector.brain_video_features_by_clip = {
+            video_features = {
                 str(clip.get("id")): dict(clip)
                 for clip in clips
                 if clip.get("id") is not None
             }
+            adapter = CanonicalFeatureAdapter(
+                audio_analysis=analysis,
+                video_analysis_by_clip=video_features,
+                fallback_duration=total_duration,
+                fallback_mood_tags=mood_tags,
+            )
+            selector.brain_feature_adapter = adapter
+            selector.brain_audio_features = {
+                "energy_curve": list(adapter.energy_curve),
+                "centroid_curve": list(adapter.centroid_curve),
+                "duration_seconds": adapter.duration_seconds,
+                "mood_tags": list(adapter.audio_mood_tags),
+                "audio_embedding": analysis.get("audio_embedding"),
+                "confidence": adapter.audio_confidence,
+            }
+            selector.brain_video_features_by_clip = video_features
             logger.info(
                 "Brain reranker bound: audio_features=%s video_features=%d threshold=%.3f",
                 bool(selector.brain_audio_features["energy_curve"]),
@@ -890,14 +941,20 @@ class PacingService:
                         pass  # ffprobe failed — let render handle it
 
                     final_cuts.append(cut)
-            return final_cuts
+            return self._finalize_cut_list(
+                final_cuts,
+                duration_limit or total_duration,
+            )
 
         # 2. Rule Engine (mittlere Priorität)
         if rule_engine and hasattr(rule_engine, "rules") and rule_engine.rules:
             logger.info(f"Rule Engine mit {len(rule_engine.rules)} Regeln.")
             rule_engine.available_clips = clips
             target = duration_limit or total_duration
-            return rule_engine.apply_rules(duration=target)
+            return self._finalize_cut_list(
+                rule_engine.apply_rules(duration=target),
+                target,
+            )
 
         # 3. Automatisches Pacing (Standard)
         from pb_studio.data.vector_store import VectorStore
@@ -1214,6 +1271,11 @@ class PacingService:
                     "clip_start": cs,
                     "trigger_type": cur.trigger_type,
                     "trigger_strength": cur.strength,
+                    **(
+                        {"trigger_provenance": dict(cur.provenance)}
+                        if getattr(cur, "provenance", None)
+                        else {}
+                    ),
                 },
             ))
             idx += 1

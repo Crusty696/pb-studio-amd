@@ -98,6 +98,12 @@ class TimelineEntrySchema(BaseModel):
     # Plan Phase 5: brain confidence + DB cut id (when use_brain=true)
     brain_confidence: float = 0.0
     cut_id: Optional[int] = None
+    feature_confidence: float = 0.0
+    semantic_status: str = "unavailable"
+    semantic_reason: Optional[str] = None
+    trigger_provenance: dict[str, Any] = Field(default_factory=dict)
+    brain_axis_status: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class TimelineResponse(BaseModel):

@@ -27,6 +27,9 @@ from .constants import (
     MOTION_TOLERANCE,
     BLACKLIST_PERCENTAGE,
     MAX_BLACKLIST_SIZE,
+    SMALL_LIBRARY_THRESHOLD,
+    SMALL_LIBRARY_MAX_BLACKLIST_PERCENTAGE,
+    MIN_SELECTABLE_CLIPS,
     CONTINUITY_WEIGHT,
 )
 
@@ -86,53 +89,6 @@ TRIGGER_PROMPTS: Dict[str, str] = {
 }
 
 DEFAULT_PROMPT = "dynamic movement action visual interest"
-
-
-def _feature_at_time(
-    curve,
-    time_sec: Optional[float],
-    duration_sec: float,
-    *,
-    default: float,
-) -> float:
-    if curve is None or time_sec is None or duration_sec <= 0:
-        return default
-    values = np.asarray(curve, dtype=np.float32).reshape(-1)
-    if values.size == 0:
-        return default
-    index = int(min(values.size - 1, max(0, time_sec / duration_sec * values.size)))
-    value = float(values[index])
-    if not np.isfinite(value):
-        return default
-    return max(0.0, min(1.0, value))
-
-
-def _nearest_scene_distance(time_sec: Optional[float], scenes: list) -> float:
-    if time_sec is None or not scenes:
-        return 1.0
-    distances: list[float] = []
-    for scene in scenes:
-        if not isinstance(scene, dict):
-            continue
-        for key in ("start_time", "end_time", "time"):
-            try:
-                if scene.get(key) is not None:
-                    distances.append(abs(float(scene[key]) - float(time_sec)))
-            except (TypeError, ValueError):
-                continue
-    return min(distances, default=1.0)
-
-
-def _video_pace_score(features: dict) -> float:
-    if features.get("pace_class_score") is not None:
-        return float(features["pace_class_score"])
-    category = str(features.get("motion_category") or "medium").lower()
-    return {
-        "low": 0.2,
-        "medium": 0.5,
-        "high": 0.8,
-        "extreme": 1.0,
-    }.get(category, 0.5)
 
 
 # =============================================================================
@@ -250,7 +206,7 @@ class ClipSelector:
         # Blacklist für kürzlich verwendete Clips (NV-Roter-Faden)
         # R18/MEDIUM-018-3: Use deque so popleft() is O(1) instead of list.pop(0) O(N).
         self._recently_used: deque = deque()
-        self._blacklist_size = 10
+        self._blacklist_size = 0
 
         # Roter Faden - Visueller Zusammenhang zwischen Clips
         self._last_clip_motion_score: float = 0.5
@@ -274,6 +230,7 @@ class ClipSelector:
         self.brain_audio_features: dict = {}
         self.brain_video_features_by_clip: dict = {}
         self.brain_min_confidence: float = 0.0
+        self.brain_feature_adapter = None
 
         # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
         # use_key_matching: Master-Switch (vom PacingService gesetzt).
@@ -342,6 +299,30 @@ class ClipSelector:
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
 
+    def _adaptive_blacklist_size(self, available_count: int) -> int:
+        if available_count <= 1:
+            return 0
+        percentage = self.blacklist_percentage
+        if available_count <= SMALL_LIBRARY_THRESHOLD:
+            percentage = min(
+                percentage,
+                SMALL_LIBRARY_MAX_BLACKLIST_PERCENTAGE,
+            )
+        requested = int(available_count * percentage)
+        selectable_floor = (
+            1
+            if available_count < MIN_SELECTABLE_CLIPS
+            else MIN_SELECTABLE_CLIPS
+        )
+        return max(
+            0,
+            min(
+                MAX_BLACKLIST_SIZE,
+                requested,
+                available_count - selectable_floor,
+            ),
+        )
+
     def select_clip(
         self,
         available_clips: List[dict],
@@ -390,8 +371,22 @@ class ClipSelector:
             self._current_prompt_override = None
 
         # Dynamische Blacklist-Größe
-        calculated_size = int(len(available_clips) * self.blacklist_percentage)
-        self._blacklist_size = max(3, min(MAX_BLACKLIST_SIZE, calculated_size))
+        available_ids = {
+            str(clip.get("id", ""))
+            for clip in available_clips
+        }
+        self._blacklist_size = self._adaptive_blacklist_size(
+            len(available_ids)
+        )
+        recent_unique: list[str] = []
+        seen_recent: set[str] = set()
+        for clip_id in reversed(self._recently_used):
+            if clip_id in available_ids and clip_id not in seen_recent:
+                seen_recent.add(clip_id)
+                recent_unique.append(clip_id)
+        self._recently_used = deque(reversed(recent_unique))
+        while len(self._recently_used) > self._blacklist_size:
+            self._recently_used.popleft()
 
         # Blacklist anwenden
         candidates = [
@@ -430,6 +425,10 @@ class ClipSelector:
             )
 
         # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
+        try:
+            self._recently_used.remove(selected.clip_id)
+        except ValueError:
+            pass
         self._recently_used.append(selected.clip_id)
         if len(self._recently_used) > self._blacklist_size:
             self._recently_used.popleft()
@@ -470,40 +469,28 @@ class ClipSelector:
         cut_duration_sec: float = 1.0,
     ) -> "SelectedClip":
         """Brain reranker scores every candidate, returns highest. Plan Phase 4 deep hook."""
-        from pb_studio.brain.bridge_dimensions import CandidateFeatures
+        from pb_studio.brain.feature_adapter import CanonicalFeatureAdapter
 
         af = self.brain_audio_features or {}
         vf_by_id = self.brain_video_features_by_clip or {}
-        audio_duration = float(af.get("duration_seconds") or self.duration_seconds or 0.0)
-        audio_energy = _feature_at_time(
-            af.get("energy_curve"), current_time, audio_duration, default=0.5
-        )
-        audio_centroid = _feature_at_time(
-            af.get("centroid_curve"), current_time, audio_duration, default=0.5
+        adapter = self.brain_feature_adapter or CanonicalFeatureAdapter(
+            audio_analysis=af,
+            video_analysis_by_clip=vf_by_id,
+            fallback_duration=self.duration_seconds,
         )
 
         rerank_inputs = []
         for clip in candidates:
             cid = str(clip.get("id", ""))
             vf = vf_by_id.get(cid) or vf_by_id.get(f"clip_{cid}") or {}
-            feats = CandidateFeatures(
+            feats = adapter.candidate_features(
+                clip_id=cid,
                 trigger_type=trigger_type,
-                trigger_strength=float(trigger_strength),
-                audio_energy=audio_energy,
-                audio_centroid=audio_centroid,
+                trigger_strength=trigger_strength,
+                cut_time_sec=float(current_time or 0.0),
+                cut_duration_sec=cut_duration_sec,
                 audio_embedding=af.get("audio_embedding"),
-                motion_score=float(vf.get("avg_motion") or vf.get("motion_score") or 0.0),
-                scene_distance_sec=_nearest_scene_distance(
-                    current_time, vf.get("scenes") or vf.get("scene_changes") or []
-                ),
-                brightness=float(vf.get("avg_brightness") or 0.5),
-                saturation=float(vf.get("avg_saturation") or 0.5),
-                color_temp=float(vf.get("avg_color_temp") or 0.0),
-                pace_class_score=_video_pace_score(vf),
                 video_embedding=vf.get("video_embedding"),
-                mood_tags=list(vf.get("mood_tags") or []),
-                audio_mood_tags=list(af.get("mood_tags") or []),
-                cut_duration_sec=max(float(cut_duration_sec), 0.01),
             )
             from pb_studio.brain.reranker import RerankInput
             rerank_inputs.append(RerankInput(candidate=clip, features=feats))
@@ -525,8 +512,22 @@ class ClipSelector:
             clip_id=clip_id,
             clip_path=clip_path,
             score=float(top.final_score),
-            motion_score=float((vf_by_id.get(clip_id) or {}).get("avg_motion") or 0.0),
-            metadata={"brain_scores": top.brain_scores},
+            motion_score=float(top.features.motion_score),
+            metadata={
+                "brain_scores": top.brain_scores,
+                "brain_final_score": float(top.final_score),
+                "feature_confidence": float(top.features.confidence),
+                "feature_provenance": dict(top.features.feature_provenance),
+                "segment_type": top.features.segment_type,
+                "semantic_status": top.features.semantic_status,
+                "semantic_reason": top.features.semantic_reason,
+                "brain_axis_status": {
+                    "semantic_match_weight": {
+                        "status": top.features.semantic_status,
+                        "reason": top.features.semantic_reason,
+                    }
+                },
+            },
         )
 
     def reset(self) -> None:

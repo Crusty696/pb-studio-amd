@@ -621,24 +621,35 @@ class AdvancedPacingEngine:
 
     def _identify_downbeats(self, beats: List[float]) -> List[float]:
         """
-        Identify downbeats (first beat of each measure).
-
-        Assumes 4/4 time signature.
+        Return only measured downbeats from BeatNet beat-position output.
         """
-        if not beats or len(beats) < 4:
-            return beats
+        if not beats:
+            self._last_downbeat_provenance = {
+                "status": "unavailable",
+                "method": "no_beats",
+                "synthetic": False,
+                "measured_count": 0,
+            }
+            return []
 
-        # Use beat strength from analysis if available
         beat_data = (self.audio_analysis or {}).get("beat_data", [])
-
         if beat_data and all(len(b) >= 2 for b in beat_data[:10]):
-            # BeatNet provides beat position (1, 2, 3, 4)
             downbeats = [b[0] for b in beat_data if len(b) >= 2 and b[1] == 1]
-        else:
-            # Fallback: Assume every 4th beat is a downbeat
-            downbeats = [beats[i] for i in range(0, len(beats), 4)]
+            self._last_downbeat_provenance = {
+                "status": "measured",
+                "method": "beatnet_bar_position",
+                "synthetic": False,
+                "measured_count": len(downbeats),
+            }
+            return downbeats
 
-        return downbeats
+        self._last_downbeat_provenance = {
+            "status": "unavailable",
+            "method": "beat_positions_missing",
+            "synthetic": False,
+            "measured_count": 0,
+        }
+        return []
 
     def _smooth_energy(self, energy: np.ndarray, smoothing: float) -> np.ndarray:
         """Apply moving average smoothing to energy curve."""
@@ -1042,8 +1053,16 @@ class AdvancedPacingEngine:
         if hasattr(self, "_pre_cached_beats") and self._pre_cached_beats:
             beats = self._pre_cached_beats
             downbeats = getattr(self, "_pre_cached_downbeats", None) or []
-            if not downbeats:
-                downbeats = self._identify_downbeats(beats)
+            self._last_downbeat_provenance = getattr(
+                self,
+                "_pre_cached_downbeat_provenance",
+                {
+                    "status": "unavailable",
+                    "method": "cached_downbeats_missing",
+                    "synthetic": False,
+                    "measured_count": 0,
+                },
+            )
             logger.info(f"Pre-cached Beats: {len(beats)}")
         else:
             try:
@@ -1362,11 +1381,40 @@ class AdvancedPacingEngine:
                     best_dist = d
                     best_idx = i
             if best_idx >= 0:
-                snapped[best_idx].time = float(t)
+                cut = snapped[best_idx]
+                source_time = float(cut.time)
+                source_type = cut.trigger_type
+                source_strength = float(cut.strength)
+                cut.time = float(t)
+                cut.trigger_type = "subtrack"
+                cut.strength = 1.0
+                cut.provenance = {
+                    "classification": "derived",
+                    "operation": "endpoint_snap",
+                    "source_trigger_type": source_type,
+                    "source_time_seconds": source_time,
+                    "source_strength": source_strength,
+                    "target_type": "subtrack_boundary",
+                    "target_time_seconds": float(t),
+                    "snap_distance_seconds": abs(source_time - float(t)),
+                    "alignment_quality": "exact",
+                    "target_quality": "detected_subtrack_boundary",
+                }
             else:
-                snapped.append(PacingCut(time=float(t),
-                                         trigger_type="subtrack",
-                                         strength=1.0))
+                snapped.append(PacingCut(
+                    time=float(t),
+                    trigger_type="subtrack",
+                    strength=1.0,
+                    provenance={
+                        "classification": "derived",
+                        "operation": "boundary_insert",
+                        "target_type": "subtrack_boundary",
+                        "target_time_seconds": float(t),
+                        "snap_distance_seconds": None,
+                        "alignment_quality": "exact",
+                        "target_quality": "detected_subtrack_boundary",
+                    },
+                ))
         snapped.sort(key=lambda x: x.time)
         return snapped
 

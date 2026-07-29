@@ -15,6 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..app_state import AppState, get_app_state
 from ..dependencies import publish_event, publish_log
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    validate_registered_media_path,
+    validate_timeline_media_paths,
+    validate_owned_media_file,
+)
 from ..schemas.common import validate_timeline, StatusResponse
 from ..schemas.pacing_schemas import (
     PacingConfigSchema, TriggerSettingsSchema, CutListResponse, CutListEntrySchema,
@@ -241,6 +247,12 @@ async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResp
             segment_type=meta.get("segment_type"),
             brain_confidence=float(meta.get("brain_final_score", 0.0) or 0.0),
             cut_id=meta.get("cut_id"),
+            feature_confidence=float(meta.get("feature_confidence", 0.0) or 0.0),
+            semantic_status=str(meta.get("semantic_status", "unavailable")),
+            semantic_reason=meta.get("semantic_reason"),
+            trigger_provenance=dict(meta.get("trigger_provenance") or {}),
+            brain_axis_status=dict(meta.get("brain_axis_status") or {}),
+            metadata=dict(meta),
         ))
 
     total = entries[-1].end_time if entries else 0.0
@@ -264,21 +276,45 @@ async def update_timeline(
     """Aktualisiert die Timeline im State."""
     internal_cuts = []
     for entry in request.entries:
+        metadata = dict(entry.metadata)
+        metadata.update({
+            "clip_name": entry.clip_name,
+            "file_path": entry.file_path,
+            "clip_start": entry.clip_start,
+            "trigger_type": entry.trigger_type,
+            "trigger_strength": entry.trigger_strength,
+            "segment_type": entry.segment_type,
+            "brain_final_score": entry.brain_confidence,
+            "cut_id": entry.cut_id,
+            "feature_confidence": entry.feature_confidence,
+            "semantic_status": entry.semantic_status,
+            "semantic_reason": entry.semantic_reason,
+            "trigger_provenance": dict(entry.trigger_provenance),
+            "brain_axis_status": dict(entry.brain_axis_status),
+        })
         internal_cuts.append({
             "clip_id": entry.clip_id,
             "start_time": entry.start_time,
             "end_time": entry.end_time,
-            "metadata": {
-                "clip_name": entry.clip_name,
-                "file_path": entry.file_path,
-                "clip_start": entry.clip_start,
-                "trigger_type": entry.trigger_type,
-                "trigger_strength": entry.trigger_strength,
-                "segment_type": entry.segment_type,
-                "brain_final_score": entry.brain_confidence,
-                "cut_id": entry.cut_id,
-            }
+            "metadata": metadata,
         })
+
+    try:
+        internal_cuts = validate_timeline_media_paths(
+            internal_cuts,
+            state.get_video_clips_snapshot(),
+        )
+        if state.current_audio_path:
+            state.current_audio_path = validate_registered_media_path(
+                state.current_audio_path,
+                (
+                    clip.get("path", "")
+                    for clip in state.get_audio_clips_snapshot().values()
+                ),
+                label="Timeline audio_path",
+            )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # L-TI-3: clip_start + duration gegen Source-Video-Laenge cappen.
     # Auto-Pfad hat diesen Cap in pacing_service._process_pacing_cuts_to_cutlist
@@ -326,7 +362,13 @@ async def generate_preview(
     if not state.current_timeline:
         raise HTTPException(status_code=400, detail="Keine Timeline vorhanden")
 
-    timeline_snapshot = list(state.current_timeline)
+    try:
+        timeline_snapshot = validate_timeline_media_paths(
+            state.get_timeline_snapshot(),
+            state.get_video_clips_snapshot(),
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
         preview_path = await asyncio.to_thread(
@@ -510,6 +552,9 @@ def _run_pacing_generation(
                 clip_data["motion_category"] = va.get("motion_category", "medium")
                 clip_data["pace_class_score"] = va.get("pace_class_score")
                 clip_data["video_embedding"] = va.get("video_embedding")
+                clip_data["is_analyzed"] = bool(va.get("is_analyzed", False))
+                clip_data["analysis_status"] = va.get("analysis_status")
+                clip_data["analysis_confidence"] = va.get("analysis_confidence")
             clips.append(clip_data)
 
     pacing_config = {
@@ -544,7 +589,29 @@ def _run_pacing_generation(
                 logger.warning("L-K5 stems_paths JSON ungueltig fuer clip %s", config.audio_clip_id)
                 raw_stems = {}
         if isinstance(raw_stems, dict):
-            stems = {str(k): str(v) for k, v in raw_stems.items() if v}
+            from pb_studio.config_manager import ConfigManager
+
+            config_manager = ConfigManager()
+            stem_root = config_manager.resolve_path(
+                config_manager.get("paths", {}).get("temp_dir", "./temp")
+            )
+            try:
+                stems = {
+                    str(role): validate_owned_media_file(
+                        str(stem_path),
+                        stem_root,
+                        label=f"Stem-Pacing {role}",
+                    )
+                    for role, stem_path in raw_stems.items()
+                    if stem_path
+                }
+            except MediaPathPolicyError as exc:
+                logger.warning(
+                    "L-K5 unsichere stems_paths fuer clip %s verworfen: %s",
+                    config.audio_clip_id,
+                    exc,
+                )
+                stems = {}
 
     if use_stem_pacing and stems:
         logger.info("L-K5 Stem-Pacing aktiviert, stems=%s", list(stems.keys()))
