@@ -42,6 +42,7 @@ class BrainFeedbackResponse(BaseModel):
     status: str
     updated_buckets: int
     total_clicks: int
+    message: Optional[str] = None
 
 
 class BrainLearningSessionResponse(BaseModel):

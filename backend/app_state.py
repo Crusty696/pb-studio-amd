@@ -553,7 +553,7 @@ class AppState:
         key: Optional[str] = None,
         beat_count: Optional[int] = None,
         beats_json: Optional[str] = None,
-        is_analyzed: bool = False,
+        is_analyzed: Optional[bool] = None,
         energy_curve=None,
         structure_segments=None,
         spectral_data=None,
@@ -563,6 +563,12 @@ class AppState:
         kick_times=None,         # Audit-Fix 2026-07-10: Kick-Trigger-Kandidaten
         snare_times=None,        # Audit-Fix 2026-07-10: Snare-Trigger-Kandidaten
         hihat_times=None,        # Audit-Fix 2026-07-10: HiHat-Trigger-Kandidaten
+        chunk_evidence=None,     # T316: vollstaendige Long-Mix-Chunk-Provenance
+        analysis_status: Optional[str] = None,
+        stage_status=None,
+        stage_errors=None,
+        downbeats=None,
+        downbeat_provenance=None,
     ) -> None:
         """
         Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
@@ -616,9 +622,8 @@ class AppState:
                     beats_list = []
                     logger.warning("update_audio_analysis: beats_json konnte nicht geparst werden; leere Liste verwendet")
                 ai_data["beats_json"] = beats_list
-            # is_analyzed: True ueberschreibt; False respektiert vorhandenen True-Wert.
-            if is_analyzed:
-                ai_data["is_analyzed"] = True
+            if is_analyzed is not None:
+                ai_data["is_analyzed"] = is_analyzed
             elif "is_analyzed" not in ai_data:
                 ai_data["is_analyzed"] = False
             if energy_curve is not None:
@@ -639,6 +644,18 @@ class AppState:
                 ai_data["snare_times"] = snare_times
             if hihat_times is not None:
                 ai_data["hihat_times"] = hihat_times
+            if chunk_evidence is not None:
+                ai_data["chunk_evidence"] = chunk_evidence
+            if analysis_status is not None:
+                ai_data["analysis_status"] = analysis_status
+            if stage_status is not None:
+                ai_data["stage_status"] = stage_status
+            if stage_errors is not None:
+                ai_data["stage_errors"] = stage_errors
+            if downbeats is not None:
+                ai_data["downbeats"] = downbeats
+            if downbeat_provenance is not None:
+                ai_data["downbeat_provenance"] = downbeat_provenance
 
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
 
@@ -652,8 +669,8 @@ class AppState:
                 cache_update["beat_count"] = beat_count
             if beats_json is not None:
                 cache_update["beats_json"] = ai_data["beats_json"]
-            if is_analyzed:
-                cache_update["is_analyzed"] = True
+            if is_analyzed is not None:
+                cache_update["is_analyzed"] = is_analyzed
             if energy_curve is not None:
                 cache_update["energy_curve"] = energy_curve
             if structure_segments is not None:
@@ -672,6 +689,18 @@ class AppState:
                 cache_update["snare_times"] = snare_times
             if hihat_times is not None:
                 cache_update["hihat_times"] = hihat_times
+            if chunk_evidence is not None:
+                cache_update["chunk_evidence"] = chunk_evidence
+            if analysis_status is not None:
+                cache_update["_analysis_status"] = analysis_status
+            if stage_status is not None:
+                cache_update["_stage_status"] = stage_status
+            if stage_errors is not None:
+                cache_update["_stage_errors"] = stage_errors
+            if downbeats is not None:
+                cache_update["downbeats"] = downbeats
+            if downbeat_provenance is not None:
+                cache_update["downbeat_provenance"] = downbeat_provenance
 
             # C3-Fix (D-C1, 2026-05-19): NICHT nur audio_analysis_cache updaten,
             # sondern auch audio_clips[clip_id] — sonst sehen Endpoints, die
@@ -1039,7 +1068,7 @@ class AppState:
                     continue
 
                 file_path = row.get("file_path")
-                if not file_path or not Path(file_path).exists():
+                if not file_path:
                     unavailable_count += 1
                     logger.warning(
                         "Medium derzeit nicht erreichbar; DB-Eintrag %r bleibt erhalten: %s",
@@ -1047,6 +1076,34 @@ class AppState:
                         file_path,
                     )
                     continue
+                from backend.media_path_policy import (
+                    MediaPathPolicyError,
+                    canonical_local_media_file,
+                    canonical_local_media_reference,
+                )
+                try:
+                    file_reference = canonical_local_media_reference(
+                        str(file_path),
+                        label=f"Media-DB-Eintrag {row.get('id')} file_path",
+                    )
+                except MediaPathPolicyError as exc:
+                    raise ValueError(
+                        f"Unsicherer Medienpfad in DB-Eintrag {row.get('id')}: {exc}"
+                    ) from exc
+                if not file_reference.is_file():
+                    unavailable_count += 1
+                    logger.warning(
+                        "Medium derzeit nicht erreichbar; DB-Eintrag %r bleibt erhalten: %s",
+                        row.get("id"),
+                        file_reference,
+                    )
+                    continue
+                file_path = str(
+                    canonical_local_media_file(
+                        str(file_reference),
+                        label=f"Media-DB-Eintrag {row.get('id')} file_path",
+                    )
+                )
 
                 # Analyse-Daten aus ai_data_json laden
                 raw_ai = row.get("ai_data_json") or "{}"
@@ -1074,7 +1131,7 @@ class AppState:
                     clip = {
                         "id": clip_id,
                         "name": meta.get("name", ""),
-                        "path": row["file_path"],
+                        "path": file_path,
                         "duration_seconds": row.get("duration_sec") or 0.0,
                         "sample_rate": meta.get("sample_rate", 44100),
                         "channels": meta.get("channels", 2),
@@ -1123,6 +1180,23 @@ class AppState:
                             "kick_times": ai_data.get("kick_times", []),
                             "snare_times": ai_data.get("snare_times", []),
                             "hihat_times": ai_data.get("hihat_times", []),
+                            "chunk_evidence": ai_data.get("chunk_evidence", {}),
+                            "_analysis_status": ai_data.get(
+                                "analysis_status",
+                                "completed" if is_analyzed else "partial",
+                            ),
+                            "_stage_status": ai_data.get("stage_status", {}),
+                            "_stage_errors": ai_data.get("stage_errors", {}),
+                            "downbeats": ai_data.get("downbeats", []),
+                            "downbeat_provenance": ai_data.get(
+                                "downbeat_provenance",
+                                {
+                                    "status": "unavailable",
+                                    "method": "legacy_cache",
+                                    "synthetic": False,
+                                    "measured_count": 0,
+                                },
+                            ),
                             "is_analyzed": is_analyzed,
                             "duration_seconds": row.get("duration_sec") or 0.0,
                         }
@@ -1132,7 +1206,7 @@ class AppState:
                     clip = {
                         "id": clip_id,
                         "name": meta.get("name", ""),
-                        "path": row["file_path"],
+                        "path": file_path,
                         "duration_seconds": row.get("duration_sec") or 0.0,
                         "width": meta.get("width", 1920),
                         "height": meta.get("height", 1080),
@@ -1143,7 +1217,7 @@ class AppState:
                         # (siehe thumbnail_generator.generate_clip_thumbnail). Wenn vorhanden
                         # → True; sonst False, UI rendert dann fallback.
                         "thumbnail_available": _thumbnail_exists_for_clip(
-                            clip_id, self.current_project, row["file_path"]
+                            clip_id, self.current_project, file_path
                         ),
                         "tags": [],
                         # L-VIDEO-3 (CD-3): video_hash aus Meta (oder Legacy

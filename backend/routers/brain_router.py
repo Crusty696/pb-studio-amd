@@ -11,14 +11,16 @@ GET  /brain/explain/{cut_id}    -- UX: warum diese Confidence? (R-Brain-09)
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json as _json
 import logging
 import secrets
 import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
+from ..owner_capability import OWNER_CAPABILITY_HEADER, authorize_owner
 from ..schemas.brain_schemas import (
     BrainAxisContribution, BrainExplainResponse,
     BrainFeedbackRequest, BrainFeedbackResponse,
@@ -32,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/brain", tags=["Brain"])
 
-_pending_reset_tokens: dict[str, float] = {}
+_pending_reset_tokens: dict[str, tuple[float, str]] = {}
+
+
+def _authorize_reset_owner(owner_capability: str | None) -> str:
+    return authorize_owner(owner_capability, operation="Brain-Reset")
 
 
 @router.post("/suggest", response_model=BrainSuggestResponse)
@@ -102,6 +108,7 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
         raise HTTPException(status_code=404, detail=f"Cut {req.cut_id} not found")
 
     metadata = _json.loads(row[1]) if row[1] else {}
+    brain_scores = _json.loads(row[0]) if row[0] else {}
     context_keys = metadata.get("context_keys")
     if not context_keys or not isinstance(context_keys, list):
         logger.warning(
@@ -110,6 +117,21 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
             "Backoff.", req.cut_id
         )
         context_keys = [""]
+
+    from pb_studio.brain.feedback_logger import build_credit_assignments
+    assignments = build_credit_assignments(
+        metadata=metadata,
+        brain_scores=brain_scores,
+        context_keys=context_keys,
+    )
+    if not assignments:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cut has no relevant, available Brain feature evidence; "
+                "feedback was not applied"
+            ),
+        )
 
     # Z2 / GPU-F4: log_feedback macht SQLite-INSERT + WeightStore-Math (~10-50ms).
     # asyncio.to_thread haelt den Event-Loop frei fuer parallele SSE-Streams.
@@ -121,12 +143,14 @@ async def feedback(req: BrainFeedbackRequest) -> BrainFeedbackResponse:
             cut_id=req.cut_id,
             rating=req.rating,
             context_keys=context_keys,
+            assignments=assignments,
         )
     total = await asyncio.to_thread(svc.weights.total_clicks)
     return BrainFeedbackResponse(
         status="ok",
         updated_buckets=bumps,
         total_clicks=total,
+        message=f"{bumps} evidence-relevant buckets updated",
     )
 
 
@@ -237,24 +261,61 @@ async def stats() -> BrainStatsResponse:
     )
 
 
-@router.post("/reset", response_model=BrainResetResponse)
-async def reset(req: Optional[BrainResetRequest] = None) -> BrainResetResponse:
-    """Two-step confirmation reset: 1st call returns token, 2nd resets."""
+@router.post(
+    "/reset",
+    response_model=BrainResetResponse,
+    responses={
+        403: {"description": "Owner-Capability oder Token-Owner ungueltig."},
+        503: {"description": "Backend wurde ohne Owner-Capability gestartet."},
+    },
+    openapi_extra={
+        "parameters": [
+            {
+                "name": OWNER_CAPABILITY_HEADER,
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+                "description": (
+                    "Runtime-required launcher capability; confirmation "
+                    "tokens are bound to this owner."
+                ),
+            }
+        ]
+    },
+)
+async def reset(
+    req: Optional[BrainResetRequest] = None,
+    owner_capability: str | None = Header(
+        default=None,
+        alias=OWNER_CAPABILITY_HEADER,
+        include_in_schema=False,
+    ),
+) -> BrainResetResponse:
+    """Owner-bound two-step reset with an expiring, single-use token."""
+    owner_id = _authorize_reset_owner(owner_capability)
     now = time.time()
     # Clean expired tokens
-    expired = [t for t, exp in _pending_reset_tokens.items() if exp < now]
+    expired = [
+        token
+        for token, (expires_at, _) in _pending_reset_tokens.items()
+        if expires_at < now
+    ]
     for t in expired:
         _pending_reset_tokens.pop(t, None)
 
     svc = get_brain_service()
     if req is None or req.confirmation_token is None:
         token = secrets.token_urlsafe(16)
-        _pending_reset_tokens[token] = now + 300.0  # 5 minutes expiry
+        _pending_reset_tokens[token] = (now + 300.0, owner_id)
         return BrainResetResponse(status="pending_confirmation",
                                   confirmation_token=token)
 
-    if req.confirmation_token not in _pending_reset_tokens:
+    pending = _pending_reset_tokens.get(req.confirmation_token)
+    if pending is None:
         raise HTTPException(status_code=400, detail="invalid or expired token")
+    _, token_owner_id = pending
+    if not hmac.compare_digest(token_owner_id, owner_id):
+        raise HTTPException(status_code=403, detail="reset token owner mismatch")
 
     _pending_reset_tokens.pop(req.confirmation_token, None)
     from ..dependencies import db_write_lock

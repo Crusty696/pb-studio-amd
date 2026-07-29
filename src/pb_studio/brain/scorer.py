@@ -1,16 +1,13 @@
-"""BrainScorer — kombiniert 17 Brücken-Werte × Posterior-Gewichte (Plan Phase 3+4).
+"""BrainScorer — kombiniert verfügbare Brücken-Werte × Posterior-Gewichte.
 
-Eingabe pro Kandidat: BridgeDimensions.compute_all -> dict[axis -> 0..1]
-Lookup je Achse: WeightStore.get_posterior_mean(axis, context_keys)
-Final-Score: mean(bridge_value * weight) über alle 17 Achsen.
+Nicht verfügbare Achsen werden ausgelassen und fließen weder als synthetischer
+Wert noch in den Nenner des Final-Scores ein.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-
-from .bridge_dimensions import BRIDGE_AXES
 
 
 @dataclass
@@ -19,6 +16,7 @@ class ScoredCandidate:
     candidate: Any
     final_score: float
     brain_scores: dict[str, float] = field(default_factory=dict)
+    features: Any = None
 
 
 class BrainScorer:
@@ -29,8 +27,8 @@ class BrainScorer:
     def score(self, *, candidate: Any, features, context_keys: list[str]) -> ScoredCandidate:
         bridge_values = self.bridge.compute_all(features)
         sub_scores: dict[str, float] = {}
-        for axis in BRIDGE_AXES:
-            bv = float(bridge_values.get(axis, 0.0))
+        for axis, bridge_value in bridge_values.items():
+            bv = float(bridge_value)
             w = float(self.weights.get_posterior_mean(axis, context_keys))
             sub_scores[axis] = bv * w
         if sub_scores:
@@ -41,4 +39,5 @@ class BrainScorer:
             candidate=candidate,
             final_score=final,
             brain_scores=sub_scores,
+            features=features,
         )

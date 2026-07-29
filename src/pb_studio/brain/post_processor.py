@@ -3,7 +3,7 @@
 R-Brain-01: spectral centroid (95th-percentile-normalized) statt 0.5-Default.
 R-Brain-02: nearest-scene-distance aus video_analysis statt 0.5-Default.
 R-Brain-03: real CLAP/SigLIP embedding lookup via EmbeddingCache.
-R-Brain-04: optional CrossModalProjector (CLAP-512 / SigLIP-768 -> 256).
+R-Brain-04: optional CrossModalProjector (CLAP-512 / SigLIP-1152 -> 256).
 R-Brain-08: process-level loader cache (LoaderCache singleton) +
             CrossModalProjector hash-keyed projection cache.
 """
@@ -18,8 +18,9 @@ from typing import Any, Optional
 
 import numpy as np
 
-from .bridge_dimensions import BRIDGE_AXES, BridgeDimensions, CandidateFeatures
+from .bridge_dimensions import BridgeDimensions
 from .context_resolver import ContextResolver
+from .feature_adapter import CanonicalFeatureAdapter
 from .weight_store import WeightStore
 
 logger = logging.getLogger(__name__)
@@ -60,13 +61,11 @@ def annotate_cuts_with_brain(
     video_analysis_by_clip = video_analysis_by_clip or {}
     video_hashes_by_clip = video_hashes_by_clip or {}
 
-    audio_mood_tags: list[str] = list(audio_analysis.get("mood_tags") or [])
-    energy_curve = audio_analysis.get("energy_curve") or []
     subtrack_segments = audio_analysis.get("subtrack_segments") or []
-    spectral_data = audio_analysis.get("spectral_data") or {}
-    centroid_curve = spectral_data.get("centroids") or []
-    centroid_curve_norm = _normalize_centroid_curve(centroid_curve)
-    audio_duration = float(audio_analysis.get("duration_seconds", 0.0) or 0.0)
+    adapter = CanonicalFeatureAdapter(
+        audio_analysis=audio_analysis,
+        video_analysis_by_clip=video_analysis_by_clip,
+    )
 
     # R-Brain-04: resolve cross-modal projector
     projector = cross_modal_projector
@@ -114,9 +113,8 @@ def annotate_cuts_with_brain(
             timeline_id = _ensure_timeline(persist_to_state_conn, audio_clip_id)
             for idx, cut in enumerate(cuts):
                 new_cut = _annotate_and_maybe_persist_cut(
-                    idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
-                    energy_curve, subtrack_segments, audio_mood_tags,
-                    video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                    idx, cut, bridge, resolver, adapter, subtrack_segments,
+                    audio_embedding, video_embedding_by_clip,
                     weight_store, min_confidence, persist_to_state_conn, timeline_id
                 )
                 if new_cut is not None:
@@ -130,9 +128,8 @@ def annotate_cuts_with_brain(
             out = []
             for idx, cut in enumerate(cuts):
                 new_cut = _annotate_and_maybe_persist_cut(
-                    idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
-                    energy_curve, subtrack_segments, audio_mood_tags,
-                    video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                    idx, cut, bridge, resolver, adapter, subtrack_segments,
+                    audio_embedding, video_embedding_by_clip,
                     weight_store, min_confidence, None, None
                 )
                 if new_cut is not None:
@@ -141,9 +138,8 @@ def annotate_cuts_with_brain(
         # RAM-only Modus
         for idx, cut in enumerate(cuts):
             new_cut = _annotate_and_maybe_persist_cut(
-                idx, cut, bridge, resolver, audio_duration, centroid_curve_norm,
-                energy_curve, subtrack_segments, audio_mood_tags,
-                video_analysis_by_clip, audio_embedding, video_embedding_by_clip,
+                idx, cut, bridge, resolver, adapter, subtrack_segments,
+                audio_embedding, video_embedding_by_clip,
                 weight_store, min_confidence, None, None
             )
             if new_cut is not None:
@@ -157,12 +153,8 @@ def _annotate_and_maybe_persist_cut(
     cut: dict[str, Any],
     bridge: BridgeDimensions,
     resolver: ContextResolver,
-    audio_duration: float,
-    centroid_curve_norm: list[float],
-    energy_curve: list,
+    adapter: CanonicalFeatureAdapter,
     subtrack_segments: list,
-    audio_mood_tags: list[str],
-    video_analysis_by_clip: dict[str, dict],
     audio_embedding: Optional[np.ndarray],
     video_embedding_by_clip: dict[str, np.ndarray],
     weight_store: WeightStore,
@@ -176,55 +168,41 @@ def _annotate_and_maybe_persist_cut(
     clip_id = str(cut.get("clip_id", ""))
 
     sub_start, sub_end = _enclosing_subtrack(start, subtrack_segments)
-    a_energy = _value_at_time(energy_curve, start, audio_duration)
-
-    v = video_analysis_by_clip.get(clip_id, {})
-    motion = float(v.get("avg_motion") or 0.0)
-    v_pace = _video_pace_score(v)
-    scene_dist = _nearest_scene_distance(start, v.get("scenes") or [])
-    a_centroid = _value_at_time(centroid_curve_norm, start, audio_duration)
+    cut_meta = dict(cut.get("metadata") or {})
+    feats = adapter.candidate_features(
+        clip_id=clip_id,
+        trigger_type=str(cut_meta.get("trigger_type") or ""),
+        trigger_strength=float(cut_meta.get("trigger_strength") or 0.0),
+        cut_time_sec=start,
+        cut_duration_sec=max(end - start, 0.01),
+        segment_type=cut_meta.get("segment_type"),
+        audio_embedding=audio_embedding,
+        video_embedding=video_embedding_by_clip.get(clip_id),
+    )
 
     ctx = resolver.resolve(
-        section_type=str(cut.get("metadata", {}).get("segment_type") or "transition"),
+        section_type=feats.segment_type,
         cut_time_sec=start,
         subtrack_start_sec=sub_start,
         subtrack_end_sec=sub_end,
-        audio_energy=a_energy,
-        audio_mood_tags=audio_mood_tags,
-        video_motion_score=motion,
-        video_pace_class_value=v_pace,
-        energy_curve_full=energy_curve,
-        motion_curve_full=v.get("motion_curve") or None,
-    )
-
-    feats = CandidateFeatures(
-        trigger_type=str(cut.get("metadata", {}).get("trigger_type") or ""),
-        trigger_strength=float(cut.get("metadata", {}).get("trigger_strength") or 0.0),
-        audio_energy=a_energy,
-        audio_centroid=a_centroid,
-        audio_embedding=audio_embedding,
-        motion_score=motion,
-        scene_distance_sec=scene_dist,
-        brightness=float(v.get("avg_brightness") or 0.5),
-        saturation=float(v.get("avg_saturation") or 0.5),
-        color_temp=float(v.get("avg_color_temp") or 0.0),
-        pace_class_score=v_pace,
-        video_embedding=video_embedding_by_clip.get(clip_id),
-        mood_tags=list(v.get("mood_tags") or []),
-        audio_mood_tags=audio_mood_tags,
-        cut_duration_sec=max(end - start, 0.01),
+        audio_energy=feats.audio_energy,
+        audio_mood_tags=feats.audio_mood_tags,
+        video_motion_score=feats.motion_score,
+        video_pace_class_value=feats.pace_class_score,
+        energy_curve_full=adapter.energy_curve,
+        motion_curve_full=adapter.normalized_motion_curve(clip_id) or None,
     )
 
     bridge_values = bridge.compute_all(feats)
     scores: dict[str, float] = {}
-    for axis in BRIDGE_AXES:
-        bv = float(bridge_values.get(axis, 0.0))
+    for axis, bridge_value in bridge_values.items():
+        bv = float(bridge_value)
         w = float(weight_store.get_posterior_mean(axis, ctx.context_keys))
         scores[axis] = round(bv * w, 6)
 
     final_score = sum(scores.values()) / len(scores) if scores else 0.0
 
-    if final_score < min_confidence:
+    if feats.confidence < min_confidence:
         return None
 
     new_cut = dict(cut)
@@ -233,6 +211,17 @@ def _annotate_and_maybe_persist_cut(
     meta["context_keys"] = ctx.context_keys
     meta["brain_final_score"] = round(final_score, 6)
     meta["bridge_values"] = bridge_values
+    meta["feature_confidence"] = round(feats.confidence, 6)
+    meta["feature_provenance"] = feats.feature_provenance
+    meta["segment_type"] = feats.segment_type
+    meta["semantic_status"] = feats.semantic_status
+    meta["semantic_reason"] = feats.semantic_reason
+    meta["brain_axis_status"] = {
+        "semantic_match_weight": {
+            "status": feats.semantic_status,
+            "reason": feats.semantic_reason,
+        }
+    }
     new_cut["metadata"] = meta
 
     if conn is not None and timeline_id is not None:
@@ -263,61 +252,6 @@ def _enclosing_subtrack(t: float, segs: list) -> tuple[float, float]:
     if isinstance(s, dict):
         return float(s.get("start_time", 0.0)), float(s.get("end_time", 1.0))
     return float(getattr(s, "start_time", 0.0)), float(getattr(s, "end_time", 1.0))
-
-
-def _value_at_time(curve, t: float, total_dur: float) -> float:
-    if curve is None or len(curve) == 0 or total_dur <= 0:
-        return 0.5
-    arr = np.asarray(list(curve), dtype=np.float32)
-    idx = int(min(arr.size - 1, max(0, t / total_dur * arr.size)))
-    return float(max(0.0, min(1.0, arr[idx])))
-
-
-def _video_pace_score(v: dict) -> float:
-    cat = (v.get("motion_category") or "medium").lower()
-    return {"low": 0.2, "medium": 0.5, "high": 0.8, "extreme": 1.0}.get(cat, 0.5)
-
-
-def _normalize_centroid_curve(curve) -> list[float]:
-    """R-Brain-01: normalize spectral centroid curve to 0..1 (95th-percentile)."""
-    if curve is None or len(curve) == 0:
-        return []
-    arr = np.asarray(list(curve), dtype=np.float32)
-    if arr.size == 0:
-        return []
-    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
-    max_val = float(np.percentile(arr, 95)) if arr.size > 1 else float(arr[0])
-    if max_val < 1e-6:
-        return []
-    arr = arr / max_val
-    return [float(max(0.0, min(1.0, x))) for x in arr]
-
-
-def _nearest_scene_distance(t: float, scenes: list) -> float:
-    """R-Brain-02: Min |t - scene_boundary| in seconds. Empty list -> 1.0."""
-    if not scenes:
-        return 1.0
-    min_dist = float("inf")
-    for s in scenes:
-        if isinstance(s, dict):
-            for key in ("start_time", "end_time", "time"):
-                if key in s:
-                    try:
-                        d = abs(float(s[key]) - float(t))
-                        if d < min_dist:
-                            min_dist = d
-                    except (TypeError, ValueError):
-                        continue
-        elif isinstance(s, (list, tuple)) and len(s) >= 1:
-            try:
-                d = abs(float(s[0]) - float(t))
-                if d < min_dist:
-                    min_dist = d
-            except (TypeError, ValueError):
-                continue
-    if min_dist == float("inf"):
-        return 1.0
-    return min(min_dist, 10.0)
 
 
 # ---------- embedding lookup with R-Brain-08 LRU ----------

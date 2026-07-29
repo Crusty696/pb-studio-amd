@@ -37,6 +37,11 @@ class BrainReranker:
     ) -> list[ScoredCandidate]:
         scored: list[ScoredCandidate] = []
         for ri in candidates:
+            if (
+                min_confidence > 0.0
+                and ri.features.confidence < min_confidence
+            ):
+                continue
             sc = self.scorer.score(
                 candidate=ri.candidate,
                 features=ri.features,
@@ -45,7 +50,4 @@ class BrainReranker:
             scored.append(sc)
 
         scored.sort(key=lambda s: s.final_score, reverse=True)
-
-        if min_confidence > 0.0:
-            scored = [s for s in scored if s.final_score >= min_confidence]
         return scored

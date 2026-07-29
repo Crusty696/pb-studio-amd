@@ -1,6 +1,6 @@
 """Cross-Modal Projector CLAP <-> SigLIP (R-Brain-04 + R-Brain-05 + R-Brain-08).
 
-Audio (CLAP, 512-dim) und Video (SigLIP2-Base, 768-dim via video_embedder.py)
+Audio (CLAP, 512-dim) und Video (SigLIP SO400M, 1152-dim via video_embedder.py)
 leben in unterschiedlichen Raeumen. Beide werden in einen gemeinsamen 256-dim
 Raum projiziert. Initial random (Johnson-Lindenstrauss); spaeter aus
 Brain-Feedback gelernt (R-Brain-05).
@@ -38,13 +38,8 @@ DEFAULT_COMMON_DIM = 256
 DEFAULT_AUDIO_DIM = _AUDIO_EMBED_DIM
 DEFAULT_AUDIO_MODEL_NAME = _AUDIO_MODEL_NAME
 DEFAULT_AUDIO_MODEL_VERSION = _AUDIO_MODEL_VERSION
-# Korrektur (2026-07-10, selbst-korrigiert nach Sweep-Audit): faelschlich
-# kurzzeitig auf 1152 gesetzt, weil siglip_wrapper.py (SO400M, 1152-dim,
-# nur fuer FAISS/clip_selector-Suche) mit dem tatsaechlichen Brain-Feeder
-# verwechselt wurde. post_processor.py._load_video_embedding() liest via
-# CURRENT_MODEL_NAME/CURRENT_MODEL_VERSION aus video_embedder.py
-# (google/siglip2-base-patch16-384, EMBED_DIM=768) - DAS ist die reale
-# Quelle fuer Cross-Modal-Similarity. 768 war die ganze Zeit richtig.
+# The legacy Torch producer is retired. Cache lookup uses the same registered
+# 1152-D SigLIP ONNX identity as the active video pipeline.
 DEFAULT_VIDEO_DIM = _VIDEO_EMBED_DIM
 DEFAULT_VIDEO_MODEL_NAME = _VIDEO_MODEL_NAME
 DEFAULT_VIDEO_MODEL_VERSION = _VIDEO_MODEL_VERSION
@@ -139,19 +134,25 @@ class CrossModalProjector:
         self._proj_cache_hits = 0
         self._proj_cache_misses = 0
 
-    def cosine(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Convenience: cosine on already-projected vectors. Returns 0..1."""
+    def cosine(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+    ) -> Optional[float]:
+        """Cosine for valid projected vectors; otherwise unavailable."""
         a = np.asarray(a, dtype=np.float32).reshape(-1)
         b = np.asarray(b, dtype=np.float32).reshape(-1)
         if a.size == 0 or b.size == 0 or a.size != b.size:
-            return 0.5
+            return None
         a = np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)
         b = np.nan_to_num(b, nan=0.0, posinf=0.0, neginf=0.0)
-        na = float(np.linalg.norm(a)) + 1e-9
-        nb = float(np.linalg.norm(b)) + 1e-9
+        na = float(np.linalg.norm(a))
+        nb = float(np.linalg.norm(b))
+        if na <= 1e-9 or nb <= 1e-9:
+            return None
         cos = float(np.dot(a, b) / (na * nb))
-        if cos != cos:
-            return 0.5
+        if not np.isfinite(cos):
+            return None
         return float(max(0.0, min(1.0, (cos + 1.0) / 2.0)))
 
     # ---------- R-Brain-05: learned projection ----------

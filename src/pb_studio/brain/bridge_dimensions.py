@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -66,6 +66,13 @@ class CandidateFeatures:
     audio_mood_tags: list[str] = field(default_factory=list)
 
     cut_duration_sec: float = 1.0
+    segment_type: str = "transition"
+    audio_confidence: float = 0.0
+    video_confidence: float = 0.0
+    confidence: float = 0.0
+    feature_provenance: dict[str, Any] = field(default_factory=dict)
+    semantic_status: str = "unavailable"
+    semantic_reason: str = "embeddings_missing"
 
 
 class BridgeDimensions:
@@ -76,7 +83,9 @@ class BridgeDimensions:
         for axis in AUDIO_AXES:
             out[axis] = self._audio_axis(axis, features)
         for axis in VIDEO_AXES:
-            out[axis] = self._video_axis(axis, features)
+            value = self._video_axis(axis, features)
+            if value is not None:
+                out[axis] = value
         return out
 
     def _audio_axis(self, axis: str, f: CandidateFeatures) -> float:
@@ -101,7 +110,7 @@ class BridgeDimensions:
             return _clip01(min(1.0, f.cut_duration_sec / 8.0))
         return 0.0
 
-    def _video_axis(self, axis: str, f: CandidateFeatures) -> float:
+    def _video_axis(self, axis: str, f: CandidateFeatures) -> Optional[float]:
         if axis == "motion_match_weight":
             return 1.0 - abs(_clip01(f.motion_score) - _clip01(f.audio_energy))
 
@@ -119,8 +128,8 @@ class BridgeDimensions:
             return _clip01(f.pace_class_score)
 
         if axis == "semantic_match_weight":
-            if f.audio_embedding is None or f.video_embedding is None:
-                return 0.5
+            if f.semantic_status != "available":
+                return None
             return _cosine_zero_one(f.audio_embedding, f.video_embedding)
 
         if axis == "mood_match_weight":
@@ -158,22 +167,27 @@ def _audio_mood_score(tags: list[str]) -> float:
     return score / n
 
 
-def _cosine_zero_one(a: np.ndarray, b: np.ndarray) -> float:
+def _cosine_zero_one(
+    a: Optional[np.ndarray],
+    b: Optional[np.ndarray],
+) -> Optional[float]:
+    if a is None or b is None:
+        return None
     a = np.asarray(a, dtype=np.float32).reshape(-1)
     b = np.asarray(b, dtype=np.float32).reshape(-1)
     if a.size == 0 or b.size == 0:
-        return 0.5
+        return None
     if a.size != b.size:
-        n = min(a.size, b.size)
-        a = a[:n]
-        b = b[:n]
+        return None
     # R-Brain-09: NaN/Inf-Guard auf Inputs
     a = np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)
     b = np.nan_to_num(b, nan=0.0, posinf=0.0, neginf=0.0)
-    na = np.linalg.norm(a) + 1e-9
-    nb = np.linalg.norm(b) + 1e-9
+    na = float(np.linalg.norm(a))
+    nb = float(np.linalg.norm(b))
+    if na <= 1e-9 or nb <= 1e-9:
+        return None
     cos = float(np.dot(a, b) / (na * nb))
-    if cos != cos:  # NaN-Guard nach Berechnung
-        return 0.5
+    if not math.isfinite(cos):
+        return None
     res = (cos + 1.0) / 2.0  # [-1,1] -> [0,1]
     return max(0.0, min(1.0, res))

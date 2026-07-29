@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import sqlite3
 import threading
@@ -32,6 +33,29 @@ RATING_MAP: dict[str, tuple[float, float]] = {
 
 _OUTBOX_SCHEMA_VERSION = 1
 _OUTBOX_LOCK = threading.RLock()
+_MIN_AXIS_RELEVANCE = 0.05
+
+_AUDIO_TRIGGER_AXES = {
+    "beat_weight", "onset_weight", "kick_weight", "snare_weight",
+    "hihat_weight", "energy_weight", "energy_threshold",
+    "onset_sensitivity",
+}
+_LENGTH_AXES = {"min_clip_length", "max_clip_length"}
+_MOTION_AXES = {
+    "motion_match_weight", "scene_cut_weight", "pace_match_weight",
+}
+_SEMANTIC_AXES = {
+    "brightness_match_weight", "color_temp_match_weight",
+    "semantic_match_weight", "mood_match_weight",
+}
+_CONTEXT_LEVEL_WEIGHTS = {
+    0: 0.25,
+    1: 0.50,
+    2: 0.60,
+    3: 0.75,
+    4: 0.85,
+    5: 1.00,
+}
 
 
 class FeedbackLogger:
@@ -60,6 +84,7 @@ class FeedbackLogger:
         cut_id: int,
         rating: str,
         context_keys: list[str],
+        assignments: list[dict],
         timestamp: Optional[str] = None,
     ) -> int:
         """Apply one feedback event once, even across process interruption."""
@@ -67,6 +92,8 @@ class FeedbackLogger:
             raise ValueError(f"unknown rating: {rating}")
         if not context_keys:
             context_keys = [""]
+        if not assignments:
+            raise ValueError("feedback requires at least one relevant credit assignment")
 
         with _OUTBOX_LOCK:
             self._recover_pending_locked()
@@ -83,8 +110,14 @@ class FeedbackLogger:
                 "alpha_delta": float(alpha_delta),
                 "beta_delta": float(beta_delta),
                 "context_keys": list(context_keys),
+                "assignments": list(assignments),
+                "feedback_count_before": self.weights.total_clicks(),
                 "timestamp": ts,
-                "before": self._snapshot_weights(context_keys),
+                "before": self._snapshot_weights(
+                    assignments,
+                    alpha_delta=alpha_delta,
+                    beta_delta=beta_delta,
+                ),
             }
             self._write_outbox(operation)
             self._inject_fault("after_prepare")
@@ -103,7 +136,7 @@ class FeedbackLogger:
             self._inject_fault("after_event_insert")
             self._clear_outbox()
 
-        return len(BRIDGE_AXES) * len(context_keys)
+        return len(operation["before"])
 
     def recover_pending(self) -> bool:
         """Complete or compensate one durable operation. Returns recovery work."""
@@ -153,29 +186,52 @@ class FeedbackLogger:
             if must_close:
                 target_conn.close()
 
-    def _snapshot_weights(self, context_keys: list[str]) -> list[dict]:
+    def _snapshot_weights(
+        self,
+        assignments: list[dict],
+        *,
+        alpha_delta: float,
+        beta_delta: float,
+    ) -> list[dict]:
         snapshot: list[dict] = []
+        seen: set[tuple[str, int, str]] = set()
         with self.weights._conn_lock:
-            for axis in BRIDGE_AXES:
-                for level, key in enumerate(context_keys):
-                    row = self.weights.conn.execute(
-                        "SELECT positive_count, negative_count FROM axis_weights "
-                        "WHERE axis=? AND context_level=? AND context_key=?",
-                        (axis, level, key),
-                    ).fetchone()
-                    snapshot.append({
-                        "axis": axis,
-                        "level": level,
-                        "key": key,
-                        "exists": row is not None,
-                        "alpha": float(row[0]) if row is not None else 0.0,
-                        "beta": float(row[1]) if row is not None else 0.0,
-                    })
+            for assignment in assignments:
+                axis = str(assignment.get("axis") or "")
+                level = int(assignment.get("level", -1))
+                key = str(assignment.get("key") or "")
+                credit = float(assignment.get("credit", 0.0))
+                identity = (axis, level, key)
+                if (
+                    axis not in BRIDGE_AXES
+                    or level < 0
+                    or level > 5
+                    or not math.isfinite(credit)
+                    or credit <= 0.0
+                    or credit > 1.0
+                    or identity in seen
+                ):
+                    raise ValueError(f"invalid feedback credit assignment: {assignment!r}")
+                seen.add(identity)
+                row = self.weights.conn.execute(
+                    "SELECT positive_count, negative_count FROM axis_weights "
+                    "WHERE axis=? AND context_level=? AND context_key=?",
+                    identity,
+                ).fetchone()
+                snapshot.append({
+                    "axis": axis,
+                    "level": level,
+                    "key": key,
+                    "credit": credit,
+                    "alpha_delta": float(alpha_delta) * credit,
+                    "beta_delta": float(beta_delta) * credit,
+                    "exists": row is not None,
+                    "alpha": float(row[0]) if row is not None else 0.0,
+                    "beta": float(row[1]) if row is not None else 0.0,
+                })
         return snapshot
 
     def _weight_relation(self, operation: dict) -> str:
-        alpha_delta = float(operation["alpha_delta"])
-        beta_delta = float(operation["beta_delta"])
         all_before = True
         all_after = True
         with self.weights._conn_lock:
@@ -188,6 +244,12 @@ class FeedbackLogger:
                 exists = row is not None
                 alpha = float(row[0]) if row is not None else 0.0
                 beta = float(row[1]) if row is not None else 0.0
+                alpha_delta = float(
+                    item.get("alpha_delta", operation["alpha_delta"])
+                )
+                beta_delta = float(
+                    item.get("beta_delta", operation["beta_delta"])
+                )
                 all_before &= (
                     exists == bool(item["exists"])
                     and self._same(alpha, float(item["alpha"]))
@@ -198,6 +260,14 @@ class FeedbackLogger:
                     and self._same(alpha, float(item["alpha"]) + alpha_delta)
                     and self._same(beta, float(item["beta"]) + beta_delta)
                 )
+            if "feedback_count_before" in operation:
+                row = self.weights.conn.execute(
+                    "SELECT value FROM brain_meta WHERE key='feedback_count'"
+                ).fetchone()
+                current_count = int(row[0]) if row is not None else -1
+                before_count = int(operation["feedback_count_before"])
+                all_before &= current_count == before_count
+                all_after &= current_count == before_count + 1
         if all_before:
             return "before"
         if all_after:
@@ -205,13 +275,17 @@ class FeedbackLogger:
         return "conflict"
 
     def _apply_weight_delta(self, operation: dict) -> None:
-        alpha_delta = float(operation["alpha_delta"])
-        beta_delta = float(operation["beta_delta"])
         ts = str(operation["timestamp"])
         with self.weights._conn_lock:
             try:
                 self.weights.conn.execute("BEGIN IMMEDIATE")
                 for item in operation["before"]:
+                    alpha_delta = float(
+                        item.get("alpha_delta", operation["alpha_delta"])
+                    )
+                    beta_delta = float(
+                        item.get("beta_delta", operation["beta_delta"])
+                    )
                     self.weights.conn.execute(
                         "INSERT INTO axis_weights (axis, context_level, context_key, "
                         "positive_count, negative_count, last_updated) "
@@ -224,6 +298,14 @@ class FeedbackLogger:
                             item["axis"], int(item["level"]), item["key"],
                             alpha_delta, beta_delta, ts,
                         ),
+                    )
+                if "feedback_count_before" in operation:
+                    next_count = int(operation["feedback_count_before"]) + 1
+                    self.weights.conn.execute(
+                        "INSERT INTO brain_meta(key, value) VALUES "
+                        "('feedback_count', ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        (str(next_count),),
                     )
                 self.weights.conn.execute("COMMIT")
             except Exception:
@@ -257,6 +339,13 @@ class FeedbackLogger:
                             "AND context_level=? AND context_key=?",
                             (item["axis"], int(item["level"]), item["key"]),
                         )
+                if "feedback_count_before" in operation:
+                    self.weights.conn.execute(
+                        "INSERT INTO brain_meta(key, value) VALUES "
+                        "('feedback_count', ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        (str(int(operation["feedback_count_before"])),),
+                    )
                 self.weights.conn.execute("COMMIT")
             except Exception:
                 self.weights.conn.execute("ROLLBACK")
@@ -384,3 +473,59 @@ class FeedbackLogger:
     @staticmethod
     def _same(left: float, right: float) -> bool:
         return abs(left - right) <= 1e-9
+
+
+def build_credit_assignments(
+    *,
+    metadata: dict,
+    brain_scores: dict,
+    context_keys: list[str],
+) -> list[dict]:
+    """Derive sparse, evidence-weighted axis/context credit for one cut."""
+    bridge_values = metadata.get("bridge_values")
+    values = bridge_values if isinstance(bridge_values, dict) else brain_scores
+    axis_status = metadata.get("brain_axis_status") or {}
+    assignments: list[dict] = []
+
+    for axis in BRIDGE_AXES:
+        if axis not in values:
+            continue
+        if axis == "semantic_match_weight":
+            status = axis_status.get(axis) if isinstance(axis_status, dict) else None
+            if not isinstance(status, dict) or status.get("status") != "available":
+                continue
+        try:
+            relevance = float(values[axis])
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(relevance):
+            continue
+        relevance = max(0.0, min(1.0, relevance))
+        if relevance < _MIN_AXIS_RELEVANCE:
+            continue
+
+        for level in _levels_for_axis(axis):
+            if level >= len(context_keys):
+                continue
+            assignments.append({
+                "axis": axis,
+                "level": level,
+                "key": str(context_keys[level]),
+                "credit": round(
+                    relevance * _CONTEXT_LEVEL_WEIGHTS[level],
+                    6,
+                ),
+            })
+    return assignments
+
+
+def _levels_for_axis(axis: str) -> tuple[int, ...]:
+    if axis in _AUDIO_TRIGGER_AXES:
+        return (0, 1, 4, 5)
+    if axis in _LENGTH_AXES:
+        return (0, 1, 5)
+    if axis in _MOTION_AXES:
+        return (0, 1, 3, 5)
+    if axis in _SEMANTIC_AXES:
+        return (0, 2, 3, 5)
+    return (0, 5)
