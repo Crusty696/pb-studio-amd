@@ -21,6 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..app_state import AppState, get_app_state
 from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    canonical_local_media_file,
+    canonical_local_media_reference,
+)
 from ..schemas.audio_schemas import (
     AudioImportRequest, AudioClipInfo,
     AudioAnalyzeRequest, AudioAnalysisResult,
@@ -260,17 +265,25 @@ async def import_audio(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    audio_path = Path(request.path)
-
-    # SEC-001: Nur absolute Pfade erlauben (Path-Traversal-Schutz)
-    if not audio_path.is_absolute():
-        raise HTTPException(status_code=400, detail="Nur absolute Pfade erlaubt")
-
     try:
-        if not audio_path.exists():
-            raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {request.path}")
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert")
+        audio_reference = canonical_local_media_reference(
+            request.path,
+            label="Audio-Importpfad",
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not audio_reference.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Audio-Datei nicht gefunden: {audio_reference}",
+        )
+    try:
+        audio_path = canonical_local_media_file(
+            str(audio_reference),
+            label="Audio-Importpfad",
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if audio_path.suffix.lower() not in {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".aiff", ".aif"}:
         raise HTTPException(status_code=400, detail=f"Nicht unterstütztes Format: {audio_path.suffix}")
@@ -399,6 +412,15 @@ async def list_clips(
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
         cached_status = analysis.get("_analysis_status") if analysis else None
+        merged["analysis_status"] = cached_status or (
+            "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
+        )
+        merged["stage_status"] = (
+            dict(analysis.get("_stage_status") or {}) if analysis else {}
+        )
+        merged["stage_errors"] = (
+            dict(analysis.get("_stage_errors") or {}) if analysis else {}
+        )
         merged["is_analyzed"] = (
             cached_status == "completed"
             if cached_status is not None
@@ -566,6 +588,12 @@ async def analyze_audio(
             kick_times=result.get("kick_times"),
             snare_times=result.get("snare_times"),
             hihat_times=result.get("hihat_times"),
+            chunk_evidence=result.get("_chunk_evidence"),
+            analysis_status=analysis_status,
+            stage_status=result.get("_stage_status", {}),
+            stage_errors=result.get("_stage_errors", {}),
+            downbeats=result.get("downbeats", []),
+            downbeat_provenance=result.get("downbeat_provenance"),
         )
 
         await publish_log(
@@ -587,7 +615,12 @@ async def analyze_audio(
             "stage_status": result.get("_stage_status", {}),
             "stage_errors": result.get("_stage_errors", {}),
         })
-        return AudioAnalysisResult(**result)
+        public_result = dict(result)
+        public_result["analysis_status"] = analysis_status
+        public_result["stage_status"] = result.get("_stage_status", {})
+        public_result["stage_errors"] = result.get("_stage_errors", {})
+        public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
+        return AudioAnalysisResult(**public_result)
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
         await publish_log(
@@ -920,6 +953,7 @@ def _run_audio_analysis(
     _stream_triggers = None
     _stream_features = None
     _stream_stage_errors: dict[str, list[str]] = {}
+    _stream_chunk_evidence: dict = {}
     _stage_status: dict[str, str] = {}
     _stage_errors: dict[str, str] = {}
 
@@ -971,6 +1005,18 @@ def _run_audio_analysis(
             }
             _stream_features = _stream_res
             _stream_stage_errors = dict(_stream_res.stage_errors)
+            _stream_chunk_evidence = {
+                "schema_version": 1,
+                "primary": {
+                    "source_role": (
+                        "original_mix"
+                        if analysis_path == audio_path
+                        else "beat_source"
+                    ),
+                    "window_count": _stream_res.window_count,
+                    "chunks": list(_stream_res.chunk_evidence),
+                },
+            }
 
             # AP4.1 (Audit 2026-06-10): Kamen die Beats vom Drums-/Instrumental-Stem,
             # repraesentierte die Energy-Curve nur Stem-RMS statt Mix-Energie —
@@ -982,6 +1028,11 @@ def _run_audio_analysis(
                     _energy_res = StreamingAudioAnalyzer().analyze(audio_path, energy_only=True)
                     _stream_energy = list(_energy_res.energy_curve)
                     _stream_features = _energy_res
+                    _stream_chunk_evidence["mix_energy"] = {
+                        "source_role": "original_mix_energy",
+                        "window_count": _energy_res.window_count,
+                        "chunks": list(_energy_res.chunk_evidence),
+                    }
                     for stage_name, errors in _energy_res.stage_errors.items():
                         _stream_stage_errors.setdefault(stage_name, []).extend(errors)
                 except Exception as energy_e:
@@ -1015,6 +1066,13 @@ def _run_audio_analysis(
 
     # 1. BeatNet Beat-Detection
     beats: list[dict] = []
+    downbeats: list[float] = []
+    downbeat_provenance: dict = {
+        "status": "unavailable",
+        "method": "not_requested",
+        "synthetic": False,
+        "measured_count": 0,
+    }
     bpm: float = 0.0
     energy_curve: list[float] = []
 
@@ -1047,6 +1105,12 @@ def _run_audio_analysis(
                     })
                 bpm = float(_stream_bpm or 0.0)
                 energy_curve = list(_stream_energy or [])
+                downbeat_provenance = {
+                    "status": "unavailable",
+                    "method": "streaming_librosa_beat_track",
+                    "synthetic": False,
+                    "measured_count": 0,
+                }
             else:
                 # Use module-level singleton to avoid re-initializing on every call
                 detector = _get_beat_detector()
@@ -1089,6 +1153,12 @@ def _run_audio_analysis(
                         intervals = np.diff(arr)
                         avg_interval = float(np.median(intervals))
                         bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
+                downbeat_provenance = {
+                    "status": "unavailable",
+                    "method": "beat_time_only_detector",
+                    "synthetic": False,
+                    "measured_count": 0,
+                }
 
                 # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
                 rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
@@ -1101,6 +1171,12 @@ def _run_audio_analysis(
             _stage_errors["beats"] = str(e)
     else:
         _stage_status["beats"] = "skipped"
+        downbeat_provenance = {
+            "status": "unavailable",
+            "method": "beat_detection_disabled",
+            "synthetic": False,
+            "measured_count": 0,
+        }
 
     # 1b. Onset/Drum-Trigger-Kandidaten (Audit-Fix 2026-07-10, Sweep-Finding HIGH-1):
     # advanced_pacing_engine.py erwartete diese Daten von einem toten
@@ -1300,6 +1376,8 @@ def _run_audio_analysis(
         "bpm": bpm,
         "beat_count": len(beats),
         "beats": beats,
+        "downbeats": downbeats,
+        "downbeat_provenance": downbeat_provenance,
         "key": key,
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
@@ -1311,6 +1389,7 @@ def _run_audio_analysis(
         "_analysis_status": analysis_status,
         "_stage_status": _stage_status,
         "_stage_errors": _stage_errors,
+        "_chunk_evidence": _stream_chunk_evidence,
     }
 
 

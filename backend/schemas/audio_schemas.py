@@ -1,7 +1,7 @@
 """Audio-bezogene Schemas."""
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict
+from typing import Any, Optional, Dict
 from enum import Enum
 
 
@@ -25,6 +25,9 @@ class AudioClipInfo(BaseModel):
     is_analyzed: bool = False
     audio_hash: Optional[str] = None
     has_audio_embedding: bool = False
+    analysis_status: str = "unavailable"
+    stage_status: dict[str, str] = Field(default_factory=dict)
+    stage_errors: dict[str, str] = Field(default_factory=dict)
     # L-N4: Stem-Separation Outputs — gesetzt nach POST /audio/stems/separate.
     # Dict {vocals|instrumental|drums|bass|other -> file-path}. UI rendert
     # STEMS-Badge wenn nicht None und nicht-leer.
@@ -75,6 +78,12 @@ class AudioAnalysisResult(BaseModel):
     kick_times: list[float] = []
     snare_times: list[float] = []
     hihat_times: list[float] = []
+    analysis_status: str = "completed"
+    stage_status: dict[str, str] = Field(default_factory=dict)
+    stage_errors: dict[str, str] = Field(default_factory=dict)
+    chunk_evidence: dict[str, Any] = Field(default_factory=dict)
+    downbeats: list[float] = Field(default_factory=list)
+    downbeat_provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class WaveformRequest(BaseModel):

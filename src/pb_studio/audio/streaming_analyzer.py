@@ -50,6 +50,7 @@ class StreamingAnalysisResult:
     spectral_bands: dict[str, list[float]] = field(default_factory=dict)
     spectral_centroids: list[float] = field(default_factory=list)
     stage_errors: dict[str, list[str]] = field(default_factory=dict)
+    chunk_evidence: list[dict] = field(default_factory=list)
     window_count: int = 0
 
 
@@ -109,6 +110,10 @@ class _BeatAccumulator:
         if current_group:
             deduped.append(sum(current_group) / len(current_group))
         return deduped
+
+    @property
+    def count(self) -> int:
+        return len(self._beats)
 
 
 class _EnergyAggregator:
@@ -180,6 +185,10 @@ class _EnergyAggregator:
             return self._frames
         inv = 1.0 / self._global_max
         return [v * inv for v in self._frames]
+
+    @property
+    def count(self) -> int:
+        return len(self._frames)
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +302,31 @@ class StreamingAudioAnalyzer:
             kick_times=trigger_times[1],
             snare_times=trigger_times[2],
             hihat_times=trigger_times[3],
+            chunk_evidence=[{
+                "chunk_index": 0,
+                "start_seconds": 0.0,
+                "duration_seconds": duration,
+                "status": "completed",
+                "stages": {
+                    "load": {"status": "completed"},
+                    "beats": {
+                        "status": "skipped" if energy_only else "completed",
+                        "beat_count": len(beats),
+                    },
+                    "triggers": {
+                        "status": "skipped" if energy_only else "completed",
+                        "onset_count": len(trigger_times[0]),
+                        "kick_count": len(trigger_times[1]),
+                        "snare_count": len(trigger_times[2]),
+                        "hihat_count": len(trigger_times[3]),
+                    },
+                    "features": {"status": "not_requested"},
+                    "energy": {
+                        "status": "completed",
+                        "point_count": len(energy),
+                    },
+                },
+            }],
             window_count=1,
         )
 
@@ -374,6 +408,7 @@ class StreamingAudioAnalyzer:
         spectral_bands: dict[str, list[float]] = {}
         spectral_centroids: list[float] = []
         stage_errors: dict[str, list[str]] = {}
+        chunk_evidence: list[dict] = []
 
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
 
@@ -383,6 +418,14 @@ class StreamingAudioAnalyzer:
             chunk_start = start_sample / native_sr
             chunk_dur = min(self.window_sec, duration - chunk_start)
             if chunk_dur < 2.0:
+                chunk_evidence.append({
+                    "chunk_index": i,
+                    "start_seconds": chunk_start,
+                    "duration_seconds": max(chunk_dur, 0.0),
+                    "status": "skipped",
+                    "error": "terminal chunk shorter than 2.0 seconds",
+                    "stages": {},
+                })
                 continue
 
             try:
@@ -399,18 +442,49 @@ class StreamingAudioAnalyzer:
                 )
                 if on_progress:
                     on_progress((i + 1) * 100.0 / n_windows)
+                chunk_evidence.append({
+                    "chunk_index": i,
+                    "start_seconds": chunk_start,
+                    "duration_seconds": chunk_dur,
+                    "status": "failed",
+                    "stages": {
+                        "load": {"status": "failed", "error": str(e)},
+                        "beats": {"status": "blocked"},
+                        "triggers": {"status": "blocked"},
+                        "features": {"status": "blocked"},
+                        "energy": {"status": "failed", "error": "load failed"},
+                    },
+                })
                 continue
 
+            stages: dict[str, dict] = {"load": {"status": "completed"}}
             # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
             if not energy_only:
-                beats_ok = self._process_beats(
+                beat_count_before = beat_acc.count
+                beats_error = self._process_beats(
                     chunk, chunk_start, bpm_est, beat_acc
                 )
-                if not beats_ok:
+                if beats_error is not None:
                     stage_errors.setdefault("beats", []).append(
-                        f"chunk {i}: beat detection failed"
+                        f"chunk {i}: {beats_error}"
                     )
-                triggers_ok = self._process_triggers(
+                    stages["beats"] = {
+                        "status": "failed",
+                        "error": beats_error,
+                        "beat_count": 0,
+                    }
+                else:
+                    stages["beats"] = {
+                        "status": "completed",
+                        "beat_count": beat_acc.count - beat_count_before,
+                    }
+                trigger_counts_before = (
+                    onset_acc.count,
+                    kick_acc.count,
+                    snare_acc.count,
+                    hihat_acc.count,
+                )
+                triggers_error = self._process_triggers(
                     chunk,
                     chunk_start,
                     onset_acc,
@@ -418,10 +492,25 @@ class StreamingAudioAnalyzer:
                     snare_acc,
                     hihat_acc,
                 )
-                if not triggers_ok:
+                if triggers_error is not None:
                     stage_errors.setdefault("beats", []).append(
-                        f"chunk {i}: trigger detection failed"
+                        f"chunk {i}: {triggers_error}"
                     )
+                    stages["triggers"] = {
+                        "status": "failed",
+                        "error": triggers_error,
+                    }
+                else:
+                    stages["triggers"] = {
+                        "status": "completed",
+                        "onset_count": onset_acc.count - trigger_counts_before[0],
+                        "kick_count": kick_acc.count - trigger_counts_before[1],
+                        "snare_count": snare_acc.count - trigger_counts_before[2],
+                        "hihat_count": hihat_acc.count - trigger_counts_before[3],
+                    }
+            else:
+                stages["beats"] = {"status": "skipped"}
+                stages["triggers"] = {"status": "skipped"}
 
             try:
                 representative = self._extract_representative_features(
@@ -439,6 +528,11 @@ class StreamingAudioAnalyzer:
                 spectral_centroids.extend(representative["centroids"])
                 for band_name, values in representative["bands"].items():
                     spectral_bands.setdefault(band_name, []).extend(values)
+                stages["features"] = {
+                    "status": "completed",
+                    "representative_point_count": len(representative["times"]),
+                    "chroma_weight": feature_weight,
+                }
             except Exception as e:
                 logger.warning(
                     f"Full-duration Features bei {chunk_start:.1f}s fehlgeschlagen: {e}"
@@ -446,16 +540,18 @@ class StreamingAudioAnalyzer:
                 stage_errors.setdefault("features", []).append(
                     f"chunk {i}: {e}"
                 )
+                stages["features"] = {"status": "failed", "error": str(e)}
 
             # --- RMS-Energy pro Chunk ---
-            energy_ok = self._process_energy(
+            energy_count_before = energy_agg.count
+            energy_error = self._process_energy(
                 chunk, is_first=(i == 0),
                 overlap_frames=overlap_frames,
                 energy_agg=energy_agg,
             )
-            if not energy_ok:
+            if energy_error is not None:
                 stage_errors.setdefault("energy", []).append(
-                    f"chunk {i}: RMS calculation failed"
+                    f"chunk {i}: {energy_error}"
                 )
                 energy_agg.add_gap(
                     chunk_dur,
@@ -464,6 +560,31 @@ class StreamingAudioAnalyzer:
                     sample_rate=self.SR,
                     hop_length=self.HOP_LENGTH,
                 )
+                stages["energy"] = {
+                    "status": "failed",
+                    "error": energy_error,
+                    "point_count": energy_agg.count - energy_count_before,
+                }
+            else:
+                stages["energy"] = {
+                    "status": "completed",
+                    "point_count": energy_agg.count - energy_count_before,
+                }
+
+            chunk_evidence.append({
+                "chunk_index": i,
+                "start_seconds": chunk_start,
+                "duration_seconds": chunk_dur,
+                "status": (
+                    "partial"
+                    if any(
+                        stage.get("status") == "failed"
+                        for stage in stages.values()
+                    )
+                    else "completed"
+                ),
+                "stages": stages,
+            })
 
             # Chunk-Buffer freigeben
             del chunk
@@ -499,6 +620,7 @@ class StreamingAudioAnalyzer:
             spectral_bands=spectral_bands,
             spectral_centroids=spectral_centroids,
             stage_errors=stage_errors,
+            chunk_evidence=chunk_evidence,
             window_count=n_windows,
         )
 
@@ -688,7 +810,7 @@ class StreamingAudioAnalyzer:
         chunk_start: float,
         bpm_est: _RunningBPMEstimator,
         beat_acc: _BeatAccumulator,
-    ) -> bool:
+    ) -> Optional[str]:
         """Beat-Detection auf einem Chunk mit librosa.beat.beat_track."""
         import librosa
 
@@ -707,11 +829,11 @@ class StreamingAudioAnalyzer:
             # BPM extrahieren
             bpm_val = float(tempo) if np.ndim(tempo) == 0 else float(tempo[0])
             bpm_est.add(bpm_val)
-            return True
+            return None
 
         except Exception as e:
             logger.warning(f"Beat-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}")
-            return False
+            return str(e)
 
     def _detect_triggers(
         self,
@@ -765,7 +887,7 @@ class StreamingAudioAnalyzer:
         kick_acc: _BeatAccumulator,
         snare_acc: _BeatAccumulator,
         hihat_acc: _BeatAccumulator,
-    ) -> bool:
+    ) -> Optional[str]:
         """Collect absolute trigger times and deduplicate overlap at result time."""
         try:
             relative_groups = self._detect_triggers(chunk)
@@ -776,12 +898,12 @@ class StreamingAudioAnalyzer:
                 accumulator.add_chunk_beats(
                     [float(value) + chunk_start for value in relative]
                 )
-            return True
+            return None
         except Exception as e:
             logger.warning(
                 f"Trigger-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}"
             )
-            return False
+            return str(e)
 
     # ------------------------------------------------------------------
     # Energy-Processing pro Chunk
@@ -792,7 +914,7 @@ class StreamingAudioAnalyzer:
         is_first: bool,
         overlap_frames: int,
         energy_agg: _EnergyAggregator,
-    ) -> bool:
+    ) -> Optional[str]:
         """RMS-Energy auf einem Chunk berechnen."""
         import librosa
 
@@ -808,10 +930,10 @@ class StreamingAudioAnalyzer:
                 is_first_chunk=is_first,
                 overlap_frames=overlap_frames,
             )
-            return True
+            return None
         except Exception as e:
             logger.warning(f"Energy-Berechnung fehlgeschlagen: {e}")
-            return False
+            return str(e)
 
     # ------------------------------------------------------------------
     # STFT-Streaming (fuer erweiterte Spektral-Analyse)
