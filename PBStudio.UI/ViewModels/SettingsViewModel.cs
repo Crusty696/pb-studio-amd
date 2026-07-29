@@ -92,6 +92,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.Load();
         var s = _settings.Current;
 
+        PythonBridgeService.ApplyRuntimeEnvironment(s);
         FfmpegPath = s.FfmpegPath ?? "";
         VramLimitMb = s.VramCapMb > 0 ? s.VramCapMb : 8192;
 
@@ -105,8 +106,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             ForceVramEnabled = false;
             ForcedVramMb = 8192;
         }
-        PythonBridgeService.ApplyRuntimeEnvironment(s);
-
         // KI-Modus: String -> Slider-Index (speed=0, balance=1, quality=2). Default balance.
         KiModeIndex = (s.KiMode ?? "balance").ToLowerInvariant() switch
         {
@@ -317,11 +316,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         try
         {
-            // 1. Validierung FFmpeg-Pfad - kein hard-stop, nur Hinweis
+            FfmpegPath = PythonBridgeService.GetCanonicalFfmpegPath();
+
+            // 1. Validierung des kanonischen FFmpeg-Pfads
             if (!_settings.ValidateFFmpegPath(FfmpegPath, out var ffErr))
             {
                 FfmpegPathError = ffErr;
-                StatusText = "Warnung: FFmpeg-Pfad ungültig - andere Settings wurden gespeichert.";
+                StatusText = "FFmpeg-Projekt-Runtime ist ungültig.";
+                return;
             }
 
             // 2. In-Memory-Settings updaten und persistieren

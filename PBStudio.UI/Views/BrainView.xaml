@@ -243,10 +243,14 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           Text="{Binding Status}"
-                           VerticalAlignment="Center"
-                           Foreground="{StaticResource AbletonTextDim}"/>
+                <TextBox Grid.Column="0"
+                         Text="{Binding Status, Mode=OneWay}"
+                         IsReadOnly="True"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource AbletonTextDim}"/>
                 <Button Grid.Column="1"
                         Content="Reset anfordern"
                         Command="{Binding ResetRequestCommand}"

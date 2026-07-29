@@ -26,13 +26,14 @@ public class BeatMarkerViewModel
     public string BeatType { get; set; } = "";
 
     /// <summary>
-    /// True, wenn es sich um den Beginn eines Taktes (Downbeat / 1st Beat in Bar) handelt.
-    /// In einem standardmäßigen 4/4-Takt ist dies jeder 4. Beat (Index 0, 4, 8, ...).
+    /// True nur bei einem vom Backend als gemessen gelieferten Downbeat.
     /// </summary>
-    public bool IsDownbeat => Index % 4 == 0;
+    public bool IsDownbeat =>
+        BeatType.Equals("downbeat", StringComparison.OrdinalIgnoreCase) ||
+        BeatType.Equals("bar", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Taktnummer (z. B. "1", "2", "3" ...) für Downbeats.
+    /// Marker für einen gemessenen Downbeat; keine synthetische Taktnummer.
     /// </summary>
-    public string Label => IsDownbeat ? $"{(Index / 4) + 1}" : string.Empty;
+    public string Label => IsDownbeat ? "D" : string.Empty;
 }

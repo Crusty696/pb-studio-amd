@@ -62,11 +62,17 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 HasProject = true;
+                StatusText = "Bereit für Rendering";
                 StartRenderCommand.NotifyCanExecuteChanged();
+                _ = SyncAudioPathFromTimelineAsync();
             });
         });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _timelineState.Clear();
+                ResetProjectState();
+            }));
 
         if (HasProject)
         {
@@ -141,7 +147,23 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             if (result != null)
             {
                 _currentTaskId = result.TaskId;
-                ApplyProgressUpdate(result.TaskId, result.Status, result.Percent, "Render-Task registriert", result.CurrentFrame, result.TotalFrames, result.ElapsedSeconds, result.EtaSeconds, result.OutputPath, result.Error);
+                ApplyProgressUpdate(
+                    result.TaskId,
+                    result.Status,
+                    result.Percent,
+                    result.Message ?? "Render-Task registriert",
+                    result.CurrentFrame,
+                    result.TotalFrames,
+                    result.ElapsedSeconds,
+                    result.EtaSeconds,
+                    result.OutputPath,
+                    result.Error,
+                    result.QueueJobId,
+                    result.RunId,
+                    result.EvidencePath,
+                    result.ValidationPath,
+                    result.ProgressEnd,
+                    result.ValidationStatus);
                 AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
             }
             else
@@ -212,7 +234,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 e.ElapsedSeconds,
                 e.EtaSeconds,
                 e.OutputPath,
-                e.Error);
+                e.Error,
+                e.QueueJobId,
+                e.RunId,
+                e.EvidencePath,
+                e.ValidationPath,
+                e.ProgressEnd,
+                e.ValidationStatus);
         });
     }
 
@@ -226,7 +254,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         double elapsedSeconds,
         double etaSeconds,
         string? outputPath,
-        string? error)
+        string? error,
+        string? queueJobId,
+        string? runId,
+        string? evidencePath,
+        string? validationPath,
+        bool progressEnd,
+        string? validationStatus)
     {
         var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
         var effectiveMessage = string.IsNullOrWhiteSpace(message)
@@ -255,6 +289,17 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 AppendLog("info", taskId is null ? effectiveMessage : $"{effectiveMessage} ({taskId})");
                 if (!string.IsNullOrWhiteSpace(outputPath))
                     AppendLog("info", $"Output: {outputPath}");
+                if (!string.IsNullOrWhiteSpace(queueJobId))
+                    AppendLog("info", $"Queue-Job: {queueJobId}");
+                if (!string.IsNullOrWhiteSpace(runId))
+                    AppendLog("info", $"Render-Run: {runId}");
+                AppendLog(
+                    progressEnd && validationStatus == "validated" ? "info" : "warn",
+                    $"Abschlussvertrag: progress_end={progressEnd}, validation={validationStatus ?? "unknown"}");
+                if (!string.IsNullOrWhiteSpace(evidencePath))
+                    AppendLog("info", $"Render-Evidenz: {evidencePath}");
+                if (!string.IsNullOrWhiteSpace(validationPath))
+                    AppendLog("info", $"Validierungs-Evidenz: {validationPath}");
                 _currentTaskId = null;
                 break;
 

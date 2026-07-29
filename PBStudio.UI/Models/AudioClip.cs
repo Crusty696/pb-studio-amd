@@ -18,6 +18,8 @@ public partial class AudioClipModel : ObservableObject
     [ObservableProperty] private string _key = "";
     [ObservableProperty] private int _beatCount;
     [ObservableProperty] private bool _isAnalyzed;
+    [ObservableProperty] private string _analysisStatus = "unavailable";
+    [ObservableProperty] private Dictionary<string, string>? _stageErrors;
     // L-N2: Content-Hash vom Backend; HasCacheHash treibt CACHED-Badge im View.
     [ObservableProperty] private string? _audioHash;
     // L-N4: Stem-Separation Outputs vom Backend (vocals/drums/bass/other -> path).
@@ -27,6 +29,13 @@ public partial class AudioClipModel : ObservableObject
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public bool HasCacheHash => !string.IsNullOrWhiteSpace(AudioHash);
     public bool HasStems => StemsPaths != null && StemsPaths.Count > 0;
+    public bool HasAnalysisIssue => AnalysisStatus is "partial" or "failed";
+    public string AnalysisStatusText => AnalysisStatus switch
+    {
+        "partial" => "PARTIAL",
+        "failed" => "FAILED",
+        _ => string.Empty,
+    };
     public string? StemsFolderPath
     {
         get
@@ -41,6 +50,11 @@ public partial class AudioClipModel : ObservableObject
 
     partial void OnDurationSecondsChanged(double value) => OnPropertyChanged(nameof(DurationText));
     partial void OnAudioHashChanged(string? value) => OnPropertyChanged(nameof(HasCacheHash));
+    partial void OnAnalysisStatusChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasAnalysisIssue));
+        OnPropertyChanged(nameof(AnalysisStatusText));
+    }
     partial void OnStemsPathsChanged(Dictionary<string, string>? value)
     {
         OnPropertyChanged(nameof(HasStems));

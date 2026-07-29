@@ -33,9 +33,13 @@ public class PythonBridgeService : IDisposable
     public static void ApplyRuntimeEnvironment(PbSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        BackendOwnerCapability.Ensure();
         SetForcedVramEnvVar(settings.ForcedVramMb);
         SetVramLimitEnvVar(settings.VramCapMb);
-        SetFfmpegPathEnvVar(settings.FfmpegPath);
+        var (ffmpegPath, ffprobePath) = ResolveCanonicalFfmpegPair();
+        settings.FfmpegPath = ffmpegPath;
+        SetFfmpegPathEnvVar(ffmpegPath);
+        SetFfprobePathEnvVar(ffprobePath);
     }
 
     /// <summary>
@@ -147,6 +151,11 @@ public class PythonBridgeService : IDisposable
                 RedirectStandardError = true,
             };
             startInfo.Environment["PYTHONPATH"] = Path.Combine(projectRoot, "src");
+            var (ffmpegPath, ffprobePath) = ResolveCanonicalFfmpegPair();
+            startInfo.Environment["PBSTUDIO_FFMPEG_PATH"] = ffmpegPath;
+            startInfo.Environment["PBSTUDIO_FFPROBE_PATH"] = ffprobePath;
+            startInfo.Environment[BackendOwnerCapability.EnvironmentVariable] =
+                BackendOwnerCapability.Ensure();
 
             try
             {
@@ -241,7 +250,11 @@ public class PythonBridgeService : IDisposable
             {
                 try
                 {
-                    await _httpClient.PostAsync("/shutdown", null).ConfigureAwait(false);
+                    using var request = new HttpRequestMessage(HttpMethod.Post, "/shutdown");
+                    request.Headers.TryAddWithoutValidation(
+                        BackendOwnerCapability.HeaderName,
+                        BackendOwnerCapability.Ensure());
+                    await _httpClient.SendAsync(request).ConfigureAwait(false);
                     await Task.Delay(3000).ConfigureAwait(false);
                 }
                 catch { }
@@ -363,29 +376,53 @@ public class PythonBridgeService : IDisposable
 
     private static string? ResolvePythonExe()
     {
-        var envPath = Environment.GetEnvironmentVariable("PBSTUDIO_PYTHON_EXE");
-        if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
-            return envPath;
-
         var backendDir = FindBackendDirectory();
-        if (backendDir != null)
+        if (backendDir == null)
+            return null;
+        var projectRoot = Path.GetDirectoryName(backendDir)!;
+        var canonical = Path.GetFullPath(
+            Path.Combine(projectRoot, ".venv", "Scripts", "python.exe"));
+        var envPath = Environment.GetEnvironmentVariable("PBSTUDIO_PYTHON_EXE");
+        if (!string.IsNullOrWhiteSpace(envPath) &&
+            !Path.GetFullPath(envPath).Equals(
+                canonical,
+                StringComparison.OrdinalIgnoreCase))
         {
-            var projectRoot = Path.GetDirectoryName(backendDir)!;
-            var venvPython = Path.Combine(projectRoot, ".venv", "Scripts", "python.exe");
-            if (File.Exists(venvPython)) return venvPython;
+            return null;
         }
+        return File.Exists(canonical) ? canonical : null;
+    }
 
-        var userName = Environment.UserName;
-        var candidates = new[]
+    public static void SetFfprobePathEnvVar(string path)
+    {
+        const string key = "PBSTUDIO_FFPROBE_PATH";
+        Environment.SetEnvironmentVariable(
+            key,
+            path,
+            EnvironmentVariableTarget.Process);
+    }
+
+    public static string GetCanonicalFfmpegPath()
+    {
+        return ResolveCanonicalFfmpegPair().FfmpegPath;
+    }
+
+    private static (string FfmpegPath, string FfprobePath) ResolveCanonicalFfmpegPair()
+    {
+        var backendDir = FindBackendDirectory()
+            ?? throw new DirectoryNotFoundException(
+                "Backend-Verzeichnis für den kanonischen FFmpeg-Pfad fehlt.");
+        var projectRoot = Path.GetDirectoryName(backendDir)!;
+        var stableBin = Path.Combine(projectRoot, "tools", "ffmpeg", "bin");
+        var ffmpegPath = Path.Combine(stableBin, "ffmpeg.exe");
+        var ffprobePath = Path.Combine(stableBin, "ffprobe.exe");
+        if (!File.Exists(ffmpegPath) || !File.Exists(ffprobePath))
         {
-            $@"C:\Users\{userName}\AppData\Local\Programs\Python\Python311\python.exe",
-            @"C:\Python311\python.exe",
-            @"C:\Program Files\Python311\python.exe",
-        };
-        foreach (var c in candidates)
-            if (File.Exists(c)) return c;
-
-        return null;
+            throw new FileNotFoundException(
+                "Das kanonische FFmpeg/FFprobe-Paar ist unvollständig.",
+                stableBin);
+        }
+        return (Path.GetFullPath(ffmpegPath), Path.GetFullPath(ffprobePath));
     }
 
     private static bool IsPython311(string pythonExe)

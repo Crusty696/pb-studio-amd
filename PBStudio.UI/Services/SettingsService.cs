@@ -130,16 +130,20 @@ public class SettingsService : ISettingsService
 
     public bool ValidateFFmpegPath(string? path, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            errorMessage = null; // leerer Pfad = Auto-Detect, kein Fehler
-            return true;
-        }
-
-        // Pfad-Sicherheit: kein Crash bei ungültigen Zeichen
         try
         {
+            var canonical = PythonBridgeService.GetCanonicalFfmpegPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                errorMessage = "Der kanonische Projektpfad ist erforderlich.";
+                return false;
+            }
             var full = Path.GetFullPath(path);
+            if (!full.Equals(canonical, StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "Nur die geprüfte Projekt-Runtime ist zulässig.";
+                return false;
+            }
             if (!File.Exists(full))
             {
                 errorMessage = "Datei nicht gefunden.";

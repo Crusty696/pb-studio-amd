@@ -288,6 +288,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         Key = clipInfo.Key ?? "",
                         BeatCount = clipInfo.BeatCount,
                         IsAnalyzed = clipInfo.IsAnalyzed,
+                        AnalysisStatus = clipInfo.AnalysisStatus,
+                        StageErrors = clipInfo.StageErrors,
                         // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
                         AudioHash = clipInfo.AudioHash,
                         // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
@@ -337,6 +339,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         CurrentStep = "init";
         var total = AudioClips.Count;
         var done = 0;
+        var partial = 0;
 
         try
         {
@@ -355,13 +358,19 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     clip.Bpm = result.Bpm;
                     clip.BeatCount = result.BeatCount;
                     clip.Key = result.Key ?? "";
-                    clip.IsAnalyzed = true;
+                    clip.AnalysisStatus = result.AnalysisStatus;
+                    clip.StageErrors = result.StageErrors;
+                    clip.IsAnalyzed = result.AnalysisStatus == "completed";
+                    if (result.AnalysisStatus == "partial")
+                        partial++;
                 }
                 done++;
             }
 
             AnalysisProgress = 100;
-            StatusText = $"Alle {total} Clips analysiert";
+            StatusText = partial > 0
+                ? $"Analyse beendet: {total - partial} vollständig, {partial} partiell"
+                : $"Alle {total} Clips vollständig analysiert";
             if (_projectService.IsCurrent(operation))
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
         }
@@ -407,11 +416,15 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 clip.Bpm = result.Bpm;
                 clip.BeatCount = result.BeatCount;
                 clip.Key = result.Key ?? "";
-                clip.IsAnalyzed = true;
+                clip.AnalysisStatus = result.AnalysisStatus;
+                clip.StageErrors = result.StageErrors;
+                clip.IsAnalyzed = result.AnalysisStatus == "completed";
                 Bpm = result.Bpm;
                 BeatCount = result.BeatCount;
                 Key = result.Key ?? "";
-                StatusText = $"Analyse fertig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
+                StatusText = result.AnalysisStatus == "partial"
+                    ? $"Analyse partiell: {FormatStageErrors(result.StageErrors)}"
+                    : $"Analyse vollständig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
             }
             else
@@ -529,6 +542,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         BeatCount = 0;
         Key = string.Empty;
         DurationSeconds = 0;
+    }
+
+    private static string FormatStageErrors(Dictionary<string, string>? errors)
+    {
+        if (errors == null || errors.Count == 0)
+            return "unvollständige Chunk-/Stage-Evidenz";
+        return string.Join("; ", errors.Select(pair => $"{pair.Key}: {pair.Value}"));
     }
 
     private void OnProjectTransitionStarted(object? sender, EventArgs e)

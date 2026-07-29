@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -19,7 +20,6 @@ namespace PBStudio.UI.ViewModels;
 public partial class BrainViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
-    private readonly ProjectService? _projectService;
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
     private bool _disposed;
@@ -49,7 +49,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
         _api = api;
-        _projectService = projectService;
+        _ = projectService;
         _timelineState = timelineState;
         _ = RefreshStatsAsync();
 
@@ -152,6 +152,13 @@ public partial class BrainViewModel : ObservableObject, IDisposable
             Status = "Feedback fehlgeschlagen.";
             return;
         }
+        if (!resp.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+        {
+            Status = string.IsNullOrWhiteSpace(resp.Message)
+                ? "Feedback wurde nicht angewendet."
+                : resp.Message;
+            return;
+        }
         Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
         // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
         WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
@@ -199,8 +206,8 @@ public partial class BrainViewModel : ObservableObject, IDisposable
 
             // Pfade aus aktuellem Projekt + Timeline ableiten, sonst bleibt der Walkthrough
             // ohne Audio-/Video-Preview (siehe Audit C3).
-            var (audioPath, videoBase) = await ResolveSessionPathsAsync();
-            await vm.LoadAsync(audioPath, videoBase);
+            var (audioPath, videoPaths) = await ResolveSessionPathsAsync();
+            await vm.LoadAsync(audioPath, videoPaths);
 
             dialog.Owner = System.Windows.Application.Current.MainWindow;
             dialog.ShowDialog();
@@ -208,34 +215,39 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task<(string? audioPath, string? videoBase)> ResolveSessionPathsAsync()
+    private async Task<(
+        string? audioPath,
+        IReadOnlyDictionary<string, string> videoPaths)> ResolveSessionPathsAsync()
     {
-        // Audio: aktuelle Timeline-Response liefert audio_path.
-        string? audioPath = _timelineState?.CurrentTimeline?.AudioPath;
-        if (string.IsNullOrEmpty(audioPath))
+        var timeline = _timelineState?.CurrentTimeline;
+        if (timeline == null)
         {
             try
             {
-                var refreshed = _timelineState != null
+                timeline = _timelineState != null
                     ? await _timelineState.RefreshAsync()
                     : await _api.GetTimelineAsync();
-                audioPath = refreshed?.AudioPath;
             }
             catch
             {
-                // Best-effort — Walkthrough fällt auf "kein Audio" zurück.
+                // Best-effort -- Walkthrough remains available without preview.
             }
         }
 
-        // Video-Base: Projekt-Root\videos\ falls vorhanden, sonst Projekt-Root.
-        string? videoBase = null;
-        var projectPath = _projectService?.CurrentProjectPath;
-        if (!string.IsNullOrEmpty(projectPath))
+        var videoPaths = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        if (timeline?.Entries != null)
         {
-            var videosDir = System.IO.Path.Combine(projectPath, "videos");
-            videoBase = System.IO.Directory.Exists(videosDir) ? videosDir : projectPath;
+            foreach (var entry in timeline.Entries)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.ClipId)
+                    && !string.IsNullOrWhiteSpace(entry.FilePath))
+                {
+                    videoPaths[entry.ClipId] = entry.FilePath;
+                }
+            }
         }
-        return (audioPath, videoBase);
+        return (timeline?.AudioPath, videoPaths);
     }
 
     [RelayCommand]

@@ -160,7 +160,16 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     public string SelectedClipStart => SelectedEntry == null ? "–" : $"{SelectedEntry.ClipStart:F2}s";
     public string SelectedTimeRange => SelectedEntry?.TimeRangeText ?? "–";
     public string SelectedFilePath => SelectedEntry?.FilePath ?? "–";
-    public bool CanPreviewSelectedClip => SelectedEntry != null && File.Exists(SelectedEntry.FilePath);
+    public string SelectedEvidence => SelectedEntry == null
+        ? "–"
+        : $"Feature confidence: {SelectedEntry.FeatureConfidence:P0} | " +
+          $"Semantic: {SelectedEntry.SemanticStatus}" +
+          (string.IsNullOrWhiteSpace(SelectedEntry.SemanticReason)
+              ? string.Empty
+              : $" ({SelectedEntry.SemanticReason})");
+    public bool CanPreviewSelectedClip =>
+        SelectedEntry != null
+        && LocalMediaPathPolicy.TryCreateFileUri(SelectedEntry.FilePath, out _);
     public string SelectedPreviewRange => SelectedEntry == null
         ? "–"
         : $"Clip {TimeSpan.FromSeconds(SelectedEntry.ClipStart):mm\\:ss} - {TimeSpan.FromSeconds(SelectedEntry.ClipStart + SelectedEntry.Duration):mm\\:ss}";
@@ -194,6 +203,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedClipStart));
         OnPropertyChanged(nameof(SelectedTimeRange));
         OnPropertyChanged(nameof(SelectedFilePath));
+        OnPropertyChanged(nameof(SelectedEvidence));
         OnPropertyChanged(nameof(CanPreviewSelectedClip));
         OnPropertyChanged(nameof(SelectedPreviewRange));
         OnPropertyChanged(nameof(SelectedTimelinePositionText));
@@ -442,6 +452,12 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                         SegmentType = entry.SegmentType,
                         BrainConfidence = entry.BrainConfidence,
                         CutId = entry.CutId ?? 0,
+                        FeatureConfidence = entry.FeatureConfidence,
+                        SemanticStatus = entry.SemanticStatus,
+                        SemanticReason = entry.SemanticReason,
+                        TriggerProvenance = entry.TriggerProvenance,
+                        BrainAxisStatus = entry.BrainAxisStatus,
+                        Metadata = entry.Metadata,
                     });
                 }
 
@@ -503,9 +519,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            if (!File.Exists(resp.PreviewPath))
+            if (!LocalMediaPathPolicy.TryCreateFileUri(resp.PreviewPath, out _))
             {
-                PreviewStatus = $"Preview-Datei nicht gefunden: {resp.PreviewPath}";
+                PreviewStatus = "Preview-Pfad ist keine freigegebene lokale Datei.";
                 return;
             }
 

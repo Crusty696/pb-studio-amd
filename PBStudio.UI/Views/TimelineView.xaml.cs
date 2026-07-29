@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 using PBStudio.UI.Helpers;
 using PBStudio.UI.Models;
+using PBStudio.UI.Services;
 
 namespace PBStudio.UI.Views;
 
@@ -586,6 +587,11 @@ public partial class TimelineView : UserControl
         }
 
         var sourcePath = entry.FilePath;
+        if (!LocalMediaPathPolicy.TryCreateFileUri(sourcePath, out var sourceUri))
+        {
+            ResetPreview("Preview-Pfad ist keine freigegebene lokale Datei");
+            return;
+        }
         var clipStart = Math.Max(0, entry.ClipStart);
         var clipEnd = Math.Max(clipStart, entry.ClipStart + entry.Duration);
         var needsReload = forceReload
@@ -605,7 +611,7 @@ public partial class TimelineView : UserControl
             _pendingSeek = true;
             _playbackTimer.Stop();
             PreviewPlayer.Stop();
-            PreviewPlayer.Source = new Uri(sourcePath, UriKind.Absolute);
+            PreviewPlayer.Source = sourceUri;
             return;
         }
 

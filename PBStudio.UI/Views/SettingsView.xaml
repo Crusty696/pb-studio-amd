@@ -375,8 +375,8 @@
 
                     <TextBlock Foreground="{StaticResource AbletonText}" Margin="0,0,0,4" TextWrapping="Wrap">
                         <Run Text="Video-Embedding by " FontWeight="Bold"/>
-                        <Run Text="Google SigLIP-2" Foreground="{StaticResource AbletonAccent}"/>
-                        <Run Text=" (google/siglip2-base-patch16-384) — Apache 2.0"/>
+                        <Run Text="Google SigLIP SO400M" Foreground="{StaticResource AbletonAccent}"/>
+                        <Run Text=" (google/siglip-so400m-patch14-384) — Apache 2.0"/>
                     </TextBlock>
                     <TextBlock Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"
                                Text="https://www.apache.org/licenses/LICENSE-2.0"/>

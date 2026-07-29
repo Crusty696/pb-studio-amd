@@ -24,7 +24,11 @@ PBStudio.UI/
 │   ├── DirectorViewModel.cs         # KI-Automation-Tab
 │   ├── TimelineViewModel.cs         # Timeline-Tab
 │   ├── ProductionViewModel.cs       # Rendering-Tab
-│   └── SettingsViewModel.cs         # Einstellungen-Tab
+│   ├── SettingsViewModel.cs         # Einstellungen-Tab
+│   ├── ModelManagerViewModel.cs     # Modelle-Tab
+│   ├── BrainViewModel.cs            # Brain-Tab
+│   ├── ChatViewModel.cs             # Chat-Tab
+│   └── TerminalViewModel.cs         # Terminal-Tab
 │
 ├── Views/                           # XAML User Controls (Material Design)
 │   ├── MediaIngestView.xaml         # Import-Interface
@@ -45,16 +49,16 @@ PBStudio.UI/
 │   └── SettingsView.xaml.cs
 │
 ├── Models/                          # Daten-Klassen
-│   └── (noch zu füllen)
+│   └── Audio/Video/Timeline/Brain/Model-/Chat-DTOs
 │
 ├── Converters/                      # XAML Wert-Konverter
-│   └── (noch zu füllen)
+│   └── Visibility, Status, Confidence, Waveform und Timeline
 │
 ├── Properties/                      # .NET Metadaten
 │   └── (generiert)
 │
 ├── Resources/                       # Icons, Assets
-│   └── (noch zu erstellen)
+│   └── app.ico
 │
 ├── .gitignore                       # Git-Ausschlüsse
 ├── README.md                        # Übersicht & Setup
@@ -92,10 +96,10 @@ Windows (Transient):
 MainWindow
   └─ MainViewModel
       ├─ PythonBridgeService.StartAsync()
-      │   └─ Startet python server.py (Port 8765)
+      │   └─ Startet kanonisches Python 3.11 + uvicorn auf 127.0.0.1:8765
       │
-      ├─ SSEClient.StartStreamingAsync("/api/events")
-      │   └─ Hört auf Echtzeit-Updates
+      ├─ SSEClient.StartAsync()
+      │   └─ Hört auf /events/progress, /events/log und /events/gpu
       │       ├─ GPU-Status
       │       ├─ Progress
       │       ├─ Errors
@@ -129,11 +133,8 @@ MainWindow
 | Microsoft.Xaml.Behaviors | 1.1.135 | Event-to-Command |
 | Microsoft.Extensions.* | 9.0.0 | DI, Logging, HTTP |
 
-## Nächste Schritte
+## Verifikation
 
-1. **Models/** füllen (MediaFile, Project, Timeline, etc.)
-2. **Converters/** erweitern (DateTime, Visibility, etc.)
-3. **Resources/** Icons und Assets hinzufügen
-4. Tab-Views mit echten Controls bestücken
-5. Backend-Integration testen
-6. Unit-Tests schreiben
+Die verbindlichen Release-Gates stehen im aktiven Spec-Workspace
+`specs/00013-system-wide-bug-hunting-audit/`. Ein erfolgreicher Build allein
+belegt weder Backend-Laufzeit noch GUI- oder E2E-Funktion.

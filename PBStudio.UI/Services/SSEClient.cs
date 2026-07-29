@@ -365,6 +365,12 @@ public class SSEClient : IDisposable
                                 EtaSeconds = TryGetDouble(root, "eta_seconds"),
                                 OutputPath = TryGetString(root, "output_path"),
                                 Error = TryGetString(root, "error"),
+                                QueueJobId = TryGetString(root, "queue_job_id"),
+                                RunId = TryGetString(root, "run_id"),
+                                EvidencePath = TryGetString(root, "evidence_path"),
+                                ValidationPath = TryGetString(root, "validation_path"),
+                                ValidationStatus = TryGetString(root, "validation_status"),
+                                ProgressEnd = TryGetBool(root, "progress_end"),
                                 Step = TryGetString(root, "step"),
                                 StepIndex = TryGetInt(root, "step_index"),
                                 StepTotal = TryGetInt(root, "step_total"),
@@ -451,6 +457,19 @@ public class SSEClient : IDisposable
     private static int TryGetInt(JsonElement root, string propertyName)
         => (int)Math.Round(TryGetDouble(root, propertyName));
 
+    private static bool TryGetBool(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return false;
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(value.GetString(), out var parsed) => parsed,
+            _ => false,
+        };
+    }
+
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
@@ -491,6 +510,12 @@ public class ProgressEventArgs : EventArgs
     public double EtaSeconds { get; init; }
     public string OutputPath { get; init; } = "";
     public string Error { get; init; } = "";
+    public string QueueJobId { get; init; } = "";
+    public string RunId { get; init; } = "";
+    public string EvidencePath { get; init; } = "";
+    public string ValidationPath { get; init; } = "";
+    public string ValidationStatus { get; init; } = "";
+    public bool ProgressEnd { get; init; }
     public string Step { get; init; } = "";       // Feature-3: phase-Identifier
     public int StepIndex { get; init; }            // 1-based current step
     public int StepTotal { get; init; }            // total steps in pipeline

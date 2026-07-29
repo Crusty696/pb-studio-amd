@@ -779,6 +779,14 @@ async def recommend_model(
     )
     client, lmstudio_ok, ollama_ok = await _make_alive_client(required_capability)
     if client is None:
+        diagnostic_client, lmstudio_alive, ollama_alive = (
+            await _make_alive_client()
+        )
+        if diagnostic_client is not None:
+            client = diagnostic_client
+            lmstudio_ok = lmstudio_alive
+            ollama_ok = ollama_alive
+    if client is None:
         registry_stub = ModelRegistry(ai_cfg)
         return RecommendationResponse(
             task=task,

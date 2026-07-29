@@ -126,9 +126,15 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <!-- Audit-Fix 2026-07-10 (Sweep-Finding HIGH-12): StatusText war vorher
                          an kein UI-Element gebunden - Refresh-Fehler blieben unsichtbar. -->
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="{Binding StatusText, Converter={StaticResource StatusTextToBrushConverter}}"
-                               FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <TextBox Text="{Binding StatusText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{Binding StatusText, Converter={StaticResource StatusTextToBrushConverter}}"
+                             FontSize="10"
+                             FontWeight="SemiBold"
+                             VerticalAlignment="Center"
+                             Margin="0,0,14,0"/>
                     <TextBlock Text="{Binding PreviewStatus}"
                                Foreground="{StaticResource AbletonAccent}"
                                FontSize="10" VerticalAlignment="Center" Margin="0,0,14,0"/>
@@ -252,9 +258,23 @@
                                 </StackPanel>
                                 <StackPanel Margin="0,8,0,0">
                                     <TextBlock Text="DATEI" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
-                                    <TextBlock Text="{Binding SelectedFilePath, Mode=OneWay}" Foreground="{StaticResource AbletonTextDim}" FontSize="10" TextWrapping="Wrap"/>
+                                    <TextBox Text="{Binding SelectedFilePath, Mode=OneWay}"
+                                             IsReadOnly="True"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Foreground="{StaticResource AbletonTextDim}"
+                                             FontSize="10"
+                                             TextWrapping="Wrap"/>
                                 </StackPanel>
                             </UniformGrid>
+                            <TextBox Text="{Binding SelectedEvidence, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{StaticResource AbletonTextDim}"
+                                     TextWrapping="Wrap"
+                                     FontSize="10"
+                                     Margin="0,8,0,0"/>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>

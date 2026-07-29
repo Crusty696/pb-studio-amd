@@ -1,4 +1,4 @@
-﻿{
+{
   "openapi": "3.0.3",
   "info": {
     "title": "PB Studio AMD Backend",
@@ -95,7 +95,7 @@
     "/shutdown": {
       "post": {
         "summary": "Shutdown",
-        "description": "Graceful Shutdown (aufgerufen von C# beim App-Close).",
+        "description": "Owner-authorized graceful shutdown called by the WPF launcher.",
         "operationId": "shutdown_shutdown_post",
         "responses": {
           "200": {
@@ -103,16 +103,43 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "object",
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "type": "object",
                   "title": "Response Shutdown Shutdown Post"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Owner-Capability fehlt oder ist ungueltig."
+          },
+          "503": {
+            "description": "Backend wurde ohne Owner-Capability gestartet."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Runtime-required launcher capability for destructive loopback operations."
+          }
+        ]
       }
     },
     "/project/create": {
@@ -1722,7 +1749,7 @@
           "Brain"
         ],
         "summary": "Reset",
-        "description": "Two-step confirmation reset: 1st call returns token, 2nd resets.",
+        "description": "Owner-bound two-step reset with an expiring, single-use token.",
         "operationId": "reset_brain_reset_post",
         "requestBody": {
           "content": {
@@ -1746,6 +1773,12 @@
               }
             }
           },
+          "403": {
+            "description": "Owner-Capability oder Token-Owner ungueltig."
+          },
+          "503": {
+            "description": "Backend wurde ohne Owner-Capability gestartet."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1756,7 +1789,18 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Runtime-required launcher capability; confirmation tokens are bound to this owner."
+          }
+        ]
       }
     },
     "/brain/explain/{cut_id}": {
@@ -2541,6 +2585,42 @@
             "type": "array",
             "title": "Hihat Times",
             "default": []
+          },
+          "analysis_status": {
+            "type": "string",
+            "title": "Analysis Status",
+            "default": "completed"
+          },
+          "stage_status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Status"
+          },
+          "stage_errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Errors"
+          },
+          "chunk_evidence": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Chunk Evidence"
+          },
+          "downbeats": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Downbeats"
+          },
+          "downbeat_provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Downbeat Provenance"
           }
         },
         "type": "object",
@@ -2642,6 +2722,25 @@
             "type": "boolean",
             "title": "Has Audio Embedding",
             "default": false
+          },
+          "analysis_status": {
+            "type": "string",
+            "title": "Analysis Status",
+            "default": "unavailable"
+          },
+          "stage_status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Status"
+          },
+          "stage_errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Errors"
           },
           "stems_paths": {
             "additionalProperties": {
@@ -2941,6 +3040,11 @@
           "total_clicks": {
             "type": "integer",
             "title": "Total Clicks"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "title": "Message"
           }
         },
         "type": "object",
@@ -3910,6 +4014,41 @@
             "type": "string",
             "nullable": true,
             "title": "Error"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "title": "Message"
+          },
+          "queue_job_id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Queue Job Id"
+          },
+          "run_id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Run Id"
+          },
+          "evidence_path": {
+            "type": "string",
+            "nullable": true,
+            "title": "Evidence Path"
+          },
+          "validation_path": {
+            "type": "string",
+            "nullable": true,
+            "title": "Validation Path"
+          },
+          "progress_end": {
+            "type": "boolean",
+            "title": "Progress End",
+            "default": false
+          },
+          "validation_status": {
+            "type": "string",
+            "nullable": true,
+            "title": "Validation Status"
           }
         },
         "type": "object",
@@ -4334,6 +4473,36 @@
             "type": "integer",
             "nullable": true,
             "title": "Cut Id"
+          },
+          "feature_confidence": {
+            "type": "number",
+            "title": "Feature Confidence",
+            "default": 0.0
+          },
+          "semantic_status": {
+            "type": "string",
+            "title": "Semantic Status",
+            "default": "unavailable"
+          },
+          "semantic_reason": {
+            "type": "string",
+            "nullable": true,
+            "title": "Semantic Reason"
+          },
+          "trigger_provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Trigger Provenance"
+          },
+          "brain_axis_status": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Brain Axis Status"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
           }
         },
         "type": "object",

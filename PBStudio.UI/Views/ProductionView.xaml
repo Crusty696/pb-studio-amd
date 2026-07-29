@@ -181,9 +181,13 @@
                     <TextBlock DockPanel.Dock="Right" Text="{Binding EtaText}"
                                Foreground="{StaticResource AbletonYellow}" FontSize="11"
                                FontFamily="Consolas"/>
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="{StaticResource AbletonTextDim}" FontSize="11"
-                               TextTrimming="CharacterEllipsis"/>
+                    <TextBox Text="{Binding StatusText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{StaticResource AbletonTextDim}"
+                             FontSize="11"
+                             TextWrapping="Wrap"/>
                 </DockPanel>
             </StackPanel>
         </md:Card>
@@ -220,6 +224,18 @@
                                 </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Path=., Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Foreground="{StaticResource AbletonTextDim}"
+                                         FontFamily="Consolas"
+                                         FontSize="11"
+                                         TextWrapping="Wrap"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
                     </ListBox>
                 </Border>
             </DockPanel>

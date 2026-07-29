@@ -232,7 +232,13 @@ public class ApiClient : IApiClient
                 e.TriggerStrength,
                 e.SegmentType,
                 e.BrainConfidence,
-                e.CutId
+                e.CutId,
+                e.FeatureConfidence,
+                e.SemanticStatus,
+                e.SemanticReason,
+                e.TriggerProvenance,
+                e.BrainAxisStatus,
+                e.Metadata
             )).ToList()
         };
         return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
@@ -261,7 +267,14 @@ public class ApiClient : IApiClient
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var response = await _http.PostAsJsonAsync("/shutdown", (object?)null, JsonOptions, cts.Token).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/shutdown")
+            {
+                Content = JsonContent.Create((object?)null, options: JsonOptions),
+            };
+            request.Headers.TryAddWithoutValidation(
+                BackendOwnerCapability.HeaderName,
+                BackendOwnerCapability.Ensure());
+            using var response = await _http.SendAsync(request, cts.Token).ConfigureAwait(false);
             _logger.LogInformation("Backend graceful shutdown angefordert: {StatusCode}", response.StatusCode);
         }
         catch (Exception ex)
@@ -280,12 +293,59 @@ public class ApiClient : IApiClient
             top_n = topN,
         });
 
-    public Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
-        => PostAsync<BrainFeedbackResponse>("/brain/feedback", new
+    public async Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
+    {
+        try
         {
-            cut_id = cutId,
-            rating,
-        });
+            using var response = await _http.PostAsJsonAsync(
+                "/brain/feedback",
+                new { cut_id = cutId, rating },
+                JsonOptions,
+                _shutdownCts.Token).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<BrainFeedbackResponse>(
+                    JsonOptions,
+                    _shutdownCts.Token).ConfigureAwait(false);
+            }
+
+            var raw = await response.Content.ReadAsStringAsync(
+                _shutdownCts.Token).ConfigureAwait(false);
+            var detail = TryReadErrorDetail(raw)
+                ?? $"Feedback abgelehnt (HTTP {(int)response.StatusCode}).";
+            _logger.LogWarning(
+                "POST /brain/feedback abgelehnt: {Status} {Detail}",
+                (int)response.StatusCode,
+                detail);
+            return new BrainFeedbackResponse("rejected", 0, 0, detail);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "POST /brain/feedback fehlgeschlagen");
+            return new BrainFeedbackResponse("failed", 0, 0, ex.Message);
+        }
+    }
+
+    private static string? TryReadErrorDetail(string raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            if (!document.RootElement.TryGetProperty("detail", out var detail))
+                return null;
+            return detail.ValueKind == JsonValueKind.String
+                ? detail.GetString()
+                : detail.GetRawText();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     public Task<BrainLearningSessionResponse?> BrainLearningSessionAsync()
         => PostAsync<BrainLearningSessionResponse>("/brain/learning_session", null);
@@ -294,10 +354,12 @@ public class ApiClient : IApiClient
         => GetAsync<BrainStatsResponse>("/brain/stats");
 
     public Task<BrainResetResponse?> BrainResetRequestAsync()
-        => PostAsync<BrainResetResponse>("/brain/reset", null);
+        => PostOwnerAuthorizedAsync<BrainResetResponse>("/brain/reset", null);
 
     public Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken)
-        => PostAsync<BrainResetResponse>("/brain/reset", new { confirmation_token = confirmationToken });
+        => PostOwnerAuthorizedAsync<BrainResetResponse>(
+            "/brain/reset",
+            new { confirmation_token = confirmationToken });
 
     // R-Brain-09: Erklaerung fuer Confidence-Balken in der Timeline.
     // narrative=true (Default): Backend versucht LLM-Erklaerung via Ollama;
@@ -914,6 +976,53 @@ public class ApiClient : IApiClient
         };
     }
 
+    private async Task<T?> PostOwnerAuthorizedAsync<T>(
+        string url,
+        object? body,
+        CancellationToken cancellationToken = default) where T : class
+    {
+        var capability = BackendOwnerCapability.Current;
+        if (string.IsNullOrWhiteSpace(capability))
+        {
+            _logger.LogError(
+                "Owner-Capability fehlt; destruktiver Request {Url} wurde blockiert",
+                url);
+            return null;
+        }
+
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(body, options: JsonOptions),
+            };
+            request.Headers.TryAddWithoutValidation(
+                BackendOwnerCapability.HeaderName,
+                capability);
+            using var response = await _http.SendAsync(request, token)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(
+                JsonOptions,
+                token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Owner-authorized POST {Url} fehlgeschlagen", url);
+            return null;
+        }
+    }
+
     public async Task<bool> DecideChatToolConfirmationAsync(
         string confirmationId, bool approve, CancellationToken ct = default)
     {
@@ -983,10 +1092,14 @@ public record AudioClipInfo(
     // Persisted im Backend nach Streaming-Hash beim Import; signalisiert
     // dass Embedding/Analyse aus Cache wiederverwendbar sind.
     string? AudioHash = null,
+    bool HasAudioEmbedding = false,
     // L-N4: Stem-Separation Outputs — Dict {vocals|instrumental|drums|bass|other -> path}.
     // Gesetzt nach POST /audio/stems/separate. UI rendert STEMS-Badge und
     // "Stems-Ordner oeffnen"-Button wenn nicht null und nicht-leer.
-    Dictionary<string, string>? StemsPaths = null);
+    Dictionary<string, string>? StemsPaths = null,
+    string AnalysisStatus = "unavailable",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
 public record SubtrackSegment(double StartTime, double EndTime, double Confidence = 0.0, double? SubBpm = null, string? SubKey = null);
 public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
@@ -1005,7 +1118,13 @@ public record AudioAnalysisResult(
     List<double>? OnsetTimes = null,
     List<double>? KickTimes = null,
     List<double>? SnareTimes = null,
-    List<double>? HihatTimes = null);
+    List<double>? HihatTimes = null,
+    string AnalysisStatus = "completed",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null,
+    Dictionary<string, JsonElement>? ChunkEvidence = null,
+    List<double>? Downbeats = null,
+    Dictionary<string, JsonElement>? DownbeatProvenance = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(
@@ -1050,14 +1169,31 @@ public record VideoAnalysisResult(
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
-public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null, double BrainConfidence = 0.0, int? CutId = null);
+public record TimelineEntry(
+    string ClipId,
+    string ClipName,
+    string FilePath,
+    double StartTime,
+    double EndTime,
+    double ClipStart,
+    string TriggerType,
+    double TriggerStrength,
+    string? SegmentType = null,
+    double BrainConfidence = 0.0,
+    int? CutId = null,
+    double FeatureConfidence = 0.0,
+    string SemanticStatus = "unavailable",
+    string? SemanticReason = null,
+    Dictionary<string, JsonElement>? TriggerProvenance = null,
+    Dictionary<string, JsonElement>? BrainAxisStatus = null,
+    Dictionary<string, JsonElement>? Metadata = null);
 public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false, string? CanvasPath = null);
 public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5, double ClipLengthVariation = 0.0, double MaxCutInterval = 10.0, string BeatTriggerMode = "all");
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
 public record BrainSuggestResponse(List<BrainSuggestion> Suggestions);
 public record PacingPreviewResponse(string PreviewPath, double Duration, string Resolution);
-public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks);
+public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks, string? Message = null);
 public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
 public record BrainStatsBucket(
     string Axis,
@@ -1088,4 +1224,21 @@ public record SceneInfo(double StartTime, double EndTime, string SceneType, doub
 // Pydantic-Schema silent gedropped.
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory, double PeakMotion = 0.0);
 public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true, string? Encoder = null);
-public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);
+public record RenderProgress(
+    string TaskId,
+    string Status,
+    double Percent,
+    int CurrentFrame,
+    int TotalFrames,
+    double Fps,
+    double ElapsedSeconds,
+    double EtaSeconds,
+    string? OutputPath,
+    string? Error,
+    string? Message = null,
+    string? QueueJobId = null,
+    string? RunId = null,
+    string? EvidencePath = null,
+    string? ValidationPath = null,
+    bool ProgressEnd = false,
+    string? ValidationStatus = null);

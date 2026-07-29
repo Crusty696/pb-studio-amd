@@ -18,7 +18,8 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     private readonly IApiClient _api;
     private List<BrainSuggestion> _cuts = new();
     private string? _projectAudioPath;
-    private string? _projectVideoBasePath;
+    private IReadOnlyDictionary<string, string> _projectVideoPaths =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
     public event Action? RequestClose;
@@ -49,10 +50,13 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         _api = api;
     }
 
-    public async Task LoadAsync(string? audioPath = null, string? videoBasePath = null)
+    public async Task LoadAsync(
+        string? audioPath = null,
+        IReadOnlyDictionary<string, string>? videoPaths = null)
     {
         _projectAudioPath = audioPath;
-        _projectVideoBasePath = videoBasePath;
+        _projectVideoPaths = videoPaths
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var resp = await _api.BrainLearningSessionAsync();
         if (resp?.Cuts == null || resp.Cuts.Count == 0)
         {
@@ -80,10 +84,12 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         CurrentEndTime = c.EndTime;
         CurrentFinalScore = c.FinalScore;
 
-        // Best-effort Pfade — Vault-/Render-System löst real auf, hier reicht ClipId-Heuristik.
+        // Medienpfade stammen aus dem Projektkatalog und werden lokal validiert.
         CurrentVideoUri = ResolveVideoUri(c.ClipId);
-        CurrentAudioUri = !string.IsNullOrEmpty(_projectAudioPath)
-            ? new Uri(_projectAudioPath, UriKind.Absolute)
+        CurrentAudioUri = LocalMediaPathPolicy.TryCreateFileUri(
+            _projectAudioPath,
+            out var audioUri)
+            ? audioUri
             : null;
         IsPlaying = false;
 
@@ -93,16 +99,12 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
 
     private Uri? ResolveVideoUri(string? clipId)
     {
-        if (string.IsNullOrEmpty(_projectVideoBasePath) || string.IsNullOrEmpty(clipId))
+        if (string.IsNullOrEmpty(clipId)
+            || !_projectVideoPaths.TryGetValue(clipId, out var path))
             return null;
-        // try common file patterns: <base>/<clipId>.mp4 or <base>/clip_<id>.mp4
-        var trimmed = clipId.StartsWith("clip_") ? clipId.Substring(5) : clipId;
-        foreach (var name in new[] { clipId + ".mp4", $"clip_{trimmed}.mp4", trimmed + ".mp4" })
-        {
-            var p = Path.Combine(_projectVideoBasePath, name);
-            if (File.Exists(p)) return new Uri(p, UriKind.Absolute);
-        }
-        return null;
+        return LocalMediaPathPolicy.TryCreateFileUri(path, out var videoUri)
+            ? videoUri
+            : null;
     }
 
     [RelayCommand]
@@ -152,6 +154,11 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         if (resp == null)
         {
             Status = "Feedback fehlgeschlagen.";
+            return;
+        }
+        if (!string.Equals(resp.Status, "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            Status = resp.Message ?? "Feedback wurde abgelehnt.";
             return;
         }
         Status = $"OK — {resp.UpdatedBuckets} buckets, total={resp.TotalClicks}. → next";
