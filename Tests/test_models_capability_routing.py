@@ -34,6 +34,13 @@ class _ProbeClient:
     async def get_model_capabilities(self):
         return {f"{self.provider}-chat": frozenset({"chat"})}
 
+    async def supports_capability(self, capability: str) -> bool:
+        capabilities = await self.get_model_capabilities()
+        return any(
+            capability in model_capabilities
+            for model_capabilities in capabilities.values()
+        )
+
 
 def test_models_list_offline_provider_has_hard_deadline():
     def factory(*, provider=None, **_kwargs):
@@ -52,3 +59,33 @@ def test_models_list_offline_provider_has_hard_deadline():
     assert response.lmstudio_available is True
     assert response.ollama_available is False
     assert [model.name for model in response.models] == ["lmstudio-chat"]
+
+
+def test_recommendation_distinguishes_live_provider_from_missing_capability():
+    def factory(*, provider=None, **_kwargs):
+        return _ProbeClient(
+            provider or "lmstudio",
+            delay=0.0,
+            alive=provider != "ollama",
+        )
+
+    async def go():
+        with patch(
+            "pb_studio.ai.llm_provider.get_provider",
+            return_value="auto",
+        ), patch(
+            "pb_studio.ai.llm_provider.get_llm_client",
+            side_effect=factory,
+        ):
+            return await models_router.recommend_model(
+                task="video_captioning",
+                mode="balance",
+            )
+
+    response = asyncio.run(go())
+
+    assert response.model is None
+    assert response.installed == ["lmstudio-chat"]
+    assert "Kein vision-faehiges Modell" in response.reason
+    assert "lmstudio-chat" in response.reason
+    assert "Provider erreichbar" not in response.reason

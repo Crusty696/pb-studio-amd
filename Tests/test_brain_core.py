@@ -66,7 +66,7 @@ def test_bridge_compute_all_returns_all_axes():
         cut_duration_sec=2.0,
     )
     out = bd.compute_all(feats)
-    assert set(out.keys()) == set(BRIDGE_AXES)
+    assert set(out.keys()) == set(BRIDGE_AXES) - {"semantic_match_weight"}
     for v in out.values():
         assert 0.0 <= v <= 1.0
 
@@ -82,7 +82,12 @@ def test_bridge_kick_axis_strong_for_kick_trigger():
 def test_bridge_semantic_match_uses_cosine():
     bd = BridgeDimensions()
     e = np.ones(8, dtype=np.float32)
-    f = CandidateFeatures(audio_embedding=e, video_embedding=e)
+    f = CandidateFeatures(
+        audio_embedding=e,
+        video_embedding=e,
+        semantic_status="available",
+        semantic_reason="valid_equal_dimension_embeddings",
+    )
     out = bd.compute_all(f)
     assert out["semantic_match_weight"] > 0.99
 
@@ -190,7 +195,7 @@ def test_reset_clears_weights(tmp_path: Path):
 
 # ----------------------- feedback logger -----------------------
 
-def test_feedback_perfect_updates_85_buckets(tmp_path: Path):
+def test_feedback_perfect_updates_only_relevant_buckets(tmp_path: Path):
     store = BrainStore(tmp_path / "brain")
     try:
         ws = WeightStore(store.weights_conn)
@@ -198,10 +203,27 @@ def test_feedback_perfect_updates_85_buckets(tmp_path: Path):
         try:
             fl = FeedbackLogger(weight_store=ws, state_conn=state)
             ctx = CutContext(section_type="drop", audio_mood="dark")
+            assignments = [
+                {
+                    "axis": "kick_weight",
+                    "level": 0,
+                    "key": "",
+                    "credit": 1.0,
+                },
+                {
+                    "axis": "kick_weight",
+                    "level": 5,
+                    "key": ctx.context_keys[5],
+                    "credit": 1.0,
+                },
+            ]
             n = fl.log_feedback(
-                cut_id=42, rating="perfect", context_keys=ctx.context_keys
+                cut_id=42,
+                rating="perfect",
+                context_keys=ctx.context_keys,
+                assignments=assignments,
             )
-            assert n == 17 * 6
+            assert n == 2
             row = ws.get_alpha_beta("kick_weight", 0, "")
             assert row == (2.0, 0.0)
             row5 = ws.get_alpha_beta(
@@ -235,7 +257,17 @@ def test_feedback_invalid_rating_raises(tmp_path: Path):
         try:
             fl = FeedbackLogger(weight_store=ws, state_conn=state)
             with pytest.raises(ValueError):
-                fl.log_feedback(cut_id=42, rating="bogus", context_keys=[""])
+                fl.log_feedback(
+                    cut_id=42,
+                    rating="bogus",
+                    context_keys=[""],
+                    assignments=[{
+                        "axis": "kick_weight",
+                        "level": 0,
+                        "key": "",
+                        "credit": 1.0,
+                    }],
+                )
         finally:
             state.close()
     finally:
@@ -264,6 +296,12 @@ def test_feedback_outbox_recovers_without_double_weight_update(tmp_path: Path):
                 cut_id=42,
                 rating="perfect",
                 context_keys=["", "section=drop"],
+                assignments=[{
+                    "axis": "kick_weight",
+                    "level": 0,
+                    "key": "",
+                    "credit": 1.0,
+                }],
             )
 
         assert outbox.is_file()
@@ -311,6 +349,12 @@ def test_feedback_outbox_compensates_when_cut_disappears(tmp_path: Path):
                 cut_id=42,
                 rating="fits",
                 context_keys=[""],
+                assignments=[{
+                    "axis": "kick_weight",
+                    "level": 0,
+                    "key": "",
+                    "credit": 1.0,
+                }],
             )
         state.execute("DELETE FROM timeline_cuts WHERE id=42")
 
@@ -343,7 +387,9 @@ def test_scorer_uses_bridge_and_weights(tmp_path: Path):
         scored = scorer.score(
             candidate={"id": "x"}, features=feats, context_keys=[""]
         )
-        assert set(scored.brain_scores.keys()) == set(BRIDGE_AXES)
+        assert set(scored.brain_scores.keys()) == (
+            set(BRIDGE_AXES) - {"semantic_match_weight"}
+        )
         assert 0.0 <= scored.final_score <= 2.0  # axis values 0..1, weights 0..2
     finally:
         store.close()

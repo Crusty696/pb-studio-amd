@@ -142,18 +142,21 @@ def test_startup_reconstructs_and_schedules_render_payload(
     render_router = importlib.import_module("backend.routers.render_router")
     audio = tmp_path / "mix.wav"
     audio.write_bytes(b"audio")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
     output = tmp_path / "resume.mp4"
     timeline = [{
-        "clip_id": "clip-1",
+        "clip_id": "clip_1",
         "start_time": 0.0,
         "end_time": 2.0,
-        "metadata": {"file_path": str(tmp_path / "clip.mp4")},
+        "metadata": {"file_path": str(video)},
     }]
     request = RenderRequest(output_path=str(output), audio_path=str(audio))
     settings = render_router._request_settings_dict(
         request,
         timeline_snapshot=timeline,
         project_root=tmp_path,
+        project_db_id=1,
     )
     job = queue.enqueue("resume-hash", str(output), settings)
     queue.update_status(job.job_id, STATE_RUNNING)
@@ -164,6 +167,15 @@ def test_startup_reconstructs_and_schedules_render_payload(
         scheduled.append((task_id, restored_request, state, restored_timeline))
 
     monkeypatch.setattr(render_router, "_run_render_task", fake_run)
+    media_state = AppState(
+        audio_clips={1: {"path": str(audio)}},
+        video_clips={1: {"path": str(video)}},
+    )
+    monkeypatch.setattr(
+        render_router,
+        "_load_resume_media_state",
+        lambda *_args: (media_state, tmp_path),
+    )
     state = AppState()
     resumed = asyncio.run(
         render_router._resume_render_queue_on_startup(state, queue=queue)
@@ -216,14 +228,17 @@ def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
     output = tmp_path / "resume-shutdown.mp4"
     audio = tmp_path / "mix.wav"
     audio.write_bytes(b"audio")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
     request = RenderRequest(
         output_path=str(output),
         audio_path=str(audio),
     )
     timeline = [{
+        "clip_id": "clip_1",
         "start_time": 0.0,
         "end_time": 1.0,
-        "metadata": {"file_path": str(tmp_path / "clip.mp4")},
+        "metadata": {"file_path": str(video)},
     }]
     job = queue.enqueue(
         "resume-shutdown-hash",
@@ -232,6 +247,7 @@ def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
             request,
             timeline_snapshot=timeline,
             project_root=tmp_path,
+            project_db_id=1,
         ),
     )
     queue.update_status(job.job_id, STATE_RUNNING)
@@ -240,6 +256,15 @@ def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
         await asyncio.Event().wait()
 
     monkeypatch.setattr(render_router, "_run_render_task", stubborn_render)
+    media_state = AppState(
+        audio_clips={1: {"path": str(audio)}},
+        video_clips={1: {"path": str(video)}},
+    )
+    monkeypatch.setattr(
+        render_router,
+        "_load_resume_media_state",
+        lambda *_args: (media_state, tmp_path),
+    )
 
     async def run() -> None:
         render_router._reset_render_runtime_for_startup()

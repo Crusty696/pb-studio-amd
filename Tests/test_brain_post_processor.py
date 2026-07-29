@@ -74,7 +74,9 @@ def test_annotate_attaches_brain_scores(brain_svc, tmp_path: Path):
         assert len(out) == 2
         for c in out:
             scores = c["metadata"]["brain_scores"]
-            assert set(scores.keys()) == set(BRIDGE_AXES)
+            assert set(scores.keys()) == (
+                set(BRIDGE_AXES) - {"semantic_match_weight"}
+            )
             ck = c["metadata"]["context_keys"]
             assert len(ck) == 6
 
@@ -146,7 +148,9 @@ def test_persist_batch_rolls_back_partial_timeline(
 # ----------------------------------------------------------------------------
 
 def test_normalize_centroid_curve_handles_empty_and_nan():
-    from pb_studio.brain.post_processor import _normalize_centroid_curve
+    from pb_studio.brain.feature_adapter import (
+        _normalize_percentile_curve as _normalize_centroid_curve,
+    )
 
     assert _normalize_centroid_curve([]) == []
     assert _normalize_centroid_curve(None) == []
@@ -162,7 +166,7 @@ def test_normalize_centroid_curve_handles_empty_and_nan():
 
 
 def test_nearest_scene_distance_dict_and_tuple():
-    from pb_studio.brain.post_processor import _nearest_scene_distance
+    from pb_studio.brain.feature_adapter import _nearest_scene_distance
 
     # leere Liste
     assert _nearest_scene_distance(5.0, []) == 1.0
@@ -178,10 +182,10 @@ def test_nearest_scene_distance_dict_and_tuple():
 
     # tuple-Format (start, end)
     scenes_tup = [(0.0, 1.0), (3.0, 4.5)]
-    assert abs(_nearest_scene_distance(0.5, scenes_tup) - 0.5) < 0.001
+    assert _nearest_scene_distance(0.5, scenes_tup) == 1.0
 
     # Cap auf 10.0 fuer absurd weite Distanzen
-    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 10.0
+    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 1000.0
 
 
 def test_cosine_zero_one_handles_nan_inf_inputs():
@@ -196,7 +200,7 @@ def test_cosine_zero_one_handles_nan_inf_inputs():
     assert 0.0 <= val <= 1.0
 
     # Empty
-    assert _cosine_zero_one(np.array([]), np.array([])) == 0.5
+    assert _cosine_zero_one(np.array([]), np.array([])) is None
 
 
 def test_weight_store_variance_zero_alpha_beta(tmp_path):

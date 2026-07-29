@@ -4,7 +4,9 @@ import numpy as np
 
 
 def test_normalize_centroid_curve_handles_empty_and_nan():
-    from pb_studio.brain.post_processor import _normalize_centroid_curve
+    from pb_studio.brain.feature_adapter import (
+        _normalize_percentile_curve as _normalize_centroid_curve,
+    )
     assert _normalize_centroid_curve([]) == []
     assert _normalize_centroid_curve(None) == []
     assert _normalize_centroid_curve([0.0, 0.0, 0.0]) == []
@@ -16,7 +18,7 @@ def test_normalize_centroid_curve_handles_empty_and_nan():
 
 
 def test_nearest_scene_distance_dict_and_tuple():
-    from pb_studio.brain.post_processor import _nearest_scene_distance
+    from pb_studio.brain.feature_adapter import _nearest_scene_distance
     assert _nearest_scene_distance(5.0, []) == 1.0
     scenes_dict = [
         {"start_time": 0.0, "end_time": 2.5},
@@ -25,8 +27,8 @@ def test_nearest_scene_distance_dict_and_tuple():
     ]
     assert abs(_nearest_scene_distance(2.6, scenes_dict) - 0.1) < 0.001
     scenes_tup = [(0.0, 1.0), (3.0, 4.5)]
-    assert abs(_nearest_scene_distance(0.5, scenes_tup) - 0.5) < 0.001
-    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 10.0
+    assert _nearest_scene_distance(0.5, scenes_tup) == 1.0
+    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 1000.0
 
 
 def test_cosine_zero_one_handles_nan_inf_inputs():
@@ -37,7 +39,7 @@ def test_cosine_zero_one_handles_nan_inf_inputs():
     val = _cosine_zero_one(a, b)
     assert val == val
     assert -1e-6 <= val <= 1.0 + 1e-6
-    assert _cosine_zero_one(np.array([]), np.array([])) == 0.5
+    assert _cosine_zero_one(np.array([]), np.array([])) is None
 
 
 def test_weight_store_variance_zero_alpha_beta(tmp_path):

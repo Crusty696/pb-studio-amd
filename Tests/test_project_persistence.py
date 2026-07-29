@@ -52,14 +52,22 @@ class TestProjectLifecyclePersistence:
         assert create_response.status_code == 200
 
         audio_file = tmp_path / "roundtrip.mp3"
+        video_file = tmp_path / "roundtrip.mp4"
         audio_file.write_bytes(b"ID3")
+        video_file.write_bytes(b"video")
         fresh_state.audio_clips[1] = {"id": 1, "path": str(audio_file), "name": "roundtrip"}
+        fresh_state.video_clips[1] = {
+            "id": 1,
+            "path": str(video_file),
+            "name": "roundtrip-video",
+            "duration_seconds": 1.5,
+        }
         fresh_state.current_audio_path = str(audio_file)
         fresh_state.set_timeline([
             {
-                "clip_id": "1",
+                "clip_id": "clip_1",
                 "clip_name": "roundtrip",
-                "file_path": str(audio_file),
+                "file_path": str(video_file),
                 "start_time": 0.0,
                 "end_time": 1.5,
                 "clip_start": 0.0,
@@ -67,6 +75,21 @@ class TestProjectLifecyclePersistence:
                 "trigger_strength": 1.0,
             }
         ])
+        def restore_catalog(self, project_id=None):
+            self.audio_clips[1] = {
+                "id": 1,
+                "path": str(audio_file),
+                "name": "roundtrip",
+            }
+            self.video_clips[1] = {
+                "id": 1,
+                "path": str(video_file),
+                "name": "roundtrip-video",
+                "duration_seconds": 1.5,
+            }
+            return True
+
+        monkeypatch.setattr(AppState, "load_from_db", restore_catalog)
 
         save_response = client.post("/project/save")
         assert save_response.status_code == 200
@@ -81,7 +104,7 @@ class TestProjectLifecyclePersistence:
         assert body["has_timeline"] is True
         assert fresh_state.current_audio_path == str(audio_file)
         assert len(fresh_state.current_timeline) == 1
-        assert fresh_state.current_timeline[0]["metadata"]["file_path"] == str(audio_file)
+        assert fresh_state.current_timeline[0]["metadata"]["file_path"] == str(video_file)
 
     def test_roundtrip_timeline_endpoint_restores_flat_fields_after_reopen(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
@@ -90,13 +113,26 @@ class TestProjectLifecyclePersistence:
         client.post("/project/create", json={"name": "Roundtrip", "path": str(tmp_path)})
 
         audio_file = tmp_path / "roundtrip.mp3"
+        video_file = tmp_path / "roundtrip.mp4"
         audio_file.write_bytes(b"ID3")
+        video_file.write_bytes(b"video")
+        fresh_state.audio_clips[1] = {
+            "id": 1,
+            "path": str(audio_file),
+            "name": "roundtrip",
+        }
+        fresh_state.video_clips[1] = {
+            "id": 1,
+            "path": str(video_file),
+            "name": "roundtrip-video",
+            "duration_seconds": 1.5,
+        }
         fresh_state.current_audio_path = str(audio_file)
         fresh_state.set_timeline([
             {
-                "clip_id": "1",
+                "clip_id": "clip_1",
                 "clip_name": "roundtrip",
-                "file_path": str(audio_file),
+                "file_path": str(video_file),
                 "start_time": 0.0,
                 "end_time": 1.5,
                 "clip_start": 0.25,
@@ -104,6 +140,21 @@ class TestProjectLifecyclePersistence:
                 "trigger_strength": 1.0,
             }
         ])
+        def restore_catalog(self, project_id=None):
+            self.audio_clips[1] = {
+                "id": 1,
+                "path": str(audio_file),
+                "name": "roundtrip",
+            }
+            self.video_clips[1] = {
+                "id": 1,
+                "path": str(video_file),
+                "name": "roundtrip-video",
+                "duration_seconds": 1.5,
+            }
+            return True
+
+        monkeypatch.setattr(AppState, "load_from_db", restore_catalog)
 
         assert client.post("/project/save").status_code == 200
         assert client.post("/project/close").status_code == 200
@@ -113,7 +164,7 @@ class TestProjectLifecyclePersistence:
         assert timeline_response.status_code == 200
         entry = timeline_response.json()["entries"][0]
         assert entry["clip_name"] == "roundtrip"
-        assert entry["file_path"] == str(audio_file)
+        assert entry["file_path"] == str(video_file)
         assert entry["clip_start"] == 0.25
         assert entry["trigger_type"] == "beat"
 
@@ -269,9 +320,12 @@ class TestProjectLifecyclePersistence:
 
         captured = []
 
+        restored_audio = tmp_path / "restored.wav"
+        restored_audio.write_bytes(b"RIFF")
+
         def fake_load_from_db(self, project_id=None):
             captured.append(project_id)
-            self.audio_clips[8] = {"id": 8, "path": "restored.wav"}
+            self.audio_clips[8] = {"id": 8, "path": str(restored_audio)}
             return True
 
         monkeypatch.setattr(AppState, "load_from_db", fake_load_from_db)
@@ -281,7 +335,9 @@ class TestProjectLifecyclePersistence:
         assert response.status_code == 200
         assert captured == [100]
         assert fresh_state.current_project["db_project_id"] == 100
-        assert fresh_state.audio_clips == {8: {"id": 8, "path": "restored.wav"}}
+        assert fresh_state.audio_clips == {
+            8: {"id": 8, "path": str(restored_audio)}
+        }
 
     def test_load_from_db_replaces_old_in_memory_catalog_instead_of_merging(self, monkeypatch, tmp_path):
         existing_audio = tmp_path / "real.wav"

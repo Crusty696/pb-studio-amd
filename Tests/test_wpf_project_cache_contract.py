@@ -28,6 +28,24 @@ def test_audio_project_reset_invalidates_shared_cache():
     assert "_audioLibraryState.Clear();" in reset
 
 
+def test_export_project_switch_clears_and_reloads_timeline_state():
+    source = _source("PBStudio.UI/ViewModels/ProductionViewModel.cs")
+    opened = source[
+        source.index(
+            "Register<ProjectOpenedMessage>"
+        ):source.index("Register<ProjectClosedMessage>")
+    ]
+    closed = source[
+        source.index(
+            "Register<ProjectClosedMessage>"
+        ):source.index("if (HasProject)")
+    ]
+
+    assert 'StatusText = "Bereit für Rendering";' in opened
+    assert "_ = SyncAudioPathFromTimelineAsync();" in opened
+    assert "_timelineState.Clear();" in closed
+
+
 def test_library_state_services_reject_late_refresh_results():
     for relative_path in (
         "PBStudio.UI/Services/AudioLibraryStateService.cs",

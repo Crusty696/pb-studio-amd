@@ -12,16 +12,25 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from backend import owner_capability
 from backend.main import app
 from backend._brain_singleton import set_project_state
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
+
+OWNER_CAPABILITY = "A" * 44
+OWNER_HEADER = "X-PBStudio-Owner-Capability"
 
 
 @pytest.fixture()
 def brain_client(tmp_path: Path, monkeypatch):
     # Force brain to use a per-test directory
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+    monkeypatch.setattr(
+        owner_capability,
+        "_OWNER_CAPABILITY",
+        OWNER_CAPABILITY,
+    )
     BrainService.reset_singleton()
 
     state_db = tmp_path / "state.db"
@@ -34,7 +43,19 @@ def brain_client(tmp_path: Path, monkeypatch):
         "VALUES (1, 't', 1, '2026-05-06T00:00:00Z', 1)"
     )
     ctx_keys = ["", "section=drop"]
-    md = json.dumps({"context_keys": ctx_keys})
+    md = json.dumps({
+        "context_keys": ctx_keys,
+        "bridge_values": {
+            "beat_weight": 1.0,
+            "semantic_match_weight": 0.9,
+        },
+        "brain_axis_status": {
+            "semantic_match_weight": {
+                "status": "unavailable",
+                "reason": "audio_embedding_missing",
+            },
+        },
+    })
     conn.execute(
         "INSERT INTO timeline_cuts (id, timeline_id, position_idx, clip_id, "
         "start_time, end_time, brain_scores_json, metadata_json) "
@@ -50,6 +71,7 @@ def brain_client(tmp_path: Path, monkeypatch):
     conn.close()
 
     with TestClient(app) as client:
+        client.headers.update({OWNER_HEADER: OWNER_CAPABILITY})
         yield client
 
     BrainService.reset_singleton()
@@ -70,8 +92,8 @@ def test_feedback_increments_buckets(brain_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    # 17 axes × 2 backoff levels in the seeded metadata
-    assert body["updated_buckets"] == 17 * 2
+    # Relevant beat axis x two available context levels; semantic unavailable.
+    assert body["updated_buckets"] == 2
     assert body["total_clicks"] >= 1
 
 
@@ -177,3 +199,22 @@ def test_reset_invalid_token(brain_client):
     r = brain_client.post("/brain/reset",
                           json={"confirmation_token": "bogus"})
     assert r.status_code == 400
+
+
+def test_reset_rejects_non_owner_and_preserves_owner_token(brain_client):
+    request = brain_client.post("/brain/reset")
+    token = request.json()["confirmation_token"]
+
+    denied = brain_client.post(
+        "/brain/reset",
+        json={"confirmation_token": token},
+        headers={OWNER_HEADER: "B" * 44},
+    )
+    assert denied.status_code == 403
+
+    accepted = brain_client.post(
+        "/brain/reset",
+        json={"confirmation_token": token},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "reset_complete"

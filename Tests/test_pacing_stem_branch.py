@@ -3,13 +3,21 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-def test_pacing_router_calls_stem_branch_when_flag_set():
+def test_pacing_router_calls_stem_branch_when_flag_set(tmp_path, monkeypatch):
     from backend.routers.pacing_router import _run_pacing_generation
     from backend.schemas.pacing_schemas import PacingConfigSchema, TriggerSettingsSchema
+    from pb_studio.config_manager import ConfigManager
 
-    audio_clips = {1: {"id": 1, "name": "a", "path": "/tmp/a.wav", "duration_seconds": 5.0,
-                       "stems_paths": {"vocals": "/tmp/v.wav", "drums": "/tmp/d.wav"}}}
-    video_clips = {10: {"id": 10, "name": "v", "path": "/tmp/v.mp4", "duration_seconds": 10.0}}
+    audio_path = tmp_path / "a.wav"
+    vocals_path = tmp_path / "vocals.wav"
+    drums_path = tmp_path / "drums.wav"
+    video_path = tmp_path / "v.mp4"
+    for path in (audio_path, vocals_path, drums_path, video_path):
+        path.write_bytes(b"media")
+    monkeypatch.setattr(ConfigManager, "resolve_path", lambda self, _path: tmp_path)
+    audio_clips = {1: {"id": 1, "name": "a", "path": str(audio_path), "duration_seconds": 5.0,
+                       "stems_paths": {"vocals": str(vocals_path), "drums": str(drums_path)}}}
+    video_clips = {10: {"id": 10, "name": "v", "path": str(video_path), "duration_seconds": 10.0}}
 
     config = PacingConfigSchema(
         audio_clip_id=1, video_clip_ids=[10], expected_bpm=120.0,

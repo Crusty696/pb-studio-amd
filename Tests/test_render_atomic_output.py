@@ -8,7 +8,21 @@ from pb_studio.rendering.render_service import RenderCancelledError, RenderServi
 
 def _service_without_media_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RenderService:
     service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
-    monkeypatch.setattr(service, "_get_audio_duration", lambda _path: 1.0)
+    monkeypatch.setattr(
+        service,
+        "_get_audio_duration",
+        lambda _path, _cancel_callback=None: 1.0,
+    )
+    monkeypatch.setattr(
+        service,
+        "_measure_trailing_silence_seconds",
+        lambda *args, **kwargs: 0.0,
+    )
+    monkeypatch.setattr(
+        service,
+        "_validate_render_artifact",
+        lambda *args, **kwargs: {"duration_seconds": 1.0},
+    )
     monkeypatch.setattr(service, "_normalize_clips", lambda *args, **kwargs: [])
     monkeypatch.setattr(service, "_generate_concat_file", lambda *args, **kwargs: None)
     return service

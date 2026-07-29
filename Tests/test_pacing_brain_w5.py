@@ -25,6 +25,7 @@ class _CapturingReranker:
         return [
             SimpleNamespace(
                 candidate=self.inputs[0].candidate,
+                features=self.inputs[0].features,
                 final_score=0.8,
                 brain_scores={"motion_match_weight": 0.8},
             )
@@ -115,9 +116,10 @@ def test_brain_selector_receives_real_features_and_threshold():
     assert reranker.min_confidence == pytest.approx(0.63)
     assert features.audio_energy == pytest.approx(0.9)
     assert features.audio_centroid == pytest.approx(0.8)
-    assert features.motion_score == pytest.approx(0.75)
+    assert features.motion_score == pytest.approx(1.0)
     assert features.scene_distance_sec == pytest.approx(0.5)
-    assert features.pace_class_score == pytest.approx(0.8)
+    assert features.trigger_strength == pytest.approx(0.8)
+    assert features.pace_class_score == pytest.approx(1.0)
     assert features.cut_duration_sec == pytest.approx(2.5)
     assert features.mood_tags == ["energetic"]
     assert features.audio_mood_tags == ["energetic"]

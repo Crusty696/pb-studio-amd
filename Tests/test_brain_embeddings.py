@@ -98,7 +98,7 @@ def test_load_audio_embedding_rejects_arbitrary_model(tmp_path):
 def test_load_video_embedding_returns_array(tmp_path):
     cache = _make_cache(tmp_path)
     try:
-        emb = np.random.rand(768).astype(np.float32)
+        emb = np.random.rand(DEFAULT_VIDEO_DIM).astype(np.float32)
         cache.store(
             media_hash="vidhash1",
             media_type="video",
@@ -108,7 +108,7 @@ def test_load_video_embedding_returns_array(tmp_path):
         )
         loaded = _load_video_embedding(cache, "vidhash1")
         assert loaded is not None
-        assert loaded.shape == (768,)
+        assert loaded.shape == (DEFAULT_VIDEO_DIM,)
     finally:
         cache.close()
 
@@ -211,8 +211,8 @@ def test_annotate_orthogonal_embeddings_yield_lower_score(brain_svc, tmp_path):
         state.close()
 
 
-def test_no_cache_fallback_to_default(brain_svc, tmp_path):
-    """Ohne cache muss alles wie vorher arbeiten (0.5 default semantic_match)."""
+def test_no_cache_omits_unavailable_semantic_axis(brain_svc, tmp_path):
+    """Ohne Cache darf kein synthetischer Semantic-Score entstehen."""
     state = _make_state_conn(tmp_path)
     try:
         cuts = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 1.0,
@@ -226,8 +226,9 @@ def test_no_cache_fallback_to_default(brain_svc, tmp_path):
             persist_to_state_conn=state,
         )
         assert len(out) == 1
-        sm = out[0]["metadata"]["brain_scores"]["semantic_match_weight"]
-        # 0.5 (default) * 0.5 (cold-start posterior) = 0.25
-        assert 0.2 <= sm <= 0.3
+        assert (
+            "semantic_match_weight"
+            not in out[0]["metadata"]["brain_scores"]
+        )
     finally:
         state.close()

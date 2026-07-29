@@ -235,11 +235,15 @@ def test_render_queue_dedupe_returns_existing_runtime_task(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    render_router._reset_render_runtime_for_startup()
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"clip")
     request = _request(tmp_path)
     state = AppState()
+    state.set_audio_clip(1, {"id": 1, "path": request.audio_path})
+    state.set_video_clip(1, {"id": 1, "path": str(clip)})
     state.set_timeline([{
+        "clip_id": "clip_1",
         "start_time": 0.0,
         "end_time": 1.0,
         "metadata": {"file_path": str(clip)},
@@ -271,7 +275,10 @@ def test_render_queue_dedupe_returns_existing_runtime_task(
         lambda state, fallback: tmp_path,
     )
 
-    result = asyncio.run(render_router.start_render(request, state))
+    try:
+        result = asyncio.run(render_router.start_render(request, state))
+    finally:
+        render_router._reset_render_runtime_for_startup()
 
     assert result.task_id == "existing"
     assert len(state.render_tasks) == 1
