@@ -353,7 +353,7 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T336 [OBJ-70] {(TR-334)} Complete HEVC, resume, cancel, existing-target, and AV1-unavailable QC
 - [X] T337 [OBJ-70] {(TR-335)} Validate Release GUI, all twelve areas, models, project switching, and visible failure states
 - [X] T338 [OBJ-70] {(OR-330)} Reconcile QC, requirements, changelog, ADRs, scripts, CLAUDE status, and Brain truth
-- [ ] T339 [OBJ-70] {(OR-331)} Commit by zone, scan secrets, verify remote diff, push scoped repos, and verify remote SHAs
+- [X] T339 [OBJ-70] {(OR-331)} Commit by zone, scan secrets, verify remote diff, push scoped repos, and verify remote SHAs
 
 
 

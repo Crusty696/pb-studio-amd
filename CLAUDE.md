@@ -69,9 +69,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-07-29 (Reparaturplan 00013, T338-End-QC)
-- **Phase:** 🟡 Lokales End-QC vollständig PASS; Veröffentlichung/Remote-Gate T339 offen.
-- **Status (2026-07-29 — Release-Video-Reparatur T305–T338):**
+- **Date:** 2026-07-30 (Reparaturplan 00013, T339-Abschluss)
+- **Phase:** 🟢 End-QC und Veröffentlichung vollständig PASS.
+- **Status (2026-07-29/30 — Release-Video-Reparatur T305–T339):**
   - Root Cause und Fix über T308–T310 gegatet; produktiver Render-Router
     finalisiert die 4.816-Cut-Timeline kanonisch auf 0–6.335,027 s.
   - Postfix-H.264 und -HEVC jeweils 190.051 Frames, Full-Decode,
@@ -79,9 +79,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - Final: pytest **1036 passed/11 skipped/0 failed**, 45 Warnungen;
     WPF Release **0 Warnungen/0 Fehler**; GUI 14/14 und Projektwechsel unter
     aktivem Renderjob bestanden.
-  - `.completed` und `.qc-passed` entsprechen dem lokalen Gate. T339 bleibt
-    für Secret-Scan, Remote-Divergenz, zonierte Commits, Push und
-    Remote-SHA-Verifikation offen.
+  - `.completed` und `.qc-passed` entsprechen den T331-/T338-Gates.
+    T339: Secret-Scan ohne bestätigten Treffer, D07 Fast-Forward PASS,
+    zonierte Commits sowie PB-/Brain-Pushes mit identischen Remote-SHAs.
 - **Status (2026-07-28 — Neue vollständige App-Statusaufnahme):**
 - **Status (2026-07-28 — Vollständige App-Statusaufnahme):**
   - Sechs disjunkte read-only Fach-Audits über alle Produktzonen; Masterbericht `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`.
@@ -112,11 +112,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:**
-  - T339: zonierte Commits, Secret-Scan, `fetch`/Remote-Diff und
-    Fast-forward-Nachweis; anschließend ausschließlich freigegebene
-    PB-Studio- und pfadbegrenzte Brain-Änderungen pushen und Remote-SHAs
-    speichern. Kein Force-Push, kein automatisches Rebase.
+- **Next Task:** Kein offener Task im freigegebenen Reparaturplan T305–T339.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 

@@ -4,7 +4,7 @@
 
 - **Overall result:** **PASSED / RELEASE-READY** for the local product and
   End-QC gate.
-- **Publication status:** **OPEN** until T339 completes Secret-Scan,
+- **Publication status:** **PASS / CONFIRMED**. T339 completed the Secret-Scan,
   Remote-Diff/Fast-forward proof, zoned commits, scoped pushes and Remote-SHA
   verification.
 - **Final regression:** 1036 passed, 11 justified skips, 0 failed,
@@ -25,7 +25,8 @@
   this 100-percent PASS gate.
 - **Canonical evidence:** `evidence/T338-final-truth-gate.md`,
   `evidence/T338-final-full-suite.stdout.log`,
-  `evidence/T338-final-wpf-release-build.log`.
+  `evidence/T338-final-wpf-release-build.log` and
+  `evidence/T339-commit-push-verification.md`.
 
 ### OBJ-70 Requirement Matrix
 
@@ -65,10 +66,10 @@
 | TR-334 | PASS / CONFIRMED | T336 and T337 postfix |
 | TR-335 | PASS / CONFIRMED | T337 |
 | OR-330 | PASS / CONFIRMED | T338 |
-| OR-331 | OPEN | T339 |
-| SC-070 | OPEN | T339 completion ledger |
+| OR-331 | PASS / CONFIRMED | T339 |
+| SC-070 | PASS / CONFIRMED | T339 completion ledger |
 | SC-071 | PASS / CONFIRMED | T337 postfix codec gates |
-| SC-072 | OPEN | T339 marker/remote receipts |
+| SC-072 | PASS / CONFIRMED | T339 marker/remote receipts |
 
 ### Invalidated repair-start gate — 2026-07-29
 
