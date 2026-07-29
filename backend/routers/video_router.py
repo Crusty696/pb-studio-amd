@@ -21,6 +21,7 @@ from fastapi.responses import Response
 from ..app_state import AppState, get_app_state
 from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
+from ..media_path_policy import MediaPathPolicyError, canonical_local_media_file
 from ..schemas.video_schemas import (
     VideoImportRequest, VideoClipInfo,
     VideoAnalyzeRequest, VideoAnalysisResult,
@@ -76,25 +77,16 @@ async def import_videos(
         })
 
     for input_index, path_str in enumerate(request.paths, start=1):
-        video_path = Path(path_str)
-        # SEC-001: Nur absolute Pfade erlauben
-        if not video_path.is_absolute():
-            logger.warning(f"Relativer Pfad abgelehnt: {path_str}")
-            await _publish_input_progress(
-                input_index, f"Uebersprungen {input_index}/{input_total}: relativer Pfad"
-            )
-            continue
         try:
-            if not video_path.exists():
-                logger.warning(f"Video nicht gefunden: {path_str}")
-                await _publish_input_progress(
-                    input_index, f"Uebersprungen {input_index}/{input_total}: nicht gefunden"
-                )
-                continue
-        except PermissionError:
-            logger.warning(f"Zugriff verweigert: {path_str}")
+            video_path = canonical_local_media_file(
+                path_str,
+                label=f"Video-Importpfad {input_index}",
+            )
+        except MediaPathPolicyError as exc:
+            logger.warning("Unsicherer Video-Importpfad abgelehnt: %s", exc)
             await _publish_input_progress(
-                input_index, f"Uebersprungen {input_index}/{input_total}: Zugriff verweigert"
+                input_index,
+                f"Uebersprungen {input_index}/{input_total}: unsicherer Pfad",
             )
             continue
         if video_path.suffix.lower() not in supported:

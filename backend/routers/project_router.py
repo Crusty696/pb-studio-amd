@@ -21,6 +21,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..app_state import AppState, get_app_state, resolve_project_db_id
 from pb_studio.data.repositories.project_repository import ProjectRepository
 from ..config import config
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    validate_media_catalog,
+    validate_registered_media_path,
+    validate_timeline_media_paths,
+)
 from ..schemas.common import StatusResponse, validate_timeline
 from ..schemas.project_schemas import ProjectCreate, ProjectOpen, ProjectInfo
 
@@ -145,6 +151,19 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
             raise ValueError("timeline ist keine Liste")
 
         timeline = _normalize_timeline_entries(timeline)
+        timeline = validate_timeline_media_paths(
+            timeline,
+            state.get_video_clips_snapshot(),
+        )
+        if audio_path:
+            audio_path = validate_registered_media_path(
+                audio_path,
+                (
+                    clip.get("path", "")
+                    for clip in state.get_audio_clips_snapshot().values()
+                ),
+                label="Projekt-Timeline audio_path",
+            )
         warnings, errors = validate_timeline(timeline)
         for w in warnings:
             logger.warning(f"Projekt-Timeline Warnung beim Laden: {w}")
@@ -154,6 +173,15 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
         state.set_timeline(timeline)
         state.current_audio_path = audio_path if isinstance(audio_path, str) and audio_path else None
         return True
+    except MediaPathPolicyError as e:
+        logger.warning(
+            "Projekt-Timeline wegen unsicherem Medienpfad verworfen: %s (%s)",
+            timeline_path,
+            e,
+        )
+        state.set_timeline([])
+        state.current_audio_path = None
+        return False
     except Exception as e:
         logger.warning(f"Timeline konnte nicht geladen werden: {timeline_path} ({e})")
         state.set_timeline([])
@@ -247,6 +275,21 @@ async def open_project(
             status_code=500,
             detail="Projekt-Medienkatalog konnte nicht aus der Datenbank geladen werden",
         )
+
+    try:
+        candidate_state.audio_clips = validate_media_catalog(
+            candidate_state.get_audio_clips_snapshot(),
+            label="Audio-Katalog",
+        )
+        candidate_state.video_clips = validate_media_catalog(
+            candidate_state.get_video_clips_snapshot(),
+            label="Video-Katalog",
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Projekt-Medienkatalog enthaelt unsichere Pfade: {exc}",
+        ) from exc
 
     # Brain-Preflight vor Live-State-Wechsel: ein Bind-Fehler lässt das bisher
     # aktive Runtime-Projekt weiterhin unverändert.

@@ -1,5 +1,10 @@
-import sys
+import hashlib
+import hmac
+import json
 import logging
+import os
+import re
+import stat
 import threading
 import time
 from pathlib import Path
@@ -15,6 +20,125 @@ except ImportError:
     logger.warning("pythonnet (clr) nicht verfuegbar - Hardware-Monitoring deaktiviert")
 
 _monitor_init_lock = threading.Lock()
+_SHA256_PATTERN = re.compile(r"[A-Fa-f0-9]{64}")
+_ASSEMBLY_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
+_LHM_MANIFEST_NAME = "pb-studio-lhm-manifest.json"
+
+
+def _read_local_regular_file(path: Path) -> bytes:
+    file_stat = path.lstat()
+    file_attributes = getattr(file_stat, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    if file_attributes & reparse_flag:
+        raise ValueError(f"Reparse-Point ist nicht erlaubt: {path.name}")
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise ValueError(f"Regulaere Datei erforderlich: {path.name}")
+    return path.read_bytes()
+
+
+def _load_verified_lhm_bundle(
+    main_assembly_path: Path,
+) -> dict[str, tuple[str, bytes]]:
+    manifest_path = main_assembly_path.parent / _LHM_MANIFEST_NAME
+    manifest_expected_hash = os.environ.get(
+        "PBSTUDIO_LHM_MANIFEST_SHA256",
+        "",
+    )
+    main_expected_hash = os.environ.get("PBSTUDIO_LHM_SHA256", "")
+    if not _SHA256_PATTERN.fullmatch(manifest_expected_hash):
+        raise ValueError(
+            "PBSTUDIO_LHM_MANIFEST_SHA256 fehlt oder ist ungueltig"
+        )
+    if not _SHA256_PATTERN.fullmatch(main_expected_hash):
+        raise ValueError("PBSTUDIO_LHM_SHA256 fehlt oder ist ungueltig")
+
+    manifest_bytes = _read_local_regular_file(manifest_path)
+    manifest_actual_hash = hashlib.sha256(manifest_bytes).hexdigest()
+    if not hmac.compare_digest(
+        manifest_actual_hash,
+        manifest_expected_hash.lower(),
+    ):
+        raise ValueError("LHM-Manifest-Hash stimmt nicht")
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("LHM-Manifest ist kein gueltiges UTF-8-JSON") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        raise ValueError("LHM-Manifest schema_version muss 1 sein")
+    entries = manifest.get("assemblies")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("LHM-Manifest enthaelt keine Assemblies")
+
+    bundle_root = main_assembly_path.parent.resolve(strict=True)
+    if main_assembly_path.parent.resolve(strict=True) != bundle_root:
+        raise ValueError("LHM-Hauptassembly liegt ausserhalb des Bundles")
+    main_candidate = bundle_root / main_assembly_path.name
+    verified: dict[str, tuple[str, bytes]] = {}
+    main_verified = False
+    seen_files: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Ungueltiger Assembly-Eintrag im LHM-Manifest")
+        assembly_name = entry.get("name")
+        file_name = entry.get("file")
+        expected_hash = entry.get("sha256")
+        if (
+            not isinstance(assembly_name, str)
+            or not _ASSEMBLY_NAME_PATTERN.fullmatch(assembly_name)
+        ):
+            raise ValueError("Ungueltiger Assembly-Name im LHM-Manifest")
+        key = assembly_name.casefold()
+        if key in verified:
+            raise ValueError(
+                f"Doppelter Assembly-Name im LHM-Manifest: {assembly_name}"
+            )
+        if (
+            not isinstance(file_name, str)
+            or Path(file_name).name != file_name
+            or Path(file_name).suffix.casefold() != ".dll"
+        ):
+            raise ValueError(
+                f"Ungueltiger DLL-Dateiname im LHM-Manifest: {file_name}"
+            )
+        file_key = file_name.casefold()
+        if file_key in seen_files:
+            raise ValueError(
+                f"Doppelter DLL-Dateiname im LHM-Manifest: {file_name}"
+            )
+        seen_files.add(file_key)
+        if (
+            not isinstance(expected_hash, str)
+            or not _SHA256_PATTERN.fullmatch(expected_hash)
+        ):
+            raise ValueError(f"Ungueltiger SHA-256 fuer {assembly_name}")
+
+        assembly_path = bundle_root / file_name
+        if assembly_path.parent != bundle_root:
+            raise ValueError(
+                f"LHM-Assembly verlaesst Bundle-Verzeichnis: {file_name}"
+            )
+        assembly_bytes = _read_local_regular_file(assembly_path)
+        actual_hash = hashlib.sha256(assembly_bytes).hexdigest()
+        if not hmac.compare_digest(actual_hash, expected_hash.lower()):
+            raise ValueError(f"LHM-Assembly-Hash stimmt nicht: {file_name}")
+        verified[key] = (assembly_name, assembly_bytes)
+        if assembly_path == main_candidate:
+            if assembly_name != "LibreHardwareMonitorLib":
+                raise ValueError(
+                    "LHM-Hauptassembly hat ungueltigen Assembly-Namen"
+                )
+            if not hmac.compare_digest(
+                actual_hash,
+                main_expected_hash.lower(),
+            ):
+                raise ValueError(
+                    "LibreHardwareMonitorLib.dll stimmt nicht mit "
+                    "PBSTUDIO_LHM_SHA256 ueberein"
+                )
+            main_verified = True
+    if not main_verified:
+        raise ValueError("LHM-Hauptassembly fehlt im freigegebenen Manifest")
+    return verified
 
 class SystemMonitor:
     _instance = None
@@ -41,6 +165,8 @@ class SystemMonitor:
         self._cache_time: float = 0.0
         self._cache_lock = threading.Lock()
         self._lhm_lock = threading.Lock()
+        self._lhm_assembly_resolver = None
+        self._lhm_app_domain = None
         self._cache_ttl: float = 10.0  # Sekunden
         self._bg_refresh_running = False
         if _HAS_CLR:
@@ -50,14 +176,87 @@ class SystemMonitor:
 
     def _initialize_lhm(self):
         lib_path = getattr(self.config, 'lhm_path', None)
-        if not lib_path or not Path(lib_path).exists():
+        if not lib_path:
             logger.error(f"LibreHardwareMonitorLib.dll not found at: {lib_path}")
             return
 
         try:
-            # Add reference to the DLL
-            sys.path.append(str(Path(lib_path).parent))
-            clr.AddReference("LibreHardwareMonitorLib")
+            main_path = Path(lib_path)
+            verified_assemblies = _load_verified_lhm_bundle(main_path)
+        except (OSError, ValueError) as exc:
+            logger.error("LibreHardwareMonitor deaktiviert: %s", exc)
+            return
+
+        try:
+            from System import AppDomain, Array, Byte
+            from System.Reflection import Assembly, AssemblyName
+
+            loaded_assemblies = {}
+
+            def resolve_verified_assembly(_sender, args):
+                requested_name = AssemblyName(args.Name).Name
+                key = str(requested_name).casefold()
+                if key not in verified_assemblies:
+                    return None
+                if key in loaded_assemblies:
+                    return loaded_assemblies[key]
+                declared_name, assembly_bytes = verified_assemblies[key]
+                loaded = Assembly.Load(Array[Byte](assembly_bytes))
+                if str(loaded.GetName().Name) != declared_name:
+                    raise ValueError(
+                        f"Assembly-Identitaet stimmt nicht: {declared_name}"
+                    )
+                loaded_assemblies[key] = loaded
+                return loaded
+
+            app_domain = AppDomain.CurrentDomain
+            app_domain.AssemblyResolve += resolve_verified_assembly
+            self._lhm_app_domain = app_domain
+            self._lhm_assembly_resolver = resolve_verified_assembly
+
+            load_order = sorted(
+                key
+                for key in verified_assemblies
+                if key != "librehardwaremonitorlib"
+            )
+            load_order.append("librehardwaremonitorlib")
+            for key in load_order:
+                if key in loaded_assemblies:
+                    continue
+                declared_name, assembly_bytes = verified_assemblies[key]
+                loaded = Assembly.Load(Array[Byte](assembly_bytes))
+                if str(loaded.GetName().Name) != declared_name:
+                    raise ValueError(
+                        f"Assembly-Identitaet stimmt nicht: {declared_name}"
+                    )
+                loaded_assemblies[key] = loaded
+
+            trusted_platform_names = {
+                "microsoft.csharp",
+                "microsoft.visualbasic",
+                "microsoft.win32.primitives",
+                "microsoft.win32.registry",
+                "mscorlib",
+                "netstandard",
+                "system",
+                "windowsbase",
+            }
+            for loaded in loaded_assemblies.values():
+                for reference in loaded.GetReferencedAssemblies():
+                    reference_name = str(reference.Name)
+                    reference_key = reference_name.casefold()
+                    if reference_key in verified_assemblies:
+                        continue
+                    public_key_token = reference.GetPublicKeyToken()
+                    is_trusted_platform = (
+                        reference_key in trusted_platform_names
+                        or reference_key.startswith("system.")
+                    ) and public_key_token is not None and len(public_key_token) > 0
+                    if not is_trusted_platform:
+                        raise ValueError(
+                            "Nicht manifestgebundene LHM-Abhaengigkeit: "
+                            f"{reference_name}"
+                        )
             
             from LibreHardwareMonitor.Hardware import Computer
             
@@ -71,6 +270,15 @@ class SystemMonitor:
             self._find_gpu()
 
         except Exception as e:
+            if (
+                self._lhm_app_domain is not None
+                and self._lhm_assembly_resolver is not None
+            ):
+                self._lhm_app_domain.AssemblyResolve -= (
+                    self._lhm_assembly_resolver
+                )
+                self._lhm_app_domain = None
+                self._lhm_assembly_resolver = None
             logger.error(f"Failed to initialize Hardware Monitor: {e}")
 
     def _find_gpu(self):
@@ -309,7 +517,13 @@ class SystemMonitor:
                 ps_script,
                 gpu_name_hint,
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=5,
+            )
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
         except Exception as exc:
@@ -354,7 +568,13 @@ class SystemMonitor:
                 ps_script,
                 gpu_name_hint,
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=5,
+            )
             if res.returncode == 0 and res.stdout.strip():
                 bytes_total = int(res.stdout.strip())
                 mb_total = bytes_total / (1024 * 1024)
@@ -383,7 +603,13 @@ class SystemMonitor:
                 "else { 0 }"
             )
             cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=8,
+            )
             if res.returncode == 0 and res.stdout.strip():
                 bytes_used = float(res.stdout.strip())
                 mb_used = bytes_used / (1024 * 1024)
@@ -454,7 +680,13 @@ class SystemMonitor:
                 "else { 0 }"
             )
             cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=5,
+            )
             if res.returncode == 0 and res.stdout.strip():
                 kelvin = float(res.stdout.strip())
                 if kelvin > 200:  # plausibel (>200K = >-73C)
@@ -488,7 +720,13 @@ class SystemMonitor:
                 "else { 0 }"
             )
             cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=8,
+            )
             if res.returncode == 0 and res.stdout.strip():
                 load = float(res.stdout.strip())
                 # Cap auf 100 (multi-engine kann technisch ueber 100 summieren)
@@ -503,3 +741,12 @@ class SystemMonitor:
     def close(self):
         if self.computer:
             self.computer.Close()
+        if (
+            self._lhm_app_domain is not None
+            and self._lhm_assembly_resolver is not None
+        ):
+            self._lhm_app_domain.AssemblyResolve -= (
+                self._lhm_assembly_resolver
+            )
+            self._lhm_app_domain = None
+            self._lhm_assembly_resolver = None

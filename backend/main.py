@@ -19,10 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
+from .owner_capability import OWNER_CAPABILITY_HEADER, authorize_owner
 from .middleware.gpu_lock import GPULockMiddleware
 
 # --------------------------------------------------------------------------
@@ -397,9 +398,36 @@ async def gpu_cleanup() -> dict[str, int]:
     return {"freed_mb": freed_mb}
 
 
-@app.post("/shutdown")
-async def shutdown() -> dict[str, str]:
-    """Graceful Shutdown (aufgerufen von C# beim App-Close)."""
+@app.post(
+    "/shutdown",
+    responses={
+        403: {"description": "Owner-Capability fehlt oder ist ungueltig."},
+        503: {"description": "Backend wurde ohne Owner-Capability gestartet."},
+    },
+    openapi_extra={
+        "parameters": [
+            {
+                "name": OWNER_CAPABILITY_HEADER,
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+                "description": (
+                    "Runtime-required launcher capability for destructive "
+                    "loopback operations."
+                ),
+            }
+        ]
+    },
+)
+async def shutdown(
+    owner_capability: str | None = Header(
+        default=None,
+        alias=OWNER_CAPABILITY_HEADER,
+        include_in_schema=False,
+    ),
+) -> dict[str, str]:
+    """Owner-authorized graceful shutdown called by the WPF launcher."""
+    authorize_owner(owner_capability, operation="Backend-Shutdown")
     logger.info("Shutdown-Request erhalten, fahre in 2s herunter...")
     # Windows/Uvicorn: loop.call_later() hat hier im detached Launcher-Pfad
     # nicht zuverlässig ausgelöst, wodurch der alte Prozess Port 8765 belegt hielt.

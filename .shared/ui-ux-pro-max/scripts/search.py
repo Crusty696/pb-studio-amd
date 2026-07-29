@@ -16,7 +16,7 @@ Persistence (Master + Overrides pattern):
 
 import argparse
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, search, search_stack
-from design_system import generate_design_system, persist_design_system
+from design_system import generate_design_system, persist_design_system, slugify_label
 
 
 def format_output(result):
@@ -65,24 +65,27 @@ if __name__ == "__main__":
 
     # Design system takes priority
     if args.design_system:
-        result = generate_design_system(
-            args.query, 
-            args.project_name, 
-            args.format,
-            persist=args.persist,
-            page=args.page,
-            output_dir=args.output_dir
-        )
+        try:
+            result = generate_design_system(
+                args.query,
+                args.project_name,
+                args.format,
+                persist=args.persist,
+                page=args.page,
+                output_dir=args.output_dir
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         print(result)
         
         # Print persistence confirmation
         if args.persist:
-            project_slug = args.project_name.lower().replace(' ', '-') if args.project_name else "default"
+            project_slug = slugify_label(args.project_name, "project_name") if args.project_name else "default"
             print("\n" + "=" * 60)
             print(f"✅ Design system persisted to design-system/{project_slug}/")
             print(f"   📄 design-system/{project_slug}/MASTER.md (Global Source of Truth)")
             if args.page:
-                page_filename = args.page.lower().replace(' ', '-')
+                page_filename = slugify_label(args.page, "page")
                 print(f"   📄 design-system/{project_slug}/pages/{page_filename}.md (Page Overrides)")
             print("")
             print(f"📖 Usage: When building a page, check design-system/{project_slug}/pages/[page].md first.")

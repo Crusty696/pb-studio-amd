@@ -448,9 +448,6 @@ class ChatAgent:
         *,
         confirmation_id: Optional[str] = None,
     ):
-        await self._ensure_resources()
-        assert self._http is not None
-
         if confirmation_id is not None:
             confirmed = await tool_confirmation_broker.consume(
                 confirmation_id, stream_id=self._confirmation_stream_id
@@ -473,6 +470,8 @@ class ChatAgent:
                 "error": "Serverseitige Tool-Bestaetigung erforderlich",
                 "tool": tool.name,
             }
+        await self._ensure_resources()
+        assert self._http is not None
         # P-H2 (Audit V2): long-running Tools (Render, Stems) brauchen
         # erweiterten Timeout — default 60s killt sonst aktive GPU-Tasks
         # unter dem ChatAgent. 600s = 10min Headroom.
