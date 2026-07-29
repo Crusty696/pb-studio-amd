@@ -1,8 +1,91 @@
 # QC Report: System-wide Bug Hunting & AI Optimizations (Epic 00013)
 
-## Authoritative Release Gate — 2026-07-28
+## Authoritative End-QC Gate — 2026-07-29
 
-- **Overall result:** **PASSED / RELEASE-READY**.
+- **Overall result:** **PASSED / RELEASE-READY** for the local product and
+  End-QC gate.
+- **Publication status:** **OPEN** until T339 completes Secret-Scan,
+  Remote-Diff/Fast-forward proof, zoned commits, scoped pushes and Remote-SHA
+  verification.
+- **Final regression:** 1036 passed, 11 justified skips, 0 failed,
+  45 warnings in 402.48 s; stderr empty.
+- **Release build:** WPF Release 0 warnings, 0 errors.
+- **Static/contracts:** XAML 19/19, PowerShell 12/12,
+  OpenAPI/DTO regression PASS, `git diff --check` PASS, 33/33 progress
+  evidence references present.
+- **Security/data/fault:** T329 Security Review and T334 copy-only security,
+  restore, migration and atomic-publication gates PASS.
+- **H.264/HEVC:** each 190,051 frames, `progress=end`, full video/audio
+  decode over 6,335.027 s, 106/106 visual segments and no black/freeze
+  intervals after the productive router fix.
+- **GUI/models/project switch:** 14/14 areas, live capability recommendation,
+  visible partial/failure state and project switch during an active render
+  PASS.
+- **Markers:** `.completed` passed T331; `.qc-passed` is authorized only by
+  this 100-percent PASS gate.
+- **Canonical evidence:** `evidence/T338-final-truth-gate.md`,
+  `evidence/T338-final-full-suite.stdout.log`,
+  `evidence/T338-final-wpf-release-build.log`.
+
+### OBJ-70 Requirement Matrix
+
+| Requirement | Status | Canonical evidence |
+|---|---|---|
+| OR-325 | PASS / CONFIRMED | T305 |
+| OR-326 | PASS / CONFIRMED | T306 |
+| OR-327 | PASS / DECIDED | T307 |
+| TR-324 | PASS / CONFIRMED | T308 |
+| TR-325 | PASS / CONFIRMED | T309 |
+| TR-326 | PASS / DECIDED | T310 |
+| FR-311 | PASS / CONFIRMED | T311 |
+| FR-312 | PASS / CONFIRMED | T312 |
+| FR-313 | PASS / CONFIRMED | T313 |
+| FR-314 | PASS / CONFIRMED | T314 |
+| FR-315 | PASS / CONFIRMED | T315 |
+| FR-316 | PASS / CONFIRMED | T316 |
+| FR-317 | PASS / CONFIRMED | T317 |
+| FR-318 | PASS / CONFIRMED | T318 |
+| FR-319 | PASS / CONFIRMED | T319 |
+| FR-320 | PASS / CONFIRMED | T320 |
+| FR-321 | PASS / CONFIRMED | T321 |
+| FR-322 | PASS / CONFIRMED | T322 |
+| FR-323 | PASS / CONFIRMED | T323 |
+| RR-236 | PASS / CONFIRMED | T324 |
+| OR-328 | PASS / DECIDED | T325 |
+| FR-324 | PASS / CONFIRMED | T326 |
+| FR-325 | PASS / CONFIRMED | T327 |
+| TR-327 | PASS / CONFIRMED | T328 |
+| TR-328 | PASS / CONFIRMED | T329 |
+| OR-329 | PASS / CONFIRMED | T330 |
+| TR-329 | PASS / CONFIRMED | T331 |
+| TR-330 | PASS / CONFIRMED | T332 |
+| TR-331 | PASS / CONFIRMED | T333 and T338 final rerun |
+| TR-332 | PASS / CONFIRMED | T334 |
+| TR-333 | PASS / CONFIRMED | T335 and T337 postfix |
+| TR-334 | PASS / CONFIRMED | T336 and T337 postfix |
+| TR-335 | PASS / CONFIRMED | T337 |
+| OR-330 | PASS / CONFIRMED | T338 |
+| OR-331 | OPEN | T339 |
+| SC-070 | OPEN | T339 completion ledger |
+| SC-071 | PASS / CONFIRMED | T337 postfix codec gates |
+| SC-072 | OPEN | T339 marker/remote receipts |
+
+### Invalidated repair-start gate — 2026-07-29
+
+- **Historical result:** **FAILED / REOPENED / NOT RELEASE-READY**.
+- **Reason:** The published reference container reported 6,335.027 s, but
+  its H.264 stream ended at 1,962.100 s. Existing full-frame evidence decoded
+  58,848 of 58,863 declared frames and stopped at 1,961.600 s.
+- **Evidence:** `evidence/T305-evidence-freeze-2026-07-29.md`.
+- **Disposition:** Superseded by the authoritative End-QC gate above after
+  T308–T337 root-cause repair and complete revalidation.
+
+Sections below are historical snapshots. None supersedes the authoritative
+End-QC gate above.
+
+## Invalidated Release Gate — 2026-07-28
+
+- **Historical claim:** **PASSED / RELEASE-READY — INVALIDATED BY T305**.
 - **Finding matrix:** 60/60 PASS — 2 Critical, 26 High, 25 Medium, 7 Low.
 - **Final regression:** 966 passed, 11 justified skips, 0 failed, 45 warnings in 265.87 s.
 - **Coverage:** 62% — 20,191 statements, 7,662 missed.
@@ -101,7 +184,7 @@
 - Backend shutdown tracks render tasks/FFmpeg, persists `interrupted`, terminates children boundedly and resumes without duplicate target publication.
 - Skip audit converted hidden Pacing `audio_analysis=None` exception into a passing regression.
 
-Sections below are historical snapshots and are superseded by this authoritative gate.
+This gate is superseded by the authoritative 2026-07-29 repair gate.
 
 ## Current Gate Override — 2026-07-28
 

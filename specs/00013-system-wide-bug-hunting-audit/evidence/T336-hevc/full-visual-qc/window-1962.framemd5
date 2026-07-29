@@ -1,0 +1,35 @@
+#format: frame checksums
+#version: 2
+#hash: MD5
+#software: Lavf62.3.100
+#tb 0: 1/10
+#media_type 0: video
+#codec_id 0: rawvideo
+#dimensions 0: 640x360
+#sar 0: 1/1
+#stream#, dts,        pts, duration,     size, hash
+0,          0,          0,        1,   345600, 02abed0d91718c6f7b36eb3de7bd824c
+0,          1,          1,        1,   345600, df7284bbfeb681368ab3f3746bf1f4a4
+0,          2,          2,        1,   345600, a1ad595b9338dfa31d1702891e1dad8e
+0,          3,          3,        1,   345600, 8bca07684aae265c746f812aa7821cf9
+0,          4,          4,        1,   345600, e3987c5e09219c196ce24248096243e3
+0,          5,          5,        1,   345600, 31cbfc87bfd83a2535c06cc375f88100
+0,          6,          6,        1,   345600, 88aac14b692b9689ad822995d4ea74e6
+0,          7,          7,        1,   345600, e2e7eea32116ab7c713f7357530457d4
+0,          8,          8,        1,   345600, 5089e28154a162788b8a8e6d1f8053f8
+0,          9,          9,        1,   345600, 69ed45a2fb844becc59eb08c9b3769ef
+0,         10,         10,        1,   345600, c4eab1cd5dc55b6cf74c0c431b4e2ad4
+0,         11,         11,        1,   345600, 7a97091087a38f85a7dfc126f88b5dd5
+0,         12,         12,        1,   345600, 2fc5802cfcffb42f33323b5922177f36
+0,         13,         13,        1,   345600, 5053f0efd5e07f0612c6a394b21a9173
+0,         14,         14,        1,   345600, 267c6ad6520fe255804d9ce2c0edec33
+0,         15,         15,        1,   345600, a667319334abfc631558c3577c77333b
+0,         16,         16,        1,   345600, 958aba362daca3b49a08da402a2a1acc
+0,         17,         17,        1,   345600, aa4e7a82f8a6eaef347e58006d21494a
+0,         18,         18,        1,   345600, 6874927f263b0048546bc64100f6f203
+0,         19,         19,        1,   345600, 37fdede2b058ef4b229e8ba3df010fa1
+0,         20,         20,        1,   345600, 9ce65c19eec67a56c25a7e853db5a52c
+0,         21,         21,        1,   345600, 1b1357bcaaaa441d70ce38eaf1a5acd7
+0,         22,         22,        1,   345600, 7ed4d467cee8d36f4bb52d6e0a358a1f
+0,         23,         23,        1,   345600, e9b1dd50c2d25ed478292c79b2f21b0e
+0,         24,         24,        1,   345600, 074fa7a6ee9e6ab687815ecd61b0a00c

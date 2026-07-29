@@ -8,12 +8,12 @@ Read this file ENTIRELY before executing any tasks. Do not look for other .agent
 ## 0. ⚡ COMMANDS (copy-paste ready)
 ```powershell
 # Python Backend starten
-.venv\Scripts\activate
-$env:PYTHONPATH = "src"
-python -m uvicorn backend.main:app --port 8765
+$env:PYTHONPATH = (Join-Path (Get-Location) "src")
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 
 # Tests ausführen
-pytest Tests/ -x -q
+$env:PYTHONPATH = (Join-Path (Get-Location) "src")
+.\.venv\Scripts\python.exe -m pytest Tests/ -x -q
 
 # WPF Build
 dotnet build PBStudio.UI\PBStudio.UI.csproj
@@ -69,8 +69,20 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-07-28 (Neue vollständige Statusaufnahme)
-- **Phase:** 🔴 Regression grün, aber Audit/QC offen; nicht release-ready. Dirty branch `00013-system-wide-bug-hunting-audit`.
+- **Date:** 2026-07-29 (Reparaturplan 00013, T338-End-QC)
+- **Phase:** 🟡 Lokales End-QC vollständig PASS; Veröffentlichung/Remote-Gate T339 offen.
+- **Status (2026-07-29 — Release-Video-Reparatur T305–T338):**
+  - Root Cause und Fix über T308–T310 gegatet; produktiver Render-Router
+    finalisiert die 4.816-Cut-Timeline kanonisch auf 0–6.335,027 s.
+  - Postfix-H.264 und -HEVC jeweils 190.051 Frames, Full-Decode,
+    `progress=end`, 106/106 visuelle Segmente und 0 Schwarz-/Freezeintervalle.
+  - Final: pytest **1036 passed/11 skipped/0 failed**, 45 Warnungen;
+    WPF Release **0 Warnungen/0 Fehler**; GUI 14/14 und Projektwechsel unter
+    aktivem Renderjob bestanden.
+  - `.completed` und `.qc-passed` entsprechen dem lokalen Gate. T339 bleibt
+    für Secret-Scan, Remote-Divergenz, zonierte Commits, Push und
+    Remote-SHA-Verifikation offen.
+- **Status (2026-07-28 — Neue vollständige App-Statusaufnahme):**
 - **Status (2026-07-28 — Vollständige App-Statusaufnahme):**
   - Sechs disjunkte read-only Fach-Audits über alle Produktzonen; Masterbericht `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`.
   - Verifiziert: pytest **853 passed/11 skipped**, Release-Build 0/0, Backend Health 200, 17 SQLite-DBs integer, FAISS/SQLite 0 Orphans, 12 WPF-Tabs gerendert.
@@ -101,7 +113,10 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
 - **Next Task:**
-  - P0 aus `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md`: DirectML-Verstoß C-01, Chat-Mutationsgrenze C-02, Projektordner-Overwrite H-20 und Render-Output-Verlust H-23 spezifizieren und sequenziell verifizieren. Danach Long-Mix-/Brain-/VRAM-P1. Formellen Security-Scan nach Codex-Security-Setup fortsetzen.
+  - T339: zonierte Commits, Secret-Scan, `fetch`/Remote-Diff und
+    Fast-forward-Nachweis; anschließend ausschließlich freigegebene
+    PB-Studio- und pfadbegrenzte Brain-Änderungen pushen und Remote-SHAs
+    speichern. Kein Force-Push, kein automatisches Rebase.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 
@@ -116,7 +131,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *Key Detection:* `src/pb_studio/audio/key_detector.py` Krumhansl-Kessler via librosa
 - *SSE Fan-out:* `publish_event` broadcastet an ALLE registrierten Queues
 - *Path-Traversal-Schutz:* `Path.is_relative_to()` in project_router + render_router
-- *Brain-Modul:* 17 Bridge-Achsen · Beta-Bernoulli WeightStore · 5-Level Hierarchical Backoff · CLAP + SigLIP-2 via torch-directml · 6 REST-Endpoints `/brain/{suggest,feedback,learning_session,stats,reset,explain}` · WPF HIRN-Tab + Confidence-Balken
+- *Brain-Modul:* 17 Bridge-Achsen · Beta-Bernoulli WeightStore · 5-Level Hierarchical Backoff · SigLIP-ONNX (1152-D) und registriertes CLAP-ONNX via ONNX Runtime DirectML, fail-closed ohne Asset · 6 REST-Endpoints `/brain/{suggest,feedback,learning_session,stats,reset,explain}` · WPF HIRN-Tab + Confidence-Balken
 
 ---
 
@@ -151,7 +166,7 @@ PBStudio.UI/
 | onnxruntime-directml | >=1.16.0 | GPU engine |
 | PyTorch (CPU) | 2.4.1+cpu | ML tensors |
 | BeatNet | 1.1.1 | Beat detection |
-| FFmpeg | 6.x Gyan.dev | AMF encoders |
+| FFmpeg | aktives Manifest: 8.0.1 Gyan.dev; 6.1.1 erst nach T332-Hardware-QC | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
 
 ## 6. 📝 BRAIN UPDATE PROTOCOL

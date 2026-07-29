@@ -1,28 +1,32 @@
 # SigLIP Video Specialist - Quick Start
 
+> **Current contract (2026-07-29):** Python 3.11.x, NumPy 1.26.4,
+> project-managed dependencies, SigLIP SO400M ONNX with 1152-dimensional
+> embeddings, and `DmlExecutionProvider` only. Missing DML or model artifacts
+> is an explicit unavailable/error state; there is no CPU fallback.
+
 ## Installation
 
 ### 1. Ensure Dependencies
-```bash
-pip install onnxruntime-directml>=1.16.0
-pip install transformers>=4.48.0
-pip install pillow>=10.0.0
-pip install opencv-python-headless>=4.9.0
-```
 
-### 2. Download Models
+Use the locked project environment. Do not install or upgrade individual
+packages from this guide.
 
-Place the following files in `models/` directory:
-- `siglip_vision.onnx` (required)
-- `siglip_text.onnx` (optional, for tagging)
-- `siglip_tokenizer/` (optional, for text encoding)
+### 2. Verify registered models
+
+Model assets are accepted only through the approved, hash-bound model
+registry/manifest workflow. Do not download, export or place arbitrary ONNX
+files from this guide. Without registered `siglip_vision` the capability is
+unavailable; without registered `siglip_text`, text tagging is unavailable.
+The approval manifest is an external release input; this repository
+intentionally contains no model downloader or exporter.
 
 ## Quick Examples
 
 ### Image Encoding
 
 ```python
-from src.pb_studio.ai import SigLIPWrapper
+from pb_studio.ai import SigLIPWrapper
 from PIL import Image
 
 siglip = SigLIPWrapper()
@@ -33,7 +37,7 @@ embedding = siglip.encode_image(image)  # [1152]
 ### Video Embedding
 
 ```python
-from src.pb_studio.ai import VideoSpecialist
+from pb_studio.ai import VideoSpecialist
 
 specialist = VideoSpecialist()
 embedding = specialist.embed_video("video.mp4", interval=1.0)  # [1152]
@@ -109,27 +113,29 @@ import onnxruntime as ort
 
 sess_options = ort.SessionOptions()
 sess_options.enable_mem_pattern = False  # MANDATORY!
+sess_options.enable_cpu_mem_arena = False  # MANDATORY!
 
-providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
+providers = ['DmlExecutionProvider']
 ```
 
 ## Testing
 
-```bash
+```powershell
 # Run tests
-pytest tests/test_siglip_video.py -v
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe -m pytest Tests/test_siglip_video.py -v
 
 # Quick smoke test
-python -c "from src.pb_studio.ai import SigLIPWrapper; print(SigLIPWrapper().is_ready)"
+.\.venv\Scripts\python.exe -c "from pb_studio.ai import SigLIPWrapper; print(SigLIPWrapper().is_ready)"
 ```
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| "DmlExecutionProvider not found" | `pip install onnxruntime-directml` |
-| "Vision model not loaded" | Download `siglip_vision.onnx` to `models/` |
-| "Tokenizer not initialized" | Install `transformers` or download tokenizer |
+| "DmlExecutionProvider not found" | Run the approved setup/runtime validation; do not mutate dependencies ad hoc |
+| "Vision model not loaded" | Capability remains unavailable until an approved manifest registers the asset |
+| "Tokenizer not initialized" | Text tagging remains unavailable; do not download at runtime |
 | Slow performance | Increase `interval`, reduce `max_frames` |
 | High VRAM usage | Process videos sequentially, call `siglip.unload()` |
 
@@ -137,13 +143,17 @@ python -c "from src.pb_studio.ai import SigLIPWrapper; print(SigLIPWrapper().is_
 
 - Full documentation: [SIGLIP_VIDEO_SPECIALIST.md](SIGLIP_VIDEO_SPECIALIST.md)
 - Usage examples: [examples/siglip_video_example.py](examples/siglip_video_example.py)
-- Test suite: [tests/test_siglip_video.py](../tests/test_siglip_video.py)
+- Test suite: [Tests/test_siglip_video.py](../Tests/test_siglip_video.py)
 
 ## Integration
 
+> The direct `VectorStore`/`VideoGenerator` sketches below are historical
+> prototypes and are not the active project-media or pacing integration.
+> Production callers use registered media IDs through the backend services.
+
 ### With Vector Store
 ```python
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.data.vector_store import VectorStore
 
 vector_store = VectorStore(index_name="clips")
 specialist = VideoSpecialist(vector_store=vector_store)
@@ -155,7 +165,7 @@ vector_store.save()
 
 ### With Video Engine
 ```python
-from src.pb_studio.video.engine import VideoGenerator
+from pb_studio.video.engine import VideoGenerator
 
 # Use embeddings for intelligent clip selection
 generator = VideoGenerator()
@@ -182,7 +192,7 @@ for video in config["source_videos"]:
 
 ## Next Steps
 
-1. Download SigLIP ONNX models
-2. Run example script: `python docs/examples/siglip_video_example.py`
-3. Integrate with your video pipeline
-4. Read full documentation for advanced features
+1. Verify the approved model manifest and DirectML provider.
+2. Import media into the active project catalog.
+3. Run the T332 hardware/regression gates before treating the capability as
+   operational.

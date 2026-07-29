@@ -1,0 +1,434 @@
+{
+  "cancel_contract": {
+    "matching_ffmpeg_after": [],
+    "output_exists": false,
+    "queue": {
+      "created_at": 1785353640.2870817,
+      "error": "cancelled",
+      "finished_at": 1785353649.837295,
+      "job_id": "d087637c-b6dc-46b9-93f2-883c8ee272bd",
+      "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\t337_project_switch_cancelled_cycle12.mp4",
+      "progress_percent": 0.0,
+      "started_at": 1785353640.333149,
+      "status": "failed",
+      "updated_at": 1785353649.837295
+    },
+    "related_output_artifacts": []
+  },
+  "completed_at": "2026-07-29T21:34:17.041610+02:00",
+  "failure_state": {
+    "screenshot": {
+      "channel_range_sum": 765,
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-12-project-switch\\export-visible-failure.png",
+      "size": [
+        2576,
+        1408
+      ]
+    },
+    "status_text": "Kein Ausgabepfad gewählt"
+  },
+  "ffmpeg_monitor": {
+    "backend_log_bytes_before": 30374,
+    "backend_log_bytes_now": 32095,
+    "backend_log_growth_bytes": 1721,
+    "ffmpeg_processes": [],
+    "out_time_seconds": 4.666666666666667,
+    "output_bytes": 0,
+    "output_exists": false,
+    "queue_job_id": "d087637c-b6dc-46b9-93f2-883c8ee272bd",
+    "sampled_at": "2026-07-29T21:34:08.185109+02:00",
+    "status": {
+      "current_frame": 140,
+      "elapsed_seconds": 5.2,
+      "error": null,
+      "eta_seconds": 7015.9,
+      "evidence_path": null,
+      "fps": 27.07,
+      "message": "Rendering: 00:04 / 105:35",
+      "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\t337_project_switch_cancelled_cycle12.mp4",
+      "percent": 60.0,
+      "progress_end": false,
+      "queue_job_id": "d087637c-b6dc-46b9-93f2-883c8ee272bd",
+      "run_id": null,
+      "status": "running",
+      "task_id": "e19882c8",
+      "total_frames": 190051,
+      "validation_path": null,
+      "validation_status": null
+    },
+    "task_id": "e19882c8"
+  },
+  "models_live": {
+    "list": {
+      "base_url": "http://127.0.0.1:1234/v1",
+      "error": null,
+      "lmstudio_available": true,
+      "models": [
+        {
+          "active_tasks": [],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: Unbekannt, Quantisierung: Unbekannt. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": null,
+          "is_active": false,
+          "modified_at": "",
+          "name": "hermes-ha-ornith",
+          "parameter_size": null,
+          "provider": "lmstudio",
+          "quantization_level": null,
+          "size_bytes": 4359391805,
+          "size_gb": 4.06,
+          "size_mb": 4157.4,
+          "vision": false
+        },
+        {
+          "active_tasks": [
+            "KI-Director"
+          ],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: 8.19B, Quantisierung: unknown. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "qwen3",
+          "is_active": true,
+          "modified_at": "2026-07-29T21:29:37.1518037+02:00",
+          "name": "hf.co/mradermacher/DR-Tulu-8B-GGUF:Q8_0",
+          "parameter_size": "8.19B",
+          "provider": "ollama",
+          "quantization_level": "unknown",
+          "size_bytes": 8709521293,
+          "size_gb": 8.11,
+          "size_mb": 8306.0,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: 30.5B, Quantisierung: unknown. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "qwen3moe",
+          "is_active": false,
+          "modified_at": "2026-07-29T21:27:51.2961408+02:00",
+          "name": "hf.co/mradermacher/Huihui-Tongyi-DeepResearch-30B-A3B-abliterated-i1-GGUF:IQ3_XS",
+          "parameter_size": "30.5B",
+          "provider": "ollama",
+          "quantization_level": "unknown",
+          "size_bytes": 12598445014,
+          "size_gb": 11.73,
+          "size_mb": 12014.8,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales Qwen (Vision- und Text-Modell). Parametergröße: 36.0B, Quantisierung: Q4_K_M. Eignet sich hervorragend zur Bildbeschreibung und Video-Szenen-Analyse.",
+          "family": "qwen35moe",
+          "is_active": false,
+          "modified_at": "2026-07-29T02:22:30.7356093+02:00",
+          "name": "qwen3.6:latest",
+          "parameter_size": "36.0B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 23938333577,
+          "size_gb": 22.29,
+          "size_mb": 22829.4,
+          "vision": true
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales Qwen (reines Textmodell). Parametergröße: 14.8B, Quantisierung: Q4_K_M. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "qwen3",
+          "is_active": false,
+          "modified_at": "2026-07-27T10:38:33.61715+02:00",
+          "name": "qwen3:14b",
+          "parameter_size": "14.8B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 9276198565,
+          "size_gb": 8.64,
+          "size_mb": 8846.5,
+          "vision": false
+        },
+        {
+          "active_tasks": [
+            "Chat (Haupt)",
+            "Chat"
+          ],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: 9.0B, Quantisierung: Q4_K_M. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "qwen35",
+          "is_active": true,
+          "modified_at": "2026-07-10T10:22:54.7350005+02:00",
+          "name": "ornith:9b",
+          "parameter_size": "9.0B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 5629110568,
+          "size_gb": 5.24,
+          "size_mb": 5368.3,
+          "vision": false
+        },
+        {
+          "active_tasks": [
+            "Tool-Ausführung"
+          ],
+          "description": "Lokales Gemma (reines Textmodell). Parametergröße: 11.9B, Quantisierung: Q4_K_M. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "gemma4",
+          "is_active": true,
+          "modified_at": "2026-07-10T08:49:52.0591659+02:00",
+          "name": "artokun/gemma4-comfyui-mcp:12b",
+          "parameter_size": "11.9B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 7381382681,
+          "size_gb": 6.87,
+          "size_mb": 7039.4,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales Qwen (reines Textmodell). Parametergröße: 35.1B, Quantisierung: Q2_K. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "qwen35moe",
+          "is_active": false,
+          "modified_at": "2026-06-11T00:38:06.3063089+02:00",
+          "name": "fredrezones55/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive:Q2_K_P",
+          "parameter_size": "35.1B",
+          "provider": "ollama",
+          "quantization_level": "Q2_K",
+          "size_bytes": 15881549271,
+          "size_gb": 14.79,
+          "size_mb": 15145.8,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales Gemma (Vision- und Text-Modell). Parametergröße: 11.9B, Quantisierung: Q4_K_M. Eignet sich hervorragend zur Bildbeschreibung und Video-Szenen-Analyse.",
+          "family": "gemma4",
+          "is_active": false,
+          "modified_at": "2026-06-06T23:24:25.8604778+02:00",
+          "name": "gemma4:12b",
+          "parameter_size": "11.9B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 7556508396,
+          "size_gb": 7.04,
+          "size_mb": 7206.4,
+          "vision": true
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: 20.9B, Quantisierung: MXFP4. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "gptoss",
+          "is_active": false,
+          "modified_at": "2026-06-05T02:25:39.7408116+02:00",
+          "name": "gpt-oss:20b",
+          "parameter_size": "20.9B",
+          "provider": "ollama",
+          "quantization_level": "MXFP4",
+          "size_bytes": 13793441244,
+          "size_gb": 12.85,
+          "size_mb": 13154.5,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales LLM (reines Textmodell). Parametergröße: 8.0B, Quantisierung: Q4_0. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "llama",
+          "is_active": false,
+          "modified_at": "2026-06-04T03:51:15.1776332+02:00",
+          "name": "hermes3:8b",
+          "parameter_size": "8.0B",
+          "provider": "ollama",
+          "quantization_level": "Q4_0",
+          "size_bytes": 4661227243,
+          "size_gb": 4.34,
+          "size_mb": 4445.3,
+          "vision": false
+        },
+        {
+          "active_tasks": [],
+          "description": "Lokales Gemma (reines Textmodell). Parametergröße: 8.0B, Quantisierung: Q4_K_M. Optimiert für Textgenerierung, logisches Denken und interaktive Chats.",
+          "family": "gemma4",
+          "is_active": false,
+          "modified_at": "2026-05-21T22:04:19.3762656+02:00",
+          "name": "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+          "parameter_size": "8.0B",
+          "provider": "ollama",
+          "quantization_level": "Q4_K_M",
+          "size_bytes": 6325657788,
+          "size_gb": 5.89,
+          "size_mb": 6032.6,
+          "vision": false
+        },
+        {
+          "active_tasks": [
+            "Video-Analyse",
+            "Bild-Analyse"
+          ],
+          "description": "Lokales LLM (Vision- und Text-Modell). Parametergröße: 1B, Quantisierung: Q4_0. Eignet sich hervorragend zur Bildbeschreibung und Video-Szenen-Analyse.",
+          "family": "phi2",
+          "is_active": true,
+          "modified_at": "2026-05-17T13:20:53.0622482+02:00",
+          "name": "moondream:latest",
+          "parameter_size": "1B",
+          "provider": "ollama",
+          "quantization_level": "Q4_0",
+          "size_bytes": 1738451197,
+          "size_gb": 1.62,
+          "size_mb": 1657.9,
+          "vision": true
+        }
+      ],
+      "ollama_available": true
+    },
+    "recommendation": {
+      "installed": [
+        "hf.co/mradermacher/DR-Tulu-8B-GGUF:Q8_0",
+        "hf.co/mradermacher/Huihui-Tongyi-DeepResearch-30B-A3B-abliterated-i1-GGUF:IQ3_XS",
+        "qwen3.6:latest",
+        "qwen3:14b",
+        "ornith:9b",
+        "artokun/gemma4-comfyui-mcp:12b",
+        "fredrezones55/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive:Q2_K_P",
+        "gemma4:12b",
+        "gpt-oss:20b",
+        "hermes3:8b",
+        "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
+        "moondream:latest"
+      ],
+      "mode": "balance",
+      "model": "moondream:latest",
+      "override": null,
+      "preference_list": [
+        "qwen/qwen3.5-9b",
+        "qwen/qwen3-vl-8b",
+        "google/gemma-4-e4b"
+      ],
+      "reason": "keine Preferenz getroffen",
+      "task": "video_captioning"
+    }
+  },
+  "partial_progress_state": {
+    "screenshot": {
+      "channel_range_sum": 765,
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-12-project-switch\\export-running-partial-progress.png",
+      "size": [
+        2576,
+        1408
+      ]
+    },
+    "status": {
+      "current_frame": 140,
+      "elapsed_seconds": 5.2,
+      "error": null,
+      "eta_seconds": 7015.9,
+      "evidence_path": null,
+      "fps": 27.07,
+      "message": "Rendering: 00:04 / 105:35",
+      "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\t337_project_switch_cancelled_cycle12.mp4",
+      "percent": 60.0,
+      "progress_end": false,
+      "queue_job_id": "d087637c-b6dc-46b9-93f2-883c8ee272bd",
+      "run_id": null,
+      "status": "running",
+      "task_id": "e19882c8",
+      "total_frames": 190051,
+      "validation_path": null,
+      "validation_status": null
+    }
+  },
+  "post_switch_export": {
+    "cancel_control_visible": false,
+    "screenshot": {
+      "channel_range_sum": 765,
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-12-project-switch\\export-after-project-switch.png",
+      "size": [
+        2576,
+        1408
+      ]
+    },
+    "status_visible": "Bereit für Rendering"
+  },
+  "project_hashes": {
+    "after": {
+      "source": {
+        "project.json": "D7C645F781297A60E5D2F4577B3CEB0815A8E8FBD6DEB2978F7B98A92182AA78",
+        "state.db": "FCDC7BD66D30E4B1138DFC831673EE84C82EF5C75E7BE92DE1A43FFB5D89C7F4",
+        "timeline.json": "D275F61349E40EA8C96386F34C2DDA0C622CB862B52C31F3BC999A40F625A4B9"
+      },
+      "target": {
+        "project.json": "C2308593755F70D2F7BF39C9C08DBBD5DAF7D3608A31178D66029C1AD2DF3A66",
+        "state.db": "DD823C0F522E2B14AC04A9317F504DE21358E94C77563F62BBE7DB415CF9E595",
+        "timeline.json": "6370157529089842E16A0AD7865380E0945CAB51C31FDE43DFB110E828D417D3"
+      }
+    },
+    "before": {
+      "source": {
+        "project.json": "D7C645F781297A60E5D2F4577B3CEB0815A8E8FBD6DEB2978F7B98A92182AA78",
+        "state.db": "FCDC7BD66D30E4B1138DFC831673EE84C82EF5C75E7BE92DE1A43FFB5D89C7F4",
+        "timeline.json": "D275F61349E40EA8C96386F34C2DDA0C622CB862B52C31F3BC999A40F625A4B9"
+      },
+      "target": {
+        "project.json": "C2308593755F70D2F7BF39C9C08DBBD5DAF7D3608A31178D66029C1AD2DF3A66",
+        "state.db": "DD823C0F522E2B14AC04A9317F504DE21358E94C77563F62BBE7DB415CF9E595",
+        "timeline.json": "6370157529089842E16A0AD7865380E0945CAB51C31FDE43DFB110E828D417D3"
+      }
+    }
+  },
+  "project_switch": {
+    "backend_project_info": {
+      "audio_count": 1,
+      "created_at": "2026-07-27T06:33:26Z",
+      "db_project_id": 33,
+      "has_timeline": true,
+      "modified_at": "2026-07-29T19:25:39Z",
+      "name": "ReleaseSmoke_20260727_083320",
+      "path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseSmoke_20260727_083320",
+      "video_count": 2
+    },
+    "close_during_job": {
+      "screenshot": {
+        "channel_range_sum": 746,
+        "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-12-project-switch\\project-closed-during-running-job.png",
+        "size": [
+          2576,
+          1408
+        ]
+      },
+      "visible_project_closed": true
+    },
+    "dialog": {
+      "dialog_handle": 10357886,
+      "observed_windows": [
+        {
+          "class_name": "#32770",
+          "handle": 10357886,
+          "owner": 30018418,
+          "title": "Projektordner öffnen"
+        }
+      ],
+      "select_buttons": [
+        {
+          "class_name": "Button",
+          "enabled": true,
+          "handle": 21825032,
+          "title": "Ordner auswählen",
+          "visible": true
+        }
+      ]
+    },
+    "screenshot": {
+      "channel_range_sum": 746,
+      "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-12-project-switch\\project-after-running-job-switch.png",
+      "size": [
+        2576,
+        1408
+      ]
+    }
+  },
+  "source_project": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245",
+  "status": "pass",
+  "target_project": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseSmoke_20260727_083320",
+  "timeline_total_seconds": 6333.099743764172,
+  "wpf_log": {
+    "bytes": 763,
+    "error_counts": {
+      "path_xpath_failure": 0,
+      "unhandled_ui_exception": 0,
+      "unobserved_task_exception": 0,
+      "xaml_parse_exception": 0
+    },
+    "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\logs\\wpf_app.log"
+  }
+}

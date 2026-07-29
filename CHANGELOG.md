@@ -3,6 +3,31 @@
 
 ---
 
+## 2026-07-29 - T305–T338 Release-Video-Reparatur und End-QC
+
+### Fixed
+- Die 1,927-s-Startlücke der 4.816-Cut-Timeline beseitigt und den kanonischen
+  Pacing-Abschluss auch am produktiven Render-Router erzwungen.
+- Frame-Adressierbarkeit, job-isolierte Evidence, maschinenlesbaren
+  FFmpeg-Fortschritt, Fail-closed-Validierung und atomare Veröffentlichung
+  gehärtet.
+- Long-Mix-Audio-, Downbeat-, Snap-, Diversity-, Feature-, Semantic- und
+  Brain-Feedback-Verträge auf echte Provenance und partielle Zustände
+  korrigiert.
+- Export-Log-XAML auf OneWay-Stringbindung umgestellt; Projektwechsel,
+  Renderstatus und capability-genaue Modell-Empfehlungen wahrheitsgemäß
+  synchronisiert.
+
+### Verified
+- Finaler Gesamtlauf: 1036 passed, 11 begründete Skips, 0 Fehler,
+  45 Warnungen in 402,48 s.
+- WPF Release: 0 Warnungen, 0 Fehler.
+- Postfix-H.264 und -HEVC: je 190.051 Frames, vollständiger Decode über
+  6.335,027 s, 106/106 visuelle Segmente, keine Schwarz-/Freezeintervalle.
+- Release-GUI: 14/14 Bereiche; Projektwechsel unter aktivem Renderjob,
+  Partial-/Failure-Zustand und Models-Livepfad bestanden.
+- Veröffentlichung bleibt bis zum T339-Secret-/Remote-/Push-Gate offen.
+
 ## 2026-07-28 - M-33/M-34 Import-Hygiene und Python-Runtime-Gate
 
 ### Fixed

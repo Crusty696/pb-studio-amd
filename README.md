@@ -19,10 +19,13 @@ Die App deckt heute bereits zentrale Kernpfade ab:
 - Render start / status / cancel
 - Projekt save / open / close / reopen
 - **Brain-Modul** (online-Lernen via Beta-Bernoulli, 17 Bridge-Achsen,
-  CLAP+SigLIP-2 via torch-directml, sqlite-vec KNN, 5 REST-Endpoints,
+  SigLIP-ONNX mit 1152-D-Vektoren sowie registriertes CLAP-ONNX über
+  ONNX Runtime DirectML, sqlite-vec KNN, 6 REST-Endpoints,
   WPF HIRN-Tab + Lern-Session-Walkthrough + Confidence-Balken)
 
 Wichtiger Hinweis:
+- Der Reparaturplan `00013-system-wide-bug-hunting-audit` befindet sich vor
+  dem End-QC; der aktuelle Worktree ist nicht release-ready.
 - Die Architektur befindet sich in einer laufenden Hybrid-Migration.
 - WPF ist die aktive UI.
 - Einige reichere Interaktionsflächen (z. B. echter Timeline-/Player-Editor) sind noch im Ausbau.
@@ -39,8 +42,8 @@ Wichtiger Hinweis:
 - ausreichend VRAM für Analyse-/ML-Pfade
 
 ### Software
-- Python **3.10 oder 3.11**
-- FFmpeg mit AMF-Support bzw. das projektinterne FFmpeg-Setup
+- Python **3.11.x**
+- das in `config/ffmpeg-runtime.json` hashgebundene projektinterne FFmpeg
 - funktionierende `.venv`
 
 ---
@@ -85,7 +88,10 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 
 ### One-Shot Setup für Endanwender (Doppelklick)
 
-`setup.bat` doppelklicken — fragt automatisch nach Admin-Rechten und installiert alles.
+`setup.bat` doppelklicken. Der Wrapper fordert nicht automatisch erhöhte
+Rechte an. Fehlende systemweite Voraussetzungen werden ausschließlich über
+verifizierte `winget`-Pfade installiert; ohne passende Berechtigung bricht das
+Setup nachvollziehbar ab.
 
 | Datei      | Zweck                                                  |
 |------------|--------------------------------------------------------|
@@ -127,20 +133,24 @@ exe stderr, alles erfasst).
 Optionen:
 - `-SkipBuildTools`     VS Build Tools install ueberspringen
 - `-SkipBackupPrompt`   keine Frage fuer Auto-Backup-Task
-- `-SkipModelPrecache`  CLAP+SigLIP Download (~1.8 GB) skippen
-- `-SkipGpuVerify`      DirectML-Verify-Run skippen
+- `-SkipModelPrecache`  Legacy-Kompatibilitätsschalter; lädt keine Modelle
+- `-SkipGpuVerify`      Legacy-Kompatibilitätsschalter; ONNX-DML bleibt Pflicht
 - `-SkipPytest`         pytest am Ende skippen
 - `-NoPause`            Kein "Press Enter" am Ende
 - `-Force`              venv neu anlegen (statt re-use)
 
-Installiert Python-Venv, FFmpeg, LibreHardwareMonitor, AMD-DirectML-Stack inkl. Brain-Modul (torch-directml + transformers 4.49 + sqlite-vec + librosa) und richtet Pre-commit-Hook ein.
+Installiert Python-Venv, das hashgebundene FFmpeg, ONNX Runtime DirectML und
+die freigegebenen CPU-Ausnahmen (FAISS, BeatNet/librosa und Demucs).
+LibreHardwareMonitor bleibt deaktiviert, solange kein extern freigegebenes
+Bundle-Manifest samt beiden SHA-256-Werten vorliegt. CLAP-/SigLIP-Assets
+werden nicht unmanifestiert heruntergeladen.
 
 ### Manuell
 
 ```powershell
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### .NET / WPF
@@ -179,7 +189,8 @@ dotnet build .\PBStudio.UI\PBStudio.UI.csproj -c Debug
 ### Python-Tests
 
 ```powershell
-pytest Tests -q -rs
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+.\.venv\Scripts\python.exe -m pytest Tests -q -rs
 ```
 
 ### WPF Build-Smoke

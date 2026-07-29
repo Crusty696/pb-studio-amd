@@ -1,5 +1,11 @@
 # SigLIP Video Specialist - Documentation
 
+> **Current contract (2026-07-29):** Python 3.11.x, NumPy 1.26.4,
+> SigLIP SO400M ONNX (1152 dimensions), `DmlExecutionProvider` only, and both
+> DirectML memory flags disabled. Package-install/export commands and API
+> examples below are historical reference; use the project runtime and active
+> wrapper contracts. Missing DML/model artifacts fail closed.
+
 ## Overview
 
 The SigLIP Video Specialist provides advanced video analysis capabilities for PB Studio AMD using SigLIP (Sigmoid Loss for Language-Image Pre-training) embeddings. All processing is optimized for AMD GPUs via DirectML.
@@ -50,11 +56,11 @@ import onnxruntime as ort
 
 sess_options = ort.SessionOptions()
 sess_options.enable_mem_pattern = False  # MANDATORY for DirectML!
+sess_options.enable_cpu_mem_arena = False  # MANDATORY for DirectML!
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
 providers = [
-    'DmlExecutionProvider',  # AMD GPU
-    'CPUExecutionProvider'   # Fallback
+    'DmlExecutionProvider',  # AMD GPU; no CPU fallback
 ]
 
 session = ort.InferenceSession(
@@ -73,7 +79,7 @@ DirectML requires `enable_mem_pattern = False` to avoid memory corruption and cr
 ### 1. Image Encoding
 
 ```python
-from src.pb_studio.ai import SigLIPWrapper
+from pb_studio.ai import SigLIPWrapper
 from PIL import Image
 
 # Initialize wrapper
@@ -116,7 +122,7 @@ for label, score in results:
 ### 4. Video Analysis
 
 ```python
-from src.pb_studio.ai import VideoSpecialist
+from pb_studio.ai import VideoSpecialist
 
 # Initialize specialist
 specialist = VideoSpecialist()
@@ -202,7 +208,7 @@ print(f"Frames: {metadata['frame_count']}")
 The VideoSpecialist can integrate with PB Studio's FAISS vector store for persistent storage:
 
 ```python
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.data.vector_store import VectorStore
 
 # Create vector store
 vector_store = VectorStore(index_name="video_clips")
@@ -266,15 +272,16 @@ for video_path in video_paths:
 
 Run the test suite:
 
-```bash
+```powershell
 # All tests
-pytest tests/test_siglip_video.py -v
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe -m pytest Tests/test_siglip_video.py -v
 
 # Specific test class
-pytest tests/test_siglip_video.py::TestSigLIPWrapper -v
+.\.venv\Scripts\python.exe -m pytest Tests/test_siglip_video.py::TestSigLIPWrapper -v
 
 # With coverage
-pytest tests/test_siglip_video.py --cov=src.pb_studio.ai -v
+.\.venv\Scripts\python.exe -m pytest Tests/test_siglip_video.py --cov=src.pb_studio.ai -v
 ```
 
 Note: Some tests require model files to be present. Tests will skip gracefully if models are not available.
@@ -309,65 +316,44 @@ logger = logging.getLogger("src.pb_studio.ai")
 logger.setLevel(logging.DEBUG)
 ```
 
-## Model Download
+## Model Provisioning
 
-To use the SigLIP Video Specialist, you need to:
-
-1. Download or export the SigLIP model to ONNX format
-2. Place files in the models directory:
-   - `models/siglip_vision.onnx` (required)
-   - `models/siglip_text.onnx` (optional, for tagging)
-
-### Export from HuggingFace (Python script example)
-
-```python
-from transformers import AutoModel, AutoTokenizer
-import torch
-
-# Load model
-model = AutoModel.from_pretrained("google/siglip-so400m-patch14-384")
-tokenizer = AutoTokenizer.from_pretrained("google/siglip-so400m-patch14-384")
-
-# Export vision encoder to ONNX
-# (Implementation depends on model structure)
-# ...
-
-# Save tokenizer
-tokenizer.save_pretrained("./models/siglip_tokenizer")
-```
+SigLIP assets are external release inputs. This repository intentionally has
+no downloader or exporter. Only an approved release artifact may provide
+`siglip_vision.onnx` and optional `siglip_text.onnx`; missing assets remain an
+explicit unavailable state.
 
 ## Compatibility
 
 ### Python Version
-- **Required**: Python 3.10 or 3.11
+- **Required**: Python 3.11.x
 - Python 3.12+ not supported (BeatNet compatibility)
 
 ### Dependencies
-- `onnxruntime-directml>=1.16.0` (AMD GPU acceleration)
-- `transformers>=4.48.0` (tokenizer)
+- `onnxruntime-directml==1.19.2` (AMD GPU acceleration)
+- `transformers==4.49.0` (tokenizer)
 - `pillow>=10.0.0` (image processing)
-- `opencv-python-headless>=4.9.0` (video processing)
+- `opencv-python==4.9.0.80` (video processing)
 - `numpy==1.26.4` (numerical operations)
 
 ### Hardware
 - **GPU**: AMD Radeon with DirectML support
 - **VRAM**: Minimum 4GB recommended
-- **CPU Fallback**: Automatic fallback to CPU if DirectML unavailable
+- **CPU Fallback**: None. Missing DirectML is an explicit error.
 
 ## Troubleshooting
 
 ### "DmlExecutionProvider not found"
-```bash
-pip uninstall onnxruntime onnxruntime-gpu -y
-pip install onnxruntime-directml>=1.16.0
-```
+
+Do not install or replace packages from this guide. Verify the locked project
+runtime and fail closed until `DmlExecutionProvider` is available.
 
 ### "Vision model not loaded"
 Ensure `siglip_vision.onnx` exists in models directory.
 
 ### "Tokenizer not initialized"
-- Install transformers: `pip install transformers`
-- Text encoding will be unavailable without tokenizer
+- Restore the locked project environment from `requirements.txt`.
+- Text encoding remains unavailable without the registered local tokenizer.
 
 ### "Failed to open video"
 - Check video file exists
@@ -387,4 +373,4 @@ Ensure `siglip_vision.onnx` exists in models directory.
 
 - [SigLIP Paper](https://arxiv.org/abs/2303.15343)
 - [ONNX Runtime DirectML](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html)
-- [PB Studio Architecture](../MASTER_PLAN_v10.md)
+- [PB Studio Architecture](architecture/ADR-002-csharp-wpf-fastapi-hybrid.md)

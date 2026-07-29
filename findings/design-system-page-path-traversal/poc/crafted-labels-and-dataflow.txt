@@ -1,0 +1,51 @@
+INERT SECURITY-REVIEW DATA
+===========================
+
+Do not pass these labels to the vulnerable CLI.
+
+Intended invariant
+------------------
+page label: dashboard
+constructed: <output-dir>\design-system\<project>\pages\dashboard.md
+resolved sink: direct child of pages directory
+
+PARENT_TRAVERSAL
+----------------
+page label: ..\..\..\AGENTS
+constructed: <output-dir>\design-system\<project>\pages\..\..\..\AGENTS.md
+resolved sink: <output-dir>\AGENTS.md
+sink mode: w (create or truncate, then generated Markdown write)
+
+DRIVE_QUALIFIED
+---------------
+page label: <drive>:\<existing-directory>\target
+constructed operand: <drive>:\<existing-directory>\target.md
+Path join effect on Windows: absolute operand discards pages-directory prefix
+sink mode: w (create or truncate, then generated Markdown write)
+
+UNC
+---
+page label: \\<host>\<share>\<existing-directory>\target
+constructed operand: \\<host>\<share>\<existing-directory>\target.md
+Path join effect on Windows: UNC operand discards pages-directory prefix
+sink mode: w (create or truncate, then generated Markdown write)
+
+Static source dataflow
+----------------------
+.agent/workflows/ui-ux-pro-max.md:77
+  documented --page invocation
+    ->
+.shared/ui-ux-pro-max/scripts/search.py:61
+  argparse accepts unrestricted string
+    ->
+.shared/ui-ux-pro-max/scripts/search.py:68-74
+  args.page forwarded to generate_design_system
+    ->
+.shared/ui-ux-pro-max/scripts/design_system.py:480-482
+  page forwarded to persist_design_system
+    ->
+.shared/ui-ux-pro-max/scripts/design_system.py:527-528
+  lower-case + space replacement + .md suffix; path syntax remains
+    ->
+.shared/ui-ux-pro-max/scripts/design_system.py:530-531
+  open(..., "w") creates or truncates resolved target

@@ -1,5 +1,54 @@
 # Spezifikation: System-wide Bug Hunting & Codebase Audit (Epic 00013)
 
+## Amendment 2026-07-29: Release-Video-Reparatur und beweisbares End-QC
+
+* **OBJ-70:** Der fehlerhafte 6.335,027-s-Release-Export muss ursächlich repariert und gemeinsam mit Audio-, Pacing-, Brain-, Runtime-, Vertrags- und Veröffentlichungsfolgen vollständig beweisbar verifiziert werden.
+* **OR-325:** Falsche Release-Marker und Pass-Aussagen werden nach Evidence-Freeze invalidiert.
+* **OR-326:** `tasks.md` und `repair-progress.md` bilden T305–T339 mit Owner, ETA, Ist-Zeit, Evidenz und Commit ab.
+* **OR-327:** D01–D08 werden mit Auswirkung, Reversibilität und Abbruchkriterium als Decision Register festgehalten.
+* **TR-324:** Ein produktionsidentischer 4.816-Cut-Reproducer erhält Manifest, unveränderten Filter-/Encode-/Mux-Graph und vollständiges FFmpeg-Log.
+* **TR-325:** Stage-Isolation und Prefix-Bisektion lokalisieren die EOF-Ursache in Demux/Decode, Filter, AMF-Encoding oder Muxing; Teilproben gelten nur bei identischer Fehlersignatur.
+* **TR-326:** Ein unabhängiger Read-only-Prüfer falsifiziert Root Cause und Fixdesign; ohne belegte Ursache bleibt Renderimplementierung blockiert.
+* **FR-311:** Der deterministische EOF-Fehler wird ausschließlich an der durch TR-324–TR-326 bestätigten Ursache behoben.
+* **FR-312:** Ein Renderartefakt gilt nur bei vollständigem Decode, erwarteter End-PTS, vollständigen Video-/Audioströmen und gültiger Frame-/Paketbilanz als erfolgreich.
+* **FR-313:** Renderjobs verwenden eindeutige Temp-/Resume-Dateien, atomare Veröffentlichung und Cross-Job-Isolation.
+* **FR-314:** FFmpeg-Exitcode, `-progress`, `progress=end`, End-PTS, Log und Failure-Fingerprint werden dauerhaft jobbezogen erfasst.
+* **FR-315:** Exportaudio bewahrt die 58,2-s-Quellendstille, erzeugt null Overs und erreicht `≤ -1,0 dBTP`.
+* **FR-316:** Alle 254 Long-Mix-Chunk-Ergebnisse und -Fehler werden dauerhaft gespeichert; Teilfehler bleiben sichtbar.
+* **FR-317:** Echte und synthetische Downbeats besitzen getrennte Provenance; synthetische Viertelzählung wird nicht als gemessener Downbeat ausgegeben.
+* **FR-318:** Die Timeline beginnt bei 0 und endet bei 6.335,027 s; die bestätigte 1,927-s-Startlücke entfällt.
+* **FR-319:** Endpoint-Snapping berechnet Typ, Herkunft und Qualitätsaussage aus dem gesnappten Ziel neu.
+* **FR-320:** Diversity-/Blacklist-Regeln skalieren mit der Zahl verfügbarer Clips und verhindern keine valide Auswahl bei sechs Clips.
+* **FR-321:** Ein kanonischer Feature-Adapter liefert Motion, Pace, Mood, Segmenttyp und Confidence aus realen Daten in normalisierten Einheiten.
+* **FR-322:** Fehlende oder partielle semantische Embeddings werden als `unavailable` oder `partial` gemeldet; hardcodierte Ähnlichkeit `0.5` ist unzulässig.
+* **FR-323:** Feedback aktualisiert nur für den bewerteten Cut relevante Achsen und Kontexte statt identischer 6/4-Updates aller 102 Buckets.
+* **RR-236:** Brain-Gewichte werden nur nach Backup, Hash, Kopie-Rehearsal, Replayprüfung und Restore-Probe versioniert migriert; pauschales Löschen ist unzulässig.
+* **OR-328:** FFmpeg 8.0.1 und ein verifiziertes 6.x-AMF-Bundle werden mit Quelle, Hash, Funktionsbeleg und Rollback verglichen.
+* **FR-324:** Start-, Setup-, Test- und Release-QC-Skripte sowie Konfiguration und Settings verwenden dieselbe verifizierte Runtime und Argumentkette.
+* **FR-325:** DTOs, OpenAPI, C#-Modelle und sichtbare UI-Zustände bilden Render-, Audio- und Brain-Partial-/Failure-Verträge vollständig ab.
+* **TR-327:** Neue Regression-, Fault-, Security- und Full-Length-Tests werden vor T332 implementiert, aber nicht ausgeführt.
+* **TR-328:** Cross-Zone-Code- und Security-Review schließt alle Critical/High-Findings vor dem Implementierungsfreeze.
+* **OR-329:** Referenzscan findet keine veralteten Runtimeparameter, DTO-Felder, Skriptargumente oder Releasebehauptungen.
+* **TR-329:** `.completed` entsteht erst nach T305–T330 und geschlossenem T328-Review.
+* **TR-330:** Statische Gates und neue gezielte Regressionen bestehen ab T332.
+* **TR-331:** Vollständige Testsuite, Skip-Audit, Coverage und WPF-Release-Build bestehen.
+* **TR-332:** Security-, Daten-, Fault-, Restore- und atomare Veröffentlichungsprüfungen bestehen auf Kopien.
+* **TR-333:** Ein frischer H.264-AMF-Export besteht alle messbaren Kriterien über 6.335,027 s.
+* **TR-334:** Ein frischer HEVC-AMF-Export besteht alle messbaren Kriterien über 6.335,027 s; Resume/Cancel schützen das bestehende Ziel, AV1 endet vor Start als `unavailable`.
+* **TR-335:** Release-Binary, zwölf UI-Bereiche, Models-Tab, Projektwechsel unter Last und sichtbare Partial-/Failure-Zustände bestehen.
+* **OR-330:** QC-Report, Requirement-Matrix, CHANGELOG, ADRs, Skripte, CLAUDE-Status und Brain stimmen mit gespeicherter Evidence überein; `.qc-passed` verlangt 100 % PASS.
+* **OR-331:** Zonencommits, Secret-Scan, Fetch/Remote-Diff, Fast-forward-Nachweis, PB-Push, pfadbegrenzter Brain-Push und Remote-SHA-Verifikation werden ohne Force-Push ausgeführt.
+* **SC-070 [OBJ-70]:** T305–T339 sind vollständig `[X]`, jeder Task besitzt einen konkreten Evidenzpfad und kein offener `BLOCKED`-Status bleibt bestehen.
+* **SC-071 [OBJ-70]:** H.264 und HEVC dekodieren jeweils über 6.335,027 s vollständig; letzte Video-PTS, A/V-Enddifferenz, Framezahl, terminale Bildänderung, True Peak und Endstille erfüllen alle Kriterien des freigegebenen Plans.
+* **SC-072 [OBJ-70]:** `.completed` und `.qc-passed` entsprechen ihren Gates; PB- und Brain-Remote-SHAs sind nach Push gespeichert verifiziert.
+
+**Gate-Präzedenz für OBJ-70:** OR-330 trennt den lokalen End-QC-Nachweis vom
+nachgelagerten Veröffentlichungsnachweis. `.qc-passed` darf in T338
+ausschließlich nach 100 % PASS aller End-QC-Gates entstehen. Clean-Tree,
+Secret-Scan, Remote-Divergenz, Push und Remote-SHA gehören zu T339/SC-072.
+Damit ist die ältere Clean-Tree-Formulierung in SC-069 für diesen
+Reparaturzyklus präzisiert, nicht aufgehoben.
+
 ## Amendment 2026-07-28: Release-Readiness-Finding-Matrix
 
 * **OBJ-69:** Alle 60 Findings des eingefrorenen Berichts `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md` müssen ohne CPU-/Software-Fallbacks, Datenverlust oder falsche Erfolgszustände geschlossen werden.

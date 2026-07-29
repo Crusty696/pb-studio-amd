@@ -1,13 +1,17 @@
 """
 SigLIP Video Specialist - Usage Examples
 
-This script demonstrates how to use the SigLIP wrapper and VideoSpecialist
-for video analysis, clip matching, and semantic tagging.
+Historical API sketch for SigLIP/VideoSpecialist.
+
+This file is retained as reference and is not the production project-media
+workflow. Production callers use registered media IDs. Do not use this script
+to provision or download model assets.
 
 Requirements:
 - SigLIP ONNX models in models/ directory
 - Sample videos for testing
-- AMD GPU with DirectML support (CPU fallback available)
+- AMD GPU with DirectML support (missing DML fails closed)
+- Production videos imported into the active project's local media catalog
 """
 
 import logging
@@ -17,8 +21,8 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.pb_studio.ai import SigLIPWrapper, VideoSpecialist, VideoClip
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.ai import SigLIPWrapper, VideoSpecialist, VideoClip
+from pb_studio.data.vector_store import VectorStore
 from PIL import Image
 
 # Setup logging
@@ -37,7 +41,7 @@ def example_1_image_encoding():
     siglip = SigLIPWrapper()
 
     if not siglip.is_ready:
-        logger.warning("SigLIP model not loaded. Please download models first.")
+        logger.warning("SigLIP capability unavailable; verify approved assets.")
         return
 
     # Load an image
@@ -100,7 +104,7 @@ def example_3_video_keyframes():
     specialist = VideoSpecialist()
 
     if not specialist.is_ready:
-        logger.warning("VideoSpecialist not ready. Please download models first.")
+        logger.warning("VideoSpecialist unavailable; verify approved assets.")
         return
 
     video_path = "sample_video.mp4"
@@ -326,7 +330,7 @@ def example_8_batch_processing():
         return
 
     # Find all videos in a directory
-    video_dir = Path("./videos")
+    video_dir = Path("data/video")
     if not video_dir.exists():
         logger.warning(f"Video directory not found: {video_dir}")
         return

@@ -13,7 +13,7 @@ Audio-Embedding-Modell für DJ-Mix-Charakterisierung.
 
 Source: <https://huggingface.co/laion/larger_clap_music>
 
-### SigLIP-2 (google/siglip2-base-patch16-384) — **Apache 2.0**
+### SigLIP SO400M (google/siglip-so400m-patch14-384) — **Apache 2.0**
 
 Video-Vision-Tower für Scene-Embeddings.
 
@@ -25,7 +25,7 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 | Komponente            | Lizenz       |
 |-----------------------|--------------|
 | torch                 | BSD-3-Clause |
-| torch-directml        | MIT          |
+| onnxruntime-directml  | MIT          |
 | transformers          | Apache 2.0   |
 | librosa               | ISC          |
 | scipy                 | BSD-3-Clause |
@@ -46,7 +46,7 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 ```
 PB Studio nutzt unter anderem:
   • LAION CLAP (laion/larger_clap_music) — CC-BY-4.0
-  • SigLIP-2 (google/siglip2-base-patch16-384) — Apache 2.0
+  • SigLIP SO400M (google/siglip-so400m-patch14-384) — Apache 2.0
   • FFmpeg — LGPL
   • UVR-MDX-NET — MIT
 

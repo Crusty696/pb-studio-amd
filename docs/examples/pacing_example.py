@@ -1,11 +1,15 @@
 """
-Pacing Engine Example - Complete Usage Demonstration
+Historical Pacing Engine API sketch.
 
 This script demonstrates:
 1. Audio analysis and beat detection
 2. Timeline generation with different sync modes
 3. Clip selection using embeddings
 4. Integration with VideoGenerator
+
+This file is retained as reference and is not the production pacing workflow.
+Production media must be imported into the active project's media catalog and
+referenced by registered clip IDs. Paths below are local fixtures only.
 """
 
 import numpy as np
@@ -13,15 +17,15 @@ import logging
 from pathlib import Path
 
 # PB Studio imports
-from src.pb_studio.pacing import (
+from pb_studio.pacing import (
     AdvancedPacingEngine,
     PacingConfig,
     ClipSelector,
 )
-from src.pb_studio.pacing.advanced_pacing_engine import SyncMode
-from src.pb_studio.pacing.clip_selector import ClipMetadata
-from src.pb_studio.audio.analyzer import AudioAnalyzer
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.pacing.advanced_pacing_engine import SyncMode
+from pb_studio.pacing.clip_selector import ClipMetadata
+from pb_studio.audio.analyzer import AudioAnalyzer
+from pb_studio.data.vector_store import VectorStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -149,33 +153,33 @@ def example_clip_selection():
     clips = [
         ClipMetadata(
             video_id=1,
-            file_path="data/videos/action_scene.mp4",
+            file_path="data/video/action_scene.mp4",
             start_time=0.0,
             duration=10.0,
             motion_score=0.9,
             energy_score=0.8,
             tags=["action", "fast", "outdoor"],
-            embedding=np.random.random(768)  # Mock embedding
+            embedding=np.random.random(1152)  # Canonical SigLIP mock embedding
         ),
         ClipMetadata(
             video_id=2,
-            file_path="data/videos/calm_landscape.mp4",
+            file_path="data/video/calm_landscape.mp4",
             start_time=0.0,
             duration=15.0,
             motion_score=0.2,
             energy_score=0.3,
             tags=["calm", "nature", "slow"],
-            embedding=np.random.random(768)
+            embedding=np.random.random(1152)
         ),
         ClipMetadata(
             video_id=3,
-            file_path="data/videos/city_timelapse.mp4",
+            file_path="data/video/city_timelapse.mp4",
             start_time=0.0,
             duration=12.0,
             motion_score=0.7,
             energy_score=0.6,
             tags=["urban", "medium", "timelapse"],
-            embedding=np.random.random(768)
+            embedding=np.random.random(1152)
         )
     ]
 
@@ -301,9 +305,9 @@ def example_full_integration():
     video_config = {
         "master_audio": "data/audio/song.mp3",
         "source_videos": [
-            "data/videos/video1.mp4",
-            "data/videos/video2.mp4",
-            "data/videos/video3.mp4"
+            "data/video/video1.mp4",
+            "data/video/video2.mp4",
+            "data/video/video3.mp4"
         ],
         "output_path": "output/final_video.mp4",
         "pacing": 4,

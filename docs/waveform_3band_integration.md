@@ -67,7 +67,7 @@ cache.print_stats()
 ### Schritt 1: Imports hinzufügen
 
 ```python
-from src.pb_studio.audio import WaveformAnalyzer, WaveformCache
+from pb_studio.audio import WaveformAnalyzer, WaveformCache
 ```
 
 ### Schritt 2: Initialisierung im Widget
@@ -258,16 +258,13 @@ def paintEvent(self, event):
 
 ```bash
 # Teste Waveform Analyzer
-pytest tests/test_waveform_analyzer.py -v
-
-# Teste mit eigenen Audio-Dateien
-pytest tests/test_waveform_analyzer.py -v --audio="path/to/test.mp3"
+.\.venv\Scripts\python.exe -m pytest Tests/test_waveform_analyzer.py -v
 ```
 
 ## Beispiel-Usage
 
 ```python
-from src.pb_studio.audio import WaveformAnalyzer, WaveformCache
+from pb_studio.audio import WaveformAnalyzer, WaveformCache
 
 # Setup
 analyzer = WaveformAnalyzer(sr=44100)

@@ -1,5 +1,12 @@
 # CLAP Audio Specialist - Quick Start Guide
 
+> **Status: SUPERSEDED prototype guide (2026-07-29).** Preserve this document
+> as historical API reference only. Do not execute its package, download,
+> export, demo, or test commands. Active PB Studio semantic audio uses a
+> registered CLAP ONNX model with `DmlExecutionProvider` only and reports
+> `unavailable` when the model/provider is absent. Python 3.11.x and NumPy
+> 1.26.4 are fixed by the project runtime.
+
 ## 5-Minute Setup
 
 ### 1. Install Dependencies
@@ -9,15 +16,14 @@ pip install -r requirements.txt
 ```
 
 Benötigte Packages:
-- `onnxruntime-directml>=1.16.0` (AMD GPU support)
-- `librosa>=0.10.1` (Audio processing)
+- `onnxruntime-directml==1.19.2` (AMD GPU support)
+- `librosa>=0.11.0` (Audio processing)
 - `soundfile>=0.12.1` (Audio I/O)
-- `transformers>=4.48.0` (Model loading)
+- `transformers==4.49.0` (Model loading)
 
 ### 2. Download CLAP Model
 ```bash
-# Automatic download and ONNX export
-python scripts/download_clap_model.py
+# RETIRED: no in-repository model download or ONNX export command
 ```
 
 Output Files:
@@ -327,21 +333,17 @@ analyzer.unload()
 
 ### Issue: Model not found
 ```bash
-python scripts/download_clap_model.py
+# Provision only an externally approved CLAP ONNX release artifact.
 ```
 
 ### Issue: DirectML not working
 ```bash
-pip uninstall onnxruntime onnxruntime-gpu -y
-pip install onnxruntime-directml>=1.16.0
-
-# Verify
-python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+# Restore the locked project environment; do not replace ONNX Runtime packages.
 ```
 
 ### Issue: Audio loading fails
 ```bash
-pip install librosa soundfile --upgrade
+# Restore the locked project environment from requirements.txt.
 ```
 
 ### Issue: Out of memory
@@ -357,7 +359,7 @@ analyzer.unload()
 
 1. **Read Full Documentation:** `docs/CLAP_INTEGRATION.md`
 2. **Run Demo:** `python examples/clap_demo.py song.mp3`
-3. **Write Tests:** `pytest tests/test_clap_wrapper.py -v`
+3. **Write Tests:** `.\.venv\Scripts\python.exe -m pytest Tests/test_clap_wrapper.py -v`
 4. **Integrate into App:** See integration patterns above
 
 ## Common Use Cases
@@ -406,7 +408,7 @@ playlist = sorted(candidates, key=lambda x: x[1], reverse=True)
 
 - **Documentation:** `docs/CLAP_INTEGRATION.md`
 - **Examples:** `examples/clap_demo.py`
-- **Tests:** `tests/test_clap_wrapper.py`
+- **Tests:** `Tests/test_clap_wrapper.py`
 - **Issues:** GitHub Issues
 
 ## License

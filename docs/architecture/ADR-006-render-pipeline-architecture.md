@@ -1,11 +1,43 @@
 # ADR-006: Render-Pipeline-Architektur
 
-**Status:** Accepted
+**Status:** Superseded historical design; active contract amended 2026-07-29
 **Datum:** 2026-03-06
 **Entscheider:** David Lochmann (Owner)
 **Kontext:** WPF + FastAPI Hybrid, AMD DirectML, Phase G-J abgeschlossen
 
 ---
+
+## Aktueller verbindlicher Vertrag
+
+Die Konsolidierungsentscheidung und die Optionenanalyse unten dokumentieren den
+Stand vom 2026-03-06. Sie sind keine Beschreibung des aktiven Renderpfads.
+
+- Aktiver Orchestrator ist der job-gebundene `RenderService`.
+- Zulässige Video-Encoder sind ausschließlich `h264_amf`, `hevc_amf` und
+  `av1_amf`. Media Foundation und Software-Encoder sind kein Fallback.
+- Fehlendes oder fehlerhaftes AMF führt vor Veröffentlichung zu einem
+  expliziten Fehler.
+- Jeder Lauf besitzt isolierte Run-/Result-/Validation-Evidence.
+- Der Render-Router finalisiert die geladene Cut-Liste nach dem Probe der
+  Audio-Gesamtdauer über den kanonischen `PacingService`-Abschluss. Der
+  produktive Consumer darf diese Invariante nicht nur vom vorgelagerten
+  Pacing-Aufrufer erwarten.
+- Die für den Renderlauf eingefrorene Timeline beginnt bei 0, ist lückenlos
+  und endet an der Audio-Gesamtdauer. Erst danach folgen Timeline- und
+  Frame-Adressierbarkeitsvalidierung.
+- Ein Ziel wird erst nach vollständiger Paket-/Decode-Validierung atomar
+  veröffentlicht; Failure, Cancel und Resume dürfen ein bestehendes Ziel nicht
+  zerstören.
+- FFmpeg und FFprobe werden als gemeinsam gehashter, projektlokaler
+  Runtime-Vertrag aufgelöst.
+
+Autoritative Reparaturbelege: T311-T314, T325-T327, T329 sowie die
+vollständigen H.264-/HEVC-/GUI-Gates T335-T337 in
+`specs/00013-system-wide-bug-hunting-audit/evidence/`.
+
+---
+
+## Historische Entscheidung von 2026-03-06
 
 ## Kontext
 
@@ -41,7 +73,7 @@ C# MediaFoundation wird explizit abgelehnt.
 |-----------|-----------|
 | Komplexität | Mittel (zwei ähnliche Klassen, redundante Encoder-Detection) |
 | AMD-Kompatibilität | Hoch (hevc_amf, h264_amf, av1_amf vollständig getestet) |
-| Encoder-Flexibilität | Hoch (Auto-Detect: hevc_amf → h264_amf → h264_mf → libx264) |
+| Encoder-Flexibilität | Historisch: Auto-Detect enthielt auch `h264_mf` und `libx264`; seit 2026-07-29 superseded |
 | Wartbarkeit | Niedrig (Redundanz: 2× Encoder-Detection, 2× Temp-File-Cleanup) |
 | Windows CMD-Limit | Gelöst (BatchRenderer 30-Clip-Chunks) |
 | Team-Know-How | Hoch |
@@ -147,7 +179,7 @@ C# MediaFoundation wird explizit abgelehnt.
 
 ---
 
-## Implementation Plan (UnifiedRenderer)
+## Historischer Implementation Plan (UnifiedRenderer; nicht aktiv)
 
 ### Phase 1: Analyse (vor Implementierung)
 
@@ -188,7 +220,7 @@ class UnifiedRenderer:
 2. render_router.py auf UnifiedRenderer umstellen
 3. BatchRenderer und RenderService als @deprecated markieren
 4. Smoke-Tests: 14/14 PASSED
-5. E2E-Test mit C:\Users\david\Videos\test_data\video
+5. E2E-Test mit einem verifizierten Video unter dem freigegebenen Projektroot
 6. BatchRenderer + RenderService nach 1 Release-Zyklus löschen
 ```
 
@@ -211,7 +243,8 @@ class UnifiedRenderer:
 - [ ] 6. Alle Smoke-Tests (14/14) + E2E-Tests ausführen
 - [ ] 7. CLAUDE.md aktualisieren (ADR-006, UnifiedRenderer-Eintrag)
 
-**Priorität:** Mittel – aktuelle Pipeline funktioniert. Migration vor nächstem Feature-Release.
+**Historische Priorität:** Mittel. Diese Migration ist superseded und kein
+offener Implementierungsauftrag.
 **Geschätzter Aufwand:** 2–4 Stunden (Implementierung) + 1 Stunde (Tests)
 
 ---

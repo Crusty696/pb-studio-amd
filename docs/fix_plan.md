@@ -1,5 +1,10 @@
 # PB Studio AMD - Fix Plan
 
+> **HISTORISCH / SUPERSEDED (2026-07-29):** Abgeschlossener PyQt-/Frühphasenplan
+> vom 2026-02-12. Er ist kein aktueller Architektur-, Setup- oder Releasevertrag.
+> Verbindlich ist der aktive Spec-Workspace
+> `specs/00013-system-wide-bug-hunting-audit/`.
+
 **Erstellt:** 2026-02-12
 **Status:** ABGESCHLOSSEN
 **Gesamtstand:** 100% - Alle Aufgaben erledigt

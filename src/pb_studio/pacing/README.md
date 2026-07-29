@@ -63,7 +63,7 @@ clip = ClipMetadata(
     motion_score=0.8,
     energy_score=0.7,
     tags=["action", "outdoor"],
-    embedding=your_embedding_vector  # 768-dim numpy array
+    embedding=your_embedding_vector  # 1152-dim SigLIP SO400M vector
 )
 selector.add_clip(clip)
 

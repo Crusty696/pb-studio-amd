@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-07-29T16:08:45.052763+02:00",
+  "export": {
+    "copyable_edit_count": 6,
+    "render_log_visible": true,
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-8-xaml\\export-render-log.png"
+  },
+  "models": {
+    "api_installed_count": 1,
+    "base_url": "http://127.0.0.1:1234/v1",
+    "installed_state": "1 installiert  \u00b7  8 verfuegbar  \u00b7  LM Studio @ http://127.0.0.1:1234/v1 \u00b7 Ollama: offline",
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-8-xaml\\modelle-after-refresh.png"
+  },
+  "status": "pass",
+  "terminal": {
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-8-xaml\\terminal-after-model-refresh.png",
+    "visible": true
+  },
+  "window_handle": 4326670,
+  "wpf_log": {
+    "bytes": 531,
+    "error_counts": {
+      "path_xpath_failure": 0,
+      "unhandled_ui_exception": 0,
+      "unobserved_task_exception": 0,
+      "xaml_parse_exception": 0
+    },
+    "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\logs\\wpf_app.log"
+  }
+}

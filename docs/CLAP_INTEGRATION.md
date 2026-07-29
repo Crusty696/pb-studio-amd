@@ -1,5 +1,13 @@
 # CLAP Audio Specialist - Integration Guide
 
+> **Status: SUPERSEDED operational guide (2026-07-29).** The examples below
+> preserve the earlier prototype API. Do not use their package-install,
+> download/export, provider-fallback, or performance claims as current
+> instructions. Active semantic audio requires a registered CLAP ONNX model
+> through `DmlExecutionProvider`; without it the feature reports
+> `unavailable`. Python 3.11.x, NumPy 1.26.4, both DirectML memory flags, and
+> project-managed artifacts are mandatory.
+
 ## Overview
 
 CLAP (Contrastive Language-Audio Pretraining) ist ein multimodales AI-Modell für Zero-Shot Audio Classification. Es verbindet Audio-Embeddings mit Text-Embeddings und ermöglicht flexible Audio-Analyse ohne Training auf spezifische Kategorien.
@@ -74,20 +82,20 @@ print("Embedding:", results["embedding"].shape)  # (512,)
 # Session Options (automatisch konfiguriert)
 sess_options = ort.SessionOptions()
 sess_options.enable_mem_pattern = False  # MANDATORY für DirectML!
+sess_options.enable_cpu_mem_arena = False  # MANDATORY für DirectML!
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
 # Providers (automatisch ausgewählt)
-providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
+providers = ['DmlExecutionProvider']
 ```
 
-Das Modell erkennt automatisch verfügbare Hardware und nutzt:
-1. **DirectML** wenn AMD GPU verfügbar
-2. **CPU** als Fallback
+Das aktive Modell nutzt ausschließlich DirectML. Fehlender Provider oder
+fehlende registrierte ONNX-Artefakte ergeben `unavailable`/Fehler.
 
 Prüfe aktiven Provider:
 ```python
 analyzer = CLAPAnalyzer()
-print(analyzer.active_provider)  # "DmlExecutionProvider" oder "CPUExecutionProvider"
+print(analyzer.active_provider)  # "DmlExecutionProvider"
 ```
 
 ## Model Files
@@ -112,11 +120,7 @@ models/
 ### Model Download
 
 ```bash
-# Option 1: Automatisches Download-Script
-python scripts/download_clap_model.py
-
-# Option 2: Manueller Export von Hugging Face
-python scripts/export_clap_onnx.py
+# RETIRED: keine In-Repository-Downloads oder lokalen ONNX-Exporte
 ```
 
 **Hinweis:** Die ONNX-Modelle müssen aus dem PyTorch-Original konvertiert werden. Details siehe `scripts/export_clap_onnx.py`.
@@ -377,36 +381,34 @@ def classify_audio_genre(
 ## Troubleshooting
 
 ### Problem: "DirectML provider not available"
-```bash
-pip uninstall onnxruntime onnxruntime-gpu -y
-pip install onnxruntime-directml>=1.16.0
-```
+
+Nicht auf CPU ausweichen und keine Pakete aus diesem Guide ändern. Runtime-
+Contract und projektverwaltete Umgebung prüfen; Zustand bleibt explizit
+`unavailable`, bis DML und freigegebene Modellartefakte vorhanden sind.
 
 ### Problem: "Model not found"
 ```bash
-# Download und konvertiere CLAP-Modell
-python scripts/download_clap_model.py
+# Nur extern freigegebenes CLAP-ONNX-Release-Artefakt bereitstellen.
 ```
 
 ### Problem: Audio loading fails
 ```bash
-# Installiere benötigte Audio-Libraries
-pip install librosa soundfile
+# Projektumgebung aus requirements.txt wiederherstellen; keine Einzelpakete.
 ```
 
 ### Problem: Langsame Inference
 - Prüfe ob DirectML aktiv: `print(analyzer.active_provider)`
-- Falls "CPUExecutionProvider": DirectML installieren
+- Jeder andere Provider als `DmlExecutionProvider` ist ein Fehler.
 - Falls "DmlExecutionProvider" aber langsam: GPU-Treiber updaten
 
 ## Testing
 
 ```bash
 # Unit Tests
-pytest tests/test_clap_wrapper.py -v
+.\.venv\Scripts\python.exe -m pytest Tests/test_clap_wrapper.py -v
 
 # Integration Tests (benötigt ONNX-Modelle)
-pytest tests/test_clap_wrapper.py -v -m integration
+.\.venv\Scripts\python.exe -m pytest Tests/test_clap_wrapper.py -v -m integration
 
 # Demo ausführen
 python examples/clap_demo.py test_audio/sample.mp3

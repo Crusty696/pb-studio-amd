@@ -317,6 +317,44 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
 - [X] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
 
+## Release-Video-Reparatur 2026-07-29
+
+- [X] T305 [OBJ-70] {(OR-325)} Freeze video/report/log/Git evidence, remove invalid release markers, and reopen `specs/00013-system-wide-bug-hunting-audit/qc-report.md`
+- [X] T306 [OBJ-70] {(OR-326)} Deduplicate requirements and register T305–T339 plus `specs/00013-system-wide-bug-hunting-audit/repair-progress.md`
+- [X] T307 [OBJ-70] {(OR-327)} Record D01–D08 with impact, reversibility, and abort criteria in the decision register
+- [X] T308 [OBJ-70] {(TR-324)} Run the production-identical 4,816-entry render reproducer and save the complete FFmpeg log
+- [X] T309 [OBJ-70] {(TR-325)} Isolate EOF failure stage and bisect prefixes only with identical failure signature
+- [X] T310 [OBJ-70] {(TR-326)} Independently falsify root cause and freeze the cause-specific fix design
+- [X] T311 [OBJ-70] {(FR-311)} Fix only the confirmed deterministic EOF cause in the render pipeline
+- [X] T312 [OBJ-70] {(FR-312)} Implement fail-closed render artifact validation
+- [X] T313 [OBJ-70] {(FR-313)} Isolate temp, resume, publication, and process state per render job
+- [X] T314 [OBJ-70] {(FR-314)} Persist machine-readable FFmpeg progress, exit, End-PTS, log, and failure fingerprint
+- [X] T315 [OBJ-70] {(FR-315)} Enforce the export-audio true-peak, no-over, and source-end-silence contract
+- [X] T316 [OBJ-70] {(FR-316)} Persist truthful evidence for all 254 long-mix analysis chunks
+- [X] T317 [OBJ-70] {(FR-317)} Separate measured downbeat provenance from synthetic assumptions
+- [X] T318 [OBJ-70] {(FR-318)} Normalize timeline start and end boundaries to 0 and 6,335.027 seconds
+- [X] T319 [OBJ-70] {(FR-319)} Recompute snap provenance after endpoint snapping
+- [X] T320 [OBJ-70] {(FR-320)} Make clip diversity and blacklist behavior adaptive to available clip count
+- [X] T321 [OBJ-70] {(FR-321)} Add a canonical real-data Brain feature adapter
+- [X] T322 [OBJ-70] {(FR-322)} Expose semantic embedding availability without synthetic similarity
+- [X] T323 [OBJ-70] {(FR-323)} Make Brain credit assignment axis- and context-relevant
+- [X] T324 [OBJ-70] {(RR-236)} Back up, rehearse, replay-check, and restore-probe Brain weight migration
+- [X] T325 [OBJ-70] {(OR-328)} Compare FFmpeg 8.0.1 with a sourced, hashed, rollback-safe 6.x AMF bundle
+- [X] T326 [OBJ-70] {(FR-324)} Synchronize all start, setup, test, release-QC, config, and settings runtime references
+- [X] T327 [OBJ-70] {(FR-325)} Synchronize DTO, OpenAPI, C# model, and visible UI status contracts
+- [X] T328 [OBJ-70] {(TR-327)} Implement regression, fault, security, and full-length tests without executing them
+- [X] T329 [OBJ-70] {(TR-328)} Complete independent cross-zone code and security review
+- [X] T330 [OBJ-70] {(OR-329)} Scan all scripts, DTOs, docs, ADRs, examples, and configs for stale references
+- [X] T331 [OBJ-70] {(TR-329)} Create `.completed` only after the implementation and review gate
+- [X] T332 [OBJ-70] {(TR-330)} Run static gates and all new targeted regressions
+- [X] T333 [OBJ-70] {(TR-331)} Run the full suite, skip audit, coverage, and WPF Release build
+- [X] T334 [OBJ-70] {(TR-332)} Run security, data, fault, restore, migration, and atomic-publication QC on copies
+- [X] T335 [OBJ-70] {(TR-333)} Complete and validate the fresh full-length H.264 AMF E2E export
+- [X] T336 [OBJ-70] {(TR-334)} Complete HEVC, resume, cancel, existing-target, and AV1-unavailable QC
+- [X] T337 [OBJ-70] {(TR-335)} Validate Release GUI, all twelve areas, models, project switching, and visible failure states
+- [X] T338 [OBJ-70] {(OR-330)} Reconcile QC, requirements, changelog, ADRs, scripts, CLAUDE status, and Brain truth
+- [ ] T339 [OBJ-70] {(OR-331)} Commit by zone, scan secrets, verify remote diff, push scoped repos, and verify remote SHAs
+
 
 
 

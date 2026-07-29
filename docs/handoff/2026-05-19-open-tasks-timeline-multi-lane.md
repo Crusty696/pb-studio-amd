@@ -1,5 +1,10 @@
 # Open Tasks — nach Timeline-Multi-Lane Merge (2026-05-19)
 
+> **HISTORISCH / SUPERSEDED (2026-07-29):** Nicht ausführen. Die damaligen
+> Checkout-, Branch-Delete-, Worktree-Remove- und Build-Anweisungen gehören
+> nicht zum aktuellen Repositoryzustand. Für Veröffentlichung und Remote-
+> Divergenz gelten ausschließlich D07/D08 des aktiven Reparaturplans 00013.
+
 > Aufgenommen nach erfolgreichem PR-Merge `worktree-timeline-multi-lane @ 8ed0111` in `main`. Diese Liste fortlaufend abarbeiten in folgenden Sessions.
 
 ## Quick-Recall

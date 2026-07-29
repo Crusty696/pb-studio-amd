@@ -1,0 +1,72 @@
+﻿{
+  "current": {
+    "expected_frames": 190051,
+    "first_start": 1.9272562358276644,
+    "frame_window_sum": 189973,
+    "gap_count": 0,
+    "gap_sample": [],
+    "last_end": 6335.027,
+    "render_timeline_sha256": "1a8353d36cc15106c43b4def6e7f8f37793b2f3adfd9deaa5a7b7abaea78384e",
+    "rounded_duration_delta": 0.003256235872868274,
+    "sum_rounded_concat_duration": 6333.1030000000455,
+    "sum_timeline_duration": 6333.099743764173,
+    "timeline_count": 4816,
+    "timeline_sha256": "2a41ea381daa7d682827e46aae3613181cba01768ff89e43e872b63b40ec82de",
+    "unique_source_count": 6
+  },
+  "current_job_id": "851b5ccf-7f73-4866-8bd9-6e3845d512fd",
+  "current_request": {
+    "audio_path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\temp\\qc_longmix_20260728_1245.wav",
+    "bitrate_mbps": 4.0,
+    "encoder": "h264_amf",
+    "fps": 30.0,
+    "include_audio": true,
+    "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\t337_project_switch_cancelled.mp4",
+    "quality": "preview",
+    "resolution_height": 720,
+    "resolution_width": 1280
+  },
+  "fixed_current": {
+    "expected_frames": 190051,
+    "first_start": 0.0,
+    "frame_window_sum": 190030,
+    "gap_count": 0,
+    "gap_sample": [],
+    "last_end": 6335.027,
+    "render_timeline_sha256": "8d5eab429aa874acd557c91cde8d9f45f00de7c76989a0a6e093721d8cdbd50b",
+    "rounded_duration_delta": 0.003000000045176421,
+    "sum_rounded_concat_duration": 6335.030000000045,
+    "sum_timeline_duration": 6335.027,
+    "timeline_count": 4816,
+    "timeline_sha256": "3fff125d6a12815f8122a874d0ec4bc1182c994e3654293ecfb3540d4063889c",
+    "unique_source_count": 6
+  },
+  "frozen_job_id": "0f81362b-084f-414a-bc41-d8fae85a749e",
+  "frozen_request": {
+    "audio_path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\temp\\qc_longmix_20260728_1245.wav",
+    "bitrate_mbps": 4.0,
+    "encoder": "h264_amf",
+    "fps": 30.0,
+    "include_audio": true,
+    "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_h264.mp4",
+    "quality": "standard",
+    "resolution_height": 360,
+    "resolution_width": 640
+  },
+  "t335_finalized": {
+    "expected_frames": 190051,
+    "first_start": 0.0,
+    "frame_window_sum": 190030,
+    "gap_count": 0,
+    "gap_sample": [],
+    "last_end": 6335.027,
+    "render_timeline_sha256": "8b17a6175e5ea866008eb0871fc53822ac762d4daa9c26817b129027df100dfb",
+    "rounded_duration_delta": 0.003000000045176421,
+    "sum_rounded_concat_duration": 6335.030000000045,
+    "sum_timeline_duration": 6335.027,
+    "timeline_count": 4816,
+    "timeline_sha256": "076e6d681d7362db9bab12318addfb0415df26c39a5bfabd5733e2afffdf9a46",
+    "unique_source_count": 6
+  },
+  "timelines_equal": false
+}

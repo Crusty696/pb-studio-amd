@@ -1,0 +1,18 @@
+{
+  "timeline": [
+    {
+      "clip_id": "static-security-fixture",
+      "start_time": 0.0,
+      "end_time": 1.0,
+      "metadata": {
+        "clip_name": "Inert external-path fixture",
+        "file_path": "\\\\pb-studio-preview.invalid\\share\\clip.mp4",
+        "clip_start": 0.0,
+        "trigger_type": "fixture",
+        "trigger_strength": 0.0,
+        "segment_type": "test"
+      }
+    }
+  ],
+  "audio_path": null
+}
