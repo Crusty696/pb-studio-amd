@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -19,9 +20,21 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state, resolve_active_project_root
+from ..app_state import (
+    AppState,
+    get_app_state,
+    resolve_active_project_root,
+    resolve_project_db_id,
+)
 from ..config import config
 from ..dependencies import gpu_lock, publish_event, publish_log
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    canonical_local_media_reference,
+    validate_media_catalog,
+    validate_registered_media_path,
+    validate_timeline_media_paths,
+)
 from ..schemas.common import validate_timeline
 from ..schemas.render_schemas import (
     RenderRequest, RenderProgress,
@@ -163,6 +176,7 @@ def _request_settings_dict(
     *,
     timeline_snapshot: Optional[list[dict[str, Any]]] = None,
     project_root: Optional[Path] = None,
+    project_db_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """Render-Settings als reines Dict für die Queue-Persistenz."""
     settings = {
@@ -174,12 +188,17 @@ def _request_settings_dict(
         "include_audio": request.include_audio,
         "quality": request.quality.value if request.quality is not None else None,
     }
-    if timeline_snapshot is not None and project_root is not None:
+    if (
+        timeline_snapshot is not None
+        and project_root is not None
+        and project_db_id is not None
+    ):
         settings["_resume"] = {
             "version": _RENDER_RESUME_PAYLOAD_VERSION,
             "request": request.model_dump(mode="json"),
             "timeline_snapshot": timeline_snapshot,
             "project_root": str(Path(project_root).resolve()),
+            "project_db_id": int(project_db_id),
         }
     return settings
 
@@ -236,6 +255,117 @@ async def _preflight_render_request(
     raise HTTPException(status_code=503, detail=detail)
 
 
+def _validate_render_media_contract(
+    request: RenderRequest,
+    timeline_snapshot: list[dict[str, Any]],
+    state: AppState,
+) -> tuple[RenderRequest, list[dict[str, Any]]]:
+    """Bind all render inputs to canonical files in the active media catalogue."""
+    audio_clips = state.get_audio_clips_snapshot()
+    validated_audio = validate_registered_media_path(
+        request.audio_path,
+        (clip.get("path", "") for clip in audio_clips.values()),
+        label="Render audio_path",
+    )
+    if state.current_audio_path:
+        active_audio = validate_registered_media_path(
+            state.current_audio_path,
+            (clip.get("path", "") for clip in audio_clips.values()),
+            label="Aktive Timeline audio_path",
+        )
+        if os.path.normcase(validated_audio) != os.path.normcase(active_audio):
+            raise MediaPathPolicyError(
+                "Render audio_path gehoert nicht zur aktiven Timeline"
+            )
+
+    validated_timeline = validate_timeline_media_paths(
+        timeline_snapshot,
+        state.get_video_clips_snapshot(),
+    )
+    return request.model_copy(update={"audio_path": validated_audio}), validated_timeline
+
+
+def _load_resume_media_state(
+    project_root_raw: str,
+    project_db_id_raw: Any,
+) -> tuple[AppState, Path]:
+    """Restore only the persisted project's validated media catalogue for resume."""
+    try:
+        project_root = canonical_local_media_reference(
+            project_root_raw,
+            label="Resume-Projektwurzel",
+        ).resolve(strict=True)
+    except (MediaPathPolicyError, OSError, RuntimeError) as exc:
+        raise ValueError(f"Resume-Projektwurzel ist ungueltig: {exc}") from exc
+    if not project_root.is_dir():
+        raise ValueError("Resume-Projektwurzel ist kein Ordner")
+
+    allowed_root = Path(config.project_dir).resolve(strict=True)
+    if not project_root.is_relative_to(allowed_root):
+        raise ValueError("Resume-Projektwurzel liegt ausserhalb des Projektordners")
+
+    from pb_studio.data.repositories.project_repository import ProjectRepository
+
+    project_repo = ProjectRepository()
+    project_record = None
+    if project_db_id_raw not in (None, ""):
+        try:
+            project_db_id = int(project_db_id_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Resume-Payload enthaelt keine gueltige Projekt-ID") from exc
+        project_record = project_repo.get_by_id(project_db_id)
+    else:
+        # Backward-compatible lookup for version-1 jobs created before the
+        # project_db_id field was added. The registered canonical root remains
+        # the trust anchor; the payload path alone is never accepted.
+        project_db_id = 0
+        for candidate in project_repo.get_all():
+            candidate_root_raw = (candidate.get("data") or {}).get("path")
+            try:
+                candidate_root = canonical_local_media_reference(
+                    str(candidate_root_raw or ""),
+                    label="Registrierte Resume-Projektwurzel",
+                ).resolve(strict=True)
+            except (MediaPathPolicyError, OSError, RuntimeError):
+                continue
+            if os.path.normcase(str(candidate_root)) == os.path.normcase(
+                str(project_root)
+            ):
+                project_record = candidate
+                project_db_id = int(candidate["id"])
+                break
+    if not project_record:
+        raise ValueError("Resume-Projekt ist nicht mehr registriert")
+    registered_root_raw = (project_record.get("data") or {}).get("path")
+    try:
+        registered_root = canonical_local_media_reference(
+            str(registered_root_raw or ""),
+            label="Registrierte Resume-Projektwurzel",
+        ).resolve(strict=True)
+    except (MediaPathPolicyError, OSError, RuntimeError) as exc:
+        raise ValueError(f"Registrierte Resume-Projektwurzel ist ungueltig: {exc}") from exc
+    if os.path.normcase(str(registered_root)) != os.path.normcase(str(project_root)):
+        raise ValueError("Resume-Projekt-ID und Projektwurzel stimmen nicht ueberein")
+
+    resume_state = AppState(
+        current_project={
+            "path": str(project_root),
+            "db_project_id": project_db_id,
+        }
+    )
+    if not resume_state.load_from_db(project_id=project_db_id):
+        raise ValueError("Resume-Medienkatalog konnte nicht geladen werden")
+    resume_state.audio_clips = validate_media_catalog(
+        resume_state.get_audio_clips_snapshot(),
+        label="Resume-Audio-Katalog",
+    )
+    resume_state.video_clips = validate_media_catalog(
+        resume_state.get_video_clips_snapshot(),
+        label="Resume-Video-Katalog",
+    )
+    return resume_state, project_root
+
+
 async def _resume_render_queue_on_startup(
     state: AppState,
     *,
@@ -259,6 +389,7 @@ async def _resume_render_queue_on_startup(
             request_data = payload.get("request")
             timeline_snapshot = payload.get("timeline_snapshot")
             project_root_raw = payload.get("project_root")
+            project_db_id_raw = payload.get("project_db_id")
             if not isinstance(request_data, dict):
                 raise ValueError("Resume-Payload enthält keinen RenderRequest")
             if not isinstance(timeline_snapshot, list) or not timeline_snapshot:
@@ -266,8 +397,17 @@ async def _resume_render_queue_on_startup(
             if not project_root_raw:
                 raise ValueError("Resume-Payload enthält keine Projektwurzel")
 
+            resume_media_state, project_root = await asyncio.to_thread(
+                _load_resume_media_state,
+                str(project_root_raw),
+                project_db_id_raw,
+            )
             request = RenderRequest.model_validate(request_data)
-            project_root = Path(project_root_raw).resolve()
+            request, timeline_snapshot = _validate_render_media_contract(
+                request,
+                timeline_snapshot,
+                resume_media_state,
+            )
             output_path = Path(request.output_path).resolve()
             if output_path != Path(job.output_path).resolve():
                 raise ValueError("Resume-Output stimmt nicht mit Queue-Job überein")
@@ -396,6 +536,15 @@ async def start_render(
     if not timeline_snapshot:
         raise HTTPException(status_code=400, detail="Keine Timeline für Rendering vorhanden")
 
+    try:
+        request, timeline_snapshot = _validate_render_media_contract(
+            request,
+            timeline_snapshot,
+            state,
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
     allowed_render = resolve_active_project_root(state, config.project_dir)
@@ -431,6 +580,7 @@ async def start_render(
                 request,
                 timeline_snapshot=timeline_snapshot,
                 project_root=allowed_render,
+                project_db_id=resolve_project_db_id(state.current_project),
             ),
             job_id=candidate_queue_job_id,
         )
@@ -467,7 +617,10 @@ async def start_render(
         "eta_seconds": 0.0,
         "output_path": request.output_path,
         "error": None,
+        "message": "Render-Task registriert",
         "queue_job_id": queue_job_id,
+        "progress_end": False,
+        "validation_status": None,
     }
     state.set_render_task(task_id, task_data)
     state.set_cancel_flag(task_id, False)
@@ -560,6 +713,43 @@ def _cleanup_old_render_tasks(state: AppState, max_tasks: int = 50) -> None:
             logger.info(f"Render-Task Cleanup: {min(to_remove, len(removable))} alte Tasks entfernt")
 
 
+def _finalize_timeline_for_render(
+    timeline: list[dict[str, Any]],
+    target_duration: float,
+) -> list[dict[str, Any]]:
+    """Wendet den kanonischen Pacing-Abschluss auf einen isolierten Snapshot an."""
+    from copy import deepcopy
+
+    from pb_studio.pacing.pacing_models import CutListEntry
+    from pb_studio.services.pacing_service import PacingService
+
+    eligible = [
+        deepcopy(entry)
+        for entry in timeline
+        if float(entry.get("start_time", 0.0)) < target_duration
+    ]
+    cut_list = [
+        CutListEntry(
+            clip_id=str(entry.get("clip_id", "")),
+            start_time=float(entry.get("start_time", 0.0)),
+            end_time=float(entry.get("end_time", 0.0)),
+            metadata=deepcopy(entry.get("metadata") or {}),
+        )
+        for entry in eligible
+    ]
+    finalized = PacingService()._finalize_cut_list(
+        cut_list,
+        target_duration,
+    )
+    result = []
+    for source, cut in zip(eligible, finalized):
+        source["start_time"] = cut.start_time
+        source["end_time"] = cut.end_time
+        source["metadata"] = cut.metadata
+        result.append(source)
+    return result
+
+
 @router.post(
     "/cancel/{task_id}",
     summary="Rendering abbrechen",
@@ -631,6 +821,12 @@ async def _run_render_task(
             "percent": 100.0,
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
+            "message": "Rendering abgeschlossen",
+            "progress_end": bool(result.get("progress_end", False)),
+            "run_id": result.get("run_id"),
+            "evidence_path": result.get("evidence_path"),
+            "validation_path": result.get("validation_path"),
+            "validation_status": result.get("validation_status"),
             "finished_at": time.monotonic(),  # P-H1: enable time-gated cancel_flag cleanup
         })
         _safe_queue_update(queue_job_id, _RQ_COMPLETED)
@@ -640,6 +836,12 @@ async def _run_render_task(
             "percent": 100.0,
             "status": "completed",
             "message": "Rendering abgeschlossen",
+            "queue_job_id": queue_job_id,
+            "run_id": result.get("run_id"),
+            "evidence_path": result.get("evidence_path"),
+            "validation_path": result.get("validation_path"),
+            "progress_end": bool(result.get("progress_end", False)),
+            "validation_status": result.get("validation_status"),
         })
         await publish_log(
             f"Render abgeschlossen: {task_id}",
@@ -650,12 +852,20 @@ async def _run_render_task(
 
         logger.info(f"Render {task_id} abgeschlossen: {elapsed:.1f}s")
 
-    except _RenderCancelled:
+    except _RenderCancelled as exc:
         elapsed = time.monotonic() - start_time
         shutdown_interrupted = task_id in _shutdown_cancelled_task_ids
+        task_snapshot = state.get_render_task(task_id) or {}
         state.update_render_task(task_id, {
             "status": TaskStatus.CANCELLED.value,
+            "message": "Rendering abgebrochen",
             "elapsed_seconds": round(elapsed, 1),
+            "eta_seconds": 0.0,
+            "run_id": exc.run_id,
+            "evidence_path": exc.evidence_path,
+            "validation_path": exc.validation_path,
+            "progress_end": False,
+            "validation_status": "cancelled",
             "finished_at": time.monotonic(),  # P-H1
         })
         # Shutdown bleibt restartbar; ein User-Cancel bleibt terminal.
@@ -671,9 +881,15 @@ async def _run_render_task(
 
         await publish_event("render_progress", {
             "task_id": task_id,
-            "percent": 0.0,
+            "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
             "status": "cancelled",
             "message": "Rendering abgebrochen",
+            "queue_job_id": queue_job_id,
+            "run_id": exc.run_id,
+            "evidence_path": exc.evidence_path,
+            "validation_path": exc.validation_path,
+            "progress_end": False,
+            "validation_status": "cancelled",
         })
         await publish_log(
             f"Render abgebrochen: {task_id}",
@@ -684,11 +900,21 @@ async def _run_render_task(
 
     except Exception as e:
         elapsed = time.monotonic() - start_time
+        task_snapshot = state.get_render_task(task_id) or {}
+        run_id = getattr(e, "run_id", None)
+        evidence_path = getattr(e, "evidence_path", None)
+        validation_path = getattr(e, "validation_path", None)
         state.update_render_task(task_id, {
             "status": TaskStatus.FAILED.value,
             "error": str(e),
+            "message": "Rendering fehlgeschlagen",
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
+            "run_id": run_id,
+            "evidence_path": evidence_path,
+            "validation_path": validation_path,
+            "progress_end": False,
+            "validation_status": "failed",
             "finished_at": time.monotonic(),  # P-H1
         })
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
@@ -696,9 +922,16 @@ async def _run_render_task(
 
         await publish_event("render_progress", {
             "task_id": task_id,
-            "percent": 0.0,
+            "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
             "status": "failed",
             "message": str(e),
+            "error": str(e),
+            "queue_job_id": queue_job_id,
+            "run_id": run_id,
+            "evidence_path": evidence_path,
+            "validation_path": validation_path,
+            "progress_end": False,
+            "validation_status": "failed",
         })
         await publish_log(
             f"Render fehlgeschlagen: {task_id}",
@@ -709,8 +942,19 @@ async def _run_render_task(
 
 
 class _RenderCancelled(Exception):
-    """Interne Exception für abgebrochenes Rendering."""
-    pass
+    """Internal cancellation carrying any persisted terminal evidence."""
+
+    def __init__(
+        self,
+        *,
+        run_id: str | None = None,
+        evidence_path: str | None = None,
+        validation_path: str | None = None,
+    ) -> None:
+        super().__init__("Rendering abgebrochen")
+        self.run_id = run_id
+        self.evidence_path = evidence_path
+        self.validation_path = validation_path
 
 
 async def _acquire_gpu_lock_or_cancel(
@@ -755,7 +999,13 @@ def _execute_render(
     output_p = _Path(request.output_path)
     # R01/FIX-4: Encoder-Override als Konstruktor-Parameter übergeben (kein GlobalSeiteneffekt)
     encoder_override = request.encoder.value if request.encoder is not None else None
-    service = RenderService(output_dir=str(output_p.parent), encoder_override=encoder_override)
+    task_meta = state.get_render_task(task_id) or {}
+    render_job_id = str(task_meta.get("queue_job_id") or task_id)
+    service = RenderService(
+        output_dir=str(output_p.parent),
+        encoder_override=encoder_override,
+        job_id=render_job_id,
+    )
     if encoder_override is not None:
         logger.info(f"Render {task_id}: Encoder-Override via Request: {encoder_override}")
 
@@ -804,6 +1054,7 @@ def _execute_render(
         telemetry = telemetry or {}
         updates = {
             "status": TaskStatus.RUNNING.value,
+            "message": message,
             "percent": percent,
             "fps": round(float(telemetry.get("fps", 0.0) or 0.0), 2),
             "current_frame": max(int(telemetry.get("current_frame", 0) or 0), 0),
@@ -846,6 +1097,8 @@ def _execute_render(
     except Exception as exc:
         logger.warning(f"audio_duration via ffprobe fehlgeschlagen ({exc}) — overflow-check skipped")
         audio_duration = 0.0
+    if request.include_audio and audio_duration > 0.0:
+        timeline = _finalize_timeline_for_render(timeline, audio_duration)
     warnings, errors = validate_timeline(timeline, audio_duration=audio_duration)
     if errors:
         raise RuntimeError(f"Ungültige Timeline: {'; '.join(errors)}")
@@ -870,6 +1123,23 @@ def _execute_render(
         })
     timeline = render_timeline
 
+    def terminal_evidence() -> dict[str, str | None]:
+        evidence_dir = (
+            output_p.parent
+            / ".render_evidence"
+            / service.job_token
+            / service.run_id
+        )
+        evidence_path = evidence_dir / "result.json"
+        validation_path = evidence_dir / "validation.json"
+        return {
+            "run_id": service.run_id or None,
+            "evidence_path": str(evidence_path) if evidence_path.is_file() else None,
+            "validation_path": (
+                str(validation_path) if validation_path.is_file() else None
+            ),
+        }
+
     try:
         result_path = service.render_timeline(
             timeline=timeline,
@@ -893,8 +1163,49 @@ def _execute_render(
             "eta_seconds": 0.0,
             "output_path": str(output_p),
             "error": None,
+            "message": "Rendering abgeschlossen",
+            "run_id": service.run_id,
+            "progress_end": True,
+            "evidence_path": str(
+                output_p.parent
+                / ".render_evidence"
+                / service.job_token
+                / service.run_id
+                / "result.json"
+            ),
+            "validation_path": str(
+                output_p.parent
+                / ".render_evidence"
+                / service.job_token
+                / service.run_id
+                / "validation.json"
+            ),
+            "validation_status": "validated",
             "finished_at": time.monotonic(),  # P-H1
         })
-        return {"output_path": result_path}
+        return {
+            "output_path": result_path,
+            "run_id": service.run_id,
+            "progress_end": True,
+            "evidence_path": str(
+                output_p.parent
+                / ".render_evidence"
+                / service.job_token
+                / service.run_id
+                / "result.json"
+            ),
+            "validation_path": str(
+                output_p.parent
+                / ".render_evidence"
+                / service.job_token
+                / service.run_id
+                / "validation.json"
+            ),
+            "validation_status": "validated",
+        }
     except RenderCancelledError as exc:
-        raise _RenderCancelled() from exc
+        raise _RenderCancelled(**terminal_evidence()) from exc
+    except Exception as exc:
+        for key, value in terminal_evidence().items():
+            setattr(exc, key, value)
+        raise
