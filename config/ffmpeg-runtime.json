@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "stable_bin": "tools/ffmpeg/bin",
+  "active": {
+    "version": "8.0.1-essentials_build-www.gyan.dev",
+    "asset_url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.0.1-essentials_build.zip",
+    "asset_sha256": "E2AAEAA0FDBC397D4794828086424D4AAA2102CEF1FB6874F6FFD29C0B88B673",
+    "ffmpeg_sha256": "5AF82A0D4FE2B9EAE211B967332EA97EDFC51C6B328CA35B827E73EAC560DC0D",
+    "ffprobe_sha256": "192A1D6899059765AC8C39764FC3148D4E6049955956DC2029F81F4BD6A8972D"
+  },
+  "candidate": {
+    "version": "6.1.1-essentials_build-www.gyan.dev",
+    "asset_url": "https://github.com/GyanD/codexffmpeg/releases/download/6.1.1/ffmpeg-6.1.1-essentials_build.zip",
+    "asset_sha256": "742E32FC9F92681F9F254B925E1B613FDD8074BA40749D4879AEFDB009B94CC5",
+    "ffmpeg_sha256": "04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00",
+    "ffprobe_sha256": "3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4",
+    "activation_status": "pending_t332_hardware_qc"
+  }
+}

@@ -3,6 +3,7 @@
     "version": "1.0.0-amd",
     "paths": {
         "ffmpeg_bin": "./tools/ffmpeg/bin/ffmpeg.exe",
+        "ffprobe_bin": "./tools/ffmpeg/bin/ffprobe.exe",
         "lhm_lib": "./tools/LibreHardwareMonitor/LibreHardwareMonitorLib.dll",
         "temp_dir": "./temp",
         "db_path": "./data/pb_studio.db"
@@ -14,7 +15,7 @@
     },
     "ai": {
         "vision_model": "llava:13b",
-        "audio_backend": "demucs_dml",
+        "audio_backend": "demucs_cpu",
         "parallel_tasks": false,
         "provider": "auto",
         "lmstudio_base_url": "http://127.0.0.1:1234/v1",

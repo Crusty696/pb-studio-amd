@@ -9,11 +9,35 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProjectPath = (Resolve-Path $ProjectPath).Path
+. (Join-Path $ProjectPath 'scripts\runtime_contract.ps1')
+$Runtime = Get-PBStudioRuntimeContract -ProjectRoot $ProjectPath -RequirePython -RequireFFmpeg -ApplyEnvironment
 
 $script:StartedBackend = $false
 $script:BackendProcess = $null
 $script:DummyProcess = $null
 $script:SmokeExitCode = 1  # AP5.3: Default FAIL — nur expliziter PASS setzt 0
+
+function Initialize-OwnerCapability {
+    if (-not [string]::IsNullOrWhiteSpace($env:PBSTUDIO_OWNER_CAPABILITY)) {
+        try {
+            if (([Convert]::FromBase64String(
+                    $env:PBSTUDIO_OWNER_CAPABILITY
+                )).Length -eq 32) {
+                return
+            }
+        } catch {}
+        throw 'PBSTUDIO_OWNER_CAPABILITY must be a base64-encoded 32-byte value'
+    }
+
+    $bytes = New-Object byte[] 32
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    } finally {
+        $rng.Dispose()
+    }
+    $env:PBSTUDIO_OWNER_CAPABILITY = [Convert]::ToBase64String($bytes)
+}
 
 function Step($name, [scriptblock]$action) {
     Write-Host "[SMOKE] $name" -ForegroundColor Cyan
@@ -63,28 +87,6 @@ function Test-Health {
     }
 }
 
-function Resolve-PythonExe {
-    $userProfile = [Environment]::GetFolderPath('UserProfile')
-    $candidates = @(
-        (Join-Path $ProjectPath '.venv\Scripts\python.exe'),
-        (Join-Path $userProfile 'AppData\Local\Programs\Python\Python311\python.exe'),
-        'python'
-    )
-
-    foreach ($candidate in $candidates) {
-        if ($candidate -eq 'python') {
-            try {
-                $null = & $candidate --version 2>$null
-                return $candidate
-            } catch {}
-        } elseif (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    throw 'Python executable not found for backend startup.'
-}
-
 function Wait-BackendStopped {
     param(
         [int]$TimeoutSeconds = 20,
@@ -119,7 +121,16 @@ function Ensure-Backend {
 
         Write-Host '  restarting existing backend for isolated smoke run'
         try {
-            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
+            Invoke-RestMethod `
+                -Uri ($BaseUrl + '/shutdown') `
+                -Method Post `
+                -Headers @{
+                    'X-PBStudio-Owner-Capability' =
+                        $env:PBSTUDIO_OWNER_CAPABILITY
+                } `
+                -TimeoutSec 5 `
+                -ErrorAction SilentlyContinue `
+                -UseBasicParsing | Out-Null
         }
         catch { }
 
@@ -128,9 +139,8 @@ function Ensure-Backend {
         }
     }
 
-    $pythonExe = Resolve-PythonExe
-    $env:PYTHONPATH = Join-Path $ProjectPath 'src'
-    $args = @('-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8765')
+    $pythonExe = $Runtime.PythonExe
+    $args = @($Runtime.BackendArguments)
     $script:BackendProcess = Start-Process -FilePath $pythonExe -ArgumentList $args -WorkingDirectory $ProjectPath -WindowStyle Minimized -PassThru
     $script:StartedBackend = $true
 
@@ -155,7 +165,7 @@ function Get-AllowedProjectRoot {
     }
 
     try {
-        $pythonExe = Resolve-PythonExe
+        $pythonExe = $Runtime.PythonExe
         $configured = & $pythonExe -c "from backend.config import config; print(config.project_dir)" 2>$null
         if ($LASTEXITCODE -eq 0 -and $configured) {
             $configuredPath = $configured.Trim()
@@ -213,6 +223,8 @@ function Resolve-SampleVideoPaths {
 }
 
 try {
+    Initialize-OwnerCapability
+
     $verifyRoot = Get-AllowedProjectRoot
     $verifyName = 'ReleaseSmoke_{0}' -f (Get-Date -Format 'yyyyMMdd_HHmmss')
     $sampleAudioPath = Resolve-SampleAudioPath
@@ -436,7 +448,16 @@ catch {
 finally {
     if ($script:StartedBackend -and $script:BackendProcess) {
         try {
-            Invoke-RestMethod -Uri ($BaseUrl + '/shutdown') -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue -UseBasicParsing | Out-Null
+            Invoke-RestMethod `
+                -Uri ($BaseUrl + '/shutdown') `
+                -Method Post `
+                -Headers @{
+                    'X-PBStudio-Owner-Capability' =
+                        $env:PBSTUDIO_OWNER_CAPABILITY
+                } `
+                -TimeoutSec 5 `
+                -ErrorAction SilentlyContinue `
+                -UseBasicParsing | Out-Null
             Start-Sleep -Seconds 2
         } catch {}
 

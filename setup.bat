@@ -1,32 +1,15 @@
 @echo off
 REM PB Studio AMD - One-Shot Setup Wrapper (Doppelklick-faehig)
-REM Hebt sich selbst auf Admin-Rechte falls noetig.
 REM Loggt komplette Konsolen-Ausgabe nach logs\setup_run_<ts>.log
 REM (PS1-Skript loggt zusaetzlich nach logs\setup_log_<ts>.txt + setup_transcript_<ts>.txt)
 setlocal enabledelayedexpansion
 
-REM -----------------------------------------------------------------------
-REM Self-elevate to Admin via PowerShell Start-Process -Verb RunAs.
-REM MUSS vor allem anderen stehen. Net-session-Check verhindert Loop.
-REM -----------------------------------------------------------------------
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    if "%1"=="--no-elevation" (
-        shift
-        goto :continue
-    )
-    echo Admin-Rechte werden angefordert (fuer optionale System-Installationen) ...
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-      "try { Start-Process cmd.exe -Verb RunAs -ArgumentList '/c \"\"%~f0\"\" --no-elevation %*' -WorkingDirectory '%~dp0' -ErrorAction Stop } catch { exit 1 }"
-    if !ERRORLEVEL! EQU 0 (
-        exit /b 0
-    )
-    echo.
-    echo [WARN] Admin-Erhoehung abgelehnt/fehlgeschlagen. Fahre im User-Scope fort...
-    echo [WARN] Einige winget-Installationen werden im User-Scope ausgefuehrt.
-    echo.
+    echo [WARN] Setup laeuft ohne Admin-Rechte. Systemweite winget-Installationen
+    echo [WARN] koennen fail-closed abbrechen. Bei Bedarf dieses Skript manuell
+    echo [WARN] ueber eine bereits erhoehte Eingabeaufforderung starten.
 )
-:continue
 cd /d "%~dp0"
 REM logs-Verzeichnis MUSS vor dem Tee-Object-Pipe existieren
 if not exist "logs" mkdir logs
@@ -44,8 +27,9 @@ echo ============================================================
 echo.
 echo Installiert / aktualisiert:
 echo   - Python 3.11 venv
-echo   - Brain-Stack (torch-directml, transformers, sqlite-vec, librosa)
-echo   - FFmpeg + LibreHardwareMonitor in tools\
+echo   - AMD-Stack (ONNX Runtime DirectML, transformers, sqlite-vec, librosa)
+echo   - Hashverifiziertes FFmpeg in tools\
+echo   - LHM-Monitoring nur mit freigegebenem lokalen Bundle-Manifest
 echo   - .NET 9 SDK falls fehlt
 echo   - Pre-commit Hook
 echo.
@@ -57,12 +41,11 @@ if not defined NOPAUSE (
     pause >nul
 )
 
-REM Streaming-Tee: stdout+stderr auf Konsole UND utf8-Log (PS5.1 kompatibel).
-REM Alle Skip-Flags werden an PS1 weitergereicht (%*).
+REM Der Doppelklick-Wrapper akzeptiert absichtlich keine Argumente. Fuer
+REM optionale Switches setup_pb_studio.ps1 direkt mit -File aufrufen.
 set "_PS1=%~dp0setup_pb_studio.ps1"
 set "_LF=%~dp0%LOGFILE%"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$lf='!_LF!'; $ps1='!_PS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_PS1!' %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit $LASTEXITCODE"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup_with_log.ps1" -SetupScript "!_PS1!" -LogFile "!_LF!"
 set RC=!ERRORLEVEL!
 
 REM ABORT-on-Error: Immer Exit-Code und Log-Pfad ausgeben

@@ -11,13 +11,13 @@ Supported encoders:
 """
 
 import logging
-import os
 import subprocess
-import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+
+from pb_studio.runtime_contract import ffmpeg_path, ffprobe_path
 
 logger = logging.getLogger(__name__)
 
@@ -66,49 +66,21 @@ _av1_amf_checked_at: Optional[float] = None
 
 
 def _get_ffmpeg_path() -> str:
-    """Absoluten FFmpeg-Pfad ermitteln (Env-Var > ConfigManager > PATH > shutil.which).
-
-    Audit-Fix 2026-07-10 (Sweep-Finding, SETTINGS-Domain): das WPF-Settings-Tab
-    setzt `PBSTUDIO_FFMPEG_PATH` (analog `PBSTUDIO_PYTHON_EXE` fuer den Python-
-    Interpreter), aber kein Python-Code las diese Env-Var je — die Einstellung
-    war komplett wirkungslos.
-    """
-    env_path = os.environ.get("PBSTUDIO_FFMPEG_PATH")
-    if env_path and Path(env_path).is_file():
-        return env_path
-    try:
-        from ..config_manager import ConfigManager
-        cfg = ConfigManager()
-        path = cfg.ffmpeg_path
-        if path and Path(path).is_file():
-            return path
-    except Exception as e:
-        logger.debug("ConfigManager FFmpeg lookup failed: %s", e)
-    # Fallback: shutil.which
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-    # Letzter Fallback: Relativer Pfad vom Projekt-Root
-    # __file__ = src/pb_studio/video/encoder_utils.py → 4x parent = project root
-    project_root = Path(__file__).parent.parent.parent.parent
-    local_ff = project_root / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
-    if local_ff.is_file():
-        return str(local_ff)
-    return "ffmpeg"  # Hoffen dass es im PATH ist
+    """Return the verified project-local FFmpeg runtime."""
+    return str(ffmpeg_path())
 
 
 def _get_ffprobe_path() -> str:
-    """Absoluten FFprobe-Pfad ermitteln (neben ffmpeg.exe)."""
-    ff = _get_ffmpeg_path()
-    # Nur den Dateinamen ersetzen, nicht Ordnernamen
-    p = Path(ff)
-    return str(p.parent / p.name.replace("ffmpeg", "ffprobe"))
+    """Return the verified FFprobe paired with canonical FFmpeg."""
+    return str(ffprobe_path())
 
 
 def check_ffmpeg_available() -> bool:
     """Check if FFmpeg is installed and accessible."""
-    path = _get_ffmpeg_path()
-    return Path(path).is_file() if path != "ffmpeg" else shutil.which("ffmpeg") is not None
+    try:
+        return Path(_get_ffmpeg_path()).is_file()
+    except RuntimeError:
+        return False
 
 
 def invalidate_encoder_cache():

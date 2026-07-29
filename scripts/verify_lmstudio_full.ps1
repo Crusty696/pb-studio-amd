@@ -1,5 +1,6 @@
 # Full LM Studio verify with loaded model - 2026-05-17
-$outFile = 'C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_verify_full.json'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$outFile = Join-Path $repoRoot '.lm_studio_verify_full.json'
 $model = 'qwen3.5-9b-uncensored-hauhaucs-aggressive'
 
 $result = [ordered]@{

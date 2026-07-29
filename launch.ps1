@@ -44,6 +44,7 @@ trap {
 
 Append-Log "launch.ps1 gestartet"
 $ProjectRoot = $PSScriptRoot
+. (Join-Path $ProjectRoot 'scripts\runtime_contract.ps1')
 $BackendPort = 8765
 $BackendHost = '127.0.0.1'
 $HealthCheckUrl = "http://${BackendHost}:${BackendPort}/health"
@@ -57,34 +58,23 @@ $previousBackendDir = $env:PBSTUDIO_BACKEND_DIR
 $BackendStdOutLog = Join-Path $LogsDir 'backend_live.out.log'
 $BackendStdErrLog = Join-Path $LogsDir 'backend_live.err.log'
 
+function Initialize-OwnerCapability {
+    if (-not [string]::IsNullOrWhiteSpace($env:PBSTUDIO_OWNER_CAPABILITY)) {
+        return
+    }
+    $bytes = New-Object byte[] 32
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $generator.GetBytes($bytes)
+    } finally {
+        $generator.Dispose()
+    }
+    $env:PBSTUDIO_OWNER_CAPABILITY = [Convert]::ToBase64String($bytes)
+}
+
 function Write-Status($msg, $color = 'Cyan') {
     Write-Host '[PB Studio] ' -NoNewline -ForegroundColor $color
     Write-Host $msg
-}
-
-function Resolve-PythonExe {
-    $candidates = @(
-        (Join-Path $ProjectRoot '.venv\Scripts\python.exe'),
-        (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Python\Python311\python.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
-        'C:\Python311\python.exe',
-        'python'
-    )
-
-    foreach ($candidate in $candidates) {
-        if ($candidate -eq 'python') {
-            try {
-                $version = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-                if ($version -eq "3.11") {
-                    return $candidate
-                }
-            } catch {}
-        } elseif (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    throw 'Python 3.11 executable not found (.venv preferred, local AppData/global fallbacks missing).'
 }
 
 function Resolve-DotnetExe {
@@ -414,9 +404,11 @@ function Resolve-FrontendExe {
 
 Write-Status '=== PB Studio AMD Launcher ===' 'Yellow'
 $backendWasAlreadyRunning = Test-BackendHealth
-$PythonExe = Resolve-PythonExe
+$Runtime = Get-PBStudioRuntimeContract -ProjectRoot $ProjectRoot -RequirePython -RequireFFmpeg -ApplyEnvironment
+$PythonExe = $Runtime.PythonExe
 $pyVersion = & $PythonExe --version 2>&1
 Write-Status "Python: $pyVersion"
+Write-Status "FFmpeg: $($Runtime.FfmpegVersion) ($($Runtime.FfmpegExe))"
 
 # --- Headless Start & API-Verbindungstests für Ollama und LM Studio ---
 Write-Status 'Überprüfe lokale KI-Dienste (Ollama & LM Studio)...' 'DarkGray'
@@ -541,13 +533,17 @@ if (-not $lmsRunning) {
     Write-Status "LM Studio API ist bereits aktiv und reagiert erfolgreich (Port $activeLmsPort)." 'Green'
 }
 
+# Provision the destructive-operation capability only after third-party model
+# runtimes have started, so they never inherit the backend/WPF secret.
+Initialize-OwnerCapability
+
 if (-not $FrontendOnly) {
     if (Test-BackendHealth) {
         Write-Status "Backend läuft bereits auf http://${BackendHost}:${BackendPort}" 'Green'
     } else {
         Write-Status 'Starte Python Backend...'
 
-        $backendArgs = @('-m', 'uvicorn', 'backend.main:app', '--host', $BackendHost, '--port', $BackendPort)
+        $backendArgs = @($Runtime.BackendArguments)
         if ($Debug) { $backendArgs += '--reload' }
 
         $env:PYTHONPATH = Join-Path $ProjectRoot 'src'
@@ -640,7 +636,12 @@ if (-not $BackendOnly) {
 if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get-BackendListenerPids).Count -gt 0))) {
     Write-Status 'Stoppe Backend...'
     try {
-        Invoke-RestMethod -Uri "http://${BackendHost}:${BackendPort}/shutdown" -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+        Invoke-RestMethod `
+            -Uri "http://${BackendHost}:${BackendPort}/shutdown" `
+            -Method Post `
+            -Headers @{ 'X-PBStudio-Owner-Capability' = $env:PBSTUDIO_OWNER_CAPABILITY } `
+            -TimeoutSec 5 `
+            -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 
     if (-not (Wait-ForBackendShutdown -TimeoutSeconds 10 -ExpectedProcess $backendProcess)) {
@@ -654,7 +655,12 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
 } elseif ($FrontendOnly -and -not $backendWasAlreadyRunning -and (Test-BackendHealth)) {
     Write-Status 'FrontendOnly: stoppe von der UI gestartetes Backend...' 'Yellow'
     try {
-        Invoke-RestMethod -Uri "http://${BackendHost}:${BackendPort}/shutdown" -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+        Invoke-RestMethod `
+            -Uri "http://${BackendHost}:${BackendPort}/shutdown" `
+            -Method Post `
+            -Headers @{ 'X-PBStudio-Owner-Capability' = $env:PBSTUDIO_OWNER_CAPABILITY } `
+            -TimeoutSec 5 `
+            -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 
     if (-not (Wait-ForBackendShutdown -TimeoutSeconds 10)) {

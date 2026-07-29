@@ -3,6 +3,7 @@ import sys
 import re
 import datetime
 import subprocess
+from pathlib import Path
 
 # Force UTF-8 encoding for standard output on Windows
 if sys.platform == "win32":
@@ -11,9 +12,10 @@ if sys.platform == "win32":
     except AttributeError:
         pass
 
-VAULT_DIR = r"C:\Users\david\Brain\10_Projects\PB_studio"
-META_DIR = r"C:\Users\david\Brain\_meta"
-WORKSPACE_DIR = r"c:\Users\david\Documents\Pb_studio_AMD_version"
+WORKSPACE_DIR = Path(__file__).resolve().parent.parent
+BRAIN_DIR = Path.home() / "Brain"
+VAULT_DIR = BRAIN_DIR / "10_Projects" / "PB_studio"
+META_DIR = BRAIN_DIR / "_meta"
 
 def log_message(msg):
     print(f"[brain-sync] {msg}")
@@ -112,12 +114,13 @@ def get_collected_tests():
     """
     try:
         # Use python executable in the venv
-        python_exe = os.path.join(WORKSPACE_DIR, ".venv", "Scripts", "python.exe")
+        python_exe = WORKSPACE_DIR / ".venv" / "Scripts" / "python.exe"
         if not os.path.exists(python_exe):
-            python_exe = "python"
+            log_message(f"Kanonisches Python fehlt: {python_exe}")
+            return None
             
         res = subprocess.run([python_exe, "-m", "pytest", "--collect-only", "-q"], 
-                             cwd=WORKSPACE_DIR, capture_output=True, text=True, timeout=15)
+                             cwd=WORKSPACE_DIR, capture_output=True, text=True, timeout=120)
         
         # Parse output for number of tests collected
         match = re.search(r"(\d+) tests collected", res.stdout)
@@ -248,7 +251,7 @@ def main():
     branch, uncommitted_count, uncommitted_files = get_git_status()
     
     # Tests count
-    tests_count = 727 # Direct fallback to last known valid count if subprocess fails
+    tests_count = get_collected_tests()
     
     # Lint files
     if not args.no_lint:
@@ -273,7 +276,10 @@ def main():
             print(f"  - {f}")
         if len(uncommitted_files) > 5:
             print(f"  - ... und {len(uncommitted_files)-5} weitere")
-    print(f"Pytest Test-Suite:    {tests_count} Tests collected")
+    if tests_count is None:
+        print("Pytest Test-Suite:    OPEN (collection unavailable)")
+    else:
+        print(f"Pytest Test-Suite:    {tests_count} Tests collected")
     print(f"Vault-Status:         {vault_files} Markdown-Dateien im Vault")
     print(f"Frontmatter-Warnings: {vault_warnings} Schema-Fehlermeldungen")
     print("="*56)

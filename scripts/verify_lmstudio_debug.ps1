@@ -1,5 +1,6 @@
 # LM Studio debug - capture raw response body on errors
-$outFile = 'C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_debug.json'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$outFile = Join-Path $repoRoot '.lm_studio_debug.json'
 
 # Use a known-loaded model from /v1/models output
 $model = 'qwen/qwen3-vl-8b'

@@ -3,7 +3,8 @@
 # and outputs detailed JSON for Claude to analyze.
 
 $ErrorActionPreference = "Continue"
-$out = "C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_diagnose.json"
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$out = Join-Path $repoRoot '.lm_studio_diagnose.json'
 $result = [ordered]@{
     timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
     sections = [ordered]@{}

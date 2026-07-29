@@ -133,7 +133,7 @@ class MotionAnalyzer:
             providers.append(('DmlExecutionProvider', {'device_id': device_id}))
             logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration for RAFT")
 
-        # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
+        # IRON RULE: AMD DirectML ONLY — kein sekundärer Provider
         return providers
 
     def _init_model(self) -> bool:

@@ -15,6 +15,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 $ProjectRoot = $PSScriptRoot
+. (Join-Path $ProjectRoot 'scripts\runtime_contract.ps1')
 
 function Write-Status($msg, $color = "Cyan") {
     Write-Host "[Build] " -NoNewline -ForegroundColor $color
@@ -22,32 +23,6 @@ function Write-Status($msg, $color = "Cyan") {
 }
 
 Write-Status "=== PB Studio AMD Build ===" "Yellow"
-
-# === Python- & Dotnet-Pfade dynamisch aufloesen ===
-function Resolve-PythonExe {
-    $candidates = @(
-        (Join-Path $ProjectRoot '.venv\Scripts\python.exe'),
-        (Join-Path $env:USERPROFILE 'AppData\Local\Programs\Python\Python311\python.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
-        'C:\Python311\python.exe',
-        'python'
-    )
-
-    foreach ($candidate in $candidates) {
-        if ($candidate -eq 'python') {
-            try {
-                $version = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-                if ($version -eq "3.11") {
-                    return $candidate
-                }
-            } catch {}
-        } elseif (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    throw 'Python 3.11 executable not found (.venv preferred, local AppData/global fallbacks missing).'
-}
 
 function Resolve-DotnetExe {
     $candidates = @(
@@ -72,7 +47,8 @@ function Resolve-DotnetExe {
 }
 
 try {
-    $PythonExe = Resolve-PythonExe
+    $Runtime = Get-PBStudioRuntimeContract -ProjectRoot $ProjectRoot -RequirePython -RequireFFmpeg -ApplyEnvironment
+    $PythonExe = $Runtime.PythonExe
     $DotnetExe = Resolve-DotnetExe
 } catch {
     Write-Status "FEHLER bei der Pfadaufloesung: $_" "Red"
@@ -83,14 +59,22 @@ try {
 Write-Status "Pruefe Python-Abhaengigkeiten mit $PythonExe..."
 
 $requiredPackages = @("fastapi", "uvicorn", "pydantic", "pydantic-settings")
+$missingPackages = @()
 foreach ($pkg in $requiredPackages) {
     $installed = & $PythonExe -c "import $($pkg.Replace('-','_')); print('OK')" 2>&1
     if ($installed -ne "OK") {
-        Write-Status "  FEHLT: $pkg - Installiere..." "Yellow"
-        & $PythonExe -m pip install $pkg --quiet
+        Write-Status "  FEHLT: $pkg" "Red"
+        $missingPackages += $pkg
     } else {
         Write-Status "  OK: $pkg" "Green"
     }
+}
+if ($missingPackages.Count -gt 0) {
+    Write-Status (
+        "Abbruch: Abhaengigkeiten fehlen. setup.bat ausfuehren; " +
+        "Build-Skript veraendert die Umgebung nicht."
+    ) "Red"
+    exit 1
 }
 
 if ($PythonOnly) {

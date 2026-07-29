@@ -18,6 +18,8 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
+. (Join-Path $repoRoot 'scripts\runtime_contract.ps1')
+$Runtime = Get-PBStudioRuntimeContract -ProjectRoot $repoRoot -RequirePython -RequireFFmpeg -ApplyEnvironment
 
 $snapshotPath = Join-Path $repoRoot "PBStudio.UI/openapi.snapshot.json"
 $uri = "http://127.0.0.1:$Port/openapi.json"
@@ -34,12 +36,11 @@ function Test-BackendAlive {
 $ownedBackend = $false
 if (-not (Test-BackendAlive)) {
     Write-Host "Backend not running on port $Port -- starting uvicorn"
-    $env:PYTHONPATH = "src"
     $proc = Start-Process -PassThru -NoNewWindow `
         -RedirectStandardOutput "$env:TEMP\refresh-openapi.uvicorn.out" `
         -RedirectStandardError  "$env:TEMP\refresh-openapi.uvicorn.err" `
-        -FilePath ".venv\Scripts\python.exe" `
-        -ArgumentList "-m","uvicorn","backend.main:app","--port","$Port","--log-level","warning"
+        -FilePath $Runtime.PythonExe `
+        -ArgumentList "-m","uvicorn","backend.main:app","--host","127.0.0.1","--port","$Port","--log-level","warning"
     $ownedBackend = $true
     # Poll-loop statt fixed sleep: Backend braucht 5-30s je nach Module-Imports.
     $deadline = (Get-Date).AddSeconds($StartupWaitSec)

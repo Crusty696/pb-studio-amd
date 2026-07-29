@@ -1,6 +1,8 @@
-"""Verify sqlite-vec works for KNN-Search on Windows (Plan Phase 0/2).
+"""Verify the isolated legacy sqlite-vec store on Windows (Plan Phase 0/2).
 
-Builds an in-memory store, inserts random 768-dim vectors, runs KNN.
+Builds an in-memory store, inserts vectors using its declared ``VIDEO_DIM``,
+and runs KNN. This store is not the active 1152-dimensional SigLIP FAISS
+contract.
 Exits 0 on success.
 """
 

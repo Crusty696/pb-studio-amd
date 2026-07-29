@@ -4,6 +4,8 @@ REM Loggt komplette Konsolen-Ausgabe nach logs\test_<ts>.log.
 setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
+call "%~dp0scripts\runtime_contract.bat"
+if errorlevel 1 exit /b %ERRORLEVEL%
 REM logs-Verzeichnis MUSS vor dem Tee-Object-Pipe existieren
 if not exist "logs" mkdir logs
 
@@ -28,10 +30,8 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-set "_PS1=%~dp0run_full_test.ps1"
 set "_LF=%~dp0%LOGFILE%"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$lf='!_LF!'; $ps1='!_PS1!'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File '!_PS1!' %* *>&1 | ForEach-Object { $s=[string]$_; Write-Host $s; Add-Content -Path $lf -Value $s -Encoding utf8 }; exit $LASTEXITCODE"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\invoke_project_script_with_log.ps1" -Operation test -LogFile "!_LF!"
 set RC=!ERRORLEVEL!
 
 echo.

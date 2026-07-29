@@ -6,14 +6,14 @@ REM Output: verify_audit_fix_2026-06-12.log + VERIFY_DONE.flag
 REM ============================================================
 setlocal
 cd /d "%~dp0"
+call "%~dp0scripts\runtime_contract.bat"
+if errorlevel 1 exit /b %ERRORLEVEL%
 set LOG=verify_audit_fix_2026-06-12.log
 set FLAG=VERIFY_DONE.flag
 if exist %FLAG% del %FLAG%
 echo === AUDIT-FIX VERIFY %DATE% %TIME% === > %LOG%
 
-set PY=.venv\Scripts\python.exe
-if not exist %PY% set PY=python
-set PYTHONPATH=src
+set "PY=%PBSTUDIO_PYTHON_EXE%"
 
 echo [1/3] py_compile (backend + src + scripts)... >> %LOG%
 %PY% -m compileall -q backend src\pb_studio scripts >> %LOG% 2>&1

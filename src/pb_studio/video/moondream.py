@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover - optional dependency in test envs
 
         @staticmethod
         def get_available_providers() -> List[str]:
-            return ["CPUExecutionProvider"]
+            return []
 
     ort = _FallbackOrt()
 
@@ -150,7 +150,7 @@ class MoondreamAnalyzer:
             providers.append(('DmlExecutionProvider', {'device_id': device_id}))
             logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration")
 
-        # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
+        # IRON RULE: AMD DirectML ONLY — kein sekundärer Provider
         return providers
 
     def _init_tokenizer(self) -> bool:

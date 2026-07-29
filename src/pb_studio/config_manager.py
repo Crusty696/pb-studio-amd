@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
+from pb_studio.runtime_contract import ffmpeg_path
+
 logger = logging.getLogger(__name__)
 
 # Projekt-Root berechnen (2 Ebenen hoch von diesem Modul)
@@ -18,6 +20,7 @@ class ConfigManager:
         "version": "1.0.0-amd",
         "paths": {
             "ffmpeg_bin": "./tools/ffmpeg/bin/ffmpeg.exe",
+            "ffprobe_bin": "./tools/ffmpeg/bin/ffprobe.exe",
             "lhm_lib": "./tools/LibreHardwareMonitor/LibreHardwareMonitorLib.dll",
             "temp_dir": "./temp",
             "db_path": "./data/pb_studio.db"
@@ -29,7 +32,7 @@ class ConfigManager:
         },
         "ai": {
             "vision_model": "moondream2_fp16",
-            "audio_backend": "demucs_dml",
+            "audio_backend": "demucs_cpu",
             "parallel_tasks": False
         },
         "ui": {
@@ -106,8 +109,29 @@ class ConfigManager:
     # Typed helpers
     @property
     def ffmpeg_path(self) -> str:
-        path = self._config["paths"]["ffmpeg_bin"]
-        return str(self.resolve_path(path))
+        configured = self.resolve_path(self._config["paths"]["ffmpeg_bin"])
+        canonical = ffmpeg_path()
+        if configured != canonical:
+            logger.warning(
+                "Ignoring non-canonical ffmpeg_bin %s; using %s",
+                configured,
+                canonical,
+            )
+        return str(canonical)
+
+    @property
+    def ffprobe_path(self) -> str:
+        from pb_studio.runtime_contract import ffprobe_path
+
+        configured = self.resolve_path(self._config["paths"]["ffprobe_bin"])
+        canonical = ffprobe_path()
+        if configured != canonical:
+            logger.warning(
+                "Ignoring non-canonical ffprobe_bin %s; using %s",
+                configured,
+                canonical,
+            )
+        return str(canonical)
 
     @property
     def lhm_path(self) -> str:

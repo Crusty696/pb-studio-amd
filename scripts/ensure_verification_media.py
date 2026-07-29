@@ -7,6 +7,8 @@ import subprocess
 import wave
 from pathlib import Path
 
+from pb_studio.runtime_contract import ffmpeg_path
+
 
 def generate_click_track_wav(output_path: Path, *, bpm: float = 120.0, duration_sec: float = 8.0, sample_rate: int = 44100) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -49,7 +51,7 @@ def generate_color_bars_video(output_path: Path, *, duration_sec: float = 8.0, s
     output_path.parent.mkdir(parents=True, exist_ok=True)
     run_ffmpeg(
         [
-            "ffmpeg",
+            str(ffmpeg_path()),
             "-y",
             "-f",
             "lavfi",
@@ -58,7 +60,7 @@ def generate_color_bars_video(output_path: Path, *, duration_sec: float = 8.0, s
             "-pix_fmt",
             "yuv420p",
             "-c:v",
-            "libx264",
+            "h264_amf",
             str(output_path),
         ]
     )

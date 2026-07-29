@@ -9,6 +9,7 @@ import sys
 import uuid
 import ctypes
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -16,6 +17,8 @@ from pydantic_settings import BaseSettings
 _SRC_DIR = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
+
+from pb_studio.runtime_contract import ffmpeg_path, ffprobe_path
 
 
 def _default_documents_dir() -> Path:
@@ -73,8 +76,8 @@ class ServerConfig(BaseSettings):
 
     # Pfade
     project_dir: Path = _default_documents_dir() / "PBStudio"
-    ffmpeg_path: Path = Path(__file__).resolve().parent.parent / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
-    ffprobe_path: Path = Path(__file__).resolve().parent.parent / "tools" / "ffmpeg" / "bin" / "ffprobe.exe"
+    ffmpeg_path: Path = ffmpeg_path()
+    ffprobe_path: Path = ffprobe_path()
 
     # GPU
     gpu_timeout_seconds: int = 300
@@ -88,6 +91,26 @@ class ServerConfig(BaseSettings):
     stem_timeout: int = 900
 
     model_config = {"env_prefix": "PBSTUDIO_", "env_file": ".env"}
+
+    @field_validator("ffmpeg_path")
+    @classmethod
+    def require_canonical_ffmpeg(cls, value: Path) -> Path:
+        canonical = ffmpeg_path()
+        if value.resolve() != canonical:
+            raise ValueError(
+                f"PB Studio requires canonical FFmpeg runtime {canonical}"
+            )
+        return canonical
+
+    @field_validator("ffprobe_path")
+    @classmethod
+    def require_canonical_ffprobe(cls, value: Path) -> Path:
+        canonical = ffprobe_path()
+        if value.resolve() != canonical:
+            raise ValueError(
+                f"PB Studio requires canonical FFprobe runtime {canonical}"
+            )
+        return canonical
 
 
 config = ServerConfig()

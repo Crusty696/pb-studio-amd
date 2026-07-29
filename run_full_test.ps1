@@ -5,6 +5,9 @@ param(
     [switch]$NoGui
 )
 
+. (Join-Path $PSScriptRoot 'scripts\runtime_contract.ps1')
+$Runtime = Get-PBStudioRuntimeContract -ProjectRoot $PSScriptRoot -RequirePython -RequireFFmpeg -ApplyEnvironment
+
 # Robustes Parsen für --no-gui alias
 if ($args -contains "--no-gui" -or $args -contains "-no-gui" -or $args -contains "-NoGui") {
     $NoGui = $true
@@ -16,11 +19,10 @@ Write-Host "   PB STUDIO ROBUST TEST ORCHESTRATOR   " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$python = ".\.venv\Scripts\python.exe"
+$python = $Runtime.PythonExe
 
 # 0. Pytest-Suite (inkl. Brain-Modul + Storage + Recovery + Backup)
 Write-Host "[0/3] Pytest-Suite ausführen..." -ForegroundColor Yellow
-$env:PYTHONPATH = "src"
 & $python -m pytest Tests/ -q --tb=short
 $pytestExitCode = $LASTEXITCODE
 

@@ -2,18 +2,21 @@
 REM P1.2 + P3.3: 4GB-VRAM-Stress + VRAMArbiter-Eviction-Verify
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
+call "%~dp0scripts\runtime_contract.bat"
+if errorlevel 1 exit /b %ERRORLEVEL%
+for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owner_capability.ps1"') do set "PBSTUDIO_OWNER_CAPABILITY=%%I"
+if not defined PBSTUDIO_OWNER_CAPABILITY exit /b 1
 echo === Low-VRAM-Stress Start: %date% %time% === > stress_low.log
 
-taskkill /F /IM python.exe /T  >nul 2>&1
 ping -n 3 127.0.0.1 >nul
 
 call .venv\Scripts\activate.bat
 
 REM Start backend mit Forced 4GB VRAM Limit
 echo --- Backend launch mit PB_STUDIO_FORCED_VRAM=4000 --- >> stress_low.log
-set PYTHONPATH=src
 set PB_STUDIO_FORCED_VRAM=4000
-start "PB-Backend-4GB" /MIN cmd /c "set PYTHONPATH=src && set PB_STUDIO_FORCED_VRAM=4000 && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765 > backend_low.log 2>&1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Start -Kind Backend -StateName low_vram_backend -WindowStyle Minimized -LogName backend_low >> stress_low.log 2>&1
+if errorlevel 1 exit /b %ERRORLEVEL%
 ping -n 36 127.0.0.1 >nul
 
 REM Probe health + VRAM telemetry
@@ -64,7 +67,7 @@ echo. >> stress_low.log
 
 REM Cleanup
 echo --- Cleanup --- >> stress_low.log
-taskkill /F /IM python.exe /T >>stress_low.log 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Stop -Kind Backend -StateName low_vram_backend -StopMode Graceful >> stress_low.log 2>&1
 
 echo === DONE %time% === >> stress_low.log
 echo OK > stress_low_done.flag
