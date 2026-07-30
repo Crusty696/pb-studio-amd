@@ -46,15 +46,16 @@ def test_missing_registered_clap_onnx_is_explicitly_unavailable():
     assert "Registrierte CLAP-ONNX-Modelle fehlen" in analyzer.unavailable_reason
 
 
-def test_clap_rejects_session_with_cpu_provider():
+def test_clap_rejects_session_without_cpu_fallback_guard():
     analyzer = CLAPAnalyzer(lazy_load=True)
     session = MagicMock()
     session.get_providers.return_value = [
         "DmlExecutionProvider",
         "CPUExecutionProvider",
     ]
+    session.get_session_options.return_value.get_session_config_entry.return_value = "0"
 
-    with pytest.raises(RuntimeError, match="DirectML-only"):
+    with pytest.raises(RuntimeError, match="CPU EP fallback"):
         analyzer._validate_dml_session(session)
 
 

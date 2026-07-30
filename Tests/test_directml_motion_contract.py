@@ -10,6 +10,8 @@ from pb_studio.video import raft
 
 
 def test_raft_providers_are_directml_only(monkeypatch: pytest.MonkeyPatch):
+    from pb_studio.core.directml_adapter import get_directml_provider
+
     analyzer = raft.MotionAnalyzer(lazy_load=True)
     monkeypatch.setattr(
         raft.ort,
@@ -17,9 +19,10 @@ def test_raft_providers_are_directml_only(monkeypatch: pytest.MonkeyPatch):
         lambda: ["DmlExecutionProvider", "CPUExecutionProvider"],
     )
 
-    assert analyzer._get_providers() == [
-        ("DmlExecutionProvider", {"device_id": 0})
-    ]
+    providers = analyzer._get_providers()
+
+    assert providers == [get_directml_provider()]
+    assert providers[0][0] == "DmlExecutionProvider"
 
 
 def test_raft_has_no_provider_when_directml_is_unavailable(

@@ -199,12 +199,17 @@ def test_multi_gpu_fallbacks_do_not_mix_adapters(
 ) -> None:
     from pb_studio.core.system_monitor import SystemMonitor
 
+    assert not hasattr(SystemMonitor, "_counter_query_vram_used")
+    assert not hasattr(SystemMonitor, "_query_temperature_alternative")
+    assert not hasattr(SystemMonitor, "_query_load_alternative")
+
     monitor = object.__new__(SystemMonitor)
     monitor._cache_lock = threading.Lock()
     monitor._cached_stats = {}
     monitor._cache_time = 0.0
     monitor._bg_refresh_running = True
     monitor._gpu_count = 2
+    monitor.monitoring_status = "ready"
 
     monkeypatch.setattr(monitor, "_query_driver_version", lambda name: "driver")
     monkeypatch.setattr(monitor, "_wmi_query_vram_total", lambda name: 16384.0)
@@ -212,16 +217,19 @@ def test_multi_gpu_fallbacks_do_not_mix_adapters(
         monitor,
         "_counter_query_vram_used",
         lambda: pytest.fail("cross-adapter VRAM aggregation used"),
+        raising=False,
     )
     monkeypatch.setattr(
         monitor,
         "_query_temperature_alternative",
         lambda: pytest.fail("cross-adapter temperature used"),
+        raising=False,
     )
     monkeypatch.setattr(
         monitor,
         "_query_load_alternative",
         lambda: pytest.fail("cross-adapter load used"),
+        raising=False,
     )
 
     monitor._bg_refresh_ps_stats(

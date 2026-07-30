@@ -59,6 +59,11 @@ class TestStemSeparatorSeparation:
         mock_sep.onnx_execution_provider = ["DmlExecutionProvider"]
         sep.separator = mock_sep
         sep._has_directml = True
+        mock_sep.load_model.side_effect = lambda _name: setattr(
+            sep,
+            "_directml_session_created",
+            True,
+        )
 
         result = sep.separate(str(test_file))
 
@@ -182,7 +187,8 @@ def test_separator_source_is_directml_only_for_onnx():
     ).read_text(encoding="utf-8")
 
     assert '["DmlExecutionProvider", "CPUExecutionProvider"]' not in source
-    assert '["DmlExecutionProvider"]' in source
+    assert "provider = get_directml_provider()" in source
+    assert "self.separator.onnx_execution_provider = [provider]" in source
 
 
 def test_directml_session_options_patch_is_serialized_across_instances():

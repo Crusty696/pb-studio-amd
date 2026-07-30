@@ -49,9 +49,12 @@ class TestCLAPAnalyzer:
         assert analyzer_lazy.text_encoder_session is None
         assert analyzer_lazy.combined_session is None
 
-    def test_session_options(self, analyzer_lazy):
-        """Test DirectML session options configuration"""
-        sess_options = analyzer_lazy._create_session_options()
+    def test_session_options_are_owned_by_model_loader(self, analyzer_lazy):
+        """CLAP uses the central DirectML session-options owner."""
+        from pb_studio.core.model_loader import ModelLoader
+
+        assert not hasattr(analyzer_lazy, "_create_session_options")
+        sess_options = object.__new__(ModelLoader)._create_session_options()
 
         # KRITISCH (IRON RULE §2): enable_mem_pattern UND enable_cpu_mem_arena MUSS False sein
         assert sess_options.enable_mem_pattern is False

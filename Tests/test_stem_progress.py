@@ -18,6 +18,11 @@ def test_stem_separator_calls_on_progress(tmp_path):
     sep.separator = MagicMock()
     sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
     sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
@@ -51,6 +56,11 @@ def test_stem_separator_works_without_callback(tmp_path):
     sep.separator = MagicMock()
     sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
     sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
@@ -93,6 +103,11 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
     sep.separator = MagicMock()
     sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
     sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()

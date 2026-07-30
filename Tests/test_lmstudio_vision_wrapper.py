@@ -22,9 +22,14 @@ from pb_studio.video.lmstudio_vision_wrapper import (
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
+    from pb_studio.ai.model_inventory import get_model_inventory_service
+
     clear_tag_cache()
+    inventory = get_model_inventory_service()
+    inventory.invalidate()
     yield
     clear_tag_cache()
+    inventory.invalidate()
 
 
 DEFAULT_VISION_MODEL = "qwen/qwen3-vl-8b"
@@ -144,6 +149,19 @@ def _make_vision_transport(model_name: str, content: str) -> httpx.MockTransport
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        if path.endswith("/api/v0/models") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": model_name,
+                            "type": "vlm",
+                            "state": "loaded",
+                        }
+                    ]
+                },
+            )
         if path.endswith("/models") and request.method == "GET":
             return httpx.Response(
                 200,
@@ -288,6 +306,19 @@ def test_extract_tags_via_lmstudio_cache_hits():
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        if path.endswith("/api/v0/models"):
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": DEFAULT_VISION_MODEL,
+                            "type": "vlm",
+                            "state": "loaded",
+                        }
+                    ]
+                },
+            )
         if path.endswith("/models"):
             call_count["models"] += 1
             return httpx.Response(

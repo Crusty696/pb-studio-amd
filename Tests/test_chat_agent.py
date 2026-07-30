@@ -15,6 +15,12 @@ import pytest
 
 from pb_studio.ai.chat_agent import ChatAgent, ChatEvent
 from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError, LMStudioModelInfo
+from pb_studio.ai import model_inventory
+from pb_studio.ai.model_inventory import (
+    ModelInventoryEntry,
+    ModelInventorySnapshot,
+    ProviderInventory,
+)
 from pb_studio.ai.model_registry import ModelRegistry, NoSuitableModelError
 from pb_studio.ai.tool_registry import Tool, ToolRegistry, build_default_registry
 
@@ -63,6 +69,73 @@ class FakeLMStudioClient(LMStudioClient):
         return None
 
 
+class _FrozenInventoryService:
+    def __init__(self, snapshot: ModelInventorySnapshot) -> None:
+        self.snapshot = snapshot
+        self.invalidate_calls = 0
+        self.refresh_calls = 0
+
+    def invalidate(self) -> None:
+        self.invalidate_calls += 1
+
+    async def refresh(self) -> ModelInventorySnapshot:
+        self.refresh_calls += 1
+        return self.snapshot
+
+
+def _chat_model(
+    provider: str,
+    name: str,
+    *,
+    loaded: bool = False,
+) -> ModelInventoryEntry:
+    return ModelInventoryEntry(
+        provider=provider,
+        name=name,
+        installed=True,
+        loaded=loaded,
+        downloadable=False,
+        usable=True,
+        capabilities=("chat",),
+        inventory_sources=(f"{provider}:frozen",),
+        verified_at="2026-07-30T06:00:00+00:00",
+        status_reason="frozen chat model",
+    )
+
+
+def _install_chat_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    *models: ModelInventoryEntry,
+) -> _FrozenInventoryService:
+    provider_names = tuple(sorted({model.provider for model in models}))
+    snapshot = ModelInventorySnapshot(
+        providers=tuple(
+            ProviderInventory(
+                provider=provider,
+                status="ready",
+                base_url=(
+                    "http://127.0.0.1:1234/v1"
+                    if provider == "lmstudio"
+                    else "http://127.0.0.1:11434/v1"
+                ),
+                verified_at="2026-07-30T06:00:00+00:00",
+                status_reason="frozen provider",
+            )
+            for provider in provider_names
+        ),
+        models=tuple(models),
+        verified_at="2026-07-30T06:00:00+00:00",
+        generation=1,
+    )
+    service = _FrozenInventoryService(snapshot)
+    monkeypatch.setattr(
+        model_inventory,
+        "get_model_inventory_service",
+        lambda: service,
+    )
+    return service
+
+
 # ----------------------------------------------------------------------
 # Mock-Backend fuer Tool-Handler
 # ----------------------------------------------------------------------
@@ -90,10 +163,11 @@ def _tool_call(name: str, args, *, call_id: str = "call_1"):
 # ======================================================================
 # Tests
 # ======================================================================
-def test_agent_handles_no_installed_model():
+def test_agent_handles_no_installed_model(monkeypatch):
     """Wenn kein Modell installiert ist, muss der Agent ein error-Event liefern."""
     fake = FakeLMStudioClient(responses=[], installed=[])
     http = _mock_backend({})
+    _install_chat_inventory(monkeypatch)
 
     async def go():
         events = []
@@ -423,13 +497,21 @@ def test_agent_string_arguments_parsed_as_json():
     assert tr.payload["result"]["count"] == 0
 
 
-def test_agent_legacy_ollama_client_alias_still_works():
+def test_agent_legacy_ollama_client_alias_still_works(monkeypatch):
     """Backwards-compat: alte Callsites mit ``ollama_client=...`` funktionieren noch."""
     fake = FakeLMStudioClient(
         responses=[{"message": {"role": "assistant", "content": "OK"}}],
         installed=["qwen3.5-9b-uncensored-hauhaucs-aggressive"],
     )
     http = _mock_backend({})
+    _install_chat_inventory(
+        monkeypatch,
+        _chat_model(
+            "ollama",
+            "qwen3.5-9b-uncensored-hauhaucs-aggressive",
+            loaded=True,
+        ),
+    )
 
     async def go():
         async with ChatAgent(
@@ -470,6 +552,11 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
     )
     # Setze base_url auf Ollama
     working_fallback.base_url = "http://localhost:11434/v1"
+    _install_chat_inventory(
+        monkeypatch,
+        _chat_model("lmstudio", "failed-model", loaded=True),
+        _chat_model("ollama", "gemma-4-e4b"),
+    )
 
     # Mocke get_llm_client und get_base_url aus llm_provider
     import pb_studio.ai.llm_provider as llm_provider
@@ -549,6 +636,11 @@ def test_agent_model_retry_on_non_connection_error(monkeypatch):
 
     client = ModelRetryClient()
     http = _mock_backend({})
+    _install_chat_inventory(
+        monkeypatch,
+        _chat_model("lmstudio", "unloaded-model", loaded=True),
+        _chat_model("lmstudio", "loaded-model"),
+    )
 
     async def go():
         events = []
