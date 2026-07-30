@@ -76,6 +76,18 @@ class LMStudioResponseError(LMStudioError):
         self.status_code = status_code
 
 
+def is_provider_failure(exc: Exception) -> bool:
+    """Return whether a failure warrants one live-inventory refresh."""
+
+    if isinstance(exc, (TimeoutError, LMStudioConnectionError)):
+        return True
+    if isinstance(exc, LMStudioResponseError):
+        return exc.status_code == 429 or bool(
+            exc.status_code is not None and exc.status_code >= 500
+        )
+    return False
+
+
 @dataclass(frozen=True)
 class LMStudioModelInfo:
     """Metadaten eines LM-Studio-Modells.
@@ -286,8 +298,15 @@ class LMStudioClient:
         retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
         retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        provider: Optional[str] = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        normalized_provider = str(provider or "").strip().lower()
+        self.provider = (
+            normalized_provider
+            if normalized_provider in {"lmstudio", "ollama"}
+            else None
+        )
         self.timeout_seconds = timeout_seconds
         self.connect_timeout_seconds = connect_timeout_seconds
         self.retry_attempts = max(1, int(retry_attempts))
@@ -398,7 +417,14 @@ class LMStudioClient:
         (geladen ODER on-demand ladbar). Im Gegensatz zu Ollama gibt es kein
         klares "installed but unloaded" — die App entscheidet das selbst.
         """
-        is_ollama = "11434" in self.base_url or "ollama" in self.base_url.lower()
+        is_ollama = (
+            self.provider == "ollama"
+            if self.provider is not None
+            else (
+                "11434" in self.base_url
+                or "ollama" in self.base_url.lower()
+            )
+        )
         if is_ollama:
             base = self.base_url
             if base.endswith("/v1"):
@@ -429,8 +455,12 @@ class LMStudioClient:
                         quantization_level=quantization_level,
                     ))
                 return result
+            except LMStudioError:
+                raise
             except Exception as exc:
-                logger.warning("Fehler bei nativem Ollama-Modell-List (%s): %s. Fallback auf OpenAI API.", url, exc)
+                raise LMStudioConnectionError(
+                    "Ollama-Modellinventar über /api/tags nicht erreichbar"
+                ) from exc
 
         response = await self._request_with_retry("GET", "/models")
         self._raise_for_status(response, "list_models")
@@ -502,7 +532,14 @@ class LMStudioClient:
         base = self.base_url.rstrip("/")
         if base.endswith("/v1"):
             base = base[: -len("/v1")]
-        is_ollama = "11434" in self.base_url or "ollama" in self.base_url.lower()
+        is_ollama = (
+            self.provider == "ollama"
+            if self.provider is not None
+            else (
+                "11434" in self.base_url
+                or "ollama" in self.base_url.lower()
+            )
+        )
         url = f"{base}/api/tags" if is_ollama else f"{base}/api/v0/models"
         try:
             client = await self._ensure_client()

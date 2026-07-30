@@ -282,7 +282,11 @@ async def _async_generate_explanation(
         ModelRegistryError,
         NoSuitableModelError,
     )
-    from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError
+    from pb_studio.ai.lmstudio_client import (
+        LMStudioClient,
+        LMStudioError,
+        is_provider_failure,
+    )
 
     ai_cfg = _load_ai_config()
     chash = _content_hash(
@@ -334,22 +338,9 @@ async def _async_generate_explanation(
             f"um die automatische Textgenerierung zu aktivieren.]"
         )
 
-    # Caller kann einen vorbereiteten Client uebergeben (Tests via MockTransport).
-    # M2-Fix (W-M2, 2026-05-20): get_alive_client wired — Auto-Fallback LM Studio
-    # → Ollama wenn primary down. Vorher: Wenn LM Studio down, sofort None
-    # (kein Versuch Ollama). Jetzt: get_alive_client testet beide Provider.
-    owns_client = False
-    if client is None:
-        from pb_studio.ai.llm_provider import get_alive_client
-        client = await get_alive_client(timeout_seconds=min(timeout_seconds, 5.0))
-        if client is None:
-            logger.warning(
-                "LLM-Narrator: kein LLM-Provider erreichbar (LM Studio + Ollama beide down) — Fallback auf offline Text"
-            )
-            return get_offline_explanation()
-        owns_client = True
-
-    try:
+    # Injected clients remain a deterministic test hook. Production selection
+    # below always creates a provider-bound client from a Selection Receipt.
+    if client is not None:
         registry = ModelRegistry(ai_cfg, client=client)
         try:
             await registry.refresh()
@@ -408,12 +399,69 @@ async def _async_generate_explanation(
         _publish_status(model, "active", 100.0)
         _cache_put(cache_key, text)
         return text
-    finally:
-        if owns_client:
-            try:
-                await client.aclose()
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("LLM-Narrator: aclose() ignored: %s", exc)
+
+    from pb_studio.ai.model_registry import (
+        ModelFailoverExhaustedError,
+        ModelSelectionReceipt,
+        execute_with_model_failover,
+    )
+
+    class _EmptyNarrativeError(RuntimeError):
+        pass
+
+    registry = ModelRegistry(ai_cfg)
+
+    async def _call(
+        receipt_client: LMStudioClient,
+        receipt: ModelSelectionReceipt,
+    ) -> str:
+        _publish_status(receipt.model_id, "loading", 50.0)
+        response = await asyncio.wait_for(
+            receipt_client.chat(
+                model=receipt.model_id,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                options={
+                    "temperature": DEFAULT_TEMPERATURE,
+                    "num_predict": DEFAULT_MAX_TOKENS,
+                },
+            ),
+            timeout=timeout_seconds,
+        )
+        message = response.get("message") or {}
+        raw = message.get("content") or response.get("response") or ""
+        text = _post_process_narrative(str(raw))
+        if not text:
+            _publish_status(receipt.model_id, "failed", 0.0)
+            raise _EmptyNarrativeError(
+                f"Leere Narrator-Antwort von {receipt.model_id!r}"
+            )
+        _publish_status(receipt.model_id, "active", 100.0)
+        return text
+
+    try:
+        text, _receipt, _attempts = await execute_with_model_failover(
+            registry,
+            task,
+            mode,
+            _call,
+            is_retryable=lambda exc: isinstance(
+                exc,
+                (asyncio.TimeoutError, LMStudioError, _EmptyNarrativeError),
+            ),
+            is_provider_failure=is_provider_failure,
+            explicit_model=model_override,
+        )
+    except ModelFailoverExhaustedError as exc:
+        logger.warning(
+            "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+            exc,
+        )
+        return get_offline_explanation()
+    _cache_put(cache_key, text)
+    return text
 
 
 async def generate_explanation(

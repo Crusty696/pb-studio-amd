@@ -94,10 +94,19 @@ def get_llm_client(
         timeout_seconds: HTTP-Timeout fuer Requests.
         **client_kwargs: Zusaetzliche Args fuer LMStudioClient (z.B. max_retries).
     """
-    base_url = get_base_url(provider)
+    configured_provider = (
+        str(provider or get_provider()).strip().lower()
+    )
+    resolved_provider = (
+        configured_provider
+        if configured_provider in {"lmstudio", "ollama"}
+        else "lmstudio"
+    )
+    base_url = get_base_url(resolved_provider)
     return LMStudioClient(
         base_url=base_url,
         timeout_seconds=timeout_seconds,
+        provider=resolved_provider,
         **client_kwargs,
     )
 

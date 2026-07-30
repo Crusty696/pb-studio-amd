@@ -218,125 +218,78 @@ async def _async_extract_tags(
     timeout_seconds: float,
 ) -> tuple[list[str], str]:
     from pb_studio.ai.model_registry import (
+        ModelFailoverExhaustedError,
         ModelRegistry,
-        NoSuitableModelError,
+        ModelSelectionReceipt,
+        execute_with_model_failover,
     )
-    from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError
+    from pb_studio.ai.lmstudio_client import (
+        LMStudioClient,
+        LMStudioError,
+        is_provider_failure,
+    )
 
     ai_cfg = _load_ai_config()
+    registry = ModelRegistry(ai_cfg)
 
-    # W-QA-2 (2026-05-22): Hybrid-Auto-Fallback fuer Video-Captioning. Vorher
-    # hartcodiert LMStudioClient() default-URL → kein Tag-Capture wenn nur
-    # Ollama up war. get_alive_client probiert beide.
-    from pb_studio.ai.llm_provider import get_alive_client, get_llm_client, get_provider
+    class _NoUsableTagsError(RuntimeError):
+        pass
 
-    if get_provider() == "auto":
-        client = await get_alive_client(
-            timeout_seconds=min(timeout_seconds, 5.0),
-            required_capability="vision",
+    async def _call(
+        client: LMStudioClient,
+        receipt: ModelSelectionReceipt,
+    ) -> list[str]:
+        provider_name = (
+            "Ollama" if receipt.provider == "ollama" else "LM Studio"
         )
-        if client is None:
-            logger.warning("Kein Provider mit nutzbarem Vision-Modell verfuegbar")
-            _publish_status("none", "LLM", "unavailable", 0.0)
-            return [], "none"
-    else:
-        client = get_llm_client(timeout_seconds=timeout_seconds)
+        cache_key = (
+            _frame_hash(frame_rgb),
+            f"{receipt.provider}:{receipt.model_id}",
+            mode,
+        )
+        cached = _cache_get(cache_key)
+        if cached:
+            _publish_status(receipt.model_id, provider_name, "active", 100.0)
+            return list(cached)
+        _publish_status(receipt.model_id, provider_name, "loading", 25.0)
+        response = await asyncio.wait_for(
+            client.chat(
+                model=receipt.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                images=[frame_rgb],
+                options={"temperature": 0.2},
+            ),
+            timeout=timeout_seconds,
+        )
+        message = response.get("message") or {}
+        raw = message.get("content") or response.get("response") or ""
+        tags = _parse_tags(str(raw))
+        if not tags:
+            _publish_status(receipt.model_id, provider_name, "failed", 0.0)
+            raise _NoUsableTagsError(
+                f"Vision-Modell {receipt.model_id!r} lieferte keine nutzbaren Tags"
+            )
+        _cache_put(cache_key, tags)
+        _publish_status(receipt.model_id, provider_name, "active", 100.0)
+        return tags
 
-    # Review-Fix LOW (2026-07-09): Provider-Name VOR registry.refresh, damit
-    # auch der Provider-down-Fall ein failed-Event senden kann.
-    base_url_lower = client.base_url.lower()
-    is_ollama = "11434" in base_url_lower or "ollama" in base_url_lower
-    provider_name = "Ollama" if is_ollama else "LM Studio"
-
-    async with client:
-        registry = ModelRegistry(ai_cfg, client=client)
-        try:
-            await registry.refresh()
-        except LMStudioError as exc:
-            logger.warning("LLM-Provider nicht erreichbar - keine Tags: %s", exc)
-            _publish_status("none", provider_name, "failed", 0.0)
-            return [], "none"
-
-        exclude_models = set()
-        max_attempts = 3
-        attempt = 0
-
-        while attempt < max_attempts:
-            attempt += 1
-            if model_override:
-                if not registry.is_model_capable(model_override, "vision"):
-                    logger.warning(
-                        "Vision-Override %r ist nicht installiert oder nicht vision-faehig",
-                        model_override,
-                    )
-                    _publish_status(model_override, provider_name, "unavailable", 0.0)
-                    return [], "none"
-                model = model_override
-            else:
-                try:
-                    model = registry.select_best_for_task(task, mode, exclude=exclude_models)
-                except NoSuitableModelError as exc:
-                    logger.warning("Keine Modell-Auswahl fuer Tags: %s", exc)
-                    _publish_status("none", provider_name, "unavailable", 0.0)
-                    return [], "none"
-
-            # Review-Fix LOW (2026-07-09): Cache-Lookup VOR loading-Event —
-            # Cache-Hits erzeugen sonst pro Frame ein loading/active-Flicker.
-            cache_key = (_frame_hash(frame_rgb), model, mode)
-            cached = _cache_get(cache_key)
-            if cached:
-                _publish_status(model, provider_name, "active", 100.0)
-                return list(cached), model
-
-            _publish_status(model, provider_name, "loading", 25.0)
-
-            try:
-                # C-F3: Hard 15s timeout wrapper for the chat call to prevent hangs
-                response = await asyncio.wait_for(
-                    client.chat(
-                        model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                        images=[frame_rgb],
-                        options={"temperature": 0.2},
-                    ),
-                    timeout=timeout_seconds
-                )
-                message = response.get("message") or {}
-                raw = message.get("content") or response.get("response") or ""
-                tags = _parse_tags(str(raw))
-                if not tags:
-                    logger.warning(
-                        "Vision-Modell '%s' lieferte keine nutzbaren Tags",
-                        model,
-                    )
-                    _publish_status(model, provider_name, "failed", 0.0)
-                    if model_override:
-                        return [], model
-                    exclude_models.add(model)
-                    continue
-                _cache_put(cache_key, tags)
-
-                _publish_status(model, provider_name, "active", 100.0)
-                return tags, model
-            except asyncio.TimeoutError as exc:
-                logger.warning("LM Studio Chat-Timeout (%ss) erreicht mit Modell '%s': %s", timeout_seconds, model, exc)
-                _publish_status(model, provider_name, "failed", 0.0)
-                if model_override:
-                    # Bei explizitem Override macht ein Fallback keinen Sinn
-                    return [], model
-                # Modell ausschließen und nächstes versuchen
-                logger.info("Schliesse Modell '%s' wegen Timeout aus und versuche das naechste...", model)
-                exclude_models.add(model)
-            except LMStudioError as exc:
-                logger.warning("LM Studio chat mit Modell '%s' fehlgeschlagen (Tags): %s", model, exc)
-                _publish_status(model, provider_name, "failed", 0.0)
-                if model_override:
-                    # Bei explizitem Override macht ein Fallback keinen Sinn
-                    return [], model
-                # Modell ausschließen und nächstes versuchen
-                logger.info("Schliesse Modell '%s' aus und versuche das naechste geeignete Modell...", model)
-                exclude_models.add(model)
-
+    try:
+        tags, receipt, _attempts = await execute_with_model_failover(
+            registry,
+            task,
+            mode,
+            _call,
+            is_retryable=lambda exc: isinstance(
+                exc,
+                (asyncio.TimeoutError, LMStudioError, _NoUsableTagsError),
+            ),
+            is_provider_failure=is_provider_failure,
+            explicit_model=model_override,
+        )
+        return tags, receipt.model_id
+    except ModelFailoverExhaustedError as exc:
+        logger.warning("Keine nutzbare Receipt-Auswahl für Tags: %s", exc)
+        _publish_status("none", "LLM", "unavailable", 0.0)
         return [], "none"
 
 

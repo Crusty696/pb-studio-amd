@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import secrets
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
@@ -207,6 +206,15 @@ class ChatAgent:
         self._backend_base_url = backend_base_url or _get_backend_base_url()
         self._confirmation_timeout_seconds = max(0.01, float(confirmation_timeout_seconds))
         self._confirmation_stream_id = secrets.token_urlsafe(24)
+        self._active_selection_receipt = None
+        self._active_client_provider: Optional[str] = (
+            "lmstudio"
+            if lmstudio_client is not None
+            else "ollama"
+            if ollama_client is not None
+            else None
+        )
+        self._provider_failure_refresh_used = False
 
     @property
     def registry(self) -> ToolRegistry:
@@ -225,61 +233,9 @@ class ChatAgent:
                 base_url=self._backend_base_url,
                 timeout=httpx.Timeout(60.0, connect=5.0),
             )
-        if self._llm is None:
-            from .llm_provider import (
-                get_llm_client, get_alive_client, get_provider,
-                DEFAULT_GENERATION_TIMEOUT,
-            )
-            env_override = os.environ.get("PBSTUDIO_LMSTUDIO_URL") or os.environ.get("PBSTUDIO_OLLAMA_URL")
-            if env_override:
-                self._llm = LMStudioClient(
-                    base_url=env_override, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
-                )
-            else:
-                provider = get_provider()
-                if provider == "auto":
-                    # Probe kurz (5s), Client-Timeout aber generierungs-tauglich.
-                    alive = await get_alive_client(timeout_seconds=5.0)
-                    self._llm = alive if alive is not None else get_llm_client(
-                        timeout_seconds=DEFAULT_GENERATION_TIMEOUT
-                    )
-                else:
-                    primary = get_llm_client(
-                        provider=provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
-                    )
-                    primary_alive = False
-                    try:
-                        primary_alive = await primary.is_alive()
-                    except Exception:
-                        pass
-
-                    if primary_alive:
-                        self._llm = primary
-                    else:
-                        other_provider = "ollama" if provider == "lmstudio" else "lmstudio"
-                        secondary = get_llm_client(
-                            provider=other_provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
-                        )
-                        secondary_alive = False
-                        try:
-                            secondary_alive = await secondary.is_alive()
-                        except Exception:
-                            pass
-                        
-                        if secondary_alive:
-                            logger.warning(
-                                "Primärer LLM-Provider %s ist offline. Weiche autonom im Chat auf %s aus!",
-                                provider, other_provider
-                            )
-                            await primary.aclose()
-                            self._llm = secondary
-                        else:
-                            await secondary.aclose()
-                            self._llm = primary
-
         if self._model_registry is None:
             ai_cfg = self._load_ai_config()
-            self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
+            self._model_registry = ModelRegistry(ai_cfg)
 
     async def aclose(self) -> None:
         await tool_confirmation_broker.cancel_stream(self._confirmation_stream_id)
@@ -293,79 +249,22 @@ class ChatAgent:
                 await self._llm.aclose()
             finally:
                 self._llm = None
+                self._active_client_provider = None
 
     async def _attempt_fallback(self) -> bool:
-        """Versucht autonom auf den alternativen LLM-Provider zu wechseln.
+        """Invalidate once and let the next receipt select the live provider."""
+        from .model_inventory import get_model_inventory_service
 
-        Prueft, ob der alternative Provider alive ist. Wenn ja, wird der aktuelle
-        Client geschlossen, der neue Client initialisiert, die ModelRegistry
-        aktualisiert und True zurueckgegeben.
-        """
-        if self._llm is None:
+        if self._provider_failure_refresh_used:
             return False
-
-        current_url = self._llm.base_url
-        from .llm_provider import get_base_url, get_llm_client
-
-        ollama_url = get_base_url("ollama").rstrip("/")
-        lmstudio_url = get_base_url("lmstudio").rstrip("/")
-        current_normalized = current_url.rstrip("/")
-        # Bestimme alternative Provider
-        if current_normalized == ollama_url:
-            other_provider = "lmstudio"
-        else:
-            other_provider = "ollama"
-
-        logger.warning(
-            "Verbindungsproblem mit aktuellem Provider (%s). Pruefe Fallback auf %s...",
-            current_url, other_provider
+        self._provider_failure_refresh_used = True
+        inventory = get_model_inventory_service()
+        inventory.invalidate()
+        snapshot = await inventory.refresh()
+        return any(
+            model.installed and model.usable and "chat" in model.capabilities
+            for model in snapshot.models
         )
-
-        from .llm_provider import DEFAULT_GENERATION_TIMEOUT
-        # Generierungs-Timeout (nicht 5s) — der Client wird bei Erfolg fuer echte
-        # Chat-Generierung uebernommen; is_alive bleibt trotzdem schnell, da bei
-        # Offline-Provider der Connect-Timeout (5s) greift.
-        secondary = get_llm_client(
-            provider=other_provider, timeout_seconds=DEFAULT_GENERATION_TIMEOUT
-        )
-        secondary_alive = False
-        try:
-            secondary_alive = await secondary.is_alive()
-        except Exception:
-            pass
-
-        if secondary_alive:
-            logger.warning(
-                "Fallback-Provider %s ist online! Wechsle Client...", other_provider
-            )
-            # Alten Client schliessen
-            if self._owned_llm:
-                try:
-                    await self._llm.aclose()
-                except Exception:
-                    pass
-
-            # Neuen Client setzen
-            self._llm = secondary
-            self._owned_llm = True
-
-            # ModelRegistry fuer den neuen Client neu erstellen/aktualisieren
-            ai_cfg = self._load_ai_config()
-            self._model_registry = ModelRegistry(ai_cfg, client=self._llm)
-            try:
-                await self._model_registry.refresh()
-            except Exception as exc:
-                logger.error("Fehler beim Aktualisieren der Registry nach Fallback: %s", exc)
-                return False
-
-            return True
-        else:
-            try:
-                await secondary.aclose()
-            except Exception:
-                pass
-            logger.error("Alternativer LLM-Provider %s ist ebenfalls offline.", other_provider)
-            return False
 
     @staticmethod
     def _load_ai_config() -> dict:
@@ -378,51 +277,51 @@ class ChatAgent:
             logger.debug("AI-Config nicht ladbar fuer ChatAgent: %s", exc)
         return {}
 
-    async def _pick_chat_model(self, mode: str, *, exclude: set[str] | None = None):
-        """Waehlt das beste Chat-Modell, optional mit Ausschluss-Liste.
-
-        Args:
-            mode: speed/balance/quality
-            exclude: Set von Modell-Namen die uebersprungen werden sollen
-                     (z.B. weil sie nicht geladen sind und schon fehlgeschlagen haben).
-        """
+    async def _pick_chat_model(
+        self,
+        mode: str,
+        *,
+        exclude: set[tuple[str, str]] | None = None,
+        explicit_model: Optional[str] = None,
+    ):
+        """Select a receipt and bind the HTTP client to its exact provider."""
         await self._ensure_resources()
         assert self._model_registry is not None
-        try:
-            await self._model_registry.refresh()
-        except LMStudioError as exc:
-            logger.warning("Fehler beim Aktualisieren der Registry: %s. Versuche Fallback...", exc)
-            if await self._attempt_fallback():
-                try:
-                    await self._model_registry.refresh()
-                except Exception as exc2:
-                    raise NoSuitableModelError(
-                        f"Fehler bei Registry-Refresh nach Fallback: {exc2}"
-                    ) from exc2
-            else:
-                raise NoSuitableModelError(
-                    f"LM Studio nicht erreichbar - Chat kann nicht laufen: {exc}"
-                ) from exc
+        from .llm_provider import DEFAULT_GENERATION_TIMEOUT, get_llm_client
+        from .model_inventory import get_model_inventory_service
 
-        _exclude = exclude or set()
+        snapshot = await get_model_inventory_service().refresh()
+        excluded = set(exclude or set())
 
         for task in ("chat_tool_use", "chat_general", "chat"):
             try:
-                model = self._model_registry.select_best_for_task(
-                    task, mode, exclude=_exclude
+                receipt = self._model_registry.select_receipt_for_task(
+                    snapshot,
+                    task,
+                    mode,
+                    explicit_model=explicit_model,
+                    exclude=excluded,
                 )
-                return model, f"task={task}, mode={mode}"
+                if self._active_client_provider != receipt.provider:
+                    if self._llm is not None and self._owned_llm:
+                        await self._llm.aclose()
+                    self._llm = get_llm_client(
+                        provider=receipt.provider,
+                        timeout_seconds=DEFAULT_GENERATION_TIMEOUT,
+                    )
+                    self._owned_llm = True
+                    self._active_client_provider = receipt.provider
+                self._active_selection_receipt = receipt
+                logger.info("ModelSelectionReceipt: %s", receipt.to_dict())
+                return (
+                    receipt.model_id,
+                    f"{receipt.reason} provider={receipt.provider} source={receipt.source}",
+                )
             except (NoSuitableModelError, ModelRegistryError):
                 continue
-        try:
-            model = self._model_registry.select_best_for_task(
-                "chat", mode, allow_any_installed=True, exclude=_exclude
-            )
-            return model, "fallback: irgendein installiertes Modell"
-        except (NoSuitableModelError, ModelRegistryError) as exc:
-            raise NoSuitableModelError(
-                f"Kein chat-faehiges Modell installiert: {exc}"
-            ) from exc
+        raise NoSuitableModelError(
+            "Kein chat-fähiges Modell mit verifizierter Provider-Capability verfügbar."
+        )
 
     def _parse_tool_call(
         self, tool_call: dict[str, Any]
@@ -518,21 +417,30 @@ class ChatAgent:
         model_override: Optional[str] = None,
     ) -> AsyncIterator[ChatEvent]:
         await self._ensure_resources()
-        assert self._llm is not None
+        self._provider_failure_refresh_used = False
 
         try:
-            if model_override:
-                model = model_override
-                reason = "explicit override"
-            else:
-                model, reason = await self._pick_chat_model(mode)
+            model, reason = await self._pick_chat_model(
+                mode,
+                explicit_model=model_override,
+            )
         except NoSuitableModelError as exc:
             _publish_status("none", "failed", 0.0)
             yield ChatEvent("error", {"message": str(exc), "stage": "model_selection"})
             yield ChatEvent("done", {"reason": "no_model"})
             return
+        assert self._llm is not None
 
-        yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+        receipt = self._active_selection_receipt
+        yield ChatEvent("model", {
+            "model": model,
+            "provider": getattr(receipt, "provider", None),
+            "reason": reason,
+            "mode": mode,
+            "selection_receipt": (
+                receipt.to_dict() if receipt is not None else None
+            ),
+        })
         _publish_status(model, "loading", 50.0)
 
         messages = [{"role": "system", "content": self._system_prompt}]
@@ -549,8 +457,10 @@ class ChatAgent:
         final_text = ""
         # Set von Modellen die fehlgeschlagen sind (z.B. nicht geladen in LM Studio)
         # Bei Model-Fehlern wird das naechste Modell probiert statt sofort Provider-Fallback.
-        _failed_models: set[str] = set()
-        MAX_MODEL_RETRIES = 3
+        _failed_models: set[tuple[str, str]] = set()
+        # Two local model failures plus one receipt after the single provider
+        # refresh yields the contract maximum of three distinct candidates.
+        MAX_MODEL_RETRIES = 2
         # Audit-Fix 2026-07-10 (Sweep-Finding CHAT-7): 8 von 9 Fehler-Pfaden unten
         # (return nach yield ChatEvent("done",...)) publizierten nie einen
         # finalen llm_status — Widget blieb bei "loading" haengen. Statt jeden
@@ -612,7 +522,8 @@ class ChatAgent:
                         logger.warning("Request von LM Studio abgelehnt (HTTP 400) bei Modell %r: %s", model, exc)
                         yield ChatEvent("error", {
                             "message": (
-                                f"LM Studio hat die Anfrage abgelehnt (HTTP 400): {exc}\n\n"
+                                "Der LLM-Provider hat die Anfrage abgelehnt "
+                                "(HTTP 400).\n\n"
                                 f"Haeufigste Ursache: Chat-Verlauf ist zu lang fuer das Kontext-"
                                 f"fenster von '{model}'. Bitte Verlauf kuerzen oder ein Modell mit "
                                 f"groesserem Kontext waehlen."
@@ -625,23 +536,36 @@ class ChatAgent:
                     # Fall 2: Connection-Error → Provider-Fallback
                     elif isinstance(exc, LMStudioConnectionError):
                         logger.warning("Connection-Fehler im Chat-Turn %s: %s. Versuche Provider-Fallback...", turn, exc)
-                        from .llm_provider import get_base_url
-                        ollama_url = get_base_url("ollama").rstrip("/")
-                        current_base = self._llm.base_url.rstrip("/") if self._llm else ""
-                        other_prov = "lmstudio" if current_base == ollama_url else "ollama"
+                        failed_provider = (
+                            getattr(
+                                self._active_selection_receipt,
+                                "provider",
+                                None,
+                            )
+                            or self._active_client_provider
+                            or "unknown"
+                        )
+                        _failed_models.add((failed_provider, model))
+                        other_prov = (
+                            "ollama"
+                            if failed_provider == "lmstudio"
+                            else "lmstudio"
+                        )
                         yield ChatEvent("error", {
-                            "message": f"Verbindung zu {self._llm.base_url if self._llm else 'LLM'} verloren. Wechsle automatisch auf {other_prov}...",
+                            "message": (
+                                f"Verbindung zu Provider {failed_provider} verloren. "
+                                f"Wechsle automatisch auf {other_prov}..."
+                            ),
                             "stage": "fallback"
                         })
 
                         if await self._attempt_fallback():
-                            _failed_models.clear()  # Neuer Provider → alte Fehler zuruecksetzen
                             try:
-                                if model_override:
-                                    model = model_override
-                                    reason = "explicit override (fallback)"
-                                else:
-                                    model, reason = await self._pick_chat_model(mode)
+                                model, reason = await self._pick_chat_model(
+                                    mode,
+                                    explicit_model=model_override,
+                                    exclude=_failed_models,
+                                )
 
                                 yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
 
@@ -665,7 +589,7 @@ class ChatAgent:
                                 f"1. LM Studio oder Ollama läuft nicht. Bitte starten Sie Ihre lokale KI-Anwendung.\n"
                                 f"2. In LM Studio ist kein Modell geladen. Bitte laden Sie ein Chat-Modell (z. B. 'gemma-4-e4b' oder 'moondream').\n"
                                 f"3. Falls Sie Ollama nutzen, stellen Sie sicher, dass mindestens ein Modell installiert ist (z. B. via 'ollama run gemma:2b').\n\n"
-                                f"Originaler Fehler: {exc}"
+                                f"Fehlerklasse: {type(exc).__name__}"
                             )
                             yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
                             yield ChatEvent("done", {"reason": "llm_error"})
@@ -673,7 +597,16 @@ class ChatAgent:
 
                     # Fall 3: Model-Fehler (z.B. nicht geladen) → naechstes Modell versuchen
                     else:
-                        _failed_models.add(model)
+                        failed_provider = (
+                            getattr(
+                                self._active_selection_receipt,
+                                "provider",
+                                None,
+                            )
+                            or self._active_client_provider
+                            or "unknown"
+                        )
+                        _failed_models.add((failed_provider, model))
                         logger.warning(
                             "Modell %r fehlgeschlagen (Turn %s): %s. Versuche naechstes Modell... (fehlgeschlagen: %s)",
                             model, turn, exc, _failed_models
@@ -685,15 +618,18 @@ class ChatAgent:
                                 "%d Modelle fehlgeschlagen auf diesem Provider. Versuche Provider-Fallback...",
                                 len(_failed_models)
                             )
-                            from .llm_provider import get_base_url
-                            ollama_url_f = get_base_url("ollama").rstrip("/")
-                            current_base_f = self._llm.base_url.rstrip("/") if self._llm else ""
-                            other_prov_f = "lmstudio" if current_base_f == ollama_url_f else "ollama"
+                            other_prov_f = (
+                                "ollama"
+                                if failed_provider == "lmstudio"
+                                else "lmstudio"
+                            )
 
                             if await self._attempt_fallback():
-                                _failed_models.clear()
                                 try:
-                                    model, reason = await self._pick_chat_model(mode)
+                                    model, reason = await self._pick_chat_model(
+                                        mode,
+                                        exclude=_failed_models,
+                                    )
                                     yield ChatEvent("model", {"model": model, "reason": f"{reason} (provider-fallback)", "mode": mode})
                                     continue  # Retry den Turn mit neuem Modell+Provider
                                 except NoSuitableModelError as exc_no_model:
@@ -722,7 +658,13 @@ class ChatAgent:
                                 continue  # Retry den Turn mit neuem Modell
                             else:
                                 # Bei model_override kein Retry mit anderem Modell
-                                yield ChatEvent("error", {"message": f"Explizites Modell '{model}' fehlgeschlagen: {exc}", "stage": "chat"})
+                                yield ChatEvent("error", {
+                                    "message": (
+                                        f"Explizites Modell '{model}' "
+                                        f"fehlgeschlagen ({type(exc).__name__})."
+                                    ),
+                                    "stage": "chat",
+                                })
                                 yield ChatEvent("done", {"reason": "llm_error"})
                                 return
                         except NoSuitableModelError:
@@ -833,20 +775,32 @@ class ChatAgent:
                     yield ChatEvent("text", {"content": final_text})
                 except LMStudioError as exc:
                     logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
-                    from .llm_provider import get_base_url
-                    ollama_url_s = get_base_url("ollama").rstrip("/")
-                    current_base_s = self._llm.base_url.rstrip("/") if self._llm else ""
-                    other_prov = "lmstudio" if current_base_s == ollama_url_s else "ollama"
+                    failed_provider = (
+                        getattr(
+                            self._active_selection_receipt,
+                            "provider",
+                            None,
+                        )
+                        or self._active_client_provider
+                        or "unknown"
+                    )
+                    _failed_models.add((failed_provider, model))
+                    other_prov = (
+                        "ollama"
+                        if failed_provider == "lmstudio"
+                        else "lmstudio"
+                    )
                     yield ChatEvent("error", {
                         "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
                         "stage": "fallback"
                     })
                     if await self._attempt_fallback():
                         try:
-                            if model_override:
-                                model = model_override
-                            else:
-                                model, _ = await self._pick_chat_model(mode)
+                            model, _ = await self._pick_chat_model(
+                                mode,
+                                explicit_model=model_override,
+                                exclude=_failed_models,
+                            )
 
                             response = await self._llm.chat(
                                 model=model,
@@ -862,9 +816,21 @@ class ChatAgent:
                             final_text = (response.get("message") or {}).get("content") or ""
                             yield ChatEvent("text", {"content": final_text})
                         except Exception as exc_fallback:
-                            yield ChatEvent("error", {"message": f"Fehler bei Summary nach Fallback: {exc_fallback}", "stage": "summary_fallback"})
+                            yield ChatEvent("error", {
+                                "message": (
+                                    "Summary-Fallback fehlgeschlagen "
+                                    f"({type(exc_fallback).__name__})."
+                                ),
+                                "stage": "summary_fallback",
+                            })
                     else:
-                        yield ChatEvent("error", {"message": f"LM-Studio-Fehler beim Summary: {exc}", "stage": "summary"})
+                        yield ChatEvent("error", {
+                            "message": (
+                                "Provider-Fehler beim Summary "
+                                f"({type(exc).__name__})."
+                            ),
+                            "stage": "summary",
+                        })
 
             _publish_status(model, "active" if final_text else "failed", 100.0 if final_text else 0.0)
             _status_final_published = True

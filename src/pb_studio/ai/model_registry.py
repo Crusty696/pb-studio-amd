@@ -24,9 +24,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypeVar
 
 from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioModelInfo
+
+if TYPE_CHECKING:
+    from .model_inventory import ModelInventoryEntry, ModelInventorySnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +86,38 @@ class ModelRegistryError(RuntimeError):
 
 class NoSuitableModelError(ModelRegistryError):
     """Kein installiertes Modell erfuellt die Preferenz-Kette fuer den Task."""
+
+
+@dataclass(frozen=True)
+class ModelSelectionReceipt:
+    provider: str
+    model_id: str
+    task: str
+    mode: str
+    required_capabilities: tuple[str, ...]
+    verified_capabilities: tuple[str, ...]
+    source: str
+    reason: str
+    selected_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class ModelFailoverExhaustedError(ModelRegistryError):
+    """All bounded, capability-valid candidates failed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        receipts: list[ModelSelectionReceipt],
+    ) -> None:
+        super().__init__(message)
+        self.receipts = tuple(receipts)
+
+
+_ResultT = TypeVar("_ResultT")
 
 
 def _parse_parameter_size(name: str) -> float:
@@ -175,13 +212,6 @@ class ModelRegistry:
     @property
     def is_loaded(self) -> bool:
         return self._loaded
-
-    def _resolve_client(self) -> LMStudioClient:
-        if self._client is None:
-            from pb_studio.ai.llm_provider import get_llm_client
-            self._client = get_llm_client()
-        return self._client
-
 
     async def _resolve_client_async(self) -> LMStudioClient:
         """W-QA-2 (2026-05-22): respektiert config.ai.provider mit Auto-Fallback.
@@ -299,6 +329,230 @@ class ModelRegistry:
             return None
         text = str(value).strip()
         return text or None
+
+    def get_provider_override(self, task: str) -> Optional[str]:
+        overrides = self._config.get("task_provider_overrides") or {}
+        value = overrides.get(task) if isinstance(overrides, dict) else None
+        text = str(value or "").strip().lower()
+        return text if text in {"lmstudio", "ollama"} else None
+
+    @staticmethod
+    def _required_capability(task: str) -> str:
+        return (
+            "vision"
+            if task in {"video_captioning", "image_captioning"}
+            else "chat"
+        )
+
+    def selection_receipts_for_task(
+        self,
+        snapshot: ModelInventorySnapshot,
+        task: str,
+        mode: str = "balance",
+        *,
+        explicit_model: Optional[str] = None,
+        explicit_provider: Optional[str] = None,
+        exclude: Optional[set[tuple[str, str]]] = None,
+        limit: int = 3,
+    ) -> list[ModelSelectionReceipt]:
+        """Return at most ``limit`` provider/model candidates in contract order."""
+        if mode not in VALID_MODES:
+            raise ModelRegistryError(
+                f"Unbekannter mode={mode!r} (erlaubt: {sorted(VALID_MODES)})"
+            )
+        required = self._required_capability(task)
+        excluded = {
+            (provider.lower(), model.lower())
+            for provider, model in (exclude or set())
+        }
+        eligible = [
+            model
+            for model in snapshot.models
+            if model.installed
+            and model.usable
+            and required in model.capabilities
+            and (model.provider.lower(), model.name.lower()) not in excluded
+        ]
+        if not eligible:
+            raise NoSuitableModelError(
+                f"Kein nutzbares {required}-Modell für task={task!r}; "
+                f"Inventargeneration={snapshot.generation}."
+            )
+
+        configured_provider = str(
+            self._config.get("provider") or "auto"
+        ).strip().lower()
+        preferred_provider = (
+            configured_provider
+            if configured_provider in {"lmstudio", "ollama"}
+            else None
+        )
+
+        def tie_key(model: ModelInventoryEntry) -> tuple[int, int, str, str]:
+            return (
+                0 if model.loaded else 1,
+                0 if preferred_provider and model.provider == preferred_provider else 1,
+                model.provider.lower(),
+                model.name.lower(),
+            )
+
+        remaining = list(eligible)
+        ranked: list[tuple[ModelInventoryEntry, str, str]] = []
+
+        def consume_matches(
+            names: list[str],
+            *,
+            provider: Optional[str],
+            source: str,
+            reason: str,
+            require_unique_without_provider: bool = False,
+        ) -> None:
+            nonlocal remaining
+            for requested_name in names:
+                scoped = [
+                    model
+                    for model in remaining
+                    if provider is None or model.provider == provider
+                ]
+                normalized = str(requested_name).strip().casefold()
+                exact_matches = [
+                    model
+                    for model in scoped
+                    if model.name.strip().casefold() == normalized
+                ]
+                matches = exact_matches or [
+                    model
+                    for model in scoped
+                    if _name_matches(requested_name, model.name)
+                ]
+                if not exact_matches and len(matches) > 1:
+                    identities = ", ".join(
+                        sorted(
+                            f"{model.provider}:{model.name}"
+                            for model in matches
+                        )
+                    )
+                    raise ModelRegistryError(
+                        f"Legacy-Modellalias {requested_name!r} ist "
+                        f"mehrdeutig ({identities}); exakte Modell-ID und "
+                        "Provider sind erforderlich."
+                    )
+                if (
+                    require_unique_without_provider
+                    and provider is None
+                    and len(matches) > 1
+                ):
+                    providers = ", ".join(
+                        sorted(model.provider for model in matches)
+                    )
+                    raise ModelRegistryError(
+                        f"Persistiertes Modell {requested_name!r} für {task!r} "
+                        f"ist bei mehreren Providern nutzbar ({providers}); "
+                        "task_provider_overrides muss den Provider festlegen."
+                    )
+                for model in sorted(matches, key=tie_key):
+                    ranked.append((model, source, reason))
+                    remaining.remove(model)
+
+        explicit_name = str(explicit_model or "").strip()
+        explicit_provider_name = str(explicit_provider or "").strip().lower()
+        if explicit_provider_name not in {"lmstudio", "ollama"}:
+            explicit_provider_name = ""
+        if explicit_name:
+            ranked_before = len(ranked)
+            consume_matches(
+                [explicit_name],
+                provider=explicit_provider_name or None,
+                source="explicit_override",
+                reason="Nutzbarer expliziter Provider-/Modell-Override.",
+                require_unique_without_provider=True,
+            )
+            if len(ranked) == ranked_before:
+                raise NoSuitableModelError(
+                    f"Explizites Modell {explicit_name!r} ist beim "
+                    "angeforderten Provider nicht exakt oder eindeutig als "
+                    f"nutzbares {required}-Modell verifiziert."
+                )
+
+        persisted_model = self.get_user_override(task)
+        persisted_provider = self.get_provider_override(task)
+        if persisted_model:
+            consume_matches(
+                [persisted_model],
+                provider=persisted_provider,
+                source="persisted_task_preference",
+                reason="Persistierte Aufgabenpräferenz ist live nutzbar.",
+                require_unique_without_provider=True,
+            )
+
+        user_preferences = (
+            (self._config.get("task_preferences") or {}).get(task) or {}
+        )
+        persisted_names = (
+            list(user_preferences.get(mode) or [])
+            if isinstance(user_preferences, dict)
+            else []
+        )
+        consume_matches(
+            persisted_names,
+            provider=None,
+            source="persisted_task_preference",
+            reason=f"Persistierte {mode}-Präferenz mit verifizierter Capability.",
+        )
+
+        default_names = list(
+            (DEFAULT_TASK_PREFERENCES.get(task) or {}).get(mode) or []
+        )
+        consume_matches(
+            default_names,
+            provider=None,
+            source="capability_recommendation",
+            reason=f"Capability-basierte {mode}-Empfehlung.",
+        )
+
+        for model in sorted(remaining, key=tie_key):
+            ranked.append(
+                (
+                    model,
+                    "live_fallback",
+                    "Anderes geeignetes Live-Modell mit verifizierter Capability.",
+                )
+            )
+
+        receipts = [
+            ModelSelectionReceipt(
+                provider=model.provider,
+                model_id=model.name,
+                task=task,
+                mode=mode,
+                required_capabilities=(required,),
+                verified_capabilities=tuple(sorted(model.capabilities)),
+                source=source,
+                reason=reason,
+                selected_at=datetime.now(timezone.utc).isoformat(),
+            )
+            for model, source, reason in ranked[: max(1, min(int(limit), 3))]
+        ]
+        if not receipts:
+            raise NoSuitableModelError(
+                f"Kein Modell nach Ausschlüssen für task={task!r} verfügbar."
+            )
+        return receipts
+
+    def select_receipt_for_task(
+        self,
+        snapshot: ModelInventorySnapshot,
+        task: str,
+        mode: str = "balance",
+        **kwargs: Any,
+    ) -> ModelSelectionReceipt:
+        return self.selection_receipts_for_task(
+            snapshot,
+            task,
+            mode,
+            limit=1,
+            **kwargs,
+        )[0]
 
     def select_best_for_task(
         self,
@@ -445,3 +699,83 @@ class ModelRegistry:
                 "override": override,
                 "installed": installed_names,
             }
+
+
+async def execute_with_model_failover(
+    registry: ModelRegistry,
+    task: str,
+    mode: str,
+    operation: Callable[
+        [LMStudioClient, ModelSelectionReceipt],
+        Awaitable[_ResultT],
+    ],
+    *,
+    is_retryable: Callable[[Exception], bool],
+    is_provider_failure: Optional[Callable[[Exception], bool]] = None,
+    explicit_model: Optional[str] = None,
+    explicit_provider: Optional[str] = None,
+) -> tuple[_ResultT, ModelSelectionReceipt, tuple[ModelSelectionReceipt, ...]]:
+    """Execute against receipt-bound clients with one refresh and three attempts."""
+    from .llm_provider import DEFAULT_GENERATION_TIMEOUT, get_llm_client
+    from .model_inventory import get_model_inventory_service
+
+    inventory = get_model_inventory_service()
+    snapshot = await inventory.refresh()
+    excluded: set[tuple[str, str]] = set()
+    attempts: list[ModelSelectionReceipt] = []
+    refreshed_after_failure = False
+    last_error: Optional[Exception] = None
+
+    while len(attempts) < 3:
+        try:
+            receipt = registry.select_receipt_for_task(
+                snapshot,
+                task,
+                mode,
+                explicit_model=explicit_model if not attempts else None,
+                explicit_provider=explicit_provider if not attempts else None,
+                exclude=excluded,
+            )
+        except NoSuitableModelError as exc:
+            last_error = exc
+            break
+
+        attempts.append(receipt)
+        logger.info("ModelSelectionReceipt: %s", receipt.to_dict())
+        client = get_llm_client(
+            provider=receipt.provider,
+            timeout_seconds=DEFAULT_GENERATION_TIMEOUT,
+        )
+        try:
+            async with client:
+                result = await operation(client, receipt)
+            return result, receipt, tuple(attempts)
+        except Exception as exc:
+            if not is_retryable(exc):
+                raise
+            last_error = exc
+            excluded.add((receipt.provider, receipt.model_id))
+            logger.warning(
+                "Receipt-bound provider call failed: provider=%s model=%s "
+                "attempt=%d/3 error=%s",
+                receipt.provider,
+                receipt.model_id,
+                len(attempts),
+                exc,
+            )
+            provider_failure = (
+                is_provider_failure(exc)
+                if is_provider_failure is not None
+                else True
+            )
+            if provider_failure and not refreshed_after_failure:
+                inventory.invalidate()
+                snapshot = await inventory.refresh()
+                refreshed_after_failure = True
+
+    detail = str(last_error) if last_error else "keine weiteren Kandidaten"
+    raise ModelFailoverExhaustedError(
+        f"Modellauswahl für task={task!r} nach {len(attempts)} "
+        f"verschiedenen Kandidaten erschöpft: {detail}",
+        receipts=attempts,
+    )
