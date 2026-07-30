@@ -70,6 +70,8 @@ class CLAPAnalyzer:
         self._init_failed = False
         self._classification_available = False
         self._unavailable_reason: Optional[str] = "CLAP ONNX wurde noch nicht initialisiert"
+        self._processor = None
+        self._preprocess_stats: Optional[Dict[str, np.ndarray]] = None
 
         if not lazy_load:
             self._init_model()
@@ -108,8 +110,11 @@ class CLAPAnalyzer:
             if self.audio_encoder_session is not None and self.text_encoder_session is not None:
                 self._validate_dml_session(self.audio_encoder_session)
                 self._validate_dml_session(self.text_encoder_session)
+                self._init_processor()
                 self._active_provider = "DmlExecutionProvider"
                 self._initialized = True
+                self._classification_available = True
+                self._unavailable_reason = None
                 return True
 
             self._unavailable_reason = (
@@ -139,6 +144,42 @@ class CLAPAnalyzer:
         """Load registered CLAP ONNX assets without any runtime fallback."""
         return self._init_model()
 
+    def _init_processor(self) -> None:
+        """Load the pinned local CLAP processor and deterministic resize data."""
+        from transformers import ClapProcessor
+
+        models_path = Path(self._models_dir)
+        processor_path = models_path / "clap_processor"
+        stats_path = models_path / "clap_audio_preprocess.npz"
+        if not processor_path.is_dir() or not stats_path.is_file():
+            raise RuntimeError(
+                "CLAP processor assets are incomplete "
+                "(clap_processor/ and clap_audio_preprocess.npz required)"
+            )
+
+        self._processor = ClapProcessor.from_pretrained(
+            str(processor_path),
+            local_files_only=True,
+        )
+        with np.load(stats_path, allow_pickle=False) as stats:
+            required = {
+                "weight",
+                "bias",
+                "running_mean",
+                "running_var",
+                "epsilon",
+            }
+            missing = required.difference(stats.files)
+            if missing:
+                raise RuntimeError(
+                    "CLAP preprocessing statistics missing: "
+                    + ", ".join(sorted(missing))
+                )
+            self._preprocess_stats = {
+                name: np.asarray(stats[name], dtype=np.float32).copy()
+                for name in required
+            }
+
     def load_audio(self, audio_path: Union[str, Path]) -> np.ndarray:
         """Load and normalize audio for CLAP."""
         audio, _ = librosa.load(str(audio_path), sr=CLAP_SAMPLE_RATE, mono=True, duration=CLAP_DURATION)
@@ -150,18 +191,46 @@ class CLAPAnalyzer:
         return audio.astype(np.float32)
 
     def preprocess_audio(self, audio: np.ndarray) -> np.ndarray:
-        """Convert raw audio to model input tensor (4D, scaled 0-1)."""
-        # Audit Fix: ensure positive values AND range 0-1 for mock spectro
-        vals = np.abs(audio.astype(np.float32))
-        vals = vals / (np.max(vals) + 1e-8)
-        return vals[np.newaxis, np.newaxis, np.newaxis, :]
+        """Build the pinned CLAP log-mel input and externalized cubic resize."""
+        if self._processor is None or self._preprocess_stats is None:
+            raise RuntimeError("CLAP processor is not initialized")
+
+        features = self._processor(
+            audios=np.asarray(audio, dtype=np.float32),
+            sampling_rate=CLAP_SAMPLE_RATE,
+            return_tensors="np",
+        )["input_features"].astype(np.float32)
+        stats = self._preprocess_stats
+        weight = stats["weight"][None, None, None, :]
+        bias = stats["bias"][None, None, None, :]
+        mean = stats["running_mean"][None, None, None, :]
+        variance = stats["running_var"][None, None, None, :]
+        epsilon = float(stats["epsilon"][0])
+        normalized = (
+            (features - mean)
+            / np.sqrt(variance + np.float32(epsilon))
+            * weight
+            + bias
+        )
+
+        # The source export contains one cubic Resize node that DirectML 1.19.2
+        # cannot own. It is deterministic input preprocessing, not inference.
+        import torch
+
+        resized = torch.nn.functional.interpolate(
+            torch.from_numpy(normalized),
+            size=(1024, CLAP_N_MELS),
+            mode="bicubic",
+            align_corners=True,
+        )
+        return resized.numpy().astype(np.float32, copy=False)
 
     def encode_audio(self, audio_path: Union[str, Path]) -> Optional[np.ndarray]:
         if not self._initialized and not self._init_model(): return None
 
         try:
             audio = self.load_audio(audio_path)
-            audio_input = audio[np.newaxis, :]
+            audio_input = self.preprocess_audio(audio)
             session = self.combined_session or self.audio_encoder_session
             if session is None: return None
             with gpu_inference_lock:
@@ -174,16 +243,61 @@ class CLAPAnalyzer:
             return None
 
     def encode_text(self, text_list: List[str]) -> Optional[np.ndarray]:
-        if not self._initialized and not self._init_model(): return None
-        return None
+        if not self._initialized and not self._init_model():
+            return None
+        if self._processor is None:
+            return None
+        session = self.combined_session or self.text_encoder_session
+        if session is None:
+            return None
+
+        embeddings = []
+        try:
+            for text in text_list:
+                tokens = self._processor(
+                    text=[str(text)],
+                    padding="max_length",
+                    truncation=True,
+                    max_length=77,
+                    return_tensors="np",
+                )
+                inputs = {
+                    meta.name: np.asarray(tokens[meta.name], dtype=np.int64)
+                    for meta in session.get_inputs()
+                }
+                with gpu_inference_lock:
+                    embedding = session.run(None, inputs)[0].squeeze()
+                embedding = embedding.astype(np.float32, copy=False)
+                embedding /= np.linalg.norm(embedding) + 1e-8
+                embeddings.append(embedding)
+        except Exception as e:
+            logger.error("Text encode fail: %s", e)
+            return None
+        return np.stack(embeddings) if embeddings else np.empty(
+            (0, CLAP_EMBEDDING_DIM),
+            dtype=np.float32,
+        )
 
     def classify_audio(self, audio_path: Union[str, Path], labels: List[str], top_k: int = 5) -> List[Tuple[str, float]]:
         if not self._initialized and not self._init_model():
             raise RuntimeError(self._unavailable_reason or "CLAP ONNX nicht verfügbar")
-        raise RuntimeError(
-            "CLAP ONNX Audio/Text-Klassifikation ist nicht funktionsfähig; "
-            "Semantic Audio ist deaktiviert"
-        )
+        if not labels:
+            return []
+        audio_embedding = self.encode_audio(audio_path)
+        text_embeddings = self.encode_text(labels)
+        if audio_embedding is None or text_embeddings is None:
+            raise RuntimeError("CLAP Audio/Text-Encoding fehlgeschlagen")
+
+        similarities = text_embeddings @ audio_embedding
+        similarities = similarities - float(np.max(similarities))
+        probabilities = np.exp(similarities)
+        probabilities /= float(np.sum(probabilities)) + 1e-8
+        limit = min(max(0, int(top_k)), len(labels))
+        order = np.argsort(probabilities)[::-1][:limit]
+        return [
+            (labels[int(index)], float(probabilities[int(index)]))
+            for index in order
+        ]
 
     def get_mood_tags(self, audio_path: Union[str, Path], top_k: int = 5) -> List[str]:
         results = self.classify_audio(audio_path, DEFAULT_MOOD_LABELS, top_k=top_k)
@@ -246,6 +360,8 @@ class CLAPAnalyzer:
         self.audio_encoder_session = self.text_encoder_session = self.combined_session = None
         self._initialized = False
         self._classification_available = False
+        self._processor = None
+        self._preprocess_stats = None
         import gc; gc.collect()
 
 def analyze_audio_mood(audio_path: Union[str, Path], top_k: int = 5) -> List[str]:

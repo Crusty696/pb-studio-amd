@@ -552,17 +552,18 @@ class SmartDirector:
                 "mysterious ambient music": "mysterious"
             }
 
-            # Run CLAP classification - returns List[Tuple[str, float]]
-            with self._inference_lock:
-                if self._clap is None:
-                    raise SemanticAudioUnavailableError(
-                        "CLAP ONNX was unloaded before classification"
-                    )
-                results = self._clap.classify_audio(
-                    audio_path,
-                    labels=mood_labels,
-                    top_k=len(mood_labels)
+            # CLAPAnalyzer serializes each DirectML session run with the shared
+            # GPU lock. Acquiring the same non-reentrant lock here would
+            # deadlock when classify_audio enters encode_audio or encode_text.
+            if self._clap is None:
+                raise SemanticAudioUnavailableError(
+                    "CLAP ONNX was unloaded before classification"
                 )
+            results = self._clap.classify_audio(
+                audio_path,
+                labels=mood_labels,
+                top_k=len(mood_labels)
+            )
 
             mood_scores = {}
             for label, score in results:

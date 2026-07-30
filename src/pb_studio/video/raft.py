@@ -190,6 +190,13 @@ class MotionAnalyzer:
             )
 
             self._active_provider = self.session.get_providers()[0]
+            input_shape = self.session.get_inputs()[0].shape
+            if (
+                len(input_shape) >= 4
+                and isinstance(input_shape[-2], int)
+                and isinstance(input_shape[-1], int)
+            ):
+                self.target_size = (input_shape[-1], input_shape[-2])
             self._initialized = True
 
             logger.info(f"RAFT model loaded. Active Provider: {self._active_provider}")

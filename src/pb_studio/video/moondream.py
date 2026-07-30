@@ -393,8 +393,15 @@ class MoondreamAnalyzer:
         if image.mode != 'RGB':
             image = image.convert('RGB')
 
+        session = self.combined_session or self.encoder_session
+        target_size = SIGLIP_IMAGE_SIZE
+        if session is not None:
+            shape = session.get_inputs()[0].shape
+            if len(shape) >= 4 and isinstance(shape[-1], int):
+                target_size = shape[-1]
+
         # Resize mit hochwertiger Interpolation
-        image = image.resize((SIGLIP_IMAGE_SIZE, SIGLIP_IMAGE_SIZE), Image.Resampling.BICUBIC)
+        image = image.resize((target_size, target_size), Image.Resampling.BICUBIC)
 
         # Zu numpy array konvertieren und normalisieren
         img_array = np.array(image, dtype=np.float32) / 255.0
@@ -766,6 +773,13 @@ class MoondreamAnalyzer:
         return (
             self.combined_session is not None or
             (self.encoder_session is not None and self.decoder_session is not None)
+        )
+
+    @property
+    def is_vision_ready(self) -> bool:
+        """True when the Moondream vision encoder can run on DirectML."""
+        return self._initialized and (
+            self.combined_session is not None or self.encoder_session is not None
         )
 
     @property

@@ -85,6 +85,30 @@ def test_smart_director_never_returns_neutral_when_clap_is_missing():
         director._analyze_mood("track.wav")
 
 
+def test_smart_director_does_not_reacquire_clap_gpu_lock():
+    director = _director_without_models()
+    analyzer = MagicMock()
+    analyzer.classify_audio.return_value = [
+        ("energetic upbeat music", 0.75),
+        ("calm relaxing music", 0.25),
+    ]
+    director._clap = analyzer
+
+    class FailingOuterLock:
+        def __enter__(self):
+            raise AssertionError("SmartDirector must not wrap CLAP's own GPU lock")
+
+        def __exit__(self, *args):
+            return False
+
+    director._inference_lock = FailingOuterLock()
+
+    result = director._analyze_mood("track.wav")
+
+    assert result == {"energetic": 0.75, "calm": 0.25}
+    analyzer.classify_audio.assert_called_once()
+
+
 def test_pacing_disables_semantic_matching_when_clap_is_unavailable():
     service = PacingService()
     director = MagicMock()

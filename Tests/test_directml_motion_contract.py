@@ -38,6 +38,24 @@ def test_raft_has_no_provider_when_directml_is_unavailable(
     assert analyzer._get_providers() == []
 
 
+def test_raft_uses_static_model_input_size(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    model_path = tmp_path / "raft_small.onnx"
+    model_path.write_bytes(b"test-model")
+    analyzer = raft.MotionAnalyzer(models_dir=str(tmp_path), lazy_load=True)
+    input_meta = MagicMock(shape=[1, 3, 360, 480])
+    session = MagicMock()
+    session.get_inputs.return_value = [input_meta]
+    session.get_outputs.return_value = []
+    session.get_providers.return_value = ["DmlExecutionProvider"]
+    monkeypatch.setattr(analyzer, "_create_session_options", MagicMock())
+    monkeypatch.setattr(analyzer, "_get_providers", lambda: [("DmlExecutionProvider", {})])
+    monkeypatch.setattr(raft.ort, "InferenceSession", lambda *args, **kwargs: session)
+    monkeypatch.setattr(raft, "enforce_directml_session", lambda value: value)
+
+    assert analyzer._init_model() is True
+    assert analyzer.target_size == (480, 360)
+
+
 def test_factory_ignores_cpu_fallback_environment(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ALLOW_CPU_FALLBACK", "1")
     analyzer = MagicMock()
