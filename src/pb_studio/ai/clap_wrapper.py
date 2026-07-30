@@ -18,6 +18,10 @@ import onnxruntime as ort
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    enforce_directml_session,
+    get_directml_provider,
+)
 
 
 # CLAP Audio Processing Constants
@@ -70,13 +74,6 @@ class CLAPAnalyzer:
         if not lazy_load:
             self._init_model()
 
-    def _create_session_options(self) -> ort.SessionOptions:
-        sess_options = ort.SessionOptions()
-        sess_options.enable_mem_pattern = False
-        sess_options.enable_cpu_mem_arena = False
-        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        return sess_options
-
     def _get_providers(self) -> List[Any]:
         """IRC-1 / IRON RULE 1: AMD DirectML ONLY — kein CPU-Fallback.
 
@@ -88,8 +85,7 @@ class CLAPAnalyzer:
                 "CLAP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
                 "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
             )
-        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-        return [('DmlExecutionProvider', {'device_id': device_id})]
+        return [get_directml_provider()]
 
     def _init_model(self) -> bool:
         if self._initialized: return True
@@ -137,12 +133,7 @@ class CLAPAnalyzer:
 
     @staticmethod
     def _validate_dml_session(session: ort.InferenceSession) -> None:
-        providers = list(session.get_providers())
-        if providers != ["DmlExecutionProvider"]:
-            raise RuntimeError(
-                "CLAP ONNX Session ist nicht DirectML-only "
-                f"(aktive Provider: {providers})"
-            )
+        enforce_directml_session(session)
 
     def load(self) -> bool:
         """Load registered CLAP ONNX assets without any runtime fallback."""

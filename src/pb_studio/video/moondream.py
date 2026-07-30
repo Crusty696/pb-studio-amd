@@ -16,6 +16,12 @@ from typing import Optional, List, Dict, Any
 from PIL import Image
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_adapter,
+    get_directml_provider,
+)
 
 
 try:
@@ -80,7 +86,7 @@ class MoondreamAnalyzer:
     Moondream2 Vision-Language Model for image captioning and analysis.
 
     Uses ONNX Runtime with DirectML for AMD GPU acceleration.
-    Falls back to CPU if DirectML is unavailable.
+    Fails closed if DirectML is unavailable.
 
     Model Structure (expected ONNX files):
     - moondream_encoder.onnx: Vision encoder (SigLIP)
@@ -124,14 +130,11 @@ class MoondreamAnalyzer:
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create optimized session options for DirectML compatibility."""
-        sess_options = ort.SessionOptions()
+        sess_options = configure_directml_session_options(ort.SessionOptions())
 
         # KRITISCH fuer DirectML: beide Memory-Flags MÜSSEN False sein.
         # R16: enable_cpu_mem_arena=True war falsch — CPU-Arena konkurriert mit
         # DmlExecutionProvider-Allocator und kann OOM / Instabilität verursachen.
-        sess_options.enable_mem_pattern = False
-        sess_options.enable_cpu_mem_arena = False
-
         # Graph-Optimierungen aktivieren
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.intra_op_num_threads = 0  # Auto
@@ -143,15 +146,34 @@ class MoondreamAnalyzer:
         """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
-        providers = []
-
         if 'DmlExecutionProvider' in available:
-            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-            providers.append(('DmlExecutionProvider', {'device_id': device_id}))
-            logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration")
+            adapter = get_directml_adapter()
+            logger.info(
+                "DirectML provider available "
+                "(device_id=%d, luid=%s, adapter=%s) - "
+                "using AMD GPU acceleration",
+                adapter.device_id,
+                adapter.luid,
+                adapter.name,
+            )
+            return [get_directml_provider()]
 
         # IRON RULE: AMD DirectML ONLY — kein sekundärer Provider
-        return providers
+        return []
+
+    @staticmethod
+    def _create_onnx_session(
+        model_path: Path,
+        session_options: ort.SessionOptions,
+        providers: List[Any],
+    ) -> ort.InferenceSession:
+        return enforce_directml_session(
+            ort.InferenceSession(
+                str(model_path),
+                session_options,
+                providers=providers,
+            )
+        )
 
     def _init_tokenizer(self) -> bool:
         """Initialize the tokenizer for text processing."""
@@ -267,15 +289,15 @@ class MoondreamAnalyzer:
                 # Split Model Architecture (Encoder + Decoder ONNX)
                 logger.info(f"Loading split Moondream model from {models_path}")
 
-                self.encoder_session = ort.InferenceSession(
-                    str(encoder_path),
+                self.encoder_session = self._create_onnx_session(
+                    encoder_path,
                     sess_options,
-                    providers=providers
+                    providers,
                 )
-                self.decoder_session = ort.InferenceSession(
-                    str(decoder_path),
+                self.decoder_session = self._create_onnx_session(
+                    decoder_path,
                     sess_options,
-                    providers=providers
+                    providers,
                 )
 
                 self._is_combined_model = False
@@ -288,10 +310,10 @@ class MoondreamAnalyzer:
                 # Encoder-only ONNX — kein PyTorch-Decoder-Fallback (IRON RULE)
                 logger.info(f"Loading Moondream ONNX encoder only (no decoder found): {encoder_path}")
 
-                self.encoder_session = ort.InferenceSession(
-                    str(encoder_path),
+                self.encoder_session = self._create_onnx_session(
+                    encoder_path,
                     sess_options,
-                    providers=providers
+                    providers,
                 )
 
                 self._is_combined_model = False
@@ -307,10 +329,10 @@ class MoondreamAnalyzer:
                 # Combined Model Architecture
                 logger.info(f"Loading combined Moondream model from {combined_path}")
 
-                self.combined_session = ort.InferenceSession(
-                    str(combined_path),
+                self.combined_session = self._create_onnx_session(
+                    combined_path,
                     sess_options,
-                    providers=providers
+                    providers,
                 )
 
                 self._is_combined_model = True

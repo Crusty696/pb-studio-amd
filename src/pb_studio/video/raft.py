@@ -23,6 +23,12 @@ from typing import Optional, Tuple, List, Dict, Any
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_adapter,
+    get_directml_provider,
+)
 
 
 # RAFT preprocessing constants
@@ -39,7 +45,7 @@ class MotionAnalyzer:
     RAFT-based optical flow analyzer for motion estimation.
 
     Uses ONNX Runtime with DirectML for AMD GPU acceleration.
-    Falls back to CPU if DirectML is unavailable.
+    Fails closed if DirectML is unavailable.
 
     Key Methods:
     - calculate_flow(): Compute flow between two frames
@@ -100,11 +106,9 @@ class MotionAnalyzer:
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create optimized session options for DirectML compatibility."""
-        sess_options = ort.SessionOptions()
+        sess_options = configure_directml_session_options(ort.SessionOptions())
 
         # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
-        sess_options.enable_mem_pattern = False
-
         # R15/STABILITY: Sequentieller Modus ist stabiler mit DirectML/AMD Treibern
         sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
@@ -113,7 +117,6 @@ class MotionAnalyzer:
 
         # R15/M-07: CPU Memory Arena MUSS für DirectML deaktiviert sein —
         # aktiviertes Arena-Management kann mit DmlExecutionProvider-Allokator kollidieren.
-        sess_options.enable_cpu_mem_arena = False
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 
@@ -126,15 +129,20 @@ class MotionAnalyzer:
         """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
-        providers = []
-
         if 'DmlExecutionProvider' in available:
-            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-            providers.append(('DmlExecutionProvider', {'device_id': device_id}))
-            logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration for RAFT")
+            adapter = get_directml_adapter()
+            logger.info(
+                "DirectML provider available "
+                "(device_id=%d, luid=%s, adapter=%s) - "
+                "using AMD GPU acceleration for RAFT",
+                adapter.device_id,
+                adapter.luid,
+                adapter.name,
+            )
+            return [get_directml_provider()]
 
         # IRON RULE: AMD DirectML ONLY — kein sekundärer Provider
-        return providers
+        return []
 
     def _init_model(self) -> bool:
         """
@@ -173,10 +181,12 @@ class MotionAnalyzer:
 
             logger.info(f"Loading RAFT model from {self.model_path}...")
 
-            self.session = ort.InferenceSession(
-                str(self.model_path),
-                sess_options,
-                providers=providers
+            self.session = enforce_directml_session(
+                ort.InferenceSession(
+                    str(self.model_path),
+                    sess_options,
+                    providers=providers,
+                )
             )
 
             self._active_provider = self.session.get_providers()[0]

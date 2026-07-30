@@ -26,6 +26,11 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 
 
 # SigLIP preprocessing constants
@@ -54,9 +59,7 @@ class SigLIPWrapper:
             self._init_model()
 
     def _create_session_options(self) -> ort.SessionOptions:
-        sess_options = ort.SessionOptions()
-        sess_options.enable_mem_pattern = False
-        sess_options.enable_cpu_mem_arena = False
+        sess_options = configure_directml_session_options(ort.SessionOptions())
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         return sess_options
 
@@ -72,8 +75,7 @@ class SigLIPWrapper:
                 "SigLIP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
                 "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
             )
-        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-        return [('DmlExecutionProvider', {'device_id': device_id})]
+        return [get_directml_provider()]
 
     def _init_tokenizer(self) -> bool:
         try:
@@ -108,26 +110,27 @@ class SigLIPWrapper:
             if vision_path.exists():
                 self.vision_session = loader.load_model("siglip_vision", force=True)
                 if self.vision_session is None:
-                    self.vision_session = ort.InferenceSession(str(vision_path), sess_options, providers=providers)
-                
-                self._active_provider = self.vision_session.get_providers()[0]
-                if self._active_provider != 'DmlExecutionProvider':
-                    raise RuntimeError(
-                        f"SigLIP vision session was loaded on {self._active_provider}, "
-                        f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                    self.vision_session = enforce_directml_session(
+                        ort.InferenceSession(
+                            str(vision_path),
+                            sess_options,
+                            providers=providers,
+                        )
                     )
+                self.vision_session = enforce_directml_session(self.vision_session)
+                self._active_provider = "DmlExecutionProvider"
                 
                 if text_path.exists():
                     self.text_session = loader.load_model("siglip_text", force=True)
                     if self.text_session is None:
-                        self.text_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
-                    
-                    text_provider = self.text_session.get_providers()[0]
-                    if text_provider != 'DmlExecutionProvider':
-                        raise RuntimeError(
-                            f"SigLIP text session was loaded on {text_provider}, "
-                            f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                        self.text_session = enforce_directml_session(
+                            ort.InferenceSession(
+                                str(text_path),
+                                sess_options,
+                                providers=providers,
+                            )
                         )
+                    self.text_session = enforce_directml_session(self.text_session)
                 else:
                     self._init_text_fallback()
                 

@@ -17,6 +17,11 @@ import onnxruntime as ort
 import torch
 
 from pb_studio.config_manager import ConfigManager
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,15 +147,27 @@ class StemSeparator:
             # Override the ONNX execution provider AFTER init
             # This forces DirectML usage for ONNX-based models (MDX, MDXC)
             available_providers = ort.get_available_providers()
+            self._has_directml = False
+            self._directml_error = None
 
             if "DmlExecutionProvider" in available_providers:
-                logger.info("AMD DirectML detected. Patching audio-separator for GPU acceleration.")
-                self.separator.onnx_execution_provider = ["DmlExecutionProvider"]
-                logger.info(f"ONNX Provider set to: {self.separator.onnx_execution_provider}")
-
+                try:
+                    provider = get_directml_provider()
+                    self.separator.onnx_execution_provider = [provider]
+                    logger.info(
+                        "AMD DirectML provider bound for audio separation: %s",
+                        self.separator.onnx_execution_provider,
+                    )
+                    self._has_directml = True
+                except Exception as exc:
+                    self._directml_error = str(exc)
+                    logger.error(
+                        "DirectML adapter selection failed; ONNX stem models "
+                        "remain disabled: %s",
+                        exc,
+                    )
                 # SessionOptions Patch wird nur während separate() aktiv gehalten
                 # (siehe _apply_directml_patch / _restore_directml_patch)
-                self._has_directml = True
             else:
                 logger.warning(
                     "DirectML not available. ONNX stem models are disabled; "
@@ -175,31 +192,51 @@ class StemSeparator:
         _directml_session_options_patch_lock.acquire()
         try:
             original = ort.SessionOptions.__init__
+            original_inference_session = ort.InferenceSession
             self._original_session_options_init = original
+            self._original_inference_session = original_inference_session
+            self._directml_session_created = False
 
             def _patched_init(self_opts, *args, **kwargs):
                 original(self_opts, *args, **kwargs)
-                self_opts.enable_mem_pattern = False
+                configure_directml_session_options(self_opts)
                 self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
 
+            def _patched_inference_session(*args, **kwargs):
+                session = enforce_directml_session(
+                    original_inference_session(*args, **kwargs)
+                )
+                self._directml_session_created = True
+                return session
+
             ort.SessionOptions.__init__ = _patched_init
+            ort.InferenceSession = _patched_inference_session
             self._directml_patch_lock_held = True
             logger.debug("SessionOptions patch applied for DirectML separation")
         except Exception:
             self._original_session_options_init = None
+            self._original_inference_session = None
             _directml_session_options_patch_lock.release()
             raise
 
     def _restore_directml_patch(self):
         """Restore original SessionOptions.__init__ after separation."""
         original = getattr(self, '_original_session_options_init', None)
+        original_inference_session = getattr(
+            self,
+            '_original_inference_session',
+            None,
+        )
         lock_held = getattr(self, '_directml_patch_lock_held', False)
         try:
             if original is not None:
                 ort.SessionOptions.__init__ = original
+            if original_inference_session is not None:
+                ort.InferenceSession = original_inference_session
                 logger.debug("SessionOptions patch restored")
         finally:
             self._original_session_options_init = None
+            self._original_inference_session = None
             self._directml_patch_lock_held = False
             if lock_held:
                 _directml_session_options_patch_lock.release()
@@ -303,6 +340,12 @@ class StemSeparator:
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
+            if is_onnx_model and not self._directml_session_created:
+                raise RuntimeError(
+                    "ONNX stem model did not create a DirectML-only "
+                    "ONNX Runtime session; PyTorch CPU conversion is disabled."
+                )
+            self._restore_directml_patch()
             
             if vram_reserved and model_id and vram_mgr is not None:
                 if not vram_mgr.commit(model_id):
