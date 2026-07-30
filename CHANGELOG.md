@@ -45,7 +45,8 @@
 - Brain ausschließlich unter `10_Projects/PB_studio/**` aktualisiert und
   Remote-SHA `82b570df2524f2eb10e37baed34b8d165330b6aa` verifiziert.
 - Der abschließende T363/T368-Follow-up ersetzt die frühere BLOCKED-Aussage;
-  der finale Remote-SHA steht im T369-Publikationsbeleg.
+  PB-Payload `669d9d320774261d6881437760431f7d86ab2b85` und Brain-Payload
+  `aa2585979ed625f1ae51decff08b20c40155ff11` wurden remote verifiziert.
 
 ## 2026-07-29 - T305–T338 Release-Video-Reparatur und End-QC
 

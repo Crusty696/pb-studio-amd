@@ -1,7 +1,7 @@
 # T369 — Zoned Publication and Remote Verification
 
-Status: CONFIRMED publication / BLOCKED release
-Executed: 2026-07-30T09:14+02:00–2026-07-30T09:24+02:00
+Status: CONFIRMED publication / RELEASE-READY
+Executed: 2026-07-30T09:14+02:00–2026-07-30T12:18+02:00
 
 ## Scope and D07
 
@@ -86,7 +86,25 @@ Brain left all unrelated state unstaged and unchanged:
 
 ## Verdict
 
-OR-334 and T369 are PASS / CONFIRMED. The publication is complete and remote
-receipts are stored. T363 / TR-344 remains BLOCKED, `.qc-passed` remains
-absent, and PB Studio is not release-ready. This file is the final
-receipt-only follow-up to the verified commits above.
+OR-334 and T369 are PASS / CONFIRMED. The original blocked-state publication
+was followed by the authorized T363 model-asset remediation and final T368
+truth gate.
+
+## T363/T368 closing publication
+
+- PB pre-push divergence: 0 remote-only, 2 local-only
+- exact 31-file publication Secret-Scan: 0 credential/private-key matches
+- DirectML/model commit:
+  `c2e3e8440547c0d9d3f081e531657a37a0299e8a`
+- QC/evidence commit:
+  `669d9d320774261d6881437760431f7d86ab2b85`
+- PB payload local/remote SHA:
+  `669d9d320774261d6881437760431f7d86ab2b85`
+- Brain pre-push divergence: 0 remote-only, 1 local-only
+- Brain PB-Studio-only payload local/remote SHA:
+  `aa2585979ed625f1ae51decff08b20c40155ff11`
+- force-push/rebase: not used
+
+T363 / TR-344 and T368 are PASS. `.completed` and `.qc-passed` are valid;
+PB Studio is release-ready. This document update is the receipt-only follow-up
+to the byte-identical payload SHAs above.
