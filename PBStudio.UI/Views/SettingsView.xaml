@@ -50,6 +50,11 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <!-- GPU Name -->
@@ -59,39 +64,68 @@
                                    Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonGreen}"
                                    Margin="0,0,0,6"/>
 
-                        <!-- VRAM Total -->
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="VRAM Gesamt"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Adapterindex"
                                    Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,6"
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GpuAdapterIndex}"
+                                   Style="{StaticResource ParamValue}" Margin="0,0,0,6"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="LUID"
+                                   Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding GpuAdapterLuid}"
+                                   Style="{StaticResource ParamValue}" Margin="0,0,0,6"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Auswahl"
+                                   Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding GpuSelectionPolicy}"
+                                   Style="{StaticResource ParamValue}" Margin="0,0,0,6"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="DirectML"
+                                   Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DirectmlStatus}"
+                                   Style="{StaticResource ParamValue}" Margin="0,0,0,6"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Monitoring"
+                                   Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding MonitoringStatus}"
+                                   Style="{StaticResource ParamValue}" Margin="0,0,0,6"/>
+
+                        <!-- VRAM Total -->
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="VRAM Gesamt"
+                                   Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,6"
                                    Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonGreen}"
                                    ToolTip="Gesamter Grafikspeicher (VRAM)&#x0a;• Was es macht: Zeigt die Gesamtkapazität des dedizierten Speichers deiner Grafikkarte an.&#x0a;• Wozu es dient: Gibt den maximal verfügbaren Rahmen für alle System- und KI-Aufgaben vor.&#x0a;• Wann &amp; wie nutzen: Rein informativer Wert. Zeigt dir, über wie viel VRAM deine Hardware physikalisch verfügt.">
                             <Run Text="{Binding VramTotal, Mode=OneWay}"/><Run Text=" MB"/>
                         </TextBlock>
 
                         <!-- VRAM Used -->
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="VRAM Belegt"
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="VRAM Belegt"
                                    Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6"
+                        <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,0,0,6"
                                    Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonYellow}"
                                    ToolTip="Belegter Grafikspeicher (VRAM)&#x0a;• Was es macht: Zeigt an, wie viel Grafikspeicher momentan von Windows und allen aktiven Programmen belegt ist.&#x0a;• Wozu es dient: Hilft dir zu beurteilen, ob der Speicher knapp wird und ob eine Bereinigung sinnvoll ist.&#x0a;• Wann &amp; wie nutzen: Regelmäßig prüfen, um Engpässe und Ruckler frühzeitig zu erkennen.">
                             <Run Text="{Binding VramUsed, Mode=OneWay}"/><Run Text=" MB"/>
                         </TextBlock>
 
                         <!-- Temperature -->
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Temperatur"
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Temperatur"
                                    Style="{StaticResource ParamLabel}" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,6"
+                        <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,0,0,6"
                                    Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonGreen}">
                             <Run Text="{Binding Temperature, Mode=OneWay}"/><Run Text=" °C"/>
                         </TextBlock>
 
                         <!-- Driver Version -->
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Treiber"
+                        <TextBlock Grid.Row="9" Grid.Column="0" Text="Treiber"
                                    Style="{StaticResource ParamLabel}" Margin="0,0,0,2"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1"
+                        <TextBlock Grid.Row="9" Grid.Column="1"
                                    Style="{StaticResource ParamValue}" Text="{Binding DriverVersion}"
                                    Foreground="{StaticResource AbletonText}" Margin="0,0,0,2"/>
                     </Grid>
+                    <TextBlock Text="{Binding MonitoringError}"
+                               Foreground="{StaticResource AbletonRed}"
+                               FontSize="10" Margin="0,6,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding MonitoringError, Converter={StaticResource NullToVisibilityConverter}}"/>
                 </StackPanel>
             </md:Card>
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace PBStudio.UI.Models;
 
 // =====================================================================
-// Ollama Model Manager — installierte Modelle (GET /models/list).
+// Providerübergreifendes Live-Inventar (GET /models/list).
 // Spiegelt backend/routers/models_router.py::ModelListResponse 1:1.
 // snake_case Mapping greift via globaler JsonNamingPolicy in ApiClient.
 // =====================================================================
@@ -14,9 +14,21 @@ public record ModelListResponse(
     string BaseUrl,
     List<ModelListEntry> Models,
     string? Error = null,
-    bool LmstudioAvailable = false);
+    bool LmstudioAvailable = false,
+    List<ProviderStatusEntry>? Providers = null,
+    int InventoryGeneration = 0,
+    string VerifiedAt = "");
 
-/// <summary>Einzelnes installiertes Ollama-Modell (entspricht <c>/api/tags</c>).</summary>
+public record ProviderStatusEntry(
+    string Provider,
+    string Status,
+    string BaseUrl,
+    string VerifiedAt,
+    string StatusReason = "",
+    string CatalogStatus = "not_verified",
+    string? DiscoverUrl = null);
+
+/// <summary>Providergebundener, live verifizierter Modelleintrag.</summary>
 public record ModelListEntry(
     string Name,
     long SizeBytes = 0,
@@ -30,4 +42,12 @@ public record ModelListEntry(
     bool IsActive = false,
     List<string>? ActiveTasks = null,
     bool Vision = false,
-    string Provider = "lmstudio");
+    string Provider = "lmstudio",
+    bool Installed = true,
+    bool Loaded = false,
+    bool Downloadable = false,
+    bool Usable = false,
+    List<string>? Capabilities = null,
+    List<string>? InventorySources = null,
+    string VerifiedAt = "",
+    string StatusReason = "");

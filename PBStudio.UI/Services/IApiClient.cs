@@ -86,19 +86,19 @@ public interface IApiClient : IDisposable
 
     #region Model Manager
     // ----------------------------------------------------------------------
-    // Ollama-Modell-Management (Phase Ollama-Pilot, Tasks #6 Roadmap-Plan).
+    // Providerübergreifendes Modellinventar und -management.
     // Endpoints im Backend: backend/routers/models_router.py
     //   GET    /models/list            -> installierte Modelle
-    //   GET    /models/available       -> kuratierte Vision-Modelle + installed-Flag
+    //   GET    /models/available       -> live verifizierte Downloads + Discover
     //   POST   /models/pull            -> SSE-Stream "event: pull_progress\ndata: {...}\n\n"
     //   DELETE /models/{name:path}     -> Modell loeschen
     //   GET    /models/recommendations -> Auto-Selection-Empfehlung fuer Task+Mode
     // ----------------------------------------------------------------------
 
-    /// <summary>Installierte Ollama-Modelle. Liefert null bei Transport-Fehler.</summary>
+    /// <summary>Providergebundenes Live-Inventar. Liefert null bei Transport-Fehler.</summary>
     Task<ModelListResponse?> GetInstalledModelsAsync(CancellationToken ct = default);
 
-    /// <summary>Kuratierte Liste der von PB Studio unterstuetzten Vision-Modelle.</summary>
+    /// <summary>Verifizierte Downloadzustände und allgemeine Discover-Aktionen.</summary>
     Task<AvailableModelsResponse?> GetAvailableModelsAsync(CancellationToken ct = default);
 
     /// <summary>Streamt Pull-Progress fuer einen Modell-Download (SSE event=pull_progress).
@@ -112,13 +112,13 @@ public interface IApiClient : IDisposable
     Task<ModelRecommendationResponse?> GetModelRecommendationAsync(string task = "video_captioning", string mode = "balance", CancellationToken ct = default);
 
     /// <summary>Aktiviert das Modell persistent im Backend fuer alle passenden Tasks.</summary>
-    Task<bool> ActivateModelAsync(string name, CancellationToken ct = default);
+    Task<bool> ActivateModelAsync(string name, string provider, CancellationToken ct = default);
 
     /// <summary>Aktualisiert den KI-Modus persistent im Backend.</summary>
     Task<bool> UpdateKiModeAsync(string mode, CancellationToken ct = default);
 
     /// <summary>Fuehrt einen Inferenz-Smoke-Test auf der AMD-GPU durch.</summary>
-    Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default);
+    Task<ModelTestResponse?> TestModelAsync(string name, string provider, CancellationToken ct = default);
     #endregion
 
     #region Chat

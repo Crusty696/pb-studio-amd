@@ -17,4 +17,9 @@ public record ModelRecommendationResponse(
     string Reason,
     List<string> PreferenceList,
     string? Override,
-    List<string> Installed);
+    List<string> Installed,
+    string? Provider = null,
+    List<string>? RequiredCapabilities = null,
+    List<string>? VerifiedCapabilities = null,
+    string? SelectionSource = null,
+    string? SelectedAt = null);

@@ -59,9 +59,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Gpu Status Gpu Status Get"
+                  "$ref": "#/components/schemas/GpuStatusResponse"
                 }
               }
             }
@@ -1978,8 +1976,22 @@
           "Models (LM Studio)"
         ],
         "summary": "List Models",
-        "description": "Liefert alle verfuegbaren Modelle aus LM Studio UND Ollama (Hybrid-Merge).",
+        "description": "Liefert den zentralen, providergetrennten Inventar-Snapshot.",
         "operationId": "list_models_models_list_get",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Inventar einmal invalidieren",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Inventar einmal invalidieren"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1987,6 +1999,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2000,7 +2022,7 @@
           "Models (LM Studio)"
         ],
         "summary": "List Available Models",
-        "description": "Kuratierte Vision-Modelle + Installations-Status (Hybrid-Merge).",
+        "description": "Expose only live-verified downloadable records and general discovery.",
         "operationId": "list_available_models_models_available_get",
         "responses": {
           "200": {
@@ -2022,17 +2044,29 @@
           "Models (LM Studio)"
         ],
         "summary": "Pull Model",
-        "description": "LM Studio managed Downloads ueber UI — oder native Weiterleitung an Ollama.",
+        "description": "Download exactly one live-verified Ollama registry candidate.",
         "operationId": "pull_model_models_pull_post",
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PullRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2062,7 +2096,7 @@
           "Models (LM Studio)"
         ],
         "summary": "Delete Model",
-        "description": "LM Studio managed Modelle ueber UI — oder native Loeschung via Ollama.",
+        "description": "Delete only an exact, live-inventoried Ollama model ID.",
         "operationId": "delete_model_models__name__delete",
         "parameters": [
           {
@@ -2072,6 +2106,16 @@
             "schema": {
               "type": "string",
               "title": "Name"
+            }
+          },
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
             }
           }
         ],
@@ -2161,17 +2205,29 @@
           "Models (LM Studio)"
         ],
         "summary": "Activate Model",
-        "description": "Aktiviert ein Modell fuer die passenden AI-Tasks in PB Studio und persistiert dies in der Konfiguration.",
+        "description": "Persistiert eine live verifizierte Provider-/Modellwahl pro Aufgabe.",
         "operationId": "activate_model_models_activate_post",
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ActivateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2203,15 +2259,27 @@
         "summary": "Update Ki Mode",
         "description": "Aktualisiert den standardmaessigen KI-Modus (speed|balance|quality) in der Konfiguration.",
         "operationId": "update_ki_mode_models_mode_post",
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ModeRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2243,15 +2311,27 @@
         "summary": "Test Model",
         "description": "Fuehrt einen minimalen Inferenz-Smoke-Test (max_tokens=1) auf der AMD-GPU durch, um die Funktion zu pruefen.",
         "operationId": "test_model_models_test_post",
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TestRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2474,9 +2554,22 @@
         "properties": {
           "name": {
             "type": "string",
+            "maxLength": 256,
             "minLength": 1,
             "title": "Name",
-            "description": "LM-Studio-Modellname zur Aktivierung"
+            "description": "Modell-ID zur Aktivierung"
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "title": "Provider",
+            "description": "Optional: lmstudio|ollama; erforderlich bei mehrdeutiger Modell-ID"
+          },
+          "task": {
+            "type": "string",
+            "nullable": true,
+            "title": "Task",
+            "description": "Optionaler einzelner Aufgaben-Schlüssel"
           }
         },
         "type": "object",
@@ -2801,6 +2894,43 @@
           "installed": {
             "type": "boolean",
             "title": "Installed"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "lmstudio"
+          },
+          "loaded": {
+            "type": "boolean",
+            "title": "Loaded",
+            "default": false
+          },
+          "downloadable": {
+            "type": "boolean",
+            "title": "Downloadable",
+            "default": false
+          },
+          "usable": {
+            "type": "boolean",
+            "title": "Usable",
+            "default": false
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At",
+            "default": ""
+          },
+          "status_reason": {
+            "type": "string",
+            "title": "Status Reason",
+            "default": ""
           }
         },
         "type": "object",
@@ -2835,6 +2965,23 @@
             },
             "type": "array",
             "title": "Available"
+          },
+          "discover_actions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverAction"
+            },
+            "type": "array",
+            "title": "Discover Actions"
+          },
+          "inventory_generation": {
+            "type": "integer",
+            "title": "Inventory Generation",
+            "default": 0
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At",
+            "default": ""
           }
         },
         "type": "object",
@@ -3442,6 +3589,107 @@
         "title": "DeleteResponse",
         "description": "Antwort eines Delete-Calls (single oder batch)."
       },
+      "DiscoverAction": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "catalog_status": {
+            "type": "string",
+            "title": "Catalog Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "label",
+          "url",
+          "catalog_status"
+        ],
+        "title": "DiscoverAction"
+      },
+      "GpuStatusResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "vram_total_mb": {
+            "type": "integer",
+            "title": "Vram Total Mb"
+          },
+          "vram_used_mb": {
+            "type": "number",
+            "title": "Vram Used Mb"
+          },
+          "temperature_c": {
+            "type": "number",
+            "title": "Temperature C"
+          },
+          "driver_version": {
+            "type": "string",
+            "title": "Driver Version"
+          },
+          "adapter_index": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Adapter Index"
+          },
+          "adapter_luid": {
+            "type": "string",
+            "nullable": true,
+            "title": "Adapter Luid"
+          },
+          "adapter_name": {
+            "type": "string",
+            "nullable": true,
+            "title": "Adapter Name"
+          },
+          "selection_policy": {
+            "type": "string",
+            "nullable": true,
+            "title": "Selection Policy"
+          },
+          "dedicated_vram_total_mb": {
+            "type": "integer",
+            "title": "Dedicated Vram Total Mb"
+          },
+          "directml_active": {
+            "type": "boolean",
+            "title": "Directml Active"
+          },
+          "monitoring_status": {
+            "type": "string",
+            "title": "Monitoring Status"
+          },
+          "monitoring_error": {
+            "type": "string",
+            "nullable": true,
+            "title": "Monitoring Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "vram_total_mb",
+          "vram_used_mb",
+          "temperature_c",
+          "driver_version",
+          "dedicated_vram_total_mb",
+          "directml_active",
+          "monitoring_status"
+        ],
+        "title": "GpuStatusResponse"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3558,6 +3806,50 @@
             "type": "string",
             "title": "Provider",
             "default": "lmstudio"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": true
+          },
+          "loaded": {
+            "type": "boolean",
+            "title": "Loaded",
+            "default": false
+          },
+          "downloadable": {
+            "type": "boolean",
+            "title": "Downloadable",
+            "default": false
+          },
+          "usable": {
+            "type": "boolean",
+            "title": "Usable",
+            "default": false
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          },
+          "inventory_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Inventory Sources"
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At",
+            "default": ""
+          },
+          "status_reason": {
+            "type": "string",
+            "title": "Status Reason",
+            "default": ""
           }
         },
         "type": "object",
@@ -3587,6 +3879,23 @@
             },
             "type": "array",
             "title": "Models"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderStatusEntry"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "inventory_generation": {
+            "type": "integer",
+            "title": "Inventory Generation",
+            "default": 0
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At",
+            "default": ""
           },
           "error": {
             "type": "string",
@@ -3892,13 +4201,57 @@
         "title": "ProjectOpen",
         "description": "Request: Bestehendes Projekt öffnen."
       },
+      "ProviderStatusEntry": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At"
+          },
+          "status_reason": {
+            "type": "string",
+            "title": "Status Reason",
+            "default": ""
+          },
+          "catalog_status": {
+            "type": "string",
+            "title": "Catalog Status",
+            "default": "not_verified"
+          },
+          "discover_url": {
+            "type": "string",
+            "nullable": true,
+            "title": "Discover Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "status",
+          "base_url",
+          "verified_at"
+        ],
+        "title": "ProviderStatusEntry"
+      },
       "PullRequest": {
         "properties": {
           "name": {
             "type": "string",
+            "maxLength": 256,
             "minLength": 1,
             "title": "Name",
-            "description": "LM-Studio-Modellname (z.B. qwen/qwen3-vl-8b)"
+            "description": "Live-verifizierte Ollama-Modell-ID"
           }
         },
         "type": "object",
@@ -3944,6 +4297,35 @@
             },
             "type": "array",
             "title": "Installed"
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "title": "Provider"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Capabilities"
+          },
+          "verified_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verified Capabilities"
+          },
+          "selection_source": {
+            "type": "string",
+            "nullable": true,
+            "title": "Selection Source"
+          },
+          "selected_at": {
+            "type": "string",
+            "nullable": true,
+            "title": "Selected At"
           }
         },
         "type": "object",
@@ -4384,9 +4766,16 @@
         "properties": {
           "name": {
             "type": "string",
+            "maxLength": 256,
             "minLength": 1,
             "title": "Name",
-            "description": "LM-Studio-Modellname zum Testen"
+            "description": "Modell-ID zum Testen"
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "title": "Provider",
+            "description": "lmstudio|ollama"
           }
         },
         "type": "object",

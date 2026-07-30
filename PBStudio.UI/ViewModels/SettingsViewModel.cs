@@ -27,6 +27,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _vramUsed;
     [ObservableProperty] private double _temperature;
     [ObservableProperty] private string _driverVersion = "";
+    [ObservableProperty] private string _gpuAdapterIndex = "–";
+    [ObservableProperty] private string _gpuAdapterLuid = "–";
+    [ObservableProperty] private string _gpuSelectionPolicy = "–";
+    [ObservableProperty] private string _directmlStatus = "Wird geladen...";
+    [ObservableProperty] private string _monitoringStatus = "Wird geladen...";
+    [ObservableProperty] private string? _monitoringError;
     [ObservableProperty] private bool _backendOnline;
 
     // ── VRAM Cap (Slider, persistiert) ────────────────────────────────────
@@ -205,7 +211,19 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 return;
             }
             if (!string.IsNullOrEmpty(rec.Model))
-                KiModeAutoSelectionText = $"Aktuell wuerde Auto-Selection: '{rec.Model}' waehlen.";
+            {
+                var provider = string.IsNullOrWhiteSpace(rec.Provider)
+                    ? "Provider unbekannt"
+                    : rec.Provider;
+                var capabilities = rec.VerifiedCapabilities is { Count: > 0 }
+                    ? string.Join(", ", rec.VerifiedCapabilities)
+                    : "keine verifizierten Capabilities";
+                var source = string.IsNullOrWhiteSpace(rec.SelectionSource)
+                    ? "Quelle unbekannt"
+                    : rec.SelectionSource;
+                KiModeAutoSelectionText =
+                    $"Auto-Selection: {provider}:{rec.Model} | {source} | {capabilities}.";
+            }
             else
                 KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {KiMode}: {rec.Reason}";
         }
@@ -372,8 +390,26 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var gpu = await _api.GetGpuStatusAsync();
         if (gpu != null)
         {
-            GpuName = gpu.Name;
-            VramTotal = gpu.VramTotalMb;
+            GpuName = gpu.AdapterName ?? gpu.Name;
+            GpuAdapterIndex = gpu.AdapterIndex?.ToString() ?? "–";
+            GpuAdapterLuid = gpu.AdapterLuid ?? "–";
+            GpuSelectionPolicy = gpu.SelectionPolicy ?? "–";
+            DirectmlStatus = gpu.DirectmlActive
+                ? "Aktiv auf ausgewähltem Adapter"
+                : "Fehler: DirectML nicht aktiv";
+            MonitoringStatus = gpu.MonitoringStatus switch
+            {
+                "ready" => "Bereit",
+                "degraded" => "Eingeschränkt",
+                "error" => "Fehler",
+                _ => gpu.MonitoringStatus,
+            };
+            MonitoringError = string.IsNullOrWhiteSpace(gpu.MonitoringError)
+                ? null
+                : gpu.MonitoringError;
+            VramTotal = gpu.DedicatedVramTotalMb > 0
+                ? gpu.DedicatedVramTotalMb
+                : gpu.VramTotalMb;
             VramUsed = gpu.VramUsedMb;
             Temperature = gpu.TemperatureC;
             DriverVersion = gpu.DriverVersion;

@@ -406,7 +406,7 @@ public class ApiClient : IApiClient
     // ----------------------------------------------------------------------
 
     public Task<ModelListResponse?> GetInstalledModelsAsync(CancellationToken ct = default)
-        => GetAsync<ModelListResponse>("/models/list", ct);
+        => GetAsync<ModelListResponse>("/models/list?refresh=true", ct);
 
     public Task<AvailableModelsResponse?> GetAvailableModelsAsync(CancellationToken ct = default)
         => GetAsync<AvailableModelsResponse>("/models/available", ct);
@@ -420,11 +420,14 @@ public class ApiClient : IApiClient
         return GetAsync<ModelRecommendationResponse>(url, ct);
     }
 
-    public async Task<bool> ActivateModelAsync(string name, CancellationToken ct = default)
+    public async Task<bool> ActivateModelAsync(string name, string provider, CancellationToken ct = default)
     {
         try
         {
-            var result = await PostAsync<object>("/models/activate", new { name }).ConfigureAwait(false);
+            var result = await PostOwnerAuthorizedAsync<object>(
+                "/models/activate",
+                new { name, provider },
+                ct).ConfigureAwait(false);
             return result != null;
         }
         catch (Exception ex)
@@ -438,7 +441,10 @@ public class ApiClient : IApiClient
     {
         try
         {
-            var result = await PostAsync<object>("/models/mode", new { mode }).ConfigureAwait(false);
+            var result = await PostOwnerAuthorizedAsync<object>(
+                "/models/mode",
+                new { mode },
+                ct).ConfigureAwait(false);
             return result != null;
         }
         catch (Exception ex)
@@ -448,11 +454,14 @@ public class ApiClient : IApiClient
         }
     }
 
-    public async Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default)
+    public async Task<ModelTestResponse?> TestModelAsync(string name, string provider, CancellationToken ct = default)
     {
         try
         {
-            return await PostAsync<ModelTestResponse>("/models/test", new { name }).ConfigureAwait(false);
+            return await PostOwnerAuthorizedAsync<ModelTestResponse>(
+                "/models/test",
+                new { name, provider },
+                ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -462,10 +471,8 @@ public class ApiClient : IApiClient
     }
 
     /// <summary>
-    /// LM Studio Refactor 2026-05-17: Modell-Loeschung wird vom Backend
-    /// nicht mehr unterstuetzt — LM Studio managed Modelle ueber die Desktop-App.
-    /// Der Endpoint liefert HTTP 501. Wir werfen <see cref="NotSupportedException"/>
-    /// mit einer User-tauglichen Message damit das UI das anzeigen kann.
+    /// Loescht eine exakt live verifizierte Ollama-Modell-ID.
+    /// LM-Studio-Modelle bleiben in der Desktop-App verwaltet.
     /// </summary>
     public async Task<bool> DeleteModelAsync(string name, CancellationToken ct = default)
     {
@@ -477,7 +484,12 @@ public class ApiClient : IApiClient
         try
         {
             var url = $"/models/{Uri.EscapeDataString(name)}";
-            using var response = await _http.DeleteAsync(url, token).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            request.Headers.TryAddWithoutValidation(
+                BackendOwnerCapability.HeaderName,
+                BackendOwnerCapability.Ensure());
+            using var response = await _http.SendAsync(request, token)
+                .ConfigureAwait(false);
 
             if ((int)response.StatusCode == 501)
             {
@@ -582,15 +594,16 @@ public class ApiClient : IApiClient
         }
     }
 
-    /// <summary>Setup-Helfer: liefert offenen Response-Stream oder null bei Fehler/Cancel.
-    /// LM Studio Refactor 2026-05-17: Wenn Backend mit HTTP 501 antwortet,
-    /// werfen wir <see cref="NotSupportedException"/> mit User-tauglicher Message.</summary>
+    /// <summary>Setup-Helfer fuer einen live verifizierten Ollama-Pull.</summary>
     private async Task<System.IO.Stream?> OpenPullStreamAsync(string name, CancellationToken token, CancellationToken originalCt)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/models/pull")
         {
             Content = JsonContent.Create(new { name }, options: JsonOptions),
         };
+        request.Headers.TryAddWithoutValidation(
+            BackendOwnerCapability.HeaderName,
+            BackendOwnerCapability.Ensure());
         // request bewusst NICHT disposen — der Lifetime ist an die Response gekoppelt,
         // und das Disposen waehrend der Streamkonsum kann den Socket killen. Der GC raeumt's.
         var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
@@ -1073,7 +1086,20 @@ public class ApiClient : IApiClient
 // --- API Response Models ---
 
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
-public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
+public record GpuStatus(
+    string Name,
+    double VramTotalMb,
+    double VramUsedMb,
+    double TemperatureC,
+    string DriverVersion,
+    int? AdapterIndex = null,
+    string? AdapterLuid = null,
+    string? AdapterName = null,
+    string? SelectionPolicy = null,
+    double DedicatedVramTotalMb = 0,
+    bool DirectmlActive = false,
+    string MonitoringStatus = "error",
+    string? MonitoringError = null);
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(
@@ -1165,7 +1191,10 @@ public record VideoAnalysisResult(
     List<string>? MoodTags = null,
     double AvgBrightness = 0.5,
     double AvgSaturation = 0.5,
-    double AvgColorTemp = 0.0);
+    double AvgColorTemp = 0.0,
+    string Status = "completed",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
@@ -1215,7 +1244,7 @@ public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 // AP3.3 (Audit 2026-06-10): SceneIndex client-seitig (Backend sendet keinen Index;
 // JSON-Deserialisierung lässt das Feld auf 0, VideoLibraryViewModel setzt es nach Load).
-public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence)
+public record SceneInfo(double StartTime, double EndTime, string SceneType, double? Confidence)
 {
     public int SceneIndex { get; set; }
 }

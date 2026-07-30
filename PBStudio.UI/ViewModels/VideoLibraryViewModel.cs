@@ -320,6 +320,16 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         clip.EmbeddingSamples = result.EmbeddingSamples > 0 ? result.EmbeddingSamples : null;
     }
 
+    private static bool IsCompleted(VideoAnalysisResult result)
+        => string.Equals(result.Status, "completed", StringComparison.OrdinalIgnoreCase);
+
+    private static string AnalysisFailure(VideoAnalysisResult result)
+    {
+        if (result.StageErrors is { Count: > 0 })
+            return string.Join(", ", result.StageErrors.Select(item => $"{item.Key}: {item.Value}"));
+        return $"Backend-Status: {result.Status}";
+    }
+
     [RelayCommand]
     private async Task AnalyzeMarkedAsync()
     {
@@ -329,36 +339,67 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         IsAnalyzing = true;
         var total = markedClips.Count;
         var done = 0;
+        var succeeded = 0;
+        var failed = 0;
+        var skipped = 0;
+        var failures = new List<string>();
         try
         {
             foreach (var clip in markedClips)
             {
-                if (clip.IsAnalyzed) { done++; continue; }
+                if (clip.IsAnalyzed) { skipped++; done++; continue; }
                 _activeAnalysisClipId = clip.Id;
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100.0;
-                var result = await _api.AnalyzeVideoAsync(
-                    clip.Id,
-                    StepDetectScenes,
-                    StepAnalyzeMotion,
-                    StepGenerateEmbeddings,
-                    StepGenerateCaptions
-                );
-                if (result != null)
+                try
                 {
-                    clip.IsAnalyzed = true;
-                    ApplyMotionResult(clip, result);
-                    if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                    var result = await _api.AnalyzeVideoAsync(
+                        clip.Id,
+                        StepDetectScenes,
+                        StepAnalyzeMotion,
+                        StepGenerateEmbeddings,
+                        StepGenerateCaptions
+                    );
+                    if (result == null)
                     {
-                        await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                        failed++;
+                        failures.Add($"{clip.Name}: leere Backend-Antwort");
                     }
+                    else if (!IsCompleted(result))
+                    {
+                        failed++;
+                        failures.Add($"{clip.Name}: {AnalysisFailure(result)}");
+                    }
+                    else
+                    {
+                        succeeded++;
+                        clip.IsAnalyzed = true;
+                        ApplyMotionResult(clip, result);
+                        if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                        {
+                            try
+                            {
+                                await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                failures.Add($"{clip.Name}: Szenenansicht {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    failures.Add($"{clip.Name}: {ex.Message}");
                 }
                 done++;
             }
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100.0;
-            StatusText = $"Markierte fertig: {total} Clips.";
+            StatusText = $"Markierte fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+                + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             UpdateAnalyzedCounts();
         }
         finally
@@ -620,7 +661,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StepGenerateEmbeddings,
                 StepGenerateCaptions
             );
-            if (result != null)
+            if (result != null && IsCompleted(result))
             {
                 SelectedClip.IsAnalyzed = true;
                 ApplyMotionResult(SelectedClip, result);
@@ -634,6 +675,10 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 {
                     await LoadScenesAsync(SelectedClip.Id).ConfigureAwait(false);
                 }
+            }
+            else if (result != null)
+            {
+                StatusText = $"Analyse partiell/fehlgeschlagen: {AnalysisFailure(result)}";
             }
             else
             {
@@ -660,33 +705,62 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         IsAnalyzing = true;
         var total = VideoClips.Count;
         var done = 0;
+        var succeeded = 0;
+        var failed = 0;
+        var skipped = 0;
+        var failures = new List<string>();
 
         try
         {
             foreach (var clip in VideoClips.ToList())
             {
-                if (clip.IsAnalyzed) { done++; continue; }
+                if (clip.IsAnalyzed) { skipped++; done++; continue; }
                 _activeAnalysisClipId = clip.Id;
 
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalyzeAllProgress = (double)done / total * 100;
 
-                var result = await _api.AnalyzeVideoAsync(
-                    clip.Id,
-                    StepDetectScenes,
-                    StepAnalyzeMotion,
-                    StepGenerateEmbeddings,
-                    StepGenerateCaptions
-                );
-                if (result != null)
+                try
                 {
-                    clip.IsAnalyzed = true;
-                    ApplyMotionResult(clip, result);
-                    // L-M6: Auto-Reload scenes wenn der analysierte Clip aktuell selektiert ist.
-                    if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                    var result = await _api.AnalyzeVideoAsync(
+                        clip.Id,
+                        StepDetectScenes,
+                        StepAnalyzeMotion,
+                        StepGenerateEmbeddings,
+                        StepGenerateCaptions
+                    );
+                    if (result == null)
                     {
-                        await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                        failed++;
+                        failures.Add($"{clip.Name}: leere Backend-Antwort");
                     }
+                    else if (!IsCompleted(result))
+                    {
+                        failed++;
+                        failures.Add($"{clip.Name}: {AnalysisFailure(result)}");
+                    }
+                    else
+                    {
+                        succeeded++;
+                        clip.IsAnalyzed = true;
+                        ApplyMotionResult(clip, result);
+                        if (SelectedClip != null && SelectedClip.Id == clip.Id)
+                        {
+                            try
+                            {
+                                await LoadScenesAsync(clip.Id).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                failures.Add($"{clip.Name}: Szenenansicht {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    failures.Add($"{clip.Name}: {ex.Message}");
                 }
                 done++;
             }
@@ -694,7 +768,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100;
-            StatusText = $"Alle {total} Clips analysiert";
+            StatusText = $"Batch fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+                + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
         }
         catch (Exception ex)
         {

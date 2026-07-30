@@ -65,6 +65,10 @@
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
                                FontSize="11" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding ProviderStatusText}"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               FontSize="10" Margin="0,2,0,0"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -203,10 +207,6 @@
                                                             <Setter Property="Background" Value="#4d2215"/>
                                                             <Setter Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Provider}" Value="both">
-                                                            <Setter Property="Background" Value="#253d1a"/>
-                                                            <Setter Property="BorderBrush" Value="{StaticResource AbletonGreen}"/>
-                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
@@ -222,13 +222,20 @@
                                                             <DataTrigger Binding="{Binding Provider}" Value="lmstudio">
                                                                 <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Provider}" Value="both">
-                                                                <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
-                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                        </Border>
+
+                                        <Border Padding="6,2" CornerRadius="2"
+                                                Margin="6,0,0,0"
+                                                Background="{StaticResource AbletonPanel}"
+                                                BorderBrush="{StaticResource AbletonBorder}"
+                                                BorderThickness="1">
+                                            <TextBlock Text="{Binding StateText}"
+                                                       FontSize="10"
+                                                       Foreground="{Binding StateColor}"/>
                                         </Border>
 
                                         <!-- Aktive Zuweisungen (falls aktiv) -->
@@ -248,6 +255,12 @@
                                                Height="34"
                                                TextTrimming="WordEllipsis"
                                                ToolTip="{Binding Description}"/>
+                                    <TextBlock Text="{Binding StatusReason}"
+                                               Foreground="{StaticResource AbletonTextDim}"
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,8"
+                                               ToolTip="{Binding StatusReason}"/>
 
                                     <!-- Detail-Grid (Groesse, Params, Quant) -->
                                     <Grid Margin="0,0,0,10">
@@ -376,10 +389,31 @@
                 </ItemsControl>
 
                 <!-- ══ Verfuegbar ══ -->
-                <TextBlock Text="VERFUEGBAR"
+                <TextBlock Text="LIVE-VERIFIZIERTE DOWNLOADS"
                            FontSize="12" FontWeight="SemiBold"
                            Foreground="{StaticResource AbletonTextDim}"
                            Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding DiscoverActionsText}"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10"/>
+                <TextBlock Text="Keine individuellen Downloadmodelle wurden live verifiziert. Es werden keine statischen Modellkarten eingeblendet."
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AvailableModels.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
                 <ItemsControl ItemsSource="{Binding AvailableModels}">
                     <ItemsControl.ItemsPanel>
@@ -414,6 +448,12 @@
                                                    Margin="0,0,6,0"/>
                                     </DockPanel>
 
+                                    <TextBlock Text="{Binding ProviderLabel}"
+                                               Foreground="{StaticResource AbletonAccent}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,6"/>
+
                                     <TextBlock Text="{Binding Description}"
                                                Foreground="{StaticResource AbletonTextDim}"
                                                FontSize="11"
@@ -447,7 +487,7 @@
                                                 HorizontalAlignment="Right"
                                                 Padding="8,2" Height="28"
                                                 Opacity="0.75"
-                                                ToolTip="Modelle über LM Studio herunterladen&#x0a;• Was es macht: Öffnet eine bebilderte Anleitung, wie du Modelle im Discover-Tab von LM Studio suchst und herunterlädst.&#x0a;• Wozu es dient: Da PB Studio komplett offline läuft, delegieren wir die Modell-Downloads an das mächtige LM Studio Interface.&#x0a;• Wann &amp; wie nutzen: Klicken, wenn du ein Modell aus der Liste 'Verfügbar' nutzen möchtest, das noch nicht auf deiner Festplatte installiert ist.">
+                                                ToolTip="{Binding DownloadToolTip}">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -461,7 +501,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <icon:PackIconMaterial Kind="OpenInNew" Width="14" Height="14"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="In LM Studio" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding DownloadActionText}" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                     </DockPanel>

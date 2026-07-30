@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
@@ -154,6 +156,11 @@ public class PythonBridgeService : IDisposable
             var (ffmpegPath, ffprobePath) = ResolveCanonicalFfmpegPair();
             startInfo.Environment["PBSTUDIO_FFMPEG_PATH"] = ffmpegPath;
             startInfo.Environment["PBSTUDIO_FFPROBE_PATH"] = ffprobePath;
+            var (lhmManifestHash, lhmLibraryHash) =
+                ResolveCanonicalLhmHashes(projectRoot);
+            startInfo.Environment["PBSTUDIO_LHM_MANIFEST_SHA256"] =
+                lhmManifestHash;
+            startInfo.Environment["PBSTUDIO_LHM_SHA256"] = lhmLibraryHash;
             startInfo.Environment[BackendOwnerCapability.EnvironmentVariable] =
                 BackendOwnerCapability.Ensure();
 
@@ -423,6 +430,72 @@ public class PythonBridgeService : IDisposable
                 stableBin);
         }
         return (Path.GetFullPath(ffmpegPath), Path.GetFullPath(ffprobePath));
+    }
+
+    private static (string ManifestHash, string LibraryHash)
+        ResolveCanonicalLhmHashes(string projectRoot)
+    {
+        var contractPath = Path.Combine(projectRoot, "config", "lhm-runtime.json");
+        if (!File.Exists(contractPath))
+            throw new FileNotFoundException(
+                "Der kanonische LibreHardwareMonitor-Vertrag fehlt.",
+                contractPath);
+
+        using var document = JsonDocument.Parse(File.ReadAllBytes(contractPath));
+        var root = document.RootElement;
+        if (root.GetProperty("schema_version").GetInt32() != 1)
+            throw new InvalidDataException(
+                "Nicht unterstützte LibreHardwareMonitor-Vertragsversion.");
+
+        var active = root.GetProperty("active");
+        var bundleDir = Path.GetFullPath(
+            Path.Combine(projectRoot, active.GetProperty("bundle_dir").GetString()!));
+        var relativeBundle = Path.GetRelativePath(projectRoot, bundleDir);
+        if (Path.IsPathRooted(relativeBundle) ||
+            relativeBundle.Equals("..", StringComparison.Ordinal) ||
+            relativeBundle.StartsWith(
+                $"..{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "LibreHardwareMonitor-Bundle liegt außerhalb des Projekts.");
+        }
+
+        var manifestName = active.GetProperty("manifest").GetString()!;
+        var libraryName = active.GetProperty("library").GetString()!;
+        if (Path.GetFileName(manifestName) != manifestName ||
+            Path.GetFileName(libraryName) != libraryName)
+        {
+            throw new InvalidDataException(
+                "LibreHardwareMonitor-Vertrag enthält ungültige Dateinamen.");
+        }
+
+        var manifestPath = Path.Combine(bundleDir, manifestName);
+        var libraryPath = Path.Combine(bundleDir, libraryName);
+        var expectedManifestHash = active
+            .GetProperty("manifest_sha256")
+            .GetString()!
+            .ToUpperInvariant();
+        var expectedLibraryHash = active
+            .GetProperty("library_sha256")
+            .GetString()!
+            .ToUpperInvariant();
+        var actualManifestHash = Convert.ToHexString(
+            SHA256.HashData(File.ReadAllBytes(manifestPath)));
+        var actualLibraryHash = Convert.ToHexString(
+            SHA256.HashData(File.ReadAllBytes(libraryPath)));
+        if (!actualManifestHash.Equals(
+                expectedManifestHash,
+                StringComparison.Ordinal) ||
+            !actualLibraryHash.Equals(
+                expectedLibraryHash,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "LibreHardwareMonitor-Vertrag oder Bibliothek stimmt nicht mit " +
+                "dem freigegebenen SHA-256 überein.");
+        }
+        return (expectedManifestHash, expectedLibraryHash);
     }
 
     private static bool IsPython311(string pythonExe)
