@@ -1,6 +1,6 @@
 # T368 — Final Truth Gate
 
-Status: CONFIRMED documentation / BLOCKED release  
+Status: CONFIRMED documentation / BLOCKED release
 Executed: 2026-07-30T09:13+02:00
 
 ## Authoritative result

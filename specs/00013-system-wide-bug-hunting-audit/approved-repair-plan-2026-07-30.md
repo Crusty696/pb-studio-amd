@@ -2,11 +2,11 @@
 
 ## GPU-, LLM-, Modellinventar- und Analyse-Wahrheit
 
-**Workspace:** `C:\Users\david\Documents\Pb_studio_AMD_version`  
-**Feature-Workspace:** `specs/00013-system-wide-bug-hunting-audit`  
-**Fortsetzung:** OBJ-71, T340–T369  
-**Status:** `DECIDED` und vollständig zur autonomen Ausführung freigegeben  
-**Ausgangslog:** `logs/manual_app_test_20260730_020333.log`  
+**Workspace:** `C:\Users\david\Documents\Pb_studio_AMD_version`
+**Feature-Workspace:** `specs/00013-system-wide-bug-hunting-audit`
+**Fortsetzung:** OBJ-71, T340–T369
+**Status:** `DECIDED` und vollständig zur autonomen Ausführung freigegeben
+**Ausgangslog:** `logs/manual_app_test_20260730_020333.log`
 **Ausgangslog SHA-256:** `086DCC6F3F7B03872AD72B90148B260E9584FACF3556E01AF2797DC193181D52`
 
 ## 1. Verbindliche Autonomiefreigabe
@@ -286,4 +286,3 @@ Anti-Loop:
 - LM Studio JIT: `https://lmstudio.ai/docs/developer/core/headless`
 - LM Studio Server Settings: `https://lmstudio.ai/docs/developer/core/server/settings`
 - LibreHardwareMonitor Releases: `https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases`
-

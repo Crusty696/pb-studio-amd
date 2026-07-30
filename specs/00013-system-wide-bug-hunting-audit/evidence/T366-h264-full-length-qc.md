@@ -1,6 +1,6 @@
 # T366 — Fresh full-length H.264 AMF QC
 
-Status: CONFIRMED PASS  
+Status: CONFIRMED PASS
 Executed: 2026-07-30T08:30+02:00–2026-07-30T08:43+02:00
 
 ## Artifact and frozen input

@@ -1,6 +1,6 @@
 # T367 — Fresh full-length HEVC AMF QC
 
-Status: CONFIRMED PASS  
+Status: CONFIRMED PASS
 Executed: 2026-07-30T08:44+02:00–2026-07-30T09:07+02:00
 
 ## Artifact and frozen input

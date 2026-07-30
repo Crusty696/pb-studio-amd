@@ -53,7 +53,7 @@ CONFIRMED: implementation and review evidence are complete. Recreating
 
 ## Revalidation after T363 remediation
 
-Date: 2026-07-30T07:32+02:00  
+Date: 2026-07-30T07:32+02:00
 Receipt: `evidence/T360-revalidation-20260730.log`
 
 T363 found that ONNX Runtime can implicitly report `CPUExecutionProvider`
@@ -90,7 +90,7 @@ require fresh executable verification.
 
 ## Revalidation after T365 production-launcher fix
 
-Date: 2026-07-30T08:26+02:00  
+Date: 2026-07-30T08:26+02:00
 Receipt: `evidence/T360-post-T365-revalidation.json`
 
 The production GUI run proved that the externally managed backend did not

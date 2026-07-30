@@ -1,6 +1,6 @@
 # T365 — Release GUI and nullable analysis E2E
 
-Status: CONFIRMED  
+Status: CONFIRMED
 Executed: 2026-07-30T08:08+02:00–2026-07-30T08:26+02:00
 
 ## Production launcher and GPU truth

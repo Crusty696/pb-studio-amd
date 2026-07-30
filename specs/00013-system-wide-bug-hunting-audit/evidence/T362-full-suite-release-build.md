@@ -1,7 +1,7 @@
 # T362 — Full Suite, Release Build, Security, Failure, Restart
 
-Status: PASS  
-Date: 2026-07-30  
+Status: PASS
+Date: 2026-07-30
 Scope: TR-343
 
 ## Python full-suite result

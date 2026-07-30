@@ -8,3 +8,6 @@
 *.py   text eol=lf
 *.md   text
 *.json text
+
+# T340 is an immutable byte-for-byte runtime log (contains NUL bytes).
+specs/00013-system-wide-bug-hunting-audit/evidence/T340-evidence-freeze-2026-07-30/manual_app_test_20260730_020333.log.txt -diff

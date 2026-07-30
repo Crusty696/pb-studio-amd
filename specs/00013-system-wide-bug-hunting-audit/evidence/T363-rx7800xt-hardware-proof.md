@@ -1,7 +1,7 @@
 # T363 — RX 7800 XT Hardware Proof
 
-Status: BLOCKED  
-Date: 2026-07-30  
+Status: BLOCKED
+Date: 2026-07-30
 Scope: TR-344, SC-073
 
 ## Adapter and monitoring identity
