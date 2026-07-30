@@ -59,6 +59,12 @@ PB completion ledger:
 - `ls-remote` SHA: `78d0c3f9009a382ecb6eacf6ab97da240688c77f`
 - result: byte-identical before this receipt-only follow-up
 
+Post-audit marker truth:
+
+- local SHA: `241f112317eea382a06e7ff56cf9c9e7040d1957`
+- `ls-remote` SHA: `241f112317eea382a06e7ff56cf9c9e7040d1957`
+- result: byte-identical before the final receipt-only follow-up
+
 Brain final publication:
 
 - local SHA: `82b570df2524f2eb10e37baed34b8d165330b6aa`
@@ -82,5 +88,5 @@ Brain left all unrelated state unstaged and unchanged:
 
 OR-334 and T369 are PASS / CONFIRMED. The publication is complete and remote
 receipts are stored. T363 / TR-344 remains BLOCKED, `.qc-passed` remains
-absent, and PB Studio is not release-ready. This file is the receipt-only
-follow-up to the verified PB completion-ledger commit above.
+absent, and PB Studio is not release-ready. This file is the final
+receipt-only follow-up to the verified commits above.
