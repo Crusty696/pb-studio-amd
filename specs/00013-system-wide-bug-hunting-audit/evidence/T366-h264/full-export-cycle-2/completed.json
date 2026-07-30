@@ -1,0 +1,50 @@
+{
+  "completed_at": "2026-07-30T08:40:32.292767+02:00",
+  "elapsed_seconds": 588.1089999999967,
+  "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_h264_t366.mp4",
+  "output_sha256": "4bf4c2c83dd6db9a047d1e1541b237cbbfe955f7303b445dfb6fe9b3d33cc366",
+  "output_size": 3688013674,
+  "render_result": {
+    "end_pts_seconds": 6335.0,
+    "exit_code": 0,
+    "expected_duration_seconds": 6335.027,
+    "expected_frames": 190051,
+    "failure_fingerprint": null,
+    "fps": 506.52,
+    "frame": 190051,
+    "job_id": "t366-h264-full-length-cycle-2",
+    "out_time_us": 6335000000,
+    "progress_end": true,
+    "progress_log_sha256": "176b47c8583d7b0b5fc8d498014b0d6dbe91d210f3050697b1411a2d513061c0",
+    "recorded_at_epoch": 1785393425.3629975,
+    "run_id": "63f0abb78e874331b07db4fc41e3601b",
+    "schema_version": 1,
+    "speed": "16.9x",
+    "status": "completed",
+    "stderr_log_sha256": "60c82f2391d4720bb5186edbaff2be5b3ea5e1ecc28692a946c63a1cb59006f8",
+    "total_size": 3688013674
+  },
+  "render_result_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t366-h264-full-length-cycle-2\\63f0abb78e874331b07db4fc41e3601b\\result.json",
+  "result": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_h264_t366.mp4",
+  "run_id": "63f0abb78e874331b07db4fc41e3601b",
+  "validation": {
+    "error": null,
+    "failure_fingerprint": null,
+    "job_id": "t366-h264-full-length-cycle-2",
+    "metrics": {
+      "audio_end_pts": 6335.04,
+      "container_duration": 6335.033333,
+      "decoded_frames": 190051,
+      "end_silence_seconds": 58.215083,
+      "expected_end_silence_seconds": 58.222062,
+      "expected_frames": 190051,
+      "true_peak_dbtp": -1.06,
+      "video_end_pts": 6335.033333
+    },
+    "recorded_at_epoch": 1785393632.1080575,
+    "run_id": "63f0abb78e874331b07db4fc41e3601b",
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "validation_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t366-h264-full-length-cycle-2\\63f0abb78e874331b07db4fc41e3601b\\validation.json"
+}

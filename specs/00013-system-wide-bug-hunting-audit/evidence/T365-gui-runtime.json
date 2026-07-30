@@ -1,0 +1,92 @@
+{
+  "captured_at": "2026-07-30T06:17:51.664022+00:00",
+  "status": "PASS",
+  "release_process_id": 1404,
+  "window_title": "PB Studio AMD",
+  "window_size": {
+    "width": 1400,
+    "height": 900
+  },
+  "results": {
+    "settings": {
+      "checks": {
+        "adapter_name": "AMD Radeon RX 7800 XT",
+        "adapter_index": 1,
+        "adapter_luid": "0x00000000_0x0001185b",
+        "selection_policy": "highest_vram_amd",
+        "directml_active": true,
+        "monitoring_status": "ready",
+        "monitoring_error": null
+      },
+      "screenshot": {
+        "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T365-gui\\settings.png",
+        "sha256": "6AA63FF75F6A1D91CAD299026D9F4B0605FC9906D764C61BC9CCE759BF57F426",
+        "width": 1400,
+        "height": 900,
+        "color_range_sum": 409
+      }
+    },
+    "performance": {
+      "visible_markers": [
+        "VRAM TELEMETRIE",
+        "VRAM BUDGET",
+        "MAX (MB)",
+        "USABLE"
+      ],
+      "screenshot": {
+        "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T365-gui\\performance.png",
+        "sha256": "62A56E17D316A340C0E87E93B2B939776127A2B7739D93ABF56F192CFF0B922F",
+        "width": 1400,
+        "height": 900,
+        "color_range_sum": 199
+      }
+    },
+    "models": {
+      "api_model_count": 29,
+      "summary": "29 installiert  ·  0 verfuegbar  ·  Hybrid @ http://127.0.0.1:1234/v1 (Hybrid: beide live)",
+      "providers": [
+        {
+          "provider": "lmstudio",
+          "status": "ready",
+          "base_url": "http://127.0.0.1:1234/v1",
+          "verified_at": "2026-07-30T06:17:32.825608+00:00",
+          "status_reason": "Installierte, geladene und Capability-Zustände verifiziert.",
+          "catalog_status": "discover_only",
+          "discover_url": "https://lmstudio.ai/models"
+        },
+        {
+          "provider": "ollama",
+          "status": "ready",
+          "base_url": "http://localhost:11434/v1",
+          "verified_at": "2026-07-30T06:17:32.826108+00:00",
+          "status_reason": "Installierte, geladene und Capability-Zustände verifiziert.",
+          "catalog_status": "not_verified",
+          "discover_url": "https://ollama.com/library"
+        }
+      ],
+      "screenshot": {
+        "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T365-gui\\models.png",
+        "sha256": "579433EE158660B0482BCAFCF45FD002436AAB4B1378A14C179C17F91820DBCD",
+        "width": 1400,
+        "height": 900,
+        "color_range_sum": 395
+      }
+    },
+    "video": {
+      "visible_markers": [
+        "Analysieren",
+        "Alle analysieren",
+        "Markierte analysieren",
+        "SCENE ANALYSIS"
+      ],
+      "screenshot": {
+        "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T365-gui\\video.png",
+        "sha256": "056745D8AA61BF30C57A61327A99C528C24E571C7151BA72487339536DE61D64",
+        "width": 1400,
+        "height": 900,
+        "color_range_sum": 261
+      }
+    }
+  },
+  "wpf_log_forbidden_matches": []
+}

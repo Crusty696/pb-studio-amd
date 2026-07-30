@@ -1,6 +1,58 @@
 # QC Report: System-wide Bug Hunting & AI Optimizations (Epic 00013)
 
-## Authoritative End-QC Gate — 2026-07-29
+## Authoritative OBJ-71 End-QC Gate — 2026-07-30
+
+- **Overall result:** **BLOCKED / NOT RELEASE-READY**.
+- **Blocking gate:** T363 / TR-344. Audio MDX proved active DirectML load on
+  RX 7800 XT index `1`, LUID `0x00000000_0x0001185b`; RAFT and SigLIP require
+  forbidden CPU-assigned graph nodes with the pinned strict runtime, while
+  approved Moondream and CLAP ONNX assets are absent.
+- **Implementation gate:** PASS. Post-T365 T360 revalidation covered 348
+  Python, 63 JSON, 22 XML/XAML/project and 132 changed non-empty files.
+- **Targeted/full regression:** 85 passed/3 justified skips/0 failed; full
+  suite 1,086 passed/12 justified skips/0 failed.
+- **Release build:** WPF Release 0 warnings, 0 errors.
+- **Provider/model E2E:** PASS. Live LM Studio/Ollama inventory, bounded
+  failover, provider-bound receipts, persistence and offline/empty states
+  were verified.
+- **GUI/nullable E2E:** PASS. Release GUI showed the RX 7800 XT and truthful
+  provider/model states; real `ApiClient` deserialized `confidence=null`
+  with exactly one request and no retry storm.
+- **H.264/HEVC:** PASS. Each fresh AMF export contains 190,051 frames,
+  `progress=end`, full video/audio decode over 6,335.027 s, 106/106 visual
+  segments and no black/freeze intervals.
+- **Markers:** `.completed` is valid after the post-fix T360 gate.
+  `.qc-passed` is absent and unauthorized while T363 remains blocked.
+- **Publication:** T369 remains open until zoned commits, Secret-Scan,
+  Remote-Diff, scoped pushes and Remote-SHA verification complete.
+- **Canonical evidence:** `evidence/T368-final-truth-gate.md`.
+
+### OBJ-71 Requirement Matrix
+
+| Requirement | Status | Canonical evidence |
+|---|---|---|
+| OR-332 | PASS / CONFIRMED | T340–T341 |
+| TR-336 | PASS / CONFIRMED | T342 |
+| TR-337 | PASS / CONFIRMED | T343 |
+| FR-326–FR-336 | PASS / CONFIRMED | T344–T356 |
+| TR-338 | PASS / CONFIRMED | T357, T361–T362 |
+| TR-339 | PASS / CONFIRMED | T358 |
+| TR-340 | PASS / CONFIRMED | T359 |
+| TR-341 | PASS / CONFIRMED | T360 post-fix revalidation |
+| TR-342 | PASS / CONFIRMED | T361 |
+| TR-343 | PASS / CONFIRMED | T362 |
+| TR-344 | BLOCKED | T363 |
+| TR-345 | PASS / CONFIRMED | T364–T367 |
+| OR-333 | PASS / CONFIRMED | T368; `.qc-passed` correctly absent |
+| OR-334 | OPEN | T369 |
+| SC-073 | BLOCKED | T363 |
+| SC-074 | PASS / CONFIRMED | T364–T365 |
+| SC-075 | OPEN / BLOCKED | T369 open; T363 prevents release marker |
+
+The 2026-07-29 gate below is a historical OBJ-70 result. It is superseded for
+current release readiness by the OBJ-71 gate above.
+
+## Historical OBJ-70 End-QC Gate — 2026-07-29
 
 - **Overall result:** **PASSED / RELEASE-READY** for the local product and
   End-QC gate.

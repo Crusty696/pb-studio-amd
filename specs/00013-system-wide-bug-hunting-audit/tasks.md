@@ -355,8 +355,35 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T338 [OBJ-70] {(OR-330)} Reconcile QC, requirements, changelog, ADRs, scripts, CLAUDE status, and Brain truth
 - [X] T339 [OBJ-70] {(OR-331)} Commit by zone, scan secrets, verify remote diff, push scoped repos, and verify remote SHAs
 
+## GPU-, Provider-, Modellinventar- und Analyse-Reparatur 2026-07-30
 
-
-
-
-
+- [X] T340 [OBJ-71] {(OR-332)} Freeze manual runtime evidence, Git/runtime/config inventory, and invalidate prior release markers
+- [X] T341 [OBJ-71] {(OR-332)} Register OBJ-71, FR-326–FR-336, TR-336–TR-345, OR-332–OR-334, and T340–T369
+- [X] T342 [OBJ-71] {(TR-336)} Independently reproduce and falsify GPU mapping, LHM trust, provider inventory, and DTO nullability causes
+- [X] T343 [OBJ-71] {(TR-337)} Freeze adapter, provider, selection, DTO, error, and restore contracts
+- [X] T344 [OBJ-71] {(FR-326)} Implement the central DXGI/LUID DirectML adapter resolver and configuration precedence
+- [X] T345 [OBJ-71] {(FR-327)} Bind ModelLoader, RAFT, Moondream, SigLIP, CLAP, and ONNX audio separation to the central provider contract
+- [X] T346 [OBJ-71] {(FR-328)} Bind VRAM arbitration, budgeting, and monitoring to the selected adapter and physical ceiling
+- [X] T347 [OBJ-71] {(FR-329)} Build the official LibreHardwareMonitor 0.9.6 trust, manifest, launcher, and restore chain
+- [X] T348 [OBJ-71] {(FR-330)} Expose truthful additive GPU adapter and monitoring status in API and WPF
+- [X] T349 [OBJ-71] {(FR-331)} Back up, hash, enable, restart, and restore-probe supported LM Studio JIT configuration
+- [X] T350 [OBJ-71] {(FR-332)} Implement central provider and model inventory with truthful availability states
+- [X] T351 [OBJ-71] {(FR-333)} Implement startup refresh, cache invalidation, and bounded bundled provider queries
+- [X] T352 [OBJ-71] {(FR-334)} Implement capability-aware Selection Receipts and bounded failover
+- [X] T353 [OBJ-71] {(FR-334)} Implement backward-compatible persistent provider/model selection per task
+- [X] T354 [OBJ-71] {(FR-335)} Render truthful installed, loaded, downloadable, unavailable, and provider states without ghost models
+- [X] T355 [OBJ-71] {(FR-336)} Make handwritten C# SceneInfo confidence nullable and stop repeated video-analysis batch failures
+- [X] T356 [OBJ-71] {(FR-336)} Synchronize configuration, DTOs, OpenAPI artifacts, generated clients, and nullability parity
+- [X] T357 [OBJ-71] {(TR-338)} Implement unit, contract, integration, hardware, and GUI checks without executing them
+- [X] T358 [OBJ-71] {(TR-339)} Review T340–T357 diffs for path, process, download, hash, provider, and configuration risks
+- [X] T359 [OBJ-71] {(TR-340)} Statically enumerate all DirectML sessions, provider calls, DTO copies, and affected UI bindings
+- [X] T360 [OBJ-71] {(TR-341)} Prove implementation and review completion and recreate `.completed`
+- [X] T361 [OBJ-71] {(TR-342)} Run targeted adapter, inventory, selection, nullability, configuration, and restore regressions
+- [X] T362 [OBJ-71] {(TR-343)} Run the full Python suite, WPF Release build, security, failure, and restart checks
+- [ ] T363 [OBJ-71] {(TR-344)} Prove RAFT, SigLIP, Moondream, CLAP, and audio DirectML load on the RX 7800 XT
+- [X] T364 [OBJ-71] {(TR-345)} Run LM Studio and Ollama inventory, startup refresh, capability, persistence, offline, and failover E2E
+- [X] T365 [OBJ-71] {(TR-345)} Run Release GUI, GPU-status, model-label, and nullable video-analysis E2E
+- [X] T366 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length H.264 AMF export over 6,335.027 seconds
+- [X] T367 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length HEVC AMF export over 6,335.027 seconds
+- [X] T368 [OBJ-71] {(OR-333)} Reconcile QC, CHANGELOG, ADRs, CLAUDE status, tasks, ledger, and Brain; create `.qc-passed` only on 100% PASS
+- [ ] T369 [OBJ-71] {(OR-334)} Commit by zone, scan secrets, verify remote diff, push scoped repositories, and verify remote SHAs

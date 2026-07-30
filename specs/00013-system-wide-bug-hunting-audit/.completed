@@ -1,1 +1,1 @@
-Implementation gate passed 2026-07-29: T305-T330 complete; T329 has 0 open High/Critical findings.
+Implementation gate revalidated 2026-07-30 after the T365 production-launcher LHM trust fix: static gate PASS (348 Python, 63 JSON, 22 XML/XAML, 132 changed non-empty files); focused contracts 19 passed with 1 expected T363 hardware skip; WPF Release 0 warnings and 0 errors. T363 remains BLOCKED and T366-T369 remain open, so .qc-passed is forbidden.

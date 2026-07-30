@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "tested_at": "2026-07-30T08:22:02.5713558+02:00",
+  "runtime": "9.0.18",
+  "request_count": 1,
+  "request_method": "POST",
+  "request_path": "/video/analyze",
+  "request_clip_id": 42,
+  "response_clip_id": 42,
+  "scene_count": 1,
+  "confidence_is_null": true,
+  "retry_storm_absent": true
+}

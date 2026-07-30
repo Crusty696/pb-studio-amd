@@ -3,6 +3,35 @@
 
 ---
 
+## 2026-07-30 - T340–T368 GPU-, Provider- und Analyse-Wahrheit
+
+### Fixed
+- DirectML-Adapterwahl, VRAM-Budget und LibreHardwareMonitor auf dieselbe
+  RX 7800 XT (Index 1, LUID `0x00000000_0x0001185b`) gebunden.
+- Sämtliche ONNX-DirectML-Konsumenten auf einen fail-closed Providervertrag
+  mit deaktiviertem CPU-Fallback und beiden DirectML-Speicherflags vereinheitlicht.
+- Offizielles LibreHardwareMonitor-0.9.6-Bundle durch Manifest-, Bundle- und
+  DLL-Hashes abgesichert; Launcher-Trust auch für extern gestartete Backends
+  geschlossen.
+- LM-Studio-/Ollama-Liveinventar, Capability-Routing, Selection Receipts,
+  begrenztes Failover und providergebundene Aufgabenpersistenz umgesetzt.
+- `SceneInfo.Confidence` im handgeschriebenen C#-DTO nullable gemacht und
+  Batchfehler sowie falsche Analyse-Erfolgsmarkierung verhindert.
+
+### Verified
+- Gezielte Regression: 85 passed, 3 begründete Skips, 0 Fehler.
+- Vollsuite: 1.086 passed, 12 begründete Skips, 0 Fehler; WPF Release 0/0.
+- Provider-/Modell-E2E und Release-GUI einschließlich `confidence=null`
+  bestanden; kein Retry-Sturm.
+- Frische H.264-/HEVC-AMF-Exporte: je 190.051 Frames, Full-Decode über
+  6.335,027 s, 106/106 Segmente, keine Schwarz-/Freezeintervalle.
+
+### Blocked
+- Kein Release-Gate: T363 kann RAFT und SigLIP wegen CPU-pflichtiger ONNX-
+  Graphknoten unter dem strikten DirectML-Vertrag nicht laden; freigegebene
+  Moondream-/CLAP-ONNX-Assets fehlen.
+- `.completed` ist nach T360 gültig; `.qc-passed` bleibt bewusst abwesend.
+
 ## 2026-07-29 - T305–T338 Release-Video-Reparatur und End-QC
 
 ### Fixed

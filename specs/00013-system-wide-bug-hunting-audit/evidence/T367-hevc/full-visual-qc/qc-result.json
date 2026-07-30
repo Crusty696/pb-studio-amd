@@ -1,0 +1,994 @@
+{
+  "completed_at": "2026-07-30T09:07:25.464638+02:00",
+  "full_decode": {
+    "decoded_frames": 190051,
+    "exit_code": 0,
+    "expected_duration": 6335.027,
+    "expected_frames": 190051,
+    "out_time_seconds": 6335.033333,
+    "progress_end": true
+  },
+  "full_scan_events": {
+    "black_intervals": [],
+    "freeze_intervals": []
+  },
+  "status": "pass",
+  "target": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t367.mp4",
+  "target_sha256": "9ad896ef336b3a0da72fc936efa19dcadd9931423ba40d6146316b508eb913e7",
+  "target_size": 3687203928,
+  "terminal_window": {
+    "black_intervals": [],
+    "end": 6335.027,
+    "freeze_intervals": [],
+    "sample_count": 60,
+    "start": 6275.0,
+    "unique_hashes": 54
+  },
+  "timeline_segments": {
+    "covered_segments": 106,
+    "expected_segments": 106,
+    "receipts": [
+      {
+        "end": 60.0,
+        "first_hash": "ce83b432874c32c161f88bbe5c9ca144",
+        "last_hash": "cb46fd10c74185f05cf425c3193878d7",
+        "sample_count": 3,
+        "segment_index": 0,
+        "start": 0.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 120.0,
+        "first_hash": "bc3a4627e2a38cf928ae4109c5966a7c",
+        "last_hash": "4650e8d3fb8023fee536ec9749a063a2",
+        "sample_count": 3,
+        "segment_index": 1,
+        "start": 60.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 180.0,
+        "first_hash": "83d19c502055c89b8153133bb67bc879",
+        "last_hash": "55b28860d173c78ca077216ccc7e1a59",
+        "sample_count": 3,
+        "segment_index": 2,
+        "start": 120.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 240.0,
+        "first_hash": "bc3a4627e2a38cf928ae4109c5966a7c",
+        "last_hash": "93f55bf3c3f1e2ae44567c548d6ef028",
+        "sample_count": 3,
+        "segment_index": 3,
+        "start": 180.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 300.0,
+        "first_hash": "07b32d75b373e6bd2a0f5505fb5503aa",
+        "last_hash": "29c8606d19c86101d2456a7f4921f902",
+        "sample_count": 3,
+        "segment_index": 4,
+        "start": 240.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 360.0,
+        "first_hash": "b631920eae912eee0ffdf8078ae87a27",
+        "last_hash": "1ff3420bd5d4833b881cebd771dc9bcb",
+        "sample_count": 3,
+        "segment_index": 5,
+        "start": 300.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 420.0,
+        "first_hash": "37dac8e04791ba5170c82b7591737941",
+        "last_hash": "37dac8e04791ba5170c82b7591737941",
+        "sample_count": 3,
+        "segment_index": 6,
+        "start": 360.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 480.0,
+        "first_hash": "eb86c2d2ebd390b7a31538a1d76da642",
+        "last_hash": "4c327122b57d7890f2e2e245e7e67aca",
+        "sample_count": 3,
+        "segment_index": 7,
+        "start": 420.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 540.0,
+        "first_hash": "5e2607a5a1987a23020918b3b6d33533",
+        "last_hash": "3d016c23f67ea19d6e37bfd40eea179d",
+        "sample_count": 3,
+        "segment_index": 8,
+        "start": 480.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 600.0,
+        "first_hash": "dea8ccd0f0eb525f4760e2e550ca180c",
+        "last_hash": "3f6e9f1214be440c7584b3ef235c1ea5",
+        "sample_count": 3,
+        "segment_index": 9,
+        "start": 540.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 660.0,
+        "first_hash": "73512a83881e7352e022fe97963e5bd5",
+        "last_hash": "9c71fd37bb13d196ac76dfa87e3be1f2",
+        "sample_count": 3,
+        "segment_index": 10,
+        "start": 600.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 720.0,
+        "first_hash": "8d3695b40bd872594a9ceb1d4d37f5d0",
+        "last_hash": "4de9d5812665053676bf1b42709bc8a4",
+        "sample_count": 3,
+        "segment_index": 11,
+        "start": 660.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 780.0,
+        "first_hash": "6492b3325eefe811f0f56a9bdf77b2ca",
+        "last_hash": "6a0a2235d6fb27b014f660d0706b4689",
+        "sample_count": 3,
+        "segment_index": 12,
+        "start": 720.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 840.0,
+        "first_hash": "5d3aca43c7c0bb3fbb1f414aebea6d4b",
+        "last_hash": "17da31335746e7d8f50d61b76a16d361",
+        "sample_count": 3,
+        "segment_index": 13,
+        "start": 780.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 900.0,
+        "first_hash": "bf3c2e85195b80bb002f9bc7e6746509",
+        "last_hash": "bf3c2e85195b80bb002f9bc7e6746509",
+        "sample_count": 3,
+        "segment_index": 14,
+        "start": 840.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 960.0,
+        "first_hash": "17da31335746e7d8f50d61b76a16d361",
+        "last_hash": "79b6ad21e8e55e0cdd7f104fb64a77c1",
+        "sample_count": 3,
+        "segment_index": 15,
+        "start": 900.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1020.0,
+        "first_hash": "239a4c4cab7eb490d5da980c7b598c74",
+        "last_hash": "fa7858e7755a9ee651a7f638b54229e5",
+        "sample_count": 3,
+        "segment_index": 16,
+        "start": 960.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1080.0,
+        "first_hash": "8ffce02ddda8ee9d249bd7010d65ba5b",
+        "last_hash": "8ffce02ddda8ee9d249bd7010d65ba5b",
+        "sample_count": 3,
+        "segment_index": 17,
+        "start": 1020.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 1140.0,
+        "first_hash": "2d4419a02763e2bc347b1e947cb33ab2",
+        "last_hash": "8e87b690798b1d27c4e4bec3bf11bdaa",
+        "sample_count": 3,
+        "segment_index": 18,
+        "start": 1080.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1200.0,
+        "first_hash": "9f6412548049b309196e7c07412428f3",
+        "last_hash": "9f6412548049b309196e7c07412428f3",
+        "sample_count": 3,
+        "segment_index": 19,
+        "start": 1140.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 1260.0,
+        "first_hash": "29c8606d19c86101d2456a7f4921f902",
+        "last_hash": "29c8606d19c86101d2456a7f4921f902",
+        "sample_count": 3,
+        "segment_index": 20,
+        "start": 1200.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 1320.0,
+        "first_hash": "9f6412548049b309196e7c07412428f3",
+        "last_hash": "9f6412548049b309196e7c07412428f3",
+        "sample_count": 3,
+        "segment_index": 21,
+        "start": 1260.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 1380.0,
+        "first_hash": "29c8606d19c86101d2456a7f4921f902",
+        "last_hash": "45f2c76efe1ab8a1c3d566295c53defd",
+        "sample_count": 3,
+        "segment_index": 22,
+        "start": 1320.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1440.0,
+        "first_hash": "bba19c875dcd75ce5e38944bc84218fa",
+        "last_hash": "eb86c2d2ebd390b7a31538a1d76da642",
+        "sample_count": 3,
+        "segment_index": 23,
+        "start": 1380.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1500.0,
+        "first_hash": "a4e31a75dc21384a570b2aaba61575b8",
+        "last_hash": "59e2f0f24f0993aecd31127e21adbcc6",
+        "sample_count": 3,
+        "segment_index": 24,
+        "start": 1440.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1560.0,
+        "first_hash": "65085978ec70151a46a2cc48a403664c",
+        "last_hash": "fdda0f0a83e12e75b475cb7c03911ab8",
+        "sample_count": 3,
+        "segment_index": 25,
+        "start": 1500.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1620.0,
+        "first_hash": "ec24ca7bc69e79d69f70bf6ca2e22bae",
+        "last_hash": "6877318ae102258ef13296456241bcdf",
+        "sample_count": 3,
+        "segment_index": 26,
+        "start": 1560.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1680.0,
+        "first_hash": "166d0bf0a26d22fee136fe1e76ff8c0e",
+        "last_hash": "9d00e088bbe1598181bc90d81472c61f",
+        "sample_count": 3,
+        "segment_index": 27,
+        "start": 1620.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1740.0,
+        "first_hash": "61fe4a9fe4366fdfd9cd7027035c066f",
+        "last_hash": "df04d289d7e0952b7739ebbc30c48242",
+        "sample_count": 3,
+        "segment_index": 28,
+        "start": 1680.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1800.0,
+        "first_hash": "5c1a35903238ae744da7fa586e6d65f0",
+        "last_hash": "1fe37c112b917c3194af417965ba8a19",
+        "sample_count": 3,
+        "segment_index": 29,
+        "start": 1740.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1860.0,
+        "first_hash": "d6419219aa315973bbdb889582e61e6a",
+        "last_hash": "14cfa2535d39a4d35395b7a7d8212b4e",
+        "sample_count": 3,
+        "segment_index": 30,
+        "start": 1800.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1920.0,
+        "first_hash": "c685193f94221bf17b0001604a8e4c46",
+        "last_hash": "736ab69cd2c8e4927d95a529f0b45470",
+        "sample_count": 3,
+        "segment_index": 31,
+        "start": 1860.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 1980.0,
+        "first_hash": "1b0a64cc725f3c9e10269149f6494e43",
+        "last_hash": "aff0f0bba31dc9261f9d0ea50d58f5f3",
+        "sample_count": 3,
+        "segment_index": 32,
+        "start": 1920.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2040.0,
+        "first_hash": "2fe86905fb8ca8b2fa7fc543c457e36c",
+        "last_hash": "df800477d2090dd0f6f2ee009840a89e",
+        "sample_count": 3,
+        "segment_index": 33,
+        "start": 1980.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2100.0,
+        "first_hash": "aff0f0bba31dc9261f9d0ea50d58f5f3",
+        "last_hash": "5aadcbeb222ffaacaaab2cef2d4596c1",
+        "sample_count": 3,
+        "segment_index": 34,
+        "start": 2040.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2160.0,
+        "first_hash": "2fe86905fb8ca8b2fa7fc543c457e36c",
+        "last_hash": "ab9bddffccbf3c69685c02d8465985b5",
+        "sample_count": 3,
+        "segment_index": 35,
+        "start": 2100.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2220.0,
+        "first_hash": "2763d9217ff73e32c395868e8948a97f",
+        "last_hash": "4e232ec09868d8b4a03b16584b2c60d6",
+        "sample_count": 3,
+        "segment_index": 36,
+        "start": 2160.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2280.0,
+        "first_hash": "056de2c79bce083a59f6f56545bb5e68",
+        "last_hash": "bf14368dd191e6a6d47426003d19c17a",
+        "sample_count": 3,
+        "segment_index": 37,
+        "start": 2220.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2340.0,
+        "first_hash": "4e232ec09868d8b4a03b16584b2c60d6",
+        "last_hash": "b83c88e146afba96d21f5f2a75ab0e94",
+        "sample_count": 3,
+        "segment_index": 38,
+        "start": 2280.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2400.0,
+        "first_hash": "1cf1fa2113194b7c5a3c0c891fa3cba0",
+        "last_hash": "6cccb1969a6aa4f83de11354b88305e4",
+        "sample_count": 3,
+        "segment_index": 39,
+        "start": 2340.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2460.0,
+        "first_hash": "ed6b164baef45dab9af58e9544b28156",
+        "last_hash": "ed6b164baef45dab9af58e9544b28156",
+        "sample_count": 3,
+        "segment_index": 40,
+        "start": 2400.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 2520.0,
+        "first_hash": "6cccb1969a6aa4f83de11354b88305e4",
+        "last_hash": "2ea019c4ec98ccea1869a1999312797c",
+        "sample_count": 3,
+        "segment_index": 41,
+        "start": 2460.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2580.0,
+        "first_hash": "ed6b164baef45dab9af58e9544b28156",
+        "last_hash": "ed6b164baef45dab9af58e9544b28156",
+        "sample_count": 3,
+        "segment_index": 42,
+        "start": 2520.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 2640.0,
+        "first_hash": "2ea019c4ec98ccea1869a1999312797c",
+        "last_hash": "2ea019c4ec98ccea1869a1999312797c",
+        "sample_count": 3,
+        "segment_index": 43,
+        "start": 2580.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 2700.0,
+        "first_hash": "f660c7563a2acf409cc3f20dde1531ce",
+        "last_hash": "4d3f50a8b2efe9a4f54b1d225a777ad7",
+        "sample_count": 3,
+        "segment_index": 44,
+        "start": 2640.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2760.0,
+        "first_hash": "d14b5bbf2abe4b7894d9d991a71561e5",
+        "last_hash": "d14b5bbf2abe4b7894d9d991a71561e5",
+        "sample_count": 3,
+        "segment_index": 45,
+        "start": 2700.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 2820.0,
+        "first_hash": "a229b2e476aba6b813a884c4668303b0",
+        "last_hash": "4de78235fac878361770b6902055f16b",
+        "sample_count": 3,
+        "segment_index": 46,
+        "start": 2760.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2880.0,
+        "first_hash": "9699e2766367ca8d716a630a84358fae",
+        "last_hash": "8b65ff8804e487a550fe0960b411d1e5",
+        "sample_count": 3,
+        "segment_index": 47,
+        "start": 2820.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 2940.0,
+        "first_hash": "a771508f038f38fbd75d678bf05db896",
+        "last_hash": "afb1408cfdb5d49f124dfa51ac192126",
+        "sample_count": 3,
+        "segment_index": 48,
+        "start": 2880.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3000.0,
+        "first_hash": "8370294331b77ff834c8481198c67ffe",
+        "last_hash": "c4f52b5231e008ba15f9a553ae3843b8",
+        "sample_count": 3,
+        "segment_index": 49,
+        "start": 2940.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3060.0,
+        "first_hash": "6a0a2235d6fb27b014f660d0706b4689",
+        "last_hash": "79c72c2095f635ad58154e6081f668a9",
+        "sample_count": 3,
+        "segment_index": 50,
+        "start": 3000.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3120.0,
+        "first_hash": "7323d060c6784b503f14ad63aaa932d6",
+        "last_hash": "7323d060c6784b503f14ad63aaa932d6",
+        "sample_count": 3,
+        "segment_index": 51,
+        "start": 3060.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 3180.0,
+        "first_hash": "79c72c2095f635ad58154e6081f668a9",
+        "last_hash": "046b7b13c9be8860fb894126a078a2fb",
+        "sample_count": 3,
+        "segment_index": 52,
+        "start": 3120.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3240.0,
+        "first_hash": "8ffce02ddda8ee9d249bd7010d65ba5b",
+        "last_hash": "54f63c5a243ab067d9c95c600b928a9e",
+        "sample_count": 3,
+        "segment_index": 53,
+        "start": 3180.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3300.0,
+        "first_hash": "932b4303abf207f56dd2a5bb8b16163e",
+        "last_hash": "ce83b432874c32c161f88bbe5c9ca144",
+        "sample_count": 3,
+        "segment_index": 54,
+        "start": 3240.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3360.0,
+        "first_hash": "54f63c5a243ab067d9c95c600b928a9e",
+        "last_hash": "35b266b7f1e82534ea28df963d25a7e3",
+        "sample_count": 3,
+        "segment_index": 55,
+        "start": 3300.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3420.0,
+        "first_hash": "60dd24b2b6fcc1113ac2ebbb4130ba4d",
+        "last_hash": "df2daabe20d32637d4fb253fd29ba150",
+        "sample_count": 3,
+        "segment_index": 56,
+        "start": 3360.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3480.0,
+        "first_hash": "a189a8ece8bdbea854c8a24afa4c1603",
+        "last_hash": "a189a8ece8bdbea854c8a24afa4c1603",
+        "sample_count": 3,
+        "segment_index": 57,
+        "start": 3420.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 3540.0,
+        "first_hash": "4d3f50a8b2efe9a4f54b1d225a777ad7",
+        "last_hash": "4fc607c20dfd7a27bae6345eff96f1e0",
+        "sample_count": 3,
+        "segment_index": 58,
+        "start": 3480.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3600.0,
+        "first_hash": "71c54a769e01a81b9e75a7282a215bf9",
+        "last_hash": "9e548437d06972e74f0801aa9cc9c640",
+        "sample_count": 3,
+        "segment_index": 59,
+        "start": 3540.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3660.0,
+        "first_hash": "4fc607c20dfd7a27bae6345eff96f1e0",
+        "last_hash": "4fc607c20dfd7a27bae6345eff96f1e0",
+        "sample_count": 3,
+        "segment_index": 60,
+        "start": 3600.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 3720.0,
+        "first_hash": "9e548437d06972e74f0801aa9cc9c640",
+        "last_hash": "030aaa2e29345ab5cdc5e164b1756265",
+        "sample_count": 3,
+        "segment_index": 61,
+        "start": 3660.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3780.0,
+        "first_hash": "fa7858e7755a9ee651a7f638b54229e5",
+        "last_hash": "cb967787a537b6688ca7103a12c187be",
+        "sample_count": 3,
+        "segment_index": 62,
+        "start": 3720.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3840.0,
+        "first_hash": "bf0aba5ec3a53a2af0534eb966f08a7f",
+        "last_hash": "9c45747c7bf709beab5584f861fbee15",
+        "sample_count": 3,
+        "segment_index": 63,
+        "start": 3780.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3900.0,
+        "first_hash": "55b28860d173c78ca077216ccc7e1a59",
+        "last_hash": "b83c88e146afba96d21f5f2a75ab0e94",
+        "sample_count": 3,
+        "segment_index": 64,
+        "start": 3840.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 3960.0,
+        "first_hash": "4637c61978890766710c9fb483b20508",
+        "last_hash": "63c7298c56f3f3f9a687dcd6b73ec0d6",
+        "sample_count": 3,
+        "segment_index": 65,
+        "start": 3900.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4020.0,
+        "first_hash": "7e998851d0f29a75ac5731d8e5c54e21",
+        "last_hash": "7e998851d0f29a75ac5731d8e5c54e21",
+        "sample_count": 3,
+        "segment_index": 66,
+        "start": 3960.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4080.0,
+        "first_hash": "4b6a58890f6a105b322079c930ce0fb3",
+        "last_hash": "f8747518aec7a09abff9656195512003",
+        "sample_count": 3,
+        "segment_index": 67,
+        "start": 4020.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4140.0,
+        "first_hash": "91262c82e6c1d91d4d538aa1dec17540",
+        "last_hash": "91262c82e6c1d91d4d538aa1dec17540",
+        "sample_count": 3,
+        "segment_index": 68,
+        "start": 4080.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4200.0,
+        "first_hash": "d8b2a42b514460d2c71b598219136c70",
+        "last_hash": "d8b2a42b514460d2c71b598219136c70",
+        "sample_count": 3,
+        "segment_index": 69,
+        "start": 4140.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4260.0,
+        "first_hash": "91262c82e6c1d91d4d538aa1dec17540",
+        "last_hash": "1f05604442dfc0338eeb6a9035f8ae22",
+        "sample_count": 3,
+        "segment_index": 70,
+        "start": 4200.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4320.0,
+        "first_hash": "a6d80381a84026b5c45b0cd68549a037",
+        "last_hash": "667ff8058323f34909990e3faf86067b",
+        "sample_count": 3,
+        "segment_index": 71,
+        "start": 4260.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4380.0,
+        "first_hash": "b4e6bc51fb353afbc607fa35d7c8c715",
+        "last_hash": "67eec78a24ebdddb8521d61a5e5ba2d0",
+        "sample_count": 3,
+        "segment_index": 72,
+        "start": 4320.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4440.0,
+        "first_hash": "a7b77a40483e4e90c46e45396b0ebc6c",
+        "last_hash": "a7b77a40483e4e90c46e45396b0ebc6c",
+        "sample_count": 3,
+        "segment_index": 73,
+        "start": 4380.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4500.0,
+        "first_hash": "267328514f51d86bbcf09da46f26666e",
+        "last_hash": "267328514f51d86bbcf09da46f26666e",
+        "sample_count": 3,
+        "segment_index": 74,
+        "start": 4440.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4560.0,
+        "first_hash": "a7b77a40483e4e90c46e45396b0ebc6c",
+        "last_hash": "a7b77a40483e4e90c46e45396b0ebc6c",
+        "sample_count": 3,
+        "segment_index": 75,
+        "start": 4500.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4620.0,
+        "first_hash": "267328514f51d86bbcf09da46f26666e",
+        "last_hash": "2982d1d190907a4a763188d6279da006",
+        "sample_count": 3,
+        "segment_index": 76,
+        "start": 4560.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4680.0,
+        "first_hash": "f73222641934552d1c0126cc443a9970",
+        "last_hash": "490990045e8edaa026c64e4b3129e01a",
+        "sample_count": 3,
+        "segment_index": 77,
+        "start": 4620.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4740.0,
+        "first_hash": "b60b401eb2fc0b2be8c565ad76c2f974",
+        "last_hash": "4698d6c3883d1f7b3a4a6137d93459bc",
+        "sample_count": 3,
+        "segment_index": 78,
+        "start": 4680.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4800.0,
+        "first_hash": "ce68d676c12a98ff12dbf698d8427505",
+        "last_hash": "33a253a3811a7921c9ce72002cb14821",
+        "sample_count": 3,
+        "segment_index": 79,
+        "start": 4740.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 4860.0,
+        "first_hash": "f46150bebb1de07c608c2be539e39afd",
+        "last_hash": "f46150bebb1de07c608c2be539e39afd",
+        "sample_count": 3,
+        "segment_index": 80,
+        "start": 4800.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4920.0,
+        "first_hash": "895273f5405fb1bba167987f06647f8b",
+        "last_hash": "895273f5405fb1bba167987f06647f8b",
+        "sample_count": 3,
+        "segment_index": 81,
+        "start": 4860.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 4980.0,
+        "first_hash": "ac047aac9449341043d30fac4481e301",
+        "last_hash": "4add0be31f4a3e722794c3bfb6748e57",
+        "sample_count": 3,
+        "segment_index": 82,
+        "start": 4920.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5040.0,
+        "first_hash": "0a5f1c846a2b068f328e80f39d0cba72",
+        "last_hash": "79b6ad21e8e55e0cdd7f104fb64a77c1",
+        "sample_count": 3,
+        "segment_index": 83,
+        "start": 4980.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5100.0,
+        "first_hash": "afb1408cfdb5d49f124dfa51ac192126",
+        "last_hash": "fa7858e7755a9ee651a7f638b54229e5",
+        "sample_count": 3,
+        "segment_index": 84,
+        "start": 5040.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5160.0,
+        "first_hash": "fdda0f0a83e12e75b475cb7c03911ab8",
+        "last_hash": "f47402db3e0e116151de8b1e0b78c363",
+        "sample_count": 3,
+        "segment_index": 85,
+        "start": 5100.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5220.0,
+        "first_hash": "85b8507c38be5e5a358aca6e602846f1",
+        "last_hash": "1d8208afbe8f5fd571863fc472b75944",
+        "sample_count": 3,
+        "segment_index": 86,
+        "start": 5160.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5280.0,
+        "first_hash": "8d3695b40bd872594a9ceb1d4d37f5d0",
+        "last_hash": "35b266b7f1e82534ea28df963d25a7e3",
+        "sample_count": 3,
+        "segment_index": 87,
+        "start": 5220.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5340.0,
+        "first_hash": "a771508f038f38fbd75d678bf05db896",
+        "last_hash": "6a0a2235d6fb27b014f660d0706b4689",
+        "sample_count": 3,
+        "segment_index": 88,
+        "start": 5280.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5400.0,
+        "first_hash": "71c54a769e01a81b9e75a7282a215bf9",
+        "last_hash": "24c4a0e93bbe6042b3973b2a83f0004d",
+        "sample_count": 3,
+        "segment_index": 89,
+        "start": 5340.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5460.0,
+        "first_hash": "91262c82e6c1d91d4d538aa1dec17540",
+        "last_hash": "91262c82e6c1d91d4d538aa1dec17540",
+        "sample_count": 3,
+        "segment_index": 90,
+        "start": 5400.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 5520.0,
+        "first_hash": "d8b2a42b514460d2c71b598219136c70",
+        "last_hash": "2e2b0fd5d6a59faf048c90487727a42b",
+        "sample_count": 3,
+        "segment_index": 91,
+        "start": 5460.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5580.0,
+        "first_hash": "9cb315738bcb6e3f7c4240909d70d0af",
+        "last_hash": "9c44502babcb7fae3029068533e24b5c",
+        "sample_count": 3,
+        "segment_index": 92,
+        "start": 5520.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5640.0,
+        "first_hash": "e9e58580af047211fe6ca8ca5d44bc59",
+        "last_hash": "eb86c2d2ebd390b7a31538a1d76da642",
+        "sample_count": 3,
+        "segment_index": 93,
+        "start": 5580.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5700.0,
+        "first_hash": "37dac8e04791ba5170c82b7591737941",
+        "last_hash": "37dac8e04791ba5170c82b7591737941",
+        "sample_count": 3,
+        "segment_index": 94,
+        "start": 5640.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 5760.0,
+        "first_hash": "e55ebdd80b3fa989da4d56405d8e5bd1",
+        "last_hash": "48a9ffa462f26d1d234a47ea9442f37c",
+        "sample_count": 3,
+        "segment_index": 95,
+        "start": 5700.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5820.0,
+        "first_hash": "b617079729df2af331c2e2cdb50b62b8",
+        "last_hash": "7ef88dfca26aa053e520bf97f8e37ae5",
+        "sample_count": 3,
+        "segment_index": 96,
+        "start": 5760.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5880.0,
+        "first_hash": "24f1c174a167433eddfa0ae6720527c3",
+        "last_hash": "d9933e4757a756a63b54aadfacfeb2d3",
+        "sample_count": 3,
+        "segment_index": 97,
+        "start": 5820.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 5940.0,
+        "first_hash": "1906c7b52f60619e615b3389b78f39b5",
+        "last_hash": "551ffd722e036a1ba3707297c62c9c8f",
+        "sample_count": 3,
+        "segment_index": 98,
+        "start": 5880.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 6000.0,
+        "first_hash": "650efb2c68207e0ecdf4f5c40666e0ad",
+        "last_hash": "650efb2c68207e0ecdf4f5c40666e0ad",
+        "sample_count": 3,
+        "segment_index": 99,
+        "start": 5940.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 6060.0,
+        "first_hash": "551ffd722e036a1ba3707297c62c9c8f",
+        "last_hash": "551ffd722e036a1ba3707297c62c9c8f",
+        "sample_count": 3,
+        "segment_index": 100,
+        "start": 6000.0,
+        "unique_hashes": 2
+      },
+      {
+        "end": 6120.0,
+        "first_hash": "8ffce02ddda8ee9d249bd7010d65ba5b",
+        "last_hash": "143e5524df661467a77c80f92eac7d29",
+        "sample_count": 3,
+        "segment_index": 101,
+        "start": 6060.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 6180.0,
+        "first_hash": "2d4419a02763e2bc347b1e947cb33ab2",
+        "last_hash": "ad6db268b754fea4d7d8a299fd480951",
+        "sample_count": 3,
+        "segment_index": 102,
+        "start": 6120.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 6240.0,
+        "first_hash": "cb193c20e84cd1ab11c0a081490e77a0",
+        "last_hash": "9f6412548049b309196e7c07412428f3",
+        "sample_count": 3,
+        "segment_index": 103,
+        "start": 6180.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 6300.0,
+        "first_hash": "e1aedd6886c076d99f7e4b5b10891d49",
+        "last_hash": "9bd6336207ccb83a5c82f75c78944905",
+        "sample_count": 3,
+        "segment_index": 104,
+        "start": 6240.0,
+        "unique_hashes": 3
+      },
+      {
+        "end": 6335.027,
+        "first_hash": "9699e2766367ca8d716a630a84358fae",
+        "last_hash": "036bb5661658275571d4827fd5e5dc8e",
+        "sample_count": 2,
+        "segment_index": 105,
+        "start": 6300.0,
+        "unique_hashes": 2
+      }
+    ],
+    "segment_seconds": 60.0
+  },
+  "window_1962": {
+    "duration": 2.5,
+    "sample_count": 25,
+    "start": 1961.0,
+    "unique_hashes": 25
+  }
+}

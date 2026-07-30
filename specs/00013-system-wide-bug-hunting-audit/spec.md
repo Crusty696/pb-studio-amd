@@ -1,5 +1,36 @@
 # Spezifikation: System-wide Bug Hunting & Codebase Audit (Epic 00013)
 
+## Amendment 2026-07-30: GPU-, Provider-, Modellinventar- und Analyse-Wahrheit
+
+* **OBJ-71:** DirectML-Inferenz, VRAM-Budget und Hardwaremonitoring müssen denselben RX-7800-XT-Adapter verwenden; Modellinventar, Auswahl, UI-Status und nullable Analysewerte müssen den realen Laufzeitzustand beweisbar abbilden.
+* **OR-332:** Ausgangslog, Git-/Runtime-/Konfigurationszustand und bisherige Release-Marker werden vor jeder Implementierung eingefroren; OBJ-71 und T340–T369 werden verbindlich registriert.
+* **TR-336:** GPU-Zuordnung, LHM-Vertrauenskette, Providerinventar und DTO-Nullability werden jeweils reproduziert und mit einer zweiten unabhängigen Messmethode falsifiziert.
+* **TR-337:** Adapter-, Provider-, Auswahl-, DTO-, Fehler- und Restore-Verträge werden vor Implementierung eingefroren.
+* **FR-326:** Ein zentraler DXGI-/LUID-Resolver wählt standardmäßig den AMD-Hardwareadapter mit dem höchsten dedizierten VRAM; `hardware.directml_device_id` übersteuert, `ai.dml_device_id` bleibt nur als nachrangiger deprecated Eingang.
+* **FR-327:** ModelLoader, RAFT, Moondream, SigLIP, CLAP und der ONNX-Audio-Separator verwenden denselben zentralen `DmlExecutionProvider`-Vertrag mit identischem `device_id` und beiden deaktivierten DirectML-Speicherflags.
+* **FR-328:** VRAM-Arbiter, Budgetmanager und Systemmonitor sind an denselben Adapter-LUID gebunden; ein konfiguriertes Limit darf den physischen VRAM nur reduzieren.
+* **FR-329:** LibreHardwareMonitor 0.9.6 wird ausschließlich über offizielles, gehashtes Bundle, versioniertes Manifest, Launcher-gebundene Hashes und nachgewiesenen Restore-Pfad aktiviert.
+* **FR-330:** `/gpu/status` und WPF zeigen additiv Adapterindex, LUID, Name, dedizierten VRAM, DirectML-Aktivität sowie eindeutigen Monitoring-Status und -Fehler; Werte fremder Adapter bleiben ausgeschlossen.
+* **FR-331:** LM Studio JIT wird nach Backup und Hash über den unterstützten Mechanismus aktiviert; Neustart und Restore bleiben reproduzierbar.
+* **FR-332:** Ein zentraler Inventarservice klassifiziert Provider als `offline`, `online_empty`, `ready` oder `degraded` und erfasst installierte, geladene, nutzbare sowie live verifiziert herunterladbare Modelle aus den freigegebenen Quellen.
+* **FR-333:** Backendstart, Modellansicht, Override-Änderung und einmaliger Providerfehler aktualisieren das Inventar gebündelt und ohne Request-Sturm.
+* **FR-334:** Jede Aufgabenauswahl erzeugt ein Selection Receipt; HTTP-Aufruf, Capability, Provider, Modell, begrenztes Failover und rückwärtskompatible Aufgabenpersistenz müssen exakt damit übereinstimmen.
+* **FR-335:** Die Modelloberfläche zeigt nur installierte oder live verifiziert herunterladbare Modelle und kennzeichnet installiert, geladen, nutzbar, nicht verfügbar sowie Providerstatus ohne Geisterkarten.
+* **FR-336:** `SceneInfo.confidence` bleibt in Backend und OpenAPI nullable; das handgeschriebene C#-DTO verwendet `double?`, und automatische Paritätsprüfung schützt DTO, Client und UI-Bindings.
+* **TR-338:** Unit-, Vertrags-, Integrations-, Hardware- und GUI-Prüfungen werden vor T361 implementiert, aber nicht ausgeführt.
+* **TR-339:** Ein Security Review schließt Pfad-, Prozess-, Download-, Hash-, Provider- und Konfigurationsrisiken vor dem Implementierungsgate.
+* **TR-340:** Statische Vollständigkeitssuche erfasst jede DirectML-Session, jeden Provideraufruf, jede DTO-Kopie und jedes betroffene UI-Binding.
+* **TR-341:** `.completed` entsteht erst nach vollständiger T340–T359-Evidenz, sauberem Syntax-/XML-Sweep und geschlossenem Review.
+* **TR-342:** Gezielte Adapter-, Inventar-, Selection-, Nullability-, Konfigurations- und Restore-Regressionen bestehen.
+* **TR-343:** Python-Gesamtsuite, WPF-Release-Build sowie Security-, Fehler- und Wiederanlaufprüfungen bestehen.
+* **TR-344:** RAFT-, SigLIP-, Moondream-, CLAP- und Audio-Last weisen PID, Adapter-LUID, Engine-Auslastung und VRAM auf der RX 7800 XT nach; die iGPU trägt keine PB-Studio-DirectML-Last.
+* **TR-345:** Modell-, GUI- und Analyse-E2E sowie frische vollständige H.264- und HEVC-Exporte bestehen über jeweils 6.335,027 Sekunden ohne Retry-Sturm oder verkürzte Prüfung.
+* **OR-333:** QC-Bericht, CHANGELOG, ADRs, CLAUDE-Status, Tasks, Progress-Ledger und PB-Studio-Brain entsprechen der gespeicherten Evidenz; `.qc-passed` entsteht nur bei 100 Prozent PASS.
+* **OR-334:** Zonencommits, Secret-Scan, Remote-Diff, Fast-forward-Pushes und Remote-SHA-Verifikation werden ohne Force-Push oder automatisches Rebase ausgeführt.
+* **SC-073 [OBJ-71]:** Alle DirectML-Konsumenten, VRAM-Budget und Monitoring weisen denselben RX-7800-XT-Index `1` und LUID `0x00000000_0x0001185b` nach; beide Sessionflags bleiben gesetzt und kein CPU-/CUDA-/ROCm-Fallback wird aktiv.
+* **SC-074 [OBJ-71]:** Provider- und Modellkarten entsprechen Live-Inventar und Capabilities; Selection Receipt, realer HTTP-Aufruf und persistierter Aufgabenwechsel stimmen nach Neustart überein.
+* **SC-075 [OBJ-71]:** `confidence=null` deserialisiert ohne Batchfehler; T340–T369 besitzen gespeicherte Evidenz, beide Full-Length-Exporte bestehen, Release-Marker entsprechen ihren Gates und lokale sowie Remote-SHAs sind verifiziert.
+
 ## Amendment 2026-07-29: Release-Video-Reparatur und beweisbares End-QC
 
 * **OBJ-70:** Der fehlerhafte 6.335,027-s-Release-Export muss ursächlich repariert und gemeinsam mit Audio-, Pacing-, Brain-, Runtime-, Vertrags- und Veröffentlichungsfolgen vollständig beweisbar verifiziert werden.
