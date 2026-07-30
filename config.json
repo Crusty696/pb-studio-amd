@@ -10,6 +10,7 @@
     },
     "hardware": {
         "gpu_backend": "directml",
+        "directml_adapter_policy": "highest_vram_amd",
         "vram_limit_mb": 0,
         "enable_monitoring": true
     },
@@ -101,7 +102,8 @@
                 ]
             }
         },
-        "task_overrides": {}
+        "task_overrides": {},
+        "task_provider_overrides": {}
     },
     "ui": {
         "theme": "dark_red",

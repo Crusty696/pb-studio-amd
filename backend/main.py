@@ -21,6 +21,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .config import config
 from .owner_capability import OWNER_CAPABILITY_HEADER, authorize_owner
@@ -148,6 +149,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"  Projekt-Verzeichnis bereit: {config.project_dir}")
     except Exception as e:
         logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
+
+    # Provider-/Modellwahrheit einmal pro Backendstart neu erfassen. Der
+    # Service bündelt LM-Studio- und Ollama-Abfragen und publiziert atomar.
+    try:
+        from pb_studio.ai.model_inventory import get_model_inventory_service
+
+        model_inventory = await get_model_inventory_service().refresh(force=True)
+        provider_states = ", ".join(
+            f"{provider.provider}={provider.status}"
+            for provider in model_inventory.providers
+        )
+        logger.info(
+            "  Modellinventar aktualisiert: %d Modelle (%s)",
+            len(model_inventory.models),
+            provider_states or "keine Provider",
+        )
+    except Exception as e:
+        logger.warning(f"  Modellinventar-Startup-Refresh fehlgeschlagen: {e}")
 
     # Kein automatischer Medien-Restore beim Startup:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
@@ -338,6 +357,22 @@ app.add_middleware(GPULockMiddleware)
 
 # --- Health Router (inline, da minimal) ---
 
+
+class GpuStatusResponse(BaseModel):
+    name: str
+    vram_total_mb: int
+    vram_used_mb: float
+    temperature_c: float
+    driver_version: str
+    adapter_index: int | None = None
+    adapter_luid: str | None = None
+    adapter_name: str | None = None
+    selection_policy: str | None = None
+    dedicated_vram_total_mb: int
+    directml_active: bool
+    monitoring_status: str
+    monitoring_error: str | None = None
+
 @app.get("/health")
 async def health_check() -> dict[str, Any]:
     """Basis Health-Check."""
@@ -354,20 +389,38 @@ async def heartbeat() -> dict[str, Any]:
     return {"status": "alive", "timestamp": time.time()}
 
 
-@app.get("/gpu/status")
+@app.get("/gpu/status", response_model=GpuStatusResponse)
 async def gpu_status() -> dict[str, Any]:
     """GPU-Status via LibreHardwareMonitor."""
     try:
+        from pb_studio.core.directml_adapter import get_directml_adapter
         from pb_studio.core.system_monitor import SystemMonitor
+        adapter = get_directml_adapter()
         monitor = SystemMonitor()
-        # BUG-013 Fix: Methode heißt get_stats(), nicht get_gpu_info()
         gpu_info = monitor.get_stats()
+        directml_active = _check_gpu_available()
+        monitoring_status = gpu_info.get("monitoring_status", "degraded")
         return {
-            "name": gpu_info.get("gpu_name", "Unknown"),
-            "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
+            "name": adapter.name,
+            "vram_total_mb": adapter.dedicated_vram_mb,
             "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
             "temperature_c": gpu_info.get("gpu_temp", 0),
             "driver_version": gpu_info.get("driver_version", "Unknown"),
+            "adapter_index": adapter.device_id,
+            "adapter_luid": adapter.luid,
+            "adapter_name": adapter.name,
+            "selection_policy": adapter.selection_policy,
+            "dedicated_vram_total_mb": adapter.dedicated_vram_mb,
+            "directml_active": directml_active,
+            "monitoring_status": monitoring_status,
+            "monitoring_error": (
+                None
+                if monitoring_status == "ready"
+                else (
+                    "LibreHardwareMonitor ist eingeschränkt; "
+                    "Details stehen im Backend-Log."
+                )
+            ),
         }
     except Exception as e:
         logger.warning(f"GPU-Status nicht verfügbar: {e}")
@@ -376,7 +429,18 @@ async def gpu_status() -> dict[str, Any]:
             "vram_total_mb": 0,
             "vram_used_mb": 0,
             "temperature_c": 0,
-            "driver_version": str(e),
+            "driver_version": "Unknown",
+            "adapter_index": None,
+            "adapter_luid": None,
+            "adapter_name": None,
+            "selection_policy": None,
+            "dedicated_vram_total_mb": 0,
+            "directml_active": False,
+            "monitoring_status": "error",
+            "monitoring_error": (
+                "GPU-Status ist nicht verfügbar; "
+                "Details stehen im Backend-Log."
+            ),
         }
 
 

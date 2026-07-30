@@ -9,6 +9,8 @@ import threading
 import time
 from pathlib import Path
 
+from pb_studio.core.directml_adapter import get_directml_adapter
+
 logger = logging.getLogger(__name__)
 
 # pythonnet ist optional - nur auf Windows mit LibreHardwareMonitor
@@ -157,6 +159,10 @@ class SystemMonitor:
         self._initialized = True
         from pb_studio.config_manager import ConfigManager
         self.config = ConfigManager()
+        self.selected_adapter = get_directml_adapter()
+        self.selected_adapter_luid = self.selected_adapter.luid
+        self.monitoring_status = "degraded"
+        self.monitoring_error = "LibreHardwareMonitor not initialized"
         self.computer = None
         self.gpu_sensor = None
         self._gpu_count = 0
@@ -172,11 +178,13 @@ class SystemMonitor:
         if _HAS_CLR:
             self._initialize_lhm()
         else:
+            self.monitoring_error = "pythonnet (clr) is unavailable"
             logger.info("Hardware-Monitoring uebersprungen (pythonnet nicht verfuegbar)")
 
     def _initialize_lhm(self):
         lib_path = getattr(self.config, 'lhm_path', None)
         if not lib_path:
+            self.monitoring_error = "LibreHardwareMonitorLib.dll path is missing"
             logger.error(f"LibreHardwareMonitorLib.dll not found at: {lib_path}")
             return
 
@@ -184,6 +192,7 @@ class SystemMonitor:
             main_path = Path(lib_path)
             verified_assemblies = _load_verified_lhm_bundle(main_path)
         except (OSError, ValueError) as exc:
+            self.monitoring_error = str(exc)
             logger.error("LibreHardwareMonitor deaktiviert: %s", exc)
             return
 
@@ -270,6 +279,8 @@ class SystemMonitor:
             self._find_gpu()
 
         except Exception as e:
+            self.monitoring_status = "degraded"
+            self.monitoring_error = str(e)
             if (
                 self._lhm_app_domain is not None
                 and self._lhm_assembly_resolver is not None
@@ -281,8 +292,12 @@ class SystemMonitor:
                 self._lhm_assembly_resolver = None
             logger.error(f"Failed to initialize Hardware Monitor: {e}")
 
+    @staticmethod
+    def _normalized_adapter_name(value: str) -> str:
+        return " ".join((value or "").casefold().split())
+
     def _find_gpu(self):
-        """Finds the primary GPU (Prefer Dedicated AMD, then APU)."""
+        """Bind LHM only to the centrally selected DirectML adapter."""
         if not self.computer: return
 
         candidates = []
@@ -302,34 +317,38 @@ class SystemMonitor:
             if h_type_str.startswith("Gpu"):
                 candidates.append(hardware)
 
-        # Prioritization Strategy:
-        # 1. Dedicated AMD (RX/XT/Pro)
-        # 2. Any AMD GPU
-        # 3. Any Nvidia GPU (Fallback)
-        # 4. Any Intel GPU
-        
-        dedicated_amd = [g for g in candidates if "GpuAmd" in str(g.HardwareType) and ("RX" in g.Name or "XT" in g.Name)]
-        any_amd = [g for g in candidates if "GpuAmd" in str(g.HardwareType)]
-        any_gpu = candidates
         self._gpu_count = len(candidates)
-        
-        if dedicated_amd:
-            self.gpu_sensor = dedicated_amd[0]
-            logger.info(f"Selected Dedicated AMD GPU: {self.gpu_sensor.Name}")
-        elif any_amd:
-            self.gpu_sensor = any_amd[0]
-            logger.info(f"Selected Generic AMD GPU: {self.gpu_sensor.Name}")
-        elif any_gpu:
-            self.gpu_sensor = any_gpu[0]
-            logger.info(f"Selected Fallback GPU: {self.gpu_sensor.Name}")
-        
+        selected_name = self._normalized_adapter_name(self.selected_adapter.name)
+        exact_matches = [
+            item
+            for item in candidates
+            if self._normalized_adapter_name(str(item.Name)) == selected_name
+        ]
+        if len(exact_matches) == 1:
+            self.gpu_sensor = exact_matches[0]
+            self.monitoring_status = "ready"
+            self.monitoring_error = None
+            logger.info(
+                "LHM bound to DirectML adapter index=%d luid=%s name=%s",
+                self.selected_adapter.device_id,
+                self.selected_adapter.luid,
+                self.gpu_sensor.Name,
+            )
+        else:
+            self.gpu_sensor = None
+            self.monitoring_status = "degraded"
+            self.monitoring_error = (
+                "LHM adapter identity is ambiguous or does not match "
+                f"DirectML adapter {self.selected_adapter.name!r}"
+            )
+
         if self.gpu_sensor:
             self.gpu_sensor.Update()
             logger.info(f"Sensors for {self.gpu_sensor.Name}:")
             for s in self.gpu_sensor.Sensors:
                 logger.info(f"  - {s.Name} [{s.SensorType}] = {s.Value}")
         else:
-            logger.warning("No suitable GPU found for monitoring.")
+            logger.warning(self.monitoring_error)
 
     def get_stats(self, *, force_refresh: bool = False) -> dict:
         """Reads current hardware stats with 10s caching for PowerShell fallbacks.
@@ -356,7 +375,7 @@ class SystemMonitor:
             # only when the cached sample belongs to the same selected adapter.
             with self._cache_lock:
                 cached = self._cached_stats.copy()
-            if cached.get("gpu_name") == stats.get("gpu_name"):
+            if cached.get("adapter_luid") == stats.get("adapter_luid"):
                 if stats["gpu_memory_total"] <= 0:
                     stats["gpu_memory_total"] = cached.get("gpu_memory_total", 0.0)
                 stats["driver_version"] = cached.get("driver_version", "Unknown")
@@ -383,6 +402,14 @@ class SystemMonitor:
                     if stats.get(k, 0.0) > 0:
                         merged[k] = stats[k]
                 merged["gpu_name"] = stats["gpu_name"]
+                merged["adapter_index"] = stats["adapter_index"]
+                merged["adapter_luid"] = stats["adapter_luid"]
+                merged["adapter_name"] = stats["adapter_name"]
+                merged["dedicated_vram_total_mb"] = stats[
+                    "dedicated_vram_total_mb"
+                ]
+                merged["monitoring_status"] = stats["monitoring_status"]
+                merged["monitoring_error"] = stats["monitoring_error"]
                 return merged
         
         return stats
@@ -390,7 +417,13 @@ class SystemMonitor:
     def _collect_lhm_stats(self) -> dict:
         """Sammelt nur die schnellen LHM In-Process Sensorwerte."""
         stats = {
-            "gpu_name": "Unknown",
+            "gpu_name": self.selected_adapter.name,
+            "adapter_index": self.selected_adapter.device_id,
+            "adapter_luid": self.selected_adapter.luid,
+            "adapter_name": self.selected_adapter.name,
+            "dedicated_vram_total_mb": self.selected_adapter.dedicated_vram_mb,
+            "monitoring_status": self.monitoring_status,
+            "monitoring_error": self.monitoring_error,
             "gpu_load": 0.0,
             "gpu_temp": 0.0,
             "gpu_memory_used": 0.0,
@@ -399,10 +432,11 @@ class SystemMonitor:
             "driver_version": "Unknown",
         }
 
-        if not self.computer: return stats
+        if not self.computer or not self.gpu_sensor:
+            return stats
         
         with self._lhm_lock:
-            stats["gpu_name"] = self.gpu_sensor.Name if self.gpu_sensor else "Unknown"
+            stats["gpu_name"] = self.gpu_sensor.Name
             
             # Update sensors (LHM in-process - schnell)
             for hardware in self.computer.Hardware:
@@ -447,16 +481,33 @@ class SystemMonitor:
                             # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
                             stats["gpu_memory_total"] = s.Value or 0.0
 
+            physical_total = float(self.selected_adapter.dedicated_vram_mb)
+            if stats["gpu_memory_total"] > physical_total:
+                logger.warning(
+                    "LHM VRAM total %.0fMB exceeds selected adapter physical "
+                    "ceiling %.0fMB; clamped",
+                    stats["gpu_memory_total"],
+                    physical_total,
+                )
+                stats["gpu_memory_total"] = physical_total
+            if stats["gpu_memory_used"] > physical_total:
+                stats["gpu_memory_used"] = physical_total
+
         return stats
 
     def _bg_refresh_ps_stats(self, base_stats: dict) -> None:
         """T3.4: Hintergrund-Thread für langsame PowerShell-Sensor-Fallbacks.
         
-        Sammelt driver_version, VRAM-Total/Used Fallbacks, GPU-Temp und GPU-Load
-        via subprocess.run (jeweils 5-8s Timeout). Aktualisiert den Cache atomic.
+        Sammelt nur exakt adaptergebundene statische Fallbacks für Treiber und
+        VRAM-Total. Aggregierte GPU-Counter und Fremd-GPU-Sensoren sind verboten.
         """
         try:
             stats = base_stats.copy()
+            if self.monitoring_status != "ready":
+                with self._cache_lock:
+                    self._cached_stats = stats
+                    self._cache_time = time.monotonic()
+                return
             
             # BUG-080/BUG-100 FIX: Get Driver Version via PowerShell
             if stats["driver_version"] == "Unknown":
@@ -469,24 +520,6 @@ class SystemMonitor:
                 wmi_total = self._wmi_query_vram_total(stats["gpu_name"])
                 if wmi_total > 0:
                     stats["gpu_memory_total"] = wmi_total
-
-            # BUG-205 Phase 2: VRAM-Used via Windows Performance Counter
-            if stats["gpu_memory_used"] == 0.0 and self._gpu_count <= 1:
-                counter_used = self._counter_query_vram_used()
-                if counter_used > 0:
-                    stats["gpu_memory_used"] = counter_used
-
-            # Audit D1: GPU Temperature Fallback
-            if stats["gpu_temp"] == 0.0 and self._gpu_count <= 1:
-                alt_temp = self._query_temperature_alternative()
-                if alt_temp > 0:
-                    stats["gpu_temp"] = alt_temp
-
-            # Audit D2: GPU Load Fallback
-            if stats["gpu_load"] == 0.0 and self._gpu_count <= 1:
-                alt_load = self._query_load_alternative()
-                if alt_load > 0:
-                    stats["gpu_load"] = alt_load
 
             # Cache atomic aktualisieren
             with self._cache_lock:
@@ -582,160 +615,12 @@ class SystemMonitor:
                     "Registry VRAM-Total fallback fuer %r: %.0f MB (LHM lieferte 0 sensors)",
                     gpu_name_hint, mb_total,
                 )
-                return mb_total
+                return min(
+                    mb_total,
+                    float(self.selected_adapter.dedicated_vram_mb),
+                )
         except Exception as e:
             logger.warning("Registry VRAM-Fallback fehlgeschlagen: %s", e)
-        return 0.0
-
-    def _counter_query_vram_used(self) -> float:
-        """Fallback: VRAM-Used via Windows Performance Counter.
-
-        \\\\GPU Process Memory(*)\\\\Local Usage liefert per-process bytes.
-        Summe ueber alle Instanzen ist Total-Used.
-        Returns MB. 0.0 bei Fehler.
-        """
-        try:
-            import subprocess
-            ps_script = (
-                "$samples = (Get-Counter '\\GPU Process Memory(*)\\Local Usage' "
-                "-ErrorAction SilentlyContinue).CounterSamples; "
-                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Sum).Sum } "
-                "else { 0 }"
-            )
-            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=8,
-            )
-            if res.returncode == 0 and res.stdout.strip():
-                bytes_used = float(res.stdout.strip())
-                mb_used = bytes_used / (1024 * 1024)
-                if mb_used > 0:
-                    logger.debug("Counter VRAM-Used fallback: %.0f MB", mb_used)
-                return mb_used
-        except Exception as e:
-            logger.warning("Counter VRAM-Used-Fallback fehlgeschlagen: %s", e)
-        return 0.0
-
-    def _query_temperature_alternative(self) -> float:
-        r"""Audit D1 Fallback: GPU temp via alternative sources wenn LHM fuer
-        dedicated GPU 0 liefert (AMD Adrenalin blockiert Sensor-Zugriff).
-
-        Strategie (in Reihenfolge, kein extra-dependency):
-        1. iGPU temperature aus LHM (gleicher Hardware-Loop, anderes GPU-Device).
-           iGPU + dGPU sitzen oft im selben Thermal-Package - iGPU temp ist
-           ein akzeptabler Proxy (besser als 0).
-        2. PowerShell Get-Counter "\Thermal Zone Information(*)\Temperature"
-           (System-Thermal, last-resort heuristic).
-
-        Returns Celsius (float). 0.0 bei Fehler / wenn nichts gefunden.
-        """
-        # Versuch 1: iGPU/anderes GPU-Device temperature aus LHM
-        if self.computer:
-            try:
-                # BUGFIX H4: serialize ALL native LibreHardwareMonitor traversal
-                # under _lhm_lock. This runs in the background refresh thread while
-                # _collect_lhm_stats (which holds _lhm_lock) may iterate/Update() the
-                # same native Computer/Hardware objects on the foreground thread.
-                # On AMD Adrenalin gpu_temp==0 is common, so this fallback fires on
-                # nearly every refresh -> concurrent unlocked Update() corrupts LHM's
-                # internal sensor buffers (garbage readings or a native crash).
-                with self._lhm_lock:
-                    for hardware in self.computer.Hardware:
-                        h_type_str = str(hardware.HardwareType)
-                        if not h_type_str.startswith("Gpu"):
-                            continue
-                        if hardware == self.gpu_sensor:
-                            # Dedicated wurde bereits oben abgefragt - 0 sensors
-                            continue
-                        hardware.Update()
-                        for s in hardware.Sensors:
-                            if str(s.SensorType) != "Temperature":
-                                continue
-                            name = (s.Name or "").lower()
-                            if "core" in name or "edge" in name or "gpu" in name:
-                                val = s.Value or 0.0
-                                if val and val > 0:
-                                    logger.debug(
-                                        "GPU temp Fallback ueber alternatives GPU-Device "
-                                        "'%s' (sensor=%s): %.1f C",
-                                        hardware.Name, s.Name, float(val),
-                                    )
-                                    return float(val)
-            except Exception as e:
-                logger.debug("iGPU-Temp-Fallback fehlgeschlagen: %s", e)
-
-        # Versuch 2: PowerShell Thermal Zone Information (System-thermal heuristic).
-        # Kelvin*10 -> Celsius via /10 - 273.15. Nimm hoechste Zone als Proxy
-        # (GPU thermal-zone ist typischerweise hottest unter Last).
-        try:
-            import subprocess
-            ps_script = (
-                "$samples = (Get-Counter '\\Thermal Zone Information(*)\\Temperature' "
-                "-ErrorAction SilentlyContinue).CounterSamples; "
-                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Maximum).Maximum } "
-                "else { 0 }"
-            )
-            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=5,
-            )
-            if res.returncode == 0 and res.stdout.strip():
-                kelvin = float(res.stdout.strip())
-                if kelvin > 200:  # plausibel (>200K = >-73C)
-                    celsius = kelvin - 273.15
-                    if 20.0 <= celsius <= 150.0:  # plausibel range
-                        logger.debug(
-                            "GPU temp Fallback ueber Thermal-Zone-Max: %.1f C",
-                            celsius,
-                        )
-                        return float(celsius)
-        except Exception as e:
-            logger.debug("Thermal-Zone-Temp-Fallback fehlgeschlagen: %s", e)
-
-        return 0.0
-
-    def _query_load_alternative(self) -> float:
-        r"""Audit D2 Fallback: GPU Load via Windows Performance Counter wenn LHM
-        0 liefert (gleiches Problem wie BUG-205: AMD Adrenalin blockiert
-        Load-Sensor fuer dedicated GPU).
-
-        \GPU Engine(*engtype_3D)\Utilization Percentage liefert per-engine load.
-        Sum ueber alle Engines = total GPU 3D-Load.
-        Returns Percent (0..100). 0.0 bei Fehler.
-        """
-        try:
-            import subprocess
-            ps_script = (
-                "$samples = (Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' "
-                "-ErrorAction SilentlyContinue).CounterSamples; "
-                "if ($samples) { ($samples | Measure-Object -Property CookedValue -Sum).Sum } "
-                "else { 0 }"
-            )
-            cmd = ["powershell", "-NoProfile", "-Command", ps_script]
-            res = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=8,
-            )
-            if res.returncode == 0 and res.stdout.strip():
-                load = float(res.stdout.strip())
-                # Cap auf 100 (multi-engine kann technisch ueber 100 summieren)
-                load = min(100.0, max(0.0, load))
-                if load > 0:
-                    logger.debug("Counter GPU Load fallback: %.1f%%", load)
-                return load
-        except Exception as e:
-            logger.warning("Counter GPU-Load-Fallback fehlgeschlagen: %s", e)
         return 0.0
 
     def close(self):

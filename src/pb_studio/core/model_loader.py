@@ -27,6 +27,11 @@ from pb_studio.core.vram_budget_manager import (
     KNOWN_MODEL_BUDGETS,
     get_vram_manager
 )
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -181,16 +186,13 @@ class ModelLoader:
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create DirectML-compatible session options."""
-        opts = ort.SessionOptions()
+        opts = configure_directml_session_options(ort.SessionOptions())
 
         # KRITISCH: Beide Memory-Flags MÜSSEN für DirectML deaktiviert sein.
         # enable_mem_pattern=False: Pflicht für DmlExecutionProvider (Graph-Speicher
         #   wird dynamisch, nicht vorab alloziert — DirectML erfordert das).
         # enable_cpu_mem_arena=False: CPU-Arena konkurriert mit DirectML-Allocator
         #   und führt zu Instabilität / OOM. R16/IRON-RULE fix (war True — falsch).
-        opts.enable_mem_pattern = False
-        opts.enable_cpu_mem_arena = False
-
         # Optimierungen
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         opts.intra_op_num_threads = 0  # Auto
@@ -206,8 +208,21 @@ class ModelLoader:
                 "DmlExecutionProvider is unavailable; CPU ONNX fallback is disabled"
             )
 
-        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-        return [("DmlExecutionProvider", {"device_id": device_id})]
+        return [get_directml_provider()]
+
+    @staticmethod
+    def _create_onnx_session(
+        model_path: Path,
+        options: ort.SessionOptions,
+        providers: list,
+    ) -> ort.InferenceSession:
+        return enforce_directml_session(
+            ort.InferenceSession(
+                str(model_path),
+                options,
+                providers=providers,
+            )
+        )
 
     def can_load(self, model_id: str) -> bool:
         """
@@ -336,11 +351,7 @@ class ModelLoader:
         opts = self._create_session_options()
         providers = self._get_providers()
 
-        return ort.InferenceSession(
-            str(model_path),
-            opts,
-            providers=providers
-        )
+        return self._create_onnx_session(model_path, opts, providers)
 
     def _load_onnx_split(self, spec: ModelSpec) -> Optional[Dict[str, ort.InferenceSession]]:
         """Load a split encoder/decoder model."""
@@ -351,7 +362,11 @@ class ModelLoader:
             providers = self._get_providers()
 
             return {
-                "combined": ort.InferenceSession(str(combined_path), opts, providers=providers),
+                "combined": self._create_onnx_session(
+                    combined_path,
+                    opts,
+                    providers,
+                ),
                 "is_combined": True
             }
 
@@ -367,8 +382,16 @@ class ModelLoader:
         providers = self._get_providers()
 
         return {
-            "encoder": ort.InferenceSession(str(encoder_path), opts, providers=providers),
-            "decoder": ort.InferenceSession(str(decoder_path), opts, providers=providers),
+            "encoder": self._create_onnx_session(
+                encoder_path,
+                opts,
+                providers,
+            ),
+            "decoder": self._create_onnx_session(
+                decoder_path,
+                opts,
+                providers,
+            ),
             "is_combined": False
         }
 

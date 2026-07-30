@@ -24,6 +24,8 @@ from enum import IntEnum
 from typing import Dict, Optional, Callable, List, Any
 from collections import OrderedDict
 
+from pb_studio.core.directml_adapter import get_directml_adapter
+
 logger = logging.getLogger(__name__)
 
 
@@ -204,17 +206,20 @@ class VRAMBudgetManager:
             if self._initialized:
                 # Monitor nachtraeglich setzen wenn noch keiner vorhanden
                 if monitor is not None and self.monitor is None:
-                    self.monitor = monitor
-                    logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
+                    self.monitor = self._coherent_monitor(monitor)
+                    if self.monitor is not None:
+                        logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
                 return
 
             from pb_studio.config_manager import ConfigManager
 
             self.config = ConfigManager()
-            self.monitor = monitor
+            self.adapter = get_directml_adapter()
+            self._physical_vram_mb = self.adapter.dedicated_vram_mb
+            self.monitor = self._coherent_monitor(monitor)
 
             # VRAM limits
-            self._max_vram_mb = max_vram_mb or self._detect_vram_limit()
+            self._max_vram_mb = self._detect_vram_limit(max_vram_mb)
             self._safety_buffer_mb = 500  # Reserve for OS/Desktop
             self._usable_vram_mb = self._max_vram_mb - self._safety_buffer_mb
 
@@ -261,110 +266,65 @@ class VRAMBudgetManager:
         with cls._lock:
             cls._instance = None
 
-    def _detect_vram_limit(self) -> int:
-        """
-        Detect total VRAM using multiple methods.
+    def _coherent_monitor(self, monitor):
+        if monitor is None:
+            return None
+        monitor_luid = getattr(monitor, "selected_adapter_luid", None)
+        if monitor_luid != self.adapter.luid:
+            logger.error(
+                "VRAM monitor rejected: selected LUID %s does not match "
+                "DirectML LUID %s",
+                monitor_luid,
+                self.adapter.luid,
+            )
+            return None
+        return monitor
 
-        Priority:
-        1. Config (if explicitly set > 0)
-        2. SystemMonitor (LibreHardwareMonitor)
-        3. WMI Win32_VideoController query
-        4. Fallback: 8192MB
-        """
-        # 1. Config (nur wenn explizit gesetzt oder per Env-Var injiziert)
+    def _detect_vram_limit(self, requested_limit: Optional[int] = None) -> int:
+        """Clamp a configured limit to the selected adapter's physical VRAM."""
         import os
-        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get("PB_STUDIO_FORCED_VRAM")
-        config_limit = int(env_limit) if env_limit and env_limit.isdigit() else self.config.get("hardware", {}).get("vram_limit_mb", 0)
-        if config_limit > 0:
-            logger.info(f"Using configured VRAM limit: {config_limit}MB")
-            return config_limit
 
-        # 2. SystemMonitor (LibreHardwareMonitor)
-        if self.monitor:
-            try:
-                stats = self.monitor.get_stats()
-                total = stats.get("gpu_memory_total", 0)
-                if total > 0:
-                    logger.info(f"Detected VRAM from monitor: {total}MB")
-                    return int(total)
-            except Exception as e:
-                logger.debug(f"Monitor VRAM detection failed: {e}")
-
-        # 3. WMI Query (Windows-native GPU-Erkennung)
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 "Get-CimInstance Win32_VideoController | "
-                 "Where-Object { $_.AdapterRAM -gt 0 } | "
-                 "Select-Object -First 1 -ExpandProperty AdapterRAM"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                adapter_ram = int(result.stdout.strip())
-                # AdapterRAM ist in Bytes, konvertiere zu MB
-                vram_mb = adapter_ram // (1024 * 1024)
-                # WMI meldet bei >4GB GPUs manchmal nur 4GB (32-bit Limit)
-                # In dem Fall ignorieren wir den Wert
-                if vram_mb > 4096:
-                    logger.info(f"Detected VRAM via WMI: {vram_mb}MB")
-                    return vram_mb
-                elif vram_mb > 0:
-                    logger.debug(f"WMI reports {vram_mb}MB (possibly capped at 4GB)")
-        except Exception as e:
-            logger.debug(f"WMI VRAM detection failed: {e}")
-
-        # 4. DirectX Adapter Query via dxdiag-artige Methode
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 "(Get-CimInstance Win32_VideoController | "
-                 "Where-Object { $_.Name -match 'AMD|Radeon' } | "
-                 "Select-Object -First 1).AdapterRAM"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                adapter_ram = int(result.stdout.strip())
-                vram_mb = adapter_ram // (1024 * 1024)
-                if vram_mb > 0:
-                    # Wenn 4GB gemeldet wird bei einer GPU die mehr hat,
-                    # versuche den Namen zu matchen
-                    logger.info(f"Detected AMD GPU VRAM via WMI: {vram_mb}MB")
-                    if vram_mb <= 4096:
-                        # WMI 32-bit Limit - schaetze anhand des GPU-Namens
-                        name_result = subprocess.run(
-                            ["powershell", "-Command",
-                             "(Get-CimInstance Win32_VideoController | "
-                             "Where-Object { $_.Name -match 'AMD|Radeon' } | "
-                             "Select-Object -First 1).Name"],
-                            capture_output=True, text=True, timeout=10
-                        )
-                        if name_result.returncode == 0:
-                            gpu_name = name_result.stdout.strip().lower()
-                            # Bekannte AMD GPU VRAM-Groessen
-                            vram_by_name = {
-                                "7900 xtx": 24576, "7900 xt": 20480,
-                                "7900 gre": 16384, "7800 xt": 16384,
-                                "7700 xt": 12288, "7600": 8192,
-                                "6950 xt": 16384, "6900 xt": 16384,
-                                "6800 xt": 16384, "6800": 16384,
-                                "6700 xt": 12288, "6600 xt": 8192,
-                            }
-                            for model, vram in vram_by_name.items():
-                                if model in gpu_name:
-                                    logger.info(f"Matched GPU '{gpu_name}' -> {vram}MB VRAM")
-                                    return vram
-        except Exception as e:
-            logger.debug(f"AMD GPU detection failed: {e}")
-
-        # 5. Fallback
-        logger.warning(
-            "VRAM-Erkennung fehlgeschlagen! Alle Methoden (Config, Monitor, WMI, GPU-Name) "
-            "konnten VRAM-Größe nicht bestimmen. Verwende konservativen Fallback von 8192MB. "
-            "Empfehlung: Setze 'vram_limit_mb' in config.yaml unter 'hardware' für korrekte Werte."
+        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get(
+            "PB_STUDIO_FORCED_VRAM"
         )
-        return 8192
+        if requested_limit is None:
+            if env_limit:
+                if not env_limit.isdigit():
+                    raise ValueError(
+                        "PBSTUDIO_VRAM_LIMIT_MB must be a non-negative integer"
+                    )
+                requested_limit = int(env_limit)
+            else:
+                requested_limit = self.config.get("hardware", {}).get(
+                    "vram_limit_mb",
+                    0,
+                )
+        if isinstance(requested_limit, bool) or not isinstance(requested_limit, int):
+            raise ValueError("VRAM limit must be an integer number of MB")
+        if requested_limit < 0:
+            raise ValueError("VRAM limit cannot be negative")
+
+        effective = (
+            min(requested_limit, self._physical_vram_mb)
+            if requested_limit > 0
+            else self._physical_vram_mb
+        )
+        if requested_limit > self._physical_vram_mb:
+            logger.warning(
+                "Configured VRAM limit %dMB exceeds selected adapter physical "
+                "VRAM %dMB; clamped",
+                requested_limit,
+                self._physical_vram_mb,
+            )
+        logger.info(
+            "VRAM ceiling bound to DirectML adapter index=%d luid=%s: "
+            "physical=%dMB effective=%dMB",
+            self.adapter.device_id,
+            self.adapter.luid,
+            self._physical_vram_mb,
+            effective,
+        )
+        return effective
 
     @property
     def available_vram_mb(self) -> int:
@@ -381,7 +341,18 @@ class VRAMBudgetManager:
         Raises:
             ValueError: If new usable VRAM is less than currently committed VRAM.
         """
-        new_usable = limit_mb - self._safety_buffer_mb
+        if isinstance(limit_mb, bool) or not isinstance(limit_mb, int):
+            raise ValueError("VRAM limit must be an integer number of MB")
+        if limit_mb <= 0:
+            limit_mb = self._physical_vram_mb
+        effective_limit = min(limit_mb, self._physical_vram_mb)
+        if effective_limit < limit_mb:
+            logger.warning(
+                "Requested VRAM limit %dMB exceeds physical ceiling %dMB; clamped",
+                limit_mb,
+                self._physical_vram_mb,
+            )
+        new_usable = effective_limit - self._safety_buffer_mb
         if new_usable < 0:
             raise ValueError("Das VRAM-Limit ist zu niedrig (Sicherheits-Buffer fuer OS nicht gedeckt).")
 
@@ -394,10 +365,10 @@ class VRAMBudgetManager:
         with self._registry_lock:
             if new_usable < self._committed_mb:
                 raise ValueError(
-                    f"Limit kann nicht auf {limit_mb}MB gesenkt werden. "
+                    f"Limit kann nicht auf {effective_limit}MB gesenkt werden. "
                     f"Aktuell sind {self._committed_mb + self._safety_buffer_mb}MB durch aktive Prozesse belegt."
                 )
-            self._max_vram_mb = limit_mb
+            self._max_vram_mb = effective_limit
             self._usable_vram_mb = new_usable
             logger.info(
                 f"VRAMBudgetManager: Dynamically updated limits. "
@@ -425,6 +396,10 @@ class VRAMBudgetManager:
 
             return {
                 "max_vram_mb": self._max_vram_mb,
+                "physical_vram_mb": self._physical_vram_mb,
+                "adapter_index": self.adapter.device_id,
+                "adapter_luid": self.adapter.luid,
+                "adapter_name": self.adapter.name,
                 "usable_vram_mb": self._usable_vram_mb,
                 "reserved_mb": self._reserved_mb,
                 "committed_mb": self._committed_mb,

@@ -1,5 +1,9 @@
+import copy
 import json
 import logging
+import os
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Dict
 
@@ -13,6 +17,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent
 class ConfigManager:
     _instance = None
     _config: Dict[str, Any] = {}
+    _config_lock = threading.RLock()
     
     # Defaults tailored for AMD Setup
     DEFAULTS = {
@@ -27,13 +32,16 @@ class ConfigManager:
         },
         "hardware": {
             "gpu_backend": "directml",
+            "directml_adapter_policy": "highest_vram_amd",
             "vram_limit_mb": 0,   # 0 = auto-detect (VRAMBudgetManager reads actual capacity)
             "enable_monitoring": True
         },
         "ai": {
             "vision_model": "moondream2_fp16",
             "audio_backend": "demucs_cpu",
-            "parallel_tasks": False
+            "parallel_tasks": False,
+            "task_overrides": {},
+            "task_provider_overrides": {}
         },
         "ui": {
             "theme": "dark_red",
@@ -59,29 +67,61 @@ class ConfigManager:
         return result
 
     def _load_config(self):
-        # Config-Datei relativ zum Projekt-Root
-        self.config_file = _PROJECT_ROOT / "config.json"
-        if self.config_file.exists():
-            try:
-                with open(self.config_file, "r") as f:
-                    user_config = json.load(f)
-                    # Deep merge: User-Config ueberschreibt Defaults, fehlende Keys bleiben
-                    self._config = self._deep_merge(self.DEFAULTS, user_config)
-            except Exception as e:
-                logger.error(f"Config load failed: {e}. Using defaults.")
-                import copy
+        with self._config_lock:
+            # Config-Datei relativ zum Projekt-Root
+            self.config_file = _PROJECT_ROOT / "config.json"
+            if self.config_file.exists():
+                try:
+                    with self.config_file.open("r", encoding="utf-8") as f:
+                        user_config = json.load(f)
+                        # Deep merge: User-Config ueberschreibt Defaults, fehlende Keys bleiben
+                        self._config = self._deep_merge(self.DEFAULTS, user_config)
+                except Exception as e:
+                    logger.error(f"Config load failed: {e}. Using defaults.")
+                    self._config = copy.deepcopy(self.DEFAULTS)
+            else:
                 self._config = copy.deepcopy(self.DEFAULTS)
-        else:
-            import copy
-            self._config = copy.deepcopy(self.DEFAULTS)
-            self.save_config()
+                self.save_config()
 
     def save_config(self):
+        temp_path: Path | None = None
         try:
-            with open(self.config_file, "w") as f:
-                json.dump(self._config, f, indent=4)
+            with self._config_lock:
+                descriptor, raw_temp_path = tempfile.mkstemp(
+                    prefix=f".{self.config_file.name}.",
+                    suffix=".tmp",
+                    dir=str(self.config_file.parent),
+                )
+                temp_path = Path(raw_temp_path)
+                with os.fdopen(
+                    descriptor,
+                    "w",
+                    encoding="utf-8",
+                    newline="\n",
+                ) as handle:
+                    json.dump(
+                        self._config,
+                        handle,
+                        indent=4,
+                        ensure_ascii=False,
+                    )
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temp_path, self.config_file)
+                temp_path = None
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
+            raise
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning(
+                        "Temporary config file could not be removed: %s",
+                        temp_path.name,
+                    )
 
     def resolve_path(self, relative_path: Any) -> Path:
         """Resolve relative path to absolute based on project root.
@@ -100,11 +140,13 @@ class ConfigManager:
         return (_PROJECT_ROOT / cleaned).resolve()
 
     def get(self, key: str, default=None):
-        return self._config.get(key, default)
+        with self._config_lock:
+            return copy.deepcopy(self._config.get(key, default))
 
     def set(self, key: str, value: Any):
-        self._config[key] = value
-        self.save_config()
+        with self._config_lock:
+            self._config[key] = copy.deepcopy(value)
+            self.save_config()
 
     # Typed helpers
     @property
