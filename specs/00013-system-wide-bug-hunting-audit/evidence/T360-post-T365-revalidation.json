@@ -2,9 +2,9 @@
   "status": "PASS",
   "counts": {
     "python": 348,
-    "json": 63,
+    "json": 74,
     "xml": 22,
-    "changed_nonempty": 132
+    "changed_nonempty": 16
   },
   "openapi_sha256": "2AFEB279BDB05CB543CE6D62CF467F4CF206175376E1FA00B8CB982220FD8962",
   "generated_sha256": "CD5C28E35757B9B5E5C704FBD69C23B94659F0A9215BD7D21B155A264CC90358",

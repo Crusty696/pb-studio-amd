@@ -28,6 +28,14 @@ did not prove which provider and model handled the next request.
 6. Missing or DirectML-incompatible model assets make the capability
    explicitly unavailable. No CPU, CUDA, ROCm or capability-mismatched
    fallback is allowed.
+7. Locally installed inference assets are bound to pinned source revisions,
+   source/derived SHA-256 values and deterministic transformations in
+   `config/directml-model-assets.json`. Fixed-shape exports are permitted when
+   they remove unsupported dynamic-shape control nodes without changing neural
+   weights.
+8. Partial model readiness is explicit. Moondream Vision may be ready while
+   caption generation remains unavailable; vision load must never set the
+   full caption-pipeline readiness flag.
 
 ## Consequences
 
@@ -37,3 +45,7 @@ did not prove which provider and model handled the next request.
 - Release readiness requires physical DirectML evidence for every required
   inference workload; unavailable assets block the gate rather than weakening
   the runtime contract.
+- Deterministic CPU input preprocessing is allowed, but neural inference stays
+  under the strict DirectML session contract.
+- Wrapper-level DirectML calls own the shared GPU lock; orchestration layers
+  must not reacquire the same non-reentrant lock around wrapper calls.

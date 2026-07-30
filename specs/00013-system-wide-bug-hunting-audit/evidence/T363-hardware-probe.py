@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -23,6 +24,13 @@ from pb_studio.core.directml_adapter import (
 
 
 MODELS_DIR = Path("models")
+PROJECT_DIR = Path(
+    os.environ.get(
+        "PBSTUDIO_T363_PROJECT_DIR",
+        r"C:\Users\david\Documents\PBStudio\New_test_juli",
+    )
+)
+PROJECT_DB = Path("data") / "pb_studio.db"
 ASSETS = (
     "raft_small.onnx",
     "siglip_vision.onnx",
@@ -65,6 +73,48 @@ def _run_loop(action: Callable[[], Any], seconds: float) -> int:
     return iterations
 
 
+def _project_media() -> tuple[Path, Path]:
+    project_data = json.loads((PROJECT_DIR / "project.json").read_text("utf-8"))
+    project_id = int(project_data["db_project_id"])
+    with sqlite3.connect(PROJECT_DB) as connection:
+        paths = [
+            Path(row[0])
+            for row in connection.execute(
+                "SELECT file_path FROM media WHERE project_id = ? ORDER BY id",
+                (project_id,),
+            )
+        ]
+    audio_extensions = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"}
+    video_extensions = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
+    audio_path = next(
+        path
+        for path in paths
+        if path.suffix.lower() in audio_extensions and path.is_file()
+    )
+    video_path = next(
+        path
+        for path in paths
+        if path.suffix.lower() in video_extensions and path.is_file()
+    )
+    return audio_path, video_path
+
+
+def _real_video_frames() -> tuple[Path, np.ndarray, np.ndarray]:
+    import cv2
+
+    _, video_path = _project_media()
+    capture = cv2.VideoCapture(str(video_path))
+    try:
+        ok_a, frame_a = capture.read()
+        capture.set(cv2.CAP_PROP_POS_MSEC, 1000.0)
+        ok_b, frame_b = capture.read()
+    finally:
+        capture.release()
+    if not ok_a or not ok_b or frame_a is None or frame_b is None:
+        raise RuntimeError(f"Could not decode real project video: {video_path}")
+    return video_path, frame_a, frame_b
+
+
 def probe_inventory(_: float) -> int:
     result = _base("inventory")
     result["assets"] = {
@@ -95,8 +145,8 @@ def probe_raft(seconds: float) -> int:
             _emit(result)
             return 2
         _emit_ready(result)
-        frame_a = np.zeros((384, 512, 3), dtype=np.uint8)
-        frame_b = np.full((384, 512, 3), 127, dtype=np.uint8)
+        video_path, frame_a, frame_b = _real_video_frames()
+        result["source_media"] = str(video_path)
         result["iterations"] = _run_loop(
             lambda: analyzer.calculate_flow(frame_a, frame_b),
             seconds,
@@ -124,10 +174,11 @@ def probe_siglip(seconds: float) -> int:
             _emit(result)
             return 2
         _emit_ready(result)
-        image = Image.fromarray(
-            np.full((384, 384, 3), 127, dtype=np.uint8),
-            mode="RGB",
-        )
+        import cv2
+
+        video_path, frame, _ = _real_video_frames()
+        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        result["source_media"] = str(video_path)
         result["iterations"] = _run_loop(
             lambda: wrapper.encode_image(image),
             seconds,
@@ -147,18 +198,20 @@ def probe_moondream(seconds: float) -> int:
     analyzer = MoondreamAnalyzer(lazy_load=False)
     try:
         result.update(
-            ready=analyzer.is_ready,
+            ready=analyzer.is_vision_ready,
+            caption_ready=analyzer.is_ready,
             active_provider=analyzer.active_provider,
         )
-        if not analyzer.is_ready:
+        if not analyzer.is_vision_ready:
             result["error"] = "Moondream DirectML ONNX assets/session unavailable"
             _emit(result)
             return 2
         _emit_ready(result)
-        image = Image.fromarray(
-            np.full((384, 384, 3), 127, dtype=np.uint8),
-            mode="RGB",
-        )
+        import cv2
+
+        video_path, frame, _ = _real_video_frames()
+        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        result["source_media"] = str(video_path)
         result["iterations"] = _run_loop(
             lambda: analyzer.encode_image(image),
             seconds,
@@ -185,20 +238,39 @@ def probe_clap(seconds: float) -> int:
             result["error"] = "CLAP DirectML ONNX assets/session unavailable"
             _emit(result)
             return 2
-        session = analyzer.combined_session or analyzer.audio_encoder_session
-        if session is None:
-            result["error"] = "CLAP has no runnable audio session"
+        audio_session = analyzer.combined_session or analyzer.audio_encoder_session
+        text_session = analyzer.text_encoder_session
+        if audio_session is None or text_session is None:
+            result["error"] = "CLAP has no runnable audio/text sessions"
             _emit(result)
             return 2
+        audio_path, _ = _project_media()
+        audio_tensor = analyzer.preprocess_audio(analyzer.load_audio(audio_path))
+        tokens = analyzer._processor(
+            text=["psytrance"],
+            padding="max_length",
+            truncation=True,
+            max_length=77,
+            return_tensors="np",
+        )
+        text_inputs = {
+            meta.name: np.asarray(tokens[meta.name], dtype=np.int64)
+            for meta in text_session.get_inputs()
+        }
+        result["source_media"] = str(audio_path)
+        result["audio_input_shape"] = list(audio_tensor.shape)
         _emit_ready(result)
-        input_meta = session.get_inputs()[0]
-        shape = [
-            dimension if isinstance(dimension, int) and dimension > 0 else 1
-            for dimension in input_meta.shape
-        ]
-        tensor = np.zeros(shape, dtype=np.float32)
+
+        def run_clap() -> Any:
+            audio_output = audio_session.run(
+                None,
+                {audio_session.get_inputs()[0].name: audio_tensor},
+            )
+            text_output = text_session.run(None, text_inputs)
+            return audio_output, text_output
+
         result["iterations"] = _run_loop(
-            lambda: session.run(None, {input_meta.name: tensor}),
+            run_clap,
             seconds,
         )
         _emit(result)

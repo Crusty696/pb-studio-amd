@@ -129,3 +129,20 @@ LHM trust anchors:
 
 Revalidation PASS. `.completed` may be recreated. `.qc-passed` remains
 forbidden because T363 is BLOCKED and T366–T369 are not complete.
+
+## Final revalidation after T363 model remediation
+
+Date: 2026-07-30
+Receipt: `evidence/T360-post-T365-revalidation.json`
+
+- Python syntax: 348 PASS
+- active/tracked JSON parse: 74 PASS
+- XAML/project XML parse: 22 PASS
+- changed non-empty files: 16 PASS at execution time
+- OpenAPI/runtime equality and generated client freshness: PASS
+- LHM manifest/library/assembly hash chain: PASS
+- all six DirectML consumers retain central enforcement: PASS
+- `git diff --check`: PASS
+- focused DirectML/model/lock contracts: PASS
+
+Revalidation PASS. `.completed` was recreated before the final full suite.

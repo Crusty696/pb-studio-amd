@@ -17,20 +17,26 @@
   begrenztes Failover und providergebundene Aufgabenpersistenz umgesetzt.
 - `SceneInfo.Confidence` im handgeschriebenen C#-DTO nullable gemacht und
   Batchfehler sowie falsche Analyse-Erfolgsmarkierung verhindert.
+- RAFT-/SigLIP-Graphen auf strict-DirectML-kompatible feste Eingabeformen
+  gebracht; gepinnte und gehashte CLAP-Audio-/Text- sowie
+  Moondream-Vision-Assets installiert.
+- Einen zuvor verdeckten Selbst-Deadlock durch doppelte Sperrung des
+  nicht-reentranten GPU-Locks zwischen SmartDirector und CLAP beseitigt.
 
 ### Verified
-- Gezielte Regression: 85 passed, 3 begründete Skips, 0 Fehler.
-- Vollsuite: 1.086 passed, 12 begründete Skips, 0 Fehler; WPF Release 0/0.
+- Finale Vollsuite: 1.090 passed, 11 begründete Skips, 0 Fehler;
+  WPF Release 0 Warnungen/0 Fehler.
+- RAFT, SigLIP, Moondream Vision, CLAP und Audio MDX mit eigenen
+  PID/LUID/Engine/VRAM-Receipts auf der RX 7800 XT; iGPU jeweils 0 %.
 - Provider-/Modell-E2E und Release-GUI einschließlich `confidence=null`
   bestanden; kein Retry-Sturm.
 - Frische H.264-/HEVC-AMF-Exporte: je 190.051 Frames, Full-Decode über
   6.335,027 s, 106/106 Segmente, keine Schwarz-/Freezeintervalle.
 
-### Blocked
-- Kein Release-Gate: T363 kann RAFT und SigLIP wegen CPU-pflichtiger ONNX-
-  Graphknoten unter dem strikten DirectML-Vertrag nicht laden; freigegebene
-  Moondream-/CLAP-ONNX-Assets fehlen.
-- `.completed` ist nach T360 gültig; `.qc-passed` bleibt bewusst abwesend.
+### Release gate
+- T363 und T368 sind PASS; `.completed` und `.qc-passed` sind gültig.
+- Moondream-Vision ist aktiv. Der vorhandene Caption-Decoder bleibt wegen
+  CPU-pflichtiger Knoten bewusst deaktiviert und wird nicht als ready gemeldet.
 
 ### Published
 - Sieben zonierte PB-Commits nach Secret-Scan und D07 Fast-Forward-Gate normal
@@ -38,8 +44,8 @@
   verifiziert.
 - Brain ausschließlich unter `10_Projects/PB_studio/**` aktualisiert und
   Remote-SHA `82b570df2524f2eb10e37baed34b8d165330b6aa` verifiziert.
-- Die Veröffentlichung dokumentiert den BLOCKED-Stand und ist keine
-  Release-Freigabe.
+- Der abschließende T363/T368-Follow-up ersetzt die frühere BLOCKED-Aussage;
+  der finale Remote-SHA steht im T369-Publikationsbeleg.
 
 ## 2026-07-29 - T305–T338 Release-Video-Reparatur und End-QC
 

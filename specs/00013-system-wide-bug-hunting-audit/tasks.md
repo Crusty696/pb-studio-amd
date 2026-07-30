@@ -380,7 +380,7 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T360 [OBJ-71] {(TR-341)} Prove implementation and review completion and recreate `.completed`
 - [X] T361 [OBJ-71] {(TR-342)} Run targeted adapter, inventory, selection, nullability, configuration, and restore regressions
 - [X] T362 [OBJ-71] {(TR-343)} Run the full Python suite, WPF Release build, security, failure, and restart checks
-- [ ] T363 [OBJ-71] {(TR-344)} Prove RAFT, SigLIP, Moondream, CLAP, and audio DirectML load on the RX 7800 XT
+- [X] T363 [OBJ-71] {(TR-344)} Prove RAFT, SigLIP, Moondream, CLAP, and audio DirectML load on the RX 7800 XT
 - [X] T364 [OBJ-71] {(TR-345)} Run LM Studio and Ollama inventory, startup refresh, capability, persistence, offline, and failover E2E
 - [X] T365 [OBJ-71] {(TR-345)} Run Release GUI, GPU-status, model-label, and nullable video-analysis E2E
 - [X] T366 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length H.264 AMF export over 6,335.027 seconds

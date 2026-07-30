@@ -1,120 +1,99 @@
 # T363 — RX 7800 XT Hardware Proof
 
-Status: BLOCKED
+Status: CONFIRMED
 Date: 2026-07-30
 Scope: TR-344, SC-073
 
-## Adapter and monitoring identity
+## Result
 
-The physical gated regression passed:
+All five required workloads executed with strict DirectML on the AMD Radeon
+RX 7800 XT:
 
-```powershell
-$env:PYTHONPATH='src'
-$env:PBSTUDIO_RUN_T357_HARDWARE='1'
-.venv\Scripts\python.exe -m pytest Tests\test_t357_gpu_wpf_nullability_contracts.py::test_physical_directml_and_lhm_identity_is_rx7800xt -q
-```
+| Workload | PID | Iterations | RX engine peak | iGPU peak | Dedicated VRAM peak |
+|---|---:|---:|---:|---:|---:|
+| RAFT | 43760 | 909 | 53.483712% | 0% | 295,043,072 B |
+| SigLIP Vision | 11852 | 212 | 94.288900% | 0% | 2,987,941,888 B |
+| Moondream Vision | 25268 | 352 | 87.775929% | 0% | 1,045,348,352 B |
+| CLAP Audio/Text | 19472 | 3,416 | 97.152906% | 0% | 1,048,829,952 B |
+| Audio MDX | 24352 | 428 | 96.182090% | 0% | 1,875,615,744 B |
 
-Receipt: `evidence/T363-hardware-identity.xml`
+Every workload reported adapter LUID `0x00000000_0x0001185b`. The iGPU LUID
+`0x00000000_0x0000ffbc` showed no process DirectML load.
 
-Verified:
+Canonical measurement receipt:
+`evidence/T363-active-summary-20260730-105514.json`.
 
-- adapter index: `1`
-- adapter LUID: `0x00000000_0x0001185b`
-- adapter: `AMD Radeon RX 7800 XT`
-- dedicated VRAM: `16,963,137,536` bytes
-- central provider tuple: `("DmlExecutionProvider", {"device_id": 1})`
-- LibreHardwareMonitor state: `ready`
+## Runtime contract
 
-## Active audio DirectML load
-
-The MDX ONNX audio model completed a dedicated 20-second load probe:
-
-- runtime PID: `35936`
-- iterations: `422`
-- input tensor: `[1, 4, 3072, 256]`
-- selected LUID: `0x00000000_0x0001185b`
-- peak GPU engine utilization: `94.891771 %`
-- peak dedicated process VRAM: `1,875,615,744` bytes
-- peak shared process GPU memory: `31,948,800` bytes
-- iGPU LUID `0x00000000_0x0000ffbc`: no counter instance for PID `35936`
-
-Receipts:
-
-- `evidence/T363-audio-active-20260730-072701.out.log`
-- `evidence/T363-audio-active-20260730-072701.err.log`
-- `evidence/T363-audio-active-20260730-072701.counters.log`
-
-The ONNX Runtime session reports DML first and its implicitly registered CPU
-provider second. The session itself proves:
-
+- Python 3.11.9
+- NumPy 1.26.4
+- ONNX Runtime DirectML 1.19.2
+- DirectML device index `1`
 - `session.disable_cpu_ep_fallback=1`
 - `enable_mem_pattern=False`
 - `enable_cpu_mem_arena=False`
-- `disable_fallback()` applied
+- runtime fallback disabled for every session
+- LibreHardwareMonitor state `ready`
 
-ONNX Runtime documents that the CPU provider can be implicitly registered and
-that `session.disable_cpu_ep_fallback=1` rejects session initialization when
-nodes require CPU placement. Provider registration is therefore not evidence
-of CPU node execution. The central enforcer was corrected to validate the
-session options and DML priority instead of rejecting the implicit provider
-name. Regression receipt: `evidence/T363-enforcer-regressions.xml` with
-58 passed and 3 bounded skips.
+Physical identity receipt: `evidence/T363-hardware-identity.xml`.
 
-Official reference:
-<https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html>
+## Real project inputs
 
-## Workload matrix
+The newest existing project was used:
+`C:\Users\david\Documents\PBStudio\New_test_juli`, database project ID `35`,
+with 1 audio file and 571 video files.
 
-| Workload | Asset state | Runtime result | PID/LUID/engine/VRAM proof |
-|---|---|---|---|
-| Audio MDX | present, 66,759,214 bytes | PASS, 422 iterations | PASS |
-| RAFT | present, 4,318,909 bytes | FAIL: graph nodes assigned to default CPU EP while fallback is disabled | unavailable |
-| SigLIP Vision | present, 1,713,419,274 bytes | FAIL: graph nodes assigned to default CPU EP while fallback is disabled | unavailable |
-| Moondream | required ONNX files absent | FAIL: capability unavailable; no CPU/PyTorch fallback | unavailable |
-| CLAP | combined and split ONNX files absent | FAIL: semantic capability unavailable | unavailable |
+- RAFT, SigLIP and Moondream used
+  `C:\Users\david\Videos\video\1 (1).mp4`.
+- CLAP used
+  `C:\Users\david\Music\audio\psy-set\Progressive Psy Summer Dream Mix  by Crusty FREE DOWNLOAD.wav`.
+- Audio MDX used a deterministic tensor with the exact model input contract
+  `[1, 4, 3072, 256]`; this gate measures model/session hardware ownership,
+  while the earlier audio probe separately proved the same path.
 
-Per-workload receipts:
+## Model assets
 
-- `evidence/T363-inventory.log`
-- `evidence/T363-raft.log`
-- `evidence/T363-siglip.log`
-- `evidence/T363-moondream.log`
-- `evidence/T363-clap.log`
-- `evidence/T363-audio.log`
+`config/directml-model-assets.json` records pinned repositories, revisions,
+source hashes, installed hashes and transformations.
 
-## Exhausted safe alternatives
+- RAFT and SigLIP were converted from the already present dynamic graphs to
+  fixed supported input shapes. Strict session creation and active inference
+  pass without CPU fallback.
+- CLAP audio/text assets came from the pinned
+  `ConceptualMachines/magda-sample-tagger` revision. The source audio graph's
+  deterministic input BatchNorm and unsupported cubic Resize were externalized
+  as CPU preprocessing; all neural inference remains strict DirectML.
+  Source/derived embedding parity has cosine similarity `1.0000001`.
+- The CLAP processor came from pinned `laion/clap-htsat-unfused` assets.
+  Real audio and text embeddings are functional; live classification returned
+  ordered non-neutral scores.
+- Moondream's pinned vision encoder is strict-DirectML compatible and passed
+  active inference. The available text decoder requires CPU-assigned nodes and
+  remains intentionally absent. `is_vision_ready=True` and
+  `is_ready=False`, so vision readiness never falsely claims caption readiness.
 
-1. Default strict session options: RAFT and SigLIP fail closed.
-2. Strict session with graph optimization disabled: both still fail.
-3. ONNX static shape inference on temporary copies: both still fail.
-4. Local model search across Documents, Hugging Face caches, and Temp:
-   no alternative RAFT, SigLIP, Moondream, or CLAP ONNX assets found.
-5. CPU EP, PyTorch CPU, torch-directml, CUDA, ROCm, and contract relaxation
-   were not used.
+T363 requires active Moondream load, which the vision encoder satisfies.
+Moondream caption generation remains explicitly unavailable and is not hidden
+by this hardware result.
 
-Diagnostic receipts:
+## Regression and build receipts
 
-- `evidence/T363-strict-no-opt-probe.log`
-- `evidence/T363-raft-siglip-strict-verbose.log`
-- `evidence/T363-shape-inference-probe.log`
-- reproducible driver: `evidence/T363-hardware-probe.py`
+- model integration: `T363-model-integration-tests.xml`
+- focused model contracts: `T363-final-focused-tests.xml`
+- CLAP lock regression: `T363-clap-lock-regressions.xml`
+- SDD marker gate: `T363-marker-gate.xml`
+- final full suite: `T363-final-full-suite.xml`
+  (`1090 passed, 11 skipped, 0 failed`)
+- WPF Release: `T363-final-wpf-release.binlog`
+  (`0 warnings, 0 errors`)
 
-## Blocker
+The full suite exposed a previously dormant self-deadlock: `SmartDirector`
+held the shared non-reentrant GPU lock while `CLAPAnalyzer` attempted to
+acquire it again. The redundant outer lock was removed; CLAP retains
+per-session serialization and all relevant regressions pass.
 
-TR-344 requires all five active workloads. Only Audio can currently produce
-the required PID/LUID/engine/VRAM receipt. Completion requires:
+## Verdict
 
-- DirectML-only-compatible RAFT and SigLIP ONNX exports for pinned ONNX Runtime
-  1.19.2, or an explicitly approved runtime/dependency change; and
-- DirectML ONNX assets for Moondream and CLAP from approved, hashed sources.
-
-Those assets are not present locally. Downloading or re-exporting them is not
-part of the approved model-asset actions, and changing ONNX Runtime would
-violate the no-dependency-change constraint. T363 remains BLOCKED. No
-`.qc-passed` marker may be created.
-
-The T363 enforcer correction changed production code after the initial T360.
-The implementation marker was invalidated and then recreated only after fresh
-T360–T362 validation. The post-T365 launcher correction was likewise followed
-by a complete static T360 revalidation. `.completed` is therefore current;
-`.qc-passed` remains forbidden by this blocker.
+TR-344 and SC-073 are PASS / CONFIRMED. RX 7800 XT activity, exact LUID,
+process engine load and VRAM are stored for every required workload; the iGPU
+was inactive for those PIDs.

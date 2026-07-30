@@ -69,21 +69,22 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-07-30 (Reparaturplan 00013, OBJ-71 T368)
-- **Phase:** 🔴 End-QC BLOCKED; nicht release-ready.
-- **Status (2026-07-30 — GPU-/Provider-/Analyse-Reparatur T340–T368):**
+- **Date:** 2026-07-30 (Reparaturplan 00013, OBJ-71 T369)
+- **Phase:** 🟢 End-QC PASS; release-ready.
+- **Status (2026-07-30 — GPU-/Provider-/Analyse-Reparatur T340–T369):**
   - DirectML, VRAM und LHM verwenden RX 7800 XT Index `1`, LUID
     `0x00000000_0x0001185b`; LHM-0.9.6-Trust ist manifest- und hashgebunden.
   - Liveinventar, providergebundene Selection Receipts, begrenztes Failover,
     persistenter Modellwechsel und nullable `SceneInfo.Confidence` sind repariert.
-  - Verifiziert: **1086 passed/12 skipped/0 failed**, WPF Release **0/0**,
+  - Verifiziert: **1090 passed/11 skipped/0 failed**, WPF Release **0/0**,
     Provider-/GUI-E2E PASS; H.264 und HEVC je 190.051 Frames, Full-Decode,
     106/106 Segmente und keine Schwarz-/Freezeintervalle.
-  - **Blocker T363:** Audio läuft auf der RX 7800 XT; RAFT/SigLIP benötigen
-    mit den vorhandenen ONNX-Exports verbotene CPU-Knoten. Freigegebene
-    Moondream-/CLAP-ONNX-Assets fehlen.
-  - `.completed` ist nach post-fix T360 gültig; `.qc-passed` ist abwesend.
-  - T369: Secret-Scan und D07 PASS; sieben PB-Zonencommits und ausschließlich
+  - T363 PASS: RAFT, SigLIP, Moondream Vision, CLAP und Audio MDX liefen
+    aktiv auf RX 7800 XT LUID `0x00000000_0x0001185b`; iGPU jeweils 0 %.
+  - CLAP Audio/Text ist funktional; ein aktivierter doppelter GPU-Lock wurde
+    entfernt. Moondream Caption bleibt ehrlich unavailable, Vision ist ready.
+  - `.completed` und `.qc-passed` sind nach 100-Prozent-End-QC gültig.
+  - T369: Secret-Scan und D07 PASS; PB und ausschließlich
     PB-Studio-Brainpfade normal gepusht; Remote-SHAs verifiziert.
 - **Status (2026-07-28 — Neue vollständige App-Statusaufnahme):**
 - **Status (2026-07-28 — Vollständige App-Statusaufnahme):**
@@ -115,9 +116,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:** DirectML-only-kompatible RAFT-/SigLIP-Exports und freigegebene,
-  gehashte Moondream-/CLAP-ONNX-Assets bereitstellen; danach T363 und T368
-  erneut ausführen.
+- **Next Task:** Manueller End-to-End-Benutzertest mit
+  `C:\Users\david\Documents\PBStudio\New_test_juli`; Moondream Caption bleibt
+  bis zu einem strict-DirectML-kompatiblen Decoder bewusst deaktiviert.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 
