@@ -23,8 +23,9 @@
   segments and no black/freeze intervals.
 - **Markers:** `.completed` is valid after the post-fix T360 gate.
   `.qc-passed` is absent and unauthorized while T363 remains blocked.
-- **Publication:** T369 remains open until zoned commits, Secret-Scan,
-  Remote-Diff, scoped pushes and Remote-SHA verification complete.
+- **Publication:** PASS / CONFIRMED. T369 completed zoned commits, a clean
+  Secret-Scan, D07 Fast-Forward checks, scoped pushes and Remote-SHA
+  verification. Publication does not override the T363 release blocker.
 - **Canonical evidence:** `evidence/T368-final-truth-gate.md`.
 
 ### OBJ-71 Requirement Matrix
@@ -44,10 +45,10 @@
 | TR-344 | BLOCKED | T363 |
 | TR-345 | PASS / CONFIRMED | T364–T367 |
 | OR-333 | PASS / CONFIRMED | T368; `.qc-passed` correctly absent |
-| OR-334 | OPEN | T369 |
+| OR-334 | PASS / CONFIRMED | T369 |
 | SC-073 | BLOCKED | T363 |
 | SC-074 | PASS / CONFIRMED | T364–T365 |
-| SC-075 | OPEN / BLOCKED | T369 open; T363 prevents release marker |
+| SC-075 | BLOCKED | Publication complete; T363 prevents release marker |
 
 The 2026-07-29 gate below is a historical OBJ-70 result. It is superseded for
 current release readiness by the OBJ-71 gate above.

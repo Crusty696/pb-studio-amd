@@ -32,6 +32,15 @@
   Moondream-/CLAP-ONNX-Assets fehlen.
 - `.completed` ist nach T360 gültig; `.qc-passed` bleibt bewusst abwesend.
 
+### Published
+- Sieben zonierte PB-Commits nach Secret-Scan und D07 Fast-Forward-Gate normal
+  gepusht; Remote-SHA `b04ca4f9479021c932c53b1fb14df50600781821`
+  verifiziert.
+- Brain ausschließlich unter `10_Projects/PB_studio/**` aktualisiert und
+  Remote-SHA `82b570df2524f2eb10e37baed34b8d165330b6aa` verifiziert.
+- Die Veröffentlichung dokumentiert den BLOCKED-Stand und ist keine
+  Release-Freigabe.
+
 ## 2026-07-29 - T305–T338 Release-Video-Reparatur und End-QC
 
 ### Fixed

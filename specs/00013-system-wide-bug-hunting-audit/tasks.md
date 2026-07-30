@@ -386,4 +386,4 @@ plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
 - [X] T366 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length H.264 AMF export over 6,335.027 seconds
 - [X] T367 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length HEVC AMF export over 6,335.027 seconds
 - [X] T368 [OBJ-71] {(OR-333)} Reconcile QC, CHANGELOG, ADRs, CLAUDE status, tasks, ledger, and Brain; create `.qc-passed` only on 100% PASS
-- [ ] T369 [OBJ-71] {(OR-334)} Commit by zone, scan secrets, verify remote diff, push scoped repositories, and verify remote SHAs
+- [X] T369 [OBJ-71] {(OR-334)} Commit by zone, scan secrets, verify remote diff, push scoped repositories, and verify remote SHAs
