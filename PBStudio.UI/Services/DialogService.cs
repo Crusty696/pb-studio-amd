@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows;
 using Microsoft.Win32;
 
 namespace PBStudio.UI.Services;
@@ -60,5 +61,16 @@ public class DialogService : IDialogService
         };
 
         return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public bool ConfirmDestructiveAction(string title, string message)
+    {
+        var result = MessageBox.Show(
+            message,
+            title,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        return result == MessageBoxResult.Yes;
     }
 }

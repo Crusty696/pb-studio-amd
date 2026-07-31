@@ -336,15 +336,17 @@ class MediaRepository:
                     json_ai = json.dumps(
                         _migrate_ai_data_for_path(file_path, ai_data)
                     )
-                    conn.execute(
+                    cursor = conn.execute(
                         "UPDATE media SET status = ?, ai_data_json = ? WHERE id = ?",
                         (status, json_ai, media_id)
                     )
                 else:
-                    conn.execute(
+                    cursor = conn.execute(
                         "UPDATE media SET status = ? WHERE id = ?",
                         (status, media_id)
                     )
+                if cursor.rowcount != 1:
+                    raise LookupError(f"Media {media_id} existiert nicht mehr")
                 logger.debug(f"Updated media {media_id} status to {status}")
 
         except sqlite3.OperationalError:
@@ -368,10 +370,12 @@ class MediaRepository:
                 json_meta = _serialize_meta(
                     _migrate_metadata_for_path(file_path, metadata)
                 )
-                conn.execute(
+                cursor = conn.execute(
                     "UPDATE media SET metadata_json = ? WHERE id = ?",
                     (json_meta, media_id)
                 )
+                if cursor.rowcount != 1:
+                    raise LookupError(f"Media {media_id} existiert nicht mehr")
                 logger.debug(f"Updated metadata for media {media_id}")
 
         except sqlite3.OperationalError:
@@ -386,7 +390,9 @@ class MediaRepository:
         try:
             with self.db.transaction(immediate=True) as conn:
                 # Foreign key cascade will delete related vector_map entries
-                conn.execute("DELETE FROM media WHERE id = ?", (media_id,))
+                cursor = conn.execute("DELETE FROM media WHERE id = ?", (media_id,))
+                if cursor.rowcount != 1:
+                    raise LookupError(f"Media {media_id} existiert nicht mehr")
                 logger.info(f"Deleted media {media_id}")
 
         except sqlite3.OperationalError:

@@ -4,6 +4,10 @@
 > project-managed dependencies, SigLIP SO400M ONNX with 1152-dimensional
 > embeddings, and `DmlExecutionProvider` only. Missing DML or model artifacts
 > is an explicit unavailable/error state; there is no CPU fallback.
+> Approved source:
+> `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3`,
+> license `Apache-2.0`. Exact source/target hashes and transform:
+> [`config/directml-model-assets.json`](../config/directml-model-assets.json).
 
 ## Installation
 
@@ -18,8 +22,10 @@ Model assets are accepted only through the approved, hash-bound model
 registry/manifest workflow. Do not download, export or place arbitrary ONNX
 files from this guide. Without registered `siglip_vision` the capability is
 unavailable; without registered `siglip_text`, text tagging is unavailable.
-The approval manifest is an external release input; this repository
-intentionally contains no model downloader or exporter.
+The approved release archive is bound by
+[`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json);
+this repository intentionally contains no arbitrary model downloader or
+exporter.
 
 ## Quick Examples
 

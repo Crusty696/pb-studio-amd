@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "bundle_id": "pb-studio-directml-assets",
+  "bundle_version": "2026.07.31",
+  "approval_status": "approved",
+  "approval_blockers": [],
+  "archive": {
+    "file_name": "pb-studio-directml-assets-2026.07.31.zip",
+    "size": 3219585582,
+    "sha256": "397f4b332a265b71ac555f7209fdb4a140bb2efc5168f51297cff5ea93e4b96d"
+  },
+  "files": [
+    {
+      "archive_path": "models/raft_small.onnx",
+      "target": "models/raft_small.onnx",
+      "size": 4318867,
+      "sha256": "2357ac663fade8717165504f150cfb32a81e94d9d4528190508ed4cd525e5358",
+      "kind": "model",
+      "source": {
+        "repository": "pytorch/vision",
+        "revision": "61943691d3390bd3148a7003b4a501f0e2b7ac6e",
+        "file": "raft_small_C_T_V2-01064c6d.pth",
+        "sha256": "01064c6dba73b0fc9fc8edf772248560a00a3acfd62ac6677e9eeebad9680e27"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "archive_path": "licenses/TorchVision-BSD-3-Clause.txt"
+      }
+    },
+    {
+      "archive_path": "models/siglip_vision.onnx",
+      "target": "models/siglip_vision.onnx",
+      "size": 1713419163,
+      "sha256": "863380e4e628cca0d61d4170bdb1401a66ce030080d7a956f90ebe42e040969e",
+      "kind": "model",
+      "source": {
+        "repository": "google/siglip-so400m-patch14-384",
+        "revision": "9fdffc58afc957d1a03a25b10dba0329ab15c2a3",
+        "file": "model.safetensors",
+        "sha256": "ea2abad2b7f8a9c1aa5e49a244d5d57ffa71c56f720c94bc5d240ef4d6e1d94a"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_audio_encoder.onnx",
+      "target": "models/clap_audio_encoder.onnx",
+      "size": 117910309,
+      "sha256": "01ead7ae27ddaf293d79d2fa69f63e66d645f3338e193f34aee87a528087ebb7",
+      "kind": "model",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_audio.onnx",
+        "sha256": "3f42f71e555b62709910b6efa66fa5879f00d9571874b12b0fa674f82dbfe332"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "archive_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_text_encoder.onnx",
+      "target": "models/clap_text_encoder.onnx",
+      "size": 501425027,
+      "sha256": "075b3c40edd0c3cf7d28fe7db3126ad6ea2978d303cffd7605eeb49499580180",
+      "kind": "model",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_text.onnx",
+        "sha256": "c07b27204836877d5b615c103685b66ea8f21bc6b5b70a572be356125423a8bf"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "archive_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_audio_preprocess.npz",
+      "target": "models/clap_audio_preprocess.npz",
+      "size": 2290,
+      "sha256": "9139def979cba61ef93eb2dbccecc02db37b23592e0ee38bce6d776faa6be546",
+      "kind": "runtime",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_audio.onnx",
+        "sha256": "3f42f71e555b62709910b6efa66fa5879f00d9571874b12b0fa674f82dbfe332"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "archive_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/config.json",
+      "target": "models/clap_processor/config.json",
+      "size": 5390,
+      "sha256": "9efb9557bc804f2ca6e394486af2e45dfed0b18554909735a99c6220b84e4288",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "config.json",
+        "sha256": "9efb9557bc804f2ca6e394486af2e45dfed0b18554909735a99c6220b84e4288"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/merges.txt",
+      "target": "models/clap_processor/merges.txt",
+      "size": 456356,
+      "sha256": "fe36cab26d4f4421ed725e10a2e9ddb7f799449c603a96e7f29b5a3c82a95862",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "merges.txt",
+        "sha256": "fe36cab26d4f4421ed725e10a2e9ddb7f799449c603a96e7f29b5a3c82a95862"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/preprocessor_config.json",
+      "target": "models/clap_processor/preprocessor_config.json",
+      "size": 541,
+      "sha256": "9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "preprocessor_config.json",
+        "sha256": "9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/tokenizer.json",
+      "target": "models/clap_processor/tokenizer.json",
+      "size": 2108746,
+      "sha256": "77ef92283d67f0d97e1454909a964afcbfa2019f0fb9f18f8e88d5c25c3ba729",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "tokenizer.json",
+        "sha256": "77ef92283d67f0d97e1454909a964afcbfa2019f0fb9f18f8e88d5c25c3ba729"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/tokenizer_config.json",
+      "target": "models/clap_processor/tokenizer_config.json",
+      "size": 384,
+      "sha256": "377f91458f7729a4574a84c77bdce67dbc3c58c1a345a29bbf8c4eb1307948a3",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "tokenizer_config.json",
+        "sha256": "377f91458f7729a4574a84c77bdce67dbc3c58c1a345a29bbf8c4eb1307948a3"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/clap_processor/vocab.json",
+      "target": "models/clap_processor/vocab.json",
+      "size": 798293,
+      "sha256": "ed19656ea1707df69134c4af35c8ceda2cc9860bf2c3495026153a133670ab5e",
+      "kind": "runtime",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+        "file": "vocab.json",
+        "sha256": "ed19656ea1707df69134c4af35c8ceda2cc9860bf2c3495026153a133670ab5e"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "archive_path": "models/moondream_encoder.onnx",
+      "target": "models/moondream_encoder.onnx",
+      "size": 879098032,
+      "sha256": "ab72b9c627cc33312095cba48448f37e80f4ffea69aadd3ed7d7392b494438f9",
+      "kind": "model",
+      "source": {
+        "repository": "Heliosoph/moondream2-onnx",
+        "revision": "e48d8acc253b09d8f201206aa126388742298452",
+        "file": "vision_encoder_fp16.onnx",
+        "sha256": "aa79c8ca1b7bc127be6cbcc4776908f7fc499080c52aeaab35e2c3c5ccc00f07"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "archive_path": "licenses/Moondream-Apache-2.0.md"
+      }
+    },
+    {
+      "archive_path": "licenses/Apache-2.0.txt",
+      "target": "models/licenses/Apache-2.0.txt",
+      "size": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "kind": "license"
+    },
+    {
+      "archive_path": "licenses/TorchVision-BSD-3-Clause.txt",
+      "target": "models/licenses/TorchVision-BSD-3-Clause.txt",
+      "size": 1517,
+      "sha256": "6502f676851cfe25f8af75531dfb32375b7325b73c37e7b43741fa422893e71d",
+      "kind": "license"
+    },
+    {
+      "archive_path": "licenses/Moondream-Apache-2.0.md",
+      "target": "models/licenses/Moondream-Apache-2.0.md",
+      "size": 12624,
+      "sha256": "609e2cb599f84aaa41d8ef29d8fdb04d164fab22e8d9292ca34a599d0f56a338",
+      "kind": "license"
+    },
+    {
+      "archive_path": "licenses/CLAP-license-chain.txt",
+      "target": "models/licenses/CLAP-license-chain.txt",
+      "size": 13883,
+      "sha256": "5d5e754a29997398a00427dd7f549937dd451ddd867a5061c6fe3115b81e1d34",
+      "kind": "license"
+    }
+  ]
+}

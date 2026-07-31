@@ -33,10 +33,12 @@
     Auto-Backup-Task-Frage ueberspringen.
 
 .PARAMETER SkipModelPrecache
-    Legacy-Kompatibilitaetsschalter; Setup laedt keine Modellassets.
+    Veralteter Kompatibilitaetsschalter ohne Skip-Wirkung. Pflichtassets werden
+    weiterhin manifest- und hashverifiziert.
 
 .PARAMETER SkipGpuVerify
-    Legacy-Schalter; nicht-ONNX-basierte Verifier werden nicht ausgefuehrt.
+    Veralteter Kompatibilitaetsschalter ohne Skip-Wirkung. ONNX Runtime
+    DirectML wird weiterhin verpflichtend verifiziert.
 
 .PARAMETER SkipPytest
     Final pytest-Run ueberspringen.
@@ -732,16 +734,58 @@ $venvPython = Join-Path $VENV_PATH "Scripts\python.exe"
 $venvPip = Join-Path $VENV_PATH "Scripts\pip.exe"
 $RuntimeContract = Get-PBStudioRuntimeContract -ProjectRoot $REPO_ROOT -RequirePython -RequireFFmpeg -ApplyEnvironment
 
-# B.6 Pip + numpy lock
-& $venvPython -m pip install --upgrade pip setuptools wheel *>&1 | Out-String | Add-Content $LogFile
-& $venvPip install "numpy==1.26.4" *>&1 | Out-String | Add-Content $LogFile
-
-# B.7 requirements.txt
+# B.6/B.7 hash-locked Python graph + approved local wheel overrides
 $reqFile = Join-Path $REPO_ROOT "requirements.txt"
 if (-not (Test-Path $reqFile)) { FAIL "requirements.txt nicht gefunden"; exit 1 }
-Step "pip install -r requirements.txt (kann mehrere Minuten dauern)..."
-& $venvPip install -r $reqFile *>&1 | Out-String | Add-Content $LogFile
-if ($LASTEXITCODE -ne 0) { FAIL "pip install scheitert (siehe $LogFile)"; exit 1 }
+$wheelManifestPath = Join-Path $REPO_ROOT "config\python-wheel-overrides.json"
+if (-not (Test-Path -LiteralPath $wheelManifestPath -PathType Leaf)) {
+    FAIL "Python-Wheelmanifest fehlt: $wheelManifestPath"
+    exit 1
+}
+try {
+    $wheelManifest = Get-Content -LiteralPath $wheelManifestPath -Raw | ConvertFrom-Json
+    if ($wheelManifest.schema_version -ne 1 -or -not $wheelManifest.packages) {
+        throw "ungueltiges Schema"
+    }
+    $vendorRoot = [IO.Path]::GetFullPath((Join-Path $REPO_ROOT "vendor\wheels"))
+    $requirementsText = Get-Content -LiteralPath $reqFile -Raw
+    $declaredWheels = @{}
+    foreach ($package in $wheelManifest.packages) {
+        $relativeWheel = [string]$package.wheel_path
+        if (-not $relativeWheel.StartsWith("vendor/wheels/", [StringComparison]::Ordinal) -or
+            $relativeWheel.Contains("..")) {
+            throw "unsicherer Wheelpfad: $relativeWheel"
+        }
+        $wheelPath = [IO.Path]::GetFullPath((Join-Path $REPO_ROOT $relativeWheel))
+        if (-not $wheelPath.StartsWith($vendorRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $wheelPath -PathType Leaf)) {
+            throw "Wheel fehlt oder liegt ausserhalb vendor/wheels: $relativeWheel"
+        }
+        $expectedWheelHash = ([string]$package.wheel_sha256).ToLowerInvariant()
+        $actualWheelHash = (Get-FileHash -LiteralPath $wheelPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($expectedWheelHash -notmatch '^[0-9a-f]{64}$' -or $actualWheelHash -ne $expectedWheelHash) {
+            throw "Wheel-Hash ungueltig: $relativeWheel"
+        }
+        if ($requirementsText.IndexOf("--hash=sha256:$expectedWheelHash", [StringComparison]::Ordinal) -lt 0) {
+            throw "Wheel-Hash fehlt im Python-Lock: $relativeWheel"
+        }
+        $declaredWheels[$wheelPath.ToLowerInvariant()] = $true
+    }
+    foreach ($localWheel in Get-ChildItem -LiteralPath $vendorRoot -Filter "*.whl" -File) {
+        if (-not $declaredWheels.ContainsKey($localWheel.FullName.ToLowerInvariant())) {
+            throw "Nicht allowlistetes Wheel in vendor/wheels: $($localWheel.Name)"
+        }
+    }
+} catch {
+    FAIL "Python-Wheelmanifest nicht vertrauenswuerdig: $($_.Exception.Message)"
+    exit 1
+}
+Step "pip install --require-hashes -r requirements.txt (kann mehrere Minuten dauern)..."
+Push-Location $REPO_ROOT
+& $venvPython -m pip install --require-hashes -r $reqFile *>&1 | Out-String | Add-Content $LogFile
+$pipInstallExitCode = $LASTEXITCODE
+Pop-Location
+if ($pipInstallExitCode -ne 0) { FAIL "pip install scheitert (siehe $LogFile)"; exit 1 }
 OK "Brain-Stack + Backend-Deps installiert"
 
 # B.8 Pre-commit Hook
@@ -768,14 +812,32 @@ if ($dn -and $dn.Major -ge 9) {
     }
 }
 
-# B.10 ONNX assets are provisioned only through their approved model manifests.
-# The legacy switch is retained for CLI compatibility but never downloads
-# PyTorch CLAP/SigLIP checkpoints.
-if (-not $SkipModelPrecache) {
-    Step "Model-Precache deaktiviert: ONNX-Assets benötigen freigegebene Manifeste"
-} else {
-    Step "Model-Precache uebersprungen (--SkipModelPrecache)"
+# B.10 DirectML assets: approved manifest + exact hashes + safe atomic promotion.
+$directMlProvisioner = Join-Path $REPO_ROOT "scripts\provision_directml_assets.ps1"
+$directMlBundleManifest = Join-Path $REPO_ROOT "config\directml-asset-bundle.json"
+if ($SkipModelPrecache) {
+    WARN "--SkipModelPrecache ist veraltet und wird ignoriert; Pflichtassets bleiben verpflichtend."
 }
+if (-not (Test-Path -LiteralPath $directMlProvisioner -PathType Leaf)) {
+    FAIL "DirectML-Asset-Provisioner fehlt: $directMlProvisioner"
+    exit 1
+}
+$directMlProvisionArgs = @{
+    ManifestPath = $directMlBundleManifest
+    InstallRoot = $REPO_ROOT
+}
+if (-not [string]::IsNullOrWhiteSpace($env:PBSTUDIO_DIRECTML_ASSET_BUNDLE)) {
+    $directMlProvisionArgs.BundlePath = $env:PBSTUDIO_DIRECTML_ASSET_BUNDLE
+}
+Step "DirectML-Pflichtassets aus freigegebenem Release-Bundle pruefen..."
+$directMlProvisionOutput = & $directMlProvisioner @directMlProvisionArgs 2>&1
+$directMlProvisionExitCode = $LASTEXITCODE
+$directMlProvisionOutput | Out-String | Add-Content $LogFile
+if ($directMlProvisionExitCode -ne 0) {
+    FAIL "DirectML-Pflichtassets fehlen oder sind nicht freigegeben (siehe $LogFile)"
+    exit 1
+}
+OK "DirectML-Pflichtassets manifest- und hashverifiziert"
 
 # B.11 Auto-Backup Task
 # SkipBackupPrompt = true  -> skip
@@ -829,6 +891,9 @@ if ($LASTEXITCODE -eq 0) { OK "sqlite-vec KNN" }
 else { FAIL "sqlite-vec verify scheitert" }
 
 # C.3 DirectML verify (auf venv-Python, der gerade installiert wurde)
+if ($SkipGpuVerify) {
+    WARN "--SkipGpuVerify ist veraltet und wird ignoriert; DirectML-Verifikation bleibt verpflichtend."
+}
 $dml = Test-DirectML $venvPython
 if ($dml -eq $true) { OK "ONNX Runtime DirectML Provider" }
 elseif ($dml -eq $false) { FAIL "DirectML Provider fehlt - ML-Funktionen deaktiviert; kein CPU-Fallback" }

@@ -1,29 +1,53 @@
 # Hardware-Verify-Guide — Brain-Modul
 
-Plan Phase 2 + Phase 6 DoD-Verifikation. Alle Skripte sind in `scripts/`.
+Hardware-Verifikation gemäß
+[`specs/dod.md`](../specs/dod.md). Alle ausführbaren Prüfer sind im jeweiligen
+Abschnitt benannt; nicht vorhandene historische Skripte sind kein Prüfpfad.
 
-> **Status 2026-07-29:** Die historischen CLAP-/SigLIP-Probes und Messwerte
-> unten sind superseded und kein aktueller Hardwarebeleg. Verbindliche
-> Hardware-QC beginnt erst mit T332. ML-Probes müssen
-> `DmlExecutionProvider`, beide DirectML-Speicherflags und einen expliziten
-> Fehler ohne DML nachweisen.
+> **Status 2026-07-31:** Der letzte akzeptierte Live-Beleg T363 ordnete RAFT,
+> SigLIP, Moondream Vision, CLAP Audio/Text und Audio-MDX der AMD Radeon RX
+> 7800 XT, DXGI-Index `1`, LUID `0x00000000_0x0001185b` zu; die iGPU blieb
+> dabei bei 0 %. Dieser Beleg ist eine Vorleistung, keine Freigabe des
+> aktuellen Worktrees. Release-Gate T411 muss dieselbe Identität,
+> `DmlExecutionProvider`, beide DirectML-Speicherflags, AMF und alle
+> Manifest-Hashes auf einer frischen Installation erneut belegen. Moondream
+> Vision ist bereit; Caption bleibt mangels vollständig DirectML-fähigem
+> Decoder ausdrücklich `unavailable`.
+
+## Freigegebene Modellherkunft
+
+| Asset | Gepinnte Quelle | Lizenz |
+|---|---|---|
+| RAFT Small | `pytorch/vision@61943691d3390bd3148a7003b4a501f0e2b7ac6e` | BSD-3-Clause |
+| SigLIP SO400M | `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` | Apache-2.0 |
+| CLAP Audio/Text | `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763` | BSD-3-Clause AND Apache-2.0 |
+| CLAP Processor | `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a` | Apache-2.0 |
+| Moondream Vision | `Heliosoph/moondream2-onnx@e48d8acc253b09d8f201206aa126388742298452` | Apache-2.0 |
+
+Verbindlich sind die exakten Source-, Target-, Archiv- und Lizenzhashes in
+[`config/directml-model-assets.json`](../config/directml-model-assets.json)
+und
+[`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).
 
 ## Setup einmalig
 
 ```powershell
-.venv\Scripts\activate
-$env:PYTHONPATH = "src"
+$env:PYTHONPATH = (Join-Path (Get-Location) "src")
+.\.venv\Scripts\Activate.ps1
 ```
 
 Verbindliche Runtime: Projekt-`.venv` mit Python 3.11.x, NumPy 1.26.4 und
 `onnxruntime-directml`. Keine Einzelinstallation oder Paketaktualisierung aus
-diesem Guide.
+diesem Guide. Modellassets werden nur über
+[`scripts/provision_directml_assets.ps1`](../scripts/provision_directml_assets.ps1)
+aus dem freigegebenen Archiv installiert.
 
 ## 1. CLAP auf DirectML (historischer Probe; superseded)
 
 Der frühere Standalone-Verifier ist gesperrt und liefert absichtlich Exitcode
 `2`; er kann weder Modellprovenienz noch den aktiven Registry-Vertrag belegen.
-Die folgende Ausgabe ist ausschließlich historisch:
+Die folgende Ausgabe ist ausschließlich historisch und darf nicht als
+Releasebeleg zitiert werden:
 
 **Historische Ausgabe:**
 ```

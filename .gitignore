@@ -6,6 +6,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+[Bb]in/
+[Oo]bj/
 *.egg
 
 # Virtual Environment
@@ -72,6 +74,7 @@ assets/
 .pytest_tmp/
 .pytest_tmp_local/
 .pytest_tmp*/
+.pytest_t362_*/
 
 # Claude Code runtime artefacts
 .claude/scheduled_tasks.lock
@@ -84,6 +87,7 @@ project.json
 timeline.json
 .build_verify/
 artifacts/
+release-assets/
 .tmp_*.ps1
 .tmp_*.py
 gui_screenshots/

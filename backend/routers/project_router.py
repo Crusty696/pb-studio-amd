@@ -13,12 +13,24 @@ import asyncio
 import json
 import logging
 import os
+import shutil
+import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state, resolve_project_db_id
+from ..app_state import (
+    AppState,
+    PersistenceError,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
+    get_app_state,
+    persistence_error,
+    resolve_project_db_id,
+)
 from pb_studio.data.repositories.project_repository import ProjectRepository
 from ..config import config
 from ..media_path_policy import (
@@ -35,18 +47,28 @@ router = APIRouter(prefix="/project", tags=["Project"])
 
 _PROJECT_META_FILE = "project.json"
 _TIMELINE_FILE = "timeline.json"
+_CREATE_OWNER_FILE = ".pb-studio-create-owner.json"
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _bind_brain_to_project(project_path: Path) -> None:
+def _bind_brain_to_project(
+    project_path: Path,
+    *,
+    project_epoch: int,
+    project_id: int,
+) -> None:
     """Bind Brain to this project's state.db before switching runtime state."""
     try:
         from .._brain_singleton import set_project_state
         state_db = project_path / "state.db"
-        set_project_state(state_db)
+        set_project_state(
+            state_db,
+            project_epoch=project_epoch,
+            project_id=project_id,
+        )
         logger.info(f"Brain bound to {state_db}")
     except Exception as e:
         logger.error("Brain bind fehlgeschlagen: %s", e, exc_info=True)
@@ -62,6 +84,94 @@ def _project_meta_path(project_path: Path) -> Path:
 
 def _timeline_path(project_path: Path) -> Path:
     return project_path / _TIMELINE_FILE
+
+
+def _write_creation_owner(
+    staging_path: Path,
+    *,
+    owner_token: str,
+    target_path: Path,
+) -> None:
+    marker = {
+        "schema_version": 1,
+        "owner_token": owner_token,
+        "target_path": str(target_path),
+        "created_at": _utc_now_iso(),
+    }
+    (staging_path / _CREATE_OWNER_FILE).write_text(
+        json.dumps(marker, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _prepare_project_state_db(staging_path: Path) -> None:
+    """Create and migrate state.db before the directory is published."""
+    from pb_studio.storage import migration_runner
+
+    migrations_dir = (
+        Path(migration_runner.__file__).resolve().parent
+        / "migrations"
+        / "state"
+    )
+    migration_runner.migrate(staging_path / "state.db", migrations_dir)
+
+
+def _remove_owned_creation_directory(
+    path: Path,
+    *,
+    owner_token: str,
+    allowed_base: Path,
+) -> bool:
+    """Remove only a staging/final directory carrying the exact owner token."""
+    if not path.exists():
+        return False
+    resolved_path = path.resolve()
+    if not resolved_path.is_relative_to(allowed_base):
+        raise RuntimeError(
+            f"Refusing creation compensation outside project base: {resolved_path}"
+        )
+    marker_path = resolved_path / _CREATE_OWNER_FILE
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Refusing creation compensation without readable owner marker: "
+            f"{resolved_path}"
+        ) from exc
+    if marker.get("owner_token") != owner_token:
+        raise RuntimeError(
+            f"Refusing creation compensation for foreign directory: {resolved_path}"
+        )
+    shutil.rmtree(resolved_path)
+    return True
+
+
+def _compensate_project_creation(
+    *,
+    staging_path: Path,
+    project_path: Path,
+    published: bool,
+    project_id: int | None,
+    owner_token: str,
+    allowed_base: Path,
+) -> list[str]:
+    """Best-effort compensation restricted to artifacts owned by this call."""
+    errors: list[str] = []
+    if project_id is not None:
+        try:
+            ProjectRepository().delete_owned_project(project_id, owner_token)
+        except Exception as exc:
+            errors.append(f"DB compensation failed: {exc}")
+    owned_path = project_path if published else staging_path
+    try:
+        _remove_owned_creation_directory(
+            owned_path,
+            owner_token=owner_token,
+            allowed_base=allowed_base,
+        )
+    except Exception as exc:
+        errors.append(f"directory compensation failed: {exc}")
+    return errors
 
 
 def _find_or_create_project_db_record(project_path: Path, project_name: str, meta: dict | None = None) -> int:
@@ -82,6 +192,15 @@ def _find_or_create_project_db_record(project_path: Path, project_name: str, met
     if project_id <= 0:
         raise RuntimeError(f"Projekt-DB-Record konnte nicht erstellt werden: {project_name}")
     return int(project_id)
+
+
+def _find_project_db_record_id(project_path: Path) -> int | None:
+    normalized_path = str(project_path.resolve())
+    for row in ProjectRepository().get_all():
+        data = row.get("data") or {}
+        if data.get("path") == normalized_path:
+            return int(row["id"])
+    return None
 
 
 def _read_project_meta(project_path: Path) -> dict:
@@ -105,6 +224,19 @@ def _write_project_meta(project_path: Path, meta: dict) -> None:
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
+
+
+def _restore_file_snapshot(path: Path, snapshot: bytes | None) -> None:
+    """Restore one save-owned file to its exact pre-save bytes."""
+    rollback_path = path.with_suffix(f"{path.suffix}.rollback.tmp")
+    try:
+        if snapshot is None:
+            path.unlink(missing_ok=True)
+            return
+        rollback_path.write_bytes(snapshot)
+        os.replace(str(rollback_path), str(path))
+    finally:
+        rollback_path.unlink(missing_ok=True)
 
 
 def _normalize_timeline_entries(timeline: list[dict]) -> list[dict]:
@@ -189,6 +321,35 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
         return False
 
 
+async def _activate_project(
+    state: AppState,
+    project_path: Path,
+    project_data: dict,
+    candidate_state: AppState | None = None,
+) -> None:
+    """Serialisiert Brain-Bind, Epoch-Wechsel, Task-Drain und State-Swap."""
+    async with state.project_lifecycle_lock:
+        # Alte Commits zuerst sperren und registrierte Tasks beenden. Dadurch
+        # kann während des externen Brain-Rebinds kein A-Job mehr nach B schreiben.
+        state.invalidate_project_context()
+        _, pending = await state.cancel_and_drain_project_tasks()
+        # Ein Bind-Fehler lässt den bisherigen Runtime-State erhalten; dessen
+        # alte Tasks bleiben jedoch bewusst invalidiert und beendet.
+        _bind_brain_to_project(
+            project_path,
+            project_epoch=state.project_epoch,
+            project_id=int(project_data["db_project_id"]),
+        )
+        state.reset(invalidate_context=False)
+        state.install_project_state(project_data, candidate_state)
+        if pending:
+            logger.warning(
+                "Projektwechsel mit %d noch auslaufenden stale Task(s); "
+                "Epoch-Guard blockiert deren Commit",
+                pending,
+            )
+
+
 @router.post("/create", response_model=ProjectInfo)
 async def create_project(
     request: ProjectCreate,
@@ -202,44 +363,119 @@ async def create_project(
     allowed_base = Path(config.project_dir).resolve()
     if not project_path.is_relative_to(allowed_base):
         raise HTTPException(status_code=403, detail="Pfad außerhalb des erlaubten Projektverzeichnisses")
-    try:
-        project_path.mkdir(parents=True, exist_ok=False)
-    except FileExistsError:
+    if project_path.exists():
         raise HTTPException(
             status_code=409,
             detail=f"Projekt existiert bereits: {project_path}",
         )
-    except OSError as e:
-        raise HTTPException(status_code=400, detail=f"Ordner nicht erstellbar: {e}")
+
+    owner_token = uuid.uuid4().hex
+    staging_path: Path | None = None
+    project_id: int | None = None
+    published = False
+    project_data: dict | None = None
 
     try:
-        (project_path / "audio").mkdir(exist_ok=True)
-        (project_path / "video").mkdir(exist_ok=True)
-        (project_path / "output").mkdir(exist_ok=True)
-        (project_path / "cache").mkdir(exist_ok=True)
-    except OSError as e:
-        raise HTTPException(status_code=400, detail=f"Ordner nicht erstellbar: {e}")
+        project_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = Path(
+            tempfile.mkdtemp(
+                prefix=".pb-studio-create-",
+                dir=str(project_path.parent),
+            )
+        ).resolve()
+        _write_creation_owner(
+            staging_path,
+            owner_token=owner_token,
+            target_path=project_path,
+        )
+        for directory_name in ("audio", "video", "output", "cache"):
+            (staging_path / directory_name).mkdir()
+        _prepare_project_state_db(staging_path)
 
-    created_at = _utc_now_iso()
-    project_data = {
-        "name": request.name,
-        "path": str(project_path),
-        "audio_count": 0,
-        "video_count": 0,
-        "has_timeline": False,
-        "created_at": created_at,
-        "modified_at": created_at,
-    }
-    project_data["db_project_id"] = _find_or_create_project_db_record(project_path, request.name, project_data)
-    _write_project_meta(project_path, project_data)
+        created_at = _utc_now_iso()
+        project_data = {
+            "name": request.name,
+            "path": str(project_path),
+            "audio_count": 0,
+            "video_count": 0,
+            "has_timeline": False,
+            "created_at": created_at,
+            "modified_at": created_at,
+        }
+        project_id = ProjectRepository().create_owned_project(
+            request.name,
+            project_data,
+            owner_token,
+        )
+        project_data["db_project_id"] = project_id
+        _write_project_meta(staging_path, project_data)
 
-    # Brain zuerst binden: bei Fehler bleibt der bisherige Runtime-State unverändert.
-    _bind_brain_to_project(project_path)
+        # Same-volume rename publishes the fully prepared directory atomically.
+        os.replace(str(staging_path), str(project_path))
+        published = True
 
-    # Neues Projekt muss immer mit sauberem Runtime-State starten.
-    # Sonst übernimmt ein frisch erstelltes Projekt Clips/Timeline/Render-Tasks aus dem vorherigen Projekt.
-    state.reset()
-    state.current_project = project_data
+        # Neues Projekt startet nach serialisiertem Brain-/Epoch-Wechsel mit
+        # sauberem Runtime-State. Bind-Fehler werden unten kompensiert.
+        await _activate_project(state, project_path, project_data)
+    except asyncio.CancelledError:
+        if staging_path is not None:
+            cleanup_errors = _compensate_project_creation(
+                staging_path=staging_path,
+                project_path=project_path,
+                published=published,
+                project_id=project_id,
+                owner_token=owner_token,
+                allowed_base=allowed_base,
+            )
+            if cleanup_errors:
+                logger.critical(
+                    "Projekt-Erstellung abgebrochen; Kompensation unvollstaendig: %s",
+                    "; ".join(cleanup_errors),
+                )
+        raise
+    except Exception as exc:
+        cleanup_errors = []
+        if staging_path is not None:
+            cleanup_errors = _compensate_project_creation(
+                staging_path=staging_path,
+                project_path=project_path,
+                published=published,
+                project_id=project_id,
+                owner_token=owner_token,
+                allowed_base=allowed_base,
+            )
+        if cleanup_errors:
+            logger.critical(
+                "Projekt-Erstellung und Kompensation fehlgeschlagen: %s",
+                "; ".join(cleanup_errors),
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Projekt konnte nicht atomar erstellt werden; "
+                    + "; ".join(cleanup_errors)
+                ),
+            ) from exc
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Projekt konnte nicht erstellt werden: {exc}",
+        ) from exc
+
+    if project_data is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Projekt konnte nicht initialisiert werden",
+        )
+    try:
+        (project_path / _CREATE_OWNER_FILE).unlink()
+    except OSError as exc:
+        logger.warning(
+            "Creation-Owner-Marker konnte nach Erfolg nicht entfernt werden: %s",
+            exc,
+        )
     logger.info(f"Projekt erstellt: {project_path}")
     return ProjectInfo(**project_data)
 
@@ -260,15 +496,21 @@ async def open_project(
         raise HTTPException(status_code=404, detail=f"Projekt nicht gefunden: {request.path}")
 
     meta = _read_project_meta(project_path)
-    db_project_id = _find_or_create_project_db_record(project_path, meta.get("name", project_path.name), meta)
+    existing_project_id = _find_project_db_record_id(project_path)
+    candidate_project_id = (
+        existing_project_id if existing_project_id is not None else -1
+    )
 
     # Medienkatalog isoliert vorladen. DB-/Schemafehler dürfen weder das aktive
     # Runtime-Projekt leeren noch Brain auf das neue Projekt umbiegen.
-    candidate_project = {"path": str(project_path), "db_project_id": db_project_id}
+    candidate_project = {
+        "path": str(project_path),
+        "db_project_id": candidate_project_id,
+    }
     candidate_state = AppState(current_project=candidate_project)
     catalog_loaded = await asyncio.to_thread(
         candidate_state.load_from_db,
-        project_id=db_project_id,
+        project_id=candidate_project_id,
     )
     if not catalog_loaded:
         raise HTTPException(
@@ -291,24 +533,8 @@ async def open_project(
             detail=f"Projekt-Medienkatalog enthaelt unsichere Pfade: {exc}",
         ) from exc
 
-    # Brain-Preflight vor Live-State-Wechsel: ein Bind-Fehler lässt das bisher
-    # aktive Runtime-Projekt weiterhin unverändert.
-    _bind_brain_to_project(project_path)
-
-    # Erst nach beiden erfolgreichen Preflights den Live-State ersetzen.
-    state.reset()
-    with state._state_lock:
-        with state._lock:
-            state.current_project = candidate_project
-            state.audio_clips.update(candidate_state.audio_clips)
-            state.audio_analysis_cache.update(candidate_state.audio_analysis_cache)
-            state.video_clips.update(candidate_state.video_clips)
-            state.video_analysis_cache.update(candidate_state.video_analysis_cache)
-            state._audio_next_id = candidate_state._audio_next_id
-            state._video_next_id = candidate_state._video_next_id
-
     meta = _read_project_meta(project_path)
-    has_timeline = _load_timeline_into_state(project_path, state)
+    has_timeline = _load_timeline_into_state(project_path, candidate_state)
 
     # Fallback: lokale Projektordner zählen, falls keine Metadaten vorhanden.
     audio_count = int(meta.get("audio_count") or 0)
@@ -318,6 +544,15 @@ async def open_project(
     if video_count == 0 and (project_path / "video").exists():
         video_count = sum(1 for f in (project_path / "video").glob("*") if f.is_file())
 
+    db_project_id = (
+        existing_project_id
+        if existing_project_id is not None
+        else _find_or_create_project_db_record(
+            project_path,
+            meta.get("name", project_path.name),
+            meta,
+        )
+    )
     project_data = {
         "name": meta.get("name", project_path.name),
         "path": str(project_path),
@@ -328,57 +563,142 @@ async def open_project(
         "created_at": meta.get("created_at"),
         "modified_at": meta.get("modified_at"),
     }
-    state.current_project = project_data
+    try:
+        await _activate_project(
+            state,
+            project_path,
+            project_data,
+            candidate_state,
+        )
+    except BaseException:
+        if existing_project_id is None:
+            try:
+                ProjectRepository().delete_project(db_project_id)
+            except Exception as compensation_error:
+                logger.critical(
+                    "Projekt-Open fehlgeschlagen; DB-Kompensation fuer %s "
+                    "ebenfalls fehlgeschlagen: %s",
+                    db_project_id,
+                    compensation_error,
+                    exc_info=True,
+                )
+        raise
     logger.info(f"Projekt geöffnet: {project_path}")
     return ProjectInfo(**project_data)
 
 
 @router.post("/save", response_model=StatusResponse)
 async def save_project(state: AppState = Depends(get_app_state)) -> StatusResponse:
-    """Speichert das aktuelle Projekt."""
-    if not state.current_project:
-        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
+    """Persist the current project without reporting false success."""
+    try:
+        async with state.project_operation() as context:
+            return _save_project_in_context(state, context)
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PersistenceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    project_path = Path(state.current_project["path"]).resolve()
+
+def _save_project_in_context(
+    state: AppState,
+    context: ProjectOperationContext,
+) -> StatusResponse:
+    project_path = context.project_root
     if not project_path.exists():
         raise HTTPException(status_code=404, detail=f"Projektpfad nicht gefunden: {project_path}")
 
     timeline = _normalize_timeline_entries(state.get_timeline_snapshot())
-    state.set_timeline(timeline)
     timeline_path = _timeline_path(project_path)
-    if timeline:
-        timeline_payload = {
+    existing_meta = _read_project_meta(project_path)
+    with state._state_lock:
+        current_project = dict(state.current_project or {})
+    project_data = {
+        "name": current_project.get("name", project_path.name),
+        "path": str(project_path),
+        "db_project_id": context.project_id,
+        "audio_count": len(state.get_audio_clips_snapshot()),
+        "video_count": len(state.get_video_clips_snapshot()),
+        "has_timeline": bool(timeline),
+        "created_at": existing_meta.get("created_at") or current_project.get("created_at") or _utc_now_iso(),
+        "modified_at": _utc_now_iso(),
+    }
+
+    timeline_payload = (
+        {
             "audio_path": state.current_audio_path,
             "timeline": timeline,
             "saved_at": _utc_now_iso(),
         }
-        # R17/FINDING-5: Atomic write — crash during save must not corrupt timeline.json.
-        # Same tmp+os.replace pattern used by _write_project_meta.
-        tmp_tl = timeline_path.with_suffix(".tmp")
-        try:
-            tmp_tl.write_text(json.dumps(timeline_payload, indent=2, ensure_ascii=False), encoding="utf-8")
-            os.replace(str(tmp_tl), str(timeline_path))
-        finally:
-            if tmp_tl.exists():
-                tmp_tl.unlink(missing_ok=True)
-    else:
-        timeline_path.unlink(missing_ok=True)
+        if timeline
+        else None
+    )
+    meta_path = _project_meta_path(project_path)
+    try:
+        timeline_snapshot = (
+            timeline_path.read_bytes() if timeline_path.is_file() else None
+        )
+        meta_snapshot = meta_path.read_bytes() if meta_path.is_file() else None
+    except OSError as exc:
+        raise persistence_error(
+            "project_save",
+            "Bestehende Projektdateien konnten nicht gesichert werden",
+            exc,
+        ) from exc
+    timeline_stage = timeline_path.with_suffix(f"{timeline_path.suffix}.save.tmp")
+    meta_stage = meta_path.with_suffix(f"{meta_path.suffix}.save.tmp")
+    durable_mutated = False
+    try:
+        if timeline_payload is not None:
+            timeline_stage.write_text(
+                json.dumps(timeline_payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        meta_stage.write_text(
+            json.dumps(project_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
-    existing_meta = _read_project_meta(project_path)
-    project_data = {
-        "name": state.current_project.get("name", project_path.name),
-        "path": str(project_path),
-        "db_project_id": resolve_project_db_id(state.current_project),
-        "audio_count": len(state.get_audio_clips_snapshot()),
-        "video_count": len(state.get_video_clips_snapshot()),
-        "has_timeline": bool(timeline),
-        "created_at": existing_meta.get("created_at") or state.current_project.get("created_at") or _utc_now_iso(),
-        "modified_at": _utc_now_iso(),
-    }
-    _write_project_meta(project_path, project_data)
-    state.current_project = project_data
-    if not state.sync_project_db_record():
-        raise HTTPException(status_code=500, detail="Projekt konnte nicht vollständig gespeichert werden")
+        if timeline_payload is None:
+            if timeline_path.exists():
+                timeline_path.unlink()
+                durable_mutated = True
+        else:
+            os.replace(str(timeline_stage), str(timeline_path))
+            durable_mutated = True
+        os.replace(str(meta_stage), str(meta_path))
+        durable_mutated = True
+
+        # SQLite commits last. Any failure restores both files byte-for-byte.
+        state.sync_project_db_record(project_data)
+    except Exception as exc:
+        rollback_errors: list[str] = []
+        if durable_mutated:
+            for path, snapshot in (
+                (timeline_path, timeline_snapshot),
+                (meta_path, meta_snapshot),
+            ):
+                try:
+                    _restore_file_snapshot(path, snapshot)
+                except Exception as rollback_error:
+                    rollback_errors.append(f"{path.name}: {rollback_error}")
+        detail = "Projektdateien/DB konnten nicht konsistent gespeichert werden"
+        if rollback_errors:
+            detail += "; Rollback unvollstaendig: " + "; ".join(rollback_errors)
+            logger.critical("%s", detail, exc_info=True)
+        raise persistence_error(
+            "project_save",
+            detail,
+            exc,
+        ) from exc
+    finally:
+        timeline_stage.unlink(missing_ok=True)
+        meta_stage.unlink(missing_ok=True)
+
+    with state.project_commit(context):
+        state.set_timeline(timeline)
+        state.current_project = project_data
 
     logger.info(f"Projekt gespeichert: {project_path}")
     return StatusResponse(success=True, message="Projekt gespeichert")
@@ -387,25 +707,32 @@ async def save_project(state: AppState = Depends(get_app_state)) -> StatusRespon
 @router.post("/close", response_model=StatusResponse)
 async def close_project(state: AppState = Depends(get_app_state)) -> StatusResponse:
     """Schließt das aktuelle Projekt und räumt State auf."""
-    if not state.current_project:
-        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
-    name = state.current_project.get("name", "Unbekannt")
-    # In-flight Render-Tasks abbrechen bevor State geleert wird (verhindert GPU-Lock Stall)
-    # Snapshot der Task-IDs unter Lock nehmen um Race-Condition beim Iterieren zu verhindern.
-    with state._state_lock:
-        task_ids = list(state.render_tasks.keys())
-    for task_id in task_ids:
-        state.set_cancel_flag(task_id, True)
-    # Reset BEVOR current_project = None (reset() leert alle Caches)
-    state.reset()
-    # L-STATE-4: Brain-State-Connection vom alten Projekt loesen, sonst
-    # schreiben /brain/feedback Calls weiter in die alte state.db
-    # (Cross-Project-Leak). Best-effort: bricht den Close nicht ab.
-    try:
-        from backend._brain_singleton import clear_project_state
-        clear_project_state()
-    except Exception as e:
-        logger.warning("Brain-State-Unbind beim Close fehlgeschlagen: %s", e)
+    async with state.project_lifecycle_lock:
+        with state._state_lock:
+            if not state.current_project:
+                raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
+            name = state.current_project.get("name", "Unbekannt")
+        state.invalidate_project_context()
+        _, pending = await state.cancel_and_drain_project_tasks()
+        # In-flight Render-Threads nutzen weiterhin ihre bestehenden Cancel-Flags.
+        with state._state_lock:
+            task_ids = list(state.render_tasks.keys())
+        for task_id in task_ids:
+            state.set_cancel_flag(task_id, True)
+        state.reset(invalidate_context=False)
+        # L-STATE-4: Brain-State-Connection vom alten Projekt loesen, sonst
+        # schreiben /brain/feedback Calls weiter in die alte state.db.
+        try:
+            from backend._brain_singleton import clear_project_state
+            clear_project_state()
+        except Exception as e:
+            logger.warning("Brain-State-Unbind beim Close fehlgeschlagen: %s", e)
+        if pending:
+            logger.warning(
+                "Projekt-Close mit %d noch auslaufenden stale Task(s); "
+                "Epoch-Guard blockiert deren Commit",
+                pending,
+            )
     logger.info(f"Projekt geschlossen: {name}")
     return StatusResponse(success=True, message=f"Projekt '{name}' geschlossen")
 

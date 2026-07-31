@@ -1,0 +1,115 @@
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PBStudio.UI.Services;
+
+namespace PBStudio.UI.Tests;
+
+[TestClass]
+public sealed class ApiClientContractTests
+{
+    [TestMethod]
+    public async Task ClearChatHistory_NonSuccessStatusReturnsFalse()
+    {
+        using var client = CreateClient(
+            (_, _) => Task.FromResult(new HttpResponseMessage(
+                HttpStatusCode.InternalServerError)));
+
+        var result = await client.ClearChatHistoryAsync();
+
+        Assert.IsFalse(result);
+    }
+
+    [TestMethod]
+    public async Task ClearChatHistory_SuccessStatusReturnsTrue()
+    {
+        using var client = CreateClient(
+            (_, _) => Task.FromResult(new HttpResponseMessage(
+                HttpStatusCode.NoContent)));
+
+        var result = await client.ClearChatHistoryAsync();
+
+        Assert.IsTrue(result);
+    }
+
+    [TestMethod]
+    public async Task CleanupGpu_DeserializesTypedNegativeResult()
+    {
+        using var client = CreateClient(
+            (_, _) => JsonResponse(
+                """{"success":false,"freed_mb":0,"error":"models active"}"""));
+
+        var result = await client.CleanupGpuAsync();
+
+        Assert.IsNotNull(result);
+        Assert.IsFalse(result.Success);
+        Assert.AreEqual(0, result.FreedMb);
+        Assert.AreEqual("models active", result.Error);
+    }
+
+    [TestMethod]
+    public async Task TimelinePreview_ForwardsCancellationToHttpRequest()
+    {
+        var requestStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var handlerSawCancellation = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        using var client = CreateClient(async (_, cancellationToken) =>
+        {
+            requestStarted.SetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new AssertFailedException("Request hätte abgebrochen werden müssen.");
+            }
+            catch (OperationCanceledException)
+            {
+                handlerSawCancellation.SetResult();
+                throw;
+            }
+        });
+        using var cancellation = new CancellationTokenSource();
+
+        var previewTask = client.GenerateTimelinePreviewAsync(
+            1.0,
+            2.0,
+            cancellation.Token);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+        var result = await previewTask;
+        await handlerSawCancellation.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.IsNull(result);
+    }
+
+    private static ApiClient CreateClient(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder)
+    {
+        var http = new HttpClient(new StubHttpMessageHandler(responder))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:8765"),
+        };
+        return new ApiClient(http, NullLogger<ApiClient>.Instance);
+    }
+
+    private static Task<HttpResponseMessage> JsonResponse(string json) =>
+        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                json,
+                Encoding.UTF8,
+                "application/json"),
+        });
+
+    private sealed class StubHttpMessageHandler(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder)
+        : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            responder(request, cancellationToken);
+    }
+}

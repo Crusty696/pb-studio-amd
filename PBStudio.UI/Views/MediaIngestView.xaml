@@ -4,7 +4,16 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Medienimport"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="A" Modifiers="Alt" Command="{Binding ImportAudioCommand}"/>
+        <KeyBinding Key="V" Modifiers="Alt" Command="{Binding ImportVideoCommand}"/>
+        <KeyBinding Key="P" Modifiers="Alt" Command="{Binding BrowseVideoPathCommand}"/>
+        <KeyBinding Key="I" Modifiers="Alt" Command="{Binding ImportVideoFromPathCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <!-- Compact GridView column header -->
@@ -48,7 +57,10 @@
         <Border Grid.Row="0" Style="{StaticResource AbletonToolbar}" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal">
                 <Button Command="{Binding ImportAudioCommand}" Style="{StaticResource ToolbarBtn}"
-                        ToolTip="Audio-Datei(en) importieren (WAV, MP3, FLAC)">
+                        ToolTip="Audio-Datei(en) importieren (WAV, MP3, FLAC)"
+                        AutomationProperties.Name="Audio-Dateien importieren"
+                        AutomationProperties.HelpText="Öffnet die Dateiauswahl für WAV-, MP3- und FLAC-Dateien."
+                        AutomationProperties.AccessKey="Alt+A">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="MusicNotePlus" Width="14" Height="14"
                                                Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -59,7 +71,10 @@
                 <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                 <Button Command="{Binding ImportVideoCommand}" Style="{StaticResource ToolbarBtn}"
-                        ToolTip="Video-Datei(en) importieren (MP4, MOV, AVI)">
+                        ToolTip="Video-Datei(en) importieren (MP4, MOV, AVI)"
+                        AutomationProperties.Name="Video-Dateien importieren"
+                        AutomationProperties.HelpText="Öffnet die Dateiauswahl für MP4-, MOV- und AVI-Dateien."
+                        AutomationProperties.AccessKey="Alt+V">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="VideoPlus" Width="14" Height="14"
                                                Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -73,10 +88,15 @@
                          Margin="6,0,6,0"
                          Text="{Binding VideoImportPath, UpdateSourceTrigger=PropertyChanged}"
                          VerticalContentAlignment="Center"
+                         AutomationProperties.Name="Video-Importpfade"
+                         AutomationProperties.HelpText="Vollständige Pfade eingeben; mehrere Pfade mit Semikolon oder Zeilenumbruch trennen."
                          ToolTip="Workaround für flakigen Windows-Dateidialog: vollständigen Video-Pfad direkt eingeben. Mehrere Pfade via Semikolon oder neue Zeile trennen."/>
 
                 <Button Command="{Binding BrowseVideoPathCommand}" Style="{StaticResource ToolbarBtn}"
-                        ToolTip="Video-Dateien auswählen und nur den/die Pfad/Pfade in das In-App-Feld übernehmen">
+                        ToolTip="Video-Dateien auswählen und nur den/die Pfad/Pfade in das In-App-Feld übernehmen"
+                        AutomationProperties.Name="Video-Pfade auswählen"
+                        AutomationProperties.HelpText="Übernimmt ausgewählte Video-Dateipfade in das Eingabefeld, ohne sie sofort zu importieren."
+                        AutomationProperties.AccessKey="Alt+P">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="FolderSearchOutline" Width="14" Height="14"
                                                Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -85,7 +105,10 @@
                 </Button>
 
                 <Button Command="{Binding ImportVideoFromPathCommand}" Style="{StaticResource ToolbarBtn}"
-                        ToolTip="Video direkt vom angegebenen Pfad importieren, ohne den nativen Import-Lauf zu verwenden">
+                        ToolTip="Video direkt vom angegebenen Pfad importieren, ohne den nativen Import-Lauf zu verwenden"
+                        AutomationProperties.Name="Videos aus Pfaden importieren"
+                        AutomationProperties.HelpText="Importiert alle gültigen Pfade aus dem Eingabefeld."
+                        AutomationProperties.AccessKey="Alt+I">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="FileImportOutline" Width="14" Height="14"
                                                Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -110,7 +133,9 @@
                                Style="{StaticResource SectionHeader}"/>
 
                     <ListView ItemsSource="{Binding ImportedAudio}"
-                              Background="Transparent" BorderThickness="0">
+                              Background="Transparent" BorderThickness="0"
+                              AutomationProperties.Name="Importierte Audio-Dateien"
+                              AutomationProperties.HelpText="Liste der im aktiven Projekt importierten Audio-Dateien.">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="180"/>
@@ -129,7 +154,9 @@
                                Style="{StaticResource SectionHeader}"/>
 
                     <ListView ItemsSource="{Binding ImportedVideo}"
-                              Background="Transparent" BorderThickness="0">
+                              Background="Transparent" BorderThickness="0"
+                              AutomationProperties.Name="Importierte Video-Dateien"
+                              AutomationProperties.HelpText="Liste der im aktiven Projekt importierten Video-Dateien.">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="180"/>
@@ -153,7 +180,9 @@
                              Background="{StaticResource AbletonBorder}"
                              Visibility="{Binding IsImporting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                           FontSize="11" VerticalAlignment="Center"/>
+                           FontSize="11" VerticalAlignment="Center"
+                           AutomationProperties.Name="{Binding StatusText}"
+                           AutomationProperties.LiveSetting="Polite"/>
             </DockPanel>
         </Border>
     </Grid>

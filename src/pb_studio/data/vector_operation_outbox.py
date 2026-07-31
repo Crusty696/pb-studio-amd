@@ -48,8 +48,44 @@ class VectorOperationOutbox:
 
     def dedupe_media_vectors(self, media_id: int) -> Optional[str]:
         """Remove existing vector links without exposing active unmapped vectors."""
+        return self._dedupe_media_vectors(int(media_id))
+
+    def dedupe_media_vectors_except(
+        self,
+        media_id: int,
+        keep_faiss_id: int,
+    ) -> Optional[str]:
+        """Remove older vectors while keeping the newly committed vector active."""
+        return self._dedupe_media_vectors(
+            int(media_id),
+            exclude_faiss_ids={int(keep_faiss_id)},
+        )
+
+    def remove_media_vector(
+        self,
+        media_id: int,
+        faiss_id: int,
+    ) -> Optional[str]:
+        """Compensate exactly one newly added vector without deleting older truth."""
+        return self._dedupe_media_vectors(
+            int(media_id),
+            include_faiss_ids={int(faiss_id)},
+        )
+
+    def _dedupe_media_vectors(
+        self,
+        media_id: int,
+        *,
+        include_faiss_ids: Optional[set[int]] = None,
+        exclude_faiss_ids: Optional[set[int]] = None,
+    ) -> Optional[str]:
         with _OPERATION_LOCK:
-            operation_id = self._prepare("vector_dedupe", int(media_id))
+            operation_id = self._prepare(
+                "vector_dedupe",
+                int(media_id),
+                include_faiss_ids=include_faiss_ids,
+                exclude_faiss_ids=exclude_faiss_ids,
+            )
             operation = self._load(operation_id)
             if not operation["faiss_ids"]:
                 self._set_stage(operation_id, "completed")
@@ -87,20 +123,36 @@ class VectorOperationOutbox:
                 recovered += 1
             return recovered
 
-    def _prepare(self, operation_type: str, media_id: int) -> str:
+    def _prepare(
+        self,
+        operation_type: str,
+        media_id: int,
+        *,
+        include_faiss_ids: Optional[set[int]] = None,
+        exclude_faiss_ids: Optional[set[int]] = None,
+    ) -> str:
         with self.db.transaction(immediate=True) as conn:
             media_row = conn.execute(
                 "SELECT project_id FROM media WHERE id = ?",
                 (media_id,),
             ).fetchone()
             project_id = int(media_row[0]) if media_row is not None else 0
-            faiss_ids = sorted(
+            linked_faiss_ids = {
                 int(row[0])
                 for row in conn.execute(
                     "SELECT faiss_id FROM vector_map WHERE media_id = ? ORDER BY faiss_id",
                     (media_id,),
                 ).fetchall()
-            )
+            }
+            if include_faiss_ids is not None:
+                linked_faiss_ids &= {
+                    int(value) for value in include_faiss_ids
+                }
+            if exclude_faiss_ids is not None:
+                linked_faiss_ids -= {
+                    int(value) for value in exclude_faiss_ids
+                }
+            faiss_ids = sorted(linked_faiss_ids)
             operation_id = self._operation_id(operation_type, media_id, faiss_ids)
             payload = json.dumps(faiss_ids, separators=(",", ":"))
             conn.execute(

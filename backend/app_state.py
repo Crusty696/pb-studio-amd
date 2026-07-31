@@ -18,14 +18,24 @@ import asyncio
 import json
 import logging
 import threading
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Iterator, Optional
 
 from pb_studio.data.database_core import normalize_media_path
 from pb_studio.data.repositories.project_repository import ProjectRepository
 
 logger = logging.getLogger(__name__)
+PROJECT_TASK_DRAIN_TIMEOUT_SECONDS = 5.0
+
+
+class PersistenceError(RuntimeError):
+    """A durable mutation failed and must not be reported as success."""
+
+    def __init__(self, source: str, message: str):
+        super().__init__(message)
+        self.source = source
 
 
 def _emit_persist_error(source: str, message: str, detail: str) -> None:
@@ -56,6 +66,24 @@ def _emit_persist_error(source: str, message: str, detail: str) -> None:
     except Exception as exc:
         # Defensive: emit failure darf den eigentlichen Fail-Path nicht blocken
         logger.error(f"persist_error emit fehlgeschlagen ({exc}) [{source}] {message}: {detail}")
+
+
+def _persistence_error(
+    source: str,
+    message: str,
+    exc: BaseException | None = None,
+) -> PersistenceError:
+    _emit_persist_error(source, message, str(exc) if exc is not None else message)
+    return PersistenceError(source, message)
+
+
+def persistence_error(
+    source: str,
+    message: str,
+    exc: BaseException | None = None,
+) -> PersistenceError:
+    """Create a typed persistence failure and publish its error event."""
+    return _persistence_error(source, message, exc)
 
 
 def _thumbnail_exists_for_clip(
@@ -102,6 +130,23 @@ def resolve_project_db_id(project_data: Optional[dict]) -> int:
     return 1
 
 
+@dataclass(frozen=True)
+class ProjectOperationContext:
+    """Unveränderliche Projektidentität einer asynchronen Operation."""
+
+    project_id: int
+    project_root: Path
+    epoch: int
+
+
+class ProjectContextChangedError(RuntimeError):
+    """Die Operation gehört nicht mehr zum aktiven Projekt."""
+
+
+class ProjectContextUnavailableError(RuntimeError):
+    """Es existiert kein vollständig auflösbarer aktiver Projektkontext."""
+
+
 @dataclass
 class AppState:
     """Thread-sicherer In-Memory State für alle FastAPI Router."""
@@ -130,6 +175,213 @@ class AppState:
     _video_next_id: int = field(default=1)
     _lock: threading.RLock = field(default_factory=threading.RLock)
     _state_lock: threading.RLock = field(default_factory=threading.RLock)
+    _project_epoch: int = field(default=0)
+    _project_lifecycle_lock: asyncio.Lock = field(
+        default_factory=asyncio.Lock,
+        repr=False,
+    )
+    _project_tasks: dict[
+        asyncio.Task[Any],
+        tuple[ProjectOperationContext, int],
+    ] = field(default_factory=dict, repr=False)
+
+    @property
+    def project_epoch(self) -> int:
+        with self._state_lock:
+            return self._project_epoch
+
+    @property
+    def project_lifecycle_lock(self) -> asyncio.Lock:
+        return self._project_lifecycle_lock
+
+    def capture_project_context(self) -> ProjectOperationContext:
+        """Erfasst Projekt-ID, Root und Epoch atomar oder bricht ohne Projekt ab."""
+        with self._state_lock:
+            project = self.current_project
+            if not isinstance(project, dict):
+                raise ProjectContextUnavailableError("Kein Projekt geöffnet")
+            raw_project_id = project.get("db_project_id")
+            raw_project_root = project.get("path")
+            epoch = self._project_epoch
+        if raw_project_id in (None, ""):
+            raise ProjectContextUnavailableError(
+                "Aktives Projekt besitzt keine DB-Projekt-ID"
+            )
+        if raw_project_root in (None, ""):
+            raise ProjectContextUnavailableError(
+                "Aktives Projekt besitzt keinen Projektpfad"
+            )
+        try:
+            project_id = int(raw_project_id)
+            project_root = Path(str(raw_project_root)).resolve()
+        except (TypeError, ValueError, OSError) as exc:
+            raise ProjectContextUnavailableError(
+                "Aktiver Projektkontext ist ungültig"
+            ) from exc
+        return ProjectOperationContext(project_id, project_root, epoch)
+
+    def is_project_context_current(self, context: ProjectOperationContext) -> bool:
+        with self._state_lock:
+            return self._is_project_context_current_locked(context)
+
+    def _is_project_context_current_locked(
+        self,
+        context: ProjectOperationContext,
+    ) -> bool:
+        project = self.current_project
+        if not isinstance(project, dict) or self._project_epoch != context.epoch:
+            return False
+        raw_project_id = project.get("db_project_id")
+        raw_project_root = project.get("path")
+        try:
+            return (
+                int(raw_project_id) == context.project_id
+                and Path(str(raw_project_root)).resolve() == context.project_root
+            )
+        except (TypeError, ValueError, OSError):
+            return False
+
+    def require_project_context_current(
+        self,
+        context: ProjectOperationContext,
+    ) -> None:
+        if not self.is_project_context_current(context):
+            raise ProjectContextChangedError(
+                "Projekt wurde während der Operation gewechselt"
+            )
+
+    @contextmanager
+    def project_commit(
+        self,
+        context: ProjectOperationContext,
+    ) -> Iterator[None]:
+        """Linearisiert einen synchronen Commit gegen Epoch-Wechsel."""
+        with self._state_lock:
+            if not self._is_project_context_current_locked(context):
+                raise ProjectContextChangedError(
+                    "Projekt wurde während der Operation gewechselt"
+                )
+            yield
+
+    def invalidate_project_context(self) -> int:
+        """Invalidiert alle bisher erfassten Kontexte vor einem State-Wechsel."""
+        with self._state_lock:
+            self._project_epoch += 1
+            return self._project_epoch
+
+    @asynccontextmanager
+    async def project_operation(self) -> AsyncIterator[ProjectOperationContext]:
+        """Registriert die aktuelle Task atomar gegenüber Projektwechseln."""
+        task = asyncio.current_task()
+        if task is None:
+            raise RuntimeError("Projektoperation benötigt eine asyncio.Task")
+        async with self._project_lifecycle_lock:
+            context = self.capture_project_context()
+            with self._state_lock:
+                registered = self._project_tasks.get(task)
+                if registered is None:
+                    self._project_tasks[task] = (context, 1)
+                elif registered[0] == context:
+                    self._project_tasks[task] = (context, registered[1] + 1)
+                else:
+                    raise RuntimeError(
+                        "Task ist bereits an einen anderen Projektkontext gebunden"
+                    )
+        try:
+            yield context
+        finally:
+            with self._state_lock:
+                registered = self._project_tasks.get(task)
+                if registered is not None and registered[1] <= 1:
+                    self._project_tasks.pop(task, None)
+                elif registered is not None:
+                    self._project_tasks[task] = (
+                        registered[0],
+                        registered[1] - 1,
+                    )
+
+    async def cancel_and_drain_project_tasks(
+        self,
+        timeout_seconds: float = PROJECT_TASK_DRAIN_TIMEOUT_SECONDS,
+    ) -> tuple[int, int]:
+        """Cancelt registrierte Tasks und wartet begrenzt auf deren Abschluss."""
+        current = asyncio.current_task()
+        with self._state_lock:
+            tasks = [
+                task
+                for task in self._project_tasks
+                if task is not current and not task.done()
+            ]
+        for task in tasks:
+            task.cancel()
+        if not tasks:
+            return 0, 0
+        done, pending = await asyncio.wait(tasks, timeout=timeout_seconds)
+        if done:
+            await asyncio.gather(*done, return_exceptions=True)
+        with self._state_lock:
+            for task in done:
+                self._project_tasks.pop(task, None)
+        if pending:
+            logger.error(
+                "%d projektgebundene Task(s) ignorieren Cancellation; "
+                "stale Commit bleibt durch Epoch-Guard gesperrt",
+                len(pending),
+            )
+        return len(done), len(pending)
+
+    def install_project_state(
+        self,
+        project_data: dict,
+        candidate: Optional["AppState"] = None,
+    ) -> ProjectOperationContext:
+        """Installiert einen vollständig vorbereiteten Projektzustand atomar."""
+        if candidate is None:
+            audio_clips: dict[int, dict] = {}
+            audio_analysis: dict[int, dict] = {}
+            video_clips: dict[int, dict] = {}
+            video_analysis: dict[int, dict] = {}
+            timeline: list[dict] = []
+            audio_path: Optional[str] = None
+            audio_next_id = 1
+            video_next_id = 1
+        else:
+            with candidate._state_lock:
+                audio_clips = {
+                    key: dict(value) for key, value in candidate.audio_clips.items()
+                }
+                audio_analysis = {
+                    key: dict(value)
+                    for key, value in candidate.audio_analysis_cache.items()
+                }
+                video_clips = {
+                    key: dict(value) for key, value in candidate.video_clips.items()
+                }
+                video_analysis = {
+                    key: dict(value)
+                    for key, value in candidate.video_analysis_cache.items()
+                }
+                timeline = [dict(entry) for entry in candidate.current_timeline]
+                audio_path = candidate.current_audio_path
+            with candidate._lock:
+                audio_next_id = candidate._audio_next_id
+                video_next_id = candidate._video_next_id
+        with self._state_lock:
+            with self._lock:
+                self.current_project = dict(project_data)
+                self.audio_clips.clear()
+                self.audio_clips.update(audio_clips)
+                self.audio_analysis_cache.clear()
+                self.audio_analysis_cache.update(audio_analysis)
+                self.video_clips.clear()
+                self.video_clips.update(video_clips)
+                self.video_analysis_cache.clear()
+                self.video_analysis_cache.update(video_analysis)
+                self.current_timeline = timeline
+                self.current_audio_path = audio_path
+                self._audio_next_id = audio_next_id
+                self._video_next_id = video_next_id
+        return self.capture_project_context()
 
     def next_audio_id(self) -> int:
         """Gibt die nächste Audio-Clip-ID zurück (thread-safe)."""
@@ -223,12 +475,11 @@ class AppState:
                 repo.delete_media(row["id"])
         except Exception as e:
             logger.error("Audio-Clip DB-Delete fehlgeschlagen: %s", e, exc_info=True)
-            _emit_persist_error(
+            raise _persistence_error(
                 "audio_delete",
                 f"Audio-Clip {clip_id} konnte nicht gelöscht werden",
-                str(e),
-            )
-            raise
+                e,
+            ) from e
         with self._state_lock:
             self.audio_clips.pop(clip_id, None)
             self.audio_analysis_cache.pop(clip_id, None)
@@ -258,12 +509,11 @@ class AppState:
                 VectorOperationOutbox().delete_media(row["id"])
         except Exception as e:
             logger.error("Video-Clip Persistenz-Delete fehlgeschlagen: %s", e, exc_info=True)
-            _emit_persist_error(
+            raise _persistence_error(
                 "video_delete",
                 f"Video-Clip {clip_id} konnte nicht gelöscht werden",
-                str(e),
-            )
-            raise
+                e,
+            ) from e
         with self._state_lock:
             self.video_clips.pop(clip_id, None)
             self.video_analysis_cache.pop(clip_id, None)
@@ -351,7 +601,7 @@ class AppState:
             # task als cancelled (defensive). Verhindert die race aus L-TI-1.
             return task_id not in self.render_tasks
 
-    def reset(self) -> None:
+    def reset(self, *, invalidate_context: bool = True) -> None:
         """Setzt den gesamten State zurück (z.B. bei neuem Projekt).
 
         MEDIUM-015 Fix: cancel_flags wird NICHT geleert, sondern alle verbleibenden Flags
@@ -362,6 +612,8 @@ class AppState:
         """
         with self._state_lock:
             with self._lock:
+                if invalidate_context:
+                    self._project_epoch += 1
                 self.current_project = None
                 self.audio_clips.clear()
                 self.audio_analysis_cache.clear()
@@ -400,10 +652,16 @@ class AppState:
         except (TypeError, ValueError) as exc:
             raise RuntimeError("Aktive DB-Projekt-ID ist ungültig") from exc
 
-    def sync_project_db_record(self) -> bool:
-        """Schreibt current_project in die Projects-Tabelle, falls eine DB-Projekt-ID bekannt ist."""
+    def sync_project_db_record(self, project_data: Optional[dict] = None) -> bool:
+        """Persist project metadata or raise instead of returning false success."""
         with self._state_lock:
-            project = dict(self.current_project) if isinstance(self.current_project, dict) else None
+            project = (
+                dict(project_data)
+                if isinstance(project_data, dict)
+                else dict(self.current_project)
+                if isinstance(self.current_project, dict)
+                else None
+            )
 
         if not project:
             return False
@@ -422,9 +680,12 @@ class AppState:
             ProjectRepository().update_project(project_id, name=project.get("name"), data=project_data)
             return True
         except Exception as e:
-            logger.error("Projekt-DB-Sync fehlgeschlagen: %s", e)
-            _emit_persist_error("project_sync", "Projekt-DB-Sync fehlgeschlagen", str(e))
-            return False
+            logger.error("Projekt-DB-Sync fehlgeschlagen: %s", e, exc_info=True)
+            raise _persistence_error(
+                "project_sync",
+                "Projekt-DB-Sync fehlgeschlagen",
+                e,
+            ) from e
 
     def _find_audio_clip_by_path(self, file_path: str) -> Optional[dict]:
         normalized = normalize_media_path(file_path)
@@ -486,12 +747,17 @@ class AppState:
                         self._audio_next_id = max(self._audio_next_id, clip_id + 1)
                     return clip
         except Exception as e:
-            logger.warning(f"Audio-Clip-Reuse aus DB fehlgeschlagen (Fallback auf neue ID): {e}")
+            logger.error("Audio-Clip-Reuse aus DB fehlgeschlagen: %s", e, exc_info=True)
+            raise _persistence_error(
+                "audio_import",
+                "Audio-Import konnte den bestehenden DB-Zustand nicht prüfen",
+                e,
+            ) from e
 
         clip = dict(clip_data)
         clip["id"] = self.next_audio_id()
-        self.set_audio_clip(clip["id"], clip)
         self.persist_audio_clip(clip, project_id=project_id)
+        self.set_audio_clip(clip["id"], clip)
         return clip
 
     def register_video_clip(self, clip_data: dict) -> dict:
@@ -538,12 +804,17 @@ class AppState:
                         self._video_next_id = max(self._video_next_id, clip_id + 1)
                     return clip
         except Exception as e:
-            logger.warning(f"Video-Clip-Reuse aus DB fehlgeschlagen (Fallback auf neue ID): {e}")
+            logger.error("Video-Clip-Reuse aus DB fehlgeschlagen: %s", e, exc_info=True)
+            raise _persistence_error(
+                "video_import",
+                "Video-Import konnte den bestehenden DB-Zustand nicht prüfen",
+                e,
+            ) from e
 
         clip = dict(clip_data)
         clip["id"] = self.next_video_id()
-        self.set_video_clip(clip["id"], clip)
         self.persist_video_clip(clip, project_id=project_id)
+        self.set_video_clip(clip["id"], clip)
         return clip
 
     def update_audio_analysis(
@@ -579,22 +850,27 @@ class AppState:
         bestehende DB-/Cache-Eintraege. Das erlaubt partielle Updates (z.B. nur
         Subtracks aus dem Import-Pfad, ohne BPM/Beats zu loeschen).
 
-        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den Analyseworkflow).
+        Persistenzfehler werden typisiert geworfen; der RAM-Cache wird erst
+        nach erfolgreichem DB-Commit aktualisiert.
         """
         try:
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
             clip = self.get_audio_clip(clip_id)
             if clip is None:
-                logger.warning(f"update_audio_analysis: Clip {clip_id} nicht im In-Memory State")
-                return
+                raise _persistence_error(
+                    "audio_analysis",
+                    f"Audio-Clip {clip_id} fehlt im Projektzustand",
+                )
             row = repo.find_by_project_and_path(
                 project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
             )
             if row is None:
-                logger.warning(f"update_audio_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
-                return
+                raise _persistence_error(
+                    "audio_analysis",
+                    f"Kein DB-Eintrag für Audio-Clip {clip_id}",
+                )
 
             # Existing ai_data laden — partielle Updates muessen vorhandene Felder
             # bewahren (z.B. nur Subtracks setzen, ohne BPM/Beats zu loeschen).
@@ -727,11 +1003,13 @@ class AppState:
             )
         except Exception as e:
             logger.error(f"Audio-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
-            _emit_persist_error(
+            if isinstance(e, PersistenceError):
+                raise
+            raise _persistence_error(
                 "audio_analysis",
                 f"Audio-Analyse für Clip {clip_id} nicht gespeichert",
-                str(e),
-            )
+                e,
+            ) from e
 
     def update_video_analysis(
         self,
@@ -762,8 +1040,8 @@ class AppState:
         bestehende DB-/Cache-Eintraege. Das erlaubt partielle Updates (z.B. nur
         embedding-meta nach SigLIP-Pass, ohne scene_count/avg_motion zu loeschen).
 
-        Fehler werden NUR geloggt — nie geworfen (nicht kritisch für den
-        Analyseworkflow).
+        Persistenzfehler werden typisiert geworfen; der RAM-Cache wird erst
+        nach erfolgreichem DB-Commit aktualisiert.
 
         L-K4: audio_key (Tonart des Video-Audio-Tracks) wird persistiert damit
         UseKeyMatching im Pacing nach Reload des Projekts weiterhin wirkt.
@@ -775,8 +1053,10 @@ class AppState:
             repo = MediaRepository()
             clip = self.get_video_clip(clip_id)
             if clip is None:
-                logger.warning(f"update_video_analysis: Clip {clip_id} nicht im In-Memory State")
-                return
+                raise _persistence_error(
+                    "video_analysis",
+                    f"Video-Clip {clip_id} fehlt im Projektzustand",
+                )
             row = repo.find_by_project_and_path(
                 project_id=self.get_current_project_db_id(),
                 file_path=clip["path"],
@@ -792,8 +1072,10 @@ class AppState:
                 except (json.JSONDecodeError, TypeError):
                     existing_ai = {}
             else:
-                existing_ai = {}
-                logger.warning(f"update_video_analysis: Kein DB-Eintrag für Clip {clip_id} ({clip['path']})")
+                raise _persistence_error(
+                    "video_analysis",
+                    f"Kein DB-Eintrag für Video-Clip {clip_id}",
+                )
 
             ai_data: dict = dict(existing_ai)
 
@@ -837,9 +1119,7 @@ class AppState:
             if mood_tags is not None:
                 ai_data["mood_tags"] = mood_tags
 
-            # DB-Persist nur wenn ein passender Media-Row existiert.
-            if row is not None:
-                repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
 
             # Diff-Dictionary fuer den In-Memory-Cache (nur tatsaechlich gesetzte Felder).
             cache_update: dict = {}
@@ -901,16 +1181,18 @@ class AppState:
             )
         except Exception as e:
             logger.error(f"Video-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
-            _emit_persist_error(
+            if isinstance(e, PersistenceError):
+                raise
+            raise _persistence_error(
                 "video_analysis",
                 f"Video-Analyse für Clip {clip_id} nicht gespeichert",
-                str(e),
-            )
+                e,
+            ) from e
 
     def persist_audio_clip(self, clip: dict, project_id: Optional[int] = None) -> None:
         """
         Persistiert einen Audio-Clip in SQLite für das aktuell aktive Projekt.
-        Fehler werden NUR geloggt — niemals geworfen (nicht kritisch für Import).
+        Persistenzfehler werden typisiert geworfen.
         """
         try:
             active_project_id = (
@@ -945,16 +1227,16 @@ class AppState:
             logger.debug(f"Audio Clip {clip['id']} in DB persistiert")
         except Exception as e:
             logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
-            _emit_persist_error(
+            raise _persistence_error(
                 "audio_import",
-                f"Audio-Clip {clip.get('id')} nicht in DB gespeichert — beim Restart weg",
-                str(e),
-            )
+                f"Audio-Clip {clip.get('id')} nicht gespeichert",
+                e,
+            ) from e
 
     def persist_video_clip(self, clip: dict, project_id: Optional[int] = None) -> None:
         """
         Persistiert einen Video-Clip in SQLite für das aktuell aktive Projekt.
-        Fehler werden NUR geloggt — niemals geworfen (nicht kritisch für Import).
+        Persistenzfehler werden typisiert geworfen.
         """
         try:
             active_project_id = (
@@ -988,11 +1270,11 @@ class AppState:
             logger.debug(f"Video Clip {clip['id']} in DB persistiert")
         except Exception as e:
             logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
-            _emit_persist_error(
+            raise _persistence_error(
                 "video_import",
-                f"Video-Clip {clip.get('id')} nicht in DB gespeichert — beim Restart weg",
-                str(e),
-            )
+                f"Video-Clip {clip.get('id')} nicht gespeichert",
+                e,
+            ) from e
 
     def load_from_db(self, project_id: Optional[int] = None) -> bool:
         """

@@ -12,9 +12,11 @@ public class ProjectService : IDisposable
 {
     private readonly IApiClient _api;
     private readonly ILogger<ProjectService> _logger;
+    private readonly SemaphoreSlim _projectTransitionGate = new(1, 1);
     private readonly object _projectLifetimeLock = new();
     private CancellationTokenSource _projectLifetimeCts = new();
     private long _projectGeneration;
+    private int _projectTransitionCount;
     private bool _disposed;
 
     public ProjectInfo? CurrentProject { get; private set; }
@@ -33,26 +35,64 @@ public class ProjectService : IDisposable
 
     public async Task<bool> CreateProjectAsync(string name, string path)
     {
-        BeginProjectTransition();
-        var project = await _api.CreateProjectAsync(name, path).ConfigureAwait(false);
-        if (project == null)
-            return false;
+        await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
+        var stableProject = CurrentProject;
+        var completed = false;
+        try
+        {
+            BeginProjectTransition();
+            var project = await _api.CreateProjectAsync(name, path).ConfigureAwait(false);
+            if (project == null)
+                return false;
 
-        SwitchToProject(project);
-        _logger.LogInformation("Projekt erstellt: {Name} ({Path})", project.Name, project.Path);
-        return true;
+            SwitchToProject(project);
+            completed = true;
+            _logger.LogInformation("Projekt erstellt: {Name} ({Path})", project.Name, project.Path);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (!completed)
+                    RestoreStableProject(stableProject);
+            }
+            finally
+            {
+                _projectTransitionGate.Release();
+            }
+        }
     }
 
     public async Task<bool> OpenProjectAsync(string path)
     {
-        BeginProjectTransition();
-        var project = await _api.OpenProjectAsync(path).ConfigureAwait(false);
-        if (project == null)
-            return false;
+        await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
+        var stableProject = CurrentProject;
+        var completed = false;
+        try
+        {
+            BeginProjectTransition();
+            var project = await _api.OpenProjectAsync(path).ConfigureAwait(false);
+            if (project == null)
+                return false;
 
-        SwitchToProject(project);
-        _logger.LogInformation("Projekt geöffnet: {Path}", path);
-        return true;
+            SwitchToProject(project);
+            completed = true;
+            _logger.LogInformation("Projekt geöffnet: {Path}", path);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (!completed)
+                    RestoreStableProject(stableProject);
+            }
+            finally
+            {
+                _projectTransitionGate.Release();
+            }
+        }
     }
 
     public async Task<bool> SaveProjectAsync()
@@ -83,21 +123,54 @@ public class ProjectService : IDisposable
 
     public async Task<bool> CloseProjectAsync()
     {
-        BeginProjectTransition();
-        var result = await _api.CloseProjectAsync().ConfigureAwait(false);
-        if (result?.Success != true)
-            return false;
+        await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
+        var stableProject = CurrentProject;
+        var completed = false;
+        try
+        {
+            BeginProjectTransition();
+            var result = await _api.CloseProjectAsync().ConfigureAwait(false);
+            if (result?.Success != true)
+                return false;
 
-        RunOnUiThread(() =>
-            WeakReferenceMessenger.Default.Send(new ProjectClosingMessage()));
+            RunOnUiThread(() =>
+            {
+                WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
+                CurrentProject = null;
+                EndProjectTransition();
+                ProjectChanged?.Invoke(this, null);
+                WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+            });
+            completed = true;
+            _logger.LogInformation("Projekt geschlossen");
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (!completed)
+                    RestoreStableProject(stableProject);
+            }
+            finally
+            {
+                _projectTransitionGate.Release();
+            }
+        }
+    }
+
+    private void RestoreStableProject(ProjectInfo? stableProject)
+    {
         RunOnUiThread(() =>
         {
-            CurrentProject = null;
-            ProjectChanged?.Invoke(this, null);
-            WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+            CurrentProject = stableProject;
+            EndProjectTransition();
+            ProjectChanged?.Invoke(this, CurrentProject);
+            if (CurrentProject == null)
+                WeakReferenceMessenger.Default.Send(new ProjectClosedMessage());
+            else
+                WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
         });
-        _logger.LogInformation("Projekt geschlossen");
-        return true;
     }
 
     private void SwitchToProject(ProjectInfo project)
@@ -119,6 +192,7 @@ public class ProjectService : IDisposable
             }
 
             CurrentProject = project;
+            EndProjectTransition();
             ProjectChanged?.Invoke(this, CurrentProject);
             WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
         });
@@ -129,7 +203,12 @@ public class ProjectService : IDisposable
         lock (_projectLifetimeLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return new ProjectOperationContext(_projectGeneration, _projectLifetimeCts.Token);
+            if (_projectTransitionCount > 0 || CurrentProject == null)
+                throw new InvalidOperationException("Kein stabiler Projektkontext verfügbar");
+            return new ProjectOperationContext(
+                _projectGeneration,
+                CurrentProject.Path,
+                _projectLifetimeCts.Token);
         }
     }
 
@@ -138,8 +217,14 @@ public class ProjectService : IDisposable
         lock (_projectLifetimeLock)
         {
             return !_disposed
+                && _projectTransitionCount == 0
+                && CurrentProject != null
                 && !context.CancellationToken.IsCancellationRequested
-                && context.Generation == _projectGeneration;
+                && context.Generation == _projectGeneration
+                && string.Equals(
+                    context.ProjectPath,
+                    CurrentProject.Path,
+                    StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -154,11 +239,21 @@ public class ProjectService : IDisposable
             previous = _projectLifetimeCts;
             _projectLifetimeCts = new CancellationTokenSource();
             _projectGeneration++;
+            _projectTransitionCount++;
         }
 
         previous.Cancel();
         previous.Dispose();
         RunOnUiThread(() => ProjectTransitionStarted?.Invoke(this, EventArgs.Empty));
+    }
+
+    private void EndProjectTransition()
+    {
+        lock (_projectLifetimeLock)
+        {
+            if (!_disposed && _projectTransitionCount > 0)
+                _projectTransitionCount--;
+        }
     }
 
     private static void RunOnUiThread(Action action)
@@ -187,4 +282,5 @@ public class ProjectService : IDisposable
 
 public readonly record struct ProjectOperationContext(
     long Generation,
+    string ProjectPath,
     CancellationToken CancellationToken);

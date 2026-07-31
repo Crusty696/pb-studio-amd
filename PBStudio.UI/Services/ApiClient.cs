@@ -58,8 +58,8 @@ public class ApiClient : IApiClient
     public async Task<GpuStatus?> GetGpuStatusAsync()
         => await GetAsync<GpuStatus>("/gpu/status").ConfigureAwait(false);
 
-    public async Task CleanupGpuAsync()
-        => await PostAsync<object>("/gpu/cleanup", null).ConfigureAwait(false);
+    public Task<GpuCleanupResponse?> CleanupGpuAsync(CancellationToken ct = default)
+        => PostAsync<GpuCleanupResponse>("/gpu/cleanup", null, ct);
 
     // --- Project ---
 
@@ -114,8 +114,16 @@ public class ApiClient : IApiClient
     public async Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200)
         => await GetAsync<List<AudioClipInfo>>($"/audio/clips?page={page}&limit={limit}").ConfigureAwait(false);
 
-    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId, CancellationToken cancellationToken = default)
-        => await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }, cancellationToken).ConfigureAwait(false);
+    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(
+        int clipId,
+        CancellationToken cancellationToken = default)
+    {
+        var transport = await PostAsync<PBStudio.UI.Generated.AudioAnalysisResult>(
+            "/audio/analyze",
+            new { clip_id = clipId },
+            cancellationToken).ConfigureAwait(false);
+        return transport is null ? null : AudioAnalysisResult.FromTransport(transport);
+    }
 
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
         => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
@@ -135,8 +143,8 @@ public class ApiClient : IApiClient
     public async Task<List<StructureSegment>?> GetStructureAsync(int clipId)
         => await GetAsync<List<StructureSegment>>($"/audio/structure/{clipId}").ConfigureAwait(false);
 
-    public async Task<SpectralData?> GetSpectralAsync(int clipId)
-        => await GetAsync<SpectralData>($"/audio/spectral/{clipId}").ConfigureAwait(false);
+    public async Task<PBStudio.UI.Generated.SpectralData?> GetSpectralAsync(int clipId)
+        => await GetAsync<PBStudio.UI.Generated.SpectralData>($"/audio/spectral/{clipId}").ConfigureAwait(false);
 
     // --- Video ---
 
@@ -217,7 +225,9 @@ public class ApiClient : IApiClient
     public async Task<TimelineResponse?> GetTimelineAsync()
         => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
 
-    public async Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries)
+    public async Task<StatusResponse?> UpdateTimelineAsync(
+        List<TimelineEntryModel> entries,
+        CancellationToken cancellationToken = default)
     {
         var payload = new
         {
@@ -241,7 +251,10 @@ public class ApiClient : IApiClient
                 e.Metadata
             )).ToList()
         };
-        return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
+        return await PostAsync<StatusResponse>(
+            "/pacing/timeline",
+            payload,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default)
@@ -249,7 +262,7 @@ public class ApiClient : IApiClient
         {
             start_sec = startSec,
             duration,
-        }).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
 
     // --- Render ---
 
@@ -371,17 +384,30 @@ public class ApiClient : IApiClient
             ct);
 
     #region VRAM Telemetry
-    // GET /health/vram[?model_id=...] — Histogramm-basierte Performance-Telemetrie pro model_id.
-    // Bei modelId=null: Multi-Model-Snapshot (Telemetry.Summary + Telemetry.Models).
-    // Bei modelId gesetzt: Single-Entry-Shape (Telemetry.ModelId/Count/DurationMs/...).
-    public Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default)
+    // Kompatibilitätsmethode für die bestehende Multi-Modell-UI-Shape.
+    // Die shape-spezifischen Methoden darunter bilden den Transportvertrag ab.
+    public async Task<VramHealthResponse?> GetVramTelemetryAsync(
+        string? modelId = null,
+        CancellationToken ct = default)
     {
-        var url = string.IsNullOrWhiteSpace(modelId)
-            ? "/health/vram"
-            : $"/health/vram?model_id={Uri.EscapeDataString(modelId)}";
-        // T5c (S-H1b Audit V2): API surface still typed as multi-model VramHealthResponse.
-        // Single-model variant (Telemetry direkt = Entry) wird vom VM aktuell nicht genutzt.
-        return GetAsync<VramHealthResponse>(url, ct);
+        if (string.IsNullOrWhiteSpace(modelId))
+            return await GetVramTelemetrySnapshotAsync(ct).ConfigureAwait(false);
+
+        var single = await GetVramModelTelemetryAsync(modelId, ct).ConfigureAwait(false);
+        return single?.ToMultiModelSnapshot();
+    }
+
+    public Task<VramHealthResponse?> GetVramTelemetrySnapshotAsync(CancellationToken ct = default)
+        => GetAsync<VramHealthResponse>("/health/vram", ct);
+
+    public Task<VramHealthSingleResponse?> GetVramModelTelemetryAsync(
+        string modelId,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+        return GetAsync<VramHealthSingleResponse>(
+            $"/health/vram?model_id={Uri.EscapeDataString(modelId)}",
+            ct);
     }
 
     public async Task<VramLimitResponse?> UpdateVramLimitAsync(int limitMb, CancellationToken ct = default)
@@ -1100,6 +1126,10 @@ public record GpuStatus(
     bool DirectmlActive = false,
     string MonitoringStatus = "error",
     string? MonitoringError = null);
+public record GpuCleanupResponse(
+    bool Success,
+    int FreedMb,
+    string? Error = null);
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(
@@ -1128,7 +1158,6 @@ public record AudioClipInfo(
     Dictionary<string, string>? StageErrors = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
 public record SubtrackSegment(double StartTime, double EndTime, double Confidence = 0.0, double? SubBpm = null, string? SubKey = null);
-public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
 public record AudioAnalysisResult(
     int ClipId,
     double DurationSeconds,
@@ -1136,9 +1165,9 @@ public record AudioAnalysisResult(
     int BeatCount,
     List<BeatData> Beats,
     string? Key = null,
-    List<float>? EnergyCurve = null,
+    List<double>? EnergyCurve = null,
     List<StructureSegment>? StructureSegments = null,
-    SpectralData? SpectralData = null,
+    PBStudio.UI.Generated.SpectralData? SpectralData = null,
     List<SubtrackSegment>? SubtrackSegments = null,
     List<double>? TempoCurve = null,
     List<double>? OnsetTimes = null,
@@ -1150,7 +1179,72 @@ public record AudioAnalysisResult(
     Dictionary<string, string>? StageErrors = null,
     Dictionary<string, JsonElement>? ChunkEvidence = null,
     List<double>? Downbeats = null,
-    Dictionary<string, JsonElement>? DownbeatProvenance = null);
+    Dictionary<string, JsonElement>? DownbeatProvenance = null)
+{
+    public static AudioAnalysisResult FromTransport(
+        PBStudio.UI.Generated.AudioAnalysisResult value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var beats = value.Beats?.Select(beat => new BeatData(
+            beat.Time,
+            beat.Strength ?? 0.0,
+            beat.Beat_type ?? string.Empty)).ToList() ?? new List<BeatData>();
+
+        return new AudioAnalysisResult(
+            value.Clip_id,
+            value.Duration_seconds,
+            value.Bpm ?? 0.0,
+            value.Beat_count ?? beats.Count,
+            beats,
+            value.Key,
+            value.Energy_curve?.ToList(),
+            value.Structure_segments?.Select(segment => new StructureSegment(
+                segment.Start_time,
+                segment.End_time,
+                segment.Label,
+                segment.Confidence ?? 0.0,
+                segment.Energy_score ?? 0.0)).ToList(),
+            value.Spectral_data,
+            value.Subtrack_segments?.Select(segment => new SubtrackSegment(
+                segment.Start_time,
+                segment.End_time,
+                segment.Confidence ?? 0.0,
+                segment.Sub_bpm,
+                segment.Sub_key)).ToList(),
+            value.Tempo_curve?.ToList(),
+            value.Onset_times?.ToList(),
+            value.Kick_times?.ToList(),
+            value.Snare_times?.ToList(),
+            value.Hihat_times?.ToList(),
+            value.Analysis_status ?? "unavailable",
+            value.Stage_status is null
+                ? null
+                : new Dictionary<string, string>(value.Stage_status),
+            value.Stage_errors is null
+                ? null
+                : new Dictionary<string, string>(value.Stage_errors),
+            ToJsonDictionary(value.Chunk_evidence),
+            value.Downbeats?.ToList(),
+            ToJsonDictionary(value.Downbeat_provenance));
+    }
+
+    private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)
+    {
+        if (value is null)
+            return null;
+
+        var element = value is JsonElement json
+            ? json
+            : JsonSerializer.SerializeToElement(value);
+        if (element.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return element.EnumerateObject().ToDictionary(
+            property => property.Name,
+            property => property.Value.Clone());
+    }
+}
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(

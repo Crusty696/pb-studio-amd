@@ -13,7 +13,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..app_state import AppState, get_app_state
+from ..app_state import (
+    AppState,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
+    get_app_state,
+)
 from ..dependencies import publish_event, publish_log
 from ..media_path_policy import (
     MediaPathPolicyError,
@@ -50,6 +56,23 @@ def _requires_video_analysis(config: PacingConfigSchema) -> bool:
 async def generate_cut_list(
     config: PacingConfigSchema,
     state: AppState = Depends(get_app_state),
+) -> CutListResponse:
+    """Generiert eine Cut-Liste im unveraenderlichen Projektkontext."""
+    try:
+        async with state.project_operation() as context:
+            return await _generate_cut_list_for_project(config, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _generate_cut_list_for_project(
+    config: PacingConfigSchema,
+    state: AppState,
+    context: ProjectOperationContext,
 ) -> CutListResponse:
     """Generiert eine Cut-Liste basierend auf Pacing-Konfiguration."""
     logger.info(
@@ -102,6 +125,8 @@ async def generate_cut_list(
         # Plan Phase 4: brain post-processor — annotates and persists cuts
         if getattr(config, "use_brain", False):
             try:
+                from .._brain_singleton import acquire_project_state_lease
+                from ..dependencies import db_write_lock
                 from pb_studio.brain.brain_service import BrainService
                 from pb_studio.brain.post_processor import annotate_cuts_with_brain
 
@@ -124,20 +149,34 @@ async def generate_cut_list(
                         video_hashes_by_clip[f"clip_{vid_id}"] = h
 
                 _t_brain_start = _time.perf_counter()
-                cuts = await asyncio.to_thread(
-                    annotate_cuts_with_brain,
-                    cuts,
-                    weight_store=svc.weights,
-                    audio_analysis=cached_analysis,
-                    video_analysis_by_clip=vab,
-                    audio_clip_id=config.audio_clip_id,
-                    audio_path=audio_clip_meta.get("path"),
-                    persist_to_state_conn=svc.state_conn,
-                    min_confidence=float(getattr(config, "brain_min_confidence", 0.0)),
-                    embedding_cache=svc.brain.cache,
-                    audio_hash=audio_hash_value,
-                    video_hashes_by_clip=video_hashes_by_clip,
-                )
+                state.require_project_context_current(context)
+
+                def _annotate_with_project_lease() -> list[dict[str, Any]]:
+                    with acquire_project_state_lease(
+                        path=context.project_root / "state.db",
+                        project_epoch=context.epoch,
+                        project_id=context.project_id,
+                    ) as lease:
+                        return lease.run_write(
+                            lambda connection: annotate_cuts_with_brain(
+                                cuts,
+                                weight_store=svc.weights,
+                                audio_analysis=cached_analysis,
+                                video_analysis_by_clip=vab,
+                                audio_clip_id=config.audio_clip_id,
+                                audio_path=audio_clip_meta.get("path"),
+                                persist_to_state_conn=connection,
+                                min_confidence=float(
+                                    getattr(config, "brain_min_confidence", 0.0)
+                                ),
+                                embedding_cache=svc.brain.cache,
+                                audio_hash=audio_hash_value,
+                                video_hashes_by_clip=video_hashes_by_clip,
+                            )
+                        )
+
+                async with db_write_lock:
+                    cuts = await asyncio.to_thread(_annotate_with_project_lease)
                 _t_brain_elapsed_ms = (_time.perf_counter() - _t_brain_start) * 1000.0
                 logger.info(
                     "Pacing performance: pacing=%.1fms brain=%.1fms cuts=%d",
@@ -147,23 +186,41 @@ async def generate_cut_list(
                     logger.warning(
                         "Brain overhead %.1fms > 500ms target", _t_brain_elapsed_ms
                     )
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as brain_e:
                 logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
         else:
             # R-Brain: use_brain ist False. Alte Timelines deaktivieren, um Geister-Daten
             # bei /brain/suggest und /brain/learning_session zu verhindern
             try:
-                from pb_studio.brain.brain_service import BrainService
+                from .._brain_singleton import acquire_project_state_lease
                 from ..dependencies import db_write_lock
-                svc = BrainService.get()
-                if svc.state_conn is not None:
-                    # AP1.3 (Audit 2026-06-10): Write auf state_conn einheitlich hinter
-                    # db_write_lock + to_thread (Pattern aus brain_router)
-                    async with db_write_lock:
-                        await asyncio.to_thread(
-                            svc.state_conn.execute, "UPDATE timelines SET is_current = 0"
-                        )
-                    logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
+
+                # AP1.3 (Audit 2026-06-10): Write auf state_conn einheitlich hinter
+                # db_write_lock + to_thread (Pattern aus brain_router).
+                def _deactivate_old_timelines() -> None:
+                    with acquire_project_state_lease(
+                        path=context.project_root / "state.db",
+                        project_epoch=context.epoch,
+                        project_id=context.project_id,
+                    ) as lease:
+                        with state.project_commit(context):
+                            lease.run_write(
+                                lambda connection: connection.execute(
+                                    "UPDATE timelines SET is_current = 0"
+                                )
+                            )
+
+                async with db_write_lock:
+                    await asyncio.to_thread(_deactivate_old_timelines)
+                logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as e:
                 logger.warning("Alte Timelines in state.db konnten nicht deaktiviert werden: %s", e)
 
@@ -176,12 +233,13 @@ async def generate_cut_list(
             logger.warning(f"Timeline-Validierung: {w}")
 
         # Timeline im State speichern (thread-safe)
-        state.current_audio_path = (
-            audio_clips_snapshot[config.audio_clip_id]["path"]
-            if config.audio_clip_id in audio_clips_snapshot
-            else None
-        )
-        state.set_timeline(cuts)
+        with state.project_commit(context):
+            state.current_audio_path = (
+                audio_clips_snapshot[config.audio_clip_id]["path"]
+                if config.audio_clip_id in audio_clips_snapshot
+                else None
+            )
+            state.set_timeline(cuts)
 
         total_dur = cuts[-1]["end_time"] if cuts else 0.0
         avg_dur = sum(c["end_time"] - c["start_time"] for c in cuts) / len(cuts) if cuts else 0.0
@@ -206,6 +264,10 @@ async def generate_cut_list(
             cut_count=len(cuts),
             average_cut_duration=round(avg_dur, 2),
         )
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except HTTPException:
         # AP1.1 (Audit 2026-06-10): Validierungs-Fehler (400) nicht in 500 umwandeln
         raise
@@ -273,7 +335,25 @@ async def update_timeline(
     request: TimelineUpdateRequest,
     state: AppState = Depends(get_app_state)
 ) -> StatusResponse:
+    """Aktualisiert die Timeline im unveraenderlichen Projektkontext."""
+    try:
+        async with state.project_operation() as context:
+            return await _update_timeline_for_project(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _update_timeline_for_project(
+    request: TimelineUpdateRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> StatusResponse:
     """Aktualisiert die Timeline im State."""
+    current_audio_path = state.current_audio_path
     internal_cuts = []
     for entry in request.entries:
         metadata = dict(entry.metadata)
@@ -304,9 +384,9 @@ async def update_timeline(
             internal_cuts,
             state.get_video_clips_snapshot(),
         )
-        if state.current_audio_path:
-            state.current_audio_path = validate_registered_media_path(
-                state.current_audio_path,
+        if current_audio_path:
+            current_audio_path = validate_registered_media_path(
+                current_audio_path,
                 (
                     clip.get("path", "")
                     for clip in state.get_audio_clips_snapshot().values()
@@ -324,19 +404,21 @@ async def update_timeline(
     internal_cuts = _cap_entries_against_source(internal_cuts, state)
 
     audio_dur = 0.0
-    if state.current_audio_path:
+    if current_audio_path:
         from pb_studio.rendering.render_service import RenderService
         # AP1.2 (Audit 2026-06-10): ffprobe-Subprocess blockierte den Event-Loop
         # (SSE-Keepalives/parallele Requests froren ein) -> to_thread
         audio_dur = await asyncio.to_thread(
-            RenderService()._get_audio_duration, state.current_audio_path
+            RenderService()._get_audio_duration, current_audio_path
         ) or 0.0
 
     warnings, errors = validate_timeline(internal_cuts, audio_duration=audio_dur)
     if errors:
         raise HTTPException(status_code=400, detail=f"Ungültige Timeline: {'; '.join(errors)}")
 
-    state.set_timeline(internal_cuts)
+    with state.project_commit(context):
+        state.current_audio_path = current_audio_path
+        state.set_timeline(internal_cuts)
     logger.info(f"Timeline manuell aktualisiert: {len(internal_cuts)} Schnitte")
 
     return StatusResponse(

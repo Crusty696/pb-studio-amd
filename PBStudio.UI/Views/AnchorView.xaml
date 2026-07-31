@@ -4,7 +4,14 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Anchor-Punkte"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding ReloadWaveformCommand}"/>
+        <KeyBinding Key="A" Modifiers="Control+Shift" Command="{Binding AddAnchorCommand}"/>
+    </UserControl.InputBindings>
 
     <Grid Margin="12">
         <Grid.ColumnDefinitions>
@@ -29,12 +36,17 @@
                                   Foreground="{StaticResource AbletonText}"
                                   BorderBrush="{StaticResource AbletonBorder}"
                                   FontSize="12"
+                                  AutomationProperties.Name="Audio-Quelle"
+                                  AutomationProperties.HelpText="Wählt den Audio-Clip für Waveform, Beat-Marker und Anchor-Punkte."
                                   ToolTip="Audio-Quelle für Waveform und Beat-Marker"/>
                         <Button Command="{Binding ReloadWaveformCommand}"
                                 Style="{StaticResource MaterialDesignFlatButton}"
                                 Foreground="{StaticResource AbletonAccent}"
                                 ToolTip="Waveform und Beat-Marker neu laden"
-                                Padding="6,4" Height="30">
+                                Padding="6,4" Height="30"
+                                AutomationProperties.Name="Waveform neu laden"
+                                AutomationProperties.HelpText="Lädt Waveform und Beat-Marker der gewählten Audio-Quelle neu."
+                                AutomationProperties.AcceleratorKey="F5">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"/>
                         </Button>
                     </StackPanel>
@@ -48,6 +60,8 @@
                             TickFrequency="1"
                             IsSnapToTickEnabled="False"
                             Foreground="{StaticResource AbletonAccent}"
+                            AutomationProperties.Name="Audio-Position"
+                            AutomationProperties.HelpText="Verschiebt die aktuelle Position in Sekunden; Pfeiltasten ändern den Wert."
                             ToolTip="Position im Audio-Track (Sekunden)"/>
                     <DockPanel Margin="0,4,0,0">
                         <TextBlock DockPanel.Dock="Left"
@@ -62,8 +76,19 @@
                 </StackPanel>
 
                 <!-- Real Waveform Surface -->
-                <Border Background="#1A1A2E" CornerRadius="2" Margin="0,8,0,0"
+                <Border CornerRadius="2" Margin="0,8,0,0"
                         BorderBrush="{StaticResource AbletonBorder}" BorderThickness="1">
+                    <Border.Style>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="Background" Value="#1A1A2E"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Grid MinHeight="180" Width="720" HorizontalAlignment="Stretch">
                         <Canvas Width="720" Height="180" ClipToBounds="True">
                             <!-- Midline -->
@@ -154,7 +179,10 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             ToolTip="Anchor-Punkt an aktueller Position setzen"
-                            Padding="6,4" Height="30">
+                            Padding="6,4" Height="30"
+                            AutomationProperties.Name="Anchor-Punkt hinzufügen"
+                            AutomationProperties.HelpText="Setzt einen neuen Anchor-Punkt an der aktuellen Audio-Position."
+                            AutomationProperties.AcceleratorKey="Strg+Umschalt+A">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Plus" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -166,7 +194,9 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonRed}"
                             ToolTip="Anchor-Punkt entfernen"
-                            Padding="6,4" Height="30" Margin="4,0,0,0">
+                            Padding="6,4" Height="30" Margin="4,0,0,0"
+                            AutomationProperties.Name="Ausgewählten Anchor-Punkt entfernen"
+                            AutomationProperties.HelpText="Entfernt nach Aktivierung dieser Schaltfläche den ausgewählten Anchor-Punkt. Dieser Vorgang kann nicht rückgängig gemacht werden.">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Delete" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -182,7 +212,9 @@
                 <!-- Anchor ListView -->
                 <ListView ItemsSource="{Binding Anchors}" SelectedItem="{Binding SelectedAnchor}"
                           Background="Transparent" BorderThickness="0"
-                          Foreground="{StaticResource AbletonText}">
+                          Foreground="{StaticResource AbletonText}"
+                          AutomationProperties.Name="Anchor-Punkt-Liste"
+                          AutomationProperties.HelpText="Liste aller Anchor-Punkte. Auswahl mit Pfeiltasten ändern; zum Löschen anschließend die Schaltfläche Ausgewählten Anchor-Punkt entfernen aktivieren.">
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
                             <Setter Property="Padding" Value="4,2"/>

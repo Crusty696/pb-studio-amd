@@ -1,5 +1,17 @@
 # QC Report: System-wide Bug Hunting & AI Optimizations (Epic 00013)
 
+## Authoritative OBJ-72 Gate — 2026-07-31
+
+- **Overall result:** **REOPENED / NOT RELEASE-READY**.
+- **Reason:** OBJ-72/T370–T415 supersedes the historical OBJ-71 release gate.
+- **Current progress:** 14/46 OBJ-72 tasks PASS. Gate A (T370–T373), central
+  project context, Audio/Video/Pacing/Brain isolation, bounded SSE, NSwag
+  integration, Timeline lifecycle, atomic creation and CachedTab reapply are
+  PASS. T380/T385/T386 implementation is active. Historical OBJ-71 evidence is
+  preserved under `history/` and remains valid only for that completed scope.
+- **Release rule:** `.completed` and `.qc-passed` remain absent until their
+  OBJ-72 implementation and QC digest gates are satisfied.
+
 ## Authoritative OBJ-71 End-QC Gate — 2026-07-30
 
 - **Overall result:** **PASSED / RELEASE-READY**.

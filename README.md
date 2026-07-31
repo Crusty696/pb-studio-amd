@@ -26,6 +26,9 @@ Die App deckt heute bereits zentrale Kernpfade ab:
 Wichtiger Hinweis:
 - Der Reparaturplan `00013-system-wide-bug-hunting-audit` befindet sich vor
   dem End-QC; der aktuelle Worktree ist nicht release-ready.
+- Verbindliche Freigabekriterien stehen im
+  [Deployment- und Betriebsvertrag](specs/dod.md). Frühere Testzahlen oder
+  Hardwarebelege ersetzen dessen aktuelle QC-Gates nicht.
 - Die Architektur befindet sich in einer laufenden Hybrid-Migration.
 - WPF ist die aktive UI.
 - Einige reichere Interaktionsflächen (z. B. echter Timeline-/Player-Editor) sind noch im Ausbau.
@@ -133,8 +136,10 @@ exe stderr, alles erfasst).
 Optionen:
 - `-SkipBuildTools`     VS Build Tools install ueberspringen
 - `-SkipBackupPrompt`   keine Frage fuer Auto-Backup-Task
-- `-SkipModelPrecache`  Legacy-Kompatibilitätsschalter; lädt keine Modelle
-- `-SkipGpuVerify`      Legacy-Kompatibilitätsschalter; ONNX-DML bleibt Pflicht
+- `-SkipModelPrecache`  veralteter Kompatibilitätsschalter; wird ignoriert,
+  Pflichtassets werden immer verifiziert
+- `-SkipGpuVerify`      veralteter Kompatibilitätsschalter; wird ignoriert,
+  ONNX-DirectML-Verifikation bleibt Pflicht
 - `-SkipPytest`         pytest am Ende skippen
 - `-NoPause`            Kein "Press Enter" am Ende
 - `-Force`              venv neu anlegen (statt re-use)
@@ -143,7 +148,12 @@ Installiert Python-Venv, das hashgebundene FFmpeg, ONNX Runtime DirectML und
 die freigegebenen CPU-Ausnahmen (FAISS, BeatNet/librosa und Demucs).
 LibreHardwareMonitor bleibt deaktiviert, solange kein extern freigegebenes
 Bundle-Manifest samt beiden SHA-256-Werten vorliegt. CLAP-/SigLIP-Assets
-werden nicht unmanifestiert heruntergeladen.
+werden ausschließlich aus dem freigegebenen, SHA-256-gebundenen Archiv
+installiert. Quelle, Transformation und Lizenzkette stehen in
+[`config/directml-model-assets.json`](config/directml-model-assets.json);
+[`config/directml-asset-bundle.json`](config/directml-asset-bundle.json)
+bindet das konkrete Release-Archiv. Die Installation übernimmt
+[`scripts/provision_directml_assets.ps1`](scripts/provision_directml_assets.ps1).
 
 ### Manuell
 
@@ -222,6 +232,8 @@ powershell -ExecutionPolicy Bypass -File .\verify_release_smoke.ps1
 ```
 
 Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Projekt, prüft Audio/Video/Waveform/Beats, generiert eine Timeline, speichert das Projekt und verifiziert einen sicheren Render-Start+Cancel-Pfad.
+Er ist ein Teil-Gate. Eine Release-Freigabe gilt erst nach allen Kriterien im
+[Deployment- und Betriebsvertrag](specs/dod.md).
 
 ---
 
@@ -236,12 +248,17 @@ Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Proj
 
 ## Wichtige Dateien für den Projektstatus
 
-- `STATUS_MATRIX.md` — Ampel-/Verifikationsstand
-- `WORKLOG.md` — zuletzt erledigte Blöcke
-- `PYQT_MIGRATION_CLASSIFICATION.md` — Alt-UI-zu-WPF-Klassifikation
-- `docs/BRAIN_USER_GUIDE.md` — Brain-Modul für End-User
-- `docs/HARDWARE_VERIFY_GUIDE.md` — DirectML-Hardware-Verifikation
-- `LICENSES.md` — Lizenz-Attribution (CC-BY-4.0 für CLAP-Modell)
+- [`specs/dod.md`](specs/dod.md) — verbindlicher Deployment-, Betriebs- und
+  Releasevertrag
+- [`specs/00013-system-wide-bug-hunting-audit/tasks.md`](specs/00013-system-wide-bug-hunting-audit/tasks.md)
+  — aktueller Reparatur- und QC-Stand
+- [`docs/BRAIN_USER_GUIDE.md`](docs/BRAIN_USER_GUIDE.md) — Brain-Modul für
+  Endanwender
+- [`docs/HARDWARE_VERIFY_GUIDE.md`](docs/HARDWARE_VERIFY_GUIDE.md) —
+  DirectML-Hardware-Verifikation
+- [`config/directml-model-assets.json`](config/directml-model-assets.json) und
+  [`config/directml-asset-bundle.json`](config/directml-asset-bundle.json) —
+  Modellherkunft, Transformationen, Lizenzkette und Release-Hashes
 
 ---
 
@@ -254,4 +271,5 @@ Bei Problemen zuerst prüfen:
 1. startet das Backend?
 2. ist `.venv` vollständig?
 3. ist FFmpeg erreichbar?
-4. zeigt `STATUS_MATRIX.md` den Bereich als live-getestet oder nur code-inspected?
+4. besitzt der aktuelle Reparaturstand echte QC-Belege und die erforderlichen
+   Freigabemarker gemäß `specs/dod.md`?

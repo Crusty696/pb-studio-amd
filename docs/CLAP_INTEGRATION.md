@@ -7,12 +7,24 @@
 > through `DmlExecutionProvider`; without it the feature reports
 > `unavailable`. Python 3.11.x, NumPy 1.26.4, both DirectML memory flags, and
 > project-managed artifacts are mandatory.
+>
+> **Approved provenance:** Audio/Text ONNX derives from
+> `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`;
+> processor files come from
+> `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`.
+> The bound license expression is `BSD-3-Clause AND Apache-2.0`; exact hashes
+> and bundled license text are authoritative in
+> [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+> and [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).
 
 ## Overview
 
 CLAP (Contrastive Language-Audio Pretraining) ist ein multimodales AI-Modell für Zero-Shot Audio Classification. Es verbindet Audio-Embeddings mit Text-Embeddings und ermöglicht flexible Audio-Analyse ohne Training auf spezifische Kategorien.
 
-**Model:** `laion/clap-htsat-unfused`
+**Runtime model:** pinned derived ONNX from
+`ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`,
+with processor assets from
+`laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`
 **Architecture:**
 - Audio Encoder: HTS-AT (Hierarchical Token-Semantic Audio Transformer)
 - Text Encoder: RoBERTa-based transformer
@@ -123,7 +135,9 @@ models/
 # RETIRED: keine In-Repository-Downloads oder lokalen ONNX-Exporte
 ```
 
-**Hinweis:** Die ONNX-Modelle müssen aus dem PyTorch-Original konvertiert werden. Details siehe `scripts/export_clap_onnx.py`.
+**Hinweis:** Keine lokale Konvertierung oder beliebige Modelldatei ist
+freigegeben. Setup akzeptiert ausschließlich das Manifest- und
+SHA-256-gebundene Release-Archiv.
 
 ## Audio Processing
 
@@ -423,5 +437,9 @@ python examples/clap_demo.py test_audio/sample.mp3
 
 ## License
 
-Code: MIT License
-Model: Creative ML Open RAIL-M License (siehe LAION CLAP repository)
+Code: siehe Repository-Lizenz.
+
+Freigegebene CLAP-Modellkette:
+`BSD-3-Clause AND Apache-2.0`; vollständiger Text und Hash stehen als
+`licenses/CLAP-license-chain.txt` in
+[`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).

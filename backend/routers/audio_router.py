@@ -18,7 +18,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..app_state import AppState, get_app_state
+from ..app_state import (
+    AppState,
+    PersistenceError,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
+    get_app_state,
+)
 from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
 from ..media_path_policy import (
@@ -42,8 +49,6 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
 _LONG_STEM_TIMEOUT_RATIO = 0.75
-
-
 def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
     """Allow long mixes enough wall time while retaining the configured floor."""
     duration = max(0.0, float(duration_seconds))
@@ -166,6 +171,9 @@ def _write_stem_cache_marker(
     model_name: str,
     output_dir: Path,
     stem_files: list[str],
+    *,
+    state: AppState | None = None,
+    context: ProjectOperationContext | None = None,
 ) -> None:
     """Atomically publish validated output metadata after separator success."""
     import json
@@ -225,7 +233,11 @@ def _write_stem_cache_marker(
             json.dump(marker, handle, sort_keys=True, separators=(",", ":"))
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp_path, marker_path)
+        if state is not None and context is not None:
+            with state.project_commit(context):
+                os.replace(temp_path, marker_path)
+        else:
+            os.replace(temp_path, marker_path)
     finally:
         try:
             temp_path.unlink()
@@ -258,6 +270,22 @@ def _get_beat_detector() -> "Any":
 async def import_audio(
     request: AudioImportRequest,
     state: AppState = Depends(get_app_state),
+) -> AudioClipInfo:
+    try:
+        async with state.project_operation() as context:
+            return await _import_audio_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _import_audio_in_context(
+    request: AudioImportRequest,
+    state: AppState,
+    context: ProjectOperationContext,
 ) -> AudioClipInfo:
     """Importiert eine Audio-Datei."""
     try:
@@ -321,20 +349,21 @@ async def import_audio(
         logger.warning(f"media_hash fehlgeschlagen für {audio_path}: {e}")
         audio_hash_value = None
 
-    clip = state.register_audio_clip({
-        "name": audio_path.stem,
-        "path": str(audio_path.absolute()),
-        "duration_seconds": probe_info["duration"],
-        "sample_rate": probe_info["sample_rate"],
-        "channels": probe_info["channels"],
-        "format": audio_path.suffix.lstrip("."),
-        "bpm": 0.0,
-        "key": None,
-        "beat_count": 0,
-        "is_analyzed": False,
-        "audio_hash": audio_hash_value,
-        "has_audio_embedding": False,
-    })
+    with state.project_commit(context):
+        clip = dict(state.register_audio_clip({
+            "name": audio_path.stem,
+            "path": str(audio_path.absolute()),
+            "duration_seconds": probe_info["duration"],
+            "sample_rate": probe_info["sample_rate"],
+            "channels": probe_info["channels"],
+            "format": audio_path.suffix.lstrip("."),
+            "bpm": 0.0,
+            "key": None,
+            "beat_count": 0,
+            "is_analyzed": False,
+            "audio_hash": audio_hash_value,
+            "has_audio_embedding": False,
+        }))
 
     # Plan Phase 1 #6: synchronous sub-track-detection during mix-import.
     # Skip for short clips (< 60s) — sub-tracks meaningless there.
@@ -363,11 +392,12 @@ async def import_audio(
     # Vorher landeten subtrack_segments + tempo_curve nur im in-memory clip-dict
     # und nie im audio_analysis_cache — _pre_cached_subtracks (Audit E3) wurde
     # nie sinnvoll aufgerufen.
-    state.update_audio_analysis(
-        clip_id=clip["id"],
-        subtrack_segments=clip["subtrack_segments"],
-        tempo_curve=clip["tempo_curve"],
-    )
+    with state.project_commit(context):
+        state.update_audio_analysis(
+            clip_id=clip["id"],
+            subtrack_segments=clip["subtrack_segments"],
+            tempo_curve=clip["tempo_curve"],
+        )
 
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
     await publish_log(
@@ -497,6 +527,22 @@ async def analyze_audio(
     request: AudioAnalyzeRequest,
     state: AppState = Depends(get_app_state),
 ) -> AudioAnalysisResult:
+    try:
+        async with state.project_operation() as context:
+            return await _analyze_audio_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _analyze_audio_in_context(
+    request: AudioAnalyzeRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> AudioAnalysisResult:
     """Analysiert einen Audio-Clip (Beats, Struktur, Spektral)."""
     clip = state.get_audio_clip(request.clip_id)
     if clip is None:
@@ -555,7 +601,6 @@ async def analyze_audio(
             result["subtrack_segments"] = _pre_subtracks
         if not result.get("tempo_curve"):
             result["tempo_curve"] = _pre_tempo_curve
-        state.set_audio_analysis(request.clip_id, result)
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
@@ -565,36 +610,36 @@ async def analyze_audio(
         analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
         if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
             clip["duration_seconds"] = analysis_dur
-        state.set_audio_clip(request.clip_id, clip)
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
         import json as _json
         beats_json = _json.dumps(result.get("beats", []))
-        state.update_audio_analysis(
-            clip_id=request.clip_id,
-            bpm=clip["bpm"],
-            key=clip["key"],
-            beat_count=clip["beat_count"],
-            beats_json=beats_json,
-            is_analyzed=clip["is_analyzed"],
-            energy_curve=result.get("energy_curve"),
-            structure_segments=result.get("structure_segments"),
-            spectral_data=result.get("spectral_data"),
-            # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
-            subtrack_segments=result.get("subtrack_segments"),
-            tempo_curve=result.get("tempo_curve"),
-            # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten mit-persistieren.
-            onset_times=result.get("onset_times"),
-            kick_times=result.get("kick_times"),
-            snare_times=result.get("snare_times"),
-            hihat_times=result.get("hihat_times"),
-            chunk_evidence=result.get("_chunk_evidence"),
-            analysis_status=analysis_status,
-            stage_status=result.get("_stage_status", {}),
-            stage_errors=result.get("_stage_errors", {}),
-            downbeats=result.get("downbeats", []),
-            downbeat_provenance=result.get("downbeat_provenance"),
-        )
+        with state.project_commit(context):
+            state.update_audio_analysis(
+                clip_id=request.clip_id,
+                bpm=clip["bpm"],
+                key=clip["key"],
+                beat_count=clip["beat_count"],
+                beats_json=beats_json,
+                is_analyzed=clip["is_analyzed"],
+                energy_curve=result.get("energy_curve"),
+                structure_segments=result.get("structure_segments"),
+                spectral_data=result.get("spectral_data"),
+                # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
+                subtrack_segments=result.get("subtrack_segments"),
+                tempo_curve=result.get("tempo_curve"),
+                # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten mit-persistieren.
+                onset_times=result.get("onset_times"),
+                kick_times=result.get("kick_times"),
+                snare_times=result.get("snare_times"),
+                hihat_times=result.get("hihat_times"),
+                chunk_evidence=result.get("_chunk_evidence"),
+                analysis_status=analysis_status,
+                stage_status=result.get("_stage_status", {}),
+                stage_errors=result.get("_stage_errors", {}),
+                downbeats=result.get("downbeats", []),
+                downbeat_provenance=result.get("downbeat_provenance"),
+            )
 
         await publish_log(
             f"Audio-Analyse {analysis_status}: {clip['name']}",
@@ -621,6 +666,10 @@ async def analyze_audio(
         public_result["stage_errors"] = result.get("_stage_errors", {})
         public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
         return AudioAnalysisResult(**public_result)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
         await publish_log(
@@ -719,6 +768,22 @@ async def separate_stems(
     request: StemSeparateRequest,
     state: AppState = Depends(get_app_state),
 ) -> StemResult:
+    try:
+        async with state.project_operation() as context:
+            return await _separate_stems_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _separate_stems_in_context(
+    request: StemSeparateRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> StemResult:
     """Führt Stem-Separation durch (GPU-Lock via Middleware)."""
     clip = state.get_audio_clip(request.clip_id)
     if clip is None:
@@ -730,6 +795,7 @@ async def separate_stems(
     _clip_id = request.clip_id
 
     def _stem_progress(pct: float) -> None:
+        state.require_project_context_current(context)
         if _loop is None:
             return
         try:
@@ -758,6 +824,8 @@ async def separate_stems(
             model_id="stem_separation_full",
             manage_vram=False,  # StemSeparator owns ONNX model budgets; Demucs is CPU.
             timeout_seconds=stem_timeout,
+            state=state,
+            context=context,
         )
 
         # L-N4: stems_paths in audio_clip persistieren — pacing_router liest das
@@ -771,14 +839,20 @@ async def separate_stems(
                 stems_paths[stem_name] = p
         if stems_paths:
             clip["stems_paths"] = stems_paths
-            state.set_audio_clip(request.clip_id, clip)
             # L-AUDIO-8 (CD-1): meta sofort in DB upserten damit Reload nach
             # Backend-Restart die Stem-Pfade kennt - Demucs ist ~10min GPU,
             # darf nicht silent verloren gehen.
             try:
-                state.persist_audio_clip(clip)
+                with state.project_commit(context):
+                    state.persist_audio_clip(clip, project_id=context.project_id)
+                    state.set_audio_clip(request.clip_id, clip)
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as e:
-                logger.warning(f"stems_paths-DB-Persistierung fehlgeschlagen (unkritisch): {e}")
+                logger.error("stems_paths-DB-Persistierung fehlgeschlagen: %s", e)
+                raise
 
             # Lücke schliessen: Re-run der Sub-Track-Detection mit echten Stems für hochpräzise Boundaries!
             try:
@@ -799,17 +873,28 @@ async def separate_stems(
                 clip["tempo_curve"] = subtrack_res.tempo_curve
                 
                 # State und Analyse-Cache mit den neuen Werten aktualisieren
-                state.update_audio_analysis(
-                    clip_id=clip["id"],
-                    subtrack_segments=clip["subtrack_segments"],
-                    tempo_curve=clip["tempo_curve"],
-                )
+                with state.project_commit(context):
+                    state.update_audio_analysis(
+                        clip_id=clip["id"],
+                        subtrack_segments=clip["subtrack_segments"],
+                        tempo_curve=clip["tempo_curve"],
+                    )
                 
                 logger.info(f"Sub-Track-Detection mit Stems erfolgreich aktualisiert und im Cache/DB persistiert für Clip {request.clip_id}.")
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
+            except PersistenceError:
+                raise
             except Exception as sub_err:
                 logger.error(f"Re-Run der Sub-Track-Detection mit Stems fehlgeschlagen: {sub_err}", exc_info=True)
 
         return StemResult(clip_id=request.clip_id, **result)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except Exception as e:
         logger.error(f"Stem-Separation fehlgeschlagen: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Stem-Separation fehlgeschlagen: {e}")
@@ -1441,7 +1526,14 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
         return []
 
 
-def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> dict[str, Any]:
+def _run_stem_separation(
+    audio_path: str,
+    model_name: str,
+    on_progress=None,
+    *,
+    state: AppState | None = None,
+    context: ProjectOperationContext | None = None,
+) -> dict[str, Any]:
     """Führt Stem-Separation durch (blockierend, GPU)."""
     from pb_studio.config_manager import ConfigManager
     from pb_studio.audio.separator import StemSeparator
@@ -1458,6 +1550,8 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
         result = {"stems": reusable}
     else:
         separator = StemSeparator()
+        if state is not None and context is not None:
+            state.require_project_context_current(context)
         result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
 
     # Fehler vom Separator prüfen
@@ -1524,7 +1618,11 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
             # Amplitudenbegrenzung gegen Clipping
             data_inst = np.clip(data_inst, -1.0, 1.0)
             
-            sf.write(str(inst_p), data_inst, sr)
+            if state is not None and context is not None:
+                with state.project_commit(context):
+                    sf.write(str(inst_p), data_inst, sr)
+            else:
+                sf.write(str(inst_p), data_inst, sr)
             mapped["instrumental_path"] = str(inst_p)
             logger.info(f"Instrumental-Stem erfolgreich synthetisiert unter: {inst_p}")
         except Exception as synth_err:
@@ -1538,7 +1636,11 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
                 model_name,
                 output_dir,
                 normalized_stem_files,
+                state=state,
+                context=context,
             )
+        except ProjectContextChangedError:
+            raise
         except (OSError, RuntimeError, ValueError) as marker_error:
             logger.warning(
                 "Stem-Erfolgsmarker konnte nicht publiziert werden; Reuse deaktiviert: %s",

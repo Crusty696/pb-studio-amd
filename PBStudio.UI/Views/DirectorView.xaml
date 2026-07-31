@@ -9,7 +9,16 @@
              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="1200"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="KI-Regie"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="G" Modifiers="Control" Command="{Binding GenerateCutListCommand}"/>
+        <KeyBinding Key="F5" Command="{Binding LoadBrainSuggestionsCommand}"/>
+        <KeyBinding Key="A" Modifiers="Alt" Command="{Binding SelectAllVideoClipsCommand}"/>
+        <KeyBinding Key="N" Modifiers="Alt" Command="{Binding DeselectAllVideoClipsCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <!-- Compact slider style -->
@@ -111,6 +120,8 @@
                                   BorderBrush="{StaticResource AbletonBorder}"
                                   FontSize="12"
                                   Height="30"
+                                  AutomationProperties.Name="Audio-Quelle"
+                                  AutomationProperties.HelpText="Wählt den analysierten Audio-Clip als zeitliche und rhythmische Grundlage."
                                   ToolTip="Musik-Auswahl&#x0a;• Was es macht: Wählt den geladenen Song aus der Bibliothek aus.&#x0a;• Wozu es dient: Bildet die zeitliche und rhythmische Grundlage für das gesamte Video.&#x0a;• Wann nutzen: Immer als allerersten Schritt vor dem Pacing festlegen."/>
                     </StackPanel>
                 </md:Card>
@@ -125,9 +136,13 @@
                         <DockPanel Margin="0,0,0,6">
                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                                 <Button Content="ALLE" Style="{StaticResource TinyFlatButton}"
-                                        Command="{Binding SelectAllVideoClipsCommand}" Margin="0,0,4,0"/>
+                                        Command="{Binding SelectAllVideoClipsCommand}" Margin="0,0,4,0"
+                                        AutomationProperties.Name="Alle Video-Clips auswählen"
+                                        AutomationProperties.AccessKey="Alt+A"/>
                                 <Button Content="KEINE" Style="{StaticResource TinyFlatButton}"
-                                        Command="{Binding DeselectAllVideoClipsCommand}"/>
+                                        Command="{Binding DeselectAllVideoClipsCommand}"
+                                        AutomationProperties.Name="Video-Auswahl aufheben"
+                                        AutomationProperties.AccessKey="Alt+N"/>
                             </StackPanel>
                             <TextBlock DockPanel.Dock="Right"
                                        HorizontalAlignment="Right"
@@ -150,7 +165,9 @@
                                  BorderThickness="1"
                                  MaxHeight="150"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 Padding="2">
+                                 Padding="2"
+                                 AutomationProperties.Name="Video-Clips für Cut-Liste"
+                                 AutomationProperties.HelpText="Mit Leertaste einzelne Video-Clips für die Cut-Generierung aktivieren oder deaktivieren.">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
@@ -382,7 +399,10 @@
                         IsEnabled="{Binding IsGenerating, Converter={StaticResource InverseBooleanConverter}}"
                         Cursor="Hand"
                         Height="40"
-                        Margin="0,4,0,4">
+                        Margin="0,4,0,4"
+                        AutomationProperties.Name="Cut-Liste generieren"
+                        AutomationProperties.HelpText="Erzeugt aus Audio, ausgewählten Video-Clips und Pacing-Parametern eine neue Cut-Liste."
+                        AutomationProperties.AcceleratorKey="Strg+G">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="border"
@@ -469,6 +489,8 @@
                       Foreground="{StaticResource AbletonText}"
                       BorderThickness="0"
                       FontSize="12"
+                      AutomationProperties.Name="Generierte Cut-Liste"
+                      AutomationProperties.HelpText="Ergebnisliste mit Clip, Zeitraum, Dauer und Trigger jedes Schnitts."
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListView.View>
                     <GridView>
@@ -530,11 +552,15 @@
                                  Text="{Binding BrainSuggestTopN, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ParamTextBox}"
                                  Margin="0,0,8,0"
+                                 AutomationProperties.Name="Anzahl KI-Vorschläge"
                                  ToolTip="Anzahl der zu ladenden Vorschläge (1..200)"/>
                         <Button Content="↻ Vorschläge laden"
                                 Command="{Binding LoadBrainSuggestionsCommand}"
                                 IsEnabled="{Binding IsLoadingSuggestions, Converter={StaticResource InverseBooleanConverter}}"
                                 Padding="10,4"
+                                AutomationProperties.Name="KI-Vorschläge laden"
+                                AutomationProperties.HelpText="Lädt bewertete Timeline-Schnitte aus dem Brain des aktiven Projekts."
+                                AutomationProperties.AcceleratorKey="F5"
                                 ToolTip="POST /brain/suggest — liest cuts mit brain_scores aus timeline_cuts"/>
                     </StackPanel>
                 </DockPanel>
@@ -547,6 +573,8 @@
                       Foreground="{StaticResource AbletonText}"
                       BorderThickness="0"
                       FontSize="12"
+                      AutomationProperties.Name="KI-Vorschläge"
+                      AutomationProperties.HelpText="Liste der bestbewerteten Brain-Vorschläge mit Zeitbereich und Score."
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListView.View>
                     <GridView>
@@ -600,7 +628,9 @@
                     <TextBlock DockPanel.Dock="Left"
                                Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11"/>
+                               FontSize="11"
+                               AutomationProperties.Name="{Binding StatusText}"
+                               AutomationProperties.LiveSetting="Polite"/>
                     <TextBlock DockPanel.Dock="Right"
                                HorizontalAlignment="Right"
                                Text="{Binding SuggestionsStatus}"

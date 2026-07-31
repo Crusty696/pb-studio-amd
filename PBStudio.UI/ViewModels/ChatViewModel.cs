@@ -28,6 +28,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     private readonly ILogger<ChatViewModel>? _logger;
     private CancellationTokenSource? _streamCts;
     private int _streamGeneration;
+    private bool _isClearing;
     private bool _disposed;
 
     [ObservableProperty] private string _inputText = string.Empty;
@@ -59,7 +60,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                 "• \"Show me the brain stats\"")));
     }
 
-    public bool CanSend => !IsStreaming && !string.IsNullOrWhiteSpace(InputText);
+    public bool CanSend =>
+        !IsStreaming &&
+        !_isClearing &&
+        !string.IsNullOrWhiteSpace(InputText);
 
     partial void OnInputTextChanged(string value) => SendCommand.NotifyCanExecuteChanged();
     partial void OnIsStreamingChanged(bool value)
@@ -231,17 +235,41 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task ClearAsync()
     {
-        if (_disposed) return;
+        if (_disposed || _isClearing) return;
 
-        Interlocked.Increment(ref _streamGeneration);
+        _isClearing = true;
+        SendCommand.NotifyCanExecuteChanged();
         _streamCts?.Cancel();
-        IsStreaming = false;
-        await _api.ClearChatHistoryAsync().ConfigureAwait(true);
-        if (_disposed) return;
+        StatusText = "Lösche Chat-History...";
 
-        Messages.Clear();
-        AddWelcomeMessage();
-        StatusText = "History geleert.";
+        try
+        {
+            var cleared = await _api.ClearChatHistoryAsync().ConfigureAwait(true);
+            if (_disposed) return;
+
+            if (!cleared)
+            {
+                StatusText = "Chat-History konnte nicht gelöscht werden.";
+                return;
+            }
+
+            Interlocked.Increment(ref _streamGeneration);
+            Messages.Clear();
+            AddWelcomeMessage();
+            StatusText = "History geleert.";
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Chat-History konnte nicht gelöscht werden");
+            if (!_disposed)
+                StatusText = "Chat-History konnte nicht gelöscht werden.";
+        }
+        finally
+        {
+            _isClearing = false;
+            if (!_disposed)
+                SendCommand.NotifyCanExecuteChanged();
+        }
     }
 
     public void Dispose()

@@ -4,7 +4,16 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Einstellungen"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding CleanupGpuCommand}"/>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveSettingsCommand}"/>
+        <KeyBinding Key="F6" Command="{Binding ProbeFfmpegCommand}"/>
+    </UserControl.InputBindings>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel MaxWidth="600" Margin="12"
@@ -21,14 +30,20 @@
                                     Style="{StaticResource MaterialDesignFlatButton}"
                                     Foreground="{StaticResource AbletonAccent}"
                                     Padding="6,4" Height="28"
-                                    ToolTip="GPU-Status aktualisieren&#x0a;• Was es macht: Fragt den aktuellen Hardware-Status deiner Grafikkarte über LibreHardwareMonitor ab.&#x0a;• Wozu es dient: Bringt Temperatur, belegten VRAM und Lüfterdaten live auf den neuesten Stand.&#x0a;• Wann &amp; wie nutzen: Nützlich bei langen Berechnungen, um zu sehen, ob deine Grafikkarte thermisch ausgelastet ist.">
+                                    ToolTip="GPU-Status aktualisieren&#x0a;• Was es macht: Fragt den aktuellen Hardware-Status deiner Grafikkarte über LibreHardwareMonitor ab.&#x0a;• Wozu es dient: Bringt Temperatur, belegten VRAM und Lüfterdaten live auf den neuesten Stand.&#x0a;• Wann &amp; wie nutzen: Nützlich bei langen Berechnungen, um zu sehen, ob deine Grafikkarte thermisch ausgelastet ist."
+                                    AutomationProperties.Name="GPU-Status aktualisieren"
+                                    AutomationProperties.HelpText="Lädt Adapteridentität, DirectML-, Monitoring-, VRAM- und Temperaturstatus neu."
+                                    AutomationProperties.AcceleratorKey="F5">
                                 <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"/>
                             </Button>
                             <Button Command="{Binding CleanupGpuCommand}"
                                     Style="{StaticResource MaterialDesignFlatButton}"
                                     Foreground="{StaticResource AbletonYellow}"
                                     Padding="6,4" Height="28" Margin="4,0,0,0"
-                                    ToolTip="VRAM aufräumen &amp; Cache leeren&#x0a;• Was es macht: Entlädt alle inaktiven KI-Modelle aus dem Grafikkartenspeicher (VRAM) und leert den Cache.&#x0a;• Wozu es dient: Gibt blockierten Speicher sofort wieder frei, um Platz für andere Anwendungen oder neue Modell-Tests zu schaffen.&#x0a;• Wann &amp; wie nutzen: Immer dann drücken, wenn du Grafik-Fehler vermutest oder vor dem Wechsel zu rechenintensiven Games.">
+                                    ToolTip="VRAM aufräumen &amp; Cache leeren&#x0a;• Was es macht: Entlädt alle inaktiven KI-Modelle aus dem Grafikkartenspeicher (VRAM) und leert den Cache.&#x0a;• Wozu es dient: Gibt blockierten Speicher sofort wieder frei, um Platz für andere Anwendungen oder neue Modell-Tests zu schaffen.&#x0a;• Wann &amp; wie nutzen: Immer dann drücken, wenn du Grafik-Fehler vermutest oder vor dem Wechsel zu rechenintensiven Games."
+                                    AutomationProperties.Name="Inaktive GPU-Modelle entladen"
+                                    AutomationProperties.HelpText="Entlädt nur inaktive, freigabefähige KI-Modelle und meldet den bestätigten Cleanup-Status."
+                                    AutomationProperties.AcceleratorKey="Strg+Umschalt+G">
                                 <StackPanel Orientation="Horizontal">
                                     <icon:PackIconMaterial Kind="Broom" Width="14" Height="14"
                                                            VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -145,6 +160,8 @@
                         <Slider Minimum="2048" Maximum="32768" TickFrequency="512"
                                 Value="{Binding VramLimitMb}"
                                 IsSnapToTickEnabled="True"
+                                AutomationProperties.Name="VRAM-Limit"
+                                AutomationProperties.HelpText="Maximaler VRAM-Betrag für PB Studio in Megabyte; Pfeiltasten ändern den Wert in 512-Megabyte-Schritten."
                                 ToolTip="Maximales VRAM-Limit für PB Studio&#x0a;• Was es macht: Setzt eine harte Obergrenze fest, wie viel Grafikspeicher PB Studio maximal für KI-Modelle reservieren darf.&#x0a;• Wozu es dient: Schützt dein Windows-System und andere Apps davor, dass PB Studio den gesamten Grafikspeicher aufbraucht und das System einfriert.&#x0a;• Wann &amp; wie nutzen: Sollte in der Regel auf ca. 75-80% deines Gesamt-VRAMs eingestellt werden."/>
                         <DockPanel Margin="0,2,0,0">
                             <TextBlock Text="Bestimmt wann der Arbiter Modelle auslagert oder Anfragen ablehnt."
@@ -163,6 +180,8 @@
                             <CheckBox IsChecked="{Binding ForceVramEnabled}"
                                       Content="VRAM erzwingen (PB_STUDIO_FORCED_VRAM)"
                                       Foreground="{StaticResource AbletonText}" FontSize="11"
+                                      AutomationProperties.Name="VRAM-Testwert erzwingen"
+                                      AutomationProperties.HelpText="Nur für Tests: aktiviert einen simulierten VRAM-Wert, der erst nach Backend-Neustart gilt."
                                       ToolTip="VRAM-Simulation aktivieren&#x0a;• Was es macht: Aktiviert eine Testumgebung, in der eine bestimmte VRAM-Größe für PB Studio vorgetäuscht wird.&#x0a;• Wozu es dient: Ermöglicht Entwicklern zu simulieren, wie sich die App auf schwächeren oder stärkeren Grafikkarten verhält.&#x0a;• Wann &amp; wie nutzen: Nur für Entwicklungs- und Testzwecke aktivieren. Im Normalbetrieb ausgeschaltet lassen."/>
                             <TextBlock Text="{Binding ForcedVramMb, StringFormat={}{0} MB}"
                                        Style="{StaticResource ParamValue}" Foreground="{StaticResource AbletonYellow}"
@@ -172,6 +191,8 @@
                                 Value="{Binding ForcedVramMb}"
                                 IsSnapToTickEnabled="True"
                                 IsEnabled="{Binding ForceVramEnabled}"
+                                AutomationProperties.Name="Simulierter VRAM"
+                                AutomationProperties.HelpText="VRAM-Testwert in Megabyte; nur verfügbar, wenn VRAM erzwingen aktiviert ist."
                                 ToolTip="Simulierte VRAM-Größe&#x0a;• Was es macht: Stellt die VRAM-Größe ein, die für den Testmodus simuliert werden soll.&#x0a;• Wozu es dient: Definiert die Speicherobergrenze für das Test-Szenario.&#x0a;• Wann &amp; wie nutzen: Nur aktiv, wenn 'VRAM erzwingen' aktiviert ist. Greift erst nach einem Neustart des Backend-Prozesses."/>
                         <TextBlock Text="Greift erst nach Backend-Restart. Nützlich für Tests auf kleineren GPUs."
                                    FontSize="10" Foreground="{StaticResource AbletonTextDim}" Margin="0,2,0,0"/>
@@ -179,7 +200,10 @@
 
                     <Button Command="{Binding SaveSettingsCommand}"
                             Background="{StaticResource AbletonAccent}" BorderThickness="0"
-                            Height="32" Content="Einstellungen übernehmen">
+                            Height="32" Content="_Einstellungen übernehmen"
+                            AutomationProperties.Name="Einstellungen speichern"
+                            AutomationProperties.HelpText="Speichert alle geänderten Hardware- und KI-Einstellungen atomar und meldet nur bestätigten Erfolg."
+                            AutomationProperties.AcceleratorKey="Strg+S">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                                 <Style.Triggers>
@@ -215,6 +239,8 @@
                             Value="{Binding KiModeIndex}"
                             IsSnapToTickEnabled="True"
                             TickPlacement="BottomRight"
+                            AutomationProperties.Name="KI-Modus"
+                            AutomationProperties.HelpText="Wählt Speed, Balance oder Quality; Pfeiltasten ändern den Modus."
                             ToolTip="KI-Modus-Auswahl&#x0a;• Was es macht: Steuert die Balance zwischen Verarbeitungsgeschwindigkeit (Speed) und Analysegenauigkeit (Quality).&#x0a;• Wozu es dient: Passt die automatisch ausgewählten KI-Modelle an die Leistungsfähigkeit deines PCs an.&#x0a;• Wann &amp; wie nutzen: 'Speed' für schnelle Vorab-Entwürfe, 'Balance' für die meisten Rechner, 'Quality' für maximale Details bei starker Hardware."/>
 
                     <Grid Margin="0,2,0,8">
@@ -261,28 +287,19 @@
                 <StackPanel>
                     <TextBlock Text="FFMPEG KONFIGURATION" Style="{StaticResource SectionHeader}" Margin="0,0,0,8"/>
 
-                    <TextBlock Text="Pfad zur ffmpeg.exe (leer = PATH/Auto-Detect)"
+                    <TextBlock Text="Kanonische Projekt-Runtime (schreibgeschützt)"
                                Style="{StaticResource ParamLabel}" Margin="0,0,0,4"/>
 
                     <DockPanel Margin="0,0,0,6">
-                        <Button DockPanel.Dock="Right" Margin="6,0,0,0"
-                                Command="{Binding BrowseFfmpegCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Foreground="{StaticResource AbletonAccent}"
-                                Padding="8,4" Height="28"
-                                ToolTip="FFmpeg-Pfad durchsuchen&#x0a;• Was es macht: Öffnet einen Windows-Dateidialog, um die ausführbare Datei 'ffmpeg.exe' manuell auszuwählen.&#x0a;• Wozu es dient: Ermöglicht das Verwenden einer benutzerdefinierten FFmpeg-Version, falls die automatische Erkennung fehlschlägt.&#x0a;• Wann &amp; wie nutzen: Nutzen, wenn du FFmpeg an einem benutzerdefinierten Ort installiert hast und die App es nicht findet.">
-                            <StackPanel Orientation="Horizontal">
-                                <icon:PackIconMaterial Kind="FolderOpen" Width="14" Height="14"
-                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock Text="Browse" FontSize="11" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
                         <Button DockPanel.Dock="Right" Margin="4,0,0,0"
                                 Command="{Binding ProbeFfmpegCommand}"
                                 Style="{StaticResource MaterialDesignFlatButton}"
                                 Foreground="{StaticResource AbletonGreen}"
                                 Padding="8,4" Height="28"
-                                ToolTip="FFmpeg-Kompatibilität prüfen&#x0a;• Was es macht: Führt einen kurzen Testaufruf aus, um zu überprüfen, ob FFmpeg unter dem angegebenen Pfad korrekt funktioniert.&#x0a;• Wozu es dient: Verifiziert die ordnungsgemäße Installation und gibt die erkannte FFmpeg-Versionsnummer aus.&#x0a;• Wann &amp; wie nutzen: Immer nach der manuellen Angabe oder Änderung des FFmpeg-Pfads anklicken.">
+                                AutomationProperties.Name="FFmpeg-Runtime prüfen"
+                                AutomationProperties.HelpText="Prüft Version, SHA-256 und Manifestbindung der kanonischen FFmpeg-Runtime."
+                                AutomationProperties.AcceleratorKey="F6"
+                                ToolTip="Kanonische FFmpeg-Runtime erneut gegen Version, SHA-256 und aktives Manifest prüfen.">
                             <StackPanel Orientation="Horizontal">
                                 <icon:PackIconMaterial Kind="Check" Width="14" Height="14"
                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -290,17 +307,21 @@
                             </StackPanel>
                         </Button>
                         <TextBox Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
+                                 IsReadOnly="True"
+                                 IsTabStop="False"
                                  Foreground="{StaticResource AbletonText}"
                                  Background="{StaticResource AbletonPanel}"
                                  BorderBrush="{StaticResource AbletonBorder}"
                                  Height="28" VerticalContentAlignment="Center" Padding="6,2"
-                                 ToolTip="FFmpeg-Pfad-Eingabe&#x0a;• Was es macht: Hier wird der vollständige Pfad zur ausführbaren Datei 'ffmpeg.exe' eingegeben.&#x0a;• Wozu es dient: FFmpeg ist das Herzstück für das Zusammenfügen und Rendern von Videos in PB Studio.&#x0a;• Wann &amp; wie nutzen: Leer lassen, um die Standard-Systemerkennung zu nutzen. Bei Problemen den absoluten Pfad manuell eintragen."/>
+                                 ToolTip="Dieser Pfad wird vom geprüften Runtime-Vertrag vorgegeben und kann hier nicht geändert werden."/>
                     </DockPanel>
 
                     <!-- Inline Validation Error -->
                     <TextBlock Text="{Binding FfmpegPathError}"
                                Foreground="{StaticResource AbletonRed}"
                                FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap"
+                               AutomationProperties.Name="{Binding FfmpegPathError}"
+                               AutomationProperties.LiveSetting="Assertive"
                                Visibility="{Binding FfmpegPathError, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                     <!-- Probed Version -->
@@ -315,6 +336,12 @@
                         </TextBlock>
                     </StackPanel>
 
+                    <TextBlock Text="{Binding FfmpegProvenance}"
+                               FontSize="10" Margin="0,2,0,0"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding FfmpegProvenance, Converter={StaticResource NullToVisibilityConverter}}"/>
+
                     <!-- Probe in progress indicator -->
                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
                                 Visibility="{Binding IsProbingFfmpeg, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -326,7 +353,8 @@
 
             <!-- ══ Settings File Path (Info) ══ -->
             <md:Card Style="{StaticResource AbletonCard}" Padding="10" Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
                     <icon:PackIconMaterial Kind="ContentSaveOutline" Width="14" Height="14"
                                            VerticalAlignment="Center" Margin="0,0,6,0"
                                            Foreground="{StaticResource AbletonTextDim}"/>
@@ -336,6 +364,14 @@
                                ToolTip="{Binding SettingsFilePath}">
                         <Run Text="Settings-Datei: "/><Run Text="{Binding SettingsFilePath, Mode=OneWay}"/>
                     </TextBlock>
+                    </StackPanel>
+                    <TextBlock Text="{Binding SettingsPersistenceError}"
+                               Foreground="{StaticResource AbletonRed}"
+                               FontSize="11" Margin="20,6,0,0"
+                               TextWrapping="Wrap"
+                               AutomationProperties.Name="{Binding SettingsPersistenceError}"
+                               AutomationProperties.LiveSetting="Assertive"
+                               Visibility="{Binding SettingsPersistenceError, Converter={StaticResource NullToVisibilityConverter}}"/>
                 </StackPanel>
             </md:Card>
 

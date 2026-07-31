@@ -9,7 +9,15 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:ChatViewModel}"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="KI-Chat"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding ClearCommand}"/>
+        <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding SendCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding StopCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -38,12 +46,17 @@
                               Width="100"
                               Margin="0,0,12,0"
                               ItemsSource="{Binding Modes}"
-                              SelectedItem="{Binding Mode}"/>
+                              SelectedItem="{Binding Mode}"
+                              AutomationProperties.Name="Chat-Modus"
+                              AutomationProperties.HelpText="Wählt den Arbeitsmodus des KI-Chats."/>
                     <Button Command="{Binding ClearCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="6,4" Height="28"
-                            ToolTip="Chat-History leeren">
+                            ToolTip="Chat-History leeren"
+                            AutomationProperties.Name="Chat-Verlauf leeren"
+                            AutomationProperties.HelpText="Löscht den Verlauf nur, wenn das Backend die Löschung bestätigt; bei Fehler bleibt er sichtbar."
+                            AutomationProperties.AcceleratorKey="Strg+L">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -56,7 +69,9 @@
                     <TextBlock Text="KI-CHAT" Style="{StaticResource SectionHeader}"/>
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11" Margin="0,2,0,0"/>
+                               FontSize="11" Margin="0,2,0,0"
+                               AutomationProperties.Name="{Binding StatusText}"
+                               AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -67,7 +82,8 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="14,12">
-            <ItemsControl ItemsSource="{Binding Messages}">
+            <ItemsControl ItemsSource="{Binding Messages}"
+                          AutomationProperties.Name="Chat-Nachrichten">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:ChatMessageViewModel}">
                         <Border Margin="0,0,0,12"
@@ -205,6 +221,8 @@
                                              TextWrapping="Wrap"
                                              FontSize="11"
                                              Foreground="#FFFFB0B0"
+                                             AutomationProperties.Name="{Binding ErrorText}"
+                                             AutomationProperties.LiveSetting="Assertive"
                                              Focusable="True"/>
                                 </Border>
                             </StackPanel>
@@ -238,6 +256,8 @@
                          VerticalContentAlignment="Center"
                          md:HintAssist.Hint="Frag mich was — z.B. 'Liste meine Audio-Clips'"
                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         AutomationProperties.Name="Chat-Nachricht"
+                         AutomationProperties.HelpText="Nachricht eingeben. Strg+Eingabe sendet; Eingabe allein erzeugt eine neue Zeile."
                          KeyDown="InputBox_KeyDown"/>
                 <Button Grid.Column="1"
                         Command="{Binding StopCommand}"
@@ -245,7 +265,10 @@
                         Margin="8,0,0,0"
                         Height="36"
                         Visibility="{Binding IsStreaming, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Streaming abbrechen">
+                        ToolTip="Streaming abbrechen"
+                        AutomationProperties.Name="Antwort abbrechen"
+                        AutomationProperties.HelpText="Bricht die laufende KI-Antwort ab."
+                        AutomationProperties.AcceleratorKey="Escape">
                     <icon:PackIconMaterial Kind="Stop" Width="16" Height="16"/>
                 </Button>
                 <Button Grid.Column="2"
@@ -254,7 +277,10 @@
                         Background="{StaticResource AbletonAccent}"
                         Margin="8,0,0,0"
                         Padding="14,0"
-                        Height="36">
+                        Height="36"
+                        AutomationProperties.Name="Chat-Nachricht senden"
+                        AutomationProperties.HelpText="Sendet die eingegebene Nachricht an den ausgewählten Chat-Modus."
+                        AutomationProperties.AcceleratorKey="Strg+Eingabe">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="Send" Width="14" Height="14"
                                                VerticalAlignment="Center" Margin="0,0,6,0"/>

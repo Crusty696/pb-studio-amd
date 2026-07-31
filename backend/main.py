@@ -373,6 +373,12 @@ class GpuStatusResponse(BaseModel):
     monitoring_status: str
     monitoring_error: str | None = None
 
+
+class GpuCleanupResponse(BaseModel):
+    success: bool
+    freed_mb: int
+    error: str | None = None
+
 @app.get("/health")
 async def health_check() -> dict[str, Any]:
     """Basis Health-Check."""
@@ -444,22 +450,64 @@ async def gpu_status() -> dict[str, Any]:
         }
 
 
-@app.post("/gpu/cleanup")
-async def gpu_cleanup() -> dict[str, int]:
-    """VRAM aufräumen."""
-    freed_mb = 0
+@app.post("/gpu/cleanup", response_model=GpuCleanupResponse)
+async def gpu_cleanup() -> GpuCleanupResponse:
+    """Idle GPU models unload and report only confirmed releases."""
     try:
-        # BUG-014 Fix: VRAMArbiter braucht monitor-Argument; cleanup() → get_stats()
-        from pb_studio.core.system_monitor import SystemMonitor
-        from pb_studio.core.vram_arbiter import VRAMArbiter
-        monitor = SystemMonitor()
-        arbiter = VRAMArbiter(monitor=monitor)
-        stats = arbiter.get_stats()
-        freed_mb = max(0, stats.get("budget_reserved_mb", 0))
-        logger.info(f"GPU-Cleanup: {freed_mb}MB reserviert (Budget-Reset)")
-    except Exception as e:
-        logger.warning(f"GPU-Cleanup fehlgeschlagen: {e}")
-    return {"freed_mb": freed_mb}
+        from pb_studio.core.vram_budget_manager import (
+            ModelPriority,
+            get_vram_manager,
+        )
+
+        manager = get_vram_manager()
+        before = manager.get_stats()["models"]
+        eligible_ids = {
+            model_id
+            for model_id, state in before.items()
+            if state["is_loaded"]
+            and ModelPriority[state["priority"]] >= ModelPriority.LOW
+            and manager.get_model_budget(model_id).unload_callback is not None
+        }
+
+        freed_mb = await asyncio.to_thread(
+            manager.evict_all,
+            ModelPriority.LOW,
+        )
+        remaining = {
+            model_id
+            for model_id in eligible_ids
+            if manager.is_model_loaded(model_id)
+        }
+        if remaining:
+            logger.warning(
+                "GPU-Cleanup konnte %d Idle-Modelle nicht bestätigen.",
+                len(remaining),
+            )
+            return GpuCleanupResponse(
+                success=False,
+                freed_mb=max(0, freed_mb),
+                error=(
+                    "Nicht alle inaktiven GPU-Modelle konnten sicher "
+                    "freigegeben werden."
+                ),
+            )
+
+        logger.info(
+            "GPU-Cleanup bestätigt: %dMB aus %d Idle-Modellen freigegeben.",
+            freed_mb,
+            len(eligible_ids),
+        )
+        return GpuCleanupResponse(
+            success=True,
+            freed_mb=max(0, freed_mb),
+        )
+    except Exception:
+        logger.exception("GPU-Cleanup fehlgeschlagen.")
+        return GpuCleanupResponse(
+            success=False,
+            freed_mb=0,
+            error="GPU-Cleanup ist fehlgeschlagen; Details stehen im Backend-Log.",
+        )
 
 
 @app.post(

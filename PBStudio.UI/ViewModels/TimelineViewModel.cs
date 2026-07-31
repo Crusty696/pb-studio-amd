@@ -19,6 +19,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 {
     private readonly TimelineStateService _timelineState;
     private readonly AudioLibraryStateService _audioLibraryState;
+    private readonly ProjectService _projectService;
     // AP3.5 (Audit 2026-06-10): IApiClient statt konkretem ApiClient — die
     // Transient-Registrierung erzeugte hier eine ZWEITE ApiClient-Instanz mit
     // eigenem Shutdown-Token, die BeginShutdown() der Singleton-Instanz nie erreichte.
@@ -32,6 +33,14 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     private readonly object _assetLoadLock = new();
     private readonly Dictionary<TimelineEntryModel, Task> _assetLoads = [];
     private CancellationTokenSource? _assetLoadCts = new();
+    private readonly object _projectOperationLock = new();
+    private CancellationTokenSource? _syncTimelineCts;
+    private CancellationTokenSource? _previewCts;
+    private int _syncTimelineSequence;
+    private int _previewSequence;
+    private bool _timelineReadyForMutation;
+    private const double MinClipDuration = 0.1;
+    private const double TimelineEditEpsilon = 0.0001;
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private double _totalDuration;
@@ -131,11 +140,17 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     public ObservableCollection<double> SnapMarkers { get; } = [];
     public ObservableCollection<SongSegmentModel> SongSegments { get; } = [];
 
-    public TimelineViewModel(TimelineStateService timelineState, AudioLibraryStateService audioLibraryState, IApiClient api)
+    public TimelineViewModel(
+        TimelineStateService timelineState,
+        AudioLibraryStateService audioLibraryState,
+        IApiClient api,
+        ProjectService projectService)
     {
         _timelineState = timelineState;
         _audioLibraryState = audioLibraryState;
         _api = api;
+        _projectService = projectService;
+        _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         WeakReferenceMessenger.Default.Register<TimelineRefreshMessage>(this, (_, _) => _ = RequestTimelineRefreshAsync());
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestTimelineRefreshAsync());
@@ -402,10 +417,184 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             SelectedEntry = TimelineEntries[index + 1];
     }
 
+    public bool SelectFirstCut()
+    {
+        if (TimelineEntries.Count == 0)
+            return false;
+
+        SelectedEntry = TimelineEntries
+            .OrderBy(entry => entry.StartTime)
+            .First();
+        return true;
+    }
+
+    public bool SelectLastCut()
+    {
+        if (TimelineEntries.Count == 0)
+            return false;
+
+        SelectedEntry = TimelineEntries
+            .OrderBy(entry => entry.StartTime)
+            .Last();
+        return true;
+    }
+
+    public bool ScrubTimelineBy(double deltaSeconds)
+    {
+        if (TimelineEntries.Count == 0 || TotalDuration <= 0)
+            return false;
+
+        var nextPosition = ClampRoundedTimelineTime(
+            SelectedTimelinePosition + deltaSeconds,
+            0,
+            TotalDuration);
+        if (Math.Abs(nextPosition - SelectedTimelinePosition) < TimelineEditEpsilon)
+            return false;
+
+        SelectedTimelinePosition = nextPosition;
+        StatusText = $"Abspielposition: {TimeSpan.FromSeconds(nextPosition):mm\\:ss\\.f}";
+        return true;
+    }
+
+    public bool NudgeSelectedCutBy(double deltaSeconds)
+    {
+        if (SelectedEntry == null)
+            return false;
+
+        var entry = SelectedEntry;
+        var duration = entry.Duration;
+        var previous = FindPreviousEntry(entry);
+        var next = FindNextEntry(entry);
+        var minimumStart = previous?.EndTime ?? 0;
+        var maximumStart = next?.StartTime - duration
+            ?? (TotalDuration > 0 ? TotalDuration - duration : double.PositiveInfinity);
+        maximumStart = Math.Max(minimumStart, maximumStart);
+
+        var newStart = ClampRoundedTimelineTime(
+            entry.StartTime + deltaSeconds,
+            minimumStart,
+            maximumStart);
+        if (Math.Abs(newStart - entry.StartTime) < TimelineEditEpsilon)
+        {
+            StatusText = "Cut kann wegen angrenzender Clips nicht weiter verschoben werden.";
+            return false;
+        }
+
+        entry.StartTime = newStart;
+        var maximumEnd = next?.StartTime
+            ?? (TotalDuration > 0 ? TotalDuration : double.PositiveInfinity);
+        entry.EndTime = Math.Min(maximumEnd, newStart + duration);
+        entry.NotifyPositionChanged();
+        SetSelectionPositionWithoutChangingEntry(newStart);
+        StatusText = $"Cut verschoben: {newStart:F1}s";
+        return true;
+    }
+
+    public bool TrimSelectedCutStartBy(double deltaSeconds)
+    {
+        if (SelectedEntry == null)
+            return false;
+
+        var entry = SelectedEntry;
+        var previous = FindPreviousEntry(entry);
+        var minimumStart = Math.Max(
+            previous?.EndTime ?? 0,
+            entry.StartTime - entry.ClipStart);
+        var maximumStart = entry.EndTime - MinClipDuration;
+        maximumStart = Math.Max(minimumStart, maximumStart);
+        var newStart = ClampRoundedTimelineTime(
+            entry.StartTime + deltaSeconds,
+            minimumStart,
+            maximumStart);
+        if (Math.Abs(newStart - entry.StartTime) < TimelineEditEpsilon)
+        {
+            StatusText = "Linke Schnittkante hat ihre sichere Grenze erreicht.";
+            return false;
+        }
+
+        var actualDelta = newStart - entry.StartTime;
+        entry.StartTime = newStart;
+        entry.ClipStart = Math.Max(
+            0,
+            RoundTimelineTime(entry.ClipStart + actualDelta));
+        entry.NotifyPositionChanged();
+        SetSelectionPositionWithoutChangingEntry(newStart);
+        StatusText = $"Linke Schnittkante: {newStart:F1}s";
+        return true;
+    }
+
+    public bool TrimSelectedCutEndBy(double deltaSeconds)
+    {
+        if (SelectedEntry == null)
+            return false;
+
+        var entry = SelectedEntry;
+        var next = FindNextEntry(entry);
+        var minimumEnd = entry.StartTime + MinClipDuration;
+        var maximumEnd = next?.StartTime
+            ?? (TotalDuration > 0 ? TotalDuration : double.PositiveInfinity);
+        maximumEnd = Math.Max(minimumEnd, maximumEnd);
+        var newEnd = ClampRoundedTimelineTime(
+            entry.EndTime + deltaSeconds,
+            minimumEnd,
+            maximumEnd);
+        if (Math.Abs(newEnd - entry.EndTime) < TimelineEditEpsilon)
+        {
+            StatusText = "Rechte Schnittkante hat ihre sichere Grenze erreicht.";
+            return false;
+        }
+
+        entry.EndTime = newEnd;
+        entry.NotifyPositionChanged();
+        StatusText = $"Rechte Schnittkante: {newEnd:F1}s";
+        return true;
+    }
+
+    public void RejectUnsafeTimelineRemoval()
+    {
+        StatusText = SelectedEntry == null
+            ? "Kein Cut zum Entfernen ausgewählt."
+            : "Cut nicht entfernt: bestätigter Timeline-Löschvertrag fehlt.";
+    }
+
+    private TimelineEntryModel? FindPreviousEntry(TimelineEntryModel entry) =>
+        TimelineEntries
+            .Where(other => !ReferenceEquals(other, entry)
+                && other.EndTime <= entry.StartTime + TimelineEditEpsilon)
+            .OrderByDescending(other => other.EndTime)
+            .FirstOrDefault();
+
+    private TimelineEntryModel? FindNextEntry(TimelineEntryModel entry) =>
+        TimelineEntries
+            .Where(other => !ReferenceEquals(other, entry)
+                && other.StartTime >= entry.EndTime - TimelineEditEpsilon)
+            .OrderBy(other => other.StartTime)
+            .FirstOrDefault();
+
+    private void SetSelectionPositionWithoutChangingEntry(double value)
+    {
+        _isSyncingSelection = true;
+        SelectedTimelinePosition = value;
+        _isSyncingSelection = false;
+    }
+
+    private static double RoundTimelineTime(double value) =>
+        Math.Round(value, 3, MidpointRounding.AwayFromZero);
+
+    private static double ClampRoundedTimelineTime(
+        double value,
+        double minimum,
+        double maximum)
+    {
+        var rounded = RoundTimelineTime(Math.Clamp(value, minimum, maximum));
+        return Math.Clamp(rounded, minimum, maximum);
+    }
+
     [RelayCommand]
     private async Task RefreshTimelineAsync()
     {
         _reloadQueued = false;
+        _timelineReadyForMutation = false;
         var version = Interlocked.Increment(ref _loadVersion);
 
         if (!await _loadGate.WaitAsync(0))
@@ -416,6 +605,18 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
+            ProjectOperationContext operation;
+            try
+            {
+                operation = _projectService.CaptureOperationContext();
+            }
+            catch (InvalidOperationException)
+            {
+                if (version == Volatile.Read(ref _loadVersion))
+                    StatusText = "Timeline laden ausgesetzt — kein stabiler Projektkontext.";
+                return;
+            }
+
             ResetAssetLoads();
             IsLoading = true;
             StatusText = "Timeline wird geladen...";
@@ -423,17 +624,20 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             var timeline = await _timelineState.RefreshAsync();
             if (timeline == null)
             {
-                if (version == _loadVersion)
+                if (version == Volatile.Read(ref _loadVersion)
+                    && _projectService.IsCurrent(operation))
                     StatusText = "Timeline laden fehlgeschlagen";
                 return;
             }
 
-            if (version != _loadVersion)
+            if (version != Volatile.Read(ref _loadVersion)
+                || !_projectService.IsCurrent(operation))
                 return;
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                if (version != Volatile.Read(ref _loadVersion))
+                if (version != Volatile.Read(ref _loadVersion)
+                    || !_projectService.IsCurrent(operation))
                     return;
 
                 TimelineEntries.Clear();
@@ -481,6 +685,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(TimelineWidth));
                 PreviousCutCommand.NotifyCanExecuteChanged();
                 NextCutCommand.NotifyCanExecuteChanged();
+                _timelineReadyForMutation = true;
 
                 if (!string.IsNullOrEmpty(AudioPath))
                 {
@@ -492,10 +697,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         {
             IsLoading = false;
             _loadGate.Release();
+            if (_reloadQueued)
+                await RefreshTimelineAsync();
         }
-
-        if (_reloadQueued)
-            await RefreshTimelineAsync();
     }
 
     [RelayCommand]
@@ -508,11 +712,30 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             return;
         }
 
-        IsGeneratingPreview = true;
-        PreviewStatus = $"Rendere Preview ({PreviewDurationSec:F0}s ab {PreviewStartSec:F1}s)…";
+        ProjectOperationContext operation;
         try
         {
-            var resp = await _api.GenerateTimelinePreviewAsync(PreviewStartSec, PreviewDurationSec);
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            PreviewStatus = "Preview abgebrochen — Projektwechsel läuft.";
+            return;
+        }
+
+        var startSec = PreviewStartSec;
+        var durationSec = PreviewDurationSec;
+        var (sequence, operationCts) = BeginPreviewOperation(operation);
+        IsGeneratingPreview = true;
+        PreviewStatus = $"Rendere Preview ({durationSec:F0}s ab {startSec:F1}s)…";
+        try
+        {
+            var resp = await _api.GenerateTimelinePreviewAsync(
+                startSec,
+                durationSec,
+                operationCts.Token);
+            if (!IsCurrentPreview(sequence, operationCts, operation))
+                return;
             if (resp == null || string.IsNullOrEmpty(resp.PreviewPath))
             {
                 PreviewStatus = "Preview fehlgeschlagen — Backend lieferte keinen Pfad.";
@@ -529,24 +752,50 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             PreviewStatus = $"Preview bereit: {resp.Resolution} · {resp.Duration:F1}s";
             PreviewReady?.Invoke(resp.PreviewPath);
         }
+        catch (OperationCanceledException)
+        {
+            // Projektwechsel oder neuere Preview besitzt den sichtbaren Zustand.
+        }
         catch (Exception ex)
         {
-            PreviewStatus = "Fehler: " + ex.Message;
+            if (IsCurrentPreview(sequence, operationCts, operation))
+                PreviewStatus = "Fehler: " + ex.Message;
         }
         finally
         {
-            IsGeneratingPreview = false;
+            if (CompletePreviewOperation(sequence, operationCts))
+                IsGeneratingPreview = false;
         }
     }
 
     [RelayCommand]
     public async Task SyncTimelineAsync()
     {
+        if (!_timelineReadyForMutation)
+        {
+            StatusText = "Speichern übersprungen — Timeline wird noch geladen.";
+            return;
+        }
+
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Speichern abgebrochen — Projektwechsel läuft.";
+            return;
+        }
+
+        var entries = SnapshotTimelineEntries();
+        var (sequence, operationCts) = BeginSyncOperation(operation);
         try
         {
             StatusText = "Speichere Änderungen...";
-            var entries = TimelineEntries.ToList();
-            var response = await _api.UpdateTimelineAsync(entries);
+            var response = await _api.UpdateTimelineAsync(entries, operationCts.Token);
+            if (!IsCurrentSync(sequence, operationCts, operation))
+                return;
 
             if (response?.Success == true)
             {
@@ -557,10 +806,171 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 StatusText = "Speichern fehlgeschlagen: " + (response?.Message ?? "Unbekannter Fehler");
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Projektwechsel oder neuerer Autosave besitzt den sichtbaren Zustand.
+        }
         catch (Exception ex)
         {
-            StatusText = "Fehler beim Synchronisieren: " + ex.Message;
+            if (IsCurrentSync(sequence, operationCts, operation))
+                StatusText = "Fehler beim Synchronisieren: " + ex.Message;
         }
+        finally
+        {
+            CompleteSyncOperation(sequence, operationCts);
+        }
+    }
+
+    private List<TimelineEntryModel> SnapshotTimelineEntries() =>
+        TimelineEntries.Select(entry => new TimelineEntryModel
+        {
+            ClipId = entry.ClipId,
+            ClipName = entry.ClipName,
+            FilePath = entry.FilePath,
+            StartTime = entry.StartTime,
+            EndTime = entry.EndTime,
+            ClipStart = entry.ClipStart,
+            TriggerType = entry.TriggerType,
+            TriggerStrength = entry.TriggerStrength,
+            SegmentType = entry.SegmentType,
+            BrainConfidence = entry.BrainConfidence,
+            CutId = entry.CutId,
+            FeatureConfidence = entry.FeatureConfidence,
+            SemanticStatus = entry.SemanticStatus,
+            SemanticReason = entry.SemanticReason,
+            TriggerProvenance = entry.TriggerProvenance == null
+                ? null
+                : new Dictionary<string, System.Text.Json.JsonElement>(
+                    entry.TriggerProvenance),
+            BrainAxisStatus = entry.BrainAxisStatus == null
+                ? null
+                : new Dictionary<string, System.Text.Json.JsonElement>(
+                    entry.BrainAxisStatus),
+            Metadata = entry.Metadata == null
+                ? null
+                : new Dictionary<string, System.Text.Json.JsonElement>(
+                    entry.Metadata),
+        }).ToList();
+
+    private (int Sequence, CancellationTokenSource Cts) BeginSyncOperation(
+        ProjectOperationContext operation)
+    {
+        var current = CancellationTokenSource.CreateLinkedTokenSource(
+            operation.CancellationToken);
+        CancellationTokenSource? previous;
+        int sequence;
+        lock (_projectOperationLock)
+        {
+            previous = _syncTimelineCts;
+            _syncTimelineCts = current;
+            sequence = ++_syncTimelineSequence;
+        }
+        previous?.Cancel();
+        return (sequence, current);
+    }
+
+    private (int Sequence, CancellationTokenSource Cts) BeginPreviewOperation(
+        ProjectOperationContext operation)
+    {
+        var current = CancellationTokenSource.CreateLinkedTokenSource(
+            operation.CancellationToken);
+        CancellationTokenSource? previous;
+        int sequence;
+        lock (_projectOperationLock)
+        {
+            previous = _previewCts;
+            _previewCts = current;
+            sequence = ++_previewSequence;
+        }
+        previous?.Cancel();
+        return (sequence, current);
+    }
+
+    private bool IsCurrentSync(
+        int sequence,
+        CancellationTokenSource owner,
+        ProjectOperationContext operation)
+    {
+        lock (_projectOperationLock)
+        {
+            if (sequence != _syncTimelineSequence
+                || !ReferenceEquals(_syncTimelineCts, owner)
+                || owner.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+        return _projectService.IsCurrent(operation);
+    }
+
+    private bool IsCurrentPreview(
+        int sequence,
+        CancellationTokenSource owner,
+        ProjectOperationContext operation)
+    {
+        lock (_projectOperationLock)
+        {
+            if (sequence != _previewSequence
+                || !ReferenceEquals(_previewCts, owner)
+                || owner.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+        return _projectService.IsCurrent(operation);
+    }
+
+    private void CompleteSyncOperation(
+        int sequence,
+        CancellationTokenSource owner)
+    {
+        lock (_projectOperationLock)
+        {
+            if (sequence == _syncTimelineSequence
+                && ReferenceEquals(_syncTimelineCts, owner))
+            {
+                _syncTimelineCts = null;
+            }
+        }
+        owner.Dispose();
+    }
+
+    private bool CompletePreviewOperation(
+        int sequence,
+        CancellationTokenSource owner)
+    {
+        bool owned;
+        lock (_projectOperationLock)
+        {
+            owned = sequence == _previewSequence
+                && ReferenceEquals(_previewCts, owner);
+            if (owned)
+                _previewCts = null;
+        }
+        owner.Dispose();
+        return owned;
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e) =>
+        CancelProjectOperations();
+
+    private void CancelProjectOperations()
+    {
+        CancellationTokenSource? sync;
+        CancellationTokenSource? preview;
+        lock (_projectOperationLock)
+        {
+            sync = _syncTimelineCts;
+            preview = _previewCts;
+            _syncTimelineCts = null;
+            _previewCts = null;
+            _syncTimelineSequence++;
+            _previewSequence++;
+        }
+        sync?.Cancel();
+        preview?.Cancel();
+        _timelineReadyForMutation = false;
+        IsGeneratingPreview = false;
     }
 
     private async Task LoadWaveformAsync(string audioPath)
@@ -584,7 +994,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             var beats = await _api.GetBeatsAsync(audioClip.Id);
             var onsets = await _api.GetOnsetsAsync(audioClip.Id);
             var structure = await _api.GetAsync<List<SongSegmentModel>>($"/audio/structure/{audioClip.Id}");
-            var spectral = await _api.GetAsync<SpectralDataModel>($"/audio/spectral/{audioClip.Id}");
+            var transport = await _api.GetSpectralAsync(audioClip.Id);
+            var spectral = transport is null
+                ? null
+                : SpectralDataModel.FromTransport(transport);
 
             if (waveform == null || seq != _waveformSequence) return;
 
@@ -892,6 +1305,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
     private void ResetTimelineState()
     {
+        CancelProjectOperations();
         ResetAssetLoads();
         Interlocked.Increment(ref _loadVersion);
         Interlocked.Increment(ref _waveformSequence);
@@ -908,6 +1322,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         SelectedEntry = null;
         SelectedTimelinePosition = 0;
         MotionCurve = null;
+        PreviewVideoPath = null;
+        PreviewStatus = "";
         IsLoading = false;
         IsLoadingWaveform = false;
         StatusText = "Kein Projekt geöffnet";
@@ -925,6 +1341,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
+        CancelProjectOperations();
         Interlocked.Increment(ref _loadVersion);
         Interlocked.Increment(ref _waveformSequence);
         Interlocked.Increment(ref _motionLoadSequence);

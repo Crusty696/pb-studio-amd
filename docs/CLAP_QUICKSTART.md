@@ -6,6 +6,14 @@
 > registered CLAP ONNX model with `DmlExecutionProvider` only and reports
 > `unavailable` when the model/provider is absent. Python 3.11.x and NumPy
 > 1.26.4 are fixed by the project runtime.
+>
+> Approved Audio/Text source:
+> `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`.
+> Approved processor source:
+> `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`.
+> License chain: `BSD-3-Clause AND Apache-2.0`. Exact hashes:
+> [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+> and [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).
 
 ## 5-Minute Setup
 
@@ -30,7 +38,8 @@ Output Files:
 - `models/clap_audio_encoder.onnx` (Audio Encoder)
 - `models/clap_text_encoder.onnx` (Text Encoder)
 
-**Note:** Download benötigt ~2GB und dauert ca. 5-10 Minuten beim ersten Mal.
+**Note:** Setup provisions only the approved hash-bound release archive. This
+guide provides no download or export path.
 
 ### 3. Test Installation
 ```python
@@ -357,10 +366,10 @@ analyzer.unload()
 
 ## Next Steps
 
-1. **Read Full Documentation:** `docs/CLAP_INTEGRATION.md`
-2. **Run Demo:** `python examples/clap_demo.py song.mp3`
-3. **Write Tests:** `.\.venv\Scripts\python.exe -m pytest Tests/test_clap_wrapper.py -v`
-4. **Integrate into App:** See integration patterns above
+1. **Release contract:** [`specs/dod.md`](../specs/dod.md)
+2. **Full historical API documentation:** [`CLAP_INTEGRATION.md`](CLAP_INTEGRATION.md)
+3. **Hardware gate:** [`HARDWARE_VERIFY_GUIDE.md`](HARDWARE_VERIFY_GUIDE.md)
+4. **Current test entry point:** [`test.bat`](../test.bat)
 
 ## Common Use Cases
 
@@ -413,5 +422,9 @@ playlist = sorted(candidates, key=lambda x: x[1], reverse=True)
 
 ## License
 
-Code: MIT License
-Model: Creative ML Open RAIL-M License
+Code: siehe Repository-Lizenz.
+
+Freigegebene CLAP-Modellkette:
+`BSD-3-Clause AND Apache-2.0`; vollständiger Text und Hash stehen als
+`licenses/CLAP-license-chain.txt` in
+[`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).

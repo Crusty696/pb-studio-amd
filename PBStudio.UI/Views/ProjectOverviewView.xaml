@@ -4,7 +4,17 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Projektübersicht"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding CreateProjectCommand}"/>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenProjectCommand}"/>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}"/>
+        <KeyBinding Key="W" Modifiers="Control+Shift" Command="{Binding CloseProjectCommand}"/>
+    </UserControl.InputBindings>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24">
@@ -21,21 +31,38 @@
                     </StackPanel>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding RefreshCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonAccent}"
-                            Margin="0,0,0,0">
+                            Margin="0,0,0,0"
+                            AutomationProperties.Name="Projektstatus aktualisieren"
+                            AutomationProperties.HelpText="Lädt Projektname, Pfad, Medienzahlen und Workflow-Status neu."
+                            AutomationProperties.AcceleratorKey="F5">
                         <icon:PackIconMaterial Kind="Sync" Width="16" Height="16"/>
                     </Button>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding OpenProjectCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonText}"
-                            Margin="0,0,8,0" Content="Projekt öffnen"/>
+                            Margin="0,0,8,0" Content="Projekt _öffnen"
+                            AutomationProperties.Name="Projekt öffnen"
+                            AutomationProperties.HelpText="Öffnet ein bestehendes PB-Studio-Projekt."
+                            AutomationProperties.AcceleratorKey="Strg+O"/>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding CloseProjectCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonText}"
-                            Margin="0,0,8,0" Content="Projekt schließen"/>
+                            Margin="0,0,8,0" Content="Projekt s_chließen"
+                            AutomationProperties.Name="Projekt schließen"
+                            AutomationProperties.HelpText="Schließt das aktive Projekt nach kontrollierter Zustandsprüfung."
+                            AutomationProperties.AccessKey="Alt+C"
+                            AutomationProperties.AcceleratorKey="Strg+Umschalt+W"/>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding SaveProjectCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Foreground="{StaticResource AbletonAccent}"
-                            Margin="0,0,8,0" Content="Speichern"/>
+                            Margin="0,0,8,0" Content="_Speichern"
+                            AutomationProperties.Name="Projekt speichern"
+                            AutomationProperties.HelpText="Speichert den aktuellen Projektzustand dauerhaft."
+                            AutomationProperties.AccessKey="Alt+S"
+                            AutomationProperties.AcceleratorKey="Strg+S"/>
                     <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Command="{Binding CreateProjectCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}" Foreground="{StaticResource AbletonBg}" Background="{StaticResource AbletonAccent}"
-                            Margin="0,0,8,0" Content="Neues Projekt"/>
+                            Margin="0,0,8,0" Content="_Neues Projekt"
+                            AutomationProperties.Name="Neues Projekt erstellen"
+                            AutomationProperties.HelpText="Erstellt ein neues PB-Studio-Projekt."
+                            AutomationProperties.AcceleratorKey="Strg+N"/>
                 </DockPanel>
             </md:Card>
 
@@ -100,9 +127,11 @@
                         <TextBlock Text="{Binding TimelineStatusText}" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource AbletonText}"/>
                         
                         <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignOutlinedButton}" 
-                                Foreground="{StaticResource AbletonAccent}" Content="Jetzt generieren"
+                                Foreground="{StaticResource AbletonAccent}" Content="_Jetzt generieren"
                                 Command="{Binding GoToDirectorCommand}"
                                 Visibility="{Binding CanGenerateTimeline, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="Timeline jetzt generieren"
+                                AutomationProperties.HelpText="Wechselt zur KI-Regie, um aus dem aktiven Projekt eine Timeline zu erzeugen."
                                 Padding="12,2" Height="28" FontSize="11" HorizontalAlignment="Right"/>
                     </DockPanel>
 

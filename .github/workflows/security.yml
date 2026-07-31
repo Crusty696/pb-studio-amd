@@ -1,0 +1,301 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Validate expiring security exceptions
+        run: python scripts/security_gate.py exceptions
+
+      - name: Scan tracked text files
+        id: secret_scan
+        run: >-
+          python scripts/security_gate.py secrets
+          --history
+          --allowlist config/secret-scan-allowlist.json
+          --output artifacts/security/secrets.json
+
+      - name: Prove seeded secret is detected
+        run: >-
+          python scripts/security_gate.py secrets
+          --path Tests/security/fixtures/seeded-secret.txt
+          --expect-findings
+
+      - name: Bind secret-scan receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate secret-scan
+          --status ${{ steps.secret_scan.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/secret-scan-receipt.json
+
+      - name: Upload secret-scan receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: secret-scan
+          path: artifacts/security/
+          if-no-files-found: error
+
+  python-sca:
+    name: Python SCA
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Create receipt directory
+        shell: bash
+        run: mkdir -p artifacts/security
+
+      - name: Audit production lock
+        id: production_audit
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: requirements.txt
+          require-hashes: true
+          no-deps: true
+          internal-be-careful-extra-flags: >-
+            --strict
+            --format=json
+            --output=artifacts/security/python-sca-production.json
+
+      - name: Validate production Python report
+        id: production_validation
+        run: >-
+          python scripts/security_gate.py pip-audit-report
+          --report artifacts/security/python-sca-production.json
+          --expect-clean
+          --minimum-dependencies 100
+
+      - name: Audit vulnerable fixture
+        id: vulnerable_fixture
+        continue-on-error: true
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: Tests/security/fixtures/requirements-vulnerable.txt
+          no-deps: true
+          internal-be-careful-extra-flags: >-
+            --strict
+            --format=json
+            --output=artifacts/security/python-sca-fixture.json
+
+      - name: Validate vulnerable Python report
+        id: fixture_validation
+        shell: bash
+        run: |
+          if [ "${{ steps.vulnerable_fixture.outcome }}" != "failure" ]; then
+            echo "Vulnerable Python fixture was not rejected."
+            exit 1
+          fi
+          python scripts/security_gate.py pip-audit-report \
+            --report artifacts/security/python-sca-fixture.json \
+            --expect-package urllib3 \
+            --expect-version 1.26.5
+
+      - name: Bind Python SCA receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate python-sca
+          --status
+          ${{ steps.production_validation.outcome }}:${{ steps.fixture_validation.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/python-sca-receipt.json
+
+      - name: Upload Python SCA receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-sca
+          path: artifacts/security/python-sca-*.json
+          if-no-files-found: error
+
+  nuget-sca:
+    name: NuGet SCA
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "9.0.316"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Restore audited NuGet graphs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/security | Out-Null
+          dotnet restore PBStudio.UI/PBStudio.UI.csproj --locked-mode `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore PBStudio.UI.Tests/PBStudio.UI.Tests.csproj --locked-mode `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Export production NuGet audit reports
+        shell: pwsh
+        run: |
+          dotnet list PBStudio.UI/PBStudio.UI.csproj package --vulnerable `
+            --include-transitive --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-ui.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet list PBStudio.UI.Tests/PBStudio.UI.Tests.csproj package --vulnerable `
+            --include-transitive --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-tests.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate production NuGet reports
+        id: production_validation
+        run: >-
+          python scripts/security_gate.py nuget-audit-report
+          --report artifacts/security/nuget-sca-ui.json
+          --expect-project PBStudio.UI/PBStudio.UI.csproj
+          --report artifacts/security/nuget-sca-tests.json
+          --expect-project PBStudio.UI.Tests/PBStudio.UI.Tests.csproj
+          --expect-clean
+
+      - name: Export vulnerable NuGet fixture report
+        shell: pwsh
+        run: |
+          dotnet restore Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet list Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj `
+            package --vulnerable --include-transitive `
+            --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-fixture.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate vulnerable NuGet report
+        id: fixture_validation
+        run: >-
+          python scripts/security_gate.py nuget-audit-report
+          --report artifacts/security/nuget-sca-fixture.json
+          --expect-project Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj
+          --expect-package Newtonsoft.Json
+          --expect-version 12.0.1
+
+      - name: Bind NuGet SCA receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate nuget-sca
+          --status
+          ${{ steps.production_validation.outcome }}:${{ steps.fixture_validation.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/nuget-sca-receipt.json
+
+      - name: Upload NuGet SCA receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nuget-sca
+          path: artifacts/security/nuget-sca-*.json
+          if-no-files-found: error
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Review dependency changes
+        id: dependency_review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          comment-summary-in-pr: never
+
+      - name: Bind dependency review receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate dependency-review
+          --status ${{ steps.dependency_review.outcome }}
+          --commit ${{ github.sha }}
+          --output dependency-review-receipt.json
+
+      - name: Upload dependency review receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-review
+          path: dependency-review-receipt.json
+          if-no-files-found: error
+
+  sbom:
+    name: SBOM and provenance
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "9.0.316"
+
+      - name: Generate SBOM and provenance
+        run: python scripts/generate_release_provenance.py --allow-unmaterialized-runtime
+
+      - name: Upload SBOM and provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-provenance
+          path: artifacts/release-provenance/
+          if-no-files-found: error

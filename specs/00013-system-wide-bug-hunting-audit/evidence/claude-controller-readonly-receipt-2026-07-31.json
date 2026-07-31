@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "ticket": "OBJ-72-CLAUDE-SETUP-READ",
+  "status": "READ_ONLY_SMOKE_VERIFIED",
+  "cwd": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version",
+  "started_at": "2026-07-31T08:23:46.2843514+02:00",
+  "finished_at": "2026-07-31T08:23:51.6272711+02:00",
+  "exit_code": 0,
+  "claude_version": "2.1.212",
+  "model": "haiku",
+  "permission_mode": "plan",
+  "allowed_tools": [
+    "Read"
+  ],
+  "disallowed_tools": [
+    "Write",
+    "Edit",
+    "Bash",
+    "Agent",
+    "WebFetch",
+    "WebSearch",
+    "Glob",
+    "Grep"
+  ],
+  "safe_mode": true,
+  "session_persistence": false,
+  "max_budget_usd": 0.08,
+  "reported_cost_usd": 0.0246469,
+  "result": "CLAUDE_READ_READY | # Vorgeschlagener Reparaturplan 2026-07-31",
+  "raw_json_sha256": "1b21d50c4601a27766cbe9cf06c1f4addb9607bb45b094546436d0d89ffab3ea",
+  "git_status_unchanged_in_run": true,
+  "git_status_after_sha256": "7b6bd25b45474a2af1b6259e97faf2247a28a8d57ce0a8acb31e158b2b8e4a0",
+  "claude_processes_before": 17,
+  "claude_processes_after": 17
+}

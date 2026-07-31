@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.DependencyInjection;
@@ -16,37 +17,47 @@ namespace PBStudio.UI;
 public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
+    private int _fatalShutdownStarted;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // R10/WPF-01: Global exception handlers — prevent silent crash swallowing
+        // Unknown dispatcher failures are fatal: continuing can corrupt project state.
         DispatcherUnhandledException += (_, args) =>
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[PBStudio] Unhandled UI exception: {args.Exception}");
-            _serviceProvider?.GetService<ILogger<App>>()
-                ?.LogCritical(args.Exception, "Unbehandelte UI-Exception");
-            args.Handled = true; // Prevent crash — log and continue
+            try
+            {
+                LogRedactedException(
+                    LogLevel.Critical,
+                    "Unbehandelte UI-Exception",
+                    args.Exception);
+                args.Handled = true;
+                BeginFatalShutdown();
+            }
+            catch
+            {
+                // If even the fatal path fails, let WPF terminate normally.
+                args.Handled = false;
+            }
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[PBStudio] Unhandled domain exception: {ex}");
-                _serviceProvider?.GetService<ILogger<App>>()
-                    ?.LogCritical(ex, "Unbehandelte Domain-Exception");
+                LogRedactedException(
+                    LogLevel.Critical,
+                    "Unbehandelte Domain-Exception",
+                    ex);
             }
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[PBStudio] Unobserved task exception: {args.Exception}");
-            _serviceProvider?.GetService<ILogger<App>>()
-                ?.LogError(args.Exception, "Unbeobachtete Task-Exception");
-            args.SetObserved(); // Prevent finalization crash
+            LogRedactedException(
+                LogLevel.Error,
+                "Unbeobachtete Task-Exception",
+                args.Exception);
+            args.SetObserved();
         };
 
         var services = new ServiceCollection();
@@ -79,6 +90,31 @@ public partial class App : Application
                 logger?.LogError(ex, "Python Backend konnte nicht gestartet werden");
             }
         });
+    }
+
+    private void BeginFatalShutdown()
+    {
+        if (Interlocked.Exchange(ref _fatalShutdownStarted, 1) != 0)
+            return;
+
+        MessageBox.Show(
+            "PB Studio muss nach einem unerwarteten Fehler beendet werden. "
+            + "Details wurden sicher im Protokoll gespeichert.",
+            "PB Studio – Schwerwiegender Fehler",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        Shutdown(-1);
+    }
+
+    private void LogRedactedException(
+        LogLevel level,
+        string source,
+        Exception exception)
+    {
+        var redacted = TerminalLogRedactor.Redact(exception.ToString());
+        System.Diagnostics.Debug.WriteLine($"[PBStudio] {source}: {redacted}");
+        _serviceProvider?.GetService<ILogger<App>>()
+            ?.Log(level, "{Source}: {Crash}", source, redacted);
     }
 
     private static void ConfigureServices(IServiceCollection services)
@@ -170,14 +206,19 @@ public partial class App : Application
                     var api = sp.GetService<IApiClient>();
                     if (api != null)
                     {
-                        // K7: Speichern VOR BeginShutdown (Token-Cancel) ausführen
-                        try
+                        // Unknown UI failures may have left in-memory state inconsistent.
+                        // A normal user exit still saves before cancellation.
+                        if (Volatile.Read(ref _fatalShutdownStarted) == 0)
                         {
-                            await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-                        }
-                        catch (Exception saveEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                            try
+                            {
+                                await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                            }
+                            catch (Exception saveEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                            }
                         }
 
                         // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern

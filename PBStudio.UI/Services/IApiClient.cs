@@ -14,7 +14,7 @@ public interface IApiClient : IDisposable
     // --- Health ---
     Task<HealthStatus?> GetHealthAsync();
     Task<GpuStatus?> GetGpuStatusAsync();
-    Task CleanupGpuAsync();
+    Task<GpuCleanupResponse?> CleanupGpuAsync(CancellationToken ct = default);
 
     // --- Project ---
     Task<ProjectInfo?> CreateProjectAsync(string name, string path);
@@ -36,7 +36,7 @@ public interface IApiClient : IDisposable
     // --- Audio (Erweitert) ---
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
     Task<List<StructureSegment>?> GetStructureAsync(int clipId);
-    Task<SpectralData?> GetSpectralAsync(int clipId);
+    Task<PBStudio.UI.Generated.SpectralData?> GetSpectralAsync(int clipId);
     // AP3.5 (Audit 2026-06-10): war nur auf ApiClient public — zwang TimelineViewModel,
     // den konkreten ApiClient zu injizieren (zweite HttpClient-Instanz, BeginShutdown
     // erreichte sie nie). Additiv, einziger Implementierer ApiClient hat die Methode bereits.
@@ -57,7 +57,7 @@ public interface IApiClient : IDisposable
     // --- Pacing ---
     Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default);
     Task<TimelineResponse?> GetTimelineAsync();
-    Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries);
+    Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries, CancellationToken cancellationToken = default);
     Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default);
 
     // --- Render ---
@@ -77,9 +77,11 @@ public interface IApiClient : IDisposable
 
     #region VRAM Telemetry
     // GET /health/vram — Histogramm-basierte Performance-Telemetrie pro model_id.
-    // Gibt bei modelId=null das Multi-Model-Snapshot zurück (Summary + Models),
-    // bei gesetztem modelId die single-entry Shape.
+    // Bestehender Multi-Modell-UI-Vertrag; Einzelmodell-Transport wird intern
+    // korrekt deserialisiert und anschließend adaptiert.
     Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default);
+    Task<VramHealthResponse?> GetVramTelemetrySnapshotAsync(CancellationToken ct = default);
+    Task<VramHealthSingleResponse?> GetVramModelTelemetryAsync(string modelId, CancellationToken ct = default);
     Task<VramLimitResponse?> UpdateVramLimitAsync(int limitMb, CancellationToken ct = default);
     #endregion
 

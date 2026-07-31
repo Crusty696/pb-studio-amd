@@ -81,3 +81,96 @@ Updated: 2026-07-30T07:52:00+02:00
 - OPEN: evidence or execution pending.
 - DECIDED: governed by approved D01–D08.
 - BLOCKED: only after a plan-defined blocker is recorded.
+
+## Team-Infrastruktur für OBJ-72
+
+| Setup | Status | Datum | Owner | Ergebnis | Evidenz |
+|---|---|---|---|---|---|
+| Claude-Code-Zusatzagent | READ_ONLY_SMOKE_VERIFIED | 2026-07-31 | Teamleiter | CLI 2.1.212 gesund und angemeldet; isolierter Controller- und ticketgebundener Repo-Read-Smoke verifiziert; kein OBJ-72-Task-PASS; CSD/tmux-Pfad begrenzt und durch `claude -p` mit Tool-, Zeit- und Kostenlimits ersetzt | `evidence/claude-controller-setup-2026-07-31.md` |
+| SDD-Governance-Bootstrap | PASS | 2026-07-31 | Teamleiter + 3 Read-only-Agenten | OBJ-71 byte-/Git-gebunden archiviert; OBJ-72 Spec/Plan/Tasks aktiv; Fail-Closed-Validator 27/27 PASS; unabhängiger Finalreview PASS; Releasemarker entfernt und QC neu geöffnet | `evidence/T370-T373-governance-gate.md` |
+
+## OBJ-72 Release-Fähigkeit T370–T415
+
+Updated: 2026-07-31
+Gesamt: **33/46 PASS (71,7 %)**
+Aktuell: **T400/T401 PASS; T403 Gesamt-Diff-Review**
+
+| Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
+|---|---|---:|---|---|---:|---|
+| T370 Evidenz und Archivmanifest bestätigen | PASS | 0,5–1 h | Teamleiter | Z-DOCS/Z-INFRA | 0,5 h | Git-/Hash-gebundenes Archiv PASS (`evidence/T370-T373-governance-gate.md`) |
+| T371 Spec/Requirement-Registry validieren | PASS | 2–4 h | Teamleiter + Docs-Agent | Z-DOCS | 0,8 h | 8.523-Byte-Spec aktiv; deterministische Registry PASS (`evidence/T370-T373-governance-gate.md`) |
+| T372 SDD-Gate reparieren | PASS | 3–6 h | SDD-Agent + Reviewer | Z-DOCS/Z-TESTS | 1,4 h | 27/27 Tests, aktiver Validator und Finalreview PASS (`evidence/T370-T373-governance-gate.md`) |
+| T373 Release-Gates neu öffnen / Marker invalidieren | PASS | 0,5–1 h | Teamleiter | Z-DOCS | 0,2 h | Marker fehlen; QC `REOPENED / NOT RELEASE-READY` (`evidence/T370-T373-governance-gate.md`) |
+| T374 ProjectOperationContext | PASS | 6–10 h | Teamleiter/Core-Agent | SHARED/Z-CORE | 0,8 h | Frozen Kontext, Epoch, Lifecycle-Lock, Registry und atomarer Swap (`evidence/T374-project-operation-context.md`) |
+| T375 Audio-Kontext | PASS | 4–8 h | Audio-Agent + Teamleiter-Review | Z-AUDIO | 0,9 h | Frozen Kontext und atomare Import/Analyse/Stem-Commits (`evidence/T375-audio-project-context.md`) |
+| T376 Video-Kontext | PASS | 5–10 h | Video-Agent + Teamleiter-Review | Z-VIDEO | 0,9 h | Frozen ID, atomare Import/Analyse/Vector-Commits (`evidence/T376-video-project-context.md`) |
+| T377 Pacing-Kontext | PASS | 4–8 h | Pacing-Agent + Teamleiter-Integration | Z-PACING | 1,2 h | Exakte Brain-Lease, Generate/Timeline kontextgebunden (`evidence/T377-pacing-project-context.md`) |
+| T378 Timeline-Lifecycle | PASS | 4–8 h | Teamleiter/Timeline-Agent | Z-UI-VM/Z-UI-SERVICES | 1,1 h | Snapshot/CTS/Generation/Projektpfad; WPF Release 0/0 (`evidence/T378-timeline-project-lifecycle.md`) |
+| T379 Persistenzfehler | PASS | 6–10 h | Teamleiter/Data-Agent + unabhängiger Reviewer | SHARED/Z-DATA | 3,2 h | DB-first, typisierte Fehler, Rowcount-Guard, exakte Vector-Kompensation (`evidence/T379-persistence-truth.md`) |
+| T380 Analysewahrheit | PASS | 6–10 h | Video-/UI-Agent + Teamleiter-Review | Z-VIDEO/Z-UI-VM | 1,4 h | DB-first complete/partial/failed; Clip-/Projekt-/Generation-Guard (`evidence/T380-video-analysis-truth.md`) |
+| T381 Connection-Leases | PASS | 5–8 h | Brain-Agent + Teamleiter-Review | Z-BRAIN | 1,3 h | Pfad-/ID-/epochgebundene Leases, deferred close, stale Write-Guard (`evidence/T381-brain-project-leases.md`) |
+| T382 Atomare Erstellung | PASS | 4–6 h | Teamleiter | Z-PROJEKT/Z-DATA | 0,8 h | Same-parent Staging, atomarer Rename, tokengeprüfte DB-/FS-Kompensation (`evidence/T382-atomic-project-creation.md`) |
+| T383 Bounded Fanout | PASS | 1–2 h | Terminal-Agent + Teamleiter-Review | Z-SSE | 0,4 h | Zentraler bounded Drop-Oldest-Fanout und Drop-Metrik (`evidence/T383-bounded-sse-fanout.md`) |
+| T384 NSwag-Clean-Build | PASS | 1–2 h | Teamleiter | Z-UI-SERVICES/Z-INFRA | 0,3 h | `CoreCompile`, unbedingtes Compile-Item, Build 0/0 (`evidence/T384-nswag-corecompile.md`) |
+| T385 DTO-Konvergenz | PASS | 3–5 h | WPF/API-Agent + Teamleiter-Integration | Z-UI-SERVICES | 0,9 h | generierte Transporttypen + explizite UI-Adapter; WPF 0/0 (`evidence/T385-generated-dto-convergence.md`) |
+| T386 Render-Retry-Identität | PASS | 6–10 h | Render-/Data-Agent + Teamleiter-Review | Z-RENDER/Z-DATA | 1,1 h | aktive Dedupe, terminale Attempts, Content-/Projektidentität (`evidence/T386-render-retry-identity.md`) |
+| T387 DirectML-Provisioning | PASS | 8–16 h | GPU/Infra-Agent + Teamleiter | Z-INFRA | 2,8 h | Freigegebenes 3,2-GB-Bundle, immutable Quellen/Lizenzen, Allowlist, SHA-256, atomare Installation (`evidence/T387-directml-provisioning.md`) |
+| T388 Python-Lock | PASS | 6–12 h | Infra-Agent + Teamleiter-Review | Z-INFRA | 1,4 h | 41 direkte Pins/124 Wheel-Hashes, 4 reproduzierbare Vendor-Wheels, Setup fail-closed (`evidence/T388-python-windows-lock.md`) |
+| T389 .NET-Lock | PASS | 3–6 h | Infra/WPF-Agent + Teamleiter-Review | Z-INFRA/Z-UI | 0,7 h | SDK 9.0.316 + vollständiger NuGet-Graph + Locked Restore/WPF 0/0 (`evidence/T389-dotnet-nuget-lock.md`) |
+| T390 Provenienz | PASS | 4–8 h | Teamleiter/Infra | Z-INFRA | 1,0 h | CycloneDX-SBOM + Commit/Dirty/SDK/Lock/Artefakt-Receipt; Dirty-Gate fail-closed (`evidence/T390-release-provenance.md`) |
+| T391 Löschbestätigung | PASS | 2–3 h | UI-Agent + Teamleiter-Review | Z-UI-SERVICES/Z-UI-VM | 0,6 h | Default-No vor 4 Löschpfaden, exakte Ziele, Fehler lokal sichtbar; WPF 0/0 (`evidence/T391-delete-confirmation.md`) |
+| T392 FFmpeg-/Settings-Wahrheit | PASS | 5–8 h | Settings-Agent + Teamleiter-Integration | Z-UI-VIEWS/Z-UI-VM | 1,3 h | kanonische Runtime, atomarer Save, sichtbare Load-/Save-Fehler (`evidence/T392-settings-runtime-truth.md`) |
+| T393 UI-Ergebniswahrheit | PASS | 4–6 h | Chat/UI-Agent + Teamleiter-Integration | Z-UI-VM/Z-UI-SERVICES/SHARED | 1,2 h | Chat-, GPU- und Empfehlungswahrheit; WPF 0/0 (`evidence/T393-ui-result-truth.md`) |
+| T394 Exception-Policy | PASS | 2–4 h | Teamleiter | Z-UI | 0,5 h | redigiertes Crashlog, einmaliger Fatalpfad, kein Save aus inkonsistentem State (`evidence/T394-fatal-exception-policy.md`) |
+| T395 Responsive Video-Toolbar | PASS | 2–3 h | Views-Agent + Teamleiter-Review | Z-UI-VIEWS | 0,4 h | Aktionen und Statusbereiche umbrechend; WPF 0/0 (`evidence/T395-responsive-video-toolbar.md`) |
+| T396 Accessibility | PASS | 16–32 h | 2 UI-Agenten + unabhängiger Reviewer | Z-UI-VIEWS/Z-UI-VM | 3,4 h | 16 Views, UIA/Fokus/Shortcuts, Timeline Nudge/Trim/Scrub; 5 Review-Findings geschlossen (`evidence/T396-accessibility-keyboard.md`) |
+| T397 CachedTab-Reapply | PASS | 2–4 h | Controls-Agent + Teamleiter-Review | Z-UI-CONTROLS | 0,3 h | Presenter-Reparenting; WPF Release 0/0 (`evidence/T397-cached-tab-template-reapply.md`) |
+| T398 Native C#-Tests | PASS | 12–20 h | Test-Agent + unabhängiger Reviewer | Z-TESTS | 2,1 h | 28 MSTest-Vertragstests/135 Assertions, exakte Pins und eigener Lock (`evidence/T398-native-test-implementation.md`) |
+| T399 Python-Coverage/Skips/Temp | PASS | 4–8 h | Teamleiter + unabhängiger Reviewer | Z-TESTS/Z-INFRA | 1,6 h | Coverage ≥53, expiring owned skips, owned temp cleanup, T362 tree-digest preservation (`evidence/T399-python-quality-gates.md`) |
+| T400 Security-Workflow | PASS | 6–12 h | Security-Agent + unabhängiger Reviewer | Z-INFRA | nicht separat gemessen | Secret/History, Python-/NuGet-SCA, Dependency Review, SBOM, Negativkontrollen und SHA-Receipts; 3 Review-Runden PASS (`evidence/T400-security-workflow.md`) |
+| T401 PR-/Branch-CI | PASS | 4–8 h | Infra-Agent + unabhängiger Reviewer | Z-INFRA | nicht separat gemessen | alle Branches/PRs, SHA-gepinnte Actions, Locked Gates, ≥28 native Tests (`evidence/T401-required-ci.md`) |
+| T402 Dokumentationswahrheit | PASS | 3–5 h | Docs-Agent + Teamleiter | Z-DOCS | 1,0 h | DoD-Vertrag, autoritative Skillquelle, Manifest-/Lizenzwahrheit, 55 Links PASS (`evidence/T402-documentation-truth.md`) |
+| T403 Implementierungswahrheit | OPEN | 2–4 h | Teamleiter + Reviewer | SHARED/Z-REVIEW | – | Gesamt-Diff/Architektur/Security; `.completed` |
+| T404 Gezielte Fault-Injection | OPEN | 3–6 h | Test-Team | QC | – | gebündelter Start funktionaler Tests |
+| T405 Python-Gesamtsuite | OPEN | 1–3 h | Teamleiter/Test-Team | QC | – | `Tests/`, Python 3.11, NumPy 1.26.4 |
+| T406 Native C#-Tests und WPF Release | OPEN | 1–3 h | Teamleiter/WPF-Test | QC | – | native Tests, locked Release-Build 0/0 |
+| T407 Clean-Checkout-Windows-Gate | OPEN | 2–5 h | Infra/Test-Team | QC | – | kein Generated-/Asset-/Cache-Vorteil |
+| T408 GUI-Wahrheit | OPEN | 3–6 h | GUI-Agent + Teamleiter | QC | – | 14 Views, Fehlerfälle, Auflösungen, DPI |
+| T409 Accessibility-QC | OPEN | 3–6 h | GUI-Agent | QC | – | Keyboard, Fokus, UIA, High Contrast |
+| T410 Projektwechsel-E2E | OPEN | 4–8 h | Teamleiter/Test-Team | QC | – | aktive Jobs A→B, null Cross-Write |
+| T411 DirectML-/AMF-Fresh-Install | OPEN | 4–8 h | Teamleiter/GPU-Agent | QC | – | RX 7800 XT, LUID, Flags, Assets |
+| T412 Render-Retry/Restart | OPEN | 3–6 h | Teamleiter/Render-Agent | QC | – | aktive Dedupe, Retry, Inhaltsidentität |
+| T413 Security/Provenienz | OPEN | 2–5 h | Security-Agent + Reviewer | QC | – | Secret/SCA/SBOM/Hashes/Commit |
+| T414 Abschlusswahrheit | OPEN | 2–4 h | Teamleiter | Z-DOCS/QC | – | QC/Brain/Marker-Digests; `.qc-passed` nur 100 % |
+| T415 Veröffentlichung | OPEN | 1–3 h | Teamleiter | Git/Remote | – | PR, Required Checks, Main, Release |
+
+### Laufende Regeln
+
+- Teamleiter aktualisiert Tabelle automatisch bei Start, Review, PASS, Blocker
+  und ETA-Änderung.
+- Agent meldet nur Evidenz; ausschließlich Teamleiter setzt `PASS`.
+- Funktionale Tests beginnen gesammelt bei T404. Vorher nur Syntax-, XML-,
+  Truncation-, statische Vertrags- und zwingende Build-Integritätschecks.
+- Gleiche Fehlersignatur höchstens drei Fixzyklen; danach unabhängige
+  Root-Cause-Prüfung oder `BLOCKED`.
+- Gleicher Befehl mit gleichen Argumenten höchstens zweimal ohne neue Evidenz.
+- Höchstens drei offene, falsifizierbare Ursachenhypothesen pro Task.
+- 45 Minuten ohne neue Evidenz oder zweimalige ETA-Überschreitung aktiviert
+  `LOOP_GUARD`; Teamleiter unterbricht Ansatz/Agent.
+- Agenten melden spätestens alle 30 Minuten Evidenz oder Blocker; Ausgaben
+  bleiben Caveman-komprimiert und auf Zone/Ticket begrenzt.
+- Standardbudgets: Investigator 800, Builder 500, Reviewer 700 Output-Tokens;
+  Überschreitung nur mit Ledger-Begründung.
+- Gesamtsuite, Clean-Checkout, GUI, Hardware und Full-Length-Render nur in
+  T404–T413 oder nach belegter Gate-relevanter Änderung.
+- Keine doppelte Suche ohne ausgewiesenen unabhängigen Reviewzweck.
+- Erreichte Abnahmekriterien beenden Task; kein ungefragtes Nachpolieren.
+- Claude Code läuft nur ticket-/zonengebunden mit expliziter Tool-Allowlist,
+  `--no-session-persistence`, JSON-Ausgabe und vorab gesetztem Kostenlimit.
+- Claude-Budgetfehler werden nicht blind mit höherem Limit wiederholt; zuerst
+  Kontext und Tools reduzieren, danach höchstens ein belegter Folgelauf.
+- Claude-Limits: Investigator 10 min/0,15 USD/max. 2 Starts, Reviewer
+  15 min/0,25 USD/1 Start, Builder 30 min/0,75 USD/1 Start; OBJ-72 insgesamt
+  höchstens 10,00 USD gemeldete Kostenäquivalenz ohne neue Nutzerfreigabe.
+- Claude-Builder arbeiten nur im temporären Worktree. Fremd- oder
+  Shared-Zonenpfade verwerfen den gesamten Diff vor jeder Übernahme.

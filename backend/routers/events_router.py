@@ -43,7 +43,15 @@ def _register_client_queue(prefix: str) -> str:
 def _cleanup_client_queue(client_id: Optional[str]) -> None:
     if not client_id:
         return
-    dependencies._event_queues.pop(client_id, None)
+    dropped_events = dependencies.unregister_event_queue(client_id)
+    if dropped_events:
+        logger.warning(
+            "SSE Client deregistriert: %s (verworfene Events: %d)",
+            client_id,
+            dropped_events,
+        )
+    else:
+        logger.debug("SSE Client deregistriert: %s", client_id)
 
 
 async def _event_stream(

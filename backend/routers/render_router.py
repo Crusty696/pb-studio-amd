@@ -22,8 +22,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..app_state import (
     AppState,
+    PersistenceError,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
     get_app_state,
-    resolve_active_project_root,
+    persistence_error,
     resolve_project_db_id,
 )
 from ..config import config
@@ -50,6 +54,7 @@ from pb_studio.rendering.render_queue import (
     STATE_RUNNING as _RQ_RUNNING,
     STATE_COMPLETED as _RQ_COMPLETED,
     STATE_FAILED as _RQ_FAILED,
+    STATE_CANCELLED as _RQ_CANCELLED,
     STATE_INTERRUPTED as _RQ_INTERRUPTED,
     get_render_queue as _get_render_queue,
 )
@@ -146,29 +151,126 @@ async def _shutdown_active_renders(
     }
 
 
-def _compute_render_media_hash(audio_path: str, timeline: list[dict[str, Any]]) -> str:
-    """Stabiler Identitäts-Hash über die Render-Eingaben.
+_RENDER_RESUME_PAYLOAD_VERSION = 1
+_RENDER_IDENTITY_VERSION = 1
 
-    Zweck: Grundlage für die Idempotency der RenderQueue. Zwei /render/start
-    Requests mit demselben Audio + identischer Timeline + identischem Output
-    erzeugen denselben job_hash und daher nur einen einzigen Queue-Eintrag.
-    """
-    try:
-        canonical = json.dumps(
-            {
-                "audio_path": str(audio_path or ""),
-                "timeline": timeline or [],
+
+def _canonical_identity_path(raw_path: str | Path) -> str:
+    """Canonical, case-insensitive Windows path representation for hashing."""
+    return os.path.normcase(str(Path(raw_path).resolve())).replace("\\", "/")
+
+
+def _stored_render_media_hashes(
+    request: RenderRequest,
+    timeline: list[dict[str, Any]],
+    state: AppState,
+) -> dict[str, Any]:
+    """Freeze persisted audio/video content hashes used by this render."""
+    audio_path_key = _canonical_identity_path(request.audio_path)
+    audio_identity: dict[str, Any] = {
+        "path": audio_path_key,
+        "content_hash": None,
+    }
+    for clip_id, clip in state.get_audio_clips_snapshot().items():
+        if _canonical_identity_path(str(clip.get("path") or "")) != audio_path_key:
+            continue
+        content_hash = str(
+            clip.get("audio_hash") or clip.get("file_hash") or ""
+        ).strip().lower()
+        audio_identity = {
+            "clip_id": int(clip_id),
+            "path": audio_path_key,
+            "content_hash": content_hash or None,
+        }
+        break
+
+    video_clips = state.get_video_clips_snapshot()
+    video_identities: dict[int, dict[str, Any]] = {}
+    for entry in timeline:
+        clip_id = str(entry.get("clip_id") or "")
+        if not clip_id.startswith("clip_"):
+            continue
+        try:
+            video_id = int(clip_id[5:])
+        except ValueError:
+            continue
+        clip = video_clips.get(video_id) or {}
+        content_hash = str(
+            clip.get("video_hash") or clip.get("file_hash") or ""
+        ).strip().lower()
+        metadata = entry.get("metadata") or {}
+        video_identities[video_id] = {
+            "clip_id": clip_id,
+            "path": _canonical_identity_path(
+                str(metadata.get("file_path") or clip.get("path") or "")
+            ),
+            "content_hash": content_hash or None,
+        }
+
+    return {
+        "audio": audio_identity,
+        "video": [
+            video_identities[video_id]
+            for video_id in sorted(video_identities)
+        ],
+    }
+
+
+def _compute_render_media_hash(
+    audio_path: str,
+    timeline: list[dict[str, Any]],
+    *,
+    render_settings: Optional[dict[str, Any]] = None,
+    project_root: Optional[Path] = None,
+    project_db_id: Optional[int] = None,
+    media_content_hashes: Optional[dict[str, Any]] = None,
+) -> str:
+    """Stable request/content identity for active render deduplication."""
+    canonical = json.dumps(
+        {
+            "version": _RENDER_IDENTITY_VERSION,
+            "audio_path": _canonical_identity_path(audio_path),
+            "timeline": timeline or [],
+            "render_settings": render_settings or {},
+            "project": {
+                "root": (
+                    _canonical_identity_path(project_root)
+                    if project_root is not None
+                    else None
+                ),
+                "db_id": int(project_db_id) if project_db_id is not None else None,
             },
-            sort_keys=True,
-            separators=(",", ":"),
-            default=str,
-        )
-    except (TypeError, ValueError):
-        canonical = f"audio={audio_path};timeline_len={len(timeline or [])}"
+            "media_content_hashes": media_content_hashes or {},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-_RENDER_RESUME_PAYLOAD_VERSION = 1
+def _build_render_identity(
+    request: RenderRequest,
+    timeline: list[dict[str, Any]],
+    state: AppState,
+    *,
+    project_root: Path,
+    project_db_id: int,
+) -> tuple[str, dict[str, Any]]:
+    media_content_hashes = _stored_render_media_hashes(request, timeline, state)
+    digest = _compute_render_media_hash(
+        request.audio_path,
+        timeline,
+        render_settings=_request_settings_dict(request),
+        project_root=project_root,
+        project_db_id=project_db_id,
+        media_content_hashes=media_content_hashes,
+    )
+    return digest, {
+        "version": _RENDER_IDENTITY_VERSION,
+        "digest": digest,
+        "media_content_hashes": media_content_hashes,
+    }
 
 
 def _request_settings_dict(
@@ -177,6 +279,7 @@ def _request_settings_dict(
     timeline_snapshot: Optional[list[dict[str, Any]]] = None,
     project_root: Optional[Path] = None,
     project_db_id: Optional[int] = None,
+    identity_snapshot: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Render-Settings als reines Dict für die Queue-Persistenz."""
     settings = {
@@ -193,39 +296,60 @@ def _request_settings_dict(
         and project_root is not None
         and project_db_id is not None
     ):
+        request_snapshot = request.model_dump(mode="json")
+        request_snapshot["output_path"] = str(Path(request.output_path).resolve())
+        request_snapshot["audio_path"] = str(Path(request.audio_path).resolve())
         settings["_resume"] = {
             "version": _RENDER_RESUME_PAYLOAD_VERSION,
-            "request": request.model_dump(mode="json"),
+            "request": request_snapshot,
             "timeline_snapshot": timeline_snapshot,
             "project_root": str(Path(project_root).resolve()),
             "project_db_id": int(project_db_id),
         }
+    if identity_snapshot is not None:
+        settings["_identity"] = identity_snapshot
     return settings
 
 
-def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) -> None:
-    """Update der persistenten Queue, das niemals den Render-Task crasht."""
+def _queue_update_or_raise(
+    queue_job_id: Optional[str],
+    status: str,
+    **kwargs: Any,
+) -> None:
+    """Persist a lifecycle transition before reporting it to the UI."""
     if not queue_job_id:
-        return
+        raise persistence_error(
+            "render_queue",
+            f"Render-Queue-ID fehlt für Status {status}",
+        )
     try:
-        _get_render_queue().update_status(queue_job_id, status, **kwargs)
-    except Exception as exc:  # pragma: no cover - logging only
-        logger.warning(
-            "RenderQueue.update_status fehlgeschlagen für %s (%s): %s",
-            queue_job_id, status, exc,
+        updated = _get_render_queue().update_status(
+            queue_job_id,
+            status,
+            **kwargs,
+        )
+    except Exception as exc:
+        raise persistence_error(
+            "render_queue",
+            f"Render-Status {status} konnte nicht gespeichert werden",
+            exc,
+        ) from exc
+    if updated is None:
+        raise persistence_error(
+            "render_queue",
+            f"Render-Job {queue_job_id} fehlt für Status {status}",
         )
 
 
-def _find_runtime_task_for_queue_job(
-    state: AppState,
-    queue_job_id: str,
-) -> Optional[dict[str, Any]]:
-    """Findet den bereits geplanten Runtime-Task eines Queue-Jobs."""
-    with state._state_lock:
-        for task in state.render_tasks.values():
-            if task.get("queue_job_id") == queue_job_id:
-                return dict(task)
-    return None
+def _safe_queue_update(queue_job_id: Optional[str], status: str, **kwargs: Any) -> None:
+    """Best-effort only while already reporting a terminal failure."""
+    try:
+        _queue_update_or_raise(queue_job_id, status, **kwargs)
+    except PersistenceError as exc:
+        logger.error(
+            "RenderQueue.update_status fehlgeschlagen für %s (%s): %s",
+            queue_job_id, status, exc,
+        )
 
 
 async def _preflight_render_request(
@@ -414,6 +538,30 @@ async def _resume_render_queue_on_startup(
             if not output_path.is_relative_to(project_root):
                 raise ValueError("Resume-Output liegt außerhalb der Projektwurzel")
 
+            identity_snapshot = job.settings.get("_identity")
+            if identity_snapshot is not None:
+                if (
+                    not isinstance(identity_snapshot, dict)
+                    or identity_snapshot.get("version") != _RENDER_IDENTITY_VERSION
+                    or not identity_snapshot.get("digest")
+                ):
+                    raise ValueError(
+                        "Render-Identitaet fehlt oder hat unbekannte Version"
+                    )
+                current_digest, _ = _build_render_identity(
+                    request,
+                    timeline_snapshot,
+                    resume_media_state,
+                    project_root=project_root,
+                    project_db_id=resolve_project_db_id(
+                        resume_media_state.current_project
+                    ),
+                )
+                if current_digest != identity_snapshot["digest"]:
+                    raise ValueError(
+                        "Render-Identitaet hat sich seit dem Queueing geaendert"
+                    )
+
             base_task_id = f"resume-{job.job_id[:8]}"
             task_id = base_task_id
             suffix = 2
@@ -443,14 +591,19 @@ async def _resume_render_queue_on_startup(
                 "error": None,
                 "queue_job_id": job.job_id,
             }
-            state.set_render_task(task_id, task_data)
-            state.set_cancel_flag(task_id, False)
-            render_queue.update_status(
+            updated_job = render_queue.update_status(
                 job.job_id,
                 job.status,
                 progress_percent=0.0,
                 error="",
             )
+            if updated_job is None:
+                raise persistence_error(
+                    "render_queue",
+                    f"Resume-Job {job.job_id} fehlt vor Task-Start",
+                )
+            state.set_render_task(task_id, task_data)
+            state.set_cancel_flag(task_id, False)
 
             task = asyncio.create_task(
                 _run_render_task(task_id, request, state, timeline_snapshot)
@@ -527,10 +680,31 @@ async def start_render(
     request: RenderRequest,
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
-    """Startet ein Rendering als Background Task."""
+    """Startet ein Rendering im unveraenderlichen Projektkontext."""
     if _render_shutdown_requested:
         raise HTTPException(status_code=503, detail="Backend wird heruntergefahren")
 
+    try:
+        async with state.project_operation() as context:
+            return await _start_render_for_project(
+                request,
+                state,
+                context,
+            )
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _start_render_for_project(
+    request: RenderRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> RenderProgress:
+    """Validiert und publiziert einen Render-Task fuer exakt ein Projekt."""
     # Contract-Guard: Render darf nur mit vorhandener Timeline starten.
     timeline_snapshot = state.get_timeline_snapshot()
     if not timeline_snapshot:
@@ -547,11 +721,21 @@ async def start_render(
 
     # SEC-002: Path-Traversal-Schutz für output_path
     output_p_check = Path(request.output_path).resolve()
-    allowed_render = resolve_active_project_root(state, config.project_dir)
+    allowed_render = context.project_root
     if not output_p_check.is_relative_to(allowed_render):
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
 
+    project_db_id = context.project_id
+    media_hash, identity_snapshot = _build_render_identity(
+        request,
+        timeline_snapshot,
+        state,
+        project_root=allowed_render,
+        project_db_id=project_db_id,
+    )
+
     await _preflight_render_request(request, timeline_snapshot)
+    state.require_project_context_current(context)
 
     # Render-Task Cleanup: alte abgeschlossene Tasks entfernen (max 50)
     _cleanup_old_render_tasks(state)
@@ -571,7 +755,6 @@ async def start_render(
     # (in-memory Render-Lifecycle ist die Source-of-Truth für die HTTP-Antwort).
     queue_job_id: Optional[str] = None
     try:
-        media_hash = _compute_render_media_hash(request.audio_path, timeline_snapshot)
         candidate_queue_job_id = str(uuid.uuid4())
         queue_job = _get_render_queue().enqueue(
             media_hash=media_hash,
@@ -580,15 +763,13 @@ async def start_render(
                 request,
                 timeline_snapshot=timeline_snapshot,
                 project_root=allowed_render,
-                project_db_id=resolve_project_db_id(state.current_project),
+                project_db_id=project_db_id,
+                identity_snapshot=identity_snapshot,
             ),
             job_id=candidate_queue_job_id,
         )
         queue_job_id = queue_job.job_id
         if queue_job_id != candidate_queue_job_id:
-            existing_task = _find_runtime_task_for_queue_job(state, queue_job_id)
-            if existing_task is not None:
-                return RenderProgress(**existing_task)
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -598,8 +779,13 @@ async def start_render(
             )
     except HTTPException:
         raise
-    except Exception as exc:  # pragma: no cover - logging only
-        logger.warning("RenderQueue.enqueue fehlgeschlagen (unkritisch): %s", exc)
+    except Exception as exc:
+        logger.error("RenderQueue.enqueue fehlgeschlagen: %s", exc, exc_info=True)
+        raise persistence_error(
+            "render_queue",
+            "Render-Job konnte nicht dauerhaft registriert werden",
+            exc,
+        ) from exc
 
     while True:
         task_id = str(uuid.uuid4())[:8]
@@ -787,14 +973,13 @@ async def _run_render_task(
     timeline_snapshot wird von start_render übergeben — wird hier NICHT erneut aus dem
     State gelesen (R14/HIGH-004: Race zwischen Snapshot-Check und Task-Start vermeiden).
     """
-    state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
-    # Persistente Queue parallel auf 'running' setzen (Aufgabe I).
     _task_meta = state.get_render_task(task_id) or {}
     queue_job_id: Optional[str] = _task_meta.get("queue_job_id")
-    _safe_queue_update(queue_job_id, _RQ_RUNNING)
     start_time = time.monotonic()
 
     try:
+        _queue_update_or_raise(queue_job_id, _RQ_RUNNING)
+        state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
         if state.get_cancel_flag(task_id):
             raise _RenderCancelled()
         await _acquire_gpu_lock_or_cancel(task_id, state)
@@ -816,6 +1001,7 @@ async def _run_render_task(
             gpu_lock.release()
 
         elapsed = time.monotonic() - start_time
+        _queue_update_or_raise(queue_job_id, _RQ_COMPLETED)
         state.update_render_task(task_id, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
@@ -829,7 +1015,6 @@ async def _run_render_task(
             "validation_status": result.get("validation_status"),
             "finished_at": time.monotonic(),  # P-H1: enable time-gated cancel_flag cleanup
         })
-        _safe_queue_update(queue_job_id, _RQ_COMPLETED)
 
         await publish_event("render_progress", {
             "task_id": task_id,
@@ -856,6 +1041,41 @@ async def _run_render_task(
         elapsed = time.monotonic() - start_time
         shutdown_interrupted = task_id in _shutdown_cancelled_task_ids
         task_snapshot = state.get_render_task(task_id) or {}
+        target_queue_status = (
+            _RQ_INTERRUPTED if shutdown_interrupted else _RQ_CANCELLED
+        )
+        target_queue_error = (
+            "Backend shutdown during render" if shutdown_interrupted else "cancelled"
+        )
+        try:
+            _queue_update_or_raise(
+                queue_job_id,
+                target_queue_status,
+                error=target_queue_error,
+            )
+        except PersistenceError as persist_exc:
+            state.update_render_task(task_id, {
+                "status": TaskStatus.FAILED.value,
+                "error": str(persist_exc),
+                "message": "Render-Abbruch konnte nicht gespeichert werden",
+                "elapsed_seconds": round(elapsed, 1),
+                "eta_seconds": 0.0,
+                "progress_end": False,
+                "validation_status": "failed",
+                "finished_at": time.monotonic(),
+            })
+            await publish_event("render_progress", {
+                "task_id": task_id,
+                "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
+                "status": "failed",
+                "message": str(persist_exc),
+                "error": str(persist_exc),
+                "queue_job_id": queue_job_id,
+                "progress_end": False,
+                "validation_status": "failed",
+            })
+            return
+
         state.update_render_task(task_id, {
             "status": TaskStatus.CANCELLED.value,
             "message": "Rendering abgebrochen",
@@ -868,15 +1088,6 @@ async def _run_render_task(
             "validation_status": "cancelled",
             "finished_at": time.monotonic(),  # P-H1
         })
-        # Shutdown bleibt restartbar; ein User-Cancel bleibt terminal.
-        if shutdown_interrupted:
-            _safe_queue_update(
-                queue_job_id,
-                _RQ_INTERRUPTED,
-                error="Backend shutdown during render",
-            )
-        else:
-            _safe_queue_update(queue_job_id, _RQ_FAILED, error="cancelled")
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
         await publish_event("render_progress", {

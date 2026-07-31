@@ -212,8 +212,11 @@ async def with_gpu_task(
             gpu_lock.release()
 
 
-# SSE Event Queue für Progress-Updates
+# SSE Event Queues für Progress- und Log-Updates
+EVENT_QUEUE_MAXSIZE = 500
 _event_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
+_event_queue_drop_count = 0
+_event_queue_drop_counts: dict[str, int] = {}
 
 # Review-Fix HIGH-1 (2026-07-09): Referenz auf den uvicorn-Main-Loop, damit
 # Worker-Threads (asyncio.to_thread + eigener Loop) Events thread-safe via
@@ -231,25 +234,70 @@ def set_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
 def get_event_queue(client_id: str = "default") -> asyncio.Queue[dict[str, Any]]:
     """Gibt die Event-Queue für einen Client zurück (per-Client Queue)."""
     if client_id not in _event_queues:
-        _event_queues[client_id] = asyncio.Queue(maxsize=500)
+        _event_queues[client_id] = asyncio.Queue(maxsize=EVENT_QUEUE_MAXSIZE)
     return _event_queues[client_id]
+
+
+def unregister_event_queue(client_id: str) -> int:
+    """Deregistriert einen SSE-Client und gibt dessen Drop-Anzahl zurück."""
+    _event_queues.pop(client_id, None)
+    return _event_queue_drop_counts.pop(client_id, 0)
+
+
+def get_event_queue_drop_metrics() -> dict[str, Any]:
+    """Liefert einen Snapshot der sichtbaren SSE-Drop-Counter."""
+    return {
+        "total": _event_queue_drop_count,
+        "by_client": dict(_event_queue_drop_counts),
+    }
+
+
+def _record_event_drop(client_id: str, event: dict[str, Any]) -> None:
+    global _event_queue_drop_count
+    _event_queue_drop_count += 1
+    client_drop_count = _event_queue_drop_counts.get(client_id, 0) + 1
+    _event_queue_drop_counts[client_id] = client_drop_count
+    logger.warning(
+        "SSE Event verworfen (drop-oldest): client=%s, event=%s, "
+        "client_drops=%d, total_drops=%d",
+        client_id,
+        event.get("event", "message"),
+        client_drop_count,
+        _event_queue_drop_count,
+    )
+
+
+def _enqueue_event(
+    client_id: str,
+    queue: asyncio.Queue[dict[str, Any]],
+    event: dict[str, Any],
+) -> None:
+    """Fügt ein Event bounded ein; bei Full wird deterministisch das älteste entfernt."""
+    try:
+        queue.put_nowait(event)
+        return
+    except asyncio.QueueFull:
+        pass
+
+    try:
+        dropped_event = queue.get_nowait()
+    except asyncio.QueueEmpty:
+        # Defensive Race-Absicherung: Der Publish-Pfad darf nie QueueFull propagieren.
+        _record_event_drop(client_id, event)
+        return
+
+    _record_event_drop(client_id, dropped_event)
+    try:
+        queue.put_nowait(event)
+    except asyncio.QueueFull:
+        # Nur bei regelwidrigem Cross-Thread-Zugriff möglich; auch dann exceptionfrei.
+        _record_event_drop(client_id, event)
 
 
 def _fanout_event(event: dict[str, Any]) -> None:
     """Synchroner Fan-out an alle Queues. NUR im Main-Loop-Thread aufrufen."""
-    for queue in list(_event_queues.values()):
-        try:
-            queue.put_nowait(event)
-        except asyncio.QueueFull:
-            logger.warning(
-                f"Event-Queue voll (maxsize=500) — ältestes Event wird verworfen. "
-                f"Event-Typ: {event['event']}"
-            )
-            try:
-                queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-            queue.put_nowait(event)
+    for client_id, queue in list(_event_queues.items()):
+        _enqueue_event(client_id, queue, event)
 
 
 async def publish_event(event_type: str, data: dict[str, Any], client_id: str = "default") -> None:
@@ -321,20 +369,12 @@ class SSELogHandler(logging.Handler):
                 "message": message,
                 "source": name
             }
-            event = {"event": "log", "data": payload}
 
             # BUGFIX M13: use the shared main loop (set via set_main_loop), not
             # asyncio.get_running_loop(). emit() runs in worker threads (all heavy
             # work goes through asyncio.to_thread), where get_running_loop() raises
             # RuntimeError -> loop=None -> every worker-thread log was silently
-            # dropped from the SSE live-log. Mirror publish_event_threadsafe().
-            loop = _main_loop
-
-            if loop and not loop.is_closed():
-                for queue in list(_event_queues.values()):
-                    try:
-                        loop.call_soon_threadsafe(queue.put_nowait, event)
-                    except Exception:
-                        pass
+            # dropped from the SSE live-log.
+            publish_event_threadsafe("log", payload)
         except Exception:
             pass

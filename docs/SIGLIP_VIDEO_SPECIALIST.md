@@ -5,6 +5,12 @@
 > DirectML memory flags disabled. Package-install/export commands and API
 > examples below are historical reference; use the project runtime and active
 > wrapper contracts. Missing DML/model artifacts fail closed.
+> Approved source:
+> `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3`,
+> license `Apache-2.0`. Exact source/target hashes, fixed-shape transform and
+> archive identity:
+> [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+> and [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).
 
 ## Overview
 

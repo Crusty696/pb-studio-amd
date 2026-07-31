@@ -9,16 +9,21 @@ namespace PBStudio.UI.ViewModels;
 
 /// <summary>
 /// ViewModel für die Einstellungen. Verwaltet GPU-Status, VRAM-Cap-Slider,
-/// FFmpeg-Pfad-Picker (mit Validation + Version-Probe) und PB_STUDIO_FORCED_VRAM
+/// kanonische FFmpeg-Runtime-Provenienz und PB_STUDIO_FORCED_VRAM
 /// Env-Var. Persistenz via <see cref="ISettingsService"/> nach %APPDATA%\PBStudio\settings.json.
 /// </summary>
 public partial class SettingsViewModel : ObservableObject, IDisposable
 {
+    private const string RecommendationTask = "video_captioning";
+
     private readonly IApiClient _api;
-    private readonly IDialogService _dialogs;
     private readonly ISettingsService _settings;
+    private readonly ProjectService? _projects;
     private CancellationTokenSource? _probeCts;
     private CancellationTokenSource? _vramDebounceCts;
+    private CancellationTokenSource? _recommendationCts;
+    private long _recommendationGeneration;
+    private long _recommendationProjectGeneration;
     private bool _disposed;
 
     // ── GPU Status ────────────────────────────────────────────────────────
@@ -42,6 +47,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _ffmpegPath = "";
     [ObservableProperty] private string? _ffmpegPathError;
     [ObservableProperty] private string? _ffmpegVersion;   // null = nicht geprüft (NullToVisibility blendet aus)
+    [ObservableProperty] private string? _ffmpegProvenance;
     [ObservableProperty] private bool _isProbingFfmpeg;
 
     // ── Forced VRAM (Env-Var für nächsten Backend-Start) ──────────────────
@@ -62,7 +68,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // ── UI State ──────────────────────────────────────────────────────────
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isSaving;
+    [ObservableProperty] private bool _isCleaningGpu;
     [ObservableProperty] private string _settingsFilePath = "";
+    [ObservableProperty] private string? _settingsPersistenceError;
 
     public SettingsViewModel(IApiClient api, IDialogService dialogs)
         : this(api, dialogs, new SettingsService())
@@ -70,11 +78,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Test-Konstruktor: erlaubt Mocken aller Dependencies.</summary>
-    public SettingsViewModel(IApiClient api, IDialogService dialogs, ISettingsService settings)
+    public SettingsViewModel(
+        IApiClient api,
+        IDialogService dialogs,
+        ISettingsService settings,
+        ProjectService? projects = null)
     {
         _api = api;
-        _dialogs = dialogs;
+        _ = dialogs;
         _settings = settings;
+        _projects = projects;
         StatusText = "Backend: Startet...";
 
         SettingsFilePath = _settings.ConfigFilePath;
@@ -85,6 +98,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         // 2. Initiales Laden des Backend-Status
         WeakReferenceMessenger.Default.Register<BackendReadyMessage>(this, (_, _) => _ = RefreshAsync());
         WeakReferenceMessenger.Default.Register<AppShutdownMessage>(this, (_, _) => BackendOnline = false);
+        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: false));
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: true));
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: true));
 
         _ = RefreshAsync();
 
@@ -95,7 +117,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     private void LoadPersistedSettings()
     {
-        _settings.Load();
+        var loadResult = _settings.Load();
+        SettingsPersistenceError = loadResult.ErrorMessage;
         var s = _settings.Current;
 
         PythonBridgeService.ApplyRuntimeEnvironment(s);
@@ -202,14 +225,66 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task RefreshKiAutoSelectionAsync()
     {
+        if (_disposed)
+            return;
+
+        var requestedMode = KiMode;
+        var requestedProjectPath = _projects?.CurrentProjectPath;
+        var requestedProjectGeneration =
+            Volatile.Read(ref _recommendationProjectGeneration);
+        ProjectOperationContext? projectContext = null;
+        if (_projects?.HasProject == true)
+        {
+            try
+            {
+                projectContext = _projects.CaptureOperationContext();
+            }
+            catch (InvalidOperationException)
+            {
+                KiModeAutoSelectionText = "Projektwechsel läuft; Vorschau wird neu geladen.";
+                return;
+            }
+        }
+
+        var generation = Interlocked.Increment(ref _recommendationGeneration);
+        var previous = _recommendationCts;
+        var current = projectContext.HasValue
+            ? CancellationTokenSource.CreateLinkedTokenSource(
+                projectContext.Value.CancellationToken)
+            : new CancellationTokenSource();
+        _recommendationCts = current;
+        previous?.Cancel();
+
         try
         {
-            var rec = await _api.GetModelRecommendationAsync("video_captioning", KiMode).ConfigureAwait(true);
+            var rec = await _api.GetModelRecommendationAsync(
+                RecommendationTask,
+                requestedMode,
+                current.Token).ConfigureAwait(true);
+            if (!IsCurrentRecommendation(
+                    current,
+                    generation,
+                    requestedMode,
+                    requestedProjectPath,
+                    requestedProjectGeneration,
+                    projectContext))
+            {
+                return;
+            }
+
             if (rec == null)
             {
                 KiModeAutoSelectionText = "Backend nicht erreichbar.";
                 return;
             }
+
+            if (!string.Equals(rec.Task, RecommendationTask, StringComparison.Ordinal)
+                || !string.Equals(rec.Mode, requestedMode, StringComparison.OrdinalIgnoreCase))
+            {
+                KiModeAutoSelectionText = "Auto-Selection-Antwort passt nicht zur Anfrage.";
+                return;
+            }
+
             if (!string.IsNullOrEmpty(rec.Model))
             {
                 var provider = string.IsNullOrWhiteSpace(rec.Provider)
@@ -225,12 +300,66 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                     $"Auto-Selection: {provider}:{rec.Model} | {source} | {capabilities}.";
             }
             else
-                KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {KiMode}: {rec.Reason}";
+                KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {requestedMode}: {rec.Reason}";
+        }
+        catch (OperationCanceledException)
+        {
+            // Erwartet bei Modus-/Projektwechsel oder Dispose.
         }
         catch
         {
-            KiModeAutoSelectionText = "Auto-Selection-Preview fehlgeschlagen.";
+            if (IsCurrentRecommendation(
+                    current,
+                    generation,
+                    requestedMode,
+                    requestedProjectPath,
+                    requestedProjectGeneration,
+                    projectContext))
+            {
+                KiModeAutoSelectionText = "Auto-Selection-Preview fehlgeschlagen.";
+            }
         }
+        finally
+        {
+            if (ReferenceEquals(_recommendationCts, current))
+                _recommendationCts = null;
+            current.Dispose();
+        }
+    }
+
+    private bool IsCurrentRecommendation(
+        CancellationTokenSource owner,
+        long generation,
+        string requestedMode,
+        string? requestedProjectPath,
+        long requestedProjectGeneration,
+        ProjectOperationContext? projectContext)
+    {
+        if (_disposed
+            || owner.IsCancellationRequested
+            || !ReferenceEquals(_recommendationCts, owner)
+            || generation != Volatile.Read(ref _recommendationGeneration)
+            || requestedProjectGeneration != Volatile.Read(ref _recommendationProjectGeneration)
+            || !string.Equals(requestedMode, KiMode, StringComparison.Ordinal)
+            || !string.Equals(
+                requestedProjectPath,
+                _projects?.CurrentProjectPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !projectContext.HasValue
+            || (_projects?.IsCurrent(projectContext.Value) == true);
+    }
+
+    private void InvalidateRecommendationForProjectChange(bool refresh)
+    {
+        Interlocked.Increment(ref _recommendationProjectGeneration);
+        Interlocked.Increment(ref _recommendationGeneration);
+        _recommendationCts?.Cancel();
+        if (refresh && !_disposed)
+            _ = RefreshKiAutoSelectionAsync();
     }
 
     // Live-Validation bei jeder Änderung des FFmpeg-Pfads
@@ -240,25 +369,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.ValidateFFmpegPath(value, out var err);
         FfmpegPathError = err;
         FfmpegVersion = null; // Version invalidieren bis erneut geprüft
-    }
-
-    [RelayCommand]
-    private void BrowseFfmpeg()
-    {
-        var initial = !string.IsNullOrWhiteSpace(FfmpegPath) && System.IO.File.Exists(FfmpegPath)
-            ? System.IO.Path.GetDirectoryName(FfmpegPath)
-            : null;
-
-        var picked = _dialogs.OpenFile(
-            title: "FFmpeg-Executable auswählen",
-            filter: "FFmpeg Executable (ffmpeg.exe)|ffmpeg.exe|Alle Dateien (*.*)|*.*",
-            initialDirectory: initial);
-
-        if (string.IsNullOrEmpty(picked))
-            return;
-
-        FfmpegPath = picked;
-        _ = ProbeFfmpegAsync();
     }
 
     [RelayCommand]
@@ -287,30 +397,37 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsProbingFfmpeg = true;
         try
         {
-            var version = await _settings.ProbeFFmpegVersionAsync(FfmpegPath, ct).ConfigureAwait(true);
+            var runtime = await _settings.ProbeCanonicalFFmpegRuntimeAsync(ct).ConfigureAwait(true);
             if (ct.IsCancellationRequested) return;
 
-            if (!string.IsNullOrEmpty(version))
+            if (!string.IsNullOrWhiteSpace(runtime.RuntimePath))
+                FfmpegPath = runtime.RuntimePath;
+            FfmpegVersion = runtime.Version;
+
+            if (runtime.Succeeded)
             {
-                FfmpegVersion = version;
                 FfmpegPathError = null;
+                FfmpegProvenance =
+                    $"Manifest verifiziert · FFmpeg SHA-256 {runtime.Sha256} · " +
+                    $"FFprobe SHA-256 {runtime.FfprobeSha256} · Quelle: {runtime.AssetSource}";
             }
             else
             {
-                FfmpegVersion = null;
-                FfmpegPathError = "Version konnte nicht ermittelt werden.";
+                FfmpegProvenance = null;
+                FfmpegPathError = runtime.ErrorMessage;
             }
         }
         catch (OperationCanceledException)
         {
             // Erwartet bei Re-Probe / Dispose
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             if (!_disposed && !ct.IsCancellationRequested)
             {
-                FfmpegPathError = "Probe fehlgeschlagen: " + ex.Message;
+                FfmpegPathError = "Die FFmpeg-Runtime-Prüfung ist fehlgeschlagen.";
                 FfmpegVersion = null;
+                FfmpegProvenance = null;
             }
         }
         finally
@@ -331,6 +448,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (IsSaving) return;
         IsSaving = true;
         StatusText = "Speichere Einstellungen...";
+        var persisted = false;
 
         try
         {
@@ -351,7 +469,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 ? ForcedVramMb
                 : null;
             _settings.Current.KiMode = KiMode;
-            _settings.Save();
+            var saveResult = _settings.Save();
+            if (!saveResult.Succeeded)
+            {
+                SettingsPersistenceError = saveResult.ErrorMessage;
+                StatusText = saveResult.ErrorMessage ?? "Einstellungen konnten nicht gespeichert werden.";
+                return;
+            }
+            SettingsPersistenceError = null;
+            persisted = true;
 
             // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
             PythonBridgeService.ApplyRuntimeEnvironment(_settings.Current);
@@ -371,9 +497,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 StatusText = "Einstellungen gespeichert" + syncHint + ": " + _settings.ConfigFilePath;
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText = "Fehler beim Speichern: " + ex.Message;
+            StatusText = persisted
+                ? "Einstellungen gespeichert, aber nicht vollständig angewendet."
+                : "Einstellungen konnten nicht gespeichert werden.";
         }
         finally
         {
@@ -431,9 +559,39 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task CleanupGpuAsync()
     {
+        if (_disposed || IsCleaningGpu)
+            return;
+
+        IsCleaningGpu = true;
         StatusText = "VRAM aufräumen...";
-        await _api.CleanupGpuAsync();
-        StatusText = "VRAM aufgeräumt";
+        try
+        {
+            var result = await _api.CleanupGpuAsync().ConfigureAwait(true);
+            if (_disposed)
+                return;
+
+            StatusText = result switch
+            {
+                null => "GPU-Cleanup fehlgeschlagen; VRAM-Zustand ist unverändert.",
+                { Success: false, Error: not null } =>
+                    $"GPU-Cleanup fehlgeschlagen: {result.Error}",
+                { Success: false } =>
+                    "GPU-Cleanup fehlgeschlagen; das Backend bestätigte keinen Erfolg.",
+                { FreedMb: >= 0 } =>
+                    $"GPU-Cleanup abgeschlossen ({result.FreedMb} MB gemeldet).",
+                _ => "GPU-Cleanup lieferte ein ungültiges Ergebnis.",
+            };
+        }
+        catch
+        {
+            if (!_disposed)
+                StatusText = "GPU-Cleanup fehlgeschlagen; VRAM-Zustand ist unverändert.";
+        }
+        finally
+        {
+            if (!_disposed)
+                IsCleaningGpu = false;
+        }
     }
 
     public void Dispose()
@@ -444,6 +602,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _probeCts?.Dispose();
         try { _vramDebounceCts?.Cancel(); } catch { /* ignore */ }
         _vramDebounceCts?.Dispose();
+        try { _recommendationCts?.Cancel(); } catch { /* ignore */ }
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

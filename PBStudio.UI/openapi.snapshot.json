@@ -70,7 +70,7 @@
     "/gpu/cleanup": {
       "post": {
         "summary": "Gpu Cleanup",
-        "description": "VRAM aufräumen.",
+        "description": "Idle GPU models unload and report only confirmed releases.",
         "operationId": "gpu_cleanup_gpu_cleanup_post",
         "responses": {
           "200": {
@@ -78,11 +78,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "type": "object",
-                  "title": "Response Gpu Cleanup Gpu Cleanup Post"
+                  "$ref": "#/components/schemas/GpuCleanupResponse"
                 }
               }
             }
@@ -230,7 +226,7 @@
           "Project"
         ],
         "summary": "Save Project",
-        "description": "Speichert das aktuelle Projekt.",
+        "description": "Persist the current project without reporting false success.",
         "operationId": "save_project_project_save_post",
         "responses": {
           "200": {
@@ -3617,6 +3613,29 @@
         ],
         "title": "DiscoverAction"
       },
+      "GpuCleanupResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "freed_mb": {
+            "type": "integer",
+            "title": "Freed Mb"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "freed_mb"
+        ],
+        "title": "GpuCleanupResponse"
+      },
       "GpuStatusResponse": {
         "properties": {
           "name": {
@@ -5243,7 +5262,8 @@
             "type": "string",
             "enum": [
               "completed",
-              "partial"
+              "partial",
+              "failed"
             ],
             "title": "Status",
             "default": "completed"
@@ -5410,6 +5430,31 @@
             "type": "string",
             "nullable": true,
             "title": "Tag Source"
+          },
+          "analysis_status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "completed",
+              "partial",
+              "failed"
+            ],
+            "title": "Analysis Status",
+            "default": "unavailable"
+          },
+          "stage_status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Status"
+          },
+          "stage_errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Stage Errors"
           }
         },
         "type": "object",

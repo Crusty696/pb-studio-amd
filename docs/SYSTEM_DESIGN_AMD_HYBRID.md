@@ -20,6 +20,10 @@ projektspezifischen Agent-Referenzen und den T311-T329-Reparaturbelegen.
   schlägt ohne AMF geschlossen fehl.
 - SigLIP liefert 1152-dimensionale ONNX-Embeddings. CLAP-Semantik ist nur mit
   registriertem CLAP-ONNX-Modell verfügbar und sonst explizit `unavailable`.
+- Modellquelle, Transformation, Lizenzkette und Release-Hash sind ausschließlich
+  in [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+  und [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json)
+  autoritativ.
 - Medien werden als lokale Projektkatalog-Einträge importiert und über
   registrierte Clip-IDs an Timeline/Preview/Render gebunden.
 
@@ -53,7 +57,7 @@ Die App soll in eine **C# WPF + Python FastAPI Hybrid-Architektur** migriert wer
 |--------|--------|-----|
 | GPU-Inference | CUDA + torch.cuda | DirectML + ONNX Runtime |
 | Video-Encoder | NVENC (hevc_nvenc) | AMF (hevc_amf) |
-| Embeddings | CLIP 512-dim + CLAP | SigLIP 1152-dim (kein CLAP) |
+| Embeddings | CLIP 512-dim + CLAP | SigLIP 1152-dim + registriertes CLAP-ONNX |
 | Vector Store | ChromaDB | FAISS-CPU |
 | Vision LLM | Moondream (PyTorch) | Moondream ONNX (FP16 DirectML) |
 | Motion | RAFT (PyTorch CUDA) | RAFT ONNX (Opset 17 DirectML) |
@@ -378,7 +382,8 @@ async def with_gpu_lock(func, *args):
 | Moondream ONNX | Ja | Nein | Vision-Language Model; fail closed |
 | RAFT ONNX | Ja | Nein | Optical Flow |
 | SigLIP ONNX | Ja | Nein | Video Embeddings; fail closed |
-| Demucs | Ja (patched) | Nein | Stem Separation; fail closed |
+| Demucs/htdemucs (PyTorch) | Nein | Ja | Stem Separation; freigegebene CPU-Ausnahme |
+| UVR-MDX-NET (ONNX) | Ja | Nein | Stem Separation via DirectML; fail closed |
 | BeatNet | Nein | Ja | Immer CPU (AMD Constraint) |
 | FFmpeg AMF | Ja (HW Encoder) | Nein | Video Rendering; AMF-only |
 | FAISS | Nein | Ja | Vector Search |

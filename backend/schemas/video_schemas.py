@@ -38,6 +38,9 @@ class VideoClipInfo(BaseModel):
     embedding_samples: Optional[int] = None
     has_embedding: bool = False
     tag_source: Optional[str] = None
+    analysis_status: Literal["unavailable", "completed", "partial", "failed"] = "unavailable"
+    stage_status: dict[str, str] = Field(default_factory=dict)
+    stage_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -87,7 +90,7 @@ class VideoAnalysisResult(BaseModel):
     avg_brightness: float = 0.5
     avg_saturation: float = 0.5
     avg_color_temp: float = 0.0
-    status: Literal["completed", "partial"] = "completed"
+    status: Literal["completed", "partial", "failed"] = "completed"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
 

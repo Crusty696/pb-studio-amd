@@ -99,10 +99,17 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private async Task DeleteSelectedAsync()
     {
         if (SelectedClips.Count == 0 || IsDeleting) return;
+        var clips = SelectedClips.ToList();
+        var confirmationMessage = clips.Count == 1
+            ? $"Audio-Clip \"{clips[0].Name}\" (ID {clips[0].Id}) dauerhaft löschen?"
+            : $"{clips.Count} ausgewählte Audio-Clips dauerhaft löschen?";
+        if (!_dialogService.ConfirmDestructiveAction("Audio-Clips löschen", confirmationMessage))
+            return;
+
         IsDeleting = true;
         try
         {
-            var ids = SelectedClips.Select(c => c.Id).ToList();
+            var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Audio-Clips...";
             var resp = ids.Count == 1
                 ? await _api.DeleteAudioClipAsync(ids[0])
@@ -115,6 +122,10 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             }
             else StatusText = "Delete fehlgeschlagen.";
         }
+        catch (Exception ex)
+        {
+            StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
+        }
         finally { IsDeleting = false; }
     }
 
@@ -122,10 +133,18 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private async Task DeleteAllAsync()
     {
         if (AudioClips.Count == 0 || IsDeleting) return;
+        var clips = AudioClips.ToList();
+        if (!_dialogService.ConfirmDestructiveAction(
+                "Alle Audio-Clips löschen",
+                $"ALLE {clips.Count} Audio-Clips dauerhaft löschen?"))
+        {
+            return;
+        }
+
         IsDeleting = true;
         try
         {
-            var ids = AudioClips.Select(c => c.Id).ToList();
+            var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche ALLE {ids.Count} Audio-Clips...";
             var resp = await _api.DeleteAudioClipsBatchAsync(ids);
             if (resp != null)
@@ -135,6 +154,10 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             }
             else StatusText = "Delete-All fehlgeschlagen.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
         }
         finally { IsDeleting = false; }
     }
