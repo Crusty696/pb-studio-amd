@@ -307,6 +307,7 @@
                             </StackPanel>
                         </Button>
                         <TextBox Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="FFmpeg-Runtime-Pfad"
                                  IsReadOnly="True"
                                  IsTabStop="False"
                                  Foreground="{StaticResource AbletonText}"

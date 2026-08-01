@@ -228,8 +228,8 @@
         <!-- ══ Render Log ══ -->
         <md:Card Style="{StaticResource AbletonCard}" Padding="0">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="10,10,10,6">
-                    <TextBlock Text="RENDER LOG" Style="{StaticResource SectionHeader}"/>
+                <DockPanel DockPanel.Dock="Top" Margin="10,10,10,6" LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Text="RENDER LOG" Style="{StaticResource SectionHeader}"/>
                     <TextBlock DockPanel.Dock="Right"
                                Text="{Binding RenderLogEntries.Count, StringFormat={}{0} Einträge}"
                                Foreground="{StaticResource AbletonTextDim}"

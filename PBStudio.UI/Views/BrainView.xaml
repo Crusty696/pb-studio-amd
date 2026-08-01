@@ -160,7 +160,8 @@
                                Margin="0,0,0,8"/>
                     <ListBox ItemsSource="{Binding TopPositive}"
                              Background="Transparent"
-                             BorderThickness="0">
+                             BorderThickness="0"
+                             AutomationProperties.Name="Stärkste positiv gelernte Achsen">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
@@ -190,7 +191,8 @@
                                Margin="0,0,0,8"/>
                     <ListBox ItemsSource="{Binding TopNegative}"
                              Background="Transparent"
-                             BorderThickness="0">
+                             BorderThickness="0"
+                             AutomationProperties.Name="Stärkste negativ gelernte Achsen">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>

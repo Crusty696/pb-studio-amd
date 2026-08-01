@@ -1,0 +1,76 @@
+{
+    "schema_version":  1,
+    "captured_at":  "2026-08-01T20:25:46.3111016Z",
+    "branch":  "00013-system-wide-bug-hunting-audit",
+    "head_commit":  "f05df00fa70f8fe52b950d990377eea1dfb6e6f5",
+    "binary":  {
+                   "path":  "PBStudio.UI\\bin\\Release\\net9.0-windows\\PBStudio.UI.exe",
+                   "sha256":  "6243cff3c190d20ee30446cdce043b83269bc6877b197fed894fcca93efb802a",
+                   "length":  158208
+               },
+    "primary_monitor":  {
+                            "width":  2560,
+                            "height":  1440
+                        },
+    "dpi_method":  "Per-window WPF DPI emulation through WM_DPICHANGED; physical window size is effective_size*dpi/96 and recorded per run.",
+    "matrix":  {
+                   "effective_resolutions":  [
+                                                 "1280x720",
+                                                 "1400x900"
+                                             ],
+                   "dpi":  [
+                               96,
+                               144,
+                               192
+                           ],
+                   "limitation":  "1400x900 effective at 192 DPI requires 2800x1800 physical pixels and exceeds the 2560x1440 monitor; 192 DPI is therefore validated at 1280x720."
+               },
+    "high_contrast":  {
+                          "api_flags":  126,
+                          "api_scheme_cache":  "Kontrast Schwarz",
+                          "on":  false,
+                          "persisted_scheme":  ""
+                      },
+    "source_hashes":  [
+                          {
+                              "path":  "PBStudio.UI\\Views\\AnchorView.xaml",
+                              "sha256":  "1d5811f15311bc6485c2cb37fda7b0812edf3aa007513f631224719cb2ce71ed"
+                          },
+                          {
+                              "path":  "PBStudio.UI\\Views\\BrainView.xaml",
+                              "sha256":  "ead87d7d8b0150a11163b023d7a325725bcb7a382a72ffe24aed8ad60afc4b44"
+                          },
+                          {
+                              "path":  "PBStudio.UI\\Views\\DirectorView.xaml",
+                              "sha256":  "1b18c7012d2009b2f7fb059feb0cf63ab1f43cf9fa555ca1c1c6047c195d29d1"
+                          },
+                          {
+                              "path":  "PBStudio.UI\\Views\\ProductionView.xaml",
+                              "sha256":  "6e22414d07fe10d9edcf2816b85a98fa8159c267554b88f7bf24ad0c15300a7a"
+                          },
+                          {
+                              "path":  "PBStudio.UI\\Views\\SettingsView.xaml",
+                              "sha256":  "42cb3a66d2c51d66e6c4dc5beddc00af8ecd44ebfc853f1a51424e1c2873bcf2"
+                          },
+                          {
+                              "path":  "PBStudio.UI\\Views\\TimelineView.xaml",
+                              "sha256":  "c59d383831c81fb934d0bbee5830cc28310db0c18c1353da8949b903e1a49548"
+                          },
+                          {
+                              "path":  "scripts\\run_gui_release_gate.py",
+                              "sha256":  "854b0d25b18537a7f04539917da93181356c9f809e00f18e3bd8bac5fe42dffb"
+                          },
+                          {
+                              "path":  "scripts\\run_high_contrast_gate.py",
+                              "sha256":  "3dae2ddccba0c8aa049f6f397199e68f4a26c63e19ba7662a4735aceb706e824"
+                          },
+                          {
+                              "path":  "scripts\\check_destructive_ui_state.py",
+                              "sha256":  "64522d8a5c3f0e3df3b847fbde41c26caca22f5ea67e111ce38c135467811c87"
+                          },
+                          {
+                              "path":  "scripts\\check_gui_text_state.py",
+                              "sha256":  "e82cf97fcb94a726622ad43fe4dc44ace4b20b791975d467b6e17724e034b3dc"
+                          }
+                      ]
+}

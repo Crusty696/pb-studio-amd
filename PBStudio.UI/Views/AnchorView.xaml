@@ -63,7 +63,7 @@
                             AutomationProperties.Name="Audio-Position"
                             AutomationProperties.HelpText="Verschiebt die aktuelle Position in Sekunden; Pfeiltasten ändern den Wert."
                             ToolTip="Position im Audio-Track (Sekunden)"/>
-                    <DockPanel Margin="0,4,0,0">
+                    <DockPanel Margin="0,4,0,0" LastChildFill="False">
                         <TextBlock DockPanel.Dock="Left"
                                    Foreground="{StaticResource AbletonTextDim}" FontSize="12">
                             <Run Text="Position: "/><Run Text="{Binding CurrentPosition, StringFormat={}{0:F2}, Mode=OneWay}"/><Run Text=" s"/>
@@ -225,7 +225,7 @@
                     </ListView.ItemContainerStyle>
                     <ListView.View>
                         <GridView>
-                            <GridViewColumn Header="Zeit" Width="75">
+                            <GridViewColumn Header="Zeit" Width="90">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding TimeText}" FontFamily="Consolas"
@@ -233,7 +233,7 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Label" Width="150">
+                            <GridViewColumn Header="Label" Width="135">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Label}" FontSize="12"

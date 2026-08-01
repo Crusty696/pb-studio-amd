@@ -209,6 +209,7 @@
                         </DockPanel>
                         <TextBox Text="{Binding ExpectedBpm, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Erwartete BPM"
                                  ToolTip="Beats pro Minute (BPM)&#x0a;• Was es macht: Zeigt das gefundene Musiktempo an oder lässt Sie es manuell anpassen.&#x0a;• Wozu es dient: Bestimmt das rhythmische Raster für die Schnittplatzierung.&#x0a;• Wann nutzen: Wird automatisch erkannt. Manuell anpassen, falls das Tempo halbiert/verdoppelt wurde."
                                  Margin="0,0,0,8"/>
 
@@ -223,6 +224,7 @@
                         </DockPanel>
                         <Slider Value="{Binding BeatWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Beat-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Beat-Gewichtung&#x0a;• Was es macht: Bestimmt, wie stark Schnitte exakt auf den Musiktakt (Beats) gezogen werden.&#x0a;• Wozu es dient: Sorgt für ein perfektes Rhythmusgefühl (Tanzbarkeit des Videos).&#x0a;• Wann nutzen: Wert 1.0 (Standard) ist meist ideal. Höhere Werte für ein extrem rhythmisches Video."/>
 
@@ -237,6 +239,7 @@
                         </DockPanel>
                         <Slider Value="{Binding KickWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Kick-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Kick-Gewichtung&#x0a;• Was es macht: Bevorzugt Schnitte auf den lautesten Bass-Schlägen (Kick-Drums).&#x0a;• Wozu es dient: Synchronisiert Bildwechsel mit dem stärksten rhythmischen Element des Songs.&#x0a;• Wann nutzen: Hochdrehen bei elektronischer Musik (Techno/House) oder Hip-Hop mit klaren Kicks."/>
 
@@ -251,6 +254,7 @@
                         </DockPanel>
                         <Slider Value="{Binding EnergyWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Energie-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Energie-Gewichtung&#x0a;• Was es macht: Bevorzugt Schnitte an Stellen mit sprunghaftem Anstieg der Lautstärke/Energie.&#x0a;• Wozu es dient: Passt die Schnittfrequenz dynamisch an ruhige Passagen (weniger Cuts) und Höhepunkte (schnelle Cuts) an.&#x0a;• Wann nutzen: Standardmäßig auf 1.0 lassen, um eine lebendige Spannungskurve zu erzeugen."/>
 
@@ -265,6 +269,7 @@
                         </DockPanel>
                         <Slider Value="{Binding EnergyThreshold}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Energie-Schwelle"
                                 ToolTip="Energie-Schwelle&#x0a;• Was es macht: Setzt die Hürde fest, wie laut/energiereich ein Peak sein muss, um einen Schnitt auszulösen.&#x0a;• Wozu es dient: Filtert unbedeutende Ton-Ereignisse heraus, um zu viele nervöse Schnitte zu vermeiden.&#x0a;• Wann nutzen: Bei hektischen Songs anheben, um nur die stärksten Drops/Übergänge zu betonen."/>
 
                         <!-- Onset-Gewichtung -->
@@ -278,6 +283,7 @@
                         </DockPanel>
                         <Slider Value="{Binding OnsetWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Onset-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Onset-Gewichtung&#x0a;• Was es macht: Gewichtung von schnellen Anschlägen (Onsets, z. B. Snare, Hi-Hat, Klaviertöne).&#x0a;• Wozu es dient: Ermöglicht das Reagieren auf melodische Akzente abseits des reinen Bass-Beats.&#x0a;• Wann nutzen: Nützlich bei jazzigen, melodiereichen oder akustischen Tracks ohne stetige Kick-Drum."/>
 
@@ -295,6 +301,7 @@
                         </DockPanel>
                         <Slider Value="{Binding MinCutInterval}"
                                 Minimum="0.1" Maximum="5.0"
+                                AutomationProperties.Name="Minimaler Schnittabstand"
                                 TickFrequency="0.1"
                                 IsSnapToTickEnabled="True"
                                 Height="20" Margin="0,2,0,6"
@@ -308,12 +315,14 @@
                         </DockPanel>
                         <TextBox Text="{Binding DurationLimit, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                  Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Dauer-Limit in Sekunden"
                                  ToolTip="Dauer-Limit&#x0a;• Was es macht: Begrenzt die Gesamtlänge des generierten Videos auf eine feste Sekundenanzahl.&#x0a;• Wozu es dient: Ideal, um kurze Preview-Clips (z. B. 30 Sekunden für Social Media) aus langen Songs zu schneiden.&#x0a;• Wann nutzen: Leer lassen für den vollen Song, sonst Wunschdauer eintragen."
                                  Margin="0,0,0,4"/>
 
                         <TextBlock Text="Storyboard Canvas (.canvas)" Style="{StaticResource ParamLabel}"/>
                         <TextBox Text="{Binding CanvasPath, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                  Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Storyboard-Canvas-Pfad"
                                  ToolTip="Optionaler vollständiger Pfad zu einer Obsidian-.canvas-Datei mit Zeitankern und manuellen Clip-Zuweisungen."
                                  Margin="0,0,0,4"/>
                     </StackPanel>
@@ -385,6 +394,7 @@
                             </DockPanel>
                             <Slider Value="{Binding BrainMinConfidence}"
                                     Style="{StaticResource CompactSlider}"
+                                    AutomationProperties.Name="Minimale Hirn-Konfidenz"
                                     Minimum="0" Maximum="1"
                                     ToolTip="Brain Mindest-Vertrauen&#x0a;• Was es macht: Filtert Vorschläge heraus, bei denen sich die Regie-KI unsicher ist.&#x0a;• Wozu es dient: Setzt einen Qualitätsfilter: Höhere Werte erzwingen ausschließlich exzellent passende Schnitte.&#x0a;• Wann nutzen: Bei 0.0 (alles erlauben) beginnen. Bei anspruchsvollen Projekten auf 0.4 - 0.6 anheben."/>
                         </StackPanel>

@@ -295,6 +295,20 @@ test-report/
 # pytest coverage SQLite DB
 .coverage
 
+# Superseded local GUI-QC diagnostics (authoritative T408/T409 receipts remain tracked)
+PBStudio.UI.Tests/TestResults/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-destructive-ui-state.json
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-dpi-matrix/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-final-100-150/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-final-200/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-runtime/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-spec-matrix/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-supported-100-150/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-supported-200/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast-final/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast-final-layout/
+
 # LM Studio / Ollama debug outputs (post-merge cleanup 2026-05-19)
 .lm_*.json
 .lm_*.txt

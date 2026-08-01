@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "text": "Verbindung zum Backend verloren",
+  "expected_state": "present",
+  "matched": true,
+  "matching_values": [
+    "Verbindung zum Backend verloren — versuche erneut..."
+  ],
+  "screenshot": "present.png"
+}

@@ -299,6 +299,7 @@
                                 <StackPanel Margin="0,8,0,0">
                                     <TextBlock Text="DATEI" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
                                     <TextBox Text="{Binding SelectedFilePath, Mode=OneWay}"
+                                             AutomationProperties.Name="Ausgewählter Clip-Dateipfad"
                                              IsReadOnly="True"
                                              Background="Transparent"
                                              BorderThickness="0"
@@ -308,6 +309,7 @@
                                 </StackPanel>
                             </UniformGrid>
                             <TextBox Text="{Binding SelectedEvidence, Mode=OneWay}"
+                                     AutomationProperties.Name="Ausgewählte Timeline-Evidenz"
                                      IsReadOnly="True"
                                      Background="Transparent"
                                      BorderThickness="0"
@@ -341,8 +343,8 @@
                         <GridView>
                             <GridViewColumn Header="Clip" Width="180" DisplayMemberBinding="{Binding ClipName}"/>
                             <GridViewColumn Header="Zeitraum" Width="130" DisplayMemberBinding="{Binding TimeRangeText}"/>
-                            <GridViewColumn Header="Trigger" Width="100" DisplayMemberBinding="{Binding TriggerType}"/>
-                            <GridViewColumn Header="Dauer" Width="70" DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
+                            <GridViewColumn Header="Trigger" Width="120" DisplayMemberBinding="{Binding TriggerType}"/>
+                            <GridViewColumn Header="Dauer" Width="130" DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
                         </GridView>
                     </ListView.View>
                 </ListView>

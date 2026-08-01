@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "original": {
+    "flags": 126,
+    "scheme": "Kontrast Schwarz",
+    "persisted_scheme": ""
+  },
+  "active": {
+    "flags": 127,
+    "scheme": "Kontrast Schwarz"
+  },
+  "restored": {
+    "flags": 126,
+    "scheme": "Kontrast Schwarz",
+    "persisted_scheme": "",
+    "active_state": true,
+    "persisted_state": true,
+    "complete": true,
+    "scheme_cache_changed": false
+  },
+  "runs": [
+    {
+      "tab": "PROJEKT",
+      "screenshot": "screenshots/high-contrast-projekt.png",
+      "visible_uia_elements": 74,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 624,
+      "unique_sampled_colors": 84
+    },
+    {
+      "tab": "AUDIO",
+      "screenshot": "screenshots/high-contrast-audio.png",
+      "visible_uia_elements": 78,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 485,
+      "unique_sampled_colors": 49
+    },
+    {
+      "tab": "VIDEO",
+      "screenshot": "screenshots/high-contrast-video.png",
+      "visible_uia_elements": 78,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 552,
+      "unique_sampled_colors": 42
+    },
+    {
+      "tab": "KI-REGIE",
+      "screenshot": "screenshots/high-contrast-ki-regie.png",
+      "visible_uia_elements": 161,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 709,
+      "unique_sampled_colors": 99
+    },
+    {
+      "tab": "TIMELINE",
+      "screenshot": "screenshots/high-contrast-timeline.png",
+      "visible_uia_elements": 125,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 638,
+      "unique_sampled_colors": 62
+    },
+    {
+      "tab": "EXPORT",
+      "screenshot": "screenshots/high-contrast-export.png",
+      "visible_uia_elements": 85,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 551,
+      "unique_sampled_colors": 110
+    },
+    {
+      "tab": "HIRN",
+      "screenshot": "screenshots/high-contrast-hirn.png",
+      "visible_uia_elements": 121,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 709,
+      "unique_sampled_colors": 220
+    },
+    {
+      "tab": "SETTINGS",
+      "screenshot": "screenshots/high-contrast-settings.png",
+      "visible_uia_elements": 133,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 607,
+      "unique_sampled_colors": 146
+    },
+    {
+      "tab": "PERFORMANCE",
+      "screenshot": "screenshots/high-contrast-performance.png",
+      "visible_uia_elements": 69,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 601,
+      "unique_sampled_colors": 54
+    },
+    {
+      "tab": "MODELLE",
+      "screenshot": "screenshots/high-contrast-modelle.png",
+      "visible_uia_elements": 340,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 627,
+      "unique_sampled_colors": 410
+    },
+    {
+      "tab": "CHAT",
+      "screenshot": "screenshots/high-contrast-chat.png",
+      "visible_uia_elements": 63,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 558,
+      "unique_sampled_colors": 65
+    },
+    {
+      "tab": "TERMINAL",
+      "screenshot": "screenshots/high-contrast-terminal.png",
+      "visible_uia_elements": 52,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 414,
+      "unique_sampled_colors": 174
+    },
+    {
+      "tab": "INGEST",
+      "screenshot": "screenshots/high-contrast-ingest.png",
+      "visible_uia_elements": 81,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 408,
+      "unique_sampled_colors": 29
+    },
+    {
+      "tab": "ANCHOR",
+      "screenshot": "screenshots/high-contrast-anchor.png",
+      "visible_uia_elements": 72,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 403,
+      "unique_sampled_colors": 38
+    }
+  ],
+  "failures": [],
+  "passed": true
+}
