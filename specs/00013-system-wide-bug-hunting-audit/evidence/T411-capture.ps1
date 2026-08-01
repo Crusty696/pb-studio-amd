@@ -56,15 +56,22 @@ $readyLine = Get-Content $stdout |
 $readyPayload = $readyLine.Substring(11) | ConvertFrom-Json
 $inferencePid = [int]$readyPayload.pid
 
-$sampleCount = [Math]::Max(3, [Math]::Floor($Seconds - 2))
-$counter = Get-Counter `
-    "\GPU Engine(*)\Utilization Percentage" `
-    -SampleInterval 1 `
-    -MaxSamples $sampleCount
-$allSamples = @(
-    $counter.CounterSamples |
-        Select-Object Timestamp, InstanceName, CookedValue
-)
+$allSamples = @()
+$samplingErrors = @()
+$samplingDeadline = (Get-Date).AddSeconds([Math]::Max(3, $Seconds - 2))
+while ((Get-Date) -lt $samplingDeadline -and -not $process.HasExited) {
+    try {
+        $counter = Get-Counter "\GPU Engine(*)\Utilization Percentage"
+        $allSamples += @(
+            $counter.CounterSamples |
+                Select-Object Timestamp, InstanceName, CookedValue
+        )
+    } catch {
+        $samplingErrors += $_.Exception.Message
+    }
+    Start-Sleep -Milliseconds 100
+    $process.Refresh()
+}
 $pidSamples = @(
     $allSamples |
         Where-Object { $_.InstanceName -match "pid_$($inferencePid)_" }
@@ -111,6 +118,7 @@ $summary = [ordered]@{
     session_contracts = $result.session_contracts
     all_engine_samples = $allSamples.Count
     pid_engine_samples = $pidSamples.Count
+    sampling_errors = $samplingErrors
     rx_engine_max = ($rxSamples | Measure-Object CookedValue -Maximum).Maximum
     other_engine_max = ($otherSamples | Measure-Object CookedValue -Maximum).Maximum
 }
