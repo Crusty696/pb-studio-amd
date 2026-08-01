@@ -3,7 +3,9 @@ import faiss
 import numpy as np
 import logging
 import json
+import math
 import os
+import pickle
 import shutil
 import tempfile
 import threading
@@ -22,6 +24,69 @@ _vs_lock = threading.Lock()
 # das. Cleanup arbeitet weiter korrekt weil der Handler self._save_on_exit ueber
 # das aktuelle cls._instance referenziert.
 _atexit_registered: bool = False
+
+
+class _RestrictedMetadataUnpickler(pickle.Unpickler):
+    """Legacy metadata may contain data only; global object loading is forbidden."""
+
+    def find_class(self, module: str, name: str):
+        raise pickle.UnpicklingError(
+            f"Legacy metadata may not load global {module}.{name}"
+        )
+
+
+def _validate_legacy_metadata(value, *, _seen: set[int] | None = None):
+    """Accept only ``dict[int, dict[str, JSON-value]]`` legacy metadata."""
+    if type(value) is not dict:
+        raise ValueError("Legacy metadata muss ein dict sein")
+
+    seen = _seen if _seen is not None else set()
+    result: dict[int, dict] = {}
+    for key, metadata in value.items():
+        if type(key) is not int or type(metadata) is not dict:
+            raise ValueError("Legacy metadata muss dict[int, dict] sein")
+        result[key] = _validate_legacy_json_value(metadata, seen=seen)
+    return result
+
+
+def _validate_legacy_json_value(value, *, seen: set[int]):
+    """Copy a JSON-compatible value while rejecting cycles and custom objects."""
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ValueError("Legacy metadata darf nur endliche Zahlen enthalten")
+        return value
+
+    if type(value) in (str, int, bool, type(None)):
+        return value
+
+    if type(value) is list:
+        value_id = id(value)
+        if value_id in seen:
+            raise ValueError("Legacy metadata darf keine zyklischen Listen enthalten")
+        seen.add(value_id)
+        try:
+            return [_validate_legacy_json_value(item, seen=seen) for item in value]
+        finally:
+            seen.remove(value_id)
+
+    if type(value) is dict:
+        value_id = id(value)
+        if value_id in seen:
+            raise ValueError("Legacy metadata darf keine zyklischen dicts enthalten")
+        seen.add(value_id)
+        try:
+            result: dict[str, object] = {}
+            for key, item in value.items():
+                if type(key) is not str:
+                    raise ValueError("Legacy metadata dict keys muessen strings sein")
+                result[key] = _validate_legacy_json_value(item, seen=seen)
+            return result
+        finally:
+            seen.remove(value_id)
+
+    raise ValueError(
+        f"Legacy metadata enthaelt nicht-JSON Typ: {type(value).__name__}"
+    )
 
 
 class VectorStore:
@@ -267,15 +332,9 @@ class VectorStore:
                     # Check for legacy .pkl file
                     legacy_path = self.meta_path.with_suffix(".pkl")
                     if legacy_path.exists():
-                        import pickle
                         logger.info("Migrating legacy metadata from pickle to JSON...")
                         try:
-                            with open(legacy_path, "rb") as f:
-                                self.metadata = pickle.load(f)
-                            # Save immediately as JSON
-                            self.save()
-                            # Optional: Rename/Backup legacy
-                            legacy_path.rename(legacy_path.with_suffix(".pkl.bak"))
+                            self._migrate_legacy_metadata(legacy_path)
                         except Exception as e:
                             logger.error(f"Failed to migrate legacy pickle: {e}")
                             self.metadata = {}
@@ -294,6 +353,22 @@ class VectorStore:
                 self._create_new_index()
         else:
             self._create_new_index()
+
+    def _migrate_legacy_metadata(self, legacy_path: Path) -> None:
+        """Migrate primitive-only legacy metadata through atomic snapshot save."""
+        with legacy_path.open("rb") as handle:
+            legacy_metadata = _RestrictedMetadataUnpickler(handle).load()
+
+        self.metadata = _validate_legacy_metadata(legacy_metadata)
+        # ``_write_snapshot`` reports a failed atomic publish; ``save`` logs
+        # and swallows write errors, so it cannot safely guard the rename.
+        if self.index is None or not self._write_snapshot(
+            faiss.clone_index(self.index),
+            self.metadata.copy(),
+            list(self._tombstoned_ids),
+        ):
+            raise OSError("Legacy metadata snapshot konnte nicht publiziert werden")
+        legacy_path.replace(legacy_path.with_suffix(".pkl.bak"))
 
     def _create_new_index(self):
          # IndexFlatIP = Inner Product (Cos Sim) + Flat (Exact Search)
@@ -608,12 +683,16 @@ class VectorStore:
                     # Save metadata to temp file
                     temp_meta = str(self.meta_path) + ".tmp"
                     with open(temp_meta, "w") as f:
-                        json_mod.dump(self.metadata, f, indent=2)
+                        json_mod.dump(self.metadata, f, indent=2, allow_nan=False)
 
                     # B-7 FIX: Save tombstones
                     temp_tomb = str(self.tombstone_path) + ".tmp"
                     with open(temp_tomb, "w") as f:
-                        json_mod.dump(list(self._tombstoned_ids), f)
+                        json_mod.dump(
+                            list(self._tombstoned_ids),
+                            f,
+                            allow_nan=False,
+                        )
 
                     self._commit_snapshot_files(
                         [temp_index, temp_meta, temp_tomb],
@@ -693,11 +772,11 @@ class VectorStore:
 
                 temp_meta = str(self.meta_path) + ".tmp"
                 with open(temp_meta, "w") as f:
-                    json.dump(cloned_metadata, f, indent=2)
+                    json.dump(cloned_metadata, f, indent=2, allow_nan=False)
 
                 temp_tomb = str(self.tombstone_path) + ".tmp"
                 with open(temp_tomb, "w") as f:
-                    json.dump(cloned_tombstones, f)
+                    json.dump(cloned_tombstones, f, allow_nan=False)
 
                 self._commit_snapshot_files(
                     [temp_index, temp_meta, temp_tomb],

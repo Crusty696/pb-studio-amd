@@ -9,6 +9,7 @@ Tests:
 """
 
 import json
+import pickle
 import threading
 from contextlib import contextmanager
 
@@ -407,6 +408,126 @@ class TestVectorStoreSnapshotTransaction:
             Path(str(target) + ".bak").exists()
             for target in store._snapshot_targets()
         )
+
+
+class TestLegacyMetadataMigration:
+    @staticmethod
+    def _make_store(tmp_path):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store.index_path = tmp_path / "video_index.faiss"
+        store.meta_path = tmp_path / "video_index_meta.json"
+        store.tombstone_path = tmp_path / "video_index_tombstones.json"
+        store.dimension = 2
+        store.index = faiss.IndexFlatIP(2)
+        store.index.add(np.eye(2, dtype=np.float32))
+        store.metadata = {}
+        store._tombstoned_ids = set()
+        store._lock = threading.Lock()
+        store._write_lock = threading.Lock()
+        store._closed = False
+        return store
+
+    def test_primitive_legacy_metadata_migrates_via_atomic_snapshot(self, tmp_path):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        expected = {
+            0: {
+                "name": "clip",
+                "nested": {"items": [True, None, 1.25]},
+            }
+        }
+        legacy_path.write_bytes(pickle.dumps(expected))
+
+        store._migrate_legacy_metadata(legacy_path)
+
+        assert store.metadata == expected
+        assert json.loads(store.meta_path.read_text(encoding="utf-8")) == {
+            "0": expected[0]
+        }
+        assert faiss.read_index(str(store.index_path)).ntotal == 2
+        assert not legacy_path.exists()
+        assert legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_legacy_metadata_never_executes_pickle_reducer(self, tmp_path):
+        store = self._make_store(tmp_path)
+        marker_path = tmp_path / "pickle-reducer-ran.txt"
+
+        class MaliciousMetadata:
+            def __reduce__(self):
+                return (Path.write_text, (marker_path, "executed"))
+
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: MaliciousMetadata()}))
+
+        with pytest.raises(pickle.UnpicklingError, match="may not load global"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert not marker_path.exists()
+        assert not store.meta_path.exists()
+        assert legacy_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_legacy_backup_is_not_renamed_when_atomic_publish_fails(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: {"name": "clip"}}))
+        monkeypatch.setattr(store, "_write_snapshot", lambda *unused: False)
+
+        with pytest.raises(OSError, match="snapshot"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert legacy_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    @pytest.mark.parametrize("invalid_number", [float("nan"), float("inf"), float("-inf")])
+    def test_legacy_metadata_rejects_non_finite_json_numbers(
+        self,
+        tmp_path,
+        invalid_number,
+    ):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: {"score": invalid_number}}))
+
+        with pytest.raises(ValueError, match="endliche Zahlen"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert legacy_path.exists()
+        assert not store.meta_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_existing_json_skips_legacy_pickle_without_mutating_it(self, tmp_path):
+        store = self._make_store(tmp_path)
+        expected = {"0": {"name": "existing"}}
+        store.meta_path.write_text(json.dumps(expected), encoding="utf-8")
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_bytes = pickle.dumps({0: {"name": "legacy"}})
+        legacy_path.write_bytes(legacy_bytes)
+        faiss.write_index(store.index, str(store.index_path))
+
+        store._load_index()
+
+        assert store.metadata == {0: {"name": "existing"}}
+        assert store.meta_path.read_text(encoding="utf-8") == json.dumps(expected)
+        assert legacy_path.read_bytes() == legacy_bytes
+
+    def test_synchronous_save_does_not_publish_non_finite_json(self, tmp_path):
+        store = self._make_store(tmp_path)
+        store.metadata = {0: {"score": 1.0}}
+        store._save_unlocked(force=True)
+        committed = store.meta_path.read_bytes()
+
+        store.metadata = {0: {"score": float("nan")}}
+        store._save_unlocked(force=True)
+
+        assert store.meta_path.read_bytes() == committed
+        assert not store.meta_path.with_suffix(".json.tmp").exists()
 
 
 class TestVectorStoreLifecycle:
