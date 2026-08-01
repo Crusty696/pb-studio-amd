@@ -179,7 +179,12 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
         if save_history:
             await _history_store.append("user", user_text)
 
-        await publish_log(f"User: {user_text}", level="info", source="chat.user")
+        await publish_log(
+            "Chat-Anfrage erhalten",
+            level="info",
+            detail=f"characters={len(user_text)}",
+            source="chat.user",
+        )
 
         agent: Optional[ChatAgent] = None
         final_text = ""
@@ -198,28 +203,47 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
                         final_text = content
                         yield _sse_frame("text", {"content": content})
                     elif ev.type == "tool_call":
-                        tool_name = ev.payload.get("name", "Unbekannt")
-                        await publish_log(f"KI ruft Tool auf: {tool_name}", level="info", source="chat.tool")
+                        await publish_log(
+                            "Chat-Toolaufruf gestartet",
+                            level="info",
+                            source="chat.tool",
+                        )
                         yield _sse_frame("tool_call", ev.payload)
                     elif ev.type == "tool_result":
-                        tool_name = ev.payload.get("name", "Unbekannt")
-                        await publish_log(f"Tool {tool_name} beendet", level="info", source="chat.tool")
+                        await publish_log(
+                            "Chat-Toolaufruf beendet",
+                            level="info",
+                            source="chat.tool",
+                        )
                         yield _sse_frame("tool_result", ev.payload)
                     elif ev.type == "model":
                         yield _sse_frame("model", ev.payload)
                     elif ev.type == "error":
-                        await publish_log(f"KI-Fehler: {ev.payload.get('message')}", level="error", source="chat.error")
+                        await publish_log(
+                            "Chat-Modellfehler",
+                            level="error",
+                            source="chat.error",
+                        )
                         yield _sse_frame("error", ev.payload)
                     elif ev.type == "done":
                         if save_history and final_text:
                             await _history_store.append("assistant", final_text)
-                        await publish_log(f"KI: {final_text}", level="info", source="chat.assistant")
+                        await publish_log(
+                            "Chat-Antwort abgeschlossen",
+                            level="info",
+                            detail=f"characters={len(final_text)}",
+                            source="chat.assistant",
+                        )
                         yield _sse_frame("done", ev.payload)
                     else:
                         yield _sse_frame(ev.type, ev.payload)
         except Exception as exc:  # pragma: no cover — defensive
-            logger.exception("chat_router: unerwarteter Fehler: %s", exc)
-            await publish_log(f"KI-Chat Absturz: {exc}", level="error", source="chat.error")
+            logger.error("chat_router: unerwarteter Fehler ohne Payload")
+            await publish_log(
+                "Chat-Anfrage fehlgeschlagen",
+                level="error",
+                source="chat.error",
+            )
             yield _sse_frame("error", {
                 "message": f"Unerwarteter Server-Fehler: {exc}",
                 "stage": "stream",
