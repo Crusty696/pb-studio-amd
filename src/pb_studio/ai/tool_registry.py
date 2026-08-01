@@ -25,6 +25,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -49,6 +50,29 @@ DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8765"
 
 def _get_backend_base_url() -> str:
     return os.environ.get("PBSTUDIO_BACKEND_URL", DEFAULT_BACKEND_BASE_URL)
+
+
+def _owner_headers_for_loopback(url: str) -> dict[str, str]:
+    """Return backend capability only for PB Studio's canonical loopback target."""
+    parsed = urlparse(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        return {}
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost"}
+        or port != 8765
+    ):
+        return {}
+
+    from backend.owner_capability import (
+        OWNER_CAPABILITY_HEADER,
+        get_owner_capability,
+    )
+
+    capability = get_owner_capability()
+    return {OWNER_CAPABILITY_HEADER: capability} if capability else {}
 
 
 # ----------------------------------------------------------------------
@@ -204,7 +228,10 @@ async def _call(
         request = http_client.build_request(
             method, path, json=json_body, params=params
         )
-        response = await http_client.send(request, follow_redirects=True)
+        for name, value in _owner_headers_for_loopback(str(request.url)).items():
+            if name not in request.headers:
+                request.headers[name] = value
+        response = await http_client.send(request, follow_redirects=False)
     except httpx.TimeoutException as exc:
         return {
             "error": f"Backend-Timeout: {exc}",

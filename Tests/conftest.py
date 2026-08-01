@@ -8,11 +8,44 @@ Provides shared fixtures for:
 - Mock hardware monitors
 """
 
+import os
+
+import httpx
 import pytest
 import tempfile
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+
+TEST_OWNER_CAPABILITY = "pb-studio-pytest-owner-capability"
+os.environ["PBSTUDIO_OWNER_CAPABILITY"] = TEST_OWNER_CAPABILITY
+
+
+@pytest.fixture(autouse=True)
+def authorize_main_app_test_client(request, monkeypatch):
+    """Authenticate legacy tests that exercise the real default-deny ASGI app."""
+    if request.node.get_closest_marker("unauthorized_backend") is not None:
+        yield
+        return
+
+    from fastapi.testclient import TestClient
+    from backend import owner_capability
+    from backend.main import app as backend_app
+
+    original_request = TestClient.request
+
+    def authorized_request(client, method, url, **kwargs):
+        if client.app is backend_app:
+            headers = httpx.Headers(kwargs.get("headers"))
+            capability = owner_capability.get_owner_capability()
+            if capability and owner_capability.OWNER_CAPABILITY_HEADER not in headers:
+                headers[owner_capability.OWNER_CAPABILITY_HEADER] = capability
+            kwargs["headers"] = headers
+        return original_request(client, method, url, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", authorized_request)
+    yield
 
 
 @pytest.fixture(autouse=True)

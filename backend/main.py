@@ -24,8 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import config
-from .owner_capability import OWNER_CAPABILITY_HEADER, authorize_owner
+from .owner_capability import (
+    OWNER_CAPABILITY_HEADER,
+    authorize_owner,
+    create_health_proof,
+)
 from .middleware.gpu_lock import GPULockMiddleware
+from .middleware.owner_capability import OwnerCapabilityMiddleware
 
 # --------------------------------------------------------------------------
 # Logging Setup (Aufgabe J: Rotation + Retention)
@@ -348,11 +353,15 @@ app.add_middleware(
         "http://localhost",
     ],
     allow_methods=["GET", "POST", "DELETE", "PUT"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_headers=["Content-Type", "Accept", OWNER_CAPABILITY_HEADER],
 )
 
 # GPU-Lock Middleware
 app.add_middleware(GPULockMiddleware)
+
+# Owner-Capability is outermost: reject unauthorised calls before routers or GPU work.
+# OPTIONS bypasses in the middleware so the CORS middleware above can answer preflights.
+app.add_middleware(OwnerCapabilityMiddleware)
 
 
 # --- Health Router (inline, da minimal) ---
@@ -387,6 +396,12 @@ async def health_check() -> dict[str, Any]:
         "uptime_seconds": round(get_uptime(), 1),
         "gpu_available": _check_gpu_available(),
     }
+
+
+@app.get("/health/proof", include_in_schema=False)
+async def health_proof(nonce: str) -> dict[str, str]:
+    """Return a nonce-bound proof for launcher verification without exposing its capability."""
+    return {"status": "ok", "proof": create_health_proof(nonce)}
 
 
 @app.get("/health/heartbeat")
