@@ -205,7 +205,9 @@
       "kind": "model",
       "source": {
         "repository": "TRvlvr/model_repo",
-        "revision": "release:all_public_uvr_models;asset_id:112310332",
+        "revision": "356bbd334a0ebb8449c602503ac204a3c06df4f6",
+        "release_tag": "all_public_uvr_models",
+        "release_asset_id": 112310332,
         "file": "UVR-MDX-NET-Inst_HQ_3.onnx",
         "size": 66759214,
         "md5": "81452e3891782d67b1ce7fd05d6ac757",
