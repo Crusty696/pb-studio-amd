@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-72",
+  "phase": "implementation",
+  "task_range": "T370-T403",
+  "task_digest_sha256": "7681414790c80b9a1a07f4aee237c31313e8e59a64593cd4df8e4712f7774861",
+  "evidence_manifest": "evidence/T403-implementation-manifest.json",
+  "evidence_manifest_sha256": "f11fec6b65ad2dce313945a86b7305090cd82f77846f5d97873572352ab6ea56",
+  "commit_sha": "84e0cb721cfe1ae0c85e06b95ea80bb75c5a29a0"
+}
