@@ -231,7 +231,7 @@ def test_encoder_override_probe_is_functional_and_av1_fails_early(
     assert probed == ["av1_amf"]
 
 
-def test_render_queue_dedupe_returns_existing_runtime_task(
+def test_render_queue_dedupe_rejects_duplicate_runtime_task(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -269,24 +269,26 @@ def test_render_queue_dedupe_returns_existing_runtime_task(
             return SimpleNamespace(job_id="queue-existing", status="queued")
 
     monkeypatch.setattr(render_router, "_get_render_queue", lambda: Queue())
-    monkeypatch.setattr(
-        render_router,
-        "resolve_active_project_root",
-        lambda state, fallback: tmp_path,
-    )
+    state.current_project = {
+        "name": "RenderProject",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
 
     try:
-        result = asyncio.run(render_router.start_render(request, state))
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(render_router.start_render(request, state))
     finally:
         render_router._reset_render_runtime_for_startup()
 
-    assert result.task_id == "existing"
+    assert exc.value.status_code == 409
+    assert "queue-existing" in exc.value.detail
     assert len(state.render_tasks) == 1
 
 
 @pytest.mark.parametrize(
     ("shutdown_cancel", "expected_queue_status"),
-    [(True, "interrupted"), (False, "failed")],
+    [(True, "interrupted"), (False, "cancelled")],
 )
 def test_shutdown_cancel_stays_restartable_but_user_cancel_is_terminal(
     tmp_path: Path,
@@ -307,7 +309,7 @@ def test_shutdown_cancel_stays_restartable_but_user_cancel_is_terminal(
     monkeypatch.setattr(render_router, "_execute_render", fake_execute)
     monkeypatch.setattr(
         render_router,
-        "_safe_queue_update",
+        "_queue_update_or_raise",
         lambda _job_id, status, **kwargs: queue_updates.append(status),
     )
     monkeypatch.setattr(render_router, "publish_event", noop)
@@ -329,6 +331,7 @@ def test_shutdown_cancel_stays_restartable_but_user_cancel_is_terminal(
                 _request(tmp_path),
                 state,
                 [{"start_time": 0.0, "end_time": 1.0}],
+                "queue-1",
             )
         )
         render_router._track_render_runtime_task("task-1", task)

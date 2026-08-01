@@ -328,7 +328,7 @@ public partial class TimelineView : UserControl
         }
     }
 
-    private static void Clip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    private void Clip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (sender is FrameworkElement element)
             VisualStateManager.GoToElementState(element, "Normal", true);

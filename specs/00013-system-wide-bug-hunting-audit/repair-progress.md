@@ -92,8 +92,8 @@ Updated: 2026-07-30T07:52:00+02:00
 ## OBJ-72 Release-Fähigkeit T370–T415
 
 Updated: 2026-07-31
-Gesamt: **34/46 PASS (73,9 %)**
-Aktuell: **T403 PASS; Implementierungsmarker wird commitgebunden erzeugt**
+Gesamt: **35/46 PASS (76,1 %)**
+Aktuell: **T404 PASS; gezielte Fault-Injection 48 Python + 9 native Tests**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
 |---|---|---:|---|---|---:|---|
@@ -131,7 +131,7 @@ Aktuell: **T403 PASS; Implementierungsmarker wird commitgebunden erzeugt**
 | T401 PR-/Branch-CI | PASS | 4–8 h | Infra-Agent + unabhängiger Reviewer | Z-INFRA | nicht separat gemessen | alle Branches/PRs, SHA-gepinnte Actions, Locked Gates, ≥28 native Tests (`evidence/T401-required-ci.md`) |
 | T402 Dokumentationswahrheit | PASS | 3–5 h | Docs-Agent + Teamleiter | Z-DOCS | 1,0 h | DoD-Vertrag, autoritative Skillquelle, Manifest-/Lizenzwahrheit, 55 Links PASS (`evidence/T402-documentation-truth.md`) |
 | T403 Implementierungswahrheit | PASS | 2–4 h | Teamleiter + 3 unabhängige Reviewer | SHARED/Z-REVIEW | 2,3 h | 19 Findings geschlossen; statischer Integritäts-Sweep PASS (`evidence/T403-complete-diff-review.md`); `.completed` commitgebunden im nächsten Gate |
-| T404 Gezielte Fault-Injection | OPEN | 3–6 h | Test-Team | QC | – | gebündelter Start funktionaler Tests |
+| T404 Gezielte Fault-Injection | PASS | 3–6 h | Test-Team | QC | 1,2 h | 48/48 Python + 9/9 native PASS; 5 Build-/Betriebslücken geschlossen (`evidence/T404-targeted-fault-injection.md`) |
 | T405 Python-Gesamtsuite | OPEN | 1–3 h | Teamleiter/Test-Team | QC | – | `Tests/`, Python 3.11, NumPy 1.26.4 |
 | T406 Native C#-Tests und WPF Release | OPEN | 1–3 h | Teamleiter/WPF-Test | QC | – | native Tests, locked Release-Build 0/0 |
 | T407 Clean-Checkout-Windows-Gate | OPEN | 2–5 h | Infra/Test-Team | QC | – | kein Generated-/Asset-/Cache-Vorteil |

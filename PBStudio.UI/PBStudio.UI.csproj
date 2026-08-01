@@ -46,6 +46,7 @@
   </Target>
 
   <ItemGroup>
+    <Compile Remove="Generated\*.g.cs" />
     <Compile Include="obj/Generated/ApiTypes.g.cs" />
   </ItemGroup>
 

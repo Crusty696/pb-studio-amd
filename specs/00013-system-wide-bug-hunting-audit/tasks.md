@@ -36,7 +36,7 @@
 - [X] T401 [OBJ-72] {(FR-351)} Run required CI for work branches and pull requests in `.github/workflows/ci.yml` [Z-INFRA]
 - [X] T402 [P] [OBJ-72] {(FR-352)} Correct CLAP, DoD, setup and release documentation links in `CLAUDE.md`, `README.md`, `.github/sddp-config.md` and `docs/` [Z-DOCS]
 - [X] T403 [OBJ-72] {(OR-337)} {(FR-350)} {(FR-351)} {(FR-352)} Independently review the complete diff and create `.completed` only with task, evidence and commit digests under the feature workspace [SHARED/Z-REVIEW]
-- [ ] T404 [OBJ-72] {(TR-347)} Run targeted fault injection for project switching, persistence, Settings, QueueFull and render retry and store receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T404 [OBJ-72] {(TR-347)} Run targeted fault injection for project switching, persistence, Settings, QueueFull and render retry and store receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T405 [OBJ-72] {(TR-349)} Run the complete `Tests/` suite with Python 3.11, NumPy 1.26.4 and `PYTHONPATH=src` and store JUnit evidence [QC]
 - [ ] T406 [OBJ-72] {(TR-349)} Run locked native C# tests and WPF Release build with zero errors and warnings and store logs/binlog under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T407 [OBJ-72] {(TR-348)} Prove locked restore, generation, build and asset validation from an external clean Windows checkout without local cache advantage under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]

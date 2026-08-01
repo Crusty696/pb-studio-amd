@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from backend.app_state import AppState, get_app_state
 from backend.main import app
+from pb_studio.data.repositories.project_repository import ProjectRepository
 
 
 @pytest.fixture
@@ -32,15 +33,55 @@ class TestProjectLifecyclePersistence:
         records = {}
         next_id = {"value": 100}
 
+        def fake_find(project_path: Path) -> int | None:
+            normalized = str(project_path.resolve())
+            for project_id, record in records.items():
+                if record["path"] == normalized:
+                    return project_id
+            return None
+
         def fake_find_or_create(project_path: Path, project_name: str, meta: dict | None = None) -> int:
-            key = str(project_path.resolve())
-            if key not in records:
-                records[key] = next_id["value"]
-                next_id["value"] += 1
-            return records[key]
+            existing = fake_find(project_path)
+            if existing is not None:
+                return existing
+            project_id = next_id["value"]
+            next_id["value"] += 1
+            records[project_id] = {
+                "path": str(project_path.resolve()),
+                "owner_token": None,
+            }
+            return project_id
+
+        def fake_create_owned(_repo, _name: str, data: dict, owner_token: str) -> int:
+            project_id = next_id["value"]
+            next_id["value"] += 1
+            records[project_id] = {
+                "path": str(Path(data["path"]).resolve()),
+                "owner_token": owner_token,
+            }
+            return project_id
+
+        def fake_delete_owned(_repo, project_id: int, owner_token: str) -> bool:
+            record = records.get(project_id)
+            if record is None:
+                return False
+            if record["owner_token"] != owner_token:
+                raise RuntimeError("ownership mismatch")
+            del records[project_id]
+            return True
+
+        def fake_update(_repo, project_id: int, name=None, data=None):
+            if project_id not in records:
+                raise LookupError(f"Projekt {project_id} existiert nicht mehr")
+            if data and data.get("path"):
+                records[project_id]["path"] = str(Path(data["path"]).resolve())
 
         project_router_module = importlib.import_module("backend.routers.project_router")
         monkeypatch.setattr(project_router_module, "_find_or_create_project_db_record", fake_find_or_create)
+        monkeypatch.setattr(project_router_module, "_find_project_db_record_id", fake_find)
+        monkeypatch.setattr(ProjectRepository, "create_owned_project", fake_create_owned)
+        monkeypatch.setattr(ProjectRepository, "delete_owned_project", fake_delete_owned)
+        monkeypatch.setattr(ProjectRepository, "update_project", fake_update)
         return records
 
     def test_create_save_open_roundtrip_persists_timeline_metadata(self, client, tmp_path, fresh_state, monkeypatch):
@@ -173,12 +214,16 @@ class TestProjectLifecyclePersistence:
 
         monkeypatch.setattr(config, "project_dir", tmp_path)
         assert client.post("/project/create", json={"name": "SyncFailure", "path": str(tmp_path)}).status_code == 200
+        project_path = tmp_path / "SyncFailure"
+        meta_before = (project_path / "project.json").read_bytes()
         monkeypatch.setattr(fresh_state, "sync_project_db_record", MagicMock(return_value=False))
 
         response = client.post("/project/save")
 
         assert response.status_code == 500
-        assert response.json()["detail"] == "Projekt konnte nicht vollständig gespeichert werden"
+        assert response.json()["detail"] == "Projektdateien/DB konnten nicht konsistent gespeichert werden"
+        assert (project_path / "project.json").read_bytes() == meta_before
+        assert not (project_path / "timeline.json").exists()
 
     def test_create_project_resets_stale_in_memory_state(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
@@ -219,9 +264,9 @@ class TestProjectLifecyclePersistence:
 
         project_router = importlib.import_module("backend.routers.project_router")
         monkeypatch.setattr(config, "project_dir", tmp_path)
-        db_lookup = MagicMock(return_value=300)
+        create_owned = MagicMock(return_value=300)
         brain_bind = MagicMock()
-        monkeypatch.setattr(project_router, "_find_or_create_project_db_record", db_lookup)
+        monkeypatch.setattr(ProjectRepository, "create_owned_project", create_owned)
         monkeypatch.setattr(project_router, "_bind_brain_to_project", brain_bind)
 
         project_dir = tmp_path / "ExistingProject"
@@ -275,7 +320,7 @@ class TestProjectLifecyclePersistence:
         assert fresh_state.audio_clips == state_before["audio_clips"]
         assert fresh_state.video_clips == state_before["video_clips"]
         assert fresh_state.current_timeline == state_before["timeline"]
-        db_lookup.assert_not_called()
+        create_owned.assert_not_called()
         brain_bind.assert_not_called()
 
     def test_concurrent_create_allows_exactly_one_success(
@@ -288,26 +333,43 @@ class TestProjectLifecyclePersistence:
 
         project_router = importlib.import_module("backend.routers.project_router")
         monkeypatch.setattr(config, "project_dir", tmp_path)
-        db_lookup = MagicMock(return_value=301)
+        next_id = iter((301, 302))
+        created: dict[int, str] = {}
+
+        def create_owned(_name, _data, owner_token):
+            project_id = next(next_id)
+            created[project_id] = owner_token
+            return project_id
+
+        def delete_owned(project_id, owner_token):
+            assert created[project_id] == owner_token
+            del created[project_id]
+            return True
+
+        create_owned_mock = MagicMock(side_effect=create_owned)
+        delete_owned_mock = MagicMock(side_effect=delete_owned)
         brain_bind = MagicMock()
-        monkeypatch.setattr(project_router, "_find_or_create_project_db_record", db_lookup)
+        monkeypatch.setattr(ProjectRepository, "create_owned_project", create_owned_mock)
+        monkeypatch.setattr(ProjectRepository, "delete_owned_project", delete_owned_mock)
         monkeypatch.setattr(project_router, "_bind_brain_to_project", brain_bind)
         start = threading.Barrier(2)
 
-        def create() -> int:
+        def create():
             start.wait()
-            response = client.post(
+            return client.post(
                 "/project/create",
                 json={"name": "ConcurrentProject", "path": str(tmp_path)},
             )
-            return response.status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            statuses = list(pool.map(lambda _: create(), range(2)))
+            responses = list(pool.map(lambda _: create(), range(2)))
 
-        assert sorted(statuses) == [200, 409]
+        statuses = sorted(response.status_code for response in responses)
+        assert statuses == [200, 409], [response.json() for response in responses]
         assert (tmp_path / "ConcurrentProject" / "project.json").exists()
-        db_lookup.assert_called_once()
+        assert create_owned_mock.call_count in {1, 2}
+        assert delete_owned_mock.call_count == create_owned_mock.call_count - 1
+        assert len(created) == 1
         brain_bind.assert_called_once()
 
     def test_open_uses_project_specific_db_id_for_restore(self, client, tmp_path, fresh_state, monkeypatch):
@@ -333,7 +395,7 @@ class TestProjectLifecyclePersistence:
         response = client.post("/project/open", json={"path": str(project_dir)})
 
         assert response.status_code == 200
-        assert captured == [100]
+        assert captured == [-1]
         assert fresh_state.current_project["db_project_id"] == 100
         assert fresh_state.audio_clips == {
             8: {"id": 8, "path": str(restored_audio)}

@@ -343,12 +343,12 @@ def test_idempotent_enqueue(queue: RenderQueue, tmp_path: Path) -> None:
     assert fourth.job_id != first.job_id
     assert len(queue.list_jobs()) == 3
 
-    # Gleiche Inputs nach Statuswechsel → trotzdem keine Duplikate
+    # Gleiche Inputs nach Terminalstatus → neuer Retry-Attempt mit eigener ID
     queue.update_status(first.job_id, STATE_COMPLETED)
     fifth = queue.enqueue("hash-X", output, settings)
-    assert fifth.job_id == first.job_id
-    assert fifth.status == STATE_COMPLETED   # bestehender Status bleibt
-    assert len(queue.list_jobs()) == 3
+    assert fifth.job_id != first.job_id
+    assert fifth.status == STATE_QUEUED
+    assert len(queue.list_jobs()) == 4
 
 
 def test_concurrent_enqueue_does_not_double(queue: RenderQueue, tmp_path: Path) -> None:

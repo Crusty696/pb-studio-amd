@@ -457,6 +457,11 @@ async def create_project(
                     + "; ".join(cleanup_errors)
                 ),
             ) from exc
+        if isinstance(exc, OSError) and project_path.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Projekt existiert bereits: {project_path}",
+            ) from exc
         if isinstance(exc, HTTPException):
             raise
         raise HTTPException(
@@ -671,7 +676,8 @@ def _save_project_in_context(
         durable_mutated = True
 
         # SQLite commits last. Any failure restores both files byte-for-byte.
-        state.sync_project_db_record(project_data)
+        if not state.sync_project_db_record(project_data):
+            raise RuntimeError("Projekt-DB-Sync meldete keinen erfolgreichen Commit")
     except Exception as exc:
         rollback_errors: list[str] = []
         if durable_mutated:

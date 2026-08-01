@@ -501,7 +501,7 @@
                                         <Border x:Name="ClipBorder"
                                                 Height="100" Margin="0,5"
                                                 Focusable="True"
-                                                IsTabStop="True"
+                                                KeyboardNavigation.IsTabStop="True"
                                                 AutomationProperties.Name="{Binding ClipName}"
                                                 AutomationProperties.HelpText="Timeline-Cut. Eingabe oder Leertaste wählt; Pfeiltasten bearbeiten gemäß Timeline-Hilfe."
                                                 AutomationProperties.ItemStatus="{Binding TimeRangeText}"
