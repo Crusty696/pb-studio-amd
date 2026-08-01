@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from backend.app_state import AppState
 from backend.schemas.render_schemas import RenderEncoder, RenderQuality, RenderRequest
+from pb_studio.rendering import preview_renderer, render_service
 from pb_studio.rendering.preview_renderer import PreviewGenerator, TimelineEntry
 from pb_studio.rendering.render_service import RenderService
 
@@ -35,7 +36,14 @@ def _request(
     )
 
 
-def test_include_audio_false_builds_video_only_command(tmp_path: Path) -> None:
+def test_include_audio_false_builds_video_only_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(render_service, "get_amf_device_args", lambda: [
+        "-init_hw_device",
+        "d3d11va=pb_amf:7",
+    ])
     service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
     cmd, _ = service._build_render_cmd(
         tmp_path / "concat.txt",
@@ -53,6 +61,9 @@ def test_include_audio_false_builds_video_only_command(tmp_path: Path) -> None:
     assert "1:a" not in cmd
     assert str(tmp_path / "mix.wav") not in cmd
     assert "-c:a" not in cmd
+    assert cmd.index("-init_hw_device") < cmd.index("-i")
+    assert "d3d11va=pb_amf:7" in cmd
+    assert "d3d11va=pb_amf:1" not in cmd
 
 
 def test_quality_and_include_audio_reach_render_service(
@@ -134,6 +145,11 @@ def test_preview_renderer_uses_reported_640x360_resolution(
         "pb_studio.rendering.preview_renderer._preview_encoder_args",
         lambda: ["-c:v", "h264_amf"],
     )
+    monkeypatch.setattr(
+        preview_renderer,
+        "get_amf_device_args",
+        lambda: ["-init_hw_device", "d3d11va=pb_amf:7"],
+    )
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"clip")
     generator = PreviewGenerator(output_dir=tmp_path)
@@ -151,6 +167,9 @@ def test_preview_renderer_uses_reported_640x360_resolution(
     ]
     assert filters
     assert all("scale=640:360" in value for value in filters)
+    assert all(command.index("-init_hw_device") < command.index("-i") for command in commands)
+    assert all("d3d11va=pb_amf:7" in command for command in commands)
+    assert all("d3d11va=pb_amf:1" not in command for command in commands)
 
 
 def test_cancel_before_gpu_lock_acquire(

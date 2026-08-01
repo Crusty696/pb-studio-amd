@@ -35,7 +35,11 @@ import logging
 # AP2.1 (Audit 2026-06-10): bare "ffmpeg"/"ffprobe" schlugen fehl, wenn FFmpeg
 # nur als Bundle in tools/ffmpeg/bin liegt (PATH-unabhängige Auflösung via
 # ConfigManager -> PATH -> tools/, wie encoder_utils sie bereits nutzt).
-from pb_studio.video.encoder_utils import _get_ffmpeg_path, _get_ffprobe_path
+from pb_studio.video.encoder_utils import (
+    _get_ffmpeg_path,
+    _get_ffprobe_path,
+    get_amf_device_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +231,7 @@ class RenderService:
             raise ValueError(f"Encoder {encoder!r} is not an allowed AMD AMF encoder")
         test_cmd = [
             _get_ffmpeg_path(), "-y", "-hide_banner", "-loglevel", "error",
+            *get_amf_device_args(),
             "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.5",
             "-frames:v", "1", "-pix_fmt", "yuv420p",
             "-c:v", encoder,
@@ -665,7 +670,8 @@ class RenderService:
         for attempt_idx, encoder in enumerate(chain):
             enc_args = self._encoder_args(encoder)
             cmd = [
-                _get_ffmpeg_path(), "-y", "-i", input_path,
+                _get_ffmpeg_path(), "-y", *get_amf_device_args(),
+                "-i", input_path,
                 "-vf", vf_filter,
                 *enc_args,
                 "-an", str(output_path)
@@ -773,6 +779,7 @@ class RenderService:
         """Baut FFmpeg-Kommando fuer einen bestimmten Encoder. Gibt (cmd, effective_duration) zurueck."""
         cmd = [
             _get_ffmpeg_path(), "-y",
+            *get_amf_device_args(),
             "-f", "concat", "-safe", "0",
             "-segment_time_metadata", "1",
             "-i", str(list_path)

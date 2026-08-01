@@ -8,6 +8,7 @@ import wave
 from pathlib import Path
 
 from pb_studio.runtime_contract import ffmpeg_path
+from pb_studio.video.encoder_utils import get_amf_device_args
 
 
 def generate_click_track_wav(output_path: Path, *, bpm: float = 120.0, duration_sec: float = 8.0, sample_rate: int = 44100) -> None:
@@ -53,6 +54,7 @@ def generate_color_bars_video(output_path: Path, *, duration_sec: float = 8.0, s
         [
             str(ffmpeg_path()),
             "-y",
+            *get_amf_device_args(),
             "-f",
             "lavfi",
             "-i",

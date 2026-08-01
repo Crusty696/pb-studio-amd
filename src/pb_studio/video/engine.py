@@ -12,6 +12,7 @@ from .encoder_utils import (
     build_ffmpeg_encode_args,
     check_amf_available,
     get_encoder_info,
+    get_amf_device_args,
     _get_ffmpeg_path,
     _get_ffprobe_path,
 )
@@ -287,6 +288,7 @@ class VideoGenerator:
         # Standardize: 1080p, 30fps, no audio (we use master track)
         cmd = [
             _get_ffmpeg_path(), "-y",
+            *get_amf_device_args(),
             "-ss", str(start),
             "-i", str(input_path),
             "-t", str(duration),
@@ -344,6 +346,7 @@ class VideoGenerator:
         # Concat with re-encoding for consistent output
         cmd = [
             _get_ffmpeg_path(), "-y",
+            *get_amf_device_args(),
             "-f", "concat",
             "-safe", "0",
             "-i", str(list_path),

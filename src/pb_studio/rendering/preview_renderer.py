@@ -14,7 +14,11 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from pb_studio.video.encoder_utils import _get_ffmpeg_path, get_preview_encoder
+from pb_studio.video.encoder_utils import (
+    _get_ffmpeg_path,
+    get_amf_device_args,
+    get_preview_encoder,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +127,7 @@ class PreviewGenerator:
                 )
                 cmd = [
                     _get_ffmpeg_path(), "-y",
+                    *get_amf_device_args(),
                     "-ss", str(actual_start),
                     "-t", str(clip_duration),
                     "-i", clip.video_path,
@@ -162,6 +167,7 @@ class PreviewGenerator:
 
             cmd = [
                 _get_ffmpeg_path(), "-y",
+                *get_amf_device_args(),
                 "-i", f"concat:{concat_input}",
                 *_preview_encoder_args(),
                 "-pix_fmt", "yuv420p", "-an",

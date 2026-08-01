@@ -18,6 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
+from pb_studio.core.directml_adapter import get_directml_adapter
 from pb_studio.runtime_contract import ffmpeg_path, ffprobe_path
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,14 @@ def _get_ffmpeg_path() -> str:
 def _get_ffprobe_path() -> str:
     """Return the verified FFprobe paired with canonical FFmpeg."""
     return str(ffprobe_path())
+
+
+def get_amf_device_args() -> list[str]:
+    """Return global FFmpeg args for the selected DirectML DXGI adapter."""
+    device_id = get_directml_adapter().device_id
+    if isinstance(device_id, bool) or not isinstance(device_id, int) or device_id < 0:
+        raise RuntimeError("DirectML adapter has an invalid device ID for AMF")
+    return ["-init_hw_device", f"d3d11va=pb_amf:{device_id}"]
 
 
 def check_ffmpeg_available() -> bool:
@@ -136,6 +145,7 @@ def check_amf_available() -> bool:
         try:
             probe = subprocess.run(
                 [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                 *get_amf_device_args(),
                  "-f", "lavfi", "-i", "color=black:s=320x240:d=0.5",
                  "-c:v", "h264_amf", "-quality", "speed", test_out],
                 capture_output=True, text=True, timeout=15

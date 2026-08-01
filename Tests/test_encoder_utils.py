@@ -7,7 +7,9 @@ Mock-FFmpeg fuer check_amf_available, kein echter Subprocess.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,11 +22,68 @@ from pb_studio.video.encoder_utils import (
     RateControl,
     EncoderConfig,
     build_ffmpeg_encode_args,
+    get_amf_device_args,
     reset_availability_cache,
     get_encoder_info,
     get_preview_encoder,
     get_export_encoder,
 )
+
+
+def test_amf_device_args_use_dynamic_directml_adapter(monkeypatch):
+    monkeypatch.setattr(
+        encoder_utils,
+        "get_directml_adapter",
+        lambda: SimpleNamespace(device_id=7),
+    )
+
+    assert get_amf_device_args() == [
+        "-init_hw_device",
+        "d3d11va=pb_amf:7",
+    ]
+
+
+@pytest.mark.parametrize("device_id", [-1, True, "1"])
+def test_amf_device_args_fail_closed_for_invalid_device_id(monkeypatch, device_id):
+    monkeypatch.setattr(
+        encoder_utils,
+        "get_directml_adapter",
+        lambda: SimpleNamespace(device_id=device_id),
+    )
+
+    with pytest.raises(RuntimeError, match="invalid device ID"):
+        get_amf_device_args()
+
+
+def test_amf_functional_probe_places_dynamic_device_before_input(
+    tmp_path: Path,
+    monkeypatch,
+):
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        if "-encoders" in command:
+            return SimpleNamespace(returncode=0, stdout="h264_amf", stderr="")
+        Path(command[-1]).write_bytes(b"probe")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    reset_availability_cache()
+    monkeypatch.setattr(encoder_utils, "check_ffmpeg_available", lambda: True)
+    monkeypatch.setattr(encoder_utils, "_get_ffmpeg_path", lambda: "ffmpeg.exe")
+    monkeypatch.setattr(
+        encoder_utils,
+        "get_directml_adapter",
+        lambda: SimpleNamespace(device_id=7),
+    )
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(encoder_utils.subprocess, "run", fake_run)
+
+    assert encoder_utils.check_amf_available() is True
+    probe_command = next(command for command in commands if "-c:v" in command)
+    assert probe_command[probe_command.index("-init_hw_device") + 1] == "d3d11va=pb_amf:7"
+    assert probe_command.index("-init_hw_device") < probe_command.index("-i")
+    assert "d3d11va=pb_amf:1" not in probe_command
 
 
 # ---------- Enums ----------
