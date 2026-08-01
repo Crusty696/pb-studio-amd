@@ -284,9 +284,6 @@ public class ApiClient : IApiClient
             {
                 Content = JsonContent.Create((object?)null, options: JsonOptions),
             };
-            request.Headers.TryAddWithoutValidation(
-                BackendOwnerCapability.HeaderName,
-                BackendOwnerCapability.Ensure());
             using var response = await _http.SendAsync(request, cts.Token).ConfigureAwait(false);
             _logger.LogInformation("Backend graceful shutdown angefordert: {StatusCode}", response.StatusCode);
         }
@@ -511,9 +508,6 @@ public class ApiClient : IApiClient
         {
             var url = $"/models/{Uri.EscapeDataString(name)}";
             using var request = new HttpRequestMessage(HttpMethod.Delete, url);
-            request.Headers.TryAddWithoutValidation(
-                BackendOwnerCapability.HeaderName,
-                BackendOwnerCapability.Ensure());
             using var response = await _http.SendAsync(request, token)
                 .ConfigureAwait(false);
 
@@ -627,9 +621,6 @@ public class ApiClient : IApiClient
         {
             Content = JsonContent.Create(new { name }, options: JsonOptions),
         };
-        request.Headers.TryAddWithoutValidation(
-            BackendOwnerCapability.HeaderName,
-            BackendOwnerCapability.Ensure());
         // request bewusst NICHT disposen — der Lifetime ist an die Response gekoppelt,
         // und das Disposen waehrend der Streamkonsum kann den Socket killen. Der GC raeumt's.
         var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
@@ -1054,9 +1045,6 @@ public class ApiClient : IApiClient
             {
                 Content = JsonContent.Create(body, options: JsonOptions),
             };
-            request.Headers.TryAddWithoutValidation(
-                BackendOwnerCapability.HeaderName,
-                capability);
             using var response = await _http.SendAsync(request, token)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();

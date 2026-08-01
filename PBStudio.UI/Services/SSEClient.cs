@@ -61,7 +61,13 @@ public class SSEClient : IDisposable
     {
         _logger = logger;
         _terminalLogBuffer = terminalLogBuffer;
-        _httpClient = new HttpClient
+        _httpClient = new HttpClient(new OwnerCapabilityRequestHandler
+        {
+            InnerHandler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            },
+        })
         {
             BaseAddress = new Uri("http://127.0.0.1:8765"),
             Timeout = TimeSpan.FromMilliseconds(Timeout.Infinite),

@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -141,11 +142,17 @@ public partial class App : Application
         });
 
         // HTTP Client für API-Kommunikation (ApiClient + SSEClient)
+        services.AddTransient<OwnerCapabilityRequestHandler>();
         services.AddHttpClient<ApiClient>(client =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:8765");
             client.Timeout = TimeSpan.FromMinutes(20);
-        });
+        })
+        .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+        })
+        .AddHttpMessageHandler<OwnerCapabilityRequestHandler>();
 
         // Services (Singleton für Desktop-App)
         services.AddSingleton<PythonBridgeService>();   // erstellt HttpClient intern (kein DI-HttpClient)

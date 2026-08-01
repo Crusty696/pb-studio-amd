@@ -18,7 +18,8 @@ namespace PBStudio.UI.Services;
 public class PythonBridgeService : IDisposable
 {
     private readonly ILogger<PythonBridgeService> _logger;
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _bootstrapHttpClient;
+    private readonly HttpClient _protectedHttpClient;
     private Process? _pythonProcess;
     private bool _isRunning;
     private volatile bool _isStopping;
@@ -90,14 +91,45 @@ public class PythonBridgeService : IDisposable
     public event EventHandler<bool>? StatusChanged;
 
     public PythonBridgeService(ILogger<PythonBridgeService> logger)
+        : this(logger, CreateBootstrapHttpClient(), CreateProtectedHttpClient())
+    {
+    }
+
+    internal PythonBridgeService(
+        ILogger<PythonBridgeService> logger,
+        HttpClient bootstrapHttpClient)
+        : this(logger, bootstrapHttpClient, CreateProtectedHttpClient())
+    {
+    }
+
+    internal PythonBridgeService(
+        ILogger<PythonBridgeService> logger,
+        HttpClient bootstrapHttpClient,
+        HttpClient protectedHttpClient)
     {
         _logger = logger;
-        _httpClient = new HttpClient
-        {
-            BaseAddress = new Uri($"http://127.0.0.1:{Port}"),
-            Timeout = TimeSpan.FromMinutes(20),
-        };
+        _bootstrapHttpClient = bootstrapHttpClient;
+        _protectedHttpClient = protectedHttpClient;
+        _bootstrapHttpClient.BaseAddress ??= new Uri($"http://127.0.0.1:{Port}");
+        _protectedHttpClient.BaseAddress ??= new Uri($"http://127.0.0.1:{Port}");
+        _bootstrapHttpClient.Timeout = TimeSpan.FromMinutes(20);
+        _protectedHttpClient.Timeout = TimeSpan.FromMinutes(20);
     }
+
+    private static HttpClient CreateBootstrapHttpClient() => new(
+        new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+        });
+
+    private static HttpClient CreateProtectedHttpClient() => new(
+        new OwnerCapabilityRequestHandler
+        {
+            InnerHandler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            },
+        });
 
     public async Task StartAsync()
     {
@@ -111,10 +143,32 @@ public class PythonBridgeService : IDisposable
 
             if (_isRunning) return;
 
-            if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+            using (var revalidation = await BackendOwnerCapability
+                .BeginRevalidationAsync()
+                .ConfigureAwait(false))
             {
-                AttachToExistingBackend("Python Backend läuft bereits auf Port {Port} - kein neuer Start nötig");
-                return;
+                if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+                {
+                    if (!BackendOwnerCapability.WasProvisioned)
+                    {
+                        _logger.LogError(
+                            "Port {Port} belegt, aber keine externe Owner-Capability wurde bereitgestellt; fremdes Backend wird nicht übernommen",
+                            Port);
+                        return;
+                    }
+
+                    if (await VerifyBackendOwnershipAsync().ConfigureAwait(false))
+                    {
+                        revalidation.CompleteVerification();
+                        AttachToExistingBackend("Externes Python Backend mit gültigem Owner-Proof auf Port {Port} verbunden");
+                        return;
+                    }
+
+                    _logger.LogError(
+                        "Port {Port} belegt, aber Health-Proof stimmt nicht mit Owner-Capability überein; fremdes Backend wird nicht übernommen",
+                        Port);
+                    return;
+                }
             }
 
             if (PreferExternalBackend)
@@ -190,8 +244,8 @@ public class PythonBridgeService : IDisposable
                 _pythonProcess.BeginOutputReadLine();
                 _pythonProcess.BeginErrorReadLine();
 
-                var backendHealthy = await WaitForHealthAsync().ConfigureAwait(false);
-                if (backendHealthy)
+                var backendOwned = await WaitForHealthAsync().ConfigureAwait(false);
+                if (backendOwned)
                 {
                     _isRunning = true;
                     StatusChanged?.Invoke(this, true);
@@ -204,16 +258,10 @@ public class PythonBridgeService : IDisposable
                     return;
                 }
 
-                if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
-                {
-                    AttachToExistingBackend("Backend wurde während des Starts von einem anderen Owner übernommen - hänge an bestehende Instanz an");
-                    return;
-                }
-
                 _isRunning = false;
                 _ownsProcess = false;
                 StatusChanged?.Invoke(this, false);
-                _logger.LogError("Python Backend Health-Check fehlgeschlagen");
+                _logger.LogError("Python Backend Health- oder Owner-Proof-Check fehlgeschlagen");
 
                 try
                 {
@@ -257,11 +305,7 @@ public class PythonBridgeService : IDisposable
             {
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, "/shutdown");
-                    request.Headers.TryAddWithoutValidation(
-                        BackendOwnerCapability.HeaderName,
-                        BackendOwnerCapability.Ensure());
-                    await _httpClient.SendAsync(request).ConfigureAwait(false);
+                    await RequestOwnedShutdownAsync().ConfigureAwait(false);
                     await Task.Delay(3000).ConfigureAwait(false);
                 }
                 catch { }
@@ -299,6 +343,15 @@ public class PythonBridgeService : IDisposable
         }
     }
 
+    private async Task RequestOwnedShutdownAsync()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/shutdown");
+        using var response = await _protectedHttpClient
+            .SendAsync(request)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+    }
+
     private void StartWatchdog()
     {
         _ = Task.Run(async () =>
@@ -306,25 +359,37 @@ public class PythonBridgeService : IDisposable
             while (_isRunning)
             {
                 await Task.Delay(10_000).ConfigureAwait(false);
-                if (_pythonProcess == null || _pythonProcess.HasExited)
+                if (await IsBackendOwnedHealthyAsync().ConfigureAwait(false))
                 {
-                    if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
-                    {
-                        _logger.LogDebug("Backend-Health ist weiterhin OK, obwohl der Startprozess beendet wurde - vermutlich Python-Wrapper/Child-Prozess auf Windows");
-                        continue;
-                    }
-
-                    _isRunning = false;
-                    StatusChanged?.Invoke(this, false);
-
-                    if (_isStopping || !_ownsProcess)
-                        break;
-
-                    _logger.LogWarning("Python Backend unerwartet beendet – starte neu...");
-                    _pythonProcess = null;
-                    await StartAsync().ConfigureAwait(false);
-                    break;
+                    continue;
                 }
+
+                _isRunning = false;
+                StatusChanged?.Invoke(this, false);
+
+                if (_isStopping || !_ownsProcess)
+                    break;
+
+                _logger.LogWarning("Python Backend Health- oder Owner-Proof verlorengegangen – starte owned Prozess neu...");
+                var process = _pythonProcess;
+                _pythonProcess = null;
+                if (process is not null)
+                {
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            process.Kill(entireProcessTree: true);
+                            await process.WaitForExitAsync().ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                    {
+                        _logger.LogDebug(ex, "Owned Python-Prozess war vor Watchdog-Restart bereits beendet");
+                    }
+                }
+                await StartAsync().ConfigureAwait(false);
+                break;
             }
         });
     }
@@ -338,13 +403,16 @@ public class PythonBridgeService : IDisposable
         StatusChanged?.Invoke(this, true);
         // AP3.2: auch im Attach-Modus ist das Backend ab hier nutzbar
         WeakReferenceMessenger.Default.Send(new BackendReadyMessage());
+        StartWatchdog();
     }
 
     private async Task<bool> IsBackendAlreadyHealthyAsync()
     {
         try
         {
-            var response = await _httpClient.GetAsync("/health").ConfigureAwait(false);
+            using var response = await _bootstrapHttpClient
+                .GetAsync("/health")
+                .ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -361,8 +429,7 @@ public class PythonBridgeService : IDisposable
         {
             try
             {
-                var response = await _httpClient.GetAsync("/health").ConfigureAwait(false);
-                if (response.IsSuccessStatusCode)
+                if (await IsBackendOwnedHealthyAsync().ConfigureAwait(false))
                     return true;
             }
             catch { }
@@ -372,6 +439,62 @@ public class PythonBridgeService : IDisposable
 
         return false;
     }
+
+    private async Task<bool> IsBackendOwnedHealthyAsync()
+    {
+        using var revalidation = await BackendOwnerCapability
+            .BeginRevalidationAsync()
+            .ConfigureAwait(false);
+        if (!await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))
+            return false;
+        if (!await VerifyBackendOwnershipAsync().ConfigureAwait(false))
+            return false;
+        revalidation.CompleteVerification();
+        return true;
+    }
+
+    private async Task<bool> VerifyBackendOwnershipAsync()
+    {
+        var nonce = CreateHealthNonce();
+        try
+        {
+            // This dedicated bootstrap client is never capability-registered.
+            // Health and proof requests therefore cannot leak a prior owner key.
+            using var response = await _bootstrapHttpClient.GetAsync(
+                $"{BackendOwnerCapability.HealthProofPath}?nonce={nonce}")
+                .ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return false;
+
+            using var document = JsonDocument.Parse(
+                await response.Content.ReadAsStreamAsync().ConfigureAwait(false));
+            var root = document.RootElement;
+            if (!root.TryGetProperty("status", out var status)
+                || !string.Equals(status.GetString(), "ok", StringComparison.Ordinal)
+                || !root.TryGetProperty("proof", out var proof)
+                || proof.ValueKind != JsonValueKind.String
+                || !BackendOwnerCapability.VerifyHealthProof(
+                    nonce,
+                    proof.GetString() ?? string.Empty))
+            {
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            or TaskCanceledException
+            or JsonException)
+        {
+            _logger.LogDebug(ex, "Backend Owner-Proof fehlgeschlagen");
+            return false;
+        }
+    }
+
+    private static string CreateHealthNonce()
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
 
     private static bool IsEnabled(string? value)
     {
@@ -538,7 +661,9 @@ public class PythonBridgeService : IDisposable
         if (_disposed) return;
         _disposed = true;
         _isStopping = true;
-        _httpClient.Dispose();
+        _bootstrapHttpClient.Dispose();
+        if (!ReferenceEquals(_bootstrapHttpClient, _protectedHttpClient))
+            _protectedHttpClient.Dispose();
     }
 
     // ── AP3.1: Kill-on-Close JobObject ───────────────────────────────────────
