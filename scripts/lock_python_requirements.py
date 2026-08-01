@@ -28,6 +28,17 @@ DEFAULT_DIRECT = PROJECT_ROOT / "requirements-direct.txt"
 DEFAULT_LOCK = PROJECT_ROOT / "requirements.txt"
 LOCAL_WHEEL_DIR = PROJECT_ROOT / "vendor" / "wheels"
 LOCAL_WHEEL_MANIFEST = PROJECT_ROOT / "config" / "python-wheel-overrides.json"
+PYTORCH_CPU_FIND_LINKS = (
+    "https://download.pytorch.org/whl/cpu/torch/",
+    "https://download.pytorch.org/whl/cpu/torchvision/",
+    "https://download.pytorch.org/whl/cpu/torchaudio/",
+)
+CPU_TORCH_CONTRACT = {
+    "torch": "2.4.1+cpu",
+    "torchvision": "0.19.1+cpu",
+    "torchaudio": "2.4.1+cpu",
+}
+FORBIDDEN_ACCELERATOR_PREFIXES = ("cuda-", "nvidia-")
 
 _PIN_RE = re.compile(
     r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)=="
@@ -42,6 +53,28 @@ class LockError(RuntimeError):
 
 def _canonical_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _assert_cpu_torch_contract(
+    entries: dict[str, tuple[str, str, str | None]],
+) -> None:
+    errors: list[str] = []
+    for canonical, expected in CPU_TORCH_CONTRACT.items():
+        entry = entries.get(canonical)
+        if entry is None:
+            errors.append(f"{canonical} missing")
+        elif entry[1] != expected:
+            errors.append(f"{canonical} must be {expected}, got {entry[1]}")
+    forbidden = sorted(
+        name
+        for name in entries
+        if name.startswith(FORBIDDEN_ACCELERATOR_PREFIXES)
+        or name in {"pytorch-cuda", "triton"}
+    )
+    if forbidden:
+        errors.append("forbidden accelerator packages: " + ", ".join(forbidden))
+    if errors:
+        raise LockError("CPU-only PyTorch contract violated: " + "; ".join(errors))
 
 
 def _read_pins(path: Path, *, hashes_required: bool) -> dict[str, tuple[str, str, str | None]]:
@@ -203,6 +236,8 @@ def _run_resolver(
             "--constraint",
             os.fspath(constraints_path),
         ]
+        for find_links_url in PYTORCH_CPU_FIND_LINKS:
+            command.extend(["--find-links", find_links_url])
         subprocess.run(command, check=True)
         return json.loads(report_path.read_text(encoding="utf-8"))
 
@@ -233,6 +268,7 @@ def _render_lock(report: dict) -> str:
 
     if not entries:
         raise LockError("pip report contains no install entries")
+    _assert_cpu_torch_contract(entries)
 
     lines = [
         "# PB Studio AMD Edition - complete Python lock",
@@ -246,6 +282,7 @@ def _render_lock(report: dict) -> str:
         "",
         "--only-binary=:all:",
         "--find-links=vendor/wheels",
+        *(f"--find-links={url}" for url in PYTORCH_CPU_FIND_LINKS),
         "--require-hashes",
         "",
     ]
@@ -302,6 +339,7 @@ def verify(args: argparse.Namespace) -> None:
     required_options = {
         "--only-binary=:all:",
         "--find-links=vendor/wheels",
+        *(f"--find-links={url}" for url in PYTORCH_CPU_FIND_LINKS),
         "--require-hashes",
     }
     present_options = {
@@ -324,6 +362,7 @@ def verify(args: argparse.Namespace) -> None:
             )
     if mismatches:
         raise LockError("direct/lock mismatch: " + "; ".join(mismatches))
+    _assert_cpu_torch_contract(locked)
     local_mismatches = []
     for canonical, (version, digest) in local_wheels.items():
         entry = locked.get(canonical)

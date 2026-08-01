@@ -73,6 +73,9 @@ jobs:
       - name: Install the exact Windows dependency graph
         run: python -m pip install --require-hashes -r requirements.txt
 
+      - name: Verify CPU-only PyTorch runtime
+        run: python scripts/verify_cpu_torch_runtime.py
+
       - name: Run software tests, coverage, skip and temp gates
         shell: pwsh
         run: >-

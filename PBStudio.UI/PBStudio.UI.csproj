@@ -39,17 +39,14 @@
     </PackageReference>
   </ItemGroup>
 
-  <Target Name="NSwag" BeforeTargets="CoreCompile" Inputs="openapi.snapshot.json;nswag.json" Outputs="Generated/ApiTypes.g.cs">
-    <Message Text="NSwag: generating Generated/ApiTypes.g.cs from openapi.snapshot.json" Importance="high" />
+  <Target Name="NSwag" BeforeTargets="CoreCompile" Inputs="openapi.snapshot.json;nswag.json" Outputs="obj/Generated/ApiTypes.g.cs">
+    <Message Text="NSwag: generating obj/Generated/ApiTypes.g.cs from openapi.snapshot.json" Importance="high" />
+    <MakeDir Directories="obj/Generated" />
     <Exec Command="$(NSwagExe_Net90) run nswag.json /variables:Configuration=$(Configuration)" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
   <ItemGroup>
-    <Compile Remove="Generated/**" />
-    <None Remove="Generated/**" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Generated/ApiTypes.g.cs" />
+    <Compile Include="obj/Generated/ApiTypes.g.cs" />
   </ItemGroup>
 
 </Project>

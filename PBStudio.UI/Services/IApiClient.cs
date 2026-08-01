@@ -30,8 +30,8 @@ public interface IApiClient : IDisposable
     Task<List<BeatData>?> GetBeatsAsync(int clipId);
     Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml", CancellationToken cancellationToken = default);
 
-    Task<DeleteResponse?> DeleteAudioClipAsync(int clipId);
-    Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds);
+    Task<DeleteResponse?> DeleteAudioClipAsync(int clipId, CancellationToken cancellationToken = default);
+    Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default);
 
     // --- Audio (Erweitert) ---
     Task<WaveformData?> GetWaveformAsync(int clipId, int bands = 3);
@@ -46,17 +46,17 @@ public interface IApiClient : IDisposable
     Task<List<VideoClipInfo>?> ImportVideosAsync(List<string> paths);
     Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default);
     Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default);
-    Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true);
+    Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true, CancellationToken cancellationToken = default);
     Task<List<SceneInfo>?> GetScenesAsync(int clipId);
     Task<MotionData?> GetMotionAsync(int clipId);
     Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8, CancellationToken cancellationToken = default);
     Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256, CancellationToken cancellationToken = default);
-    Task<DeleteResponse?> DeleteVideoClipAsync(int clipId);
-    Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds);
+    Task<DeleteResponse?> DeleteVideoClipAsync(int clipId, CancellationToken cancellationToken = default);
+    Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default);
 
     // --- Pacing ---
     Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default);
-    Task<TimelineResponse?> GetTimelineAsync();
+    Task<TimelineResponse?> GetTimelineAsync(CancellationToken cancellationToken = default);
     Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries, CancellationToken cancellationToken = default);
     Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default);
 

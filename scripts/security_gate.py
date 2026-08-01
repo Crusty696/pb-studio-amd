@@ -14,10 +14,15 @@ from typing import Any
 
 
 SECRET_RULES = {
-    "private-key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    "private-key": re.compile(
+        r"-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----"
+    ),
     "aws-access-key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     "github-token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
-    "openai-key": re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}\b"),
+    "github-fine-grained-token": re.compile(
+        r"\bgithub_pat_[A-Za-z0-9_]{30,}\b"
+    ),
+    "openai-key": re.compile(r"\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{24,}\b"),
     "anthropic-key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
     "pb-test-secret": re.compile(r"\bPB_TEST_SECRET_[A-Z0-9]{20}\b"),
 }
@@ -311,6 +316,23 @@ def _secrets(args: argparse.Namespace) -> int:
             return 1
         print(f"SECRET_NEGATIVE_FIXTURE_PASS findings={len(active)}")
         return 0
+    if args.expect_all_rules:
+        detected_rules = {finding["rule"] for finding in active}
+        expected_rules = set(SECRET_RULES)
+        if detected_rules != expected_rules:
+            missing_rules = sorted(expected_rules - detected_rules)
+            unexpected_rules = sorted(detected_rules - expected_rules)
+            print(
+                "SECRET_RULE_FIXTURE_FAILED "
+                f"missing={missing_rules} unexpected={unexpected_rules}",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"SECRET_RULE_FIXTURE_PASS rules={len(detected_rules)} "
+            f"findings={len(active)}"
+        )
+        return 0
     if active:
         for finding in active:
             print(
@@ -549,6 +571,20 @@ def _workflow_receipt(args: argparse.Namespace) -> int:
         .isoformat()
         .replace("+00:00", "Z"),
     }
+    if args.base or args.head:
+        if not args.base or not args.head:
+            raise ValueError("Workflow receipt base/head must be supplied together")
+        for label, value in (("base", args.base), ("head", args.head)):
+            if not re.fullmatch(r"[0-9a-f]{40}", value, flags=re.IGNORECASE):
+                raise ValueError(
+                    f"Workflow receipt {label} must be a 40-character Git SHA"
+                )
+        if args.head.lower() != args.commit.lower():
+            raise ValueError("Workflow receipt head must equal commit SHA")
+        if args.base.lower() == args.head.lower() or set(args.base) == {"0"}:
+            raise ValueError("Workflow receipt requires a real non-identical base SHA")
+        payload["base_sha"] = args.base.lower()
+        payload["head_sha"] = args.head.lower()
     _write_report(args.output, payload)
     print(
         f"WORKFLOW_RECEIPT_PASS gate={args.gate} "
@@ -568,6 +604,7 @@ def main() -> int:
     secrets.add_argument("--path", action="append", default=[])
     secrets.add_argument("--history", action="store_true")
     secrets.add_argument("--expect-findings", action="store_true")
+    secrets.add_argument("--expect-all-rules", action="store_true")
 
     exceptions = subparsers.add_parser("exceptions")
     exceptions.add_argument(
@@ -600,6 +637,8 @@ def main() -> int:
     receipt.add_argument("--gate", required=True)
     receipt.add_argument("--status", required=True)
     receipt.add_argument("--commit", required=True)
+    receipt.add_argument("--base")
+    receipt.add_argument("--head")
     receipt.add_argument("--output", type=Path, required=True)
 
     args = parser.parse_args()

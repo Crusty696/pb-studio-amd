@@ -40,11 +40,11 @@ jobs:
           --allowlist config/secret-scan-allowlist.json
           --output artifacts/security/secrets.json
 
-      - name: Prove seeded secret is detected
+      - name: Prove every secret rule with synthetic fixtures
         run: >-
           python scripts/security_gate.py secrets
           --path Tests/security/fixtures/seeded-secret.txt
-          --expect-findings
+          --expect-all-rules
 
       - name: Bind secret-scan receipt to commit
         if: always()
@@ -236,7 +236,10 @@ jobs:
 
   dependency-review:
     name: Dependency review
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' &&
+      (github.ref_name == 'main' || startsWith(github.ref_name, 'release/')))
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -253,6 +256,8 @@ jobs:
         id: dependency_review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
+          base-ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          head-ref: ${{ github.sha }}
           fail-on-severity: low
           comment-summary-in-pr: never
 
@@ -263,6 +268,8 @@ jobs:
           --gate dependency-review
           --status ${{ steps.dependency_review.outcome }}
           --commit ${{ github.sha }}
+          --base ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          --head ${{ github.sha }}
           --output dependency-review-receipt.json
 
       - name: Upload dependency review receipt

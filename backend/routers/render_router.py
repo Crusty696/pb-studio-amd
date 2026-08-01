@@ -813,7 +813,16 @@ async def _start_render_for_project(
 
     # R14/HIGH-004: Snapshot beim Start übergeben — _run_render_task darf den State nicht
     # erneut lesen, damit kein Stale-Timeline-Race zwischen start_render und Task-Ausführung entsteht.
-    task = asyncio.create_task(_run_render_task(task_id, request, state, timeline_snapshot))
+    task = asyncio.create_task(
+        _run_render_task_bound(
+            task_id,
+            request,
+            state,
+            timeline_snapshot,
+            context,
+            queue_job_id,
+        )
+    )
     _track_render_runtime_task(task_id, task)
 
     def _on_task_done(t: asyncio.Task) -> None:
@@ -962,19 +971,64 @@ async def cancel_render(
     return {"cancelled": True, "task_id": task_id}
 
 
+async def _run_render_task_bound(
+    task_id: str,
+    request: RenderRequest,
+    state: AppState,
+    timeline_snapshot: list[dict[str, Any]],
+    context: ProjectOperationContext,
+    queue_job_id: Optional[str],
+) -> None:
+    """Bindet den Hintergrund-Render an den beim Start erfassten Kontext."""
+    try:
+        async with state.project_operation() as active_context:
+            if active_context != context:
+                raise ProjectContextChangedError(
+                    "Projekt wurde vor dem Render-Task-Start gewechselt"
+                )
+            await _run_render_task(
+                task_id,
+                request,
+                state,
+                timeline_snapshot,
+                queue_job_id,
+            )
+    except asyncio.CancelledError:
+        state.set_cancel_flag(task_id, True)
+        _safe_queue_update(
+            queue_job_id,
+            _RQ_INTERRUPTED,
+            error="Render-Task vor Kontextbindung abgebrochen",
+        )
+        raise
+    except (
+        ProjectContextChangedError,
+        ProjectContextUnavailableError,
+    ) as exc:
+        _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
+        state.update_render_task(
+            task_id,
+            {
+                "status": TaskStatus.FAILED.value,
+                "error": str(exc),
+                "message": "Render-Projektkontext ist nicht mehr aktuell",
+                "finished_at": time.monotonic(),
+            },
+        )
+
+
 async def _run_render_task(
     task_id: str,
     request: RenderRequest,
     state: AppState,
     timeline_snapshot: list[dict[str, Any]],
+    queue_job_id: Optional[str],
 ) -> None:
     """Background-Task für Rendering mit Cancel-Support.
 
     timeline_snapshot wird von start_render übergeben — wird hier NICHT erneut aus dem
     State gelesen (R14/HIGH-004: Race zwischen Snapshot-Check und Task-Start vermeiden).
     """
-    _task_meta = state.get_render_task(task_id) or {}
-    queue_job_id: Optional[str] = _task_meta.get("queue_job_id")
     start_time = time.monotonic()
 
     try:
@@ -989,14 +1043,28 @@ async def _run_render_task(
             if state.get_cancel_flag(task_id):
                 raise _RenderCancelled()
 
-            result = await asyncio.to_thread(
-                _execute_render,
-                task_id,
-                request,
-                state,
-                timeline_snapshot,
-                asyncio.get_running_loop(),
+            render_worker = asyncio.create_task(
+                asyncio.to_thread(
+                    _execute_render,
+                    task_id,
+                    request,
+                    state,
+                    timeline_snapshot,
+                    asyncio.get_running_loop(),
+                )
             )
+            try:
+                result = await asyncio.shield(render_worker)
+            except asyncio.CancelledError:
+                # Ein Projektwechsel cancelt die asyncio-Task. Der physische
+                # Thread muss sein Cancel-Flag sehen und enden, bevor GPU-Lock
+                # und Projekt-Lifecycle freigegeben werden.
+                state.set_cancel_flag(task_id, True)
+                try:
+                    await asyncio.shield(render_worker)
+                except _RenderCancelled as exc:
+                    raise exc
+                raise _RenderCancelled()
         finally:
             gpu_lock.release()
 

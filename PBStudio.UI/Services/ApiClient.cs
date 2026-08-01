@@ -154,17 +154,17 @@ public class ApiClient : IApiClient
     public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default)
         => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteVideoClipAsync(int clipId)
-        => await DeleteAsync<DeleteResponse>($"/video/clips/{clipId}").ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteVideoClipAsync(int clipId, CancellationToken cancellationToken = default)
+        => await DeleteAsync<DeleteResponse>($"/video/clips/{clipId}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds)
-        => await DeleteWithBodyAsync<DeleteResponse>("/video/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default)
+        => await DeleteWithBodyAsync<DeleteResponse>("/video/clips", new { clip_ids = clipIds }, cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteAudioClipAsync(int clipId)
-        => await DeleteAsync<DeleteResponse>($"/audio/clips/{clipId}").ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteAudioClipAsync(int clipId, CancellationToken cancellationToken = default)
+        => await DeleteAsync<DeleteResponse>($"/audio/clips/{clipId}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds)
-        => await DeleteWithBodyAsync<DeleteResponse>("/audio/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default)
+        => await DeleteWithBodyAsync<DeleteResponse>("/audio/clips", new { clip_ids = clipIds }, cancellationToken).ConfigureAwait(false);
 
     public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
@@ -192,14 +192,14 @@ public class ApiClient : IApiClient
         }
     }
 
-    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true)
+    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true, CancellationToken cancellationToken = default)
         => await PostAsync<VideoAnalysisResult>("/video/analyze", new { 
             clip_id = clipId,
             detect_scenes = detectScenes,
             analyze_motion = analyzeMotion,
             generate_embeddings = generateEmbeddings,
             generate_captions = generateCaptions
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
     public async Task<List<SceneInfo>?> GetScenesAsync(int clipId)
         => await GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}").ConfigureAwait(false);
@@ -222,8 +222,8 @@ public class ApiClient : IApiClient
     public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default)
         => await PostAsync<CutListResponse>("/pacing/generate", config, cancellationToken).ConfigureAwait(false);
 
-    public async Task<TimelineResponse?> GetTimelineAsync()
-        => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
+    public async Task<TimelineResponse?> GetTimelineAsync(CancellationToken cancellationToken = default)
+        => await GetAsync<TimelineResponse>("/pacing/timeline", cancellationToken).ConfigureAwait(false);
 
     public async Task<StatusResponse?> UpdateTimelineAsync(
         List<TimelineEntryModel> entries,
@@ -753,15 +753,21 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> DeleteAsync<T>(string url) where T : class
+    private async Task<T?> DeleteAsync<T>(
+        string url,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.DeleteAsync(url, _shutdownCts.Token).ConfigureAwait(false);
+            using var response = await _http.DeleteAsync(url, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }
@@ -772,8 +778,15 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> DeleteWithBodyAsync<T>(string url, object body) where T : class
+    private async Task<T?> DeleteWithBodyAsync<T>(
+        string url,
+        object body,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
             // HttpClient.DeleteAsync supports no body; need explicit HttpRequestMessage
@@ -781,11 +794,11 @@ public class ApiClient : IApiClient
             {
                 Content = JsonContent.Create(body, options: JsonOptions),
             };
-            using var response = await _http.SendAsync(request, _shutdownCts.Token).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }

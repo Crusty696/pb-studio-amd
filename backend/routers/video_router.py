@@ -557,20 +557,49 @@ async def get_thumbnail(
     state: AppState = Depends(get_app_state),
 ) -> Response:
     """Gibt das Thumbnail eines Clips als JPEG zurück."""
-    clip = state.get_video_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
     try:
-        jpeg_bytes = await asyncio.to_thread(_generate_thumbnail, clip["path"])
-        # L-N7: in-memory Flag setzen damit list_clips den korrekten Wert liefert.
-        # Update darf nie crashen (best-effort).
-        try:
-            state.update_video_clip(clip_id=clip_id, thumbnail_available=True)
-        except Exception as ex:
-            logger.debug(f"L-N7 thumbnail_available update fehlgeschlagen (unkritisch): {ex}")
-        return Response(content=jpeg_bytes, media_type="image/jpeg")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Thumbnail-Generierung fehlgeschlagen: {e}")
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Clip {clip_id} nicht gefunden",
+                )
+            clip_path = str(clip["path"])
+            jpeg_bytes = await asyncio.to_thread(
+                _generate_thumbnail,
+                clip_path,
+            )
+            with state.project_commit(context):
+                current_clip = state.get_video_clip(clip_id)
+                if (
+                    current_clip is None
+                    or str(current_clip.get("path")) != clip_path
+                ):
+                    raise ProjectContextChangedError(
+                        "Video-Clip wurde während der Thumbnail-Generierung ersetzt"
+                    )
+                state.update_video_clip(
+                    clip_id=clip_id,
+                    thumbnail_available=True,
+                )
+            return Response(content=jpeg_bytes, media_type="image/jpeg")
+    except HTTPException:
+        raise
+    except (
+        ProjectContextChangedError,
+        ProjectContextUnavailableError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception(
+            "Thumbnail-Generierung für Clip %s fehlgeschlagen",
+            clip_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Thumbnail-Generierung fehlgeschlagen: {exc}",
+        ) from exc
 
 
 @router.get(

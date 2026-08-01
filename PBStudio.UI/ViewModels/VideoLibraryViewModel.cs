@@ -300,14 +300,27 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         if (!_dialogService.ConfirmDestructiveAction("Video-Clips löschen", confirmationMessage))
             return;
 
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
             var ids = markedClips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Video-Clips...";
             var resp = ids.Count == 1
-                ? await _api.DeleteVideoClipAsync(ids[0])
-                : await _api.DeleteVideoClipsBatchAsync(ids);
+                ? await _api.DeleteVideoClipAsync(ids[0], projectContext.CancellationToken)
+                : await _api.DeleteVideoClipsBatchAsync(ids, projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
@@ -336,12 +349,27 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
             var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche ALLE {ids.Count} Video-Clips...";
-            var resp = await _api.DeleteVideoClipsBatchAsync(ids);
+            var resp = await _api.DeleteVideoClipsBatchAsync(
+                ids,
+                projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Video-Clips geloescht.";
@@ -606,7 +634,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         StepDetectScenes,
                         StepAnalyzeMotion,
                         StepGenerateEmbeddings,
-                        StepGenerateCaptions
+                        StepGenerateCaptions,
+                        scope.Cancellation.Token
                     );
                     scope.Cancellation.Token.ThrowIfCancellationRequested();
                     if (!IsAnalysisScopeCurrent(scope))
@@ -916,7 +945,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StepDetectScenes,
                 StepAnalyzeMotion,
                 StepGenerateEmbeddings,
-                StepGenerateCaptions
+                StepGenerateCaptions,
+                scope.Cancellation.Token
                 );
                 scope.Cancellation.Token.ThrowIfCancellationRequested();
                 if (!IsAnalysisScopeCurrent(scope))
@@ -996,7 +1026,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         StepDetectScenes,
                         StepAnalyzeMotion,
                         StepGenerateEmbeddings,
-                        StepGenerateCaptions
+                        StepGenerateCaptions,
+                        scope.Cancellation.Token
                     );
                     scope.Cancellation.Token.ThrowIfCancellationRequested();
                     if (!IsAnalysisScopeCurrent(scope))

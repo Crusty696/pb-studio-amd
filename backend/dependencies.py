@@ -215,6 +215,7 @@ async def with_gpu_task(
 # SSE Event Queues für Progress- und Log-Updates
 EVENT_QUEUE_MAXSIZE = 500
 _event_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
+_event_queue_filters: dict[str, frozenset[str] | None] = {}
 _event_queue_drop_count = 0
 _event_queue_drop_counts: dict[str, int] = {}
 
@@ -231,16 +232,29 @@ def set_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
     _main_loop = loop
 
 
-def get_event_queue(client_id: str = "default") -> asyncio.Queue[dict[str, Any]]:
-    """Gibt die Event-Queue für einen Client zurück (per-Client Queue)."""
+def get_event_queue(
+    client_id: str = "default",
+    event_filter: set[str] | frozenset[str] | None = None,
+) -> asyncio.Queue[dict[str, Any]]:
+    """Registriert eine Queue samt Publish-seitigem Eventfilter."""
     if client_id not in _event_queues:
         _event_queues[client_id] = asyncio.Queue(maxsize=EVENT_QUEUE_MAXSIZE)
+        _event_queue_filters[client_id] = (
+            frozenset(event_filter) if event_filter else None
+        )
+    elif event_filter is not None:
+        requested_filter = frozenset(event_filter)
+        if _event_queue_filters.get(client_id) != requested_filter:
+            raise RuntimeError(
+                f"SSE Client {client_id!r} wurde mit anderem Filter registriert"
+            )
     return _event_queues[client_id]
 
 
 def unregister_event_queue(client_id: str) -> int:
     """Deregistriert einen SSE-Client und gibt dessen Drop-Anzahl zurück."""
     _event_queues.pop(client_id, None)
+    _event_queue_filters.pop(client_id, None)
     return _event_queue_drop_counts.pop(client_id, 0)
 
 
@@ -296,7 +310,11 @@ def _enqueue_event(
 
 def _fanout_event(event: dict[str, Any]) -> None:
     """Synchroner Fan-out an alle Queues. NUR im Main-Loop-Thread aufrufen."""
+    event_type = str(event.get("event", "message"))
     for client_id, queue in list(_event_queues.items()):
+        event_filter = _event_queue_filters.get(client_id)
+        if event_filter is not None and event_type not in event_filter:
+            continue
         _enqueue_event(client_id, queue, event)
 
 

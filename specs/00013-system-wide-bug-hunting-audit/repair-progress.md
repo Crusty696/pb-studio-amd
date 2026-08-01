@@ -92,8 +92,8 @@ Updated: 2026-07-30T07:52:00+02:00
 ## OBJ-72 Release-Fähigkeit T370–T415
 
 Updated: 2026-07-31
-Gesamt: **33/46 PASS (71,7 %)**
-Aktuell: **T400/T401 PASS; T403 Gesamt-Diff-Review**
+Gesamt: **34/46 PASS (73,9 %)**
+Aktuell: **T403 PASS; Implementierungsmarker wird commitgebunden erzeugt**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
 |---|---|---:|---|---|---:|---|
@@ -130,7 +130,7 @@ Aktuell: **T400/T401 PASS; T403 Gesamt-Diff-Review**
 | T400 Security-Workflow | PASS | 6–12 h | Security-Agent + unabhängiger Reviewer | Z-INFRA | nicht separat gemessen | Secret/History, Python-/NuGet-SCA, Dependency Review, SBOM, Negativkontrollen und SHA-Receipts; 3 Review-Runden PASS (`evidence/T400-security-workflow.md`) |
 | T401 PR-/Branch-CI | PASS | 4–8 h | Infra-Agent + unabhängiger Reviewer | Z-INFRA | nicht separat gemessen | alle Branches/PRs, SHA-gepinnte Actions, Locked Gates, ≥28 native Tests (`evidence/T401-required-ci.md`) |
 | T402 Dokumentationswahrheit | PASS | 3–5 h | Docs-Agent + Teamleiter | Z-DOCS | 1,0 h | DoD-Vertrag, autoritative Skillquelle, Manifest-/Lizenzwahrheit, 55 Links PASS (`evidence/T402-documentation-truth.md`) |
-| T403 Implementierungswahrheit | OPEN | 2–4 h | Teamleiter + Reviewer | SHARED/Z-REVIEW | – | Gesamt-Diff/Architektur/Security; `.completed` |
+| T403 Implementierungswahrheit | PASS | 2–4 h | Teamleiter + 3 unabhängige Reviewer | SHARED/Z-REVIEW | 2,3 h | 19 Findings geschlossen; statischer Integritäts-Sweep PASS (`evidence/T403-complete-diff-review.md`); `.completed` commitgebunden im nächsten Gate |
 | T404 Gezielte Fault-Injection | OPEN | 3–6 h | Test-Team | QC | – | gebündelter Start funktionaler Tests |
 | T405 Python-Gesamtsuite | OPEN | 1–3 h | Teamleiter/Test-Team | QC | – | `Tests/`, Python 3.11, NumPy 1.26.4 |
 | T406 Native C#-Tests und WPF Release | OPEN | 1–3 h | Teamleiter/WPF-Test | QC | – | native Tests, locked Release-Build 0/0 |

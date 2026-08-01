@@ -6,6 +6,8 @@ Result: PASS
 ## Change
 
 - Every progress/log subscriber owns one queue bounded to 500 events.
+- Subscriber filters are registered with the queue and applied before enqueue,
+  so log traffic cannot evict progress traffic (or vice versa).
 - All async and worker-thread publishers converge on `_fanout_event()` and
   `_enqueue_event()`.
 - Queue saturation deterministically removes the oldest event before adding
@@ -20,8 +22,8 @@ Result: PASS
 - Agent and team-lead `py_compile`: PASS.
 - `git diff --check`: PASS.
 - `backend/dependencies.py` SHA-256:
-  `ffb6470cccc7d584f496287e67a5d83a5a3fc4aee55cb9f3aa454affafa37d0d`.
+  `7a1cdccc03ab16065dc448b8b709951ae7307ee6f547c60bf8581549b40548c4`.
 - `backend/routers/events_router.py` SHA-256:
-  `362f58957ad489a2f1a0fd3583407f10f8f4776b0068763e91fa44524c948d5d`.
+  `ea242b9f39a7e4bbb8f5313197404b33eaa7f6d3a1888c3a140e3ab981646d46`.
 
 Queue saturation fault injection remains deferred to T404.

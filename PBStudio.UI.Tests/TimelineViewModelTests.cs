@@ -146,7 +146,8 @@ public sealed class TimelineViewModelTests
             var viewModel = new TimelineViewModel(
                 new TimelineStateService(
                     api,
-                    NullLogger<TimelineStateService>.Instance),
+                    NullLogger<TimelineStateService>.Instance,
+                    projects),
                 new AudioLibraryStateService(
                     api,
                     NullLogger<AudioLibraryStateService>.Instance),

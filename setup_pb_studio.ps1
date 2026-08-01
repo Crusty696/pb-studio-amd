@@ -884,6 +884,11 @@ $smokeBody = @(
 if ($LASTEXITCODE -eq 0) { OK "Brain-Stack Imports (10/10)" }
 else { FAIL "Brain-Stack-Imports unvollstaendig - siehe $LOGS_DIR\smoke.log" }
 
+& $venvPython (Join-Path $REPO_ROOT "scripts\verify_cpu_torch_runtime.py") *>&1 |
+    Tee-Object -FilePath (Join-Path $LOGS_DIR "verify_cpu_torch.log") | Out-Null
+if ($LASTEXITCODE -eq 0) { OK "PyTorch CPU-only Runtime" }
+else { FAIL "PyTorch CPU-only Vertrag verletzt - siehe $LOGS_DIR\verify_cpu_torch.log" }
+
 # C.2 sqlite-vec verify
 $env:PYTHONPATH = Join-Path $REPO_ROOT "src"
 & $venvPython (Join-Path $REPO_ROOT "scripts\verify_sqlite_vec.py") *>&1 | Tee-Object -FilePath (Join-Path $LOGS_DIR "verify_sqlite_vec.log") | Out-Null

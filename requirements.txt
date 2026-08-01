@@ -9,6 +9,9 @@
 
 --only-binary=:all:
 --find-links=vendor/wheels
+--find-links=https://download.pytorch.org/whl/cpu/torch/
+--find-links=https://download.pytorch.org/whl/cpu/torchvision/
+--find-links=https://download.pytorch.org/whl/cpu/torchaudio/
 --require-hashes
 
 absl-py==2.4.0 --hash=sha256:88476fd881ca8aab94ffa78b7b6c632a782ab3ba1cd19c9bd423abc4fb4cd28d
@@ -122,9 +125,9 @@ submitit==1.5.4 --hash=sha256:c26f3a7c8d4150eaf70b1da71e2023e9e9936c93e8342ed7db
 sympy==1.14.0 --hash=sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5
 threadpoolctl==3.6.0 --hash=sha256:43a0b8fd5a2928500110039e43a5eed8480b918967083ea48dc3ab9f13c4a7fb
 tokenizers==0.21.4 --hash=sha256:475d807a5c3eb72c59ad9b5fcdb254f6e17f53dfcbb9903233b0dfa9c943b597
-torch==2.4.1 --hash=sha256:092e7c2280c860eff762ac08c4bdcd53d701677851670695e0c22d6d345b269c
-torchaudio==2.4.1 --hash=sha256:3c08b42a0c296c8eeee6c533bcae5cfbc0ceae86a34f24fe6bbbb5faa7a7bea1
-torchvision==0.19.1 --hash=sha256:70dea324174f5e9981b68e4b7cd524512c106ba64aedef560a86a0bbf2fbf62c
+torch==2.4.1+cpu --hash=sha256:76a6fe7b10491b650c630bc9ae328df40f79a948296b41d3b087b29a8a63cbad
+torchaudio==2.4.1+cpu --hash=sha256:6a9983de9cd1212668f0a25803b9aee124fd5aaf63c24dfce6b23008b0a8cebb
+torchvision==0.19.1+cpu --hash=sha256:49d644cd562a022b43100e0f8f7cdbb17ef69d584120ad8fcb7e327741f3605b
 tqdm==4.67.3 --hash=sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf
 transformers==4.49.0 --hash=sha256:6b4fded1c5fee04d384b1014495b4235a2b53c87503d7d592423c06128cbbe03
 treetable==0.2.6 --hash=sha256:fa7dfa0297d2bbc5882191edd2e15f79a5e883e352f489e2acadb221db565adf

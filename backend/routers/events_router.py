@@ -66,7 +66,7 @@ async def _event_stream(
     das finally-Cleanup garantiert zur Registrierung gehört (AP1.5).
     """
     try:
-        queue = get_event_queue(client_id)
+        queue = get_event_queue(client_id, event_filter)
         while True:
             if await request.is_disconnected():
                 logger.debug("SSE Client getrennt: %s", client_id)

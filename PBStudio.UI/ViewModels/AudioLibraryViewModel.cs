@@ -106,14 +106,27 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         if (!_dialogService.ConfirmDestructiveAction("Audio-Clips löschen", confirmationMessage))
             return;
 
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
             var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Audio-Clips...";
             var resp = ids.Count == 1
-                ? await _api.DeleteAudioClipAsync(ids[0])
-                : await _api.DeleteAudioClipsBatchAsync(ids);
+                ? await _api.DeleteAudioClipAsync(ids[0], projectContext.CancellationToken)
+                : await _api.DeleteAudioClipsBatchAsync(ids, projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
@@ -141,12 +154,27 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
             var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche ALLE {ids.Count} Audio-Clips...";
-            var resp = await _api.DeleteAudioClipsBatchAsync(ids);
+            var resp = await _api.DeleteAudioClipsBatchAsync(
+                ids,
+                projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";

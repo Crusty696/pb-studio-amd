@@ -216,17 +216,34 @@ public class ProjectService : IDisposable
     {
         lock (_projectLifetimeLock)
         {
-            return !_disposed
-                && _projectTransitionCount == 0
-                && CurrentProject != null
-                && !context.CancellationToken.IsCancellationRequested
-                && context.Generation == _projectGeneration
-                && string.Equals(
-                    context.ProjectPath,
-                    CurrentProject.Path,
-                    StringComparison.OrdinalIgnoreCase);
+            return IsCurrentLocked(context);
         }
     }
+
+    public bool TryCommit(
+        ProjectOperationContext context,
+        Action commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        lock (_projectLifetimeLock)
+        {
+            if (!IsCurrentLocked(context))
+                return false;
+            commit();
+            return true;
+        }
+    }
+
+    private bool IsCurrentLocked(ProjectOperationContext context)
+        => !_disposed
+            && _projectTransitionCount == 0
+            && CurrentProject != null
+            && !context.CancellationToken.IsCancellationRequested
+            && context.Generation == _projectGeneration
+            && string.Equals(
+                context.ProjectPath,
+                CurrentProject.Path,
+                StringComparison.OrdinalIgnoreCase);
 
     private void BeginProjectTransition()
     {
