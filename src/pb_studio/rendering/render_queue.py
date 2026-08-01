@@ -77,6 +77,32 @@ TERMINAL_STATES: frozenset[str] = frozenset({
     STATE_CANCELLED,
 })
 
+_ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
+    STATE_QUEUED: frozenset({
+        STATE_QUEUED,
+        STATE_RUNNING,
+        STATE_FAILED,
+        STATE_CANCELLED,
+        STATE_INTERRUPTED,
+    }),
+    STATE_RUNNING: frozenset({
+        STATE_RUNNING,
+        STATE_COMPLETED,
+        STATE_FAILED,
+        STATE_CANCELLED,
+        STATE_INTERRUPTED,
+    }),
+    STATE_INTERRUPTED: frozenset({
+        STATE_INTERRUPTED,
+        STATE_RUNNING,
+        STATE_FAILED,
+        STATE_CANCELLED,
+    }),
+    STATE_COMPLETED: frozenset({STATE_COMPLETED}),
+    STATE_FAILED: frozenset({STATE_FAILED}),
+    STATE_CANCELLED: frozenset({STATE_CANCELLED}),
+}
+
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS render_queue (
@@ -315,10 +341,41 @@ class RenderQueue:
         sql = f"UPDATE render_queue SET {', '.join(sets)} WHERE job_id = ?"
 
         with self._db.transaction(immediate=True) as conn:
-            cur = conn.execute(sql, params)
-            if cur.rowcount == 0:
-                logger.warning("RenderQueue.update_status: job_id %s nicht gefunden", job_id)
+            current = conn.execute(
+                "SELECT status FROM render_queue WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if current is None:
+                logger.warning(
+                    "RenderQueue.update_status: job_id %s nicht gefunden",
+                    job_id,
+                )
                 return None
+            current_status = str(current["status"])
+            if current_status in TERMINAL_STATES:
+                if status == current_status:
+                    row = conn.execute(
+                        "SELECT * FROM render_queue WHERE job_id = ?",
+                        (job_id,),
+                    ).fetchone()
+                    return self._row_to_job(row)
+                raise ValueError(
+                    "Terminaler Render-Job darf nicht erneut aktiviert werden: "
+                    f"{current_status!r} -> {status!r}"
+                )
+            if status not in _ALLOWED_TRANSITIONS[current_status]:
+                raise ValueError(
+                    f"Ungültiger Render-Statusübergang: "
+                    f"{current_status!r} -> {status!r}"
+                )
+            cur = conn.execute(
+                f"{sql} AND status = ?",
+                [*params, current_status],
+            )
+            if cur.rowcount == 0:
+                raise RuntimeError(
+                    f"Render-Status wurde parallel geändert: {job_id}"
+                )
 
         return self.get(job_id)
 

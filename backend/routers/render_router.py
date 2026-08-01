@@ -166,23 +166,35 @@ def _stored_render_media_hashes(
     state: AppState,
 ) -> dict[str, Any]:
     """Freeze persisted audio/video content hashes used by this render."""
+    def content_hash_or_file_hash(raw_hash: Any, raw_path: str) -> str:
+        stored_hash = str(raw_hash or "").strip().lower()
+        if stored_hash:
+            return stored_hash
+        path = Path(raw_path).resolve(strict=True)
+        if not path.is_file():
+            raise ValueError(f"Render-Medium ist keine Datei: {path}")
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
     audio_path_key = _canonical_identity_path(request.audio_path)
-    audio_identity: dict[str, Any] = {
-        "path": audio_path_key,
-        "content_hash": None,
-    }
+    audio_identity: Optional[dict[str, Any]] = None
     for clip_id, clip in state.get_audio_clips_snapshot().items():
         if _canonical_identity_path(str(clip.get("path") or "")) != audio_path_key:
             continue
-        content_hash = str(
-            clip.get("audio_hash") or clip.get("file_hash") or ""
-        ).strip().lower()
         audio_identity = {
             "clip_id": int(clip_id),
             "path": audio_path_key,
-            "content_hash": content_hash or None,
+            "content_hash": content_hash_or_file_hash(
+                clip.get("audio_hash") or clip.get("file_hash"),
+                request.audio_path,
+            ),
         }
         break
+    if audio_identity is None:
+        raise ValueError("Render-Audio fehlt im Medienkatalog")
 
     video_clips = state.get_video_clips_snapshot()
     video_identities: dict[int, dict[str, Any]] = {}
@@ -195,16 +207,17 @@ def _stored_render_media_hashes(
         except ValueError:
             continue
         clip = video_clips.get(video_id) or {}
-        content_hash = str(
-            clip.get("video_hash") or clip.get("file_hash") or ""
-        ).strip().lower()
+        if not clip:
+            raise ValueError(f"Render-Video {clip_id} fehlt im Medienkatalog")
         metadata = entry.get("metadata") or {}
+        media_path = str(metadata.get("file_path") or clip.get("path") or "")
         video_identities[video_id] = {
             "clip_id": clip_id,
-            "path": _canonical_identity_path(
-                str(metadata.get("file_path") or clip.get("path") or "")
+            "path": _canonical_identity_path(media_path),
+            "content_hash": content_hash_or_file_hash(
+                clip.get("video_hash") or clip.get("file_hash"),
+                media_path,
             ),
-            "content_hash": content_hash or None,
         }
 
     return {
@@ -548,7 +561,8 @@ async def _resume_render_queue_on_startup(
                     raise ValueError(
                         "Render-Identitaet fehlt oder hat unbekannte Version"
                     )
-                current_digest, _ = _build_render_identity(
+                current_digest, _ = await asyncio.to_thread(
+                    _build_render_identity,
                     request,
                     timeline_snapshot,
                     resume_media_state,
@@ -606,7 +620,13 @@ async def _resume_render_queue_on_startup(
             state.set_cancel_flag(task_id, False)
 
             task = asyncio.create_task(
-                _run_render_task(task_id, request, state, timeline_snapshot)
+                _run_render_task(
+                    task_id,
+                    request,
+                    state,
+                    timeline_snapshot,
+                    job.job_id,
+                )
             )
             _track_render_runtime_task(task_id, task)
 
@@ -726,7 +746,8 @@ async def _start_render_for_project(
         raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
 
     project_db_id = context.project_id
-    media_hash, identity_snapshot = _build_render_identity(
+    media_hash, identity_snapshot = await asyncio.to_thread(
+        _build_render_identity,
         request,
         timeline_snapshot,
         state,

@@ -27,6 +27,7 @@ from pb_studio.data.database_core import DatabaseCore
 from pb_studio.rendering import render_queue as rq_module
 from pb_studio.rendering.render_queue import (
     RenderQueue,
+    STATE_CANCELLED,
     STATE_COMPLETED,
     STATE_FAILED,
     STATE_INTERRUPTED,
@@ -163,8 +164,20 @@ def test_startup_reconstructs_and_schedules_render_payload(
 
     scheduled = []
 
-    async def fake_run(task_id, restored_request, state, restored_timeline):
-        scheduled.append((task_id, restored_request, state, restored_timeline))
+    async def fake_run(
+        task_id,
+        restored_request,
+        state,
+        restored_timeline,
+        queue_job_id,
+    ):
+        scheduled.append((
+            task_id,
+            restored_request,
+            state,
+            restored_timeline,
+            queue_job_id,
+        ))
 
     monkeypatch.setattr(render_router, "_run_render_task", fake_run)
     media_state = AppState(
@@ -183,11 +196,18 @@ def test_startup_reconstructs_and_schedules_render_payload(
 
     assert resumed == [job.job_id]
     assert len(scheduled) == 1
-    task_id, restored_request, restored_state, restored_timeline = scheduled[0]
+    (
+        task_id,
+        restored_request,
+        restored_state,
+        restored_timeline,
+        queue_job_id,
+    ) = scheduled[0]
     assert restored_state is state
     assert restored_request.audio_path == str(audio)
     assert restored_request.output_path == str(output)
     assert restored_timeline == timeline
+    assert queue_job_id == job.job_id
     task = state.get_render_task(task_id)
     assert task is not None
     assert task["queue_job_id"] == job.job_id
@@ -321,6 +341,30 @@ def test_failed_jobs_remain_failed(queue: RenderQueue, tmp_path: Path) -> None:
     assert restored["error"] == "encoder timeout"
 
 
+@pytest.mark.parametrize(
+    "terminal_status",
+    [STATE_COMPLETED, STATE_FAILED, STATE_CANCELLED],
+)
+def test_terminal_attempt_is_immutable_and_retry_gets_new_job(
+    queue: RenderQueue,
+    tmp_path: Path,
+    terminal_status: str,
+) -> None:
+    output = str(tmp_path / f"retry-{terminal_status}.mp4")
+    first = queue.enqueue("retry-hash", output, _settings())
+    queue.update_status(first.job_id, STATE_RUNNING)
+    queue.update_status(first.job_id, terminal_status, error=terminal_status)
+    terminal_snapshot = dict(queue.get(first.job_id))
+
+    with pytest.raises(ValueError, match="Terminaler Render-Job"):
+        queue.update_status(first.job_id, STATE_RUNNING)
+
+    assert dict(queue.get(first.job_id)) == terminal_snapshot
+    retry = queue.enqueue("retry-hash", output, _settings())
+    assert retry.job_id != first.job_id
+    assert retry.status == STATE_QUEUED
+
+
 def test_idempotent_enqueue(queue: RenderQueue, tmp_path: Path) -> None:
     """Doppeltes Enqueue desselben (media_hash, output_path, settings) gibt
     denselben Job zurück — keine zweite Zeile in der Tabelle."""
@@ -344,6 +388,7 @@ def test_idempotent_enqueue(queue: RenderQueue, tmp_path: Path) -> None:
     assert len(queue.list_jobs()) == 3
 
     # Gleiche Inputs nach Terminalstatus → neuer Retry-Attempt mit eigener ID
+    queue.update_status(first.job_id, STATE_RUNNING)
     queue.update_status(first.job_id, STATE_COMPLETED)
     fifth = queue.enqueue("hash-X", output, settings)
     assert fifth.job_id != first.job_id
