@@ -77,6 +77,12 @@ def main() -> int:
 
     _install_capture()
     driver = _load_t363()
+    if args.workload == "audio":
+        from pb_studio.core import model_loader
+
+        model_loader.enforce_directml_session = (
+            directml_adapter.enforce_directml_session
+        )
     driver._emit_ready = lambda result: _emit("T411_READY", result)
     driver._emit = lambda result: _emit("T411_RESULT", result)
     try:
