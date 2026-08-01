@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "skips": [
+    {
+      "nodeid": "Tests/test_ollama_vision_wrapper.py",
+      "allowed": true,
+      "owner": "models",
+      "expires_on": "2026-08-31",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_ollama_vision_wrapper.py', 12, 'Skipped: Ollama-Vision-Tests sind deprecated — siehe test_lmstudio_vision_wrapper.py')"
+    },
+    {
+      "nodeid": "Tests/test_clap_wrapper.py::TestCLAPIntegration::test_real_audio_encoding",
+      "allowed": true,
+      "owner": "audio",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_clap_wrapper.py', 360, 'Skipped: Test audio not available')"
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestSigLIPWrapper::test_encode_text_mock",
+      "allowed": true,
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_siglip_video.py', 106, 'Skipped: Text encoder not available')"
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestSigLIPWrapper::test_classify_image_mock",
+      "allowed": true,
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_siglip_video.py', 131, 'Skipped: Text encoder not available')"
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestVideoSpecialist::test_tag_video_mock",
+      "allowed": true,
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_siglip_video.py', 262, 'Skipped: Text encoder not available')"
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestIntegration::test_full_pipeline_mock",
+      "allowed": true,
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_siglip_video.py', 351, 'Skipped: Models not available')"
+    },
+    {
+      "nodeid": "Tests/test_subtrack_detector.py::test_subtrack_f_measure_realdata",
+      "allowed": true,
+      "owner": "audio",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_subtrack_detector.py', 52, 'Skipped: manuell annotiertes Test-Set nicht vorhanden')"
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_physical_directml_and_lhm_identity_is_rx7800xt",
+      "allowed": true,
+      "owner": "gpu",
+      "expires_on": "2026-09-30",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_t357_gpu_wpf_nullability_contracts.py', 230, 'Skipped: Set PBSTUDIO_RUN_T357_HARDWARE=1 only at the T363 hardware gate.')"
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_extract_3band_waveform",
+      "allowed": true,
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_waveform_analyzer.py', 118, 'Skipped: Test audio file not available')"
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_downsampled_waveform",
+      "allowed": true,
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_waveform_analyzer.py', 141, 'Skipped: Test audio file not available')"
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_frequency_content_analysis",
+      "allowed": true,
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "detail": "('C:\\\\Users\\\\david\\\\Documents\\\\Pb_studio_AMD_version\\\\Tests\\\\test_waveform_analyzer.py', 162, 'Skipped: Test audio file not available')"
+    }
+  ],
+  "unapproved": []
+}

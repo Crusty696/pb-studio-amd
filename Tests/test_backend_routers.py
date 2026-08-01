@@ -368,7 +368,7 @@ class TestVideoRouter:
                 }]
             }
 
-        def fake_gpu(video_path, clip_id, request, _loop=None):
+        def fake_gpu(video_path, clip_id, request, _loop=None, *args):
             return {
                 "avg_motion": 12.5,
                 "motion": {
@@ -394,11 +394,13 @@ class TestVideoRouter:
         video_mod._run_video_gpu_analysis = fake_gpu
         video_mod._run_color_and_caption_analysis = fake_color
 
-        fresh_state.video_clips[1] = {
+        clip = {
             "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
             "duration_seconds": 10.0, "width": 1920, "height": 1080,
             "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
         }
+        fresh_state.persist_video_clip(clip, project_id=1)
+        fresh_state.set_video_clip(1, clip)
 
         # R15/C-02: Patch Path.exists so the new file-existence guard passes in tests.
         from pathlib import Path as _Path

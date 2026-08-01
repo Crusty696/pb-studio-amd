@@ -18,7 +18,7 @@ def test_completed_tasks_use_canonical_uppercase_checkbox():
 
 def test_current_feature_workspace_passes_fail_closed_sdd_gate():
     phase = "qc" if (FEATURE / ".qc-passed").exists() else (
-        "implementation" if (FEATURE / ".completed").exists() else "open"
+        "qc-progress" if (FEATURE / ".completed").exists() else "open"
     )
     report = validate_feature(FEATURE, phase)
 

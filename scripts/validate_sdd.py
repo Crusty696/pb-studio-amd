@@ -270,6 +270,22 @@ def _validate_evidence_reference(
             _add(findings, f"{prefix}_ARTIFACT_SCHEMA", evidence, "artifact invalid")
             continue
         seen_artifacts.add(str(artifact.get("path")))
+        if artifact.get("path") == "tasks.md":
+            expected = artifact.get("sha256")
+            committed = _git_show(feature, commit_sha, "tasks.md")
+            if (
+                not isinstance(expected, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", expected)
+                or committed is None
+                or hashlib.sha256(committed).hexdigest() != expected
+            ):
+                _add(
+                    findings,
+                    f"{prefix}_ARTIFACT_COMMIT_HASH",
+                    evidence,
+                    "tasks.md digest is not bound to commit_sha",
+                )
+            continue
         _validate_hashed_path(
             feature,
             artifact,
@@ -820,7 +836,7 @@ def _validate_qc_order(
 def validate_feature(feature: Path, phase: str = "open") -> ValidationReport:
     feature = feature.resolve()
     findings: list[Finding] = []
-    if phase not in {"open", "implementation", "qc", "release"}:
+    if phase not in {"open", "implementation", "qc-progress", "qc", "release"}:
         _add(findings, "PHASE_UNKNOWN", feature, f"unknown phase: {phase}")
         return ValidationReport(False, phase, tuple(findings))
     spec_path = feature / "spec.md"
@@ -957,6 +973,36 @@ def validate_feature(feature: Path, phase: str = "open") -> ValidationReport:
             }
             if not completed_exists or qc_exists:
                 _add(findings, "PHASE_MARKER", feature, "implementation marker state invalid")
+        elif phase == "qc-progress":
+            expected_boxes = {
+                identifier: "X"
+                for identifier in range(start, implementation_end + 1)
+            }
+            if not completed_exists or qc_exists:
+                _add(findings, "PHASE_MARKER", feature, "QC-progress marker state invalid")
+            seen_open = False
+            for identifier in range(implementation_end + 1, min(413, end) + 1):
+                task = task_by_id.get(identifier)
+                if task is None:
+                    continue
+                if task.box == " ":
+                    seen_open = True
+                elif seen_open:
+                    _add(
+                        findings,
+                        "TASK_QC_ORDER",
+                        tasks_path,
+                        f"T{identifier:03d} completed after an open QC task",
+                    )
+            for identifier in range(max(414, start), end + 1):
+                task = task_by_id.get(identifier)
+                if task is not None and task.box != " ":
+                    _add(
+                        findings,
+                        "TASK_PHASE_STATE",
+                        tasks_path,
+                        f"T{identifier:03d} has wrong state for qc-progress",
+                    )
         elif phase == "qc":
             expected_boxes = {
                 identifier: "X" if identifier <= qc_end else " "
@@ -986,7 +1032,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--feature", type=Path, required=True)
     parser.add_argument(
         "--phase",
-        choices=("open", "implementation", "qc", "release"),
+        choices=("open", "implementation", "qc-progress", "qc", "release"),
         default="open",
     )
     parser.add_argument("--json", action="store_true", dest="as_json")

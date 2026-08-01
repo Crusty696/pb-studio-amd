@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from backend import owner_capability
 from backend.main import app
 from backend._brain_singleton import set_project_state
+from backend.app_state import AppState, get_app_state
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
 
@@ -34,7 +35,17 @@ def brain_client(tmp_path: Path, monkeypatch):
     BrainService.reset_singleton()
 
     state_db = tmp_path / "state.db"
-    set_project_state(state_db)
+    state = AppState(current_project={
+        "name": "BrainTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
+    set_project_state(
+        state_db,
+        project_epoch=state.project_epoch,
+        project_id=1,
+    )
+    app.dependency_overrides[get_app_state] = lambda: state
 
     # Seed timeline + cut so /feedback can find it
     conn = sqlite3.connect(str(state_db), isolation_level=None)
@@ -75,6 +86,7 @@ def brain_client(tmp_path: Path, monkeypatch):
         yield client
 
     BrainService.reset_singleton()
+    app.dependency_overrides.pop(get_app_state, None)
 
 
 def test_suggest_returns_cuts(brain_client):

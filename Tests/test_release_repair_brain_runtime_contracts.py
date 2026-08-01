@@ -332,13 +332,30 @@ def test_unknown_feedback_cut_fails_closed_before_weight_mutation(
             raise AssertionError("unknown cut must not mutate weights")
 
     logger = SpyLogger(state)
-    service = SimpleNamespace(state_conn=state, feedback_logger=logger)
+    service = SimpleNamespace(
+        state_conn=state,
+        feedback_logger=logger,
+        feedback_logger_for_lease=lambda _lease: logger,
+    )
     monkeypatch.setattr(brain_router, "get_brain_service", lambda: service)
+    lease = SimpleNamespace(connection=state, release=lambda: None)
+    monkeypatch.setattr(
+        brain_router,
+        "_acquire_project_state_lease",
+        lambda _service, _context: lease,
+    )
+    from backend.app_state import AppState
+    app_state = AppState(current_project={
+        "name": "BrainRuntimeTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     try:
         with pytest.raises(HTTPException) as exc:
             asyncio.run(
                 brain_router.feedback(
-                    BrainFeedbackRequest(cut_id=999_999, rating="perfect")
+                    BrainFeedbackRequest(cut_id=999_999, rating="perfect"),
+                    app_state,
                 )
             )
         assert exc.value.status_code == 404

@@ -22,4 +22,5 @@ def test_video_scenes_apply_only_to_current_selection_and_generation():
     assert "var sequence = Interlocked.Increment(ref _sceneLoadSequence);" in load
     assert "sequence != Volatile.Read(ref _sceneLoadSequence)" in load
     assert "SelectedClip?.Id != clipId" in load
-    assert "if (sequence == Volatile.Read(ref _sceneLoadSequence))" in load
+    assert "sequence == Volatile.Read(ref _sceneLoadSequence)" in load
+    assert "_projectService.IsCurrent(projectContext)" in load

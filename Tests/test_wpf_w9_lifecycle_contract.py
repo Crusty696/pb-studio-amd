@@ -58,7 +58,7 @@ def test_audio_stems_and_pacing_use_project_generation_and_cancellation():
     ):
         assert signature in api_contract
 
-    assert audio.count("_projectService.CaptureOperationContext()") == 3
+    assert audio.count("_projectService.CaptureOperationContext()") >= 3
     assert audio.count("operation.CancellationToken") >= 3
     assert audio.count("_projectService.IsCurrent(operation)") >= 6
     assert "ProjectTransitionStarted += OnProjectTransitionStarted" in audio

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -179,6 +181,8 @@ def test_embedding_hash_hit_skips_siglip(monkeypatch):
             generate_embeddings=True,
         ),
         video_hash="same-content-hash",
+        state=SimpleNamespace(require_project_context_current=lambda _context: None),
+        context=object(),
     )
 
     assert result["has_embedding"] is True
@@ -206,8 +210,9 @@ def test_import_progress_uses_input_position_for_skips(monkeypatch, tmp_path):
 
     video_router = _video_module()
     class FakeState:
-        def require_current_project_db_id(self):
-            return 1
+        @asynccontextmanager
+        async def project_operation(self):
+            yield object()
 
     events = []
 

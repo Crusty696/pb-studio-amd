@@ -597,11 +597,12 @@ def test_video_batch_counts_success_only_after_non_null_analysis(
     partial_failure = method.index("failed++;", partial_branch)
     else_branch = method.index("else", partial_failure)
     success_increment = method.index("succeeded++;", else_branch)
-    analyzed_assignment = method.index("clip.IsAnalyzed = true;", success_increment)
+    apply_result = method.index("ApplyAnalysisResult(", failure_increment)
 
     assert null_branch < failure_increment < partial_branch < partial_failure
     assert partial_failure < else_branch
-    assert else_branch < success_increment < analyzed_assignment
+    assert apply_result < partial_branch < success_increment
+    assert "clip.IsAnalyzed = IsCompleted(result);" in source
     assert method.count("failed++;") >= 3
     assert "skipped++; done++; continue;" in method
     assert status_prefix in method

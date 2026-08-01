@@ -133,7 +133,7 @@ def test_validate_end_lte_start_still_error():
 
 # --- Integration Tests: HTTP 400 in den drei Pfaden -----------------------
 
-def test_post_timeline_returns_400_on_overlap(monkeypatch):
+def test_post_timeline_returns_400_on_overlap(monkeypatch, tmp_path):
     """POST /pacing/timeline mit overlap-entries → HTTP 400."""
     from fastapi.testclient import TestClient
 
@@ -148,6 +148,11 @@ def test_post_timeline_returns_400_on_overlap(monkeypatch):
 
     state = get_app_state()
     state.reset()
+    state.current_project = {
+        "name": "TimelineTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
     state.current_audio_path = "/tmp/audio.wav"
     for vid in (30, 31):
         state.set_video_clip(
@@ -192,7 +197,7 @@ def test_post_timeline_returns_400_on_overlap(monkeypatch):
     state.reset()
 
 
-def test_post_timeline_returns_400_on_audio_overflow(monkeypatch):
+def test_post_timeline_returns_400_on_audio_overflow(monkeypatch, tmp_path):
     """POST /pacing/timeline mit timeline > audio_duration → HTTP 400."""
     from fastapi.testclient import TestClient
 
@@ -207,6 +212,11 @@ def test_post_timeline_returns_400_on_audio_overflow(monkeypatch):
 
     state = get_app_state()
     state.reset()
+    state.current_project = {
+        "name": "TimelineTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
     state.current_audio_path = "/tmp/audio.wav"
     state.set_video_clip(
         40,

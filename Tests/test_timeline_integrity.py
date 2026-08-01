@@ -302,6 +302,11 @@ def test_manual_update_full_flow_caps_and_validates(monkeypatch, tmp_path):
 
     state = get_app_state()
     state.reset()
+    state.current_project = {
+        "name": "TimelineTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
     audio_path = tmp_path / "audio.wav"
     video_path = tmp_path / "v50.mp4"
     audio_path.write_bytes(b"audio")

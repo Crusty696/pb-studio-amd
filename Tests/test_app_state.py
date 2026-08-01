@@ -11,7 +11,7 @@ Testet:
 import json
 import threading
 import pytest
-from backend.app_state import AppState, get_app_state
+from backend.app_state import AppState, PersistenceError, get_app_state
 
 
 class TestAppStateInit:
@@ -308,8 +308,9 @@ class TestDeletePersistence:
             FakeRepo,
         )
 
-        with pytest.raises(RuntimeError, match="sqlite write failed"):
+        with pytest.raises(PersistenceError, match="Audio-Clip 7") as exc:
             state.delete_audio_clip(7)
+        assert exc.value.source == "audio_delete"
 
         assert state.audio_clips[7]["path"] == r"C:\media\track.wav"
         assert state.audio_analysis_cache[7] == {"bpm": 128.0}
@@ -341,8 +342,9 @@ class TestDeletePersistence:
             FakeOutbox,
         )
 
-        with pytest.raises(RuntimeError, match="tombstone write failed"):
+        with pytest.raises(PersistenceError, match="Video-Clip 9") as exc:
             state.delete_video_clip(9)
+        assert exc.value.source == "video_delete"
 
         assert state.video_clips[9]["path"] == r"C:\media\clip.mp4"
         assert state.video_analysis_cache[9] == {"scene_count": 3}

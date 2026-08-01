@@ -19,7 +19,9 @@ def test_video_and_director_progress_are_correlated():
     ).read_text(encoding="utf-8")
 
     assert "_activeAnalysisClipId" in video_vm
-    assert "e.ClipId != _activeAnalysisClipId.Value" in video_vm
+    assert "private bool IsActiveAnalysisEvent(int clipId)" in video_vm
+    assert "_activeAnalysisClipId == clipId" in video_vm
+    assert "_projectService.IsCurrent(projectContext)" in video_vm
     assert 'e.TaskId != "video_import"' in video_vm
     assert "_activePacingAudioClipId" in director_vm
     assert 'e.EventType != "pacing_progress"' in director_vm
