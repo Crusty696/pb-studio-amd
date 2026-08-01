@@ -1,0 +1,24 @@
+﻿{
+    "encoder":  "h264_amf",
+    "device_id":  1,
+    "adapter_luid":  "0x00000000_0x00012a2a",
+    "ffmpeg_sha256":  "04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00",
+    "ffprobe_sha256":  "3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4",
+    "capture_root":  "C:\\Users\\david\\AppData\\Local\\Temp\\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\\captures\\h264_amf-6051276f301044c0aa49c7858927a860",
+    "pid":  15388,
+    "output_bytes":  18186090,
+    "output_sha256":  "EBBA8879D82E7B21F93BADEC4974667254A22DA3527FD1D3D05512A7AE3F3917",
+    "codec":  "h264",
+    "width":  1920,
+    "height":  1080,
+    "frame_rate":  "60/1",
+    "readable_frames":  720,
+    "duration":  "12.000000",
+    "pid_engine_samples":  60,
+    "sampling_errors":  [
+                            "Die Daten in einer der Leistungsindikator-Stichproben sind ungültig. Überprüfen Sie für jedes PerformanceCounterSample-Objekt, ob die Status-Eigenschaft gültige Daten enthält.",
+                            "Die Daten in einer der Leistungsindikator-Stichproben sind ungültig. Überprüfen Sie für jedes PerformanceCounterSample-Objekt, ob die Status-Eigenschaft gültige Daten enthält."
+                        ],
+    "rx_engine_max":  1.9430632903314209,
+    "other_engine_max":  null
+}

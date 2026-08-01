@@ -1,0 +1,50 @@
+﻿{
+    "captured_at":  "2026-08-01T23:46:53.7875317+02:00",
+    "checkout_root":  "C:\\Users\\david\\AppData\\Local\\Temp\\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\\checkout",
+    "checkout_sha":  "a115585cc274a0c0fc6b18b624ef82cf2fdf98b6",
+    "checkout_clean":  true,
+    "directml_bundle":  {
+                            "id":  "pb-studio-directml-assets",
+                            "version":  "2026.08.01",
+                            "approval_status":  "approved",
+                            "archive_file":  "pb-studio-directml-assets-2026.08.01.zip",
+                            "archive_size":  3286356033,
+                            "archive_sha256":  "008aac9e637f95c349826667d0f1926c12d92df9bf201f4ef77134bee30029eb",
+                            "declared_files":  18,
+                            "verification":  "already matches approved bundle"
+                        },
+    "ffmpeg":  {
+                   "version":  "6.1.1-essentials_build-www.gyan.dev",
+                   "asset_url":  "https://github.com/GyanD/codexffmpeg/releases/download/6.1.1/ffmpeg-6.1.1-essentials_build.zip",
+                   "asset_sha256":  "742E32FC9F92681F9F254B925E1B613FDD8074BA40749D4879AEFDB009B94CC5",
+                   "ffmpeg_sha256":  "04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00",
+                   "ffprobe_sha256":  "3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4"
+               },
+    "adapter":  {
+                    "name":  "AMD Radeon RX 7800 XT",
+                    "device_id":  1,
+                    "luid":  "0x00000000_0x00012a2a",
+                    "dedicated_vram_bytes":  16963137536,
+                    "selection_policy":  "highest_vram_amd"
+                },
+    "productive_amf_args":  [
+                                "-init_hw_device",
+                                "d3d11va=pb_amf:1"
+                            ],
+    "productive_probes":  {
+                              "check_amf_available":  true,
+                              "render_h264_probe":  true,
+                              "render_hevc_probe":  true
+                          },
+    "environment":  {
+                        "python":  "3.11.9",
+                        "numpy":  "1.26.4",
+                        "onnxruntime":  "1.19.2",
+                        "available_providers":  [
+                                                    "DmlExecutionProvider",
+                                                    "CPUExecutionProvider"
+                                                ],
+                        "requirements_sha256":  "6CEFB05B319105BAFF0D78D72D7EFB50BEC43594CBA97CCF61A373F8865FF7A7",
+                        "environment_origin":  "isolated clean-checkout T407 venv; dependency file byte-identical to T411 checkout"
+                    }
+}

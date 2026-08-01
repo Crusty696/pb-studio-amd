@@ -92,8 +92,8 @@ Updated: 2026-07-30T07:52:00+02:00
 ## OBJ-72 Release-Fähigkeit T370–T415
 
 Updated: 2026-08-01
-Gesamt: **41/46 PASS (89,1 %)**
-Aktuell: **T410 PASS; aktive Audio-, Video-, Pacing-, Timeline- und Brain-Jobs schreiben nach A→B weder in B noch in dessen UI**
+Gesamt: **42/46 PASS (91,3 %)**
+Aktuell: **T412 IN PROGRESS; Restart-Signaturfehler und unvollständige terminale Zustandsverträge bestätigt**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
 |---|---|---:|---|---|---:|---|
@@ -138,8 +138,8 @@ Aktuell: **T410 PASS; aktive Audio-, Video-, Pacing-, Timeline- und Brain-Jobs s
 | T408 GUI-Wahrheit | PASS | 3–6 h | GUI-Agent + Teamleiter | QC | 1,4 h | 14 Views, Fehler-/Löschzustand, 70/70 autoritative Auflösungs-/DPI-Renderings PASS (`evidence/T408-gui-release-gate.md`) |
 | T409 Accessibility-QC | PASS | 3–6 h | GUI-Agent | QC | 0,8 h | Keyboard, Fokus, UIA und 14/14 High-Contrast-Renderings PASS (`evidence/T409-accessibility-release-gate.md`) |
 | T410 Projektwechsel-E2E | PASS | 4–8 h | Teamleiter/Test-Team + unabhängiger Reviewer | QC | 2,0 h | 5/5 Backend mit realem Brain-Rebind/Lease-Retirement und 5/5 echte UI-A→B-Wechsel PASS (`evidence/T410-project-switch-e2e.md`) |
-| T411 DirectML-/AMF-Fresh-Install | OPEN | 4–8 h | Teamleiter/GPU-Agent | QC | – | RX 7800 XT, LUID, Flags, Assets |
-| T412 Render-Retry/Restart | OPEN | 3–6 h | Teamleiter/Render-Agent | QC | – | aktive Dedupe, Retry, Inhaltsidentität |
+| T411 DirectML-/AMF-Fresh-Install | PASS | 4–8 h | Teamleiter/GPU-/Render-Agent + unabhängiger Reviewer | QC | 1,2 h | 5/5 DirectML, H.264/HEVC-AMF, exakte RX-LUID, 18/18 Assets und 103/103 Vertragsprüfungen PASS (`evidence/T411-directml-amf-fresh-install.md`) |
+| T412 Render-Retry/Restart | IN PROGRESS | 3–6 h | Teamleiter/Render-Agent | QC | 0,1 h | echter Restart-Aufruf verletzt `_run_render_task`-Signatur; terminale Transitionen und Contentwechsel-Belege offen |
 | T413 Security/Provenienz | OPEN | 2–5 h | Security-Agent + Reviewer | QC | – | Secret/SCA/SBOM/Hashes/Commit |
 | T414 Abschlusswahrheit | OPEN | 2–4 h | Teamleiter | Z-DOCS/QC | – | QC/Brain/Marker-Digests; `.qc-passed` nur 100 % |
 | T415 Veröffentlichung | OPEN | 1–3 h | Teamleiter | Git/Remote | – | PR, Required Checks, Main, Release |

@@ -4,15 +4,15 @@ Hardware-Verifikation gemäß
 [`specs/dod.md`](../specs/dod.md). Alle ausführbaren Prüfer sind im jeweiligen
 Abschnitt benannt; nicht vorhandene historische Skripte sind kein Prüfpfad.
 
-> **Status 2026-07-31:** Der letzte akzeptierte Live-Beleg T363 ordnete RAFT,
-> SigLIP, Moondream Vision, CLAP Audio/Text und Audio-MDX der AMD Radeon RX
-> 7800 XT, DXGI-Index `1`, LUID `0x00000000_0x0001185b` zu; die iGPU blieb
-> dabei bei 0 %. Dieser Beleg ist eine Vorleistung, keine Freigabe des
-> aktuellen Worktrees. Release-Gate T411 muss dieselbe Identität,
-> `DmlExecutionProvider`, beide DirectML-Speicherflags, AMF und alle
-> Manifest-Hashes auf einer frischen Installation erneut belegen. Moondream
-> Vision ist bereit; Caption bleibt mangels vollständig DirectML-fähigem
-> Decoder ausdrücklich `unavailable`.
+> **Status 2026-08-01:** Release-Gate T411 ist bestanden. RAFT, SigLIP,
+> Moondream Vision, CLAP Audio/Text und Audio-MDX liefen im sauberen externen
+> Checkout auf der AMD Radeon RX 7800 XT, DXGI-Index `1`, LUID
+> `0x00000000_0x00012a2a`. Alle Sessions belegten `DmlExecutionProvider`,
+> beide deaktivierten DirectML-Speicherflags und den gesperrten CPU-Fallback.
+> H.264/HEVC-AMF liefen auf derselben LUID. Autoritativ ist
+> [`T411-directml-amf-fresh-install.md`](../specs/00013-system-wide-bug-hunting-audit/evidence/T411-directml-amf-fresh-install.md).
+> Moondream Vision ist bereit; Caption bleibt mangels vollständig
+> DirectML-fähigem Decoder ausdrücklich `unavailable`.
 
 ## Freigegebene Modellherkunft
 
@@ -22,6 +22,7 @@ Abschnitt benannt; nicht vorhandene historische Skripte sind kein Prüfpfad.
 | SigLIP SO400M | `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` | Apache-2.0 |
 | CLAP Audio/Text | `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763` | BSD-3-Clause AND Apache-2.0 |
 | CLAP Processor | `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a` | Apache-2.0 |
+| Audio-MDX | `TRvlvr/model_repo@356bbd334a0ebb8449c602503ac204a3c06df4f6` | MIT |
 | Moondream Vision | `Heliosoph/moondream2-onnx@e48d8acc253b09d8f201206aa126388742298452` | Apache-2.0 |
 
 Verbindlich sind die exakten Source-, Target-, Archiv- und Lizenzhashes in

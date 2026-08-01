@@ -134,7 +134,7 @@ Projekt zuordnen oder Erfolg vortäuschen.
   Keyboard-, Fokus-, UIA- und High-Contrast-QC.
 - **TR-351:** Aktive Audio-, Video-, Pacing-, Timeline- und Brain-Operationen
   überstehen A→B-Projektwechsel ohne Write in B oder stale UI-Publikation.
-- **TR-352:** Fresh-Install-Smoke beweist RAFT, SigLIP, Moondream, CLAP und
+- **TR-352:** Fresh-Install-Smoke beweist RAFT, SigLIP, Moondream Vision, CLAP und
   Audio-MDX auf RX 7800 XT/korrektem LUID mit beiden
   DirectML-Speicherflags sowie H.264/HEVC-AMF.
 - **TR-353:** Secret Scan, Python-/NuGet-SCA, Dependency Review, SBOM,

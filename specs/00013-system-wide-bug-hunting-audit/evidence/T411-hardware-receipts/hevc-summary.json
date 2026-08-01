@@ -1,0 +1,23 @@
+﻿{
+    "encoder":  "hevc_amf",
+    "device_id":  1,
+    "adapter_luid":  "0x00000000_0x00012a2a",
+    "ffmpeg_sha256":  "04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00",
+    "ffprobe_sha256":  "3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4",
+    "capture_root":  "C:\\Users\\david\\AppData\\Local\\Temp\\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\\captures\\hevc_amf-23622323f2114a009cb6674aa3fec9f6",
+    "pid":  21256,
+    "output_bytes":  18230843,
+    "output_sha256":  "2EF3567C31CCA41494ACD06D45356A84BBF54A73D56401A6CE998813902D019D",
+    "codec":  "hevc",
+    "width":  1920,
+    "height":  1080,
+    "frame_rate":  "60/1",
+    "readable_frames":  720,
+    "duration":  "12.000000",
+    "pid_engine_samples":  59,
+    "sampling_errors":  [
+                            "Die Daten in einer der Leistungsindikator-Stichproben sind ungültig. Überprüfen Sie für jedes PerformanceCounterSample-Objekt, ob die Status-Eigenschaft gültige Daten enthält."
+                        ],
+    "rx_engine_max":  1.9584626061072523,
+    "other_engine_max":  null
+}
