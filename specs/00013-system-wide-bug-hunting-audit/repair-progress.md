@@ -92,7 +92,7 @@ Updated: 2026-07-30T07:52:00+02:00
 ## OBJ-72 Release-Fähigkeit T370–T415
 
 Updated: 2026-07-31
-Gesamt: **37/46 PASS (80,4 %)**
+Gesamt: **38/46 PASS (82,6 %)**
 Aktuell: **T404 PASS; gezielte Fault-Injection 48 Python + 9 native Tests**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
@@ -134,7 +134,7 @@ Aktuell: **T404 PASS; gezielte Fault-Injection 48 Python + 9 native Tests**
 | T404 Gezielte Fault-Injection | PASS | 3–6 h | Test-Team | QC | 1,2 h | 48/48 Python + 9/9 native PASS; 5 Build-/Betriebslücken geschlossen (`evidence/T404-targeted-fault-injection.md`) |
 | T405 Python-Gesamtsuite | PASS | 1–3 h | Teamleiter/Test-Team | QC | 3,0 h | 1.127 Tests, 0 Fehler, 11 freigegebene Skips, 0 ungeprüfte Skips, Coverage 61,4 % (`evidence/T405-python-release-gate.md`) |
 | T406 Native C#-Tests und WPF Release | PASS | 1–3 h | Teamleiter/WPF-Test | QC | 0,2 h | Locked Restore PASS; 28/28 Tests; WPF Release 0 Warnungen/0 Fehler (`evidence/T406-dotnet-release-gate.md`) |
-| T407 Clean-Checkout-Windows-Gate | OPEN | 2–5 h | Infra/Test-Team | QC | – | kein Generated-/Asset-/Cache-Vorteil |
+| T407 Clean-Checkout-Windows-Gate | PASS | 2–5 h | Infra/Test-Team | QC | 0,3 h | Externer Checkout, isolierte NuGet/Pip-Restores, NSwag, WPF 0/0, 28/28 Tests und 3,2-GB-Assetprüfung PASS (`evidence/T407-clean-checkout-gate.md`) |
 | T408 GUI-Wahrheit | OPEN | 3–6 h | GUI-Agent + Teamleiter | QC | – | 14 Views, Fehlerfälle, Auflösungen, DPI |
 | T409 Accessibility-QC | OPEN | 3–6 h | GUI-Agent | QC | – | Keyboard, Fokus, UIA, High Contrast |
 | T410 Projektwechsel-E2E | OPEN | 4–8 h | Teamleiter/Test-Team | QC | – | aktive Jobs A→B, null Cross-Write |
