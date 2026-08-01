@@ -33,6 +33,7 @@ def _capture_session(session: Any) -> None:
     options = session.get_session_options()
     provider_options = getattr(session, "get_provider_options", lambda: {})()
     receipt = {
+        "ordinal": len(SESSION_RECEIPTS) + 1,
         "providers": list(session.get_providers()),
         "provider_options": provider_options,
         "enable_mem_pattern": options.enable_mem_pattern,
@@ -41,8 +42,7 @@ def _capture_session(session: Any) -> None:
             "session.disable_cpu_ep_fallback"
         ),
     }
-    if receipt not in SESSION_RECEIPTS:
-        SESSION_RECEIPTS.append(receipt)
+    SESSION_RECEIPTS.append(receipt)
 
 
 def _install_capture() -> None:
