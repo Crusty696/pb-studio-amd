@@ -1,0 +1,343 @@
+{
+  "completeness": "partial",
+  "deferred": [
+    {
+      "id": "deferred_91913d5dbaff86fe",
+      "paths": [
+        "src/pb_studio/data/vector_store.py"
+      ],
+      "reason": "Whether the supported user-opened project workflow can deliver the required .faiss + sibling .pkl layout to automatic startup migration remains unproven.",
+      "surfaceIds": [
+        "surface_91913d5dbaff86fe"
+      ]
+    },
+    {
+      "id": "deferred_python_sca_release_closure",
+      "paths": [
+        "requirements.txt",
+        "requirements-direct.txt",
+        ".github/workflows/security.yml",
+        "scripts/security_gate.py"
+      ],
+      "reason": "The current lock has 27 upgradeable advisory instances and the existing PyPI-mode gate cannot audit the +cpu Torch distribution completely; OSV-gate repair and a refreshed lock are required.",
+      "surfaceIds": [
+        "surface_python_sca"
+      ]
+    }
+  ],
+  "documentType": "codex-security.coverage",
+  "excludePaths": [],
+  "explicitExclusions": [],
+  "includePaths": [
+    "."
+  ],
+  "inventoryStrategy": "repository",
+  "mode": "repository",
+  "openQuestions": [
+    {
+      "followUpPrompt": "At commit 814d2389e3ab687253328ab844ff3498a787621f, trace every supported project-open/import path to src/pb_studio/data/vector_db.py legacy pickle migration and either prove safe placement or replace pickle with a restricted format.",
+      "question": "Can any supported project import or legacy upgrade path place attacker-controlled vector metadata at the automatic pickle migration sink?"
+    },
+    {
+      "followUpPrompt": "At commit 814d2389e3ab687253328ab844ff3498a787621f, implement the documented OSV gate, refresh the Python 3.11 CPU-only lock, and validate every residual advisory against exact package/version/aliases and expiry policy.",
+      "question": "Which advisories remain after the compatible Python lock refresh and exact OSV inventory gate?"
+    }
+  ],
+  "scanId": "6ec79e8a-abb1-47b3-a304-3170a12a247e",
+  "schemaVersion": "1.0",
+  "surfaces": [
+    {
+      "disposition": "rejected",
+      "id": "surface_aa10c28c8a19fcc5",
+      "label": "Unauthenticated loopback API acts as a file-reading deputy for local video paths",
+      "notes": "UNC, device, network, and reparse paths are rejected. No supported lower-integrity sandbox or cross-user caller that can reach this user-scoped loopback listener is evidenced.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Sensitive data exposure"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_f3fbba2d62439daa",
+      "label": "The complete process-global chat history is returned by a loopback endpoint without owner authorization",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Sensitive data exposure"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_fe5db9e711db0588",
+      "label": "Unauthenticated timeline endpoint exposes project media paths and editing metadata",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Sensitive data exposure"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_073e377552312876",
+      "label": "The desktop trusts any loopback process returning HTTP success from /health as the PB Studio backend and can then send its owner capability to that process",
+      "notes": "Severity medium: Severity matrix: impact=high and likelihood=medium yields severity=medium; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Backend identity spoofing"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_def520771c05da3d",
+      "label": "VRAM resource limits can be changed without the launcher owner capability",
+      "notes": "Severity low: Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_5a5a13f52e830144",
+      "label": "Brain feedback allows unauthenticated learning-state mutation",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_f493acd77641753c",
+      "label": "Project creation is reachable without the launcher owner capability",
+      "notes": "Severity low: Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_44f2f489c7d9f3e0",
+      "label": "Project activation is reachable without the launcher owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_4d91b541fce5382b",
+      "label": "Durable project save is reachable without the launcher owner capability",
+      "notes": "Save has consistency controls and no request body carrying attacker state. A harmful chain would first require a separate mutation finding, which should be assessed independently rather than attributed here.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_ec5482ded15e1b55",
+      "label": "Project close and job cancellation are reachable without the launcher owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_8d9c73983d383271",
+      "label": "Current project metadata is disclosed without the launcher owner capability",
+      "notes": "Severity low: Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_e712a4baa3235be8",
+      "label": "Loopback client can evict all eligible GPU models without an owner capability",
+      "notes": "Only eligible idle models with unload callbacks are evicted and failure is reported. A same-user malicious process can already consume equivalent host resources; no durable state or secret is affected.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_2e1c5876051a8ac0",
+      "label": "Each unauthenticated GPU SSE connection starts an uncapped polling loop",
+      "notes": "Each loop sleeps five seconds and exits on disconnect; no durable state, privilege, secret, or cross-user boundary impact is shown. The same-user process can consume CPU/memory directly.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_8f33a8fe1b20a803",
+      "label": "Preview rendering duration has no upper bound",
+      "notes": "Clip spans and per-segment 60-second timeouts constrain units of work; no durable corruption or privilege boundary is shown, and the same-user caller can consume comparable resources directly.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_9ea85b5824a67af7",
+      "label": "Timeline replacement accepts an unbounded entry collection",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_9edf418c02fb31a0",
+      "label": "Video import accepts an unbounded path list and performs expensive work sequentially",
+      "notes": "Each path is policy-checked, probed, and hashed; no cross-boundary read or durable corruption is established for this unbounded-list row. The same-user process can generate equivalent I/O directly.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Uncontrolled resource consumption"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_72037f0fea5c0719",
+      "label": "A still-runnable archived model downloader enables Hugging Face remote Python code without pinning a repository revision or verifying downloaded code",
+      "notes": "The file is under archive/tools-old, is not invoked by release/setup/runtime workflows, and the prerequisite already requires deliberate developer execution of obsolete tooling. This is not the shipped model-provisioning path.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "needs_follow_up",
+      "id": "surface_91913d5dbaff86fe",
+      "label": "Legacy vector metadata is deserialized with pickle during automatic startup migration",
+      "notes": "Whether the supported user-opened project workflow can deliver the required .faiss + sibling .pkl layout to automatic startup migration remains unproven.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_be3b5dbfde046cb2",
+      "label": "Full user chat prompts and assistant responses are copied verbatim into the live backend log channel",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Sensitive information in logs"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_0a864a4a05c64c26",
+      "label": "Project MCP configuration executes an unpinned latest npm package",
+      "notes": "Severity low: Severity matrix: impact=high and likelihood=low yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Security boundary"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_581eda68868c088e",
+      "label": "Loopback client can batch-delete audio clips without an owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_1b8a430d8019e4db",
+      "label": "Loopback client can delete an audio clip without an owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "rejected",
+      "id": "surface_115d513ff0197aef",
+      "label": "Destructive chat-tool approval is exposed without the backend owner capability, so a local HTTP client can approve a destructive tool call from its own chat stream",
+      "notes": "The random ID is not leaked cross-client; it is intentionally returned to the request stream that created it. Owner capability is documented for destructive lifecycle operations, while chat confirmation is an action-consent control. No extra privilege or independently protected sink is shown beyond the already separate route findings.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_82828171ed72bfb7",
+      "label": "Loopback client can replace the active project timeline without an owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_32cc0e1eaa3598e0",
+      "label": "Loopback client can batch-delete video and vector state without an owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "reported",
+      "id": "surface_dfee7ea23b512cd0",
+      "label": "Loopback client can delete a video clip and its persisted vector state without an owner capability",
+      "notes": "Severity low: Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression.",
+      "receiptRefs": [
+        "artifacts/02_discovery/candidate_ledger.jsonl"
+      ],
+      "riskArea": "Missing authorization"
+    },
+    {
+      "disposition": "needs_follow_up",
+      "id": "surface_python_sca",
+      "label": "Python dependency vulnerability audit",
+      "notes": "OSV completed the full pinned inventory and normalized 69 advisories; 27 lock upgrades and formal, exact, expiring treatment of residual non-reachable advisories remain release blockers.",
+      "receiptRefs": [
+        "artifacts/03_sca/python-sca-assessment.json",
+        "artifacts/03_sca/python-sca-gate-design.md"
+      ],
+      "riskArea": "Software supply chain"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "surface_secret_history",
+      "label": "Tracked files and Git-history secret scan",
+      "notes": "1,451 tracked entries and 3,965 historical entries passed; all seven seeded secret rules were detected.",
+      "receiptRefs": [
+        "artifacts/02_discovery/secret-sca.log",
+        "artifacts/03_sca/security-gate-receipts/secret-scan-receipt.json"
+      ],
+      "riskArea": "Secrets"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "surface_nuget_sca",
+      "label": "NuGet dependency vulnerability audit",
+      "notes": "Both production NuGet graphs are clean and the intentionally vulnerable Newtonsoft.Json fixture was detected.",
+      "receiptRefs": [
+        "artifacts/02_discovery/nuget-sca.log",
+        "artifacts/03_sca/security-gate-receipts/nuget-sca-receipt.json"
+      ],
+      "riskArea": "Software supply chain"
+    }
+  ]
+}

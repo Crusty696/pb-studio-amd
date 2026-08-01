@@ -1,0 +1,3103 @@
+{
+  "documentType": "codex-security.findings",
+  "findings": [
+    {
+      "attackPath": {
+        "changeConditions": "Severity drops if attachment cryptographically challenges the child capability/process identity before any trusted request, or if a verified child PID/handle exclusively owns the port.",
+        "counterEvidence": [
+          "The capability is high entropy and not otherwise exposed, but that does not help because the WPF client itself transmits it after the health-only attachment check. Same-host pre-binding is required."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A same-host process binds 127.0.0.1:8765 before desktop startup and returns success from /health. Flow: root_control PBStudio.UI/Services/PythonBridgeService.cs:114-117 -> root_control PBStudio.UI/Services/PythonBridgeService.cs:343-348 -> sink PBStudio.UI/Services/ApiClient.cs:1056-1061. Effect: A same-user process can pre-bind 127.0.0.1:8765. StartAsync calls IsBackendAlreadyHealthyAsync, which checks only response.IsSuccessStatusCode, then AttachToExistingBackend marks the service ready without a challenge or process identity check. Later owner-authorized ApiClient calls attach BackendOwnerCapability to the same BaseAddress, allowing the spoof service to capture it and return attacker-controlled application state."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "high",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A process pre-binds 127.0.0.1:8765, answers /health successfully, the desktop attaches without backend identity proof, and later sends the random owner capability and application requests to the spoof service."
+        },
+        "severity": "medium",
+        "severityRationale": "Severity matrix: impact=high and likelihood=medium yields severity=medium; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "if (await IsBackendAlreadyHealthyAsync().ConfigureAwait(false))\n            {\n                AttachToExistingBackend(\"Python Backend l\u00e4uft bereits auf Port {Port} - kein neuer Start n\u00f6tig\");\n                return;",
+          "endLine": 117,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Root Control evidence",
+          "language": "csharp",
+          "path": "PBStudio.UI/Services/PythonBridgeService.cs",
+          "role": "root_control",
+          "startLine": 114
+        },
+        {
+          "code": "private async Task<bool> IsBackendAlreadyHealthyAsync()\n    {\n        try\n        {\n            var response = await _httpClient.GetAsync(\"/health\").ConfigureAwait(false);\n            return response.IsSuccessStatusCode;",
+          "endLine": 348,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "csharp",
+          "path": "PBStudio.UI/Services/PythonBridgeService.cs",
+          "role": "root_control",
+          "startLine": 343
+        },
+        {
+          "code": "};\n            request.Headers.TryAddWithoutValidation(\n                BackendOwnerCapability.HeaderName,\n                capability);\n            using var response = await _http.SendAsync(request, token)\n                .ConfigureAwait(false);",
+          "endLine": 1061,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "csharp",
+          "path": "PBStudio.UI/Services/ApiClient.cs",
+          "role": "sink",
+          "startLine": 1056
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-073e377552312876",
+        "ledgerRowId": "candidate-073e377552312876"
+      },
+      "findingId": "csf_0b838ed7fa7aa9548953d554",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:d08282c0f1535f59cf20da4bfb8c998b0760b9ece342806530db80c8aac575b3"
+      },
+      "identity": {
+        "anchor": "cwe-290-desktop-loopback-backend-spoof",
+        "instance": "073e377552312876"
+      },
+      "locations": [
+        {
+          "endLine": 117,
+          "path": "PBStudio.UI/Services/PythonBridgeService.cs",
+          "role": "root_control",
+          "startLine": 114
+        },
+        {
+          "endLine": 348,
+          "path": "PBStudio.UI/Services/PythonBridgeService.cs",
+          "role": "root_control",
+          "startLine": 343
+        },
+        {
+          "endLine": 1061,
+          "path": "PBStudio.UI/Services/ApiClient.cs",
+          "role": "sink",
+          "startLine": 1056
+        }
+      ],
+      "occurrenceId": "occ_10b882e8ffab3c7caea30c22",
+      "preventiveControls": [
+        "Centralize backend identity verification in PythonBridgeService.",
+        "Never treat HTTP success alone as process identity."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require a nonce-based HMAC challenge response from the child backend before attaching or sending the owner capability; reject a health-only pre-bound process and test port-prebinding attacks.",
+      "remediationTests": [
+        "A fake loopback /health responder cannot become the trusted backend.",
+        "The owner capability is never sent before successful backend identity proof."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "A same-user process can pre-bind 127.0.0.1:8765. StartAsync calls IsBackendAlreadyHealthyAsync, which checks only response.IsSuccessStatusCode, then AttachToExistingBackend marks the service ready without a challenge or process identity check. Later owner-authorized ApiClient calls attach BackendOwnerCapability to the same BaseAddress, allowing the spoof service to capture it and return attacker-controlled application state. Closest-control assessment: The capability is random, but the pre-bound spoof service receives it on a later owner-authorized request because /health is the only attachment check."
+      },
+      "ruleId": "cwe-290.desktop-loopback-backend-spoof",
+      "severity": {
+        "changeConditions": "Severity drops if attachment cryptographically challenges the child capability/process identity before any trusted request, or if a verified child PID/handle exclusively owns the port.",
+        "level": "medium",
+        "rationale": "Severity matrix: impact=high and likelihood=medium yields severity=medium; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "The desktop trusts any loopback process returning HTTP success from /health as the PB Studio backend and can then send its owner capability to that process.",
+      "taxonomy": {
+        "category": "Backend identity spoofing",
+        "cwe": [
+          "CWE-290",
+          "CWE-346"
+        ]
+      },
+      "title": "The desktop trusts any loopback process returning HTTP success from /health as the PB Studio backend and can then send its owner capability to that process",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "PBStudio.UI/Services/PythonBridgeService.cs:114-117; PBStudio.UI/Services/PythonBridgeService.cs:343-348",
+        "counterEvidence": [
+          "The capability is random, but the pre-bound spoof service receives it on a later owner-authorized request because /health is the only attachment check.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "The capability is random, but the pre-bound spoof service receives it on a later owner-authorized request because /health is the only attachment check.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: A same-user process can pre-bind 127.0.0.1:8765. StartAsync calls IsBackendAlreadyHealthyAsync, which checks only response.IsSuccessStatusCode, then AttachToExistingBackend marks the service ready without a challenge or process identity check. Later owner-authorized ApiClient calls attach BackendOwnerCapability to the same BaseAddress, allowing the spoof service to capture it and return attacker-controlled application state.",
+          "Cited target-commit ranges re-read: PBStudio.UI/Services/PythonBridgeService.cs:114-117 [root_control]; PBStudio.UI/Services/PythonBridgeService.cs:343-348 [root_control]; PBStudio.UI/Services/ApiClient.cs:1056-1061 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A same-host process binds 127.0.0.1:8765 before desktop startup and returns success from /health.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "PBStudio.UI/Services/ApiClient.cs:1056-1061",
+        "source": "",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if the MCP package is pinned to a reviewed immutable version/integrity and clients enforce that lock, or if the project MCP declaration is removed.",
+        "counterEvidence": [
+          "Claude local settings disable project MCP by default, and execution requires a compatible client plus enablement. This lowers likelihood but does not provide integrity once enabled; supply-chain compromise is explicitly in scope."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A compatible MCP client enables and launches the project MCP server. Flow: root_control .claude/settings.local.json:26-27 -> sink .mcp.json:3-7. Effect: The repository MCP entry uses npx -y @upstash/context7-mcp@latest. This resolves and executes mutable future package content instead of a reviewed immutable version. The checked-in Claude settings disable project MCP servers locally, but that client-specific setting is not an integrity control for other MCP-capable clients or users who enable the declared server."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "impact": "high",
+        "likelihood": "low",
+        "reachability": {
+          "summary": "An MCP-capable client that enables the checked-in server runs npx -y @upstash/context7-mcp@latest; compromise or malicious future publication of that mutable package executes under the developer account."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=high and likelihood=low yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "\"enableAllProjectMcpServers\": false,\n  \"enabledMcpjsonServers\": [],",
+          "endLine": 27,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Root Control evidence",
+          "language": "json",
+          "path": ".claude/settings.local.json",
+          "role": "root_control",
+          "startLine": 26
+        },
+        {
+          "code": "\"context7\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@upstash/context7-mcp@latest\"],\n      \"description\": \"Live-Dokumentation fuer onnxruntime, FastAPI, WPF, librosa, demucs und andere PB Studio Bibliotheken\"\n    }",
+          "endLine": 7,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Sink evidence",
+          "language": "json",
+          "path": ".mcp.json",
+          "role": "sink",
+          "startLine": 3
+        }
+      ],
+      "confidence": {
+        "level": "medium",
+        "rationale": "The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime."
+      },
+      "extensions": {
+        "candidateId": "candidate-0a864a4a05c64c26",
+        "ledgerRowId": "candidate-0a864a4a05c64c26"
+      },
+      "findingId": "csf_e1cae414a8fc515d4f4972d0",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:d313164e67f05ff8ff2bd59d5537a260dbd207154db469c5e9c6110164e24930"
+      },
+      "identity": {
+        "anchor": "cwe-829-unpinned-tool-execution-.mcp.json-5",
+        "instance": "0a864a4a05c64c26"
+      },
+      "locations": [
+        {
+          "endLine": 27,
+          "path": ".claude/settings.local.json",
+          "role": "root_control",
+          "startLine": 26
+        },
+        {
+          "endLine": 7,
+          "path": ".mcp.json",
+          "role": "sink",
+          "startLine": 3
+        }
+      ],
+      "occurrenceId": "occ_ae9a213d1d276abce32977e6",
+      "preventiveControls": [
+        "Automate moving-tag detection for executable package configuration."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Replace the @latest MCP package reference with an reviewed exact version and integrity-bound lock or local installed executable.",
+      "remediationTests": [
+        "Configuration rejects moving tags such as latest.",
+        "The resolved package/version/integrity tuple is recorded in release provenance."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "summary": "The repository MCP entry uses npx -y @upstash/context7-mcp@latest. This resolves and executes mutable future package content instead of a reviewed immutable version. The checked-in Claude settings disable project MCP servers locally, but that client-specific setting is not an integrity control for other MCP-capable clients or users who enable the declared server. Closest-control assessment: Claude local settings disable project MCP servers by default, but that client-specific setting does not pin the package when the project MCP entry is enabled or used elsewhere."
+      },
+      "ruleId": "cwe-829.unpinned-tool-execution-.mcp.json-5",
+      "severity": {
+        "changeConditions": "Ignore if the MCP package is pinned to a reviewed immutable version/integrity and clients enforce that lock, or if the project MCP declaration is removed.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=high and likelihood=low yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Project MCP configuration executes an unpinned latest npm package",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-829"
+        ]
+      },
+      "title": "Project MCP configuration executes an unpinned latest npm package",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "medium",
+        "confidence_rationale": "The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime.",
+        "control": ".claude/settings.local.json:26-27",
+        "counterEvidence": [
+          "Claude local settings disable project MCP servers by default, but that client-specific setting does not pin the package when the project MCP entry is enabled or used elsewhere.",
+          "Execution depends on a compatible MCP client enabling the project configuration."
+        ],
+        "counterevidence_or_proof_gap": "Claude local settings disable project MCP servers by default, but that client-specific setting does not pin the package when the project MCP entry is enabled or used elsewhere.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The repository MCP entry uses npx -y @upstash/context7-mcp@latest. This resolves and executes mutable future package content instead of a reviewed immutable version. The checked-in Claude settings disable project MCP servers locally, but that client-specific setting is not an integrity control for other MCP-capable clients or users who enable the declared server.",
+          "Cited target-commit ranges re-read: .claude/settings.local.json:26-27 [root_control]; .mcp.json:3-7 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A compatible MCP client enables and launches the project MCP server.",
+        "remaining_uncertainty": "Execution depends on a compatible MCP client enabling the project configuration.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": ".mcp.json:3-7",
+        "source": "",
+        "summary": "The candidate survived compact validation as reportable with medium confidence. The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "counterEvidence": [
+          "The action is limited to a known active-project clip and the attacker is local/same-user, but the protected project-state boundary is crossed."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/audio_router.py:476-486 -> root_control backend/main.py:617-626 -> sink backend/routers/audio_router.py:486-486. Effect: The audio DELETE route is mounted without a global authorization dependency and directly calls state.delete_audio_clip. In the same application, /shutdown explicitly requires and verifies OWNER_CAPABILITY_HEADER, showing that an owner capability exists but is not enforced here."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller supplies one audio clip ID; the route durably removes that active-project clip state without per-launch owner authorization."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.delete(\n    \"/clips/{clip_id}\",\n    response_model=DeleteResponse,\n    summary=\"Audio-Clip loeschen (single)\",\n)\nasync def delete_clip(\n    clip_id: int,\n    state: AppState = Depends(get_app_state),\n) -> DeleteResponse:\n    \"\"\"Loescht einen einzelnen Audio-Clip aus In-Memory + SQLite.\"\"\"\n    if state.delete_audio_clip(clip_id):",
+          "endLine": 486,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/audio_router.py",
+          "role": "entrypoint",
+          "startLine": 476
+        },
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "if state.delete_audio_clip(clip_id):",
+          "endLine": 486,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/audio_router.py",
+          "role": "sink",
+          "startLine": 486
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-1b8a430d8019e4db",
+        "ledgerRowId": "candidate-1b8a430d8019e4db"
+      },
+      "findingId": "csf_f8437d3ea0089dc02a76f148",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:67eda7fcf925331c47f1bb8767e3721a12cbc1171d8f886bc92bc44bc8127a73"
+      },
+      "identity": {
+        "anchor": "cwe-862-audio-delete-single",
+        "instance": "1b8a430d8019e4db"
+      },
+      "locations": [
+        {
+          "endLine": 486,
+          "path": "backend/routers/audio_router.py",
+          "role": "entrypoint",
+          "startLine": 476
+        },
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 486,
+          "path": "backend/routers/audio_router.py",
+          "role": "sink",
+          "startLine": 486
+        }
+      ],
+      "occurrenceId": "occ_c9bdf176db0d1b27691fa1c9",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "The audio DELETE route is mounted without a global authorization dependency and directly calls state.delete_audio_clip. In the same application, /shutdown explicitly requires and verifies OWNER_CAPABILITY_HEADER, showing that an owner capability exists but is not enforced here. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-862.audio-delete-single",
+      "severity": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Loopback client can delete an audio clip without an owner capability",
+      "taxonomy": {
+        "category": "Missing authorization",
+        "cwe": [
+          "CWE-862"
+        ]
+      },
+      "title": "Loopback client can delete an audio clip without an owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The audio DELETE route is mounted without a global authorization dependency and directly calls state.delete_audio_clip. In the same application, /shutdown explicitly requires and verifies OWNER_CAPABILITY_HEADER, showing that an owner capability exists but is not enforced here.",
+          "Cited target-commit ranges re-read: backend/routers/audio_router.py:476-486 [entrypoint]; backend/main.py:617-626 [root_control]; backend/routers/audio_router.py:486-486 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/audio_router.py:486-486",
+        "source": "backend/routers/audio_router.py:476-486",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "counterEvidence": [
+          "The action is loopback/same-user and constrained to active-project IDs, but batch deletion crosses the protected project/FAISS integrity boundary."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/video_router.py:693-706 -> root_control backend/main.py:617-626 -> sink backend/routers/video_router.py:706-706. Effect: The caller controls clip_ids and the unauthenticated batch endpoint invokes state.delete_video_clip for every id. No router/global authorization dependency is installed."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller supplies multiple video clip IDs; the route durably removes catalog and related vector state for each active-project clip."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.delete(\n    \"/clips\",\n    response_model=DeleteResponse,\n    summary=\"Video-Clips batch-loeschen\",\n)\nasync def delete_clips_batch(\n    request: BatchDeleteRequest,\n    state: AppState = Depends(get_app_state),\n) -> DeleteResponse:\n    \"\"\"Batch-Delete: loescht alle in clip_ids aufgefuehrten Video-Clips.\"\"\"\n    deleted = 0\n    not_found = []\n    for cid in request.clip_ids:\n        if state.delete_video_clip(cid):",
+          "endLine": 706,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/video_router.py",
+          "role": "entrypoint",
+          "startLine": 693
+        },
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "if state.delete_video_clip(cid):",
+          "endLine": 706,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/video_router.py",
+          "role": "sink",
+          "startLine": 706
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-32cc0e1eaa3598e0",
+        "ledgerRowId": "candidate-32cc0e1eaa3598e0"
+      },
+      "findingId": "csf_9e0135ba77bcecae100fdf50",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:d96e9d4a9c2b359eb4d56fe5022e1de07cc58b136332fc429bdd516642d45a37"
+      },
+      "identity": {
+        "anchor": "cwe-862-video-delete-batch",
+        "instance": "32cc0e1eaa3598e0"
+      },
+      "locations": [
+        {
+          "endLine": 706,
+          "path": "backend/routers/video_router.py",
+          "role": "entrypoint",
+          "startLine": 693
+        },
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 706,
+          "path": "backend/routers/video_router.py",
+          "role": "sink",
+          "startLine": 706
+        }
+      ],
+      "occurrenceId": "occ_ce87209a2ab42ce68b67bcea",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "The caller controls clip_ids and the unauthenticated batch endpoint invokes state.delete_video_clip for every id. No router/global authorization dependency is installed. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-862.video-delete-batch",
+      "severity": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Loopback client can batch-delete video and vector state without an owner capability",
+      "taxonomy": {
+        "category": "Missing authorization",
+        "cwe": [
+          "CWE-862"
+        ]
+      },
+      "title": "Loopback client can batch-delete video and vector state without an owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The caller controls clip_ids and the unauthenticated batch endpoint invokes state.delete_video_clip for every id. No router/global authorization dependency is installed.",
+          "Cited target-commit ranges re-read: backend/routers/video_router.py:693-706 [entrypoint]; backend/main.py:617-626 [root_control]; backend/routers/video_router.py:706-706 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/video_router.py:706-706",
+        "source": "backend/routers/video_router.py:693-706",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if activation is owner-authenticated or limited to an action-bound desktop capability.",
+        "counterEvidence": [
+          "The path must be an existing permitted project and switching has context/epoch controls, but those preserve consistency rather than caller identity."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/project_router.py:488-500 -> root_control backend/owner_capability.py:12-23 -> sink backend/routers/project_router.py:571-577. Effect: POST /project/open accepts a caller-selected in-root directory and ultimately invokes _activate_project, switching Brain binding, project epoch, media catalog, timeline, and current state. No capability header or authorization dependency appears in the route."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller selects an existing in-root project; _activate_project rebinds Brain and replaces project epoch, catalog, timeline, and current state while the owner may be working."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\"/open\", response_model=ProjectInfo)\nasync def open_project(\n    request: ProjectOpen,\n    state: AppState = Depends(get_app_state),\n) -> ProjectInfo:\n    \"\"\"\u00d6ffnet ein bestehendes Projekt.\"\"\"\n\n    project_path = Path(request.path).resolve()\n    # SEC-001: Path-Traversal-Schutz f\u00fcr Open (gegen globalen Basis-Ordner)\n    allowed_base = Path(config.project_dir).resolve()\n    if not project_path.is_relative_to(allowed_base):\n        raise HTTPException(status_code=403, detail=\"Pfad au\u00dferhalb des erlaubten Projektverzeichnisses\")\n    if not project_path.exists():",
+          "endLine": 500,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 488
+        },
+        {
+          "code": "OWNER_CAPABILITY_HEADER = \"X-PBStudio-Owner-Capability\"\n_OWNER_CAPABILITY = os.environ.pop(OWNER_CAPABILITY_ENV, None)\n\n\ndef authorize_owner(owner_capability: str | None, *, operation: str) -> str:\n    \"\"\"Validate the launcher-provisioned capability and return its stable owner id.\"\"\"\n    expected = _OWNER_CAPABILITY\n    if not expected:\n        raise HTTPException(\n            status_code=503,\n            detail=f\"{operation} ist ohne Owner-Capability deaktiviert\",\n        )",
+          "endLine": 23,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "code": "try:\n        await _activate_project(\n            state,\n            project_path,\n            project_data,\n            candidate_state,\n        )",
+          "endLine": 577,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 571
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-44f2f489c7d9f3e0",
+        "ledgerRowId": "candidate-44f2f489c7d9f3e0"
+      },
+      "findingId": "csf_886701de207457ee633af731",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:92a5cc3c004d59cf05487b52adac32038b1900fc73725da2e192f6c18ea3f51f"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/project_router.py-488",
+        "instance": "44f2f489c7d9f3e0"
+      },
+      "locations": [
+        {
+          "endLine": 500,
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 488
+        },
+        {
+          "endLine": 23,
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "endLine": 577,
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 571
+        }
+      ],
+      "occurrenceId": "occ_711bac9a0c0f26d3ed029f3a",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /project/open accepts a caller-selected in-root directory and ultimately invokes _activate_project, switching Brain binding, project epoch, media catalog, timeline, and current state. No capability header or authorization dependency appears in the route. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/project_router.py-488",
+      "severity": {
+        "changeConditions": "Ignore if activation is owner-authenticated or limited to an action-bound desktop capability.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Project activation is reachable without the launcher owner capability",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-306"
+        ]
+      },
+      "title": "Project activation is reachable without the launcher owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/owner_capability.py:12-23",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /project/open accepts a caller-selected in-root directory and ultimately invokes _activate_project, switching Brain binding, project epoch, media catalog, timeline, and current state. No capability header or authorization dependency appears in the route.",
+          "Cited target-commit ranges re-read: backend/routers/project_router.py:488-500 [source]; backend/owner_capability.py:12-23 [root_control]; backend/routers/project_router.py:571-577 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/project_router.py:571-577",
+        "source": "backend/routers/project_router.py:488-500",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if deletion requires the launcher/session owner capability or another action-bound authenticated confirmation.",
+        "counterEvidence": [
+          "Loopback and same-user access constrain exposure; deletion is limited to active-project IDs and does not establish arbitrary filesystem deletion. Batch reachability increases impact but not privilege."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/audio_router.py:492-505 -> root_control backend/main.py:617-626 -> sink backend/routers/audio_router.py:505-505. Effect: The batch DELETE endpoint accepts caller-selected clip_ids and invokes state.delete_audio_clip for each id, while the mounted router has no authentication or owner-capability dependency."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller supplies multiple audio clip IDs; the batch route durably removes matching active-project clip state without per-launch owner authorization."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.delete(\n    \"/clips\",\n    response_model=DeleteResponse,\n    summary=\"Audio-Clips batch-loeschen\",\n)\nasync def delete_clips_batch(\n    request: BatchDeleteRequest,\n    state: AppState = Depends(get_app_state),\n) -> DeleteResponse:\n    \"\"\"Batch-Delete: loescht alle in clip_ids aufgefuehrten Audio-Clips.\"\"\"\n    deleted = 0\n    not_found = []\n    for cid in request.clip_ids:\n        if state.delete_audio_clip(cid):",
+          "endLine": 505,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/audio_router.py",
+          "role": "entrypoint",
+          "startLine": 492
+        },
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "if state.delete_audio_clip(cid):",
+          "endLine": 505,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/audio_router.py",
+          "role": "sink",
+          "startLine": 505
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-581eda68868c088e",
+        "ledgerRowId": "candidate-581eda68868c088e"
+      },
+      "findingId": "csf_7e31ce735a53ce7d86320f36",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:fce1afdd2fbf9ea7ba9d58cd8d89a7fbe7a377afdb95bc88c362f53dcc5474fd"
+      },
+      "identity": {
+        "anchor": "cwe-862-audio-delete-batch",
+        "instance": "581eda68868c088e"
+      },
+      "locations": [
+        {
+          "endLine": 505,
+          "path": "backend/routers/audio_router.py",
+          "role": "entrypoint",
+          "startLine": 492
+        },
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 505,
+          "path": "backend/routers/audio_router.py",
+          "role": "sink",
+          "startLine": 505
+        }
+      ],
+      "occurrenceId": "occ_2a14614d2775cc1af0372211",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "The batch DELETE endpoint accepts caller-selected clip_ids and invokes state.delete_audio_clip for each id, while the mounted router has no authentication or owner-capability dependency. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-862.audio-delete-batch",
+      "severity": {
+        "changeConditions": "Ignore if deletion requires the launcher/session owner capability or another action-bound authenticated confirmation.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Loopback client can batch-delete audio clips without an owner capability",
+      "taxonomy": {
+        "category": "Missing authorization",
+        "cwe": [
+          "CWE-862"
+        ]
+      },
+      "title": "Loopback client can batch-delete audio clips without an owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The batch DELETE endpoint accepts caller-selected clip_ids and invokes state.delete_audio_clip for each id, while the mounted router has no authentication or owner-capability dependency.",
+          "Cited target-commit ranges re-read: backend/routers/audio_router.py:492-505 [entrypoint]; backend/main.py:617-626 [root_control]; backend/routers/audio_router.py:505-505 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/audio_router.py:505-505",
+        "source": "backend/routers/audio_router.py:492-505",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if feedback is bound to an authenticated owner action or becomes non-persistent/untrusted telemetry excluded from learning.",
+        "counterEvidence": [
+          "The reset route is owner-protected and feedback values are schema-bounded, but feedback itself is durable and attributed to no authenticated caller."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/brain_router.py:142-146 -> root_control backend/routers/brain_router.py:362-393 -> sink backend/routers/brain_router.py:193-210. Effect: POST /brain/feedback accepts cut_id and rating and persists feedback through lease.run_write without an owner capability. In the same router, the destructive /brain/reset route explicitly requires and verifies the launcher capability, demonstrating that the control exists but is not applied to feedback."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller submits cut_id/rating feedback; the backend persists it into the active project Brain learning state without owner confirmation, allowing targeted model-behavior poisoning."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\"/feedback\", response_model=BrainFeedbackResponse)\nasync def feedback(\n    req: BrainFeedbackRequest,\n    state: AppState = Depends(get_app_state),\n) -> BrainFeedbackResponse:",
+          "endLine": 146,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/brain_router.py",
+          "role": "source",
+          "startLine": 142
+        },
+        {
+          "code": "@router.post(\n    \"/reset\",\n    response_model=BrainResetResponse,\n    responses={\n        403: {\"description\": \"Owner-Capability oder Token-Owner ungueltig.\"},\n        503: {\"description\": \"Backend wurde ohne Owner-Capability gestartet.\"},\n    },\n    openapi_extra={\n        \"parameters\": [\n            {\n                \"name\": OWNER_CAPABILITY_HEADER,\n                \"in\": \"header\",\n                \"required\": True,\n                \"schema\": {\"type\": \"string\"},\n                \"description\": (\n                    \"Runtime-required launcher capability; confirmation \"\n                    \"tokens are bound to this owner.\"\n                ),\n            }\n        ]\n    },\n)\nasync def reset(\n    req: Optional[BrainResetRequest] = None,\n    owner_capability: str | None = Header(\n        default=None,\n        alias=OWNER_CAPABILITY_HEADER,\n        include_in_schema=False,\n    ),\n) -> BrainResetResponse:\n    \"\"\"Owner-bound two-step reset with an expiring, single-use token.\"\"\"\n    owner_id = _authorize_reset_owner(owner_capability)",
+          "endLine": 393,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/routers/brain_router.py",
+          "role": "root_control",
+          "startLine": 362
+        },
+        {
+          "code": "def _apply_feedback(_connection):\n                    return feedback_logger.log_feedback(\n                        cut_id=req.cut_id,\n                        rating=req.rating,\n                        context_keys=context_keys,\n                        assignments=assignments,\n                    )\n\n                # Z2 / GPU-F4: log_feedback macht SQLite-INSERT + WeightStore-Math\n                # (~10-50ms). db_write_lock bleibt der globale Vertrag; der\n                # Lease-Guard linearisiert zusaetzlich gegen Projektwechsel.\n                from ..dependencies import db_write_lock\n                async with db_write_lock:\n                    try:\n                        bumps = await asyncio.to_thread(\n                            lease.run_write,\n                            _apply_feedback,\n                        )",
+          "endLine": 210,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/brain_router.py",
+          "role": "sink",
+          "startLine": 193
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-5a5a13f52e830144",
+        "ledgerRowId": "candidate-5a5a13f52e830144"
+      },
+      "findingId": "csf_43aa8ba6b34474ea21e71bdc",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:901dce54c572ef2b483b2f616dafd2b77dca1498d2b5d831cf9d9b733960bf0f"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/brain_router.py-142",
+        "instance": "5a5a13f52e830144"
+      },
+      "locations": [
+        {
+          "endLine": 146,
+          "path": "backend/routers/brain_router.py",
+          "role": "source",
+          "startLine": 142
+        },
+        {
+          "endLine": 393,
+          "path": "backend/routers/brain_router.py",
+          "role": "root_control",
+          "startLine": 362
+        },
+        {
+          "endLine": 210,
+          "path": "backend/routers/brain_router.py",
+          "role": "sink",
+          "startLine": 193
+        }
+      ],
+      "occurrenceId": "occ_a3e651f30b6a74595c940472",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /brain/feedback accepts cut_id and rating and persists feedback through lease.run_write without an owner capability. In the same router, the destructive /brain/reset route explicitly requires and verifies the launcher capability, demonstrating that the control exists but is not applied to feedback. Closest-control assessment: The reset route uses authorize_owner, confirming owner authorization exists but is absent from feedback."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/brain_router.py-142",
+      "severity": {
+        "changeConditions": "Ignore if feedback is bound to an authenticated owner action or becomes non-persistent/untrusted telemetry excluded from learning.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Brain feedback allows unauthenticated learning-state mutation",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-306"
+        ]
+      },
+      "title": "Brain feedback allows unauthenticated learning-state mutation",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/routers/brain_router.py:362-393",
+        "counterEvidence": [
+          "The reset route uses authorize_owner, confirming owner authorization exists but is absent from feedback.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "The reset route uses authorize_owner, confirming owner authorization exists but is absent from feedback.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /brain/feedback accepts cut_id and rating and persists feedback through lease.run_write without an owner capability. In the same router, the destructive /brain/reset route explicitly requires and verifies the launcher capability, demonstrating that the control exists but is not applied to feedback.",
+          "Cited target-commit ranges re-read: backend/routers/brain_router.py:142-146 [source]; backend/routers/brain_router.py:362-393 [root_control]; backend/routers/brain_router.py:193-210 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/brain_router.py:193-210",
+        "source": "backend/routers/brain_router.py:142-146",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if timeline replacement requires per-launch owner authentication or action-bound confirmation.",
+        "counterEvidence": [
+          "Path/media validation and project-context checks protect structural consistency but do not establish caller identity; loopback/same-user scope limits severity."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/pacing_router.py:328-341 -> root_control backend/main.py:617-626 -> sink backend/routers/pacing_router.py:419-421. Effect: POST /pacing/timeline accepts caller-controlled entries and commits them with state.set_timeline. The mounted router has no owner-capability/auth dependency."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller replaces the active timeline with caller-controlled entries; validation/probing completes and state.set_timeline commits the editing state without owner authentication."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\n    \"/timeline\",\n    response_model=StatusResponse,\n    summary=\"Timeline manuell aktualisieren\",\n    description=\"Ersetzt die aktuelle Timeline durch eine manuell bearbeitete Version.\",\n)\nasync def update_timeline(\n    request: TimelineUpdateRequest,\n    state: AppState = Depends(get_app_state)\n) -> StatusResponse:\n    \"\"\"Aktualisiert die Timeline im unveraenderlichen Projektkontext.\"\"\"\n    try:\n        async with state.project_operation() as context:\n            return await _update_timeline_for_project(request, state, context)",
+          "endLine": 341,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/pacing_router.py",
+          "role": "entrypoint",
+          "startLine": 328
+        },
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "with state.project_commit(context):\n        state.current_audio_path = current_audio_path\n        state.set_timeline(internal_cuts)",
+          "endLine": 421,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 419
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-82828171ed72bfb7",
+        "ledgerRowId": "candidate-82828171ed72bfb7"
+      },
+      "findingId": "csf_29e313784a4a6f1b6026596e",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:16b99382084ece08000f508c32689328afecf2f76e8a3a98a6ee5ebdc3e7adb8"
+      },
+      "identity": {
+        "anchor": "cwe-862-timeline-replace",
+        "instance": "82828171ed72bfb7"
+      },
+      "locations": [
+        {
+          "endLine": 341,
+          "path": "backend/routers/pacing_router.py",
+          "role": "entrypoint",
+          "startLine": 328
+        },
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 421,
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 419
+        }
+      ],
+      "occurrenceId": "occ_0c3dd24b0b7b9b8ed060ea27",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /pacing/timeline accepts caller-controlled entries and commits them with state.set_timeline. The mounted router has no owner-capability/auth dependency. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-862.timeline-replace",
+      "severity": {
+        "changeConditions": "Ignore if timeline replacement requires per-launch owner authentication or action-bound confirmation.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Loopback client can replace the active project timeline without an owner capability",
+      "taxonomy": {
+        "category": "Missing authorization",
+        "cwe": [
+          "CWE-862"
+        ]
+      },
+      "title": "Loopback client can replace the active project timeline without an owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /pacing/timeline accepts caller-controlled entries and commits them with state.set_timeline. The mounted router has no owner-capability/auth dependency.",
+          "Cited target-commit ranges re-read: backend/routers/pacing_router.py:328-341 [entrypoint]; backend/main.py:617-626 [root_control]; backend/routers/pacing_router.py:419-421 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/pacing_router.py:419-421",
+        "source": "backend/routers/pacing_router.py:328-341",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if sensitive path/identifier fields are removed or the endpoint gains per-launch authentication.",
+        "counterEvidence": [
+          "No media bytes or credentials are returned, and loopback limits exposure; the metadata still reveals protected project identity and filesystem location to an unauthenticated local process."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/project_router.py:746-750 -> root_control backend/owner_capability.py:12-23 -> sink backend/routers/project_router.py:751-754. Effect: GET /project/info has no authentication dependency and returns the current project object, including its absolute path, database project identifier, timestamps, and media counts."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "low",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host process GETs /project/info and obtains the active project absolute path, database identifier, timestamps, and media counts."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.get(\"/info\", response_model=ProjectInfo)\nasync def project_info(state: AppState = Depends(get_app_state)) -> ProjectInfo:\n    \"\"\"Gibt Informationen zum aktuellen Projekt zur\u00fcck.\"\"\"\n    if not state.current_project:\n        raise HTTPException(status_code=400, detail=\"Kein Projekt ge\u00f6ffnet\")",
+          "endLine": 750,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 746
+        },
+        {
+          "code": "OWNER_CAPABILITY_HEADER = \"X-PBStudio-Owner-Capability\"\n_OWNER_CAPABILITY = os.environ.pop(OWNER_CAPABILITY_ENV, None)\n\n\ndef authorize_owner(owner_capability: str | None, *, operation: str) -> str:\n    \"\"\"Validate the launcher-provisioned capability and return its stable owner id.\"\"\"\n    expected = _OWNER_CAPABILITY\n    if not expected:\n        raise HTTPException(\n            status_code=503,\n            detail=f\"{operation} ist ohne Owner-Capability deaktiviert\",\n        )",
+          "endLine": 23,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "code": "project_data = dict(state.current_project)\n    project_data[\"audio_count\"] = len(state.get_audio_clips_snapshot())\n    project_data[\"video_count\"] = len(state.get_video_clips_snapshot())\n    return ProjectInfo(**project_data)",
+          "endLine": 754,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 751
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-8d9c73983d383271",
+        "ledgerRowId": "candidate-8d9c73983d383271"
+      },
+      "findingId": "csf_a8f7ff150e510f970c80f0d5",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:47e96e664f3add4e56fd2986519edb04ec6ddc1ac2153630afd74aee4f56195c"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/project_router.py-746",
+        "instance": "8d9c73983d383271"
+      },
+      "locations": [
+        {
+          "endLine": 750,
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 746
+        },
+        {
+          "endLine": 23,
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "endLine": 754,
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 751
+        }
+      ],
+      "occurrenceId": "occ_126b5da5b981aeee94e1c004",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "GET /project/info has no authentication dependency and returns the current project object, including its absolute path, database project identifier, timestamps, and media counts. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/project_router.py-746",
+      "severity": {
+        "changeConditions": "Ignore if sensitive path/identifier fields are removed or the endpoint gains per-launch authentication.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Current project metadata is disclosed without the launcher owner capability",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-306"
+        ]
+      },
+      "title": "Current project metadata is disclosed without the launcher owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/owner_capability.py:12-23",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: GET /project/info has no authentication dependency and returns the current project object, including its absolute path, database project identifier, timestamps, and media counts.",
+          "Cited target-commit ranges re-read: backend/routers/project_router.py:746-750 [source]; backend/owner_capability.py:12-23 [root_control]; backend/routers/project_router.py:751-754 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/project_router.py:751-754",
+        "source": "backend/routers/project_router.py:746-750",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if request-body/entry-count/storage quotas are enforced before allocation and persistence.",
+        "counterEvidence": [
+          "Loopback and same-user prerequisites limit likelihood/privilege delta, but persistence makes the effect more than a transient self-DoS. Existing validation does not cap request or stored entry count."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/pacing_router.py:334-358 -> root_control backend/schemas/pacing_schemas.py:116-118 -> sink backend/routers/pacing_router.py:358-421. Effect: TimelineUpdateRequest has no maximum length. The route copies metadata for every entry, validates the full list, probes media, and persists it, allowing one request to consume unbounded memory and CPU and inflate persistent project state."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller sends an arbitrarily large timeline entry array; PB copies, probes, validates, and persists it, enabling application-specific memory/CPU pressure and durable timeline inflation."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "async def update_timeline(\n    request: TimelineUpdateRequest,\n    state: AppState = Depends(get_app_state)\n) -> StatusResponse:\n    \"\"\"Aktualisiert die Timeline im unveraenderlichen Projektkontext.\"\"\"\n    try:\n        async with state.project_operation() as context:\n            return await _update_timeline_for_project(request, state, context)\n    except asyncio.CancelledError:\n        raise\n    except ProjectContextChangedError as exc:\n        raise HTTPException(status_code=409, detail=str(exc)) from exc\n    except ProjectContextUnavailableError as exc:\n        raise HTTPException(status_code=409, detail=str(exc)) from exc\n\n\nasync def _update_timeline_for_project(\n    request: TimelineUpdateRequest,\n    state: AppState,\n    context: ProjectOperationContext,\n) -> StatusResponse:\n    \"\"\"Aktualisiert die Timeline im State.\"\"\"\n    current_audio_path = state.current_audio_path\n    internal_cuts = []\n    for entry in request.entries:",
+          "endLine": 358,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/pacing_router.py",
+          "role": "entrypoint",
+          "startLine": 334
+        },
+        {
+          "code": "class TimelineUpdateRequest(BaseModel):\n    \"\"\"Request: Timeline manuell aktualisieren.\"\"\"\n    entries: list[TimelineEntrySchema]",
+          "endLine": 118,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/schemas/pacing_schemas.py",
+          "role": "root_control",
+          "startLine": 116
+        },
+        {
+          "code": "for entry in request.entries:\n        metadata = dict(entry.metadata)\n        metadata.update({\n            \"clip_name\": entry.clip_name,\n            \"file_path\": entry.file_path,\n            \"clip_start\": entry.clip_start,\n            \"trigger_type\": entry.trigger_type,\n            \"trigger_strength\": entry.trigger_strength,\n            \"segment_type\": entry.segment_type,\n            \"brain_final_score\": entry.brain_confidence,\n            \"cut_id\": entry.cut_id,\n            \"feature_confidence\": entry.feature_confidence,\n            \"semantic_status\": entry.semantic_status,\n            \"semantic_reason\": entry.semantic_reason,\n            \"trigger_provenance\": dict(entry.trigger_provenance),\n            \"brain_axis_status\": dict(entry.brain_axis_status),\n        })\n        internal_cuts.append({\n            \"clip_id\": entry.clip_id,\n            \"start_time\": entry.start_time,\n            \"end_time\": entry.end_time,\n            \"metadata\": metadata,\n        })\n\n    try:\n        internal_cuts = validate_timeline_media_paths(\n            internal_cuts,\n            state.get_video_clips_snapshot(),\n        )\n        if current_audio_path:\n            current_audio_path = validate_registered_media_path(\n                current_audio_path,\n                (\n                    clip.get(\"path\", \"\")\n                    for clip in state.get_audio_clips_snapshot().values()\n                ),\n                label=\"Timeline audio_path\",\n            )\n    except MediaPathPolicyError as exc:\n        raise HTTPException(status_code=400, detail=str(exc)) from exc\n\n    # L-TI-3: clip_start + duration gegen Source-Video-Laenge cappen.\n    # Auto-Pfad hat diesen Cap in pacing_service._process_pacing_cuts_to_cutlist\n    # (R12b/SEV-004) \u2014 manueller Update-Endpoint war ungeschuetzt:\n    # User-Drag konnte Dauer > source_duration setzen -> Render erzeugte\n    # truncated frames / FFmpeg-Errors.\n    internal_cuts = _cap_entries_against_source(internal_cuts, state)\n\n    audio_dur = 0.0\n    if current_audio_path:\n        from pb_studio.rendering.render_service import RenderService\n        # AP1.2 (Audit 2026-06-10): ffprobe-Subprocess blockierte den Event-Loop\n        # (SSE-Keepalives/parallele Requests froren ein) -> to_thread\n        audio_dur = await asyncio.to_thread(\n            RenderService()._get_audio_duration, current_audio_path\n        ) or 0.0\n\n    warnings, errors = validate_timeline(internal_cuts, audio_duration=audio_dur)\n    if errors:\n        raise HTTPException(status_code=400, detail=f\"Ung\u00fcltige Timeline: {'; '.join(errors)}\")\n\n    with state.project_commit(context):\n        state.current_audio_path = current_audio_path\n        state.set_timeline(internal_cuts)",
+          "endLine": 421,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 358
+        }
+      ],
+      "confidence": {
+        "level": "medium",
+        "rationale": "The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime."
+      },
+      "extensions": {
+        "candidateId": "candidate-9ea85b5824a67af7",
+        "ledgerRowId": "candidate-9ea85b5824a67af7"
+      },
+      "findingId": "csf_99145df15dc7849bc161ee62",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:b8471ed61c455d185c465f1ca6aea24292b0724e9257ebfd917da100911bc60e"
+      },
+      "identity": {
+        "anchor": "cwe-400-timeline-unbounded-entries",
+        "instance": "9ea85b5824a67af7"
+      },
+      "locations": [
+        {
+          "endLine": 358,
+          "path": "backend/routers/pacing_router.py",
+          "role": "entrypoint",
+          "startLine": 334
+        },
+        {
+          "endLine": 118,
+          "path": "backend/schemas/pacing_schemas.py",
+          "role": "root_control",
+          "startLine": 116
+        },
+        {
+          "endLine": 421,
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 358
+        }
+      ],
+      "occurrenceId": "occ_b040df9215e512ddffc19ecf",
+      "preventiveControls": [
+        "Keep collection and body-size limits in shared API policy and generated contracts."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Enforce a documented maximum timeline-entry count and request-body size in the backend schema before allocation, validation or persistence.",
+      "remediationTests": [
+        "Oversized timeline arrays fail with a bounded 4xx response and do not mutate state.",
+        "Boundary-size timelines still persist atomically."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "TimelineUpdateRequest has no maximum length. The route copies metadata for every entry, validates the full list, probes media, and persists it, allowing one request to consume unbounded memory and CPU and inflate persistent project state. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-400.timeline-unbounded-entries",
+      "severity": {
+        "changeConditions": "Ignore if request-body/entry-count/storage quotas are enforced before allocation and persistence.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Timeline replacement accepts an unbounded entry collection",
+      "taxonomy": {
+        "category": "Uncontrolled resource consumption",
+        "cwe": [
+          "CWE-400"
+        ]
+      },
+      "title": "Timeline replacement accepts an unbounded entry collection",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "medium",
+        "confidence_rationale": "The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime.",
+        "control": "backend/schemas/pacing_schemas.py:116-118",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "The request size that materially degrades service is environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: TimelineUpdateRequest has no maximum length. The route copies metadata for every entry, validates the full list, probes media, and persists it, allowing one request to consume unbounded memory and CPU and inflate persistent project state.",
+          "Cited target-commit ranges re-read: backend/routers/pacing_router.py:334-358 [entrypoint]; backend/schemas/pacing_schemas.py:116-118 [root_control]; backend/routers/pacing_router.py:358-421 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "The request size that materially degrades service is environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/pacing_router.py:358-421",
+        "source": "backend/routers/pacing_router.py:334-358",
+        "summary": "The candidate survived compact validation as reportable with medium confidence. The static source/control/sink trace is complete, while practical impact magnitude or an environment-specific precondition was not exercised at runtime."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if chat content is redacted/minimized before all log sinks or log subscribers are authenticated to the same owner session.",
+        "counterEvidence": [
+          "Loopback limits exposure and a local provider already receives chat by design, but the broadcast log channel creates an additional unauthenticated recipient boundary not required for chat operation."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/chat_router.py:159-166 -> sink backend/routers/chat_router.py:180-182 -> sink backend/routers/chat_router.py:214-216 -> concrete_implementation backend/dependencies.py:356-366. Effect: The message endpoint accepts arbitrary user content, then calls publish_log with the complete user_text and final_text. publish_log places that text into a log event and broadcasts it through publish_event. Chat prompts commonly contain project paths or project content, so an additional log/SSE consumer receives material that was already available only in the originating chat stream."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "User and assistant text is copied verbatim into the broadcast log event stream; another same-host log/SSE client can observe content from a chat it did not initiate."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\"/message\")\nasync def post_message(request: ChatMessageRequest) -> StreamingResponse:\n    \"\"\"SSE-Stream \u2014 verarbeitet eine User-Message und liefert ChatEvents.\"\"\"\n    # Wichtig: Agent + Resourcen sind PRO Request \u2014 sonst Lebenszyklus-Konflikte.\n    from pb_studio.ai.chat_agent import ChatAgent  # lazy\n\n    if request.history is not None:\n        history = [h.model_dump() for h in request.history]",
+          "endLine": 166,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/chat_router.py",
+          "role": "entrypoint",
+          "startLine": 159
+        },
+        {
+          "code": "await _history_store.append(\"user\", user_text)\n\n        await publish_log(f\"User: {user_text}\", level=\"info\", source=\"chat.user\")",
+          "endLine": 182,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 180
+        },
+        {
+          "code": "if save_history and final_text:\n                            await _history_store.append(\"assistant\", final_text)\n                        await publish_log(f\"KI: {final_text}\", level=\"info\", source=\"chat.assistant\")",
+          "endLine": 216,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 214
+        },
+        {
+          "code": "async def publish_log(message: str, *, level: str = \"info\", detail: str | None = None, source: str | None = None) -> None:\n    \"\"\"Publiziert ein strukturiertes Log-Event f\u00fcr /events/log.\"\"\"\n    payload: dict[str, Any] = {\n        \"level\": (level or \"info\").lower(),\n        \"message\": message,\n    }\n    if detail:\n        payload[\"detail\"] = detail\n    if source:\n        payload[\"source\"] = source\n    await publish_event(\"log\", payload)",
+          "endLine": 366,
+          "explanation": "This range is the concrete_implementation in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-4",
+          "label": "Concrete Implementation evidence",
+          "language": "python",
+          "path": "backend/dependencies.py",
+          "role": "concrete_implementation",
+          "startLine": 356
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-be3b5dbfde046cb2",
+        "ledgerRowId": "candidate-be3b5dbfde046cb2"
+      },
+      "findingId": "csf_1e3a6fd1fedc04f8e131a24f",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:dcf98c0d9035bb9be85ed5148d5624d573acc35e7b9e85185f48fdc59da0c067"
+      },
+      "identity": {
+        "anchor": "cwe-532-chat-content-verbatim-log",
+        "instance": "be3b5dbfde046cb2"
+      },
+      "locations": [
+        {
+          "endLine": 166,
+          "path": "backend/routers/chat_router.py",
+          "role": "entrypoint",
+          "startLine": 159
+        },
+        {
+          "endLine": 182,
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 180
+        },
+        {
+          "endLine": 216,
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 214
+        },
+        {
+          "endLine": 366,
+          "path": "backend/dependencies.py",
+          "role": "concrete_implementation",
+          "startLine": 356
+        }
+      ],
+      "occurrenceId": "occ_ff061e471ccdc0d2c50cc72e",
+      "preventiveControls": [
+        "Apply one redaction policy to every log and SSE sink."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Stop copying prompt and response bodies into the live log stream; log only event type, bounded lengths and correlation identifiers after centralized redaction.",
+      "remediationTests": [
+        "Synthetic secrets in prompts and responses never appear in SSE or file logs.",
+        "Operational metadata remains available without message bodies."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3",
+          "evidence-4"
+        ],
+        "summary": "The message endpoint accepts arbitrary user content, then calls publish_log with the complete user_text and final_text. publish_log places that text into a log event and broadcasts it through publish_event. Chat prompts commonly contain project paths or project content, so an additional log/SSE consumer receives material that was already available only in the originating chat stream. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-532.chat-content-verbatim-log",
+      "severity": {
+        "changeConditions": "Ignore if chat content is redacted/minimized before all log sinks or log subscribers are authenticated to the same owner session.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Full user chat prompts and assistant responses are copied verbatim into the live backend log channel.",
+      "taxonomy": {
+        "category": "Sensitive information in logs",
+        "cwe": [
+          "CWE-532"
+        ]
+      },
+      "title": "Full user chat prompts and assistant responses are copied verbatim into the live backend log channel",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "No effective owner, bounds, or integrity control on the validated path.",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The message endpoint accepts arbitrary user content, then calls publish_log with the complete user_text and final_text. publish_log places that text into a log event and broadcasts it through publish_event. Chat prompts commonly contain project paths or project content, so an additional log/SSE consumer receives material that was already available only in the originating chat stream.",
+          "Cited target-commit ranges re-read: backend/routers/chat_router.py:159-166 [entrypoint]; backend/routers/chat_router.py:180-182 [sink]; backend/routers/chat_router.py:214-216 [sink]; backend/dependencies.py:356-366 [concrete_implementation]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3",
+          "evidence-4"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/chat_router.py:180-182; backend/routers/chat_router.py:214-216",
+        "source": "backend/routers/chat_router.py:159-166",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if the route becomes owner-authenticated, read-only, or clamps caller changes to a non-disruptive policy controlled by the desktop owner.",
+        "counterEvidence": [
+          "The effect is confined to the current local application process and can be restored; the caller already runs on the host, so no OS privilege boundary is crossed."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/health_router.py:77-84 -> root_control backend/owner_capability.py:12-23 -> sink backend/routers/health_router.py:100-103. Effect: POST /health/vram/limit accepts a request body and directly calls VRAMBudgetManager.update_max_vram. The route has no capability header or authorization dependency."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "low",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller POSTs an arbitrary VRAM limit; the health router directly changes the process-wide resource budget and can destabilize model workloads."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\n    \"/vram/limit\",\n    response_model=VramLimitResponse,\n    summary=\"Dynamisches VRAM-Limit aktualisieren\",\n)\nasync def update_vram_limit(\n    payload: VramLimitRequest,\n) -> dict[str, Any]:",
+          "endLine": 84,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/health_router.py",
+          "role": "source",
+          "startLine": 77
+        },
+        {
+          "code": "OWNER_CAPABILITY_HEADER = \"X-PBStudio-Owner-Capability\"\n_OWNER_CAPABILITY = os.environ.pop(OWNER_CAPABILITY_ENV, None)\n\n\ndef authorize_owner(owner_capability: str | None, *, operation: str) -> str:\n    \"\"\"Validate the launcher-provisioned capability and return its stable owner id.\"\"\"\n    expected = _OWNER_CAPABILITY\n    if not expected:\n        raise HTTPException(\n            status_code=503,\n            detail=f\"{operation} ist ohne Owner-Capability deaktiviert\",\n        )",
+          "endLine": 23,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "code": "try:\n        manager = get_vram_manager()\n        manager.update_max_vram(payload.limit_mb)\n        stats = manager.get_stats()",
+          "endLine": 103,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/health_router.py",
+          "role": "sink",
+          "startLine": 100
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-def520771c05da3d",
+        "ledgerRowId": "candidate-def520771c05da3d"
+      },
+      "findingId": "csf_2ee3df749660958974fd6ff1",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:9393f98a75e759ee253df3c8d5852cde23934ee329303b2155200b3f922eb253"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/health_router.py-77",
+        "instance": "def520771c05da3d"
+      },
+      "locations": [
+        {
+          "endLine": 84,
+          "path": "backend/routers/health_router.py",
+          "role": "source",
+          "startLine": 77
+        },
+        {
+          "endLine": 23,
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "endLine": 103,
+          "path": "backend/routers/health_router.py",
+          "role": "sink",
+          "startLine": 100
+        }
+      ],
+      "occurrenceId": "occ_b8e64f394b7b7f1ebfccd4ab",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /health/vram/limit accepts a request body and directly calls VRAMBudgetManager.update_max_vram. The route has no capability header or authorization dependency. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/health_router.py-77",
+      "severity": {
+        "changeConditions": "Ignore if the route becomes owner-authenticated, read-only, or clamps caller changes to a non-disruptive policy controlled by the desktop owner.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "VRAM resource limits can be changed without the launcher owner capability",
+      "taxonomy": {
+        "category": "Uncontrolled resource consumption",
+        "cwe": [
+          "CWE-306",
+          "CWE-400"
+        ]
+      },
+      "title": "VRAM resource limits can be changed without the launcher owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/owner_capability.py:12-23",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /health/vram/limit accepts a request body and directly calls VRAMBudgetManager.update_max_vram. The route has no capability header or authorization dependency.",
+          "Cited target-commit ranges re-read: backend/routers/health_router.py:77-84 [source]; backend/owner_capability.py:12-23 [root_control]; backend/routers/health_router.py:100-103 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/health_router.py:100-103",
+        "source": "backend/routers/health_router.py:77-84",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "counterEvidence": [
+          "The action is constrained to one active-project clip and does not establish arbitrary file deletion, but it crosses project and vector-state integrity boundaries."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: entrypoint backend/routers/video_router.py:677-687 -> root_control backend/main.py:617-626 -> sink backend/routers/video_router.py:687-687. Effect: The video DELETE route directly invokes state.delete_video_clip, whose documented effect includes SQLite and FAISS cleanup, without requiring the owner capability used by /shutdown."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller supplies one video clip ID; the route durably removes its catalog and persisted vector state without owner authentication."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.delete(\n    \"/clips/{clip_id}\",\n    response_model=DeleteResponse,\n    summary=\"Video-Clip loeschen (single)\",\n)\nasync def delete_clip(\n    clip_id: int,\n    state: AppState = Depends(get_app_state),\n) -> DeleteResponse:\n    \"\"\"Loescht einen einzelnen Video-Clip aus In-Memory + SQLite + FAISS-Cache.\"\"\"\n    if state.delete_video_clip(clip_id):",
+          "endLine": 687,
+          "explanation": "This range is the entrypoint in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Entrypoint evidence",
+          "language": "python",
+          "path": "backend/routers/video_router.py",
+          "role": "entrypoint",
+          "startLine": 677
+        },
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "if state.delete_video_clip(clip_id):",
+          "endLine": 687,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/video_router.py",
+          "role": "sink",
+          "startLine": 687
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-dfee7ea23b512cd0",
+        "ledgerRowId": "candidate-dfee7ea23b512cd0"
+      },
+      "findingId": "csf_23f1190605c9362371de78ab",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:0fde312bd0ad52234fab54b68d39f96aa2b233508c7f3e0c81d4cfcd44e0166c"
+      },
+      "identity": {
+        "anchor": "cwe-862-video-delete-single",
+        "instance": "dfee7ea23b512cd0"
+      },
+      "locations": [
+        {
+          "endLine": 687,
+          "path": "backend/routers/video_router.py",
+          "role": "entrypoint",
+          "startLine": 677
+        },
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 687,
+          "path": "backend/routers/video_router.py",
+          "role": "sink",
+          "startLine": 687
+        }
+      ],
+      "occurrenceId": "occ_25714eb482d6738dc070ff3d",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "The video DELETE route directly invokes state.delete_video_clip, whose documented effect includes SQLite and FAISS cleanup, without requiring the owner capability used by /shutdown. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-862.video-delete-single",
+      "severity": {
+        "changeConditions": "Ignore if deletion requires per-launch owner authentication or an action-bound confirmation.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Loopback client can delete a video clip and its persisted vector state without an owner capability",
+      "taxonomy": {
+        "category": "Missing authorization",
+        "cwe": [
+          "CWE-862"
+        ]
+      },
+      "title": "Loopback client can delete a video clip and its persisted vector state without an owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: The video DELETE route directly invokes state.delete_video_clip, whose documented effect includes SQLite and FAISS cleanup, without requiring the owner capability used by /shutdown.",
+          "Cited target-commit ranges re-read: backend/routers/video_router.py:677-687 [entrypoint]; backend/main.py:617-626 [root_control]; backend/routers/video_router.py:687-687 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/video_router.py:687-687",
+        "source": "backend/routers/video_router.py:677-687",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if close/cancel becomes owner-authenticated or is made idempotent without cancelling owner work.",
+        "counterEvidence": [
+          "The action is loopback-only and generally recoverable by reopening the project; project-operation controls reduce corruption but not unauthorized disruption."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/project_router.py:713-716 -> root_control backend/owner_capability.py:12-23 -> sink backend/routers/project_router.py:721-728. Effect: POST /project/close has no authentication parameter; it invalidates project context, drains project jobs, sets every render cancel flag, and resets state."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller POSTs /project/close; the backend invalidates the project context, drains jobs, cancels renders, and resets active state, disrupting the owner workflow."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\"/close\", response_model=StatusResponse)\nasync def close_project(state: AppState = Depends(get_app_state)) -> StatusResponse:\n    \"\"\"Schlie\u00dft das aktuelle Projekt und r\u00e4umt State auf.\"\"\"\n    async with state.project_lifecycle_lock:",
+          "endLine": 716,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 713
+        },
+        {
+          "code": "OWNER_CAPABILITY_HEADER = \"X-PBStudio-Owner-Capability\"\n_OWNER_CAPABILITY = os.environ.pop(OWNER_CAPABILITY_ENV, None)\n\n\ndef authorize_owner(owner_capability: str | None, *, operation: str) -> str:\n    \"\"\"Validate the launcher-provisioned capability and return its stable owner id.\"\"\"\n    expected = _OWNER_CAPABILITY\n    if not expected:\n        raise HTTPException(\n            status_code=503,\n            detail=f\"{operation} ist ohne Owner-Capability deaktiviert\",\n        )",
+          "endLine": 23,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "code": "state.invalidate_project_context()\n        _, pending = await state.cancel_and_drain_project_tasks()\n        # In-flight Render-Threads nutzen weiterhin ihre bestehenden Cancel-Flags.\n        with state._state_lock:\n            task_ids = list(state.render_tasks.keys())\n        for task_id in task_ids:\n            state.set_cancel_flag(task_id, True)\n        state.reset(invalidate_context=False)",
+          "endLine": 728,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 721
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-ec5482ded15e1b55",
+        "ledgerRowId": "candidate-ec5482ded15e1b55"
+      },
+      "findingId": "csf_9030afdfd7aa428afa3f82cd",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:fd2cd65a00fbf06b1a9a24a49c827395ce3ea28a1a3bb03f850ad105937ccafa"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/project_router.py-713",
+        "instance": "ec5482ded15e1b55"
+      },
+      "locations": [
+        {
+          "endLine": 716,
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 713
+        },
+        {
+          "endLine": 23,
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "endLine": 728,
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 721
+        }
+      ],
+      "occurrenceId": "occ_61f5b391c6a250d2feae2293",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /project/close has no authentication parameter; it invalidates project context, drains project jobs, sets every render cancel flag, and resets state. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/project_router.py-713",
+      "severity": {
+        "changeConditions": "Ignore if close/cancel becomes owner-authenticated or is made idempotent without cancelling owner work.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Project close and job cancellation are reachable without the launcher owner capability",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-306"
+        ]
+      },
+      "title": "Project close and job cancellation are reachable without the launcher owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/owner_capability.py:12-23",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /project/close has no authentication parameter; it invalidates project context, drains project jobs, sets every render cancel flag, and resets state.",
+          "Cited target-commit ranges re-read: backend/routers/project_router.py:713-716 [source]; backend/owner_capability.py:12-23 [root_control]; backend/routers/project_router.py:721-728 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/project_router.py:721-728",
+        "source": "backend/routers/project_router.py:713-716",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore only if the route is removed, returns caller-scoped history, or all application routes receive an authenticated per-launch owner/session control.",
+        "counterEvidence": [
+          "127.0.0.1 prevents remote-network access but does not distinguish the WPF owner from another local process; the threat model explicitly includes such a process."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: sink backend/routers/chat_router.py:279-285. Effect: GET /chat/history has no owner-capability dependency and returns every stored user and assistant entry from _history_store. Any other process under the same host that can reach 127.0.0.1:8765 can retrieve the current user conversation, including project-related content retained by the server."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "Any same-host process can GET /chat/history while PB Studio is running and receive the process-global retained conversation without an owner/session proof."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.get(\"/history\", response_model=HistoryResponse)\nasync def get_history() -> HistoryResponse:\n    \"\"\"Liefert die Server-Side Chat-History.\"\"\"\n    entries = await _history_store.snapshot()\n    return HistoryResponse(\n        entries=[ChatHistoryEntry(**e) for e in entries],\n        count=len(entries),",
+          "endLine": 285,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 279
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-f3fbba2d62439daa",
+        "ledgerRowId": "candidate-f3fbba2d62439daa"
+      },
+      "findingId": "csf_37e0e2a92451ce9661eb2b06",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:97605fdcbe131611a276bf350308d75b9c46a8b1f606892b9042a6b7d09713f3"
+      },
+      "identity": {
+        "anchor": "cwe-200-chat-history-local-disclosure",
+        "instance": "f3fbba2d62439daa"
+      },
+      "locations": [
+        {
+          "endLine": 285,
+          "path": "backend/routers/chat_router.py",
+          "role": "sink",
+          "startLine": 279
+        }
+      ],
+      "occurrenceId": "occ_4593d01a3a7e56ba38404edc",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1"
+        ],
+        "summary": "GET /chat/history has no owner-capability dependency and returns every stored user and assistant entry from _history_store. Any other process under the same host that can reach 127.0.0.1:8765 can retrieve the current user conversation, including project-related content retained by the server. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-200.chat-history-local-disclosure",
+      "severity": {
+        "changeConditions": "Ignore only if the route is removed, returns caller-scoped history, or all application routes receive an authenticated per-launch owner/session control.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "The complete process-global chat history is returned by a loopback endpoint without owner authorization.",
+      "taxonomy": {
+        "category": "Sensitive data exposure",
+        "cwe": [
+          "CWE-200",
+          "CWE-862"
+        ]
+      },
+      "title": "The complete process-global chat history is returned by a loopback endpoint without owner authorization",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "No effective owner, bounds, or integrity control on the validated path.",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: GET /chat/history has no owner-capability dependency and returns every stored user and assistant entry from _history_store. Any other process under the same host that can reach 127.0.0.1:8765 can retrieve the current user conversation, including project-related content retained by the server.",
+          "Cited target-commit ranges re-read: backend/routers/chat_router.py:279-285 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/chat_router.py:279-285",
+        "source": "",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Ignore if project creation requires owner authorization or cannot affect the active/global PB project repository.",
+        "counterEvidence": [
+          "Path policy and atomic publish limit escape/corruption, and the same-user attacker could create ordinary files directly; impact is limited to PB project/repository clutter and state."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: source backend/routers/project_router.py:353-360 -> root_control backend/owner_capability.py:12-23 -> sink backend/routers/project_router.py:379-414. Effect: POST /project/create accepts caller-controlled path/name and creates directories, a state database, a global repository record, and metadata before atomically publishing the directory. The route signature has no owner-capability header or authorization dependency even though the repository provides authorize_owner for destructive loopback operations."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "impact": "low",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host caller POSTs a permitted project name/path; PB Studio creates directories, metadata, state DB, and a repository record using application semantics."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "@router.post(\"/create\", response_model=ProjectInfo)\nasync def create_project(\n    request: ProjectCreate,\n    state: AppState = Depends(get_app_state),\n) -> ProjectInfo:\n    \"\"\"Erstellt ein neues Projekt.\"\"\"\n\n    project_path = (Path(request.path) / request.name).resolve()",
+          "endLine": 360,
+          "explanation": "This range is the source in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Source evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 353
+        },
+        {
+          "code": "OWNER_CAPABILITY_HEADER = \"X-PBStudio-Owner-Capability\"\n_OWNER_CAPABILITY = os.environ.pop(OWNER_CAPABILITY_ENV, None)\n\n\ndef authorize_owner(owner_capability: str | None, *, operation: str) -> str:\n    \"\"\"Validate the launcher-provisioned capability and return its stable owner id.\"\"\"\n    expected = _OWNER_CAPABILITY\n    if not expected:\n        raise HTTPException(\n            status_code=503,\n            detail=f\"{operation} ist ohne Owner-Capability deaktiviert\",\n        )",
+          "endLine": 23,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "code": "project_path.parent.mkdir(parents=True, exist_ok=True)\n        staging_path = Path(\n            tempfile.mkdtemp(\n                prefix=\".pb-studio-create-\",\n                dir=str(project_path.parent),\n            )\n        ).resolve()\n        _write_creation_owner(\n            staging_path,\n            owner_token=owner_token,\n            target_path=project_path,\n        )\n        for directory_name in (\"audio\", \"video\", \"output\", \"cache\"):\n            (staging_path / directory_name).mkdir()\n        _prepare_project_state_db(staging_path)\n\n        created_at = _utc_now_iso()\n        project_data = {\n            \"name\": request.name,\n            \"path\": str(project_path),\n            \"audio_count\": 0,\n            \"video_count\": 0,\n            \"has_timeline\": False,\n            \"created_at\": created_at,\n            \"modified_at\": created_at,\n        }\n        project_id = ProjectRepository().create_owned_project(\n            request.name,\n            project_data,\n            owner_token,\n        )\n        project_data[\"db_project_id\"] = project_id\n        _write_project_meta(staging_path, project_data)\n\n        # Same-volume rename publishes the fully prepared directory atomically.\n        os.replace(str(staging_path), str(project_path))",
+          "endLine": 414,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-3",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 379
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-f493acd77641753c",
+        "ledgerRowId": "candidate-f493acd77641753c"
+      },
+      "findingId": "csf_9304d96c52d733cee22051f0",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:7b1d822b09e4bf0fa70faf0d84555639d837ed9b61a4060ca0cdb7b7336b763e"
+      },
+      "identity": {
+        "anchor": "cwe-306-missing-auth-backend/routers/project_router.py-353",
+        "instance": "f493acd77641753c"
+      },
+      "locations": [
+        {
+          "endLine": 360,
+          "path": "backend/routers/project_router.py",
+          "role": "source",
+          "startLine": 353
+        },
+        {
+          "endLine": 23,
+          "path": "backend/owner_capability.py",
+          "role": "root_control",
+          "startLine": 12
+        },
+        {
+          "endLine": 414,
+          "path": "backend/routers/project_router.py",
+          "role": "sink",
+          "startLine": 379
+        }
+      ],
+      "occurrenceId": "occ_a15b9a1ee8eb5c25187acc2a",
+      "preventiveControls": [
+        "Keep the control centralized and fail closed."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Add the missing control at the cited root boundary and prove the attacker-controlled value cannot reach the protected sink.",
+      "remediationTests": [
+        "A focused negative test exercises the cited attacker path.",
+        "A positive test preserves the supported workflow."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "summary": "POST /project/create accepts caller-controlled path/name and creates directories, a state database, a global repository record, and metadata before atomically publishing the directory. The route signature has no owner-capability header or authorization dependency even though the repository provides authorize_owner for destructive loopback operations. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-306.missing-auth-backend/routers/project_router.py-353",
+      "severity": {
+        "changeConditions": "Ignore if project creation requires owner authorization or cannot affect the active/global PB project repository.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=low and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Project creation is reachable without the launcher owner capability",
+      "taxonomy": {
+        "category": "Security boundary violation",
+        "cwe": [
+          "CWE-306"
+        ]
+      },
+      "title": "Project creation is reachable without the launcher owner capability",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/owner_capability.py:12-23",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: POST /project/create accepts caller-controlled path/name and creates directories, a state database, a global repository record, and metadata before atomically publishing the directory. The route signature has no owner-capability header or authorization dependency even though the repository provides authorize_owner for destructive loopback operations.",
+          "Cited target-commit ranges re-read: backend/routers/project_router.py:353-360 [source]; backend/owner_capability.py:12-23 [root_control]; backend/routers/project_router.py:379-414 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2",
+          "evidence-3"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/project_router.py:379-414",
+        "source": "backend/routers/project_router.py:353-360",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    },
+    {
+      "attackPath": {
+        "changeConditions": "Reassess if response fields are minimized or the route gains per-launch caller authentication.",
+        "counterEvidence": [
+          "Exposure is loopback-only and the attacker is on the same host/account, limiting impact; the returned project metadata is nevertheless protected by the threat model."
+        ],
+        "dataflow": {
+          "summary": "Attacker/precondition: A separate same-host process can reach the default loopback API while PB Studio is running. Flow: root_control backend/main.py:617-626 -> sink backend/routers/pacing_router.py:285-325. Effect: GET /pacing/timeline returns each entry's file_path, full metadata, and state.current_audio_path. The router is globally mounted without authentication or an owner-capability dependency."
+        },
+        "decision": "reportable",
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "impact": "medium",
+        "likelihood": "medium",
+        "reachability": {
+          "summary": "A same-host process can GET /pacing/timeline and receive absolute media paths, current audio path, editing metadata, and state for the active project."
+        },
+        "severity": "low",
+        "severityRationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "codeEvidence": [
+        {
+          "code": "app.include_router(project_router)\napp.include_router(audio_router)\napp.include_router(video_router)\napp.include_router(pacing_router)\napp.include_router(render_router)\napp.include_router(events_router)\napp.include_router(brain_router)\napp.include_router(health_router)\napp.include_router(models_router)\napp.include_router(chat_router)",
+          "endLine": 626,
+          "explanation": "This range is the root_control in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-1",
+          "label": "Root Control evidence",
+          "language": "python",
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "code": "@router.get(\n    \"/timeline\",\n    response_model=TimelineResponse,\n    summary=\"Aktuelle Timeline abrufen\",\n    description=(\n        \"Gibt die zuletzt generierte Timeline zur\u00fcck. \"\n        \"Enth\u00e4lt alle Clip-Zuweisungen mit Start/End-Zeiten, Trigger-Typ und -St\u00e4rke. \"\n        \"Leere Timeline wenn noch keine Cut-Liste generiert wurde.\"\n    ),\n)\nasync def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResponse:\n    \"\"\"Gibt die aktuelle Timeline zur\u00fcck.\"\"\"\n    entries = []\n    for cut in state.get_timeline_snapshot():\n        meta = cut.get(\"metadata\", {})\n        entries.append(TimelineEntrySchema(\n            clip_id=cut.get(\"clip_id\", \"\"),\n            clip_name=meta.get(\"clip_name\", \"Unknown\"),\n            file_path=meta.get(\"file_path\", \"\"),\n            start_time=cut.get(\"start_time\", 0.0),\n            end_time=cut.get(\"end_time\", 0.0),\n            clip_start=meta.get(\"clip_start\", 0.0),\n            trigger_type=meta.get(\"trigger_type\", \"\"),\n            trigger_strength=meta.get(\"trigger_strength\", 0.0),\n            segment_type=meta.get(\"segment_type\"),\n            brain_confidence=float(meta.get(\"brain_final_score\", 0.0) or 0.0),\n            cut_id=meta.get(\"cut_id\"),\n            feature_confidence=float(meta.get(\"feature_confidence\", 0.0) or 0.0),\n            semantic_status=str(meta.get(\"semantic_status\", \"unavailable\")),\n            semantic_reason=meta.get(\"semantic_reason\"),\n            trigger_provenance=dict(meta.get(\"trigger_provenance\") or {}),\n            brain_axis_status=dict(meta.get(\"brain_axis_status\") or {}),\n            metadata=dict(meta),\n        ))\n\n    total = entries[-1].end_time if entries else 0.0\n    return TimelineResponse(\n        entries=entries,\n        total_duration=total,\n        audio_path=state.current_audio_path,\n    )",
+          "endLine": 325,
+          "explanation": "This range is the sink in the validated source-to-sink path and carries or fails to control the security-sensitive operation.",
+          "id": "evidence-2",
+          "label": "Sink evidence",
+          "language": "python",
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 285
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      },
+      "extensions": {
+        "candidateId": "candidate-fe5db9e711db0588",
+        "ledgerRowId": "candidate-fe5db9e711db0588"
+      },
+      "findingId": "csf_bd9a686baf1ee814ea2e532c",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:a5c8997d4e38a39432007bc8c15bfa3932fcb589d902edd256d3b42d6621bb5e"
+      },
+      "identity": {
+        "anchor": "cwe-200-timeline-read",
+        "instance": "fe5db9e711db0588"
+      },
+      "locations": [
+        {
+          "endLine": 626,
+          "path": "backend/main.py",
+          "role": "root_control",
+          "startLine": 617
+        },
+        {
+          "endLine": 325,
+          "path": "backend/routers/pacing_router.py",
+          "role": "sink",
+          "startLine": 285
+        }
+      ],
+      "occurrenceId": "occ_5a4587120ab4627068928303",
+      "preventiveControls": [
+        "Default-deny all non-health loopback API and SSE routes.",
+        "Inventory protected routes in an authorization regression test."
+      ],
+      "provenance": {
+        "source": "codex-security-standard-scan"
+      },
+      "remediation": "Require the verified launcher session capability for this endpoint through one fail-closed backend authorization dependency or middleware, and send it only after backend identity verification.",
+      "remediationTests": [
+        "Missing, incorrect and replayed session capabilities are rejected before the protected read or mutation.",
+        "The WPF client succeeds with the verified per-launch capability."
+      ],
+      "rootCause": {
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "summary": "GET /pacing/timeline returns each entry's file_path, full metadata, and state.current_audio_path. The router is globally mounted without authentication or an owner-capability dependency. Closest-control assessment: Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect."
+      },
+      "ruleId": "cwe-200.timeline-read",
+      "severity": {
+        "changeConditions": "Reassess if response fields are minimized or the route gains per-launch caller authentication.",
+        "level": "low",
+        "rationale": "Severity matrix: impact=medium and likelihood=medium yields severity=low; loopback/same-user constraints are included rather than treated as blanket suppression."
+      },
+      "summary": "Unauthenticated timeline endpoint exposes project media paths and editing metadata",
+      "taxonomy": {
+        "category": "Sensitive data exposure",
+        "cwe": [
+          "CWE-200",
+          "CWE-862"
+        ]
+      },
+      "title": "Unauthenticated timeline endpoint exposes project media paths and editing metadata",
+      "validation": {
+        "checklist": [
+          "Stated attacker trigger is controllable: pass",
+          "Source-to-sink path is reachable in the target commit: pass",
+          "Closest relevant control is absent or incomplete: pass",
+          "Protected data, state, resource, or code-integrity impact follows: pass",
+          "Loopback or manual-tool preconditions are explicit and do not defeat reachability: pass"
+        ],
+        "confidence": "high",
+        "confidence_rationale": "The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required.",
+        "control": "backend/main.py:617-626",
+        "counterEvidence": [
+          "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+          "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent."
+        ],
+        "counterevidence_or_proof_gap": "Binding to 127.0.0.1 limits exposure to the host but does not authenticate other same-host processes; no route-level owner control blocks the stated effect.",
+        "disposition": "reportable",
+        "evidence": [
+          "Independent static trace confirmed in the immutable target: GET /pacing/timeline returns each entry's file_path, full metadata, and state.current_audio_path. The router is globally mounted without authentication or an owner-capability dependency.",
+          "Cited target-commit ranges re-read: backend/main.py:617-626 [root_control]; backend/routers/pacing_router.py:285-325 [sink]"
+        ],
+        "evidenceRefs": [
+          "evidence-1",
+          "evidence-2"
+        ],
+        "method": "Bounded independent static source/control/sink validation against immutable Git commit 814d2389e3ab687253328ab844ff3498a787621f; no full runtime started.",
+        "preconditions": "A separate same-host process can reach the default loopback API while PB Studio is running.",
+        "remaining_uncertainty": "No full runtime exploit was needed for the direct static route-to-effect trace; operational impact magnitude remains environment-dependent.",
+        "rubric": [
+          {
+            "criterion": "Stated attacker trigger is controllable",
+            "result": "pass"
+          },
+          {
+            "criterion": "Source-to-sink path is reachable in the target commit",
+            "result": "pass"
+          },
+          {
+            "criterion": "Closest relevant control is absent or incomplete",
+            "result": "pass"
+          },
+          {
+            "criterion": "Protected data, state, resource, or code-integrity impact follows",
+            "result": "pass"
+          },
+          {
+            "criterion": "Loopback or manual-tool preconditions are explicit and do not defeat reachability",
+            "result": "pass"
+          }
+        ],
+        "sink": "backend/routers/pacing_router.py:285-325",
+        "source": "",
+        "summary": "The candidate survived compact validation as reportable with high confidence. The route or tool flow, missing closest control, and protected sink are explicit in the immutable source; no speculative chain is required."
+      }
+    }
+  ],
+  "scanId": "6ec79e8a-abb1-47b3-a304-3170a12a247e",
+  "schemaVersion": "1.0"
+}

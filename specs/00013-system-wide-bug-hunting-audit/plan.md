@@ -221,9 +221,27 @@ Plan, Checklist und Tasks. Erst danach beginnt Taskausführung.
 - **T410 – Projektwechsel-E2E:** aktive Audio-/Video-/Pacing-/Timeline-/Brain-Operationen A→B.
 - **T411 – DirectML-/AMF-Fresh-Install:** RX 7800 XT, LUID, Memory-Flags und Pflichtassets.
 - **T412 – Render-Retry/Restart:** aktive Deduplizierung, terminaler Retry, Inhaltsidentität.
-- **T413 – Security/Provenienz:** Secret/SCA/SBOM/Hashes/Commitidentität.
+- **T413 – Security/Provenienz:** validierte Release-Befunde beheben;
+  Secret/SCA/SBOM/Hashes/Backend-Autorisierung/Commitidentität für denselben SHA.
 - **T414 – Abschlusswahrheit:** QC-Bericht, Changelog, ADR, Brain und Marker-Digests; `.qc-passed` nur bei 100 % PASS.
 - **T415 – Veröffentlichung:** PR, Required Checks, Review/Merge, Default-Branch/Protection und Release aus geschütztem Main; externe Mutation nur nach Freigabe.
+
+#### T413-Reparaturpakete
+
+| Paket | Zone | ETA | Inhalt | Gate |
+|---|---|---:|---|---|
+| T413-S1 | SHARED/Z-UI-SERVICES | 4–8 h | Backend-Besitzbeweis, Default-Deny-Autorisierung, WPF-/SSE-/interne Client-Bindung | Spoof-, Missing-/Wrong-Capability- und Attach-Tests |
+| T413-S2 | Z-CHAT | 1–2 h | Prompt-/Antwortinhalte aus Backend-Logs entfernen | Secret bleibt im Chat, nie im Log-SSE |
+| T413-S3 | Z-PACING | 1–2 h | Timeline-Anzahl und Bodygröße vor Parse begrenzen | Grenz-/Oversize-Tests |
+| T413-S4 | Z-DATA | 2–4 h | Legacy-Pickle nur als geprüfte primitive Struktur migrieren | Safe-/Malicious-/Malformed-Migration |
+| T413-S5 | Z-INFRA | 4–12 h | OSV-SCA auf exakten Lockgraph umstellen; Python-Graph schließen | Lock=Report, Hash-, Alias- und Negativfixtures |
+| T413-S6 | Z-INFRA | 1–3 h | MCP ohne `@latest`, versioniert und integritätsgebunden starten | Offline-/Tamper-Vertrag |
+| T413-S7 | QC | 3–6 h | Voll-/Diff-Scan, Secrets, SCA, SBOM, Publish-Artefakt und Provenienz auf finalem SHA | keine offenen Releaseblocker; `release_eligible=true` |
+
+S1, S2, S3 und S4 dürfen bei disjunkten Dateien parallel laufen. S5/S6
+beginnen erst nach der in Abschnitt 5 geforderten Einzelgenehmigung. S7 folgt
+erst nach unabhängigem Diff-Review aller Pakete. Der bestehende Loop-Guard
+gilt je Paket; ein unveränderter Fehllauf wird nicht wiederholt.
 
 ## 5. Zwingende Freigaben vor Ausführung
 

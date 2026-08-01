@@ -1,0 +1,126 @@
+{
+  "documentType": "codex-security.scan-manifest",
+  "scan": {
+    "artifacts": [
+      {
+        "mediaType": "application/json",
+        "path": "findings.json",
+        "sha256": "9b960d05aec9927341d647b7a86859a84f1bb4f0f028f1a3b13fe797cf5014ad"
+      },
+      {
+        "mediaType": "application/json",
+        "path": "coverage.json",
+        "sha256": "b411071db407bc24ba9374bf0796d35e15893a3885b92e3ea62cf4d5013dbf70"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/02_discovery/candidate_ledger.jsonl",
+        "sha256": "9b68efc1a234cd25ca0ee2ad971290a69da1ff1ba41e0d8dbaf8446131eac35a"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/02_discovery/nuget-sca.log",
+        "sha256": "f881ddff656aab6ac5151eddfb3f1424c7c58ca46654fe6eca2a010507fc682d"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/02_discovery/secret-sca.log",
+        "sha256": "a3d6dc81a4ce1dffd8cb27bf760d6260212e4c8134f27700ae86c10436cb0ed9"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/03_sca/python-sca-assessment.json",
+        "sha256": "f974c5354a65ffc395233ca1b75a00cab3db20a4abf852ede1a4d917622236c9"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/03_sca/python-sca-gate-design.md",
+        "sha256": "3b1db0bc5a201fb46031dbd09f6fc79b10f2fed80b374b4369817c8470925aba"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/03_sca/security-gate-receipts/nuget-sca-receipt.json",
+        "sha256": "68a5e1b18aba19608eebed041230896647b053bf96a8dec5fb5a1887f6ec4efc"
+      },
+      {
+        "mediaType": "application/octet-stream",
+        "path": "artifacts/03_sca/security-gate-receipts/secret-scan-receipt.json",
+        "sha256": "06708a050a8d140b604f21c35b55d954ec1c8552f6694543e04fc392ed19b573"
+      }
+    ],
+    "completedAt": "2026-08-01T23:01:35.664854Z",
+    "coverageRef": "coverage.json",
+    "findingsRef": "findings.json",
+    "id": "6ec79e8a-abb1-47b3-a304-3170a12a247e",
+    "producer": {
+      "name": "codex-security-plugin",
+      "version": "0.1.15"
+    },
+    "scope": {
+      "artifactsReviewed": [
+        "1,683-file deterministic repository inventory",
+        "Threat model generated for this scan",
+        "26-candidate validation and attack-path ledger",
+        "Git-history secret scan",
+        "Python OSV and NuGet vulnerability reports"
+      ],
+      "context": "The default product is a single-user Windows WPF application with a loopback FastAPI child process. Other same-host processes remain relevant attackers.",
+      "excludePaths": [],
+      "includePaths": [
+        "."
+      ],
+      "limitations": [
+        "Legacy pickle exploitability remains deferred because no supported attacker-controlled placement path was proven.",
+        "Python package reachability was statically assessed; release remains blocked until lock upgrades, residual-exception policy and a rerun close the gate."
+      ],
+      "runtimeStatus": "Static source/control/sink validation was used for the full ledger; focused gate commands ran for secrets and dependency reports. No exploit payload was executed against user data.",
+      "summary": "Whole-repository standard security scan of the immutable release-candidate commit, augmented with Secret, Python and NuGet dependency gates.",
+      "validationMode": "Compact standard-scan validation plus compact attack-path analysis for every candidate."
+    },
+    "sealedAt": "2026-08-01T23:01:35.664854Z",
+    "startedAt": "2026-08-01T22:12:04.155776Z",
+    "status": "completed",
+    "target": {
+      "displayName": "Pb_studio_AMD_version",
+      "kind": "git_revision",
+      "revision": "814d2389e3ab687253328ab844ff3498a787621f",
+      "targetId": "target_sha256_21bf4f38604eb29128f49276d0ea477afdd635521584ed6cb42004c177a2b5bf"
+    },
+    "threatModel": {
+      "assets": [
+        "Project and timeline state",
+        "Imported media and render output",
+        "SQLite and FAISS consistency",
+        "Chat prompts and tool confirmations",
+        "Runtime/model/release provenance"
+      ],
+      "assumptions": [
+        "Supported topology remains loopback-only single-user Windows",
+        "The Windows account and OS are not already fully compromised",
+        "Remote backend deployment requires additional authentication and transport controls"
+      ],
+      "attackerCapabilities": [
+        "Same-host process can bind or call loopback ports",
+        "User can open crafted media or project content",
+        "Local AI provider can return adversarial tool requests",
+        "Supply-chain source can serve modified dependencies or artifacts"
+      ],
+      "securityObjectives": [
+        "Authenticate the intended child backend",
+        "Prevent cross-project or unauthorized state access",
+        "Bound parser and job resources",
+        "Keep secrets and prompts out of logs",
+        "Bind release artifacts to reviewed immutable inputs"
+      ],
+      "summary": "Protect project isolation, media/timeline/render state, prompts, local logs and release artifacts across WPF-to-loopback, user-input-to-parser, storage, local-model and build-supply-chain boundaries.",
+      "trustBoundaries": [
+        "WPF to FastAPI loopback HTTP/SSE",
+        "User media/project data to parsers and ML runtimes",
+        "Background jobs to project-scoped storage",
+        "Chat model to tool registry",
+        "Repository to external dependency and runtime sources"
+      ]
+    }
+  },
+  "schemaVersion": "1.0"
+}

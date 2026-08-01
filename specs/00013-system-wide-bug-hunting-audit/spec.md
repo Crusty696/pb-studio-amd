@@ -35,6 +35,7 @@ projektübergreifenden Writes erzeugen.
 - Clean-Checkout, Restore, Build, Runtime-/Modell-Provisioning
 - Dependency Locks, SBOM, Hash- und Commitprovenienz
 - CI, Security-Gates, geschützter Main-/Releasepfad
+- verifizierte Backend-Identität, lokale Autorisierung und minimierte Logs
 - native Python-/C#-, GUI-, Hardware- und Installations-QC
 - Projektkontext, Persistenzwahrheit, Cancellation und kontrollierte Fehler
 - sichtbare Fehler-, Lösch-, Settings- und Accessibility-Verträge
@@ -111,6 +112,11 @@ Projekt zuordnen oder Erfolg vortäuschen.
   Required Checks.
 - **FR-352:** Autoritative Dokumentation beschreibt DirectML-/CLAP-/AMF-
   Realität widerspruchsfrei; alle Pflichtlinks und DoD-Pfade existieren.
+- **FR-353:** Der WPF-Client bindet sich nur nach kryptografischem Besitzbeweis
+  an das gestartete Backend; alle nichtöffentlichen HTTP-/SSE-Pfade sind pro
+  Prozess autorisiert. Chat-Logs enthalten keine Prompt-/Antwortinhalte,
+  Timeline-Requests sind begrenzt und Legacy-Indexmigration deserialisiert
+  ausschließlich geprüfte primitive Daten.
 
 ## Recovery Requirement
 
@@ -141,6 +147,9 @@ Projekt zuordnen oder Erfolg vortäuschen.
   Provenienz- und Artefakthashprüfung bestehen für denselben Commit.
 - **TR-354:** PR, Required Checks, Review, Merge, Tag und Releaseartefakt
   verweisen auf denselben geschützten Main-SHA.
+- **TR-355:** Vollscan und Security-Diff-Scan haben keine offenen
+  releaseblockierenden Befunde; Python-SCA prüft den exakten Lockgraph mit
+  Alias-Deduplizierung, Hashbindung und befristeten begründeten Ausnahmen.
 
 ## Success Criteria
 
@@ -159,6 +168,9 @@ Projekt zuordnen oder Erfolg vortäuschen.
   auf freigegebener AMD-Hardware ohne verbotenen Fallback.
 - **SC-082 [OBJ-72]:** T370–T415 sind `[X]`; QC-Evidenz und Marker-Digests
   stimmen; Release-SHA stammt aus geschütztem `main`.
+- **SC-083 [OBJ-72]:** Backend-Besitzbeweis, Default-Deny-Autorisierung,
+  Logminimierung, Requestgrenzen, sichere Legacy-Migration und exakter
+  Python-SCA-Gate bestehen für denselben Release-SHA.
 
 ## Traceability
 
@@ -169,5 +181,5 @@ Projekt zuordnen oder Erfolg vortäuschen.
 | T384–T390 | FR-341–FR-345, RR-237, TR-348 |
 | T391–T397 | FR-346–FR-349, TR-350 |
 | T398–T403 | FR-350–FR-352, TR-346, TR-353 |
-| T404–T413 | TR-347–TR-353, SC-077–SC-081 |
+| T404–T413 | FR-353, TR-347–TR-353, TR-355, SC-077–SC-081, SC-083 |
 | T414–T415 | TR-354, SC-082 |
