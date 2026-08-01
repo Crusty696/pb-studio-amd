@@ -137,9 +137,14 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
         }
-        finally { IsDeleting = false; }
+        finally
+        {
+            if (_projectService.IsCurrent(projectContext))
+                IsDeleting = false;
+        }
     }
 
     [RelayCommand]
@@ -185,9 +190,14 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
         }
-        finally { IsDeleting = false; }
+        finally
+        {
+            if (_projectService.IsCurrent(projectContext))
+                IsDeleting = false;
+        }
     }
 
 
@@ -427,7 +437,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Analysefehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Analysefehler: {ex.Message}";
         }
         finally
         {
@@ -485,7 +496,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Analysefehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Analysefehler: {ex.Message}";
         }
         finally
         {
@@ -537,7 +549,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Stem-Fehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Stem-Fehler: {ex.Message}";
         }
         finally
         {

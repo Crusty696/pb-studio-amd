@@ -20,12 +20,14 @@ namespace PBStudio.UI.ViewModels;
 public partial class BrainViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private readonly ProjectService? _projectService;
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
     private bool _disposed;
     private int _statsLoadVersion;
     private int _learningLoadVersion;
     private int _loadingVersion;
+    private int _feedbackVersion;
 
     [ObservableProperty] private int _totalClicks;
     [ObservableProperty] private int _coldStartAxes = 17;
@@ -49,8 +51,10 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
         _api = api;
-        _ = projectService;
+        _projectService = projectService;
         _timelineState = timelineState;
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
         _ = RefreshStatsAsync();
 
         // Audit-Fix 2026-07-10 (Sweep-Finding HIGH-11): BrainViewModel abonnierte
@@ -73,6 +77,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _statsLoadVersion);
         Interlocked.Increment(ref _learningLoadVersion);
         Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
         IsLoading = false;
         TotalClicks = 0;
         ColdStartAxes = 17;
@@ -86,6 +91,15 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         IsResetPending = false;
         _pendingResetToken = null;
         Status = "Kein Projekt geladen.";
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        IsLoading = false;
     }
 
     [RelayCommand]
@@ -146,7 +160,10 @@ public partial class BrainViewModel : ObservableObject, IDisposable
             return;
         }
         var cutId = SelectedCutId;
+        var feedbackVersion = Interlocked.Increment(ref _feedbackVersion);
         var resp = await _api.BrainFeedbackAsync(cutId, rating);
+        if (_disposed || feedbackVersion != Volatile.Read(ref _feedbackVersion))
+            return;
         if (resp == null)
         {
             Status = "Feedback fehlgeschlagen.";
@@ -289,6 +306,9 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _statsLoadVersion);
         Interlocked.Increment(ref _learningLoadVersion);
         Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
         GC.SuppressFinalize(this);
     }

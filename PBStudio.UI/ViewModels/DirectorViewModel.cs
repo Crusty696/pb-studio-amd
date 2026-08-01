@@ -367,7 +367,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Cut-Liste generieren fehlgeschlagen: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Cut-Liste generieren fehlgeschlagen: {ex.Message}";
         }
         finally
         {

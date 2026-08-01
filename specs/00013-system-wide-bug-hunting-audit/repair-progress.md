@@ -91,9 +91,9 @@ Updated: 2026-07-30T07:52:00+02:00
 
 ## OBJ-72 Release-Fähigkeit T370–T415
 
-Updated: 2026-07-31
-Gesamt: **40/46 PASS (87,0 %)**
-Aktuell: **T408/T409 PASS; 70 autoritative DPI-/Auflösungsansichten und 14 High-Contrast-Ansichten**
+Updated: 2026-08-01
+Gesamt: **41/46 PASS (89,1 %)**
+Aktuell: **T410 PASS; aktive Audio-, Video-, Pacing-, Timeline- und Brain-Jobs schreiben nach A→B weder in B noch in dessen UI**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
 |---|---|---:|---|---|---:|---|
@@ -137,7 +137,7 @@ Aktuell: **T408/T409 PASS; 70 autoritative DPI-/Auflösungsansichten und 14 High
 | T407 Clean-Checkout-Windows-Gate | PASS | 2–5 h | Infra/Test-Team | QC | 0,3 h | Externer Checkout, isolierte NuGet/Pip-Restores, NSwag, WPF 0/0, 28/28 Tests und 3,2-GB-Assetprüfung PASS (`evidence/T407-clean-checkout-gate.md`) |
 | T408 GUI-Wahrheit | PASS | 3–6 h | GUI-Agent + Teamleiter | QC | 1,4 h | 14 Views, Fehler-/Löschzustand, 70/70 autoritative Auflösungs-/DPI-Renderings PASS (`evidence/T408-gui-release-gate.md`) |
 | T409 Accessibility-QC | PASS | 3–6 h | GUI-Agent | QC | 0,8 h | Keyboard, Fokus, UIA und 14/14 High-Contrast-Renderings PASS (`evidence/T409-accessibility-release-gate.md`) |
-| T410 Projektwechsel-E2E | OPEN | 4–8 h | Teamleiter/Test-Team | QC | – | aktive Jobs A→B, null Cross-Write |
+| T410 Projektwechsel-E2E | PASS | 4–8 h | Teamleiter/Test-Team + unabhängiger Reviewer | QC | 2,0 h | 5/5 Backend mit realem Brain-Rebind/Lease-Retirement und 5/5 echte UI-A→B-Wechsel PASS (`evidence/T410-project-switch-e2e.md`) |
 | T411 DirectML-/AMF-Fresh-Install | OPEN | 4–8 h | Teamleiter/GPU-Agent | QC | – | RX 7800 XT, LUID, Flags, Assets |
 | T412 Render-Retry/Restart | OPEN | 3–6 h | Teamleiter/Render-Agent | QC | – | aktive Dedupe, Retry, Inhaltsidentität |
 | T413 Security/Provenienz | OPEN | 2–5 h | Security-Agent + Reviewer | QC | – | Secret/SCA/SBOM/Hashes/Commit |

@@ -42,7 +42,7 @@
 - [X] T407 [OBJ-72] {(TR-348)} Prove locked restore, generation, build and asset validation from an external clean Windows checkout without local cache advantage under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [X] T408 [OBJ-72] {(TR-350)} Validate all 14 views, destructive/error states, supported resolutions and DPI matrix and store GUI evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [X] T409 [OBJ-72] {(TR-350)} Validate keyboard-only operation, focus, UIA and High Contrast and store accessibility evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
-- [ ] T410 [OBJ-72] {(TR-351)} Prove active-job project switches A→B produce zero cross-project writes in backend, database and UI under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T410 [OBJ-72] {(TR-351)} Prove active-job project switches A→B produce zero cross-project writes in backend, database and UI under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T411 [OBJ-72] {(TR-352)} Prove fresh-install DirectML and AMF operation on RX 7800 XT with exact adapter/LUID, both session flags and verified assets under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T412 [OBJ-72] {(FR-343)} {(TR-347)} Validate render active dedupe, retry, restart and content identity contracts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T413 [OBJ-72] {(TR-353)} Verify secrets, SCA, SBOM, lock hashes, artifact hashes and commit identity for one release SHA under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]

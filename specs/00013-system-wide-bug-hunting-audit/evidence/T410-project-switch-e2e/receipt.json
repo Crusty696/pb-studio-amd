@@ -1,0 +1,34 @@
+{
+  "ticket": "T410",
+  "requirement": "TR-351",
+  "status": "PASS",
+  "date": "2026-08-01",
+  "base_sha": "72d1bc67cc6ab85cf2e14dc4fb18624d7effdaaa",
+  "diff_blob": "49b7da12d45dab5ab6642c2231699536f2e25bb8",
+  "runtime": {
+    "python": "3.11.9",
+    "dotnet_sdk": "9.0.316"
+  },
+  "tests": {
+    "backend_project_switch": {
+      "passed": 5,
+      "failed": 0,
+      "receipt": "T410-python-all-five-final.xml",
+      "sha256": "DC83E7BD2A88A270F4E1FF690B4FAF143358D2A2AAF3B8E2A56D3FBF646A418E"
+    },
+    "ui_project_switch": {
+      "passed": 5,
+      "failed": 0,
+      "receipt": "T410-ui-real-switch-final.trx",
+      "sha256": "369EAA3CD6E4C9BFB783C741BB67F16C34E57B7565006E9AD890B7A98E4147CE"
+    }
+  },
+  "source_sha256": {
+    "Tests/test_t410_project_switch_e2e.py": "E23E9EB46B66AFBFE2C1835A546D1603DF9678ED0943736D8E13E71A442562D2",
+    "PBStudio.UI.Tests/ProjectSwitchUiPublicationTests.cs": "7DE6F9D1A270A633AD1C60A6A507E2B4CA51CFE4A08A6F9D5AFDC20A9EC0D0D5",
+    "PBStudio.UI/ViewModels/AudioLibraryViewModel.cs": "B2FABE6D56610566B1FF639CFE43D70D6604DF6B3C81A380658516AA474A2CF7",
+    "PBStudio.UI/ViewModels/DirectorViewModel.cs": "8491BEE0FBD262312DFB64D3451198B99D141DD888D59C18228D9FFAF5354B4C",
+    "PBStudio.UI/ViewModels/BrainViewModel.cs": "71192E31183B41482BE539E9416317FAF62D90A48CED8E320234CF06B2FB0CC5"
+  },
+  "independent_review": "PASS"
+}
