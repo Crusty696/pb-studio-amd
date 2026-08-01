@@ -11,7 +11,9 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.routing import APIRoute
+from starlette.responses import JSONResponse, Response
 
 from ..app_state import (
     AppState,
@@ -35,7 +37,82 @@ from ..schemas.pacing_schemas import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/pacing", tags=["Pacing"])
+
+# Full 4-hour timelines can contain 144,000 legal 0.1-second entries. 128 MiB
+# retains that documented product scope with complete entry metadata while
+# placing a finite bound before FastAPI constructs Pydantic models.
+TIMELINE_UPDATE_MAX_BODY_BYTES = 128 * 1024 * 1024
+
+
+class TimelineUpdateBodyLimitRoute(APIRoute):
+    """Cap only manual timeline bodies before FastAPI parses their JSON."""
+
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+
+        async def limited_handler(request: Request) -> Response:
+            if request.method != "POST" or request.url.path != "/pacing/timeline":
+                return await original_handler(request)
+
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > TIMELINE_UPDATE_MAX_BODY_BYTES:
+                        return JSONResponse(
+                            status_code=413,
+                            content={"detail": "Timeline-Request ist zu gross"},
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Content-Length ist ungueltig"},
+                    )
+
+            original_receive = request.receive
+            body_parts: list[bytes] = []
+            received_bytes = 0
+            more_body = True
+            while more_body:
+                message = await original_receive()
+                if message["type"] == "http.disconnect":
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Timeline-Request wurde abgebrochen"},
+                    )
+                if message["type"] != "http.request":
+                    continue
+
+                chunk = message.get("body", b"")
+                received_bytes += len(chunk)
+                if received_bytes > TIMELINE_UPDATE_MAX_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Timeline-Request ist zu gross"},
+                    )
+                body_parts.append(chunk)
+                more_body = message.get("more_body", False)
+
+            body = b"".join(body_parts)
+            delivered = False
+
+            async def replay_body():
+                nonlocal delivered
+                if delivered:
+                    return {"type": "http.disconnect"}
+                delivered = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request._receive = replay_body
+            return await original_handler(request)
+
+        return limited_handler
+
+
+router = APIRouter(
+    prefix="/pacing",
+    tags=["Pacing"],
+    route_class=TimelineUpdateBodyLimitRoute,
+)
 
 
 def _requires_video_analysis(config: PacingConfigSchema) -> bool:

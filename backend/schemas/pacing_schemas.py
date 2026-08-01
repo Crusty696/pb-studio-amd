@@ -4,6 +4,12 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Any
 
 
+# Product scope permits 4-hour DJ mixes; UI editing permits 0.1-second clips.
+# 4 * 60 * 60 / 0.1 = 144,000 entries, so this cap preserves the documented
+# maximum timeline while making one manual update request finite.
+TIMELINE_UPDATE_MAX_ENTRIES = 144_000
+
+
 class PreviewRequest(BaseModel):
     """Request: Timeline-Preview generieren."""
     # BUG-062 FIX: ge=0.0 validation
@@ -115,7 +121,7 @@ class TimelineResponse(BaseModel):
 
 class TimelineUpdateRequest(BaseModel):
     """Request: Timeline manuell aktualisieren."""
-    entries: list[TimelineEntrySchema]
+    entries: list[TimelineEntrySchema] = Field(max_length=TIMELINE_UPDATE_MAX_ENTRIES)
 
 
 class PreviewResponse(BaseModel):
