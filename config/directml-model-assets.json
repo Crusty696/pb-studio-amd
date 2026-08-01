@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-30T10:44:18+02:00",
+  "generated_at": "2026-08-01T22:59:00+02:00",
   "runtime": {
     "onnxruntime_directml": "1.19.2",
     "device_id": 1,
-    "adapter_luid": "0x00000000_0x0001185b",
+    "adapter_luid": "0x00000000_0x00012a2a",
     "adapter_name": "AMD Radeon RX 7800 XT",
     "cpu_ep_fallback": false
   },
   "release_provenance": {
     "status": "approved",
     "bundle_manifest": "config/directml-asset-bundle.json",
-    "reason": "Every bundled target is bound to an immutable upstream revision, exact source hash, license artifact and the SHA-256-verified 2026.07.31 release archive."
+    "reason": "Every bundled target is bound to an immutable upstream revision or release-asset identity, exact source hash, license artifact and the SHA-256-verified 2026.08.01 release archive."
   },
   "assets": [
     {
@@ -116,6 +116,24 @@
       "license": {
         "spdx": "Apache-2.0",
         "bundle_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "id": "uvr-mdx-net-inst-hq-3",
+      "target": "models/UVR-MDX-NET-Inst_HQ_3.onnx",
+      "source": {
+        "repository": "TRvlvr/model_repo",
+        "revision": "release:all_public_uvr_models;asset_id:112310332",
+        "file": "UVR-MDX-NET-Inst_HQ_3.onnx",
+        "size": 66759214,
+        "md5": "81452e3891782d67b1ce7fd05d6ac757",
+        "sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc"
+      },
+      "target_sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc",
+      "transform": "None; release asset is provisioned byte-for-byte after GitHub Blob-MD5, size and SHA-256 verification.",
+      "license": {
+        "spdx": "MIT",
+        "bundle_path": "licenses/UVR-MDX-MIT.txt"
       }
     },
     {

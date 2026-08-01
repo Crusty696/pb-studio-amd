@@ -11,6 +11,7 @@ Supported encoders:
 """
 
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from enum import Enum

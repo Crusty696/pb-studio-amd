@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "bundle_id": "pb-studio-directml-assets",
-  "bundle_version": "2026.07.31",
+  "bundle_version": "2026.08.01",
   "approval_status": "approved",
   "approval_blockers": [],
   "archive": {
-    "file_name": "pb-studio-directml-assets-2026.07.31.zip",
-    "size": 3219585582,
-    "sha256": "397f4b332a265b71ac555f7209fdb4a140bb2efc5168f51297cff5ea93e4b96d"
+    "file_name": "pb-studio-directml-assets-2026.08.01.zip",
+    "size": 3286356033,
+    "sha256": "008aac9e637f95c349826667d0f1926c12d92df9bf201f4ef77134bee30029eb"
   },
   "files": [
     {
@@ -198,6 +198,25 @@
       }
     },
     {
+      "archive_path": "models/UVR-MDX-NET-Inst_HQ_3.onnx",
+      "target": "models/UVR-MDX-NET-Inst_HQ_3.onnx",
+      "size": 66759214,
+      "sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc",
+      "kind": "model",
+      "source": {
+        "repository": "TRvlvr/model_repo",
+        "revision": "release:all_public_uvr_models;asset_id:112310332",
+        "file": "UVR-MDX-NET-Inst_HQ_3.onnx",
+        "size": 66759214,
+        "md5": "81452e3891782d67b1ce7fd05d6ac757",
+        "sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc"
+      },
+      "license": {
+        "spdx": "MIT",
+        "archive_path": "licenses/UVR-MDX-MIT.txt"
+      }
+    },
+    {
       "archive_path": "models/moondream_encoder.onnx",
       "target": "models/moondream_encoder.onnx",
       "size": 879098032,
@@ -240,6 +259,13 @@
       "target": "models/licenses/CLAP-license-chain.txt",
       "size": 13883,
       "sha256": "5d5e754a29997398a00427dd7f549937dd451ddd867a5061c6fe3115b81e1d34",
+      "kind": "license"
+    },
+    {
+      "archive_path": "licenses/UVR-MDX-MIT.txt",
+      "target": "models/licenses/UVR-MDX-MIT.txt",
+      "size": 1316,
+      "sha256": "a723300f3c78339dec5051f0803fcdb24caba7623aaa1fcf52bed51a860dd4c0",
       "kind": "license"
     }
   ]

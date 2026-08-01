@@ -14,8 +14,9 @@ did not prove which provider and model handled the next request.
 1. `highest_vram_amd` is the default DirectML adapter policy. The central
    resolver records DXGI index, LUID, adapter name and dedicated VRAM.
 2. DirectML sessions, VRAM limits and hardware monitoring use that exact
-   identity. On the verified workstation it is RX 7800 XT index `1`, LUID
-   `0x00000000_0x0001185b`.
+   identity. On the verified workstation it is RX 7800 XT index `1`. The
+   current DXGI LUID is recorded by the release hardware gate because Windows
+   can reassign it after driver or device-topology changes.
 3. LibreHardwareMonitor activates only when the versioned runtime manifest,
    bundle boundary and every declared assembly hash pass. Launchers propagate
    the validated manifest and library hashes; trust failures degrade closed.
