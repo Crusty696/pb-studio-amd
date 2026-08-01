@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html>
-<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
+<!-- Created by , GNU Texinfo 7.0.1 -->
   <head>
     <meta charset="utf-8">
     <title>
@@ -17,9 +17,9 @@
       </h1>
 
 
-<a name="SEC_Top"></a>
+<div class="top-level-extent" id="SEC_Top">
 
-<div class="region-contents" id="SEC_Contents">
+<div class="element-contents" id="SEC_Contents">
 <h2 class="contents-heading">Table of Contents</h2>
 
 <div class="contents">
@@ -29,7 +29,7 @@
   <li><a id="toc-Description" href="#Description">2 Description</a></li>
   <li><a id="toc-Options" href="#Options">3 Options</a>
   <ul class="toc-numbered-mark">
-    <li><a id="toc-Stream-specifiers" href="#Stream-specifiers-1">3.1 Stream specifiers</a></li>
+    <li><a id="toc-Stream-specifiers-1" href="#Stream-specifiers-1">3.1 Stream specifiers</a></li>
     <li><a id="toc-Generic-options" href="#Generic-options">3.2 Generic options</a></li>
     <li><a id="toc-AVOptions" href="#AVOptions">3.3 AVOptions</a></li>
     <li><a id="toc-Main-options" href="#Main-options">3.4 Main options</a></li>
@@ -50,13 +50,23 @@
 </div>
 </div>
 
-<a name="Synopsis"></a>
-<h2 class="chapter">1 Synopsis<span class="pull-right"><a class="anchor hidden-xs" href="#Synopsis" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Synopsis" aria-hidden="true">TOC</a></span></h2>
+<ul class="mini-toc">
+<li><a href="#Synopsis" accesskey="1">Synopsis</a></li>
+<li><a href="#Description" accesskey="2">Description</a></li>
+<li><a href="#Options" accesskey="3">Options</a></li>
+<li><a href="#Writers" accesskey="4">Writers</a></li>
+<li><a href="#Timecode" accesskey="5">Timecode</a></li>
+<li><a href="#See-Also" accesskey="6">See Also</a></li>
+<li><a href="#Authors" accesskey="7">Authors</a></li>
+</ul>
+<div class="chapter-level-extent" id="Synopsis">
+<h2 class="chapter">1 Synopsis</h2>
 
 <p>ffprobe [<var class="var">options</var>] <samp class="file">input_url</samp>
 </p>
-<a name="Description"></a>
-<h2 class="chapter">2 Description<span class="pull-right"><a class="anchor hidden-xs" href="#Description" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Description" aria-hidden="true">TOC</a></span></h2>
+</div>
+<div class="chapter-level-extent" id="Description">
+<h2 class="chapter">2 Description</h2>
 
 <p>ffprobe gathers information from multimedia streams and prints it in
 human- and machine-readable fashion.
@@ -89,12 +99,13 @@ name (which may be shared by other sections), and an unique
 name. See the output of <samp class="option">sections</samp>.
 </p>
 <p>Metadata tags stored in the container or in the streams are recognized
-and printed in the corresponding &quot;FORMAT&quot;, &quot;STREAM&quot;, &quot;STREAM_GROUP_STREAM&quot;
-or &quot;PROGRAM_STREAM&quot; section.
+and printed in the corresponding &quot;FORMAT&quot;, &quot;STREAM&quot; or &quot;PROGRAM_STREAM&quot;
+section.
 </p>
 
-<a name="Options"></a>
-<h2 class="chapter">3 Options<span class="pull-right"><a class="anchor hidden-xs" href="#Options" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Options" aria-hidden="true">TOC</a></span></h2>
+</div>
+<div class="chapter-level-extent" id="Options">
+<h2 class="chapter">3 Options</h2>
 
 <p>All the numerical options, if not specified otherwise, accept a string
 representing a number as input, which may be followed by one of the SI
@@ -111,17 +122,14 @@ corresponding value to true. They can be set to false by prefixing
 the option name with &quot;no&quot;. For example using &quot;-nofoo&quot;
 will set the boolean option with name &quot;foo&quot; to false.
 </p>
-<p>Options that take arguments support a special syntax where the argument given on
-the command line is interpreted as a path to the file from which the actual
-argument value is loaded. To use this feature, add a forward slash &rsquo;/&rsquo;
-immediately before the option name (after the leading dash). E.g.
-</p><div class="example">
-<pre class="example-preformatted">ffmpeg -i INPUT -/filter:v filter.script OUTPUT
-</pre></div>
-<p>will load a filtergraph description from the file named <samp class="file">filter.script</samp>.
-</p>
-<a class="anchor" id="Stream-specifiers"></a><a name="Stream-specifiers-1"></a>
-<h3 class="section">3.1 Stream specifiers<span class="pull-right"><a class="anchor hidden-xs" href="#Stream-specifiers" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Stream-specifiers" aria-hidden="true">TOC</a></span></h3>
+<a class="anchor" id="Stream-specifiers"></a><ul class="mini-toc">
+<li><a href="#Stream-specifiers-1" accesskey="1">Stream specifiers</a></li>
+<li><a href="#Generic-options" accesskey="2">Generic options</a></li>
+<li><a href="#AVOptions" accesskey="3">AVOptions</a></li>
+<li><a href="#Main-options" accesskey="4">Main options</a></li>
+</ul>
+<div class="section-level-extent" id="Stream-specifiers-1">
+<h3 class="section">3.1 Stream specifiers</h3>
 <p>Some options are applied per-stream, e.g. bitrate or codec. Stream specifiers
 are used to precisely specify which stream(s) a given option belongs to.
 </p>
@@ -144,9 +152,9 @@ or <code class="code">-codec: copy</code> would copy all the streams without ree
 thread count for the second stream to 4. If <var class="var">stream_index</var> is used as an
 additional stream specifier (see below), then it selects stream number
 <var class="var">stream_index</var> from the matching streams. Stream numbering is based on the
-order of the streams as detected by libavformat except when a stream group
-specifier or program ID is also specified. In this case it is based on the
-ordering of the streams in the group or program.
+order of the streams as detected by libavformat except when a program ID is
+also specified. In this case it is based on the ordering of the streams in the
+program.
 </p></dd>
 <dt><samp class="option"><var class="var">stream_type</var>[:<var class="var">additional_stream_specifier</var>]</samp></dt>
 <dd><p><var class="var">stream_type</var> is one of following: &rsquo;v&rsquo; or &rsquo;V&rsquo; for video, &rsquo;a&rsquo; for audio, &rsquo;s&rsquo;
@@ -157,20 +165,6 @@ it matches streams which both have this type and match the
 <var class="var">additional_stream_specifier</var>. Otherwise, it matches all streams of the
 specified type.
 </p></dd>
-<dt><samp class="option">g:<var class="var">group_specifier</var>[:<var class="var">additional_stream_specifier</var>]</samp></dt>
-<dd><p>Matches streams which are in the group with the specifier <var class="var">group_specifier</var>.
-if <var class="var">additional_stream_specifier</var> is used, then it matches streams which both
-are part of the group and match the <var class="var">additional_stream_specifier</var>.
-<var class="var">group_specifier</var> may be one of the following:
-</p><dl class="table">
-<dt><samp class="option"><var class="var">group_index</var></samp></dt>
-<dd><p>Match the stream with this group index.
-</p></dd>
-<dt><samp class="option">#<var class="var">group_id</var> or i:<var class="var">group_id</var></samp></dt>
-<dd><p>Match the stream with this group id.
-</p></dd>
-</dl>
-</dd>
 <dt><samp class="option">p:<var class="var">program_id</var>[:<var class="var">additional_stream_specifier</var>]</samp></dt>
 <dd><p>Matches streams which are in the program with the id <var class="var">program_id</var>. If
 <var class="var">additional_stream_specifier</var> is used, then it matches streams which both
@@ -183,13 +177,7 @@ are part of the program and match the <var class="var">additional_stream_specifi
 <dt><samp class="option">m:<var class="var">key</var>[:<var class="var">value</var>]</samp></dt>
 <dd><p>Matches streams with the metadata tag <var class="var">key</var> having the specified value. If
 <var class="var">value</var> is not given, matches streams that contain the given tag with any
-value. The colon character &rsquo;:&rsquo; in <var class="var">key</var> or <var class="var">value</var> needs to be
-backslash-escaped.
-</p></dd>
-<dt><samp class="option">disp:<var class="var">dispositions</var>[:<var class="var">additional_stream_specifier</var>]</samp></dt>
-<dd><p>Matches streams with the given disposition(s). <var class="var">dispositions</var> is a list of
-one or more dispositions (as printed by the <samp class="option">-dispositions</samp> option)
-joined with &rsquo;+&rsquo;.
+value.
 </p></dd>
 <dt><samp class="option">u</samp></dt>
 <dd><p>Matches streams with usable configuration, the codec must be defined and the
@@ -200,8 +188,9 @@ input files.
 </p></dd>
 </dl>
 
-<a name="Generic-options"></a>
-<h3 class="section">3.2 Generic options<span class="pull-right"><a class="anchor hidden-xs" href="#Generic-options" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Generic-options" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="Generic-options">
+<h3 class="section">3.2 Generic options</h3>
 
 <p>These options are shared amongst the ff* tools.
 </p>
@@ -365,12 +354,6 @@ and the &quot;Last message repeated n times&quot; line will be omitted.
 <dd><p>Indicates that log output should add a <code class="code">[level]</code> prefix to each message
 line. This can be used as an alternative to log coloring, e.g. when dumping the
 log to file.
-</p></dd>
-<dt>&lsquo;<samp class="samp">time</samp>&rsquo;</dt>
-<dd><p>Indicates that log lines should be prefixed with time information.
-</p></dd>
-<dt>&lsquo;<samp class="samp">datetime</samp>&rsquo;</dt>
-<dd><p>Indicates that log lines should be prefixed with date and time information.
 </p></dd>
 </dl>
 <p>Flags can also be used alone by adding a &rsquo;+&rsquo;/&rsquo;-&rsquo; prefix to set/reset a single
@@ -562,8 +545,9 @@ Default is INT_MAX.
 </p></dd>
 </dl>
 
-<a name="AVOptions"></a>
-<h3 class="section">3.3 AVOptions<span class="pull-right"><a class="anchor hidden-xs" href="#AVOptions" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-AVOptions" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="AVOptions">
+<h3 class="section">3.3 AVOptions</h3>
 
 <p>These options are provided directly by the libavformat, libavdevice and
 libavcodec libraries. To see the list of available AVOptions, use the
@@ -605,8 +589,9 @@ AVOptions, use <samp class="option">-option 0</samp>/<samp class="option">-optio
 prepending v/a/s to the options name is now obsolete and will be
 removed soon.
 </p>
-<a name="Main-options"></a>
-<h3 class="section">3.4 Main options<span class="pull-right"><a class="anchor hidden-xs" href="#Main-options" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Main-options" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="Main-options">
+<h3 class="section">3.4 Main options</h3>
 
 <dl class="table">
 <dt><samp class="option">-f <var class="var">format</var></samp></dt>
@@ -699,6 +684,14 @@ stream.
 name &quot;FORMAT&quot;.
 </p>
 </dd>
+<dt><samp class="option">-show_format_entry <var class="var">name</var></samp></dt>
+<dd><p>Like <samp class="option">-show_format</samp>, but only prints the specified entry of the
+container format information, rather than all. This option may be given more
+than once, then all specified entries will be shown.
+</p>
+<p>This option is deprecated, use <code class="code">show_entries</code> instead.
+</p>
+</dd>
 <dt><samp class="option">-show_entries <var class="var">section_entries</var></samp></dt>
 <dd><p>Set list of entries to show.
 </p>
@@ -789,14 +782,6 @@ multimedia stream.
 </p>
 <p>Each media stream information is printed within a dedicated section
 with name &quot;PROGRAM_STREAM&quot;.
-</p>
-</dd>
-<dt><samp class="option">-show_stream_groups</samp></dt>
-<dd><p>Show information about stream groups and their streams contained in the
-input multimedia stream.
-</p>
-<p>Each media stream information is printed within a dedicated section
-with name &quot;STREAM_GROUP_STREAM&quot;.
 </p>
 </dd>
 <dt><samp class="option">-show_chapters</samp></dt>
@@ -917,20 +902,6 @@ Valid values are <code class="code">always</code>/<code class="code">1</code>, <
 Default is <var class="var">auto</var>.
 </p>
 </dd>
-<dt><samp class="option">-analyze_frames</samp></dt>
-<dd><p>Analyze frames and/or their side data up to the provided read interval,
-providing additional information that may be useful at a stream level.
-Must be paired with the <samp class="option">-show_streams</samp> option or it will have no effect.
-</p>
-<p>Currently, the additional fields provided by this option when enabled are the
-<code class="code">closed_captions</code> and <code class="code">film_grain</code> fields.
-</p>
-<p>For example, to analyze the first 20 seconds and populate these fields:
-</p><div class="example">
-<pre class="example-preformatted">ffprobe -show_streams -analyze_frames -read_intervals &quot;%+20&quot; INPUT
-</pre></div>
-
-</dd>
 <dt><samp class="option">-bitexact</samp></dt>
 <dd><p>Force bitexact output, useful to produce output which is not dependent
 on the specific build.
@@ -947,8 +918,10 @@ to stdout.
 </dd>
 </dl>
 
-<a name="Writers"></a>
-<h2 class="chapter">4 Writers<span class="pull-right"><a class="anchor hidden-xs" href="#Writers" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Writers" aria-hidden="true">TOC</a></span></h2>
+</div>
+</div>
+<div class="chapter-level-extent" id="Writers">
+<h2 class="chapter">4 Writers</h2>
 
 <p>A writer defines the output format adopted by <code class="command">ffprobe</code>, and will be
 used for printing all the parts of the output.
@@ -997,8 +970,16 @@ strings.
 
 <p>A description of the currently available writers follows.
 </p>
-<a name="default"></a>
-<h3 class="section">4.1 default<span class="pull-right"><a class="anchor hidden-xs" href="#default" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-default" aria-hidden="true">TOC</a></span></h3>
+<ul class="mini-toc">
+<li><a href="#default" accesskey="1">default</a></li>
+<li><a href="#compact_002c-csv" accesskey="2">compact, csv</a></li>
+<li><a href="#flat" accesskey="3">flat</a></li>
+<li><a href="#ini" accesskey="4">ini</a></li>
+<li><a href="#json" accesskey="5">json</a></li>
+<li><a href="#xml" accesskey="6">xml</a></li>
+</ul>
+<div class="section-level-extent" id="default">
+<h3 class="section">4.1 default</h3>
 <p>Default format.
 </p>
 <p>Print each section in the form:
@@ -1010,9 +991,8 @@ keyN=valN
 [/SECTION]
 </pre></div>
 
-<p>Metadata tags are printed as a line in the corresponding FORMAT, STREAM,
-STREAM_GROUP_STREAM or PROGRAM_STREAM section, and are prefixed by the
-string &quot;TAG:&quot;.
+<p>Metadata tags are printed as a line in the corresponding FORMAT, STREAM or
+PROGRAM_STREAM section, and are prefixed by the string &quot;TAG:&quot;.
 </p>
 <p>A description of the accepted options follows.
 </p>
@@ -1028,8 +1008,9 @@ Default value is 0.
 </p></dd>
 </dl>
 
-<a name="compact_002c-csv"></a>
-<h3 class="section">4.2 compact, csv<span class="pull-right"><a class="anchor hidden-xs" href="#compact_002c-csv" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-compact_002c-csv" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="compact_002c-csv">
+<h3 class="section">4.2 compact, csv</h3>
 <p>Compact and CSV format.
 </p>
 <p>The <code class="code">csv</code> writer is equivalent to <code class="code">compact</code>, but supports
@@ -1094,8 +1075,9 @@ containing a newline (&lsquo;<samp class="samp">\n</samp>&rsquo;), a carriage re
 </dd>
 </dl>
 
-<a name="flat"></a>
-<h3 class="section">4.3 flat<span class="pull-right"><a class="anchor hidden-xs" href="#flat" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-flat" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="flat">
+<h3 class="section">4.3 flat</h3>
 <p>Flat format.
 </p>
 <p>A free-form output where each line contains an explicit key=value, such as
@@ -1123,8 +1105,9 @@ chapter. A value of 0 will disable this behavior.
 </p></dd>
 </dl>
 
-<a name="ini"></a>
-<h3 class="section">4.4 ini<span class="pull-right"><a class="anchor hidden-xs" href="#ini" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-ini" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="ini">
+<h3 class="section">4.4 ini</h3>
 <p>INI format output.
 </p>
 <p>Print output in an INI based format.
@@ -1158,8 +1141,9 @@ chapter. A value of 0 will disable this behavior.
 </p></dd>
 </dl>
 
-<a name="json"></a>
-<h3 class="section">4.5 json<span class="pull-right"><a class="anchor hidden-xs" href="#json" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-json" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="json">
+<h3 class="section">4.5 json</h3>
 <p>JSON based format.
 </p>
 <p>Each section is printed using JSON notation.
@@ -1175,8 +1159,9 @@ printed on a single line. Default value is 0.
 
 <p>For more information about JSON, see <a class="url" href="http://www.json.org/">http://www.json.org/</a>.
 </p>
-<a name="xml"></a>
-<h3 class="section">4.6 xml<span class="pull-right"><a class="anchor hidden-xs" href="#xml" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-xml" aria-hidden="true">TOC</a></span></h3>
+</div>
+<div class="section-level-extent" id="xml">
+<h3 class="section">4.6 xml</h3>
 <p>XML based format.
 </p>
 <p>The XML output is described in the XML schema description file
@@ -1211,8 +1196,10 @@ This option automatically sets <samp class="option">fully_qualified</samp> to 1.
 <p>For more information about the XML format, see
 <a class="url" href="https://www.w3.org/XML/">https://www.w3.org/XML/</a>.
 </p>
-<a name="Timecode"></a>
-<h2 class="chapter">5 Timecode<span class="pull-right"><a class="anchor hidden-xs" href="#Timecode" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Timecode" aria-hidden="true">TOC</a></span></h2>
+</div>
+</div>
+<div class="chapter-level-extent" id="Timecode">
+<h2 class="chapter">5 Timecode</h2>
 
 <p><code class="command">ffprobe</code> supports Timecode extraction:
 </p>
@@ -1229,8 +1216,9 @@ stream metadata (<samp class="option">-show_streams</samp>, see <var class="var"
 </li></ul>
 
 
-<a name="See-Also"></a>
-<h2 class="chapter">6 See Also<span class="pull-right"><a class="anchor hidden-xs" href="#See-Also" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-See-Also" aria-hidden="true">TOC</a></span></h2>
+</div>
+<div class="chapter-level-extent" id="See-Also">
+<h2 class="chapter">6 See Also</h2>
 
 <p><a class="url" href="ffprobe-all.html">ffprobe-all</a>,
 <a class="url" href="ffmpeg.html">ffmpeg</a>, <a class="url" href="ffplay.html">ffplay</a>,
@@ -1245,8 +1233,9 @@ stream metadata (<samp class="option">-show_streams</samp>, see <var class="var"
 <a class="url" href="ffmpeg-filters.html">ffmpeg-filters</a>
 </p>
 
-<a name="Authors"></a>
-<h2 class="chapter">7 Authors<span class="pull-right"><a class="anchor hidden-xs" href="#Authors" aria-hidden="true">#</a> <a class="anchor hidden-xs"href="#toc-Authors" aria-hidden="true">TOC</a></span></h2>
+</div>
+<div class="chapter-level-extent" id="Authors">
+<h2 class="chapter">7 Authors</h2>
 
 <p>The FFmpeg developers.
 </p>
@@ -1259,6 +1248,8 @@ online repository at <a class="url" href="https://git.ffmpeg.org/ffmpeg">https:/
 <samp class="file">MAINTAINERS</samp> in the source code tree.
 </p>
 
+</div>
+</div>
       <p style="font-size: small;">
         This document was generated using <a class="uref" href="https://www.gnu.org/software/texinfo/"><em class="emph">makeinfo</em></a>.
       </p>

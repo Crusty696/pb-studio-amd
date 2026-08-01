@@ -450,7 +450,7 @@ def test_runtime_manifest_hashes_one_canonical_ffmpeg_ffprobe_pair():
     assert _sha256(ffmpeg) == manifest["active"]["ffmpeg_sha256"].upper()
     assert _sha256(ffprobe) == manifest["active"]["ffprobe_sha256"].upper()
     assert manifest["candidate"]["activation_status"] == (
-        "pending_t332_hardware_qc"
+        "activated_t411_hardware_qc"
     )
     for field in ("asset_sha256", "ffmpeg_sha256", "ffprobe_sha256"):
         assert re.fullmatch(r"[0-9A-F]{64}", manifest["active"][field])

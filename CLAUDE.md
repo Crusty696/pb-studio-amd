@@ -183,7 +183,7 @@ PBStudio.UI/
 | onnxruntime-directml | >=1.16.0 | GPU engine |
 | PyTorch (CPU) | 2.4.1+cpu | ML tensors |
 | BeatNet | 1.1.1 | Beat detection |
-| FFmpeg | aktives Manifest: 8.0.1 Gyan.dev; 6.1.1 erst nach T332-Hardware-QC | AMF encoders |
+| FFmpeg | aktives Manifest: 6.1.1 Gyan.dev; T411-Hardware-QC bestanden | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
 
 ## 6. 📝 BRAIN UPDATE PROTOCOL

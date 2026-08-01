@@ -41,11 +41,11 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 
 ## Externe Tools
 
-- FFmpeg / ffprobe `8.0.1-essentials_build-www.gyan.dev` —
+- FFmpeg / ffprobe `6.1.1-essentials_build-www.gyan.dev` —
   **GPL-3.0-or-later**, statischer Windows-Build. Das gegen
   `config/ffmpeg-runtime.json` hashverifizierte Binary meldet
   `--enable-gpl --enable-version3 --enable-static`; das mitgelieferte
-  `README.txt` nennt GPL v3 und den FFmpeg-Quellstand `894da5ca7d`.
+  `README.txt` nennt GPL v3 und den FFmpeg-Quellstand `e38092ef93`.
 - UVR-MDX-NET-Inst_HQ_3.onnx — MIT
 
 ## App-Credits (Mindestumfang)
@@ -54,7 +54,7 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 PB Studio nutzt unter anderem:
   • CLAP DirectML ONNX — BSD-3-Clause AND Apache-2.0
   • SigLIP SO400M (google/siglip-so400m-patch14-384) — Apache 2.0
-  • FFmpeg 8.0.1 essentials (statischer Gyan.dev-Build) — GPL-3.0-or-later
+  • FFmpeg 6.1.1 essentials (statischer Gyan.dev-Build) — GPL-3.0-or-later
   • UVR-MDX-NET — MIT
 
 Lizenzdetails siehe LICENSES.md. Der FFmpeg-GPL-Volltext liegt im
