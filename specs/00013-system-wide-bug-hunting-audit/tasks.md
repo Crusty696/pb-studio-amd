@@ -38,7 +38,7 @@
 - [X] T403 [OBJ-72] {(OR-337)} {(FR-350)} {(FR-351)} {(FR-352)} Independently review the complete diff and create `.completed` only with task, evidence and commit digests under the feature workspace [SHARED/Z-REVIEW]
 - [X] T404 [OBJ-72] {(TR-347)} Run targeted fault injection for project switching, persistence, Settings, QueueFull and render retry and store receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [X] T405 [OBJ-72] {(TR-349)} Run the complete `Tests/` suite with Python 3.11, NumPy 1.26.4 and `PYTHONPATH=src` and store JUnit evidence [QC]
-- [ ] T406 [OBJ-72] {(TR-349)} Run locked native C# tests and WPF Release build with zero errors and warnings and store logs/binlog under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T406 [OBJ-72] {(TR-349)} Run locked native C# tests and WPF Release build with zero errors and warnings and store logs/binlog under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T407 [OBJ-72] {(TR-348)} Prove locked restore, generation, build and asset validation from an external clean Windows checkout without local cache advantage under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T408 [OBJ-72] {(TR-350)} Validate all 14 views, destructive/error states, supported resolutions and DPI matrix and store GUI evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T409 [OBJ-72] {(TR-350)} Validate keyboard-only operation, focus, UIA and High Contrast and store accessibility evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]

@@ -92,7 +92,7 @@ Updated: 2026-07-30T07:52:00+02:00
 ## OBJ-72 Release-Fähigkeit T370–T415
 
 Updated: 2026-07-31
-Gesamt: **36/46 PASS (78,3 %)**
+Gesamt: **37/46 PASS (80,4 %)**
 Aktuell: **T404 PASS; gezielte Fault-Injection 48 Python + 9 native Tests**
 
 | Task | Status | ETA | Owner | Zone | Ist | Evidenz / nächster Schritt |
@@ -133,7 +133,7 @@ Aktuell: **T404 PASS; gezielte Fault-Injection 48 Python + 9 native Tests**
 | T403 Implementierungswahrheit | PASS | 2–4 h | Teamleiter + 3 unabhängige Reviewer | SHARED/Z-REVIEW | 2,3 h | 19 Findings geschlossen; statischer Integritäts-Sweep PASS (`evidence/T403-complete-diff-review.md`); `.completed` commitgebunden im nächsten Gate |
 | T404 Gezielte Fault-Injection | PASS | 3–6 h | Test-Team | QC | 1,2 h | 48/48 Python + 9/9 native PASS; 5 Build-/Betriebslücken geschlossen (`evidence/T404-targeted-fault-injection.md`) |
 | T405 Python-Gesamtsuite | PASS | 1–3 h | Teamleiter/Test-Team | QC | 3,0 h | 1.127 Tests, 0 Fehler, 11 freigegebene Skips, 0 ungeprüfte Skips, Coverage 61,4 % (`evidence/T405-python-release-gate.md`) |
-| T406 Native C#-Tests und WPF Release | OPEN | 1–3 h | Teamleiter/WPF-Test | QC | – | native Tests, locked Release-Build 0/0 |
+| T406 Native C#-Tests und WPF Release | PASS | 1–3 h | Teamleiter/WPF-Test | QC | 0,2 h | Locked Restore PASS; 28/28 Tests; WPF Release 0 Warnungen/0 Fehler (`evidence/T406-dotnet-release-gate.md`) |
 | T407 Clean-Checkout-Windows-Gate | OPEN | 2–5 h | Infra/Test-Team | QC | – | kein Generated-/Asset-/Cache-Vorteil |
 | T408 GUI-Wahrheit | OPEN | 3–6 h | GUI-Agent + Teamleiter | QC | – | 14 Views, Fehlerfälle, Auflösungen, DPI |
 | T409 Accessibility-QC | OPEN | 3–6 h | GUI-Agent | QC | – | Keyboard, Fokus, UIA, High Contrast |
