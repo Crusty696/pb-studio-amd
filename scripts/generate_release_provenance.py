@@ -50,6 +50,15 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _display_path(root: Path, path: Path) -> str:
+    root = root.resolve()
+    path = path.resolve()
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _run(root: Path, *args: str) -> str:
     result = subprocess.run(
         args,
@@ -266,13 +275,9 @@ def _artifact_records(
             raise FileNotFoundError(f"Release artifact not found: {path}")
         if kind == "application":
             _validate_application_artifact(path)
-        try:
-            display = path.relative_to(root).as_posix()
-        except ValueError:
-            display = str(path)
         records.append(
             {
-                "path": display,
+                "path": _display_path(root, path),
                 "kind": kind,
                 "size": path.stat().st_size,
                 "sha256": _sha256(path),
@@ -511,7 +516,7 @@ def main() -> int:
         },
         "locks": lock_records,
         "sbom": {
-            "path": sbom_path.relative_to(root).as_posix(),
+            "path": _display_path(root, sbom_path),
             "size": sbom_path.stat().st_size,
             "sha256": _sha256(sbom_path),
             "components": len(components),
