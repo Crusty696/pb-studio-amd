@@ -1,6 +1,6 @@
 # T413-S7 Finaler Release-Kandidatenlauf
 
-**Status:** PASS bis auf commitgebundene Clean-Provenienz
+**Status:** PASS
 **Datum:** 2026-08-02
 
 ## Security-Diffscan und Workflow-Fix
@@ -47,6 +47,25 @@
 
 ## Abschlussbedingung
 
-T413 bleibt bis zum sauberen Kandidaten-Commit und einem für exakt diesen SHA
-erzeugten Manifest mit `release_eligible=true` offen. Danach folgen T414
-QC-/Brain-/Marker-Konvergenz und ein letzter sauberer Provenienznachweis.
+Der erste externe Provenienzlauf deckte einen echten Releasefehler auf: Bei
+absolutem `--output-dir` außerhalb des Repositories scheiterte die
+SBOM-Serialisierung an `Path.relative_to()`. Commit
+`7fece74db63470084c5179917d57a8060d20c5a3` serialisiert interne Pfade
+weiterhin relativ und externe Pfade absolut. Der Regressionstest sowie der
+globale Syntax-/Truncation-Sweep sind PASS.
+
+## Commitgebundene Clean-Provenienz
+
+- Kandidaten-SHA: `7fece74db63470084c5179917d57a8060d20c5a3`.
+- Repository: sauber; Receipt `source.dirty=false`.
+- Ergebnis: `release_eligible=true`, 182 SBOM-Komponenten und zwei gebundene
+  Artefakte.
+- WPF-ZIP: SHA-256
+  `c48e5a12046465b808e25e35559e367b5813c9ae5f42a584a19ebb8626ed3f62`.
+- SBOM: `C:\tmp\pb-t413-clean-provenance-7fece74\sbom.cdx.json`, SHA-256
+  `d3b8f492053a9d2db82dd0622d1b1397f75e36cc8bc2a0955a57a9a26b65ff80`.
+- Receipt: `C:\tmp\pb-t413-clean-provenance-7fece74\release-provenance.json`,
+  SHA-256 `4d2a1f7e8c433707217a019e42353e8af6f525424614099e3aee571188f64f7a`.
+
+T413 ist geschlossen. T414 und `.qc-passed` bleiben bis zum erfolgreichen
+T415-Nachweis auf geschütztem `main` offen.

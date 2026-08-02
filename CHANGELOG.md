@@ -18,6 +18,8 @@
   fail-closed.
 - Scanner-, Exception-, MCP- und npm-Konfiguration in Release-Provenienz
   aufgenommen.
+- Externe absolute Provenienz-Ausgabepfade korrigiert; SBOM-Receipts werden
+  außerhalb des Repositories ohne `Path.relative_to()`-Fehler erzeugt.
 
 ### Verified
 - Finaler Python-Lauf: 1.207 Outcomes, 0 Fehler/Errors, 11 genehmigte Skips,
@@ -28,6 +30,8 @@
   NuGet-Produktgraphen sauber; npm 110 Knoten/0 Vulnerabilities.
 - Codex-Security-Diffscan: 23/23 Review-Belege, 0 reportable Findings;
   zwei fail-closed Releaseblocker behoben und unabhängig nachgeprüft.
+- Clean-SHA `7fece74` mit `release_eligible=true`, 182 SBOM-Komponenten und
+  unverändertem WPF-ZIP-Hash verifiziert; Provenienzregression 4/4 PASS.
 
 ## 2026-07-30 - T340–T368 GPU-, Provider- und Analyse-Wahrheit
 

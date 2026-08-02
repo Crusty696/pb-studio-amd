@@ -45,6 +45,6 @@
 - [X] T410 [OBJ-72] {(TR-351)} Prove active-job project switches A→B produce zero cross-project writes in backend, database and UI under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [X] T411 [OBJ-72] {(TR-352)} Prove fresh-install DirectML and AMF operation on RX 7800 XT with exact adapter/LUID, both session flags and verified assets under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [X] T412 [OBJ-72] {(FR-343)} {(TR-347)} Validate render active dedupe, retry, restart and content identity contracts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
-- [ ] T413 [OBJ-72] {(FR-353)} {(TR-353)} {(TR-355)} {(SC-083)} Remediate validated release-security findings and verify secrets, exact-lock SCA, SBOM, hashes, backend authorization and commit identity for one release SHA under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T413 [OBJ-72] {(FR-353)} {(TR-353)} {(TR-355)} {(SC-083)} Remediate validated release-security findings and verify secrets, exact-lock SCA, SBOM, hashes, backend authorization and commit identity for one release SHA under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
 - [ ] T414 [OBJ-72] {(OR-336)} Reconcile QC, Brain and marker digests and create `.qc-passed` only after every gate is PASS under the feature workspace [Z-DOCS/QC]
 - [ ] T415 [OBJ-72] {(FR-351)} {(TR-354)} Publish through PR and required checks, verify protected main/release SHA and store remote receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [Git/Remote]

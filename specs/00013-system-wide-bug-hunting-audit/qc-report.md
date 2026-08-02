@@ -4,13 +4,14 @@
 
 - **Overall result:** **REOPENED / NOT RELEASE-READY**.
 - **Reason:** OBJ-72/T370–T415 supersedes the historical OBJ-71 release gate.
-- **Current progress:** 14/46 OBJ-72 tasks PASS. Gate A (T370–T373), central
-  project context, Audio/Video/Pacing/Brain isolation, bounded SSE, NSwag
-  integration, Timeline lifecycle, atomic creation and CachedTab reapply are
-  PASS. T380/T385/T386 implementation is active. Historical OBJ-71 evidence is
-  preserved under `history/` and remains valid only for that completed scope.
-- **Release rule:** `.completed` and `.qc-passed` remain absent until their
-  OBJ-72 implementation and QC digest gates are satisfied.
+- **Current progress:** 44/46 OBJ-72 tasks PASS. T370–T413 einschließlich
+  Betriebssicherheits-, Gesamt-, Native-, Clean-Checkout-, GUI-, Hardware-,
+  Security-, SCA-, SBOM- und Clean-SHA-Provenienz-Gates sind PASS. T414 und
+  T415 bleiben offen. Historische OBJ-71-Evidenz unter `history/` gilt nur für
+  ihren abgeschlossenen Scope.
+- **Release rule:** `.completed` bindet die Implementierung T370–T403.
+  `.qc-passed` bleibt bis zum geschützten Main-/Release-SHA aus T415 und der
+  anschließenden T414-Digestkonvergenz gesperrt.
 
 ## Authoritative OBJ-71 End-QC Gate — 2026-07-30
 

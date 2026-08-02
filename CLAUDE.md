@@ -69,10 +69,19 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-07-30 (Reparaturplan 00013, OBJ-71 T369)
-- **Phase:** 🟠 Reparaturplan 00013 in Umsetzung; aktueller Worktree nicht
-  release-ready. Freigabe erst nach allen Gates in `specs/dod.md` und einem
-  gültigen `.qc-passed` für denselben Quellstand.
+- **Date:** 2026-08-02 (Reparaturplan 00013, OBJ-72 T413)
+- **Phase:** 🟠 OBJ-72 bei 44/46 PASS; lokaler Kandidat technisch geprüft,
+  aber nicht release-ready. T415 und die abschließende T414-Digestkonvergenz
+  fehlen; `.qc-passed` bleibt gesperrt.
+- **Status (2026-08-02 — autoritative OBJ-72-Wahrheit):**
+  - T370–T413 einschließlich Betriebssicherheit, Gesamt-/Native-/GUI-/Hardware-
+    und Supply-Chain-Gates sind PASS.
+  - Clean-Kandidat `7fece74db63470084c5179917d57a8060d20c5a3` besitzt
+    `release_eligible=true`, 182 SBOM-Komponenten und ein verifiziertes
+    WPF-ZIP mit SHA-256
+    `c48e5a12046465b808e25e35559e367b5813c9ae5f42a584a19ebb8626ed3f62`.
+  - T414/T415 bleiben offen: PR, Required Checks, geschützter Main-/Release-SHA
+    und danach QC-/Brain-/Marker-Digests.
 - **Status (2026-07-31 — autoritative Release- und Modellwahrheit):**
   - DirectML-Assets sind durch `config/directml-model-assets.json` und
     `config/directml-asset-bundle.json` an Revisionen, Source-/Target-Hashes,
@@ -131,8 +140,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:** Reparaturplan 00013 vollständig implementieren und danach
-  T404–T415 sequenziell belegen. Moondream Caption bleibt bis zu einem
+- **Next Task:** T415 nach expliziter Freigabe über PR, Required Checks und
+  geschützten Main-/Release-SHA belegen; anschließend T414 und `.qc-passed`
+  digestgebunden schließen. Moondream Caption bleibt bis zu einem
   strict-DirectML-kompatiblen Decoder bewusst deaktiviert.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
