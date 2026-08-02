@@ -47,8 +47,11 @@ Scan-ID: `6ec79e8a-abb1-47b3-a304-3170a12a247e`
 - Auflösbarer Windows-cp311-CPU-Kandidat: 130 Wheels; Torch-Familie
   `2.11.0+cpu/0.26.0+cpu/2.11.0+cpu`, Transformers `5.5.4`,
   Hugging Face Hub `1.5.0`, Tokenizers `0.22.2`, Setuptools `81.0.0`.
-  Resolverkonflikte: 0. Ein frischer OSV-Lauf und reale Laufzeittests sind
-  nach der freigabepflichtigen Lock-Regeneration zwingend.
+  Resolverkonflikte: 0. Kandidaten-OSV: 67/69 Advisory-Familien behoben,
+  zwei exakt bekannte Restbefunde (`setuptools`: `not_actionable` für den
+  Windows-Wheel-Release; `torch`: `needs_review`). Reale
+  Laufzeittests bleiben nach der freigabepflichtigen Lock-Regeneration
+  zwingend. Detailbeleg: `evidence/T413-lock-candidate-research.md`.
 
 ## Reparatur- und Abschlussmatrix
 
@@ -58,8 +61,8 @@ Scan-ID: `6ec79e8a-abb1-47b3-a304-3170a12a247e`
 | S2 Chat-Logminimierung | PASS | Tool-/Prompt-/Antwort-/Exception-Inhalte fehlen im Live-Log; 2/2 fokussiert PASS |
 | S3 Timeline-Limits | PASS | 144.000 Einträge und 128 MiB vor Parse; 4/4 fokussiert PASS |
 | S4 Legacy-Migration | PASS | Restricted Unpickler, Strict JSON, atomarer Publish; 22/22 fokussiert PASS; Re-Review PASS |
-| S5 exakter Python-SCA/Lock | VALIDATOR PASS / WAITING APPROVAL | Inventar-, Alias-, Hash-, Scanner- und Provenienz-Gates implementiert; Produkt- und Scanner-Locks freigabepflichtig |
-| S6 MCP-Pin/Integrität | WAITING APPROVAL | exakte npm-Versionen/Integritäten und Offline-/Tamper-Design verifiziert; neuer npm-Lock freigabepflichtig |
+| S5 exakter Python-SCA/Lock | DESIGN PASS / WAITING APPROVAL | Produktkandidat 130/130 OSV-geprüft; 67/69 behoben; Resttriage: 1 `not_actionable`, 1 `needs_review`; isolierter 29-Wheel-Scanner-Lock verifiziert |
+| S6 MCP-Pin/Integrität | PARTIAL PASS / WAITING APPROVAL | 110-Knoten-Lock, SRI, npm-tree und Offline-Start PASS; echter `npm ci`-Tamperfehler nach Umsetzung offen |
 | S7 finaler Lauf | WAITING | Voll-/Diff-Scan, Secrets, SCA, SBOM, Publish und Provenienz auf finalem SHA |
 
 T413 darf erst `[X]` werden, wenn S1–S7 PASS sind, der erneute Scan keine
