@@ -62,8 +62,13 @@ Status: `DESIGN VERIFIED / REPO CHANGE WAITING APPROVAL`
   `sha512-AH81oXnhBTRrqbolhq3vTMrJxP+Zgk5cTxMYatMVNGNALqqdviY+3sTkSxynCfZQfxNXUwAwi5mWSlrXxM4TkA==`.
 - `npm ls --all`: PASS. Lokaler `npx --offline --no`-Start: PASS.
 - Direkter Tarball-/Lock-SRI-Vergleich erkennt den manipulierten Context7-SRI.
-  Ein echter `npm ci`-Tamperlauf ist noch nicht bewiesen: der leere Cache
-  scheiterte vorher mit `ENOTCACHED`, nicht mit `EINTEGRITY`.
+- Echter `npm ci --ignore-scripts`-Tamperlauf in neuem Temp-Verzeichnis:
+  erwarteter Exit 1 mit `EINTEGRITY`; gewünschter manipulierter SHA512 und
+  tatsächlicher offizieller SHA512 werden exakt ausgewiesen.
+- Manipulierter Lock-SHA-256:
+  `3FEB11E1E72934813877AAC19FBD5F2BCA7C800D187B97713BEE0B989CF2F757`.
+- npm-Fehlerlog-SHA-256:
+  `B424E798006E942D280EA34FAA8F42FC75E6EE3C47AADC7BB6119E2F8C4C796D`.
 - Codex kann projekt-relatives `cwd = "."` nutzen. Claude benötigt
   `${CLAUDE_PROJECT_DIR:-.}` bei Root-Start oder einen committed Wrapper für
   Starts aus Unterordnern.

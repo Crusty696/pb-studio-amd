@@ -140,7 +140,7 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T410 Projektwechsel-E2E | PASS | 4–8 h | Teamleiter/Test-Team + unabhängiger Reviewer | QC | 2,0 h | 5/5 Backend mit realem Brain-Rebind/Lease-Retirement und 5/5 echte UI-A→B-Wechsel PASS (`evidence/T410-project-switch-e2e.md`) |
 | T411 DirectML-/AMF-Fresh-Install | PASS | 4–8 h | Teamleiter/GPU-/Render-Agent + unabhängiger Reviewer | QC | 1,2 h | 5/5 DirectML, H.264/HEVC-AMF, exakte RX-LUID, 18/18 Assets und 103/103 Vertragsprüfungen PASS (`evidence/T411-directml-amf-fresh-install.md`) |
 | T412 Render-Retry/Restart | PASS | 3–6 h | Teamleiter/Render-Agent + unabhängiger Reviewer | QC | 0,5 h | echte Cross-Process-Dedupe, terminale Retries, `interrupted → running → completed` und Contentwechsel; 68/68 PASS (`evidence/T412-render-retry-restart.md`) |
-| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 5,1 h | S1–S4 PASS; Produktkandidat behebt 67/69 Advisories; Scanner-Lock PASS; MCP-Lock Teil-PASS; Repo-Änderungen warten auf Freigabe (`evidence/T413-lock-candidate-research.md`) |
+| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 5,3 h | S1–S4 PASS; Produktkandidat behebt 67/69 Advisories; Scanner- und MCP-Design PASS; Repo-Änderungen warten auf Freigabe (`evidence/T413-lock-candidate-research.md`) |
 | T414 Abschlusswahrheit | OPEN | 2–4 h | Teamleiter | Z-DOCS/QC | – | QC/Brain/Marker-Digests; `.qc-passed` nur 100 % |
 | T415 Veröffentlichung | OPEN | 1–3 h | Teamleiter | Git/Remote | – | PR, Required Checks, Main, Release |
 
@@ -153,7 +153,7 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T413-S3 Timeline-Limits | PASS | 1–2 h | Pacing-Agent + Reviewer | 144.000 Einträge/128 MiB vor Parse; 4/4 PASS; unabhängiger Review PASS |
 | T413-S4 sichere Legacy-Migration | PASS | 2–4 h | Data-Agent + Reviewer | Restricted Unpickler/Strict JSON/atomarer Publish; 22/22 und Re-Review PASS |
 | T413-S5 Python-SCA/Lock | DESIGN PASS / LOCK WAITING_APPROVAL | 4–12 h | Infra-Agent | 130/130 Kandidatenpakete OSV-geprüft; 67/69 behoben; Setuptools `not_actionable`, Torch `needs_review`; isolierter 29-Wheel-Scanner-Lock PASS |
-| T413-S6 MCP-Pin/Integrität | PARTIAL PASS / WAITING_APPROVAL | 1–3 h | Infra-Agent | Lock v3/110 Knoten, SRI/tree/offline PASS; echter npm-ci-Tampertest bleibt nach Umsetzung offen |
+| T413-S6 MCP-Pin/Integrität | DESIGN PASS / WAITING_APPROVAL | 1–3 h | Infra-Agent | Lock v3/110 Knoten, SRI/tree/offline und echter npm-ci-EINTEGRITY-Tampertest PASS |
 | T413-S7 finaler Security-/Provenienzlauf | WAITING | 3–6 h | Teamleiter + Reviewer | finaler SHA; keine Releaseblocker; `release_eligible=true` |
 
 ### Laufende Regeln

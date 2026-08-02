@@ -62,7 +62,7 @@ Scan-ID: `6ec79e8a-abb1-47b3-a304-3170a12a247e`
 | S3 Timeline-Limits | PASS | 144.000 Einträge und 128 MiB vor Parse; 4/4 fokussiert PASS |
 | S4 Legacy-Migration | PASS | Restricted Unpickler, Strict JSON, atomarer Publish; 22/22 fokussiert PASS; Re-Review PASS |
 | S5 exakter Python-SCA/Lock | DESIGN PASS / WAITING APPROVAL | Produktkandidat 130/130 OSV-geprüft; 67/69 behoben; Resttriage: 1 `not_actionable`, 1 `needs_review`; isolierter 29-Wheel-Scanner-Lock verifiziert |
-| S6 MCP-Pin/Integrität | PARTIAL PASS / WAITING APPROVAL | 110-Knoten-Lock, SRI, npm-tree und Offline-Start PASS; echter `npm ci`-Tamperfehler nach Umsetzung offen |
+| S6 MCP-Pin/Integrität | DESIGN PASS / WAITING APPROVAL | 110-Knoten-Lock, SRI, npm-tree, Offline-Start und echter `npm ci`-EINTEGRITY-Tampertest PASS |
 | S7 finaler Lauf | WAITING | Voll-/Diff-Scan, Secrets, SCA, SBOM, Publish und Provenienz auf finalem SHA |
 
 T413 darf erst `[X]` werden, wenn S1–S7 PASS sind, der erneute Scan keine
