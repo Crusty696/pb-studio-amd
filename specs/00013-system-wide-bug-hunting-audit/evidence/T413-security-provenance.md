@@ -30,8 +30,25 @@ Scan-ID: `6ec79e8a-abb1-47b3-a304-3170a12a247e`
 |---|---|---|
 | Secret Scan | PASS | 1.451 tracked Textdateien, 232 Binär-Skips, 3.965 History-Objekte, 7/7 Negativregeln |
 | NuGet-SCA | PASS | beide Produktionsgraphen sauber; verwundbare Newtonsoft.Json-Fixture erkannt |
-| Python-SCA | BLOCKED | PyPI-Provider bricht an `torch==2.4.1+cpu`; OSV findet normalisiert 69 Advisories in 11 Paketen |
+| Python-SCA | VALIDATOR PASS / LOCK BLOCKED | pip-audit 2.10.1/OSV bindet 124/124 Lock-Pakete; 109 Rohmeldungen werden zu 69 Advisories in 11 Paketen normalisiert; Produkt- und Scanner-Locks sind freigabepflichtig |
 | SBOM/Provenienz | BLOCKED | kein verifiziertes WPF-Publish-Artefakt; `release_eligible=false` erwartungsgemäß |
+
+### Python-SCA-Nachweis
+
+- Scanner: exaktes `pip-audit==2.10.1`, Provider OSV, lokale Ausführung
+  ohne falschen GitHub-Action-Claim.
+- Report: 124/124 Lock-Pakete, 109 Rohmeldungen, 69 eindeutige Advisories
+  in 11 Paketen, 0 angewendete Ausnahmen.
+- Lock-SHA-256:
+  `7c40a190f86199a4ee21f8050f8e0d83913dd6601226c32d31809ada3111e903`.
+- Report-SHA-256:
+  `ccd114cc777ae6983db365e602062296c6182e5421dd5a7bcfd64779485c9211`.
+- Artefakte: `evidence/T413-python-sca/`.
+- Auflösbarer Windows-cp311-CPU-Kandidat: 130 Wheels; Torch-Familie
+  `2.11.0+cpu/0.26.0+cpu/2.11.0+cpu`, Transformers `5.5.4`,
+  Hugging Face Hub `1.5.0`, Tokenizers `0.22.2`, Setuptools `81.0.0`.
+  Resolverkonflikte: 0. Ein frischer OSV-Lauf und reale Laufzeittests sind
+  nach der freigabepflichtigen Lock-Regeneration zwingend.
 
 ## Reparatur- und Abschlussmatrix
 
@@ -41,8 +58,8 @@ Scan-ID: `6ec79e8a-abb1-47b3-a304-3170a12a247e`
 | S2 Chat-Logminimierung | PASS | Tool-/Prompt-/Antwort-/Exception-Inhalte fehlen im Live-Log; 2/2 fokussiert PASS |
 | S3 Timeline-Limits | PASS | 144.000 Einträge und 128 MiB vor Parse; 4/4 fokussiert PASS |
 | S4 Legacy-Migration | PASS | Restricted Unpickler, Strict JSON, atomarer Publish; 22/22 fokussiert PASS; Re-Review PASS |
-| S5 exakter Python-SCA/Lock | IN PROGRESS | OSV-/Inventar-/Alias-Gate; Lock-Upgrade freigabepflichtig |
-| S6 MCP-Pin/Integrität | WAITING APPROVAL | exakte npm-Versionen/Integritäten verifiziert; Lockdesign ausstehend |
+| S5 exakter Python-SCA/Lock | VALIDATOR PASS / WAITING APPROVAL | Inventar-, Alias-, Hash-, Scanner- und Provenienz-Gates implementiert; Produkt- und Scanner-Locks freigabepflichtig |
+| S6 MCP-Pin/Integrität | WAITING APPROVAL | exakte npm-Versionen/Integritäten und Offline-/Tamper-Design verifiziert; neuer npm-Lock freigabepflichtig |
 | S7 finaler Lauf | WAITING | Voll-/Diff-Scan, Secrets, SCA, SBOM, Publish und Provenienz auf finalem SHA |
 
 T413 darf erst `[X]` werden, wenn S1–S7 PASS sind, der erneute Scan keine

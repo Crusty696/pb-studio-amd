@@ -1,0 +1,1156 @@
+{
+  "schema_version": 1,
+  "gate": "python-sca",
+  "provider": "osv",
+  "scanner": {
+    "name": "pip-audit",
+    "version": "2.10.1",
+    "version_status": "verified"
+  },
+  "invocation": {
+    "kind": "local",
+    "source": "uvx",
+    "command": "uvx --from pip-audit==2.10.1 pip-audit -r requirements.txt --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --format=json"
+  },
+  "lock": {
+    "sha256": "7c40a190f86199a4ee21f8050f8e0d83913dd6601226c32d31809ada3111e903",
+    "packages": [
+      {
+        "name": "absl-py",
+        "version": "2.4.0"
+      },
+      {
+        "name": "annotated-doc",
+        "version": "0.0.4"
+      },
+      {
+        "name": "annotated-types",
+        "version": "0.7.0"
+      },
+      {
+        "name": "antlr4-python3-runtime",
+        "version": "4.9.3"
+      },
+      {
+        "name": "anyio",
+        "version": "4.13.0"
+      },
+      {
+        "name": "audio-separator",
+        "version": "0.30.2"
+      },
+      {
+        "name": "audioread",
+        "version": "3.1.0"
+      },
+      {
+        "name": "beartype",
+        "version": "0.18.5"
+      },
+      {
+        "name": "beatnet",
+        "version": "1.1.1"
+      },
+      {
+        "name": "certifi",
+        "version": "2026.4.22"
+      },
+      {
+        "name": "cffi",
+        "version": "2.0.0"
+      },
+      {
+        "name": "charset-normalizer",
+        "version": "3.4.7"
+      },
+      {
+        "name": "click",
+        "version": "8.3.3"
+      },
+      {
+        "name": "cloudpickle",
+        "version": "3.1.2"
+      },
+      {
+        "name": "clr-loader",
+        "version": "0.2.10"
+      },
+      {
+        "name": "colorama",
+        "version": "0.4.6"
+      },
+      {
+        "name": "coloredlogs",
+        "version": "15.0.1"
+      },
+      {
+        "name": "colorlog",
+        "version": "6.10.1"
+      },
+      {
+        "name": "comtypes",
+        "version": "1.4.16"
+      },
+      {
+        "name": "contourpy",
+        "version": "1.3.3"
+      },
+      {
+        "name": "coverage",
+        "version": "7.14.0"
+      },
+      {
+        "name": "cycler",
+        "version": "0.12.1"
+      },
+      {
+        "name": "cython",
+        "version": "3.2.4"
+      },
+      {
+        "name": "decorator",
+        "version": "5.2.1"
+      },
+      {
+        "name": "demucs",
+        "version": "4.0.1"
+      },
+      {
+        "name": "diffq-fixed",
+        "version": "0.2.4"
+      },
+      {
+        "name": "dora-search",
+        "version": "0.1.12"
+      },
+      {
+        "name": "einops",
+        "version": "0.8.2"
+      },
+      {
+        "name": "faiss-cpu",
+        "version": "1.7.4"
+      },
+      {
+        "name": "fastapi",
+        "version": "0.136.1"
+      },
+      {
+        "name": "filelock",
+        "version": "3.29.0"
+      },
+      {
+        "name": "flatbuffers",
+        "version": "25.12.19"
+      },
+      {
+        "name": "fonttools",
+        "version": "4.62.1"
+      },
+      {
+        "name": "fsspec",
+        "version": "2026.4.0"
+      },
+      {
+        "name": "h11",
+        "version": "0.16.0"
+      },
+      {
+        "name": "httpcore",
+        "version": "1.0.9"
+      },
+      {
+        "name": "httptools",
+        "version": "0.7.1"
+      },
+      {
+        "name": "httpx",
+        "version": "0.28.1"
+      },
+      {
+        "name": "huggingface-hub",
+        "version": "0.36.2"
+      },
+      {
+        "name": "humanfriendly",
+        "version": "10.0"
+      },
+      {
+        "name": "idna",
+        "version": "3.13"
+      },
+      {
+        "name": "iniconfig",
+        "version": "2.3.0"
+      },
+      {
+        "name": "jinja2",
+        "version": "3.1.6"
+      },
+      {
+        "name": "joblib",
+        "version": "1.5.3"
+      },
+      {
+        "name": "julius",
+        "version": "0.2.7"
+      },
+      {
+        "name": "kiwisolver",
+        "version": "1.5.0"
+      },
+      {
+        "name": "lameenc",
+        "version": "1.8.2"
+      },
+      {
+        "name": "lazy-loader",
+        "version": "0.5"
+      },
+      {
+        "name": "librosa",
+        "version": "0.11.0"
+      },
+      {
+        "name": "llvmlite",
+        "version": "0.47.0"
+      },
+      {
+        "name": "markupsafe",
+        "version": "3.0.3"
+      },
+      {
+        "name": "matplotlib",
+        "version": "3.10.9"
+      },
+      {
+        "name": "mido",
+        "version": "1.3.3"
+      },
+      {
+        "name": "ml-collections",
+        "version": "1.1.0"
+      },
+      {
+        "name": "ml-dtypes",
+        "version": "0.5.4"
+      },
+      {
+        "name": "mpmath",
+        "version": "1.3.0"
+      },
+      {
+        "name": "msgpack",
+        "version": "1.1.2"
+      },
+      {
+        "name": "networkx",
+        "version": "3.6.1"
+      },
+      {
+        "name": "numba",
+        "version": "0.65.1"
+      },
+      {
+        "name": "numpy",
+        "version": "1.26.4"
+      },
+      {
+        "name": "omegaconf",
+        "version": "2.3.0"
+      },
+      {
+        "name": "onnx",
+        "version": "1.21.0"
+      },
+      {
+        "name": "onnx2torch",
+        "version": "1.5.15"
+      },
+      {
+        "name": "onnxruntime-directml",
+        "version": "1.19.2"
+      },
+      {
+        "name": "opencv-python",
+        "version": "4.9.0.80"
+      },
+      {
+        "name": "openunmix",
+        "version": "1.3.0"
+      },
+      {
+        "name": "packaging",
+        "version": "26.2"
+      },
+      {
+        "name": "pillow",
+        "version": "12.2.0"
+      },
+      {
+        "name": "pip",
+        "version": "26.1.1"
+      },
+      {
+        "name": "platformdirs",
+        "version": "4.9.6"
+      },
+      {
+        "name": "pluggy",
+        "version": "1.6.0"
+      },
+      {
+        "name": "pooch",
+        "version": "1.9.0"
+      },
+      {
+        "name": "protobuf",
+        "version": "7.34.1"
+      },
+      {
+        "name": "psutil",
+        "version": "7.2.2"
+      },
+      {
+        "name": "pycparser",
+        "version": "3.0"
+      },
+      {
+        "name": "pydantic",
+        "version": "2.13.4"
+      },
+      {
+        "name": "pydantic-core",
+        "version": "2.46.4"
+      },
+      {
+        "name": "pydantic-settings",
+        "version": "2.14.1"
+      },
+      {
+        "name": "pydub",
+        "version": "0.25.1"
+      },
+      {
+        "name": "pygments",
+        "version": "2.20.0"
+      },
+      {
+        "name": "pyparsing",
+        "version": "3.3.2"
+      },
+      {
+        "name": "pyreadline3",
+        "version": "3.5.4"
+      },
+      {
+        "name": "pytest",
+        "version": "9.0.3"
+      },
+      {
+        "name": "pytest-timeout",
+        "version": "2.4.0"
+      },
+      {
+        "name": "python-dateutil",
+        "version": "2.9.0.post0"
+      },
+      {
+        "name": "python-dotenv",
+        "version": "1.2.2"
+      },
+      {
+        "name": "pythonnet",
+        "version": "3.0.5"
+      },
+      {
+        "name": "pywin32",
+        "version": "311"
+      },
+      {
+        "name": "pywinauto",
+        "version": "0.6.9"
+      },
+      {
+        "name": "pyyaml",
+        "version": "6.0.3"
+      },
+      {
+        "name": "regex",
+        "version": "2026.4.4"
+      },
+      {
+        "name": "requests",
+        "version": "2.33.1"
+      },
+      {
+        "name": "resampy",
+        "version": "0.4.3"
+      },
+      {
+        "name": "retrying",
+        "version": "1.4.2"
+      },
+      {
+        "name": "rotary-embedding-torch",
+        "version": "0.6.5"
+      },
+      {
+        "name": "safetensors",
+        "version": "0.7.0"
+      },
+      {
+        "name": "samplerate",
+        "version": "0.1.0"
+      },
+      {
+        "name": "scenedetect",
+        "version": "0.7"
+      },
+      {
+        "name": "scikit-learn",
+        "version": "1.8.0"
+      },
+      {
+        "name": "scipy",
+        "version": "1.17.1"
+      },
+      {
+        "name": "sentencepiece",
+        "version": "0.2.1"
+      },
+      {
+        "name": "setuptools",
+        "version": "82.0.1"
+      },
+      {
+        "name": "six",
+        "version": "1.17.0"
+      },
+      {
+        "name": "soundfile",
+        "version": "0.13.1"
+      },
+      {
+        "name": "soxr",
+        "version": "1.1.0"
+      },
+      {
+        "name": "sqlite-vec",
+        "version": "0.1.9"
+      },
+      {
+        "name": "starlette",
+        "version": "1.0.0"
+      },
+      {
+        "name": "submitit",
+        "version": "1.5.4"
+      },
+      {
+        "name": "sympy",
+        "version": "1.14.0"
+      },
+      {
+        "name": "threadpoolctl",
+        "version": "3.6.0"
+      },
+      {
+        "name": "tokenizers",
+        "version": "0.21.4"
+      },
+      {
+        "name": "torch",
+        "version": "2.4.1+cpu"
+      },
+      {
+        "name": "torchaudio",
+        "version": "2.4.1+cpu"
+      },
+      {
+        "name": "torchvision",
+        "version": "0.19.1+cpu"
+      },
+      {
+        "name": "tqdm",
+        "version": "4.67.3"
+      },
+      {
+        "name": "transformers",
+        "version": "4.49.0"
+      },
+      {
+        "name": "treetable",
+        "version": "0.2.6"
+      },
+      {
+        "name": "typing-extensions",
+        "version": "4.15.0"
+      },
+      {
+        "name": "typing-inspection",
+        "version": "0.4.2"
+      },
+      {
+        "name": "urllib3",
+        "version": "2.6.3"
+      },
+      {
+        "name": "uvicorn",
+        "version": "0.47.0"
+      },
+      {
+        "name": "watchfiles",
+        "version": "1.1.1"
+      },
+      {
+        "name": "websockets",
+        "version": "16.0"
+      },
+      {
+        "name": "wheel",
+        "version": "0.47.0"
+      }
+    ]
+  },
+  "report_sha256": "ccd114cc777ae6983db365e602062296c6182e5421dd5a7bcfd64779485c9211",
+  "vulnerabilities": [
+    {
+      "package": "idna",
+      "version": "3.13",
+      "aliases": [
+        "CVE-2026-45409",
+        "GHSA-65PC-FJ4G-8RJX",
+        "PYSEC-2026-215"
+      ]
+    },
+    {
+      "package": "msgpack",
+      "version": "1.1.2",
+      "aliases": [
+        "CVE-2026-57585",
+        "GHSA-6V7P-G79W-8964"
+      ]
+    },
+    {
+      "package": "onnx",
+      "version": "1.21.0",
+      "aliases": [
+        "CVE-2026-44512",
+        "GHSA-HWPQ-HMQ9-WJ77",
+        "PYSEC-2026-2689"
+      ]
+    },
+    {
+      "package": "onnx",
+      "version": "1.21.0",
+      "aliases": [
+        "CVE-2026-63632",
+        "GHSA-P893-RVQ9-2XF9"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-54058",
+        "CVE-2026-54058",
+        "GHSA-62P4-GMF7-7G93",
+        "PYSEC-2026-3493"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-54059",
+        "CVE-2026-54059",
+        "GHSA-8V84-F9PQ-WR9X",
+        "PYSEC-2026-2253"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-54060",
+        "CVE-2026-54060",
+        "GHSA-5X94-69RX-G8H2",
+        "PYSEC-2026-2254"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-55379",
+        "CVE-2026-55379",
+        "GHSA-45HQ-CXWH-F6VC",
+        "PYSEC-2026-2255"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-55380",
+        "CVE-2026-55380",
+        "GHSA-PHJ9-MV4W-65PM",
+        "PYSEC-2026-2256"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-55798",
+        "CVE-2026-55798",
+        "GHSA-4X4J-2G7C-83W6",
+        "PYSEC-2026-2257"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59197",
+        "CVE-2026-59197",
+        "GHSA-XJ96-63GP-2GMR",
+        "PYSEC-2026-3454"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59198",
+        "CVE-2026-59198",
+        "GHSA-FJ7V-R99M-22GQ",
+        "PYSEC-2026-3494"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59199",
+        "CVE-2026-59199",
+        "GHSA-6R8X-57C9-28J4",
+        "PYSEC-2026-3451"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59200",
+        "CVE-2026-59200",
+        "GHSA-JJJ6-MW9F-P565",
+        "PYSEC-2026-3495"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59203",
+        "CVE-2026-59203",
+        "GHSA-PG7V-JWJ7-P798",
+        "PYSEC-2026-3452"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59204",
+        "CVE-2026-59204",
+        "GHSA-VJC4-5QP5-M44J",
+        "PYSEC-2026-3496"
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "12.2.0",
+      "aliases": [
+        "BIT-PILLOW-2026-59205",
+        "CVE-2026-59205",
+        "GHSA-9HW9-CH79-4VH6",
+        "PYSEC-2026-3453"
+      ]
+    },
+    {
+      "package": "pip",
+      "version": "26.1.1",
+      "aliases": [
+        "CVE-2026-8643",
+        "GHSA-WF93-45JW-7689",
+        "PYSEC-2026-196"
+      ]
+    },
+    {
+      "package": "pydantic-settings",
+      "version": "2.14.1",
+      "aliases": [
+        "CVE-2026-58203",
+        "GHSA-4XGF-CPJX-PC3J"
+      ]
+    },
+    {
+      "package": "setuptools",
+      "version": "82.0.1",
+      "aliases": [
+        "BIT-SETUPTOOLS-2026-59890",
+        "CVE-2026-59890",
+        "GHSA-H35F-9H28-MQ5C",
+        "PYSEC-2026-3447"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "1.0.0",
+      "aliases": [
+        "CVE-2026-48710",
+        "GHSA-86QP-5C8J-P5MR",
+        "PYSEC-2026-161",
+        "X41-2026-002"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "1.0.0",
+      "aliases": [
+        "CVE-2026-48817",
+        "GHSA-X746-7M8F-X49C",
+        "PYSEC-2026-2280"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "1.0.0",
+      "aliases": [
+        "CVE-2026-48818",
+        "GHSA-WQP7-X3PW-XC5R",
+        "PYSEC-2026-2281"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "1.0.0",
+      "aliases": [
+        "CVE-2026-54282",
+        "GHSA-JP82-JPQV-5VV3",
+        "PYSEC-2026-248"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "1.0.0",
+      "aliases": [
+        "CVE-2026-54283",
+        "GHSA-82W8-QH3P-5JFQ",
+        "PYSEC-2026-249"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2024-48063",
+        "CVE-2024-48063",
+        "PYSEC-2024-259"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-2148",
+        "CVE-2025-2148",
+        "GHSA-C678-JFCJ-6JMF",
+        "PYSEC-2025-189"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-2149",
+        "CVE-2025-2149",
+        "GHSA-X3GM-94WQ-G975",
+        "PYSEC-2025-190"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-2953",
+        "CVE-2025-2953",
+        "GHSA-3749-GHW9-M3MG",
+        "PYSEC-2025-191"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-2998",
+        "CVE-2025-2998",
+        "GHSA-F4HP-RMR7-R7V8",
+        "PYSEC-2025-192"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-2999",
+        "CVE-2025-2999",
+        "GHSA-VGRW-7CVW-PWGX",
+        "PYSEC-2025-193"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-3000",
+        "CVE-2025-3000",
+        "GHSA-RRMF-RVHW-RF47",
+        "PYSEC-2025-194"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-3001",
+        "CVE-2025-3001",
+        "GHSA-QFHQ-4F3W-5FPH",
+        "PYSEC-2025-195"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-32434",
+        "CVE-2025-32434",
+        "GHSA-53Q9-R3PM-6PQ6",
+        "PYSEC-2025-41"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-3730",
+        "CVE-2025-3730",
+        "GHSA-887C-MR87-CXWP",
+        "PYSEC-2026-1970"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-46148",
+        "CVE-2025-46148",
+        "PYSEC-2025-198"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55551",
+        "CVE-2025-55551",
+        "PYSEC-2025-203"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55552",
+        "CVE-2025-55552",
+        "PYSEC-2025-204"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55553",
+        "CVE-2025-55553",
+        "PYSEC-2025-205"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55554",
+        "CVE-2025-55554",
+        "PYSEC-2025-206"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55557",
+        "CVE-2025-55557",
+        "PYSEC-2025-207"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55558",
+        "CVE-2025-55558",
+        "PYSEC-2025-208"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2025-55560",
+        "CVE-2025-55560",
+        "PYSEC-2025-209"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2026-24747",
+        "CVE-2026-24747",
+        "GHSA-63CW-57P8-FM3P",
+        "PYSEC-2026-1856",
+        "PYSEC-2026-2286"
+      ]
+    },
+    {
+      "package": "torch",
+      "version": "2.4.1+cpu",
+      "aliases": [
+        "BIT-PYTORCH-2026-4538",
+        "CVE-2026-4538",
+        "PYSEC-2026-139"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-1194",
+        "GHSA-FPWR-67PX-3QHX",
+        "PYSEC-2026-1984"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14920",
+        "PYSEC-2025-211"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14921",
+        "PYSEC-2025-212"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14924",
+        "PYSEC-2025-213"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14926",
+        "PYSEC-2025-214"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14927",
+        "PYSEC-2025-215"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14928",
+        "PYSEC-2025-216"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14929",
+        "PYSEC-2025-217"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-14930",
+        "PYSEC-2025-218"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-2099",
+        "GHSA-QQ3J-4F4F-9583",
+        "PYSEC-2025-40"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-3262",
+        "GHSA-489J-G2VX-39WF",
+        "PYSEC-2026-1979"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-3263",
+        "GHSA-Q2WP-RJMX-X6X9",
+        "PYSEC-2026-1987"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-3264",
+        "GHSA-JJPH-296X-MRCR",
+        "PYSEC-2026-1985"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-3777",
+        "GHSA-PHHR-52QP-3MJ4",
+        "PYSEC-2026-1986"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-3933",
+        "GHSA-37MW-44QP-F5JM",
+        "PYSEC-2026-1977"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-5197",
+        "GHSA-9356-575X-2W9M",
+        "PYSEC-2026-1983"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-6051",
+        "GHSA-RCV9-QM8P-9P6J",
+        "PYSEC-2026-1988"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-6638",
+        "GHSA-59P9-H35M-WG4G",
+        "PYSEC-2026-1981"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2025-6921",
+        "GHSA-4W7R-H757-3R74",
+        "PYSEC-2026-1980"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2026-1839",
+        "GHSA-69W3-R845-3855",
+        "PYSEC-2026-2288"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2026-4372",
+        "GHSA-29PF-2H5F-8G72",
+        "PYSEC-2026-2289"
+      ]
+    },
+    {
+      "package": "transformers",
+      "version": "4.49.0",
+      "aliases": [
+        "CVE-2026-5241",
+        "GHSA-FGCW-684Q-JJ6R",
+        "PYSEC-2026-2290"
+      ]
+    },
+    {
+      "package": "urllib3",
+      "version": "2.6.3",
+      "aliases": [
+        "CVE-2026-44431",
+        "GHSA-QCCP-GFCP-XXVC",
+        "PYSEC-2026-141"
+      ]
+    },
+    {
+      "package": "urllib3",
+      "version": "2.6.3",
+      "aliases": [
+        "CVE-2026-44432",
+        "GHSA-MF9V-MFXR-J63J",
+        "PYSEC-2026-142"
+      ]
+    }
+  ],
+  "applied_exceptions": []
+}

@@ -140,7 +140,7 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T410 Projektwechsel-E2E | PASS | 4–8 h | Teamleiter/Test-Team + unabhängiger Reviewer | QC | 2,0 h | 5/5 Backend mit realem Brain-Rebind/Lease-Retirement und 5/5 echte UI-A→B-Wechsel PASS (`evidence/T410-project-switch-e2e.md`) |
 | T411 DirectML-/AMF-Fresh-Install | PASS | 4–8 h | Teamleiter/GPU-/Render-Agent + unabhängiger Reviewer | QC | 1,2 h | 5/5 DirectML, H.264/HEVC-AMF, exakte RX-LUID, 18/18 Assets und 103/103 Vertragsprüfungen PASS (`evidence/T411-directml-amf-fresh-install.md`) |
 | T412 Render-Retry/Restart | PASS | 3–6 h | Teamleiter/Render-Agent + unabhängiger Reviewer | QC | 0,5 h | echte Cross-Process-Dedupe, terminale Retries, `interrupted → running → completed` und Contentwechsel; 68/68 PASS (`evidence/T412-render-retry-restart.md`) |
-| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 2,8 h | Vollscan versiegelt: 17 reportable (1 MEDIUM/16 LOW), 1 deferred; Reparaturpakete S1–S7 aktiv (`evidence/T413-security-scan/`) |
+| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 4,2 h | S1–S4 PASS; SCA-Validator 124/124 und 69 Advisories PASS; Produkt-/Scanner-/MCP-Locks warten auf Freigabe (`evidence/T413-security-provenance.md`) |
 | T414 Abschlusswahrheit | OPEN | 2–4 h | Teamleiter | Z-DOCS/QC | – | QC/Brain/Marker-Digests; `.qc-passed` nur 100 % |
 | T415 Veröffentlichung | OPEN | 1–3 h | Teamleiter | Git/Remote | – | PR, Required Checks, Main, Release |
 
@@ -152,8 +152,8 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T413-S2 Chat-Logminimierung | PASS | 1–2 h | Chat-Agent + Reviewer | Tool-/Prompt-/Antwort-/Exception-Inhalte fehlen im Live-Log; 2/2 PASS |
 | T413-S3 Timeline-Limits | PASS | 1–2 h | Pacing-Agent + Reviewer | 144.000 Einträge/128 MiB vor Parse; 4/4 PASS; unabhängiger Review PASS |
 | T413-S4 sichere Legacy-Migration | PASS | 2–4 h | Data-Agent + Reviewer | Restricted Unpickler/Strict JSON/atomarer Publish; 22/22 und Re-Review PASS |
-| T413-S5 Python-SCA/Lock | IN PROGRESS / LOCK WAITING_APPROVAL | 4–12 h | Infra-Agent | OSV-/Inventar-/Alias-/Hash-Gate läuft; Produkt-Lock-Upgrade bleibt freigabepflichtig |
-| T413-S6 MCP-Pin/Integrität | WAITING_APPROVAL | 1–3 h | Infra-Agent | kein `@latest`; Tamper/Offline-Vertrag |
+| T413-S5 Python-SCA/Lock | VALIDATOR PASS / LOCK WAITING_APPROVAL | 4–12 h | Infra-Agent | 124/124 Pakete, 109 Rohmeldungen, 69 Advisories; 130-Wheel-Upgradepfad löst; Produkt- und Scanner-Lock freigabepflichtig |
+| T413-S6 MCP-Pin/Integrität | DESIGN PASS / WAITING_APPROVAL | 1–3 h | Infra-Agent | exakte Context7-/Caveman-Versionen, npm-Lock, Offline-/Tamper-Vertrag; neuer Tool-Lock freigabepflichtig |
 | T413-S7 finaler Security-/Provenienzlauf | WAITING | 3–6 h | Teamleiter + Reviewer | finaler SHA; keine Releaseblocker; `release_eligible=true` |
 
 ### Laufende Regeln
