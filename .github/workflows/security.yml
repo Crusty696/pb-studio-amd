@@ -66,6 +66,11 @@ jobs:
   python-sca:
     name: Python SCA
     runs-on: windows-latest
+    env:
+      PIP_AUDIT_ACTION_REVISION: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266
+      # TODO(release-blocker): Pin and attest the pip-audit scanner version used by the action.
+      PIP_AUDIT_SCANNER_VERSION: unverified
+      PIP_AUDIT_SCANNER_VERSION_STATUS: unverified
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -81,13 +86,17 @@ jobs:
 
       - name: Audit production lock
         id: production_audit
+        continue-on-error: true
         uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
           inputs: requirements.txt
-          require-hashes: true
-          no-deps: true
           internal-be-careful-extra-flags: >-
+            --vulnerability-service osv
+            --disable-pip
+            --require-hashes
+            --no-deps
             --strict
+            --aliases=on
             --format=json
             --output=artifacts/security/python-sca-production.json
 
@@ -96,8 +105,23 @@ jobs:
         run: >-
           python scripts/security_gate.py pip-audit-report
           --report artifacts/security/python-sca-production.json
+          --lock requirements.txt
+          --provider osv
+          --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
+          --scanner-version-status ${{ env.PIP_AUDIT_SCANNER_VERSION_STATUS }}
+          --invocation-kind github-action
+          --action-revision ${{ env.PIP_AUDIT_ACTION_REVISION }}
+          --receipt artifacts/security/python-sca-production-validation.json
           --expect-clean
           --minimum-dependencies 100
+
+      - name: Verify production Python lock hashes
+        id: production_hash_validation
+        shell: pwsh
+        run: >-
+          python -m pip download --require-hashes --no-deps
+          --dest artifacts/security/python-sca-production-hashes
+          -r requirements.txt
 
       - name: Audit vulnerable fixture
         id: vulnerable_fixture
@@ -105,9 +129,13 @@ jobs:
         uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
           inputs: Tests/security/fixtures/requirements-vulnerable.txt
-          no-deps: true
           internal-be-careful-extra-flags: >-
+            --vulnerability-service osv
+            --disable-pip
+            --require-hashes
+            --no-deps
             --strict
+            --aliases=on
             --format=json
             --output=artifacts/security/python-sca-fixture.json
 
@@ -121,8 +149,36 @@ jobs:
           fi
           python scripts/security_gate.py pip-audit-report \
             --report artifacts/security/python-sca-fixture.json \
+            --lock Tests/security/fixtures/requirements-vulnerable.txt \
+            --provider osv \
+            --scanner-version "${{ env.PIP_AUDIT_SCANNER_VERSION }}" \
+            --scanner-version-status "${{ env.PIP_AUDIT_SCANNER_VERSION_STATUS }}" \
+            --invocation-kind github-action \
+            --action-revision "${{ env.PIP_AUDIT_ACTION_REVISION }}" \
+            --receipt artifacts/security/python-sca-fixture-validation.json \
             --expect-package urllib3 \
             --expect-version 1.26.5
+
+      - name: Verify wrong Python package hash is rejected
+        id: wrong_hash_validation
+        shell: pwsh
+        run: |
+          $output = & python -m pip download --require-hashes --no-deps `
+            --dest artifacts/security/python-sca-wrong-hash `
+            -r Tests/security/fixtures/requirements-wrong-hash.txt 2>&1
+          $exitCode = $LASTEXITCODE
+          $text = $output | Out-String
+          $expectedHash = "0000000000000000000000000000000000000000000000000000000000000000"
+          $actualHash = "753a0374df26658f99d826cfe40394a686d05985786d946fbe4165b5148f5a7c"
+          if ($exitCode -eq 0 -or
+              $text -notmatch "THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE" -or
+              $text -notmatch "Expected sha256 $expectedHash" -or
+              $text -notmatch "Got\s+$actualHash") {
+            Write-Error "Wrong-hash fixture did not fail with the expected pip hash-mismatch signature."
+            Write-Output $text
+            exit 1
+          }
+          Write-Output "PYTHON_PACKAGE_HASH_NEGATIVE_FIXTURE_PASS"
 
       - name: Bind Python SCA receipt to commit
         if: always()
@@ -130,7 +186,7 @@ jobs:
           python scripts/security_gate.py workflow-receipt
           --gate python-sca
           --status
-          ${{ steps.production_validation.outcome }}:${{ steps.fixture_validation.outcome }}
+          ${{ steps.production_audit.outcome }}:${{ steps.production_validation.outcome }}:${{ steps.production_hash_validation.outcome }}:${{ steps.fixture_validation.outcome }}:${{ steps.wrong_hash_validation.outcome }}
           --commit ${{ github.sha }}
           --output artifacts/security/python-sca-receipt.json
 

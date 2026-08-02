@@ -8,7 +8,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,8 @@ SECRET_RULES = {
     "anthropic-key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
     "pb-test-secret": re.compile(r"\bPB_TEST_SECRET_[A-Z0-9]{20}\b"),
 }
+
+OSV_ALIAS_PREFIXES = ("BIT", "CVE", "GHSA", "PYSEC", "X41")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -354,46 +356,338 @@ def _read_report(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def _pip_audit_report(args: argparse.Namespace) -> int:
-    payload = _read_report(args.report)
+def _canonical_package_name(name: str) -> str:
+    normalized = re.sub(r"[-_.]+", "-", name.strip().lower())
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", normalized):
+        raise ValueError(f"Invalid Python package name: {name!r}")
+    return normalized
+
+
+def _canonical_alias(value: str) -> str:
+    normalized = value.strip().upper()
+    prefixes = "|".join(OSV_ALIAS_PREFIXES)
+    if not re.fullmatch(
+        rf"(?:{prefixes})-[A-Z0-9]+(?:-[A-Z0-9]+)+",
+        normalized,
+    ):
+        raise ValueError(f"Invalid vulnerability alias: {value!r}")
+    return normalized
+
+
+def _logical_requirement_lines(path: Path) -> list[str]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Python lock missing: {path}")
+    lines: list[str] = []
+    current = ""
+    for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.endswith("\\"):
+            current += line[:-1].rstrip() + " "
+            continue
+        lines.append(current + line)
+        current = ""
+    if current:
+        raise ValueError(f"Unterminated requirement continuation in {path}")
+    return lines
+
+
+def _parse_hashed_lock(path: Path) -> list[dict[str, str]]:
+    packages: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+    for line in _logical_requirement_lines(path):
+        if line.startswith("--"):
+            continue
+        tokens = line.split()
+        if not tokens:
+            continue
+        match = re.fullmatch(
+            r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;\\]+)",
+            tokens[0],
+        )
+        if match is None:
+            raise ValueError(f"Unparseable locked requirement: {line!r}")
+        hashes = tokens[1:]
+        if not hashes or not all(
+            re.fullmatch(r"--hash=sha256:[0-9a-fA-F]{64}", value)
+            for value in hashes
+        ):
+            raise ValueError(
+                "Locked requirement must contain only SHA-256 hashes: "
+                f"{tokens[0]!r}"
+            )
+        name = _canonical_package_name(match.group("name"))
+        if name in seen_names:
+            raise ValueError(f"Duplicate locked Python package: {name}")
+        seen_names.add(name)
+        packages.append({"name": name, "version": match.group("version")})
+    if not packages:
+        raise ValueError(f"Python lock contains no packages: {path}")
+    return sorted(packages, key=lambda package: (package["name"], package["version"]))
+
+
+def _load_python_sca_exceptions(path: Path | None) -> list[dict[str, str]]:
+    if path is None:
+        return []
+    payload = _load_json(path)
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError(f"entries must be a list in {path}")
+    required = {
+        "id",
+        "package",
+        "version",
+        "alias",
+        "owner",
+        "expires_on",
+        "reason",
+    }
+    today = date.today()
+    maximum_expiry = today + timedelta(days=30)
+    normalized: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != required:
+            raise ValueError(
+                "Python SCA exceptions require exactly id, package, version, alias, "
+                "owner, expires_on and reason"
+            )
+        exception_id = str(entry["id"]).strip()
+        if not exception_id or exception_id in seen_ids:
+            raise ValueError(f"Duplicate or empty Python SCA exception id: {exception_id!r}")
+        seen_ids.add(exception_id)
+        expires_on = date.fromisoformat(str(entry["expires_on"]))
+        if expires_on < today or expires_on > maximum_expiry:
+            raise ValueError(
+                "Python SCA exception expiry must be within 30 days: "
+                f"{exception_id} ({expires_on})"
+            )
+        owner = str(entry["owner"]).strip()
+        reason = str(entry["reason"]).strip()
+        version = str(entry["version"]).strip()
+        if not owner or not reason or not version:
+            raise ValueError(f"Incomplete Python SCA exception: {exception_id}")
+        normalized.append(
+            {
+                "id": exception_id,
+                "package": _canonical_package_name(str(entry["package"])),
+                "version": version,
+                "alias": _canonical_alias(str(entry["alias"])),
+                "owner": owner,
+                "expires_on": expires_on.isoformat(),
+                "reason": reason,
+            }
+        )
+    return normalized
+
+
+def _vulnerability_aliases(vulnerability: dict[str, Any]) -> list[str]:
+    aliases = vulnerability.get("aliases")
+    if not isinstance(aliases, list) or not all(isinstance(alias, str) for alias in aliases):
+        raise ValueError("pip-audit vulnerability has no aliases list")
+    values = [_canonical_alias(str(vulnerability["id"]))]
+    values.extend(_canonical_alias(alias) for alias in aliases)
+    return sorted(set(values))
+
+
+def _vulnerability_components(
+    vulnerabilities: list[dict[str, Any]],
+) -> list[dict[str, list[str]]]:
+    components: list[set[str]] = []
+    for vulnerability in vulnerabilities:
+        aliases = set(_vulnerability_aliases(vulnerability))
+        overlapping = [component for component in components if component & aliases]
+        if overlapping:
+            for component in overlapping:
+                aliases.update(component)
+                components.remove(component)
+        components.append(aliases)
+    return [
+        {"aliases": sorted(component)}
+        for component in sorted(components, key=lambda component: sorted(component))
+    ]
+
+
+def _validate_report_dependencies(
+    payload: Any,
+    locked_packages: list[dict[str, str]],
+) -> list[dict[str, Any]]:
     dependencies = payload.get("dependencies") if isinstance(payload, dict) else None
     if not isinstance(dependencies, list):
         raise ValueError("pip-audit report has no dependencies list")
     if not isinstance(payload.get("fixes"), list):
         raise ValueError("pip-audit report has no fixes list")
+
+    report_packages: set[tuple[str, str]] = set()
+    report_names: set[str] = set()
+    normalized: list[dict[str, Any]] = []
     for index, dependency in enumerate(dependencies):
         if not isinstance(dependency, dict):
             raise ValueError(f"pip-audit dependency {index} is not an object")
-        if not str(dependency.get("name", "")).strip():
-            raise ValueError(f"pip-audit dependency {index} has no name")
-        if not str(dependency.get("version", "")).strip():
-            raise ValueError(
-                f"pip-audit dependency {dependency.get('name')} has no version"
-            )
+        name = _canonical_package_name(str(dependency.get("name", "")))
+        version = str(dependency.get("version", "")).strip()
+        if not version:
+            raise ValueError(f"pip-audit dependency {name} has no version")
+        package = (name, version)
+        if name in report_names or package in report_packages:
+            raise ValueError(f"Duplicate pip-audit dependency: {name}=={version}")
+        report_names.add(name)
+        report_packages.add(package)
         vulnerabilities = dependency.get("vulns")
         if not isinstance(vulnerabilities, list):
-            raise ValueError(
-                f"pip-audit dependency {dependency['name']} has no vulns list"
-            )
+            raise ValueError(f"pip-audit dependency {name} has no vulns list")
         for vulnerability in vulnerabilities:
             if not isinstance(vulnerability, dict):
                 raise ValueError("pip-audit vulnerability is not an object")
             if not str(vulnerability.get("id", "")).strip():
                 raise ValueError("pip-audit vulnerability has no advisory ID")
             if not isinstance(vulnerability.get("fix_versions"), list):
-                raise ValueError(
-                    "pip-audit vulnerability has no fix_versions list"
-                )
-    vulnerable = [
-        dependency
-        for dependency in dependencies
-        if isinstance(dependency, dict) and dependency.get("vulns")
+                raise ValueError("pip-audit vulnerability has no fix_versions list")
+        normalized.append(
+            {
+                "name": name,
+                "version": version,
+                "vulnerabilities": _vulnerability_components(vulnerabilities),
+            }
+        )
+
+    lock_set = {(package["name"], package["version"]) for package in locked_packages}
+    missing = sorted(lock_set - report_packages)
+    extra = sorted(report_packages - lock_set)
+    if missing or extra:
+        raise ValueError(
+            "pip-audit dependency set does not exactly match the lock: "
+            f"missing={missing} extra={extra}"
+        )
+    return sorted(normalized, key=lambda package: (package["name"], package["version"]))
+
+
+def _matching_sca_exception(
+    exceptions: list[dict[str, str]],
+    package: dict[str, Any],
+    vulnerability: dict[str, Any],
+) -> dict[str, str] | None:
+    matches = [
+        entry
+        for entry in exceptions
+        if entry["package"] == package["name"]
+        and entry["version"] == package["version"]
+        and entry["alias"] in vulnerability["aliases"]
     ]
+    if len(matches) > 1:
+        raise ValueError(
+            "Multiple Python SCA exceptions bind the same package/version/alias: "
+            f"{package['name']}=={package['version']}"
+        )
+    return matches[0] if matches else None
+
+
+def _python_lock(args: argparse.Namespace) -> int:
+    try:
+        packages = _parse_hashed_lock(args.lock)
+    except ValueError as error:
+        if args.expect_hash_failure and "SHA-256 hashes" in str(error):
+            print("PYTHON_LOCK_HASH_NEGATIVE_FIXTURE_PASS")
+            return 0
+        raise
+    if args.expect_hash_failure:
+        raise ValueError("Expected Python lock hash validation to fail")
+    print(f"PYTHON_LOCK_PASS dependencies={len(packages)}")
+    return 0
+
+
+def _scanner_identity(args: argparse.Namespace) -> dict[str, Any]:
+    scanner_version = args.scanner_version.strip()
+    if args.scanner_version_status == "unverified":
+        if scanner_version != "unverified":
+            raise ValueError(
+                "Unverified pip-audit scanner identity must use version 'unverified'"
+            )
+    elif not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}(?:[A-Za-z0-9.+-]+)?", scanner_version):
+        raise ValueError("Verified pip-audit scanner version is malformed")
+    identity: dict[str, Any] = {
+        "scanner": {
+            "name": "pip-audit",
+            "version": scanner_version,
+            "version_status": args.scanner_version_status,
+        },
+    }
+    if args.invocation_kind == "github-action":
+        if args.local_command is not None or args.local_source is not None:
+            raise ValueError("GitHub Action provenance cannot include local execution data")
+        if not isinstance(args.action_revision, str) or not re.fullmatch(
+            r"pypa/gh-action-pip-audit@[0-9a-f]{40}", args.action_revision
+        ):
+            raise ValueError("pip-audit action revision must be a pinned Git SHA")
+        identity["invocation"] = {
+            "kind": "github-action",
+            "action": {
+                "name": "pypa/gh-action-pip-audit",
+                "revision": args.action_revision,
+            },
+        }
+        return identity
+    if args.invocation_kind == "local":
+        if args.action_revision is not None:
+            raise ValueError("Local provenance cannot claim a GitHub Action revision")
+        command = args.local_command
+        source = args.local_source
+        if not isinstance(command, str) or not command or command != command.strip():
+            raise ValueError("Local provenance requires the exact non-empty command")
+        if not isinstance(source, str) or not source or source != source.strip():
+            raise ValueError("Local provenance requires the exact non-empty source")
+        if any("\n" in value or "\r" in value for value in (command, source)):
+            raise ValueError("Local provenance command/source cannot contain line breaks")
+        identity["invocation"] = {
+            "kind": "local",
+            "source": source,
+            "command": command,
+        }
+        return identity
+    raise ValueError(f"Unsupported pip-audit invocation kind: {args.invocation_kind!r}")
+
+
+def _pip_audit_report(args: argparse.Namespace) -> int:
+    payload = _read_report(args.report)
+    scanner_identity = _scanner_identity(args)
+    locked_packages = _parse_hashed_lock(args.lock)
+    dependencies = _validate_report_dependencies(payload, locked_packages)
+    exceptions = _load_python_sca_exceptions(args.exceptions)
+    vulnerable: list[dict[str, Any]] = []
+    applied_exceptions: list[dict[str, str]] = []
+    validated_vulnerabilities: list[dict[str, Any]] = []
+    for dependency in dependencies:
+        unresolved_vulnerabilities: list[dict[str, Any]] = []
+        for vulnerability in dependency["vulnerabilities"]:
+            exception = _matching_sca_exception(exceptions, dependency, vulnerability)
+            validated = {
+                "package": dependency["name"],
+                "version": dependency["version"],
+                "aliases": vulnerability["aliases"],
+            }
+            if exception is None:
+                unresolved_vulnerabilities.append(vulnerability)
+            else:
+                applied_exceptions.append(exception)
+                validated["exception_id"] = exception["id"]
+            validated_vulnerabilities.append(validated)
+        if unresolved_vulnerabilities:
+            vulnerable.append({**dependency, "vulnerabilities": unresolved_vulnerabilities})
+    unused_exceptions = sorted(
+        {entry["id"] for entry in exceptions}
+        - {entry["id"] for entry in applied_exceptions}
+    )
+    if unused_exceptions:
+        raise ValueError(
+            "Unused Python SCA exceptions are forbidden: "
+            f"{unused_exceptions}"
+        )
     if args.expect_clean:
-        if len(dependencies) < args.minimum_dependencies:
+        if len(locked_packages) < args.minimum_dependencies:
             raise ValueError(
                 "pip-audit production report is incomplete: "
-                f"{len(dependencies)} < {args.minimum_dependencies}"
+                f"{len(locked_packages)} < {args.minimum_dependencies}"
             )
         if vulnerable:
             raise ValueError("pip-audit production report contains vulnerabilities")
@@ -402,9 +696,8 @@ def _pip_audit_report(args: argparse.Namespace) -> int:
             (
                 dependency
                 for dependency in vulnerable
-                if str(dependency.get("name", "")).lower()
-                == args.expect_package.lower()
-                and str(dependency.get("version", "")) == args.expect_version
+                if dependency["name"] == _canonical_package_name(args.expect_package)
+                and dependency["version"] == args.expect_version
             ),
             None,
         )
@@ -412,18 +705,29 @@ def _pip_audit_report(args: argparse.Namespace) -> int:
             raise ValueError(
                 "Expected vulnerable Python package/version was not reported"
             )
-        advisory_ids = [
-            str(vulnerability.get("id", ""))
-            for vulnerability in match["vulns"]
-            if isinstance(vulnerability, dict)
-        ]
-        if not any(
-            re.fullmatch(r"(?:PYSEC|GHSA|CVE)-[A-Za-z0-9-]+", advisory_id)
-            for advisory_id in advisory_ids
-        ):
+        if not any(vulnerability["aliases"] for vulnerability in match["vulnerabilities"]):
             raise ValueError("Expected Python vulnerability has no advisory ID")
+    lock_payload = args.lock.read_bytes()
+    report_payload = args.report.read_bytes()
+    receipt = {
+        "schema_version": 1,
+        "gate": "python-sca",
+        "provider": args.provider,
+        **scanner_identity,
+        "lock": {
+            "sha256": hashlib.sha256(lock_payload).hexdigest(),
+            "packages": locked_packages,
+        },
+        "report_sha256": hashlib.sha256(report_payload).hexdigest(),
+        "vulnerabilities": validated_vulnerabilities,
+        "applied_exceptions": sorted(
+            {entry["id"]: entry for entry in applied_exceptions}.values(),
+            key=lambda entry: entry["id"],
+        ),
+    }
+    _write_report(args.receipt, receipt)
     print(
-        f"PIP_AUDIT_REPORT_PASS dependencies={len(dependencies)} "
+        f"PIP_AUDIT_REPORT_PASS dependencies={len(locked_packages)} "
         f"vulnerable={len(vulnerable)}"
     )
     return 0
@@ -613,8 +917,30 @@ def main() -> int:
         default=Path("config/security-exceptions.json"),
     )
 
+    python_lock = subparsers.add_parser("python-lock")
+    python_lock.add_argument("--lock", type=Path, required=True)
+    python_lock.add_argument("--expect-hash-failure", action="store_true")
+
     pip_audit = subparsers.add_parser("pip-audit-report")
     pip_audit.add_argument("--report", type=Path, required=True)
+    pip_audit.add_argument("--lock", type=Path, required=True)
+    pip_audit.add_argument("--provider", choices=("osv",), required=True)
+    pip_audit.add_argument("--scanner-version", required=True)
+    pip_audit.add_argument(
+        "--scanner-version-status",
+        choices=("verified", "unverified"),
+        required=True,
+    )
+    pip_audit.add_argument(
+        "--invocation-kind",
+        choices=("github-action", "local"),
+        required=True,
+    )
+    pip_audit.add_argument("--action-revision")
+    pip_audit.add_argument("--local-source")
+    pip_audit.add_argument("--local-command")
+    pip_audit.add_argument("--exceptions", type=Path)
+    pip_audit.add_argument("--receipt", type=Path, required=True)
     pip_mode = pip_audit.add_mutually_exclusive_group(required=True)
     pip_mode.add_argument("--expect-clean", action="store_true")
     pip_mode.add_argument("--expect-package")
@@ -648,6 +974,8 @@ def main() -> int:
         entries = _validate_exceptions(args.config)
         print(f"SECURITY_EXCEPTIONS_PASS active={len(entries)}")
         return 0
+    if args.command == "python-lock":
+        return _python_lock(args)
     if args.command == "pip-audit-report":
         if not args.expect_clean and not args.expect_version:
             parser.error("--expect-version is required with --expect-package")
