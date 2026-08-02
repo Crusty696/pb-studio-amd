@@ -7,9 +7,9 @@ import sys
 
 
 EXPECTED = {
-    "torch": "2.4.1+cpu",
-    "torchvision": "0.19.1+cpu",
-    "torchaudio": "2.4.1+cpu",
+    "torch": "2.11.0+cpu",
+    "torchvision": "0.26.0+cpu",
+    "torchaudio": "2.11.0+cpu",
 }
 FORBIDDEN_PREFIXES = ("cuda-", "nvidia-")
 FORBIDDEN_EXACT = {"pytorch-cuda", "triton"}
@@ -60,7 +60,7 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print("PASS: PyTorch 2.4.1 CPU-only stack; CUDA runtime/packages absent")
+    print("PASS: PyTorch 2.11.0 CPU-only stack; CUDA runtime/packages absent")
     return 0
 
 

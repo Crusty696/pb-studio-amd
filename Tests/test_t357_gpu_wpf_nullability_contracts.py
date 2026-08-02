@@ -487,6 +487,9 @@ def test_model_manager_uses_live_truth_labels_without_static_ghost_cards():
 def test_model_provider_identity_is_forwarded_from_card_to_backend():
     interface = _read("PBStudio.UI/Services/IApiClient.cs")
     client = _read("PBStudio.UI/Services/ApiClient.cs")
+    owner_handler = _read(
+        "PBStudio.UI/Services/OwnerCapabilityRequestHandler.cs"
+    )
     view_model = _read("PBStudio.UI/ViewModels/ModelManagerViewModel.cs")
     view = _read("PBStudio.UI/Views/ModelManagerView.xaml")
     settings = _read("PBStudio.UI/ViewModels/SettingsViewModel.cs")
@@ -502,7 +505,10 @@ def test_model_provider_identity_is_forwarded_from_card_to_backend():
         in client
     )
     assert '"/models/test"' in client
-    assert "BackendOwnerCapability.HeaderName" in client
+    assert "BackendOwnerCapability.Current" in client
+    assert "AcquireRequestLeaseAsync" in owner_handler
+    assert "TryAddWithoutValidation" in owner_handler
+    assert "BackendOwnerCapability.HeaderName" in owner_handler
     assert "ActivateModelAsync(card.Name, card.Provider)" in view_model
     assert "TestModelAsync(card.Name, card.Provider)" in view_model
     assert "provider: Optional[str]" in router

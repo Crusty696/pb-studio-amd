@@ -1,0 +1,12 @@
+{
+  "name": "pb-studio-mcp-tools-lock-audit",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "dependencies": {
+    "@upstash/context7-mcp": "3.2.5",
+    "caveman-shrink": "0.1.0"
+  }
+}

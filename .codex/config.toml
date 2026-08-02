@@ -1,0 +1,7 @@
+[mcp_servers.caveman-shrink]
+command = "tools/mcp-node/run-caveman-shrink.cmd"
+cwd = "."
+
+[mcp_servers.context7]
+command = "tools/mcp-node/run-context7.cmd"
+cwd = "."

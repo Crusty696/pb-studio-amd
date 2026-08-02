@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "command": "${CLAUDE_PROJECT_DIR:-.}\\tools\\mcp-node\\run-context7.cmd",
+      "args": [],
       "description": "Live-Dokumentation fuer onnxruntime, FastAPI, WPF, librosa, demucs und andere PB Studio Bibliotheken"
     }
   }

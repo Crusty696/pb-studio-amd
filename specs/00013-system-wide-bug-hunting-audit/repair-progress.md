@@ -140,7 +140,7 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T410 Projektwechsel-E2E | PASS | 4–8 h | Teamleiter/Test-Team + unabhängiger Reviewer | QC | 2,0 h | 5/5 Backend mit realem Brain-Rebind/Lease-Retirement und 5/5 echte UI-A→B-Wechsel PASS (`evidence/T410-project-switch-e2e.md`) |
 | T411 DirectML-/AMF-Fresh-Install | PASS | 4–8 h | Teamleiter/GPU-/Render-Agent + unabhängiger Reviewer | QC | 1,2 h | 5/5 DirectML, H.264/HEVC-AMF, exakte RX-LUID, 18/18 Assets und 103/103 Vertragsprüfungen PASS (`evidence/T411-directml-amf-fresh-install.md`) |
 | T412 Render-Retry/Restart | PASS | 3–6 h | Teamleiter/Render-Agent + unabhängiger Reviewer | QC | 0,5 h | echte Cross-Process-Dedupe, terminale Retries, `interrupted → running → completed` und Contentwechsel; 68/68 PASS (`evidence/T412-render-retry-restart.md`) |
-| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 5,3 h | S1–S4 PASS; Produktkandidat behebt 67/69 Advisories; Scanner- und MCP-Design PASS; Repo-Änderungen warten auf Freigabe (`evidence/T413-lock-candidate-research.md`) |
+| T413 Security/Provenienz | IN PROGRESS | 16–37 h | Security-Team + Reviewer | QC | 8,1 h | S1–S6 PASS; S7 Gesamtsuite/WPF/Security/SCA PASS; nur Clean-SHA-Provenienz offen (`evidence/T413-s7-final-gates.md`) |
 | T414 Abschlusswahrheit | OPEN | 2–4 h | Teamleiter | Z-DOCS/QC | – | QC/Brain/Marker-Digests; `.qc-passed` nur 100 % |
 | T415 Veröffentlichung | OPEN | 1–3 h | Teamleiter | Git/Remote | – | PR, Required Checks, Main, Release |
 
@@ -152,9 +152,9 @@ Aktuell: **T413 IN PROGRESS; Security-/SCA-/SBOM-/Provenienz-Gate für einen Rel
 | T413-S2 Chat-Logminimierung | PASS | 1–2 h | Chat-Agent + Reviewer | Tool-/Prompt-/Antwort-/Exception-Inhalte fehlen im Live-Log; 2/2 PASS |
 | T413-S3 Timeline-Limits | PASS | 1–2 h | Pacing-Agent + Reviewer | 144.000 Einträge/128 MiB vor Parse; 4/4 PASS; unabhängiger Review PASS |
 | T413-S4 sichere Legacy-Migration | PASS | 2–4 h | Data-Agent + Reviewer | Restricted Unpickler/Strict JSON/atomarer Publish; 22/22 und Re-Review PASS |
-| T413-S5 Python-SCA/Lock | DESIGN PASS / LOCK WAITING_APPROVAL | 4–12 h | Infra-Agent | 130/130 Kandidatenpakete OSV-geprüft; 67/69 behoben; Setuptools `not_actionable`, Torch `needs_review`; isolierter 29-Wheel-Scanner-Lock PASS |
-| T413-S6 MCP-Pin/Integrität | DESIGN PASS / WAITING_APPROVAL | 1–3 h | Infra-Agent | Lock v3/110 Knoten, SRI/tree/offline und echter npm-ci-EINTEGRITY-Tampertest PASS |
-| T413-S7 finaler Security-/Provenienzlauf | WAITING | 3–6 h | Teamleiter + Reviewer | finaler SHA; keine Releaseblocker; `release_eligible=true` |
+| T413-S5 Python-SCA/Lock | PASS | 4–12 h | Infra-Agent + Reviewer | 130-Wheel-Produktlock und isolierter 29-Wheel-Scannerlock; zwei exakte Ausnahmen bis 2026-09-01; Live-OSV 130/130 ohne unaufgelöste Treffer; 26/26 PASS; Re-Review PASS |
+| T413-S6 MCP-Pin/Integrität | PASS | 1–3 h | Infra-Agent + Reviewer | Exakte Pins 3.2.5/0.1.0, 110 SRI-Knoten, Full-Lock-SHA/Tree/Node-Gate, offline; 9/9 PASS; Re-Review PASS |
+| T413-S7 finaler Security-/Provenienzlauf | IN PROGRESS | 3–6 h | Teamleiter + Reviewer | Gesamtsuite 1.207/0, Coverage 62,116 %, C# 42/42, WPF Publish, Secret/History, Python-/NuGet-SCA und MCP PASS; als Nächstes Clean-SHA-SBOM/Provenienz |
 
 ### Laufende Regeln
 

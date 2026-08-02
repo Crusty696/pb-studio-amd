@@ -30,8 +30,15 @@ LOCK_PATHS = (
     "PBStudio.UI.Tests/packages.lock.json",
     "PBStudio.UI.Tests/PBStudio.UI.Tests.csproj",
     "config/python-wheel-overrides.json",
+    "config/pip-audit-2.10.1-win-py311.lock",
+    "config/python-sca-exceptions.json",
     "config/directml-asset-bundle.json",
     "config/directml-model-assets.json",
+    ".mcp.json",
+    ".codex/config.toml",
+    "tools/mcp-node/.npmrc",
+    "tools/mcp-node/package.json",
+    "tools/mcp-node/package-lock.json",
 )
 
 

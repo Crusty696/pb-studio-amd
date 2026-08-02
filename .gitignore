@@ -57,7 +57,18 @@ LibreHardwareMonitorLib.dll
 *.db-shm
 
 # Tools / Binaries (nicht auf GitHub)
-tools/
+/tools/
+!/tools/
+/tools/*
+!/tools/mcp-node/
+/tools/mcp-node/*
+!/tools/mcp-node/.npmrc
+!/tools/mcp-node/package-lock.json
+!/tools/mcp-node/package.json
+!/tools/mcp-node/run-caveman-shrink.cmd
+!/tools/mcp-node/run-context7.cmd
+!/tools/mcp-node/verify-lock.mjs
+/src/tools/
 *.exe
 *.dll
 
@@ -341,5 +352,8 @@ PBStudio.UI/Generated/*.g.cs
 # Antigravity/Codex/Agent-Tool Runtime-Artefakte (2026-07-09)
 scratch/
 scratch_test.ps1
-.codex/
+/.codex/
+!/.codex/
+/.codex/*
+!/.codex/config.toml
 .agent/

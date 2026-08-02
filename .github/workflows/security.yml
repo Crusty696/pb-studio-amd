@@ -67,10 +67,9 @@ jobs:
     name: Python SCA
     runs-on: windows-latest
     env:
-      PIP_AUDIT_ACTION_REVISION: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266
-      # TODO(release-blocker): Pin and attest the pip-audit scanner version used by the action.
-      PIP_AUDIT_SCANNER_VERSION: unverified
-      PIP_AUDIT_SCANNER_VERSION_STATUS: unverified
+      PIP_AUDIT_SCANNER_VERSION: "2.10.1"
+      PIP_AUDIT_SCANNER_LOCK: config/pip-audit-2.10.1-win-py311.lock
+      PIP_AUDIT_SCANNER_LOCK_SHA256: 116cff7875527870582ee9c2e182752ae504c3f0887934978ee6e58141518ffe
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -84,21 +83,60 @@ jobs:
         shell: bash
         run: mkdir -p artifacts/security
 
+      - name: Install isolated pip-audit scanner
+        id: scanner_install
+        shell: pwsh
+        run: |
+          $lockHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $env:PIP_AUDIT_SCANNER_LOCK).Hash.ToLowerInvariant()
+          if ($lockHash -ne $env:PIP_AUDIT_SCANNER_LOCK_SHA256) {
+            throw "pip-audit scanner lock hash mismatch: $lockHash"
+          }
+          $scannerVenv = Join-Path $env:RUNNER_TEMP "pb-studio-pip-audit-2.10.1"
+          python -m venv $scannerVenv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scannerPython = Join-Path $scannerVenv "Scripts\python.exe"
+          & $scannerPython -m pip install --disable-pip-version-check `
+            --require-hashes --only-binary=:all: --no-deps `
+            -r $env:PIP_AUDIT_SCANNER_LOCK
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scannerVersion = (& $scannerPython -m pip_audit --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or
+              $scannerVersion -ne "pip-audit $env:PIP_AUDIT_SCANNER_VERSION") {
+            throw "Unexpected scanner identity: $scannerVersion"
+          }
+          "SCANNER_PYTHON=$scannerPython" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Output "PIP_AUDIT_SCANNER_PASS version=$scannerVersion lock=$lockHash"
+
       - name: Audit production lock
         id: production_audit
-        continue-on-error: true
-        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
-        with:
-          inputs: requirements.txt
-          internal-be-careful-extra-flags: >-
-            --vulnerability-service osv
-            --disable-pip
-            --require-hashes
-            --no-deps
-            --strict
-            --aliases=on
-            --format=json
-            --output=artifacts/security/python-sca-production.json
+        shell: pwsh
+        run: |
+          & $env:SCANNER_PYTHON -m pip_audit `
+            --vulnerability-service osv `
+            --disable-pip `
+            --require-hashes `
+            --no-deps `
+            --strict `
+            --aliases=on `
+            --desc=off `
+            --progress-spinner=off `
+            --format=json `
+            --output=artifacts/security/python-sca-production.json `
+            --requirement requirements.txt
+          $auditExit = $LASTEXITCODE
+          @{
+            schema_version = 1
+            exit_code = $auditExit
+            accepted_for_exception_validation = $auditExit -in @(0, 1)
+          } | ConvertTo-Json | Set-Content `
+            -LiteralPath artifacts/security/python-sca-production-exit.json `
+            -Encoding utf8
+          if ($auditExit -notin @(0, 1)) {
+            throw "pip-audit collection failed with exit $auditExit"
+          }
+          exit 0
 
       - name: Validate production Python report
         id: production_validation
@@ -108,9 +146,11 @@ jobs:
           --lock requirements.txt
           --provider osv
           --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
-          --scanner-version-status ${{ env.PIP_AUDIT_SCANNER_VERSION_STATUS }}
-          --invocation-kind github-action
-          --action-revision ${{ env.PIP_AUDIT_ACTION_REVISION }}
+          --scanner-version-status verified
+          --invocation-kind local
+          --local-source config/pip-audit-2.10.1-win-py311.lock@sha256:${{ env.PIP_AUDIT_SCANNER_LOCK_SHA256 }}
+          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-production.json --requirement requirements.txt'
+          --exceptions config/python-sca-exceptions.json
           --receipt artifacts/security/python-sca-production-validation.json
           --expect-clean
           --minimum-dependencies 100
@@ -119,51 +159,54 @@ jobs:
         id: production_hash_validation
         shell: pwsh
         run: >-
-          python -m pip download --require-hashes --no-deps
+          python -m pip download --require-hashes --only-binary=:all: --no-deps
           --dest artifacts/security/python-sca-production-hashes
           -r requirements.txt
 
       - name: Audit vulnerable fixture
         id: vulnerable_fixture
-        continue-on-error: true
-        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
-        with:
-          inputs: Tests/security/fixtures/requirements-vulnerable.txt
-          internal-be-careful-extra-flags: >-
-            --vulnerability-service osv
-            --disable-pip
-            --require-hashes
-            --no-deps
-            --strict
-            --aliases=on
-            --format=json
-            --output=artifacts/security/python-sca-fixture.json
+        shell: pwsh
+        run: |
+          & $env:SCANNER_PYTHON -m pip_audit `
+            --vulnerability-service osv `
+            --disable-pip `
+            --require-hashes `
+            --no-deps `
+            --strict `
+            --aliases=on `
+            --desc=off `
+            --progress-spinner=off `
+            --format=json `
+            --output=artifacts/security/python-sca-fixture.json `
+            --requirement Tests/security/fixtures/requirements-vulnerable.txt
+          if ($LASTEXITCODE -ne 1 -or
+              -not (Test-Path -LiteralPath artifacts/security/python-sca-fixture.json)) {
+            throw "Vulnerable Python fixture was not rejected with a report."
+          }
+          exit 0
 
       - name: Validate vulnerable Python report
         id: fixture_validation
-        shell: bash
-        run: |
-          if [ "${{ steps.vulnerable_fixture.outcome }}" != "failure" ]; then
-            echo "Vulnerable Python fixture was not rejected."
-            exit 1
-          fi
-          python scripts/security_gate.py pip-audit-report \
-            --report artifacts/security/python-sca-fixture.json \
-            --lock Tests/security/fixtures/requirements-vulnerable.txt \
-            --provider osv \
-            --scanner-version "${{ env.PIP_AUDIT_SCANNER_VERSION }}" \
-            --scanner-version-status "${{ env.PIP_AUDIT_SCANNER_VERSION_STATUS }}" \
-            --invocation-kind github-action \
-            --action-revision "${{ env.PIP_AUDIT_ACTION_REVISION }}" \
-            --receipt artifacts/security/python-sca-fixture-validation.json \
-            --expect-package urllib3 \
-            --expect-version 1.26.5
+        run: >-
+          python scripts/security_gate.py pip-audit-report
+          --report artifacts/security/python-sca-fixture.json
+          --lock Tests/security/fixtures/requirements-vulnerable.txt
+          --provider osv
+          --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
+          --scanner-version-status verified
+          --invocation-kind local
+          --local-source config/pip-audit-2.10.1-win-py311.lock@sha256:${{ env.PIP_AUDIT_SCANNER_LOCK_SHA256 }}
+          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-fixture.json --requirement Tests/security/fixtures/requirements-vulnerable.txt'
+          --receipt artifacts/security/python-sca-fixture-validation.json
+          --expect-package urllib3
+          --expect-version 1.26.5
 
       - name: Verify wrong Python package hash is rejected
         id: wrong_hash_validation
         shell: pwsh
         run: |
-          $output = & python -m pip download --require-hashes --no-deps `
+          $output = & $env:SCANNER_PYTHON -m pip download `
+            --require-hashes --only-binary=:all: --no-deps `
             --dest artifacts/security/python-sca-wrong-hash `
             -r Tests/security/fixtures/requirements-wrong-hash.txt 2>&1
           $exitCode = $LASTEXITCODE
@@ -186,7 +229,7 @@ jobs:
           python scripts/security_gate.py workflow-receipt
           --gate python-sca
           --status
-          ${{ steps.production_audit.outcome }}:${{ steps.production_validation.outcome }}:${{ steps.production_hash_validation.outcome }}:${{ steps.fixture_validation.outcome }}:${{ steps.wrong_hash_validation.outcome }}
+          ${{ steps.scanner_install.outcome }}:${{ steps.production_audit.outcome }}:${{ steps.production_validation.outcome }}:${{ steps.production_hash_validation.outcome }}:${{ steps.vulnerable_fixture.outcome }}:${{ steps.fixture_validation.outcome }}:${{ steps.wrong_hash_validation.outcome }}
           --commit ${{ github.sha }}
           --output artifacts/security/python-sca-receipt.json
 

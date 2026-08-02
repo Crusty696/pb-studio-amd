@@ -22,7 +22,7 @@ from typing import Iterable
 TARGET_PYTHON = (3, 11)
 TARGET_PLATFORM = "win_amd64"
 TARGET_ABI = "cp311"
-LOCK_PIP_VERSION = "26.1.1"
+LOCK_PIP_VERSION = "26.2"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DIRECT = PROJECT_ROOT / "requirements-direct.txt"
 DEFAULT_LOCK = PROJECT_ROOT / "requirements.txt"
@@ -34,9 +34,9 @@ PYTORCH_CPU_FIND_LINKS = (
     "https://download.pytorch.org/whl/cpu/torchaudio/",
 )
 CPU_TORCH_CONTRACT = {
-    "torch": "2.4.1+cpu",
-    "torchvision": "0.19.1+cpu",
-    "torchaudio": "2.4.1+cpu",
+    "torch": "2.11.0+cpu",
+    "torchvision": "0.26.0+cpu",
+    "torchaudio": "2.11.0+cpu",
 }
 FORBIDDEN_ACCELERATOR_PREFIXES = ("cuda-", "nvidia-")
 
@@ -198,6 +198,30 @@ def _constraint_lines(
         yield f"{name}=={version}"
 
 
+def _parse_upgrade_packages(values: Iterable[str]) -> tuple[set[str], list[str]]:
+    upgrades: set[str] = set()
+    constraints: list[str] = []
+    for value in values:
+        if "==" in value:
+            match = _PIN_RE.fullmatch(value)
+            if match is None or match.group("hash") is not None:
+                raise LockError(f"invalid upgrade package constraint: {value}")
+            name = match.group("name")
+            constraint = f"{name}=={match.group('version')}"
+        else:
+            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value) is None:
+                raise LockError(f"invalid upgrade package name: {value}")
+            name = value
+            constraint = ""
+        canonical = _canonical_name(name)
+        if canonical in upgrades:
+            raise LockError(f"duplicate upgrade package: {canonical}")
+        upgrades.add(canonical)
+        if constraint:
+            constraints.append(constraint)
+    return upgrades, constraints
+
+
 def _run_resolver(
     direct_path: Path,
     constraints: Iterable[str],
@@ -306,10 +330,10 @@ def generate(args: argparse.Namespace) -> None:
         raise LockError(
             "existing lock missing; use --bootstrap-installed only from a proven runtime"
         )
-    upgrades = {_canonical_name(name) for name in args.upgrade_package}
+    upgrades, upgrade_constraints = _parse_upgrade_packages(args.upgrade_package)
     report = _run_resolver(
         args.direct,
-        _constraint_lines(baseline, direct, upgrades),
+        (*_constraint_lines(baseline, direct, upgrades), *upgrade_constraints),
     )
     rendered = _render_lock(report)
     if args.output is None:
@@ -391,7 +415,13 @@ def _parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--output", type=Path)
     generate_parser.add_argument("--bootstrap-installed", action="store_true")
     generate_parser.add_argument("--refresh-all", action="store_true")
-    generate_parser.add_argument("--upgrade-package", action="append", default=[])
+    generate_parser.add_argument(
+        "--upgrade-package",
+        action="append",
+        default=[],
+        metavar="NAME[==VERSION]",
+        help="release an existing transitive pin, optionally constraining its target version",
+    )
     generate_parser.set_defaults(handler=generate)
 
     verify_parser = subparsers.add_parser("verify")

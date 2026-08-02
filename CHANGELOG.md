@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-08-02 - T413 Release-Security und reproduzierbare Lieferkette
+
+### Fixed
+- Python-Produktlock auf 130 exakte Windows-cp311-Wheels aktualisiert;
+  CPU-Torch-Familie, Transformers/Hugging Face und bekannte transitive
+  Advisories versions- und hashgebunden geschlossen.
+- Isolierten 29-Wheel-`pip-audit`-Scannerlock und zwei exakt gebundene,
+  eigentümergeführte Ausnahmen bis 2026-09-01 eingeführt.
+- MCP-Starts von dynamischem `@latest` auf lokale Wrapper, vollständigen
+  npm-Lock-SHA, 110 SRI-Knoten und installierten Runtime-Tree umgestellt.
+- GitHub-PowerShell-Gate korrigiert: akzeptierter `pip-audit`-Exit 1 wird erst
+  nach Status-/Reportprüfung zu Exit 0 normalisiert; unerwartete Pfade bleiben
+  fail-closed.
+- Scanner-, Exception-, MCP- und npm-Konfiguration in Release-Provenienz
+  aufgenommen.
+
+### Verified
+- Finaler Python-Lauf: 1.207 Outcomes, 0 Fehler/Errors, 11 genehmigte Skips,
+  62,116 % Coverage.
+- Locked .NET Restore, 42/42 native Tests und WPF Release Publish mit
+  0 Warnungen/Fehlern.
+- Secret/History 0 aktive Funde; Python-SCA 130 Pakete/0 ungelöst;
+  NuGet-Produktgraphen sauber; npm 110 Knoten/0 Vulnerabilities.
+- Codex-Security-Diffscan: 23/23 Review-Belege, 0 reportable Findings;
+  zwei fail-closed Releaseblocker behoben und unabhängig nachgeprüft.
+
 ## 2026-07-30 - T340–T368 GPU-, Provider- und Analyse-Wahrheit
 
 ### Fixed

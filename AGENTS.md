@@ -334,7 +334,7 @@ PBStudio.UI/
 | Python | 3.11.x | BeatNet/madmom |
 | NumPy | **1.26.4** | < 2.0 strict |
 | onnxruntime-directml | ≥ 1.16.0 | DirectML-Engine |
-| PyTorch (CPU) | 2.4.1+cpu | ML-Tensoren |
+| PyTorch (CPU) | 2.11.0+cpu | ML-Tensoren |
 | BeatNet | 1.1.1 | Beat-Detection |
 | FFmpeg | 6.x Gyan.dev | AMF-Encoder |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |

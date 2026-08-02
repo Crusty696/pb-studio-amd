@@ -14,7 +14,9 @@ def test_bridge_dispose_keeps_gate_alive_for_inflight_start_or_stop():
 
     assert "_disposed = true;" in dispose
     assert "_isStopping = true;" in dispose
-    assert "_httpClient.Dispose();" in dispose
+    assert "_bootstrapHttpClient.Dispose();" in dispose
+    assert "ReferenceEquals(_bootstrapHttpClient, _protectedHttpClient)" in dispose
+    assert "_protectedHttpClient.Dispose();" in dispose
     assert "_lifecycleGate.Dispose();" not in dispose
 
 
