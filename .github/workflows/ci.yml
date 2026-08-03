@@ -37,7 +37,11 @@ jobs:
           if (Test-Path -LiteralPath "$feature/.qc-passed") {
             $phase = if ($tasks -match '(?m)^- \[X\] T415 ') { "release" } else { "qc" }
           } elseif (Test-Path -LiteralPath "$feature/.completed") {
-            $phase = "implementation"
+            $phase = if ($tasks -match '(?m)^- \[X\] T404 ') {
+              "qc-progress"
+            } else {
+              "implementation"
+            }
           } else {
             $phase = "open"
           }

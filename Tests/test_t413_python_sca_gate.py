@@ -161,6 +161,35 @@ def test_python_sca_scanner_lock_has_exact_inventory_and_hash() -> None:
     assert "pip-audit==2.10.1" in lock_text
 
 
+def test_byte_bound_security_inputs_keep_lf_on_every_checkout() -> None:
+    paths = [
+        "config/pip-audit-2.10.1-win-py311.lock",
+        "config/secret-scan-allowlist.json",
+        "Tests/security/fixtures/seeded-secret.txt",
+    ]
+    result = subprocess.run(
+        ["git", "check-attr", "eol", "--", *paths],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert result.stdout.splitlines() == [f"{path}: eol: lf" for path in paths]
+    allowlist = json.loads(
+        (ROOT / "config" / "secret-scan-allowlist.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    fixture_hash = hashlib.sha256(
+        (FIXTURES / "seeded-secret.txt").read_bytes()
+    ).hexdigest()
+    assert fixture_hash in {
+        entry["content_sha256"] for entry in allowlist["entries"]
+    }
+
+
 def test_python_sca_registered_exceptions_are_exact_and_consumed(
     tmp_path: Path,
 ) -> None:

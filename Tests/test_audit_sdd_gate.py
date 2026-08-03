@@ -23,3 +23,16 @@ def test_current_feature_workspace_passes_fail_closed_sdd_gate():
     report = validate_feature(FEATURE, phase)
 
     assert report.valid, report.findings
+
+
+def test_ci_selects_qc_progress_after_qc_execution_starts():
+    workflow = (WORKSPACE / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    phase_selection = workflow.split(
+        "      - name: Select and validate the active SDD phase", 1
+    )[1].split("      - name: Validate lock and security configuration syntax", 1)[0]
+
+    assert "'(?m)^- \\[X\\] T404 '" in phase_selection
+    assert '"qc-progress"' in phase_selection
+    assert phase_selection.index("T404") < phase_selection.index('"qc-progress"')
