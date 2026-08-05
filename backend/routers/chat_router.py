@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -59,6 +60,76 @@ class _ChatHistoryStore:
     def __init__(self) -> None:
         self._entries: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
+        # Audit 2026-08-05 (H-1/T3.8): Der Store war ein reines Prozess-Singleton
+        # ohne Projektbindung und ohne Serialisierung. Zwei Folgen gleichzeitig:
+        # (1) nach jedem Backend-Neustart war der Verlauf weg, obwohl der User
+        #     nie "leeren" gedrueckt hatte, und
+        # (2) solange das Backend lief, wanderten Chats aus Projekt A ungefragt
+        #     in den Kontext von Projekt B (Cross-Project-Leak).
+        self._project_key: str | None = None
+
+    # -- Persistenz -------------------------------------------------------
+    # Bewusst als JSON neben timeline.json im Projektordner statt als
+    # DB-Migration: gleiches Muster wie die uebrige Projekt-Persistenz,
+    # kein Schema-Bump, und beim Loeschen des Projekts verschwindet der
+    # Verlauf automatisch mit.
+
+    @staticmethod
+    def _history_file(project_root: str) -> Path:
+        return Path(project_root) / "chat_history.json"
+
+    async def bind_project(self, project_root: str | None) -> None:
+        """
+        Bindet den Store an ein Projekt und laedt dessen Verlauf.
+
+        Wird beim ersten Zugriff nach einem Projektwechsel aufgerufen. Bei
+        gleichem Projekt ist der Aufruf ein No-op.
+        """
+        key = str(project_root) if project_root else None
+        async with self._lock:
+            if key == self._project_key:
+                return
+            self._project_key = key
+            self._entries = []
+            if not key:
+                return
+            try:
+                path = self._history_file(key)
+                if path.is_file():
+                    raw = json.loads(path.read_text(encoding="utf-8"))
+                    if isinstance(raw, list):
+                        self._entries = [
+                            entry for entry in raw
+                            if isinstance(entry, dict)
+                            and entry.get("role") in {"user", "assistant", "system"}
+                            and isinstance(entry.get("content"), str)
+                        ][-self.MAX_ENTRIES:]
+            except Exception as exc:  # noqa: BLE001 - Verlauf ist nicht kritisch
+                logger.warning(
+                    "Chat-Verlauf konnte nicht geladen werden: %s: %r",
+                    type(exc).__name__,
+                    exc,
+                )
+
+    def _persist_unlocked(self) -> None:
+        """Schreibt den Verlauf. Aufrufer haelt bereits den Lock."""
+        if not self._project_key:
+            return
+        try:
+            path = self._history_file(self._project_key)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(
+                json.dumps(self._entries, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            tmp.replace(path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Chat-Verlauf konnte nicht gespeichert werden: %s: %r",
+                type(exc).__name__,
+                exc,
+            )
 
     def _count_tokens(self, text: str) -> int:
         """Token-count via max(1, len(text) // 3) heuristic."""
@@ -70,6 +141,7 @@ class _ChatHistoryStore:
             if len(self._entries) > self.MAX_ENTRIES:
                 # Behalte die letzten MAX_ENTRIES
                 self._entries = self._entries[-self.MAX_ENTRIES:]
+            self._persist_unlocked()
 
     async def snapshot(self) -> list[dict[str, Any]]:
         async with self._lock:
@@ -101,9 +173,30 @@ class _ChatHistoryStore:
     async def clear(self) -> None:
         async with self._lock:
             self._entries.clear()
+            self._persist_unlocked()
 
 
 _history_store = _ChatHistoryStore()
+
+
+async def _bind_history_to_active_project() -> None:
+    """
+    Bindet den Chat-Verlauf an das aktuell geoeffnete Projekt.
+
+    Audit 2026-08-05 (H-1/T3.8): Ohne diese Bindung teilten sich alle Projekte
+    denselben Prozess-Speicher — Chats aus Projekt A landeten im Kontext von
+    Projekt B. Wird vor jedem Zugriff aufgerufen; bei unveraendertem Projekt
+    ist es ein No-op.
+    """
+    try:
+        from ..app_state import get_app_state
+
+        state = get_app_state()
+        project = getattr(state, "current_project", None)
+        root = project.get("path") if isinstance(project, dict) else None
+        await _history_store.bind_project(root)
+    except Exception as exc:  # noqa: BLE001 - Chat darf daran nie scheitern
+        logger.debug("Chat-Projektbindung uebersprungen: %r", exc)
 
 
 # ----------------------------------------------------------------------
@@ -162,6 +255,7 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
     # Wichtig: Agent + Resourcen sind PRO Request — sonst Lebenszyklus-Konflikte.
     from pb_studio.ai.chat_agent import ChatAgent  # lazy
 
+    await _bind_history_to_active_project()
     if request.history is not None:
         history = [h.model_dump() for h in request.history]
     else:
@@ -302,7 +396,8 @@ async def get_tools() -> ToolInventoryResponse:
 
 @router.get("/history", response_model=HistoryResponse)
 async def get_history() -> HistoryResponse:
-    """Liefert die Server-Side Chat-History."""
+    """Liefert die Server-Side Chat-History des aktiven Projekts."""
+    await _bind_history_to_active_project()
     entries = await _history_store.snapshot()
     return HistoryResponse(
         entries=[ChatHistoryEntry(**e) for e in entries],
@@ -312,7 +407,8 @@ async def get_history() -> HistoryResponse:
 
 @router.delete("/history", response_model=StatusResponse)
 async def clear_history() -> StatusResponse:
-    """Leert die Server-Side Chat-History."""
+    """Leert die Server-Side Chat-History des aktiven Projekts."""
+    await _bind_history_to_active_project()
     await _history_store.clear()
     return StatusResponse(status="cleared")
 

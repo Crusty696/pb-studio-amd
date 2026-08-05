@@ -246,6 +246,63 @@ def _commit_pending_video_embedding(result: dict[str, Any]) -> None:
     result["_new_embedding_media_id"] = int(pending["media_id"])
     result["_new_embedding_faiss_id"] = int(faiss_id)
 
+    _store_video_embedding_in_brain_cache(pending)
+
+
+def _store_video_embedding_in_brain_cache(pending: dict[str, Any]) -> None:
+    """
+    Zweitschreibung des SigLIP-Vektors in den Brain-EmbeddingCache.
+
+    Audit 2026-08-05 (C-3): ``EmbeddingCache.store()`` hatte im gesamten
+    Produktivcode keinen einzigen Aufrufer — nur Tests und ein Verify-Skript.
+    Die Live-DB unter ``%APPDATA%/PB_Studio/brain/embedding_cache.db`` hatte
+    entsprechend 0 Zeilen, seit sie am 2026-05-31 angelegt wurde.
+
+    Die Folge war kein Absturz, sondern eine stille Degradation: der
+    Brain-Post-Processor sucht ueber ``media_hash``, der Vektor lag aber
+    ausschliesslich in FAISS und war dort ueber ``media_id`` gekeyt. Der Lookup
+    konnte strukturell nie treffen. Dadurch meldete
+    ``feature_adapter._semantic_availability`` dauerhaft
+    ``audio_and_video_embeddings_missing``, die Achse ``semantic_match_weight``
+    fiel aus jedem ``bridge_values``-Dict heraus (0 von 2576 Cuts), und der
+    Cross-Modal-Projektor bekam nie Trainingspaare.
+
+    Der Dual-Write ist hier korrekt und keine Redundanz: FAISS ist
+    projektgebunden ueber ``media_id``, der Brain-Cache bewusst projektuebergreifend
+    ueber den Inhalts-Hash. Fehler duerfen die Analyse nicht abbrechen — der
+    FAISS-Write ist zu diesem Zeitpunkt bereits durch.
+    """
+    meta_info = pending.get("meta_info") or {}
+    video_hash = meta_info.get("video_hash")
+    if not video_hash:
+        logger.debug(
+            "Brain-Cache-Write uebersprungen: kein video_hash in meta_info"
+        )
+        return
+
+    try:
+        from pb_studio.video import video_embedder
+        from pb_studio.brain.brain_service import BrainService
+
+        cache = getattr(BrainService.get().brain, "cache", None)
+        if cache is None:
+            logger.debug("Brain-Cache nicht verfuegbar — Write uebersprungen")
+            return
+
+        cache.store(
+            media_hash=str(video_hash),
+            media_type="video",
+            embedding=pending["vector"],
+            model_name=video_embedder.CURRENT_MODEL_NAME,
+            model_version=video_embedder.CURRENT_MODEL_VERSION,
+        )
+    except Exception as exc:  # noqa: BLE001 - darf die Analyse nie abbrechen
+        logger.warning(
+            "Brain-Cache-Write fehlgeschlagen (Analyse bleibt gueltig): %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
 
 def _dedupe_old_video_embeddings(result: dict[str, Any]) -> None:
     """Tombstone older vectors only after the new analysis truth is durable."""

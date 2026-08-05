@@ -302,6 +302,32 @@
                                         </StackPanel>
                                     </Grid>
 
+                                    <!-- Audit 2026-08-05 (H-3/T3.9): Kontextfenster und
+                                         Architektur. LM Studio liefert beide, sie wurden
+                                         bisher dreifach abgeschnitten. Ohne das
+                                         Kontextfenster konnte der User den eigenen
+                                         Ratschlag des Chat-Agents ("groesseres
+                                         Kontextfenster waehlen") nicht befolgen. -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="KONTEXT" Style="{StaticResource ParamLabel}"/>
+                                            <TextBlock Text="{Binding ContextWindowDisplay}"
+                                                       Style="{StaticResource ParamValue}"
+                                                       Foreground="{StaticResource AbletonAccent}"
+                                                       ToolTip="Maximale Kontextlaenge in Tokens. Ist der Chat-Verlauf laenger, lehnt das Modell die Anfrage ab."/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="ARCH" Style="{StaticResource ParamLabel}"/>
+                                            <TextBlock Text="{Binding ArchitectureDisplay}"
+                                                       Style="{StaticResource ParamValue}"
+                                                       Foreground="{StaticResource AbletonTextDim}"/>
+                                        </StackPanel>
+                                    </Grid>
+
                                     <!-- modified-Text und Busy-Overlay -->
                                     <Grid Margin="0,0,0,8">
                                         <TextBlock Foreground="{StaticResource AbletonTextDim}"
@@ -394,6 +420,20 @@
                                             </TextBlock>
                                         </DockPanel>
                                     </Border>
+
+                                    <!-- Audit 2026-08-05 (H-2/T3.10): Auswahl-Beleg
+                                         des Smoke-Tests. Der Receipt wurde backendseitig
+                                         vollstaendig gebaut, aber nur ins Log geschrieben —
+                                         Nachvollziehbarkeit existierte damit nur fuer
+                                         jemanden, der backend.log liest. Leerer Text =
+                                         ausgeblendet (noch kein Test gelaufen). -->
+                                    <TextBlock Text="{Binding SelectionReceiptText}"
+                                               Visibility="{Binding SelectionReceiptText, Converter={StaticResource NullToVisibilityConverter}}"
+                                               FontSize="10"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource AbletonTextDim}"
+                                               ToolTip="Belegt, welches Modell fuer diesen Test ausgewaehlt wurde, welche Capabilities verlangt und welche live verifiziert wurden."/>
 
                                     <!-- Busy-Overlay -->
                                     <ProgressBar Height="3" Margin="0,6,0,0"

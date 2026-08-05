@@ -28,6 +28,26 @@ public class SSEClient : IDisposable
     
     // Throttling fields
     private readonly object _progressLock = new object();
+
+    // Audit 2026-08-05 (H-1/T3.13): Letzte gesehene Event-ID je Stream, damit der
+    // Reconnect per Last-Event-ID dort fortsetzt, wo die Verbindung abbrach.
+    private readonly Dictionary<StreamKind, long> _lastEventIds = new();
+    private readonly object _lastEventIdLock = new object();
+
+    private void RememberLastEventId(StreamKind streamKind, long eventId)
+    {
+        lock (_lastEventIdLock)
+        {
+            if (!_lastEventIds.TryGetValue(streamKind, out var current) || eventId > current)
+                _lastEventIds[streamKind] = eventId;
+        }
+    }
+
+    private long GetLastEventId(StreamKind streamKind)
+    {
+        lock (_lastEventIdLock)
+            return _lastEventIds.TryGetValue(streamKind, out var value) ? value : 0L;
+    }
     private readonly Dictionary<string, (DateTime Time, double Percent)> _lastProgressUpdate = [];
 
     private const int InitialReconnectDelayMs = 3000;
@@ -41,6 +61,14 @@ public class SSEClient : IDisposable
     public event EventHandler<LogEventArgs>? LogReceived;
     public event EventHandler<GpuEventArgs>? GpuStatusReceived;
     public event EventHandler<LlmStatusEventArgs>? LlmStatusReceived;
+
+    /// <summary>
+    /// Persistenzfehler aus dem Backend (IRON RULE 10). Vor dem Fix wurde dieser
+    /// Event-Typ zweifach verworfen: der Progress-Filter kannte ihn nicht, und hier
+    /// gab es keinen Handler — ein fehlgeschlagener Speichervorgang blieb damit
+    /// vollstaendig unsichtbar (Audit 2026-08-05, C-A).
+    /// </summary>
+    public event EventHandler<PersistErrorEventArgs>? PersistErrorReceived;
     public event EventHandler<bool>? ConnectionStateChanged;
     /// <summary>
     /// Spec 00010 T003: Feuert true sobald Backend wieder erreichbar ist; feuert false
@@ -133,6 +161,14 @@ public class SSEClient : IDisposable
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+                // Audit 2026-08-05 (H-1/T3.13): Last-Event-ID mitschicken, damit
+                // das Backend verpasste Events nachliefert. Der WHATWG-SSE-Standard
+                // definiert genau diesen Mechanismus; bisher fehlte er auf beiden
+                // Seiten, wodurch jeder Reconnect ein Loch in den Progress riss.
+                var resumeFrom = GetLastEventId(streamKind);
+                if (resumeFrom > 0)
+                    request.Headers.TryAddWithoutValidation("Last-Event-ID", resumeFrom.ToString(CultureInfo.InvariantCulture));
+
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
@@ -174,6 +210,17 @@ public class SSEClient : IDisposable
                     if (line.StartsWith("event: ", StringComparison.Ordinal))
                     {
                         eventType = line[7..].Trim();
+                        continue;
+                    }
+
+                    // Audit 2026-08-05 (H-1/T3.13): id-Zeilen mitfuehren, damit der
+                    // Reconnect per Last-Event-ID nachliefern kann. Ohne das blieb
+                    // eine Fortschrittsanzeige dauerhaft haengen, wenn das
+                    // abschliessende "completed" ins Reconnect-Fenster fiel.
+                    if (line.StartsWith("id: ", StringComparison.Ordinal))
+                    {
+                        if (long.TryParse(line[4..].Trim(), out var parsedId) && parsedId > 0)
+                            RememberLastEventId(streamKind, parsedId);
                         continue;
                     }
 
@@ -316,6 +363,18 @@ public class SSEClient : IDisposable
                             Provider = TryGetString(root, "provider"),
                             Status = TryGetString(root, "status"),
                             Percent = TryGetDouble(root, "percent"),
+                        });
+                    }
+                    break;
+
+                case StreamKind.Progress when eventType == "persist_error":
+                    {
+                        PersistErrorReceived?.Invoke(this, new PersistErrorEventArgs
+                        {
+                            Source = TryGetString(root, "source"),
+                            Message = TryGetString(root, "message"),
+                            Detail = TryGetString(root, "detail"),
+                            Severity = TryGetString(root, "severity"),
                         });
                     }
                     break;
@@ -547,6 +606,23 @@ public class LlmStatusEventArgs : EventArgs
 {
     public string Model { get; init; } = "";
     public string Provider { get; init; } = "";
-    public string Status { get; init; } = ""; // e.g. "loading", "active", "failed"
+
+    /// <summary>
+    /// Vom Backend gesendete Statuswerte: "loading", "active", "failed",
+    /// "unavailable" (Vision-Wrapper) und "idle" (Turn beendet).
+    /// </summary>
+    public string Status { get; init; } = "";
     public double Percent { get; init; } = 0.0;
+}
+
+/// <summary>
+/// Persistenzfehler-Meldung des Backends (IRON RULE 10) — z.B. gescheiterter
+/// DB-Write beim Projektspeichern. Payload aus <c>app_state._emit_persist_error</c>.
+/// </summary>
+public class PersistErrorEventArgs : EventArgs
+{
+    public string Source { get; init; } = "";
+    public string Message { get; init; } = "";
+    public string Detail { get; init; } = "";
+    public string Severity { get; init; } = "error";
 }

@@ -701,6 +701,44 @@ class ModelRegistry:
             }
 
 
+# ---------------------------------------------------------------------------
+# Audit 2026-08-05 (C-2/T2.3): Sessionweite Sperre nicht-ladbarer Modelle.
+#
+# ``excluded`` war zuvor rein call-lokal. Nach ModelFailoverExhaustedError begann
+# der naechste Aufruf wieder bei denselben drei Kandidaten. Beim frameweisen
+# Video-Tagging ergab das 467 Wiederholungen mit je ~15 s LM-Studio-Ladeversuch —
+# rund zwei Stunden reine Wartezeit in einer einzigen Session.
+#
+# Gesperrt wird nur bei Fehlern, die belegen, dass das Modell ueberhaupt nicht
+# geladen werden kann. Transiente Fehler (Timeout, Verbindungsabbruch) fuehren
+# bewusst NICHT zur Sperre.
+# ---------------------------------------------------------------------------
+_UNLOADABLE_MODELS: set[tuple[str, str]] = set()
+
+_UNLOADABLE_ERROR_MARKERS = (
+    "failed to load model",
+    "exited before becoming healthy",
+    "no lm runtime found",
+    "unable to load model",
+)
+
+
+def _is_unloadable_error(exc: Exception) -> bool:
+    """True wenn die Fehlermeldung belegt, dass das Modell nicht ladbar ist."""
+    text = f"{exc}".lower()
+    return any(marker in text for marker in _UNLOADABLE_ERROR_MARKERS)
+
+
+def get_unloadable_models() -> frozenset[tuple[str, str]]:
+    """Aktuell fuer diese Session gesperrte (provider, model_id)-Paare."""
+    return frozenset(_UNLOADABLE_MODELS)
+
+
+def reset_unloadable_models() -> None:
+    """Hebt die Sessionsperre auf (Tests, sowie nach Modell-Installation)."""
+    _UNLOADABLE_MODELS.clear()
+
+
 async def execute_with_model_failover(
     registry: ModelRegistry,
     task: str,
@@ -721,7 +759,9 @@ async def execute_with_model_failover(
 
     inventory = get_model_inventory_service()
     snapshot = await inventory.refresh()
-    excluded: set[tuple[str, str]] = set()
+    # Sessionweite Sperre als Startmenge: Modelle, die in dieser Session
+    # nachweislich nicht ladbar waren, werden gar nicht erst erneut probiert.
+    excluded: set[tuple[str, str]] = set(_UNLOADABLE_MODELS)
     attempts: list[ModelSelectionReceipt] = []
     refreshed_after_failure = False
     last_error: Optional[Exception] = None
@@ -755,12 +795,28 @@ async def execute_with_model_failover(
                 raise
             last_error = exc
             excluded.add((receipt.provider, receipt.model_id))
+            if _is_unloadable_error(exc):
+                key = (receipt.provider, receipt.model_id)
+                if key not in _UNLOADABLE_MODELS:
+                    _UNLOADABLE_MODELS.add(key)
+                    logger.warning(
+                        "Modell fuer diese Session gesperrt (nicht ladbar): "
+                        "provider=%s model=%s grund=%s",
+                        receipt.provider,
+                        receipt.model_id,
+                        exc,
+                    )
+            # Audit 2026-08-05 (C-2, Nebenbefund): %s auf eine Exception mit
+            # leerem str() ergab "error=" ohne Inhalt -- die eigentliche
+            # LM-Studio-Fehlermeldung ging komplett verloren und hat die
+            # Diagnose der Failover-Kette massiv erschwert.
             logger.warning(
                 "Receipt-bound provider call failed: provider=%s model=%s "
-                "attempt=%d/3 error=%s",
+                "attempt=%d/3 error=%s: %r",
                 receipt.provider,
                 receipt.model_id,
                 len(attempts),
+                type(exc).__name__,
                 exc,
             )
             provider_failure = (
@@ -773,7 +829,12 @@ async def execute_with_model_failover(
                 snapshot = await inventory.refresh()
                 refreshed_after_failure = True
 
-    detail = str(last_error) if last_error else "keine weiteren Kandidaten"
+    if last_error is not None:
+        # str(exc) ist bei manchen Client-Exceptions leer -- dann bleibt sonst
+        # nur "erschoepft: " ohne Grund uebrig (Audit 2026-08-05).
+        detail = str(last_error) or f"{type(last_error).__name__}: {last_error!r}"
+    else:
+        detail = "keine weiteren Kandidaten"
     raise ModelFailoverExhaustedError(
         f"Modellauswahl für task={task!r} nach {len(attempts)} "
         f"verschiedenen Kandidaten erschöpft: {detail}",

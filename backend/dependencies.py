@@ -7,8 +7,9 @@ GPU-Lock, DB-Session, Config — alles was Router brauchen.
 import asyncio
 import logging
 import time
+from collections import deque
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional
 
 from .config import config
 from .app_state import AppState, get_app_state  # noqa: F401 — re-export für Router
@@ -308,9 +309,72 @@ def _enqueue_event(
         _record_event_drop(client_id, event)
 
 
+# ---------------------------------------------------------------------------
+# Audit 2026-08-05 (H-1/T3.13): SSE-Journal fuer Reconnect-Replay.
+#
+# Bisher hatte der Stream weder ``id:``-Zeilen noch einen Puffer. Folgen:
+#   * Bei Queue-Overflow (500 Events) wurde still das aelteste verworfen — der
+#     Client erfuhr nie, dass er etwas verpasst hat.
+#   * Beim WPF-Reconnect (Backoff 3-30 s) war die alte per-connection Queue
+#     bereits geloescht. Fiel ein ``status="completed"`` in dieses Fenster,
+#     blieb die Fortschrittsanzeige dauerhaft bei z.B. 87 % stehen.
+#
+# Der WHATWG-Standard loest genau das mit ``id:`` plus ``Last-Event-ID``. Das
+# Journal ist absichtlich klein und rein im Speicher: es soll einen kurzen
+# Verbindungsabbruch ueberbruecken, kein Event-Store sein.
+# ---------------------------------------------------------------------------
+EVENT_JOURNAL_MAXLEN = 500
+
+_event_journal: deque[tuple[int, dict[str, Any]]] = deque(maxlen=EVENT_JOURNAL_MAXLEN)
+_event_sequence = 0
+
+
+def _next_event_sequence() -> int:
+    global _event_sequence
+    _event_sequence += 1
+    return _event_sequence
+
+
+def get_journaled_events_since(
+    last_event_id: int,
+    event_filter: Optional[set[str]] = None,
+) -> list[tuple[int, dict[str, Any]]]:
+    """
+    Liefert die noch gepufferten Events nach ``last_event_id``.
+
+    Wird beim Reconnect genutzt, damit ein verpasstes Abschluss-Event nicht zu
+    einer dauerhaft haengenden Fortschrittsanzeige fuehrt.
+    """
+    if last_event_id <= 0:
+        return []
+    result: list[tuple[int, dict[str, Any]]] = []
+    for sequence, event in list(_event_journal):
+        if sequence <= last_event_id:
+            continue
+        if event_filter is not None:
+            if str(event.get("event", "message")) not in event_filter:
+                continue
+        result.append((sequence, event))
+    return result
+
+
+def reset_event_journal() -> None:
+    """Setzt Journal und Sequenz zurueck (Tests, Prozessneustart-Simulation)."""
+    global _event_sequence
+    _event_journal.clear()
+    _event_sequence = 0
+
+
 def _fanout_event(event: dict[str, Any]) -> None:
     """Synchroner Fan-out an alle Queues. NUR im Main-Loop-Thread aufrufen."""
     event_type = str(event.get("event", "message"))
+    # Sequenznummer vergeben und journalisieren, BEVOR gefiltert wird — damit
+    # ein Reconnect auch Events sieht, fuer die zum Publish-Zeitpunkt kein
+    # passender Client verbunden war.
+    if "_seq" not in event:
+        event["_seq"] = _next_event_sequence()
+    _event_journal.append((int(event["_seq"]), event))
+
     for client_id, queue in list(_event_queues.items()):
         event_filter = _event_queue_filters.get(client_id)
         if event_filter is not None and event_type not in event_filter:

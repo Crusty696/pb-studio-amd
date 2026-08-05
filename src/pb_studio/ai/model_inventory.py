@@ -106,6 +106,16 @@ class ModelInventoryEntry:
     family: Optional[str] = None
     parameter_size: Optional[str] = None
     quantization_level: Optional[str] = None
+    # Audit 2026-08-05 (H-3/T3.9): Es gab hier keinen Traeger fuer
+    # Kontextfenster und Architektur — selbst wenn der Client sie geliefert
+    # haette, waeren sie an dieser Schicht verloren gegangen. Das
+    # Kontextfenster ist die Zahl, die der Chat-Agent im Fehlerfall selbst
+    # anspricht ("groesseres Kontextfenster waehlen"), die der User aber
+    # nirgends ablesen konnte.
+    context_length: Optional[int] = None
+    architecture: Optional[str] = None
+    publisher: Optional[str] = None
+    runtime_state: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -396,6 +406,12 @@ class ModelInventoryService:
             family=model.family,
             parameter_size=model.parameter_size,
             quantization_level=model.quantization_level,
+            # Audit 2026-08-05 (H-3/T3.9): getattr, weil OllamaModelInfo diese
+            # Felder nicht kennt — der Inventardienst bedient beide Provider.
+            context_length=getattr(model, "context_length", None),
+            architecture=getattr(model, "architecture", None),
+            publisher=getattr(model, "publisher", None),
+            runtime_state=getattr(model, "state", None),
         )
 
     async def _loaded_lmstudio(self, base_url: str) -> _LoadedProbe:

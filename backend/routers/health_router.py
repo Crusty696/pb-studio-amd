@@ -74,6 +74,41 @@ async def vram_health(
     }
 
 
+def _persist_vram_limit(limit_mb: int) -> None:
+    """
+    Schreibt das VRAM-Limit nach ``config.json``.
+
+    Audit 2026-08-05 (H-4/T3.6): ``update_max_vram`` wirkte ausschliesslich
+    im Speicher, und die WPF-Seite legte den Wert nur in ihrer eigenen
+    ``settings.json`` ab. ``config.json::hardware.vram_limit_mb`` blieb auf 0,
+    und ``VRAMBudgetManager._detect_vram_limit`` liest beim naechsten Start
+    genau diesen Wert — die vom User bewusst gesetzte Drosselung war nach jedem
+    Backend-Neustart still verschwunden.
+
+    Fehler beim Persistieren duerfen die Laufzeit-Aenderung nicht zuruecknehmen:
+    das Limit gilt dann fuer diese Session, nur eben nicht dauerhaft.
+    """
+    try:
+        from pb_studio.config_manager import ConfigManager
+
+        config = ConfigManager()
+        hardware = dict(config.get("hardware", {}) or {})
+        if int(hardware.get("vram_limit_mb", 0) or 0) == int(limit_mb):
+            return
+        hardware["vram_limit_mb"] = int(limit_mb)
+        config.set("hardware", hardware)
+        logger.info(
+            "VRAM-Limit dauerhaft in config.json gespeichert: %d MB", limit_mb
+        )
+    except Exception as exc:  # noqa: BLE001 - Persistenz ist nicht kritisch
+        logger.warning(
+            "VRAM-Limit konnte nicht dauerhaft gespeichert werden "
+            "(gilt nur fuer diese Session): %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
+
 @router.post(
     "/vram/limit",
     response_model=VramLimitResponse,
@@ -100,6 +135,7 @@ async def update_vram_limit(
     try:
         manager = get_vram_manager()
         manager.update_max_vram(payload.limit_mb)
+        _persist_vram_limit(payload.limit_mb)
         stats = manager.get_stats()
     except ValueError as val_exc:
         logger.warning(f"VRAM-Limit-Aenderung abgelehnt: {val_exc}")

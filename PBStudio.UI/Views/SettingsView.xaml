@@ -45,9 +45,20 @@
                                     AutomationProperties.HelpText="Entlädt nur inaktive, freigabefähige KI-Modelle und meldet den bestätigten Cleanup-Status."
                                     AutomationProperties.AcceleratorKey="Strg+Umschalt+G">
                                 <StackPanel Orientation="Horizontal">
+                                    <!-- Audit 2026-08-05 (H-1/T3b.2): IsCleaningGpu war
+                                         an kein XAML-Element gebunden — der laufende
+                                         Cleanup war unsichtbar. Das Broom-Icon weicht
+                                         waehrend der Operation einem Spinner. -->
                                     <icon:PackIconMaterial Kind="Broom" Width="14" Height="14"
-                                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="Cleanup" VerticalAlignment="Center" FontSize="11"/>
+                                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                                           Visibility="{Binding IsCleaningGpu, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                    <icon:PackIconMaterial Kind="Loading" Width="14" Height="14"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                                           Visibility="{Binding IsCleaningGpu, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <TextBlock Text="Cleanup" VerticalAlignment="Center" FontSize="11"
+                                               Visibility="{Binding IsCleaningGpu, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                    <TextBlock Text="Raeume auf..." VerticalAlignment="Center" FontSize="11"
+                                               Visibility="{Binding IsCleaningGpu, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>

@@ -330,6 +330,13 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         try
         {
             var resp = await _api.TestModelAsync(card.Name, card.Provider).ConfigureAwait(true);
+            // Audit 2026-08-05 (H-2/T3.10): Der Auswahl-Beleg wird jetzt vom
+            // Backend mitgeliefert und angezeigt — vorher landete er nur im
+            // backend.log, das bis zu diesem Audit nicht einmal ein Datum im
+            // Zeitstempel hatte. Gilt auch im Fehlerfall: gerade dann ist
+            // interessant, welches Modell mit welchen Capabilities gewaehlt wurde.
+            card.SelectionReceiptText = FormatSelectionReceipt(resp?.SelectionReceipt);
+
             if (resp != null && resp.Success)
             {
                 card.TestStatus = $"Erfolgreich ({resp.LatencyMs:F0} ms)";
@@ -351,6 +358,29 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         {
             card.IsTesting = false;
         }
+    }
+
+    /// <summary>
+    /// Formatiert den Auswahl-Beleg fuer die Anzeige auf der Modell-Karte.
+    /// Leerer String, wenn kein Receipt geliefert wurde — dann bleibt der
+    /// Bereich in der UI ausgeblendet statt eine Leerzeile zu zeigen.
+    /// </summary>
+    private static string FormatSelectionReceipt(ModelSelectionReceipt? receipt)
+    {
+        if (receipt is null || string.IsNullOrWhiteSpace(receipt.ModelId))
+            return string.Empty;
+
+        var verified = receipt.VerifiedCapabilities is { Count: > 0 }
+            ? string.Join("+", receipt.VerifiedCapabilities)
+            : "keine";
+        var required = receipt.RequiredCapabilities is { Count: > 0 }
+            ? string.Join("+", receipt.RequiredCapabilities)
+            : "keine";
+
+        return $"Gewaehlt: {receipt.ModelId} ({receipt.Provider}) · "
+               + $"Task {receipt.Task}/{receipt.Mode} · "
+               + $"benoetigt {required}, verifiziert {verified} · "
+               + $"Quelle {receipt.Source}";
     }
 
     private async Task StreamPullAsync(string name, DownloadProgressViewModel vm, CancellationToken ct)
@@ -406,7 +436,20 @@ public partial class InstalledModelCardViewModel : ObservableObject
     public string ModifiedDisplay { get; }
     public string ParameterSize { get; }
     public string Quantization { get; }
-    
+
+    /// <summary>
+    /// Kontextfenster in Tokens, formatiert. Audit 2026-08-05 (H-3): LM Studio
+    /// liefert diese Zahl, sie wurde aber auf drei Schichten hintereinander
+    /// verworfen. Der Chat-Agent verweist im Fehlerfall selbst darauf
+    /// ("Verlauf kuerzen oder groesseres Kontextfenster waehlen") — der User
+    /// konnte den Rat nicht befolgen, weil die Zahl nirgends stand.
+    /// </summary>
+    public string ContextWindowDisplay { get; }
+
+    /// <summary>Architektur laut LM Studio (z.B. "qwen35", "granitehybrid").</summary>
+    public string ArchitectureDisplay { get; }
+
+
     [ObservableProperty] private string _description = "—";
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private string _activeTasksText = "—";
@@ -419,6 +462,12 @@ public partial class InstalledModelCardViewModel : ObservableObject
     [ObservableProperty] private string _providerBadgeText = "LM STUDIO";
     [ObservableProperty] private string _stateText = "NICHT VERIFIZIERT";
     [ObservableProperty] private string _statusReason = "";
+
+    /// <summary>
+    /// Auswahl-Beleg des letzten Smoke-Tests (Audit 2026-08-05, H-2). Leer,
+    /// solange kein Test gelaufen ist — die Anzeige bleibt dann ausgeblendet.
+    /// </summary>
+    [ObservableProperty] private string _selectionReceiptText = "";
     public bool Vision { get; }
     public bool Loaded { get; }
     public bool Usable { get; }
@@ -434,7 +483,14 @@ public partial class InstalledModelCardViewModel : ObservableObject
         ParameterSize = entry.ParameterSize ?? "—";
         Quantization = entry.QuantizationLevel ?? "—";
         ModifiedDisplay = FormatTimestamp(entry.ModifiedAt);
-        
+        ContextWindowDisplay = entry.ContextLength is > 0
+            ? $"{entry.ContextLength.Value:N0} Tokens"
+            : "—";
+        ArchitectureDisplay = string.IsNullOrWhiteSpace(entry.Architecture)
+            ? "—"
+            : entry.Architecture;
+
+
         Description = entry.Description ?? "—";
         IsActive = entry.IsActive;
         Vision = entry.Vision;

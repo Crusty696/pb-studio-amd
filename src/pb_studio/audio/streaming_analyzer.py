@@ -673,9 +673,14 @@ class StreamingAudioAnalyzer:
                 mask = (frequencies >= low) & (frequencies < high)
                 value = float(np.mean(np.sum(stft[mask, start:end], axis=0)))
                 band_points[band_name].append(value)
+        # Audit 2026-08-05 (CRIT-AUDIO-1/T2.4): auch der Streaming-Pfad muss die
+        # Aggregate low/mid/high liefern — sonst haetten ausgerechnet lange
+        # DJ-Mixe (>10 min) kein bass-/hoehengewichtetes Pacing.
+        from .spectral_analyzer import add_aggregate_bands
+
         return {
             "times": times,
-            "bands": band_points,
+            "bands": add_aggregate_bands(band_points),
             "centroids": centroid_points,
             "chroma_mean": np.mean(chroma, axis=1).tolist(),
             "chroma_weight": chroma.shape[1],

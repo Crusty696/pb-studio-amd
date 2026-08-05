@@ -49,15 +49,26 @@ def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> No
     _status_publisher = fn
 
 
-def _publish_status(model: str, status: str, percent: float) -> None:
-    """Best-effort llm_status-Event. Darf NIE die Explain-Generierung abbrechen."""
+def _publish_status(
+    model: str,
+    status: str,
+    percent: float,
+    provider: str | None = None,
+) -> None:
+    """
+    Best-effort llm_status-Event. Darf NIE die Explain-Generierung abbrechen.
+
+    Audit 2026-08-05 (H-4): ``provider`` war fest auf "LM Studio" verdrahtet und
+    zeigte damit auch bei Ollama-Antworten das falsche Backend an. Ohne Angabe
+    bleibt das Feld leer, damit die UI ihren neutralen Default nutzt.
+    """
     fn = _status_publisher
     if fn is None:
         return
     try:
         fn("llm_status", {
             "model": model,
-            "provider": "LM Studio",
+            "provider": provider or "",
             "status": status,
             "percent": percent,
         })
@@ -415,7 +426,9 @@ async def _async_generate_explanation(
         receipt_client: LMStudioClient,
         receipt: ModelSelectionReceipt,
     ) -> str:
-        _publish_status(receipt.model_id, "loading", 50.0)
+        _publish_status(
+            receipt.model_id, "loading", 50.0, provider=receipt.provider
+        )
         response = await asyncio.wait_for(
             receipt_client.chat(
                 model=receipt.model_id,
@@ -434,11 +447,17 @@ async def _async_generate_explanation(
         raw = message.get("content") or response.get("response") or ""
         text = _post_process_narrative(str(raw))
         if not text:
-            _publish_status(receipt.model_id, "failed", 0.0)
+            _publish_status(
+                receipt.model_id, "failed", 0.0, provider=receipt.provider
+            )
             raise _EmptyNarrativeError(
                 f"Leere Narrator-Antwort von {receipt.model_id!r}"
             )
-        _publish_status(receipt.model_id, "active", 100.0)
+        # Audit 2026-08-05 (M-5): "idle" statt "active" -- die Erklaerung ist
+        # fertig, es laeuft nichts mehr. "active" blieb sonst dauerhaft stehen.
+        _publish_status(
+            receipt.model_id, "idle", 100.0, provider=receipt.provider
+        )
         return text
 
     try:

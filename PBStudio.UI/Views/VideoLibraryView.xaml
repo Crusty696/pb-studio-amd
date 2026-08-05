@@ -160,6 +160,27 @@
                             AutomationProperties.Name="Alle Video-Clips markieren"
                             AutomationProperties.AcceleratorKey="Strg+A"/>
 
+                    <!-- Audit 2026-08-05 (H-1/T3b.2): IsDeleting und IsLoadingClips
+                         hatten kein XAML-Element. Laufende Batch-Loeschungen und
+                         das initiale Laden der Bibliothek waren fuer den User
+                         unsichtbar. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0"
+                                Visibility="{Binding IsDeleting, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="Loading" Width="14" Height="14"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"
+                                               Foreground="{StaticResource AbletonAccent}"/>
+                        <TextBlock Text="Loesche..." VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0"
+                                Visibility="{Binding IsLoadingClips, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="Loading" Width="14" Height="14"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"
+                                               Foreground="{StaticResource AbletonAccent}"/>
+                        <TextBlock Text="Lade Bibliothek..." VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
+
                     <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ToolbarBtn}"
                             ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die ausgewählten Videos vollständig aus der Datenbank und dem Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt."
                             AutomationProperties.Name="Markierte Video-Clips löschen"

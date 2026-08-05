@@ -40,6 +40,72 @@ public class ApiClient : IApiClient
         _shutdownCts.Cancel();
     }
 
+    /// <summary>
+    /// Grund des zuletzt fehlgeschlagenen Requests, wie ihn das Backend im
+    /// <c>detail</c>-Feld gemeldet hat. Vor dem Fix wurde dieser Body verworfen,
+    /// wodurch jedes 4xx für User und Log grundlos blieb (Audit 2026-08-05, C-1/T0.1).
+    /// </summary>
+    public string? LastErrorDetail { get; private set; }
+
+    /// <summary>Liest das <c>detail</c>-Feld einer Fehlerantwort und merkt es sich.</summary>
+    private async Task<string?> CaptureErrorDetailAsync(
+        HttpResponseMessage response,
+        CancellationToken token)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            LastErrorDetail = ExtractDetail(raw);
+        }
+        catch (Exception ex) when (!IsExpectedCancellation(ex, token))
+        {
+            LastErrorDetail = null;
+        }
+        return LastErrorDetail;
+    }
+
+    /// <summary>
+    /// Zieht den lesbaren Fehlergrund aus einem FastAPI-Body. <c>detail</c> ist
+    /// entweder ein String (HTTPException) oder eine Liste (Validierungsfehler).
+    /// </summary>
+    private static string? ExtractDetail(string? rawBody)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawBody);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("detail", out var detail))
+            {
+                if (detail.ValueKind == JsonValueKind.String)
+                    return detail.GetString();
+
+                if (detail.ValueKind == JsonValueKind.Array)
+                {
+                    var parts = detail.EnumerateArray()
+                        .Select(item => item.ValueKind == JsonValueKind.Object
+                            && item.TryGetProperty("msg", out var msg)
+                                ? msg.GetString()
+                                : item.ToString())
+                        .Where(part => !string.IsNullOrWhiteSpace(part));
+                    var joined = string.Join("; ", parts);
+                    return string.IsNullOrWhiteSpace(joined) ? null : joined;
+                }
+
+                return detail.ToString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Kein JSON-Body — der Rohtext ist immer noch besser als gar nichts.
+        }
+
+        var trimmed = rawBody.Trim();
+        return trimmed.Length > 500 ? trimmed[..500] : trimmed;
+    }
+
     // --- Health ---
 
     public async Task<HealthStatus?> GetHealthAsync()
@@ -812,7 +878,18 @@ public class ApiClient : IApiClient
         try
         {
             using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
+                _logger.LogWarning(
+                    "POST {Url} fehlgeschlagen: {Status} — {Detail}",
+                    url,
+                    (int)response.StatusCode,
+                    detail ?? "(kein Detail im Body)");
+                return null;
+            }
+
+            LastErrorDetail = null;
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
@@ -821,6 +898,7 @@ public class ApiClient : IApiClient
         }
         catch (Exception ex)
         {
+            LastErrorDetail = ex.Message;
             _logger.LogWarning(ex, "POST {Url} fehlgeschlagen", url);
             return null;
         }
@@ -1024,15 +1102,14 @@ public class ApiClient : IApiClient
         object? body,
         CancellationToken cancellationToken = default) where T : class
     {
-        var capability = BackendOwnerCapability.Current;
-        if (string.IsNullOrWhiteSpace(capability))
-        {
-            _logger.LogError(
-                "Owner-Capability fehlt; destruktiver Request {Url} wurde blockiert",
-                url);
-            return null;
-        }
-
+        // Bewusst KEINE Capability-Vorabpruefung mehr an dieser Stelle:
+        // Der Getter liefert null, solange der 10-Sekunden-Watchdog revalidiert
+        // (siehe BackendOwnerCapability, _isVerified wird dabei kurz false).
+        // Die alte Pruefung lief ausserhalb des RevalidationGate und brach Requests
+        // hart ab, die in dieses Fenster fielen — sichtbar als "Button reagiert nicht".
+        // Der OwnerCapabilityRequestHandler wartet am Gate und prueft dort
+        // fail-closed; der Sicherheitsgewinn der Vorabpruefung war also null.
+        // Audit 2026-08-05, H-1/T1.2.
         using var requestCts = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
@@ -1047,7 +1124,18 @@ public class ApiClient : IApiClient
             };
             using var response = await _http.SendAsync(request, token)
                 .ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
+                _logger.LogWarning(
+                    "Owner-authorized POST {Url} fehlgeschlagen: {Status} — {Detail}",
+                    url,
+                    (int)response.StatusCode,
+                    detail ?? "(kein Detail im Body)");
+                return null;
+            }
+
+            LastErrorDetail = null;
             return await response.Content.ReadFromJsonAsync<T>(
                 JsonOptions,
                 token).ConfigureAwait(false);
@@ -1058,6 +1146,7 @@ public class ApiClient : IApiClient
         }
         catch (Exception ex)
         {
+            LastErrorDetail = ex.Message;
             _logger.LogWarning(ex, "Owner-authorized POST {Url} fehlgeschlagen", url);
             return null;
         }
@@ -1277,7 +1366,11 @@ public record VideoAnalysisResult(
     List<string> DominantColors,
     List<string> Tags,
     bool HasEmbedding,
-    int EmbeddingDim = 1152,
+    // Audit 2026-08-05 (H-4): Default war 1152 und damit semantisch invertiert.
+    // Das Backend definiert ausdruecklich "0 = kein Embedding vorhanden"
+    // (video_schemas.py:79). Fehlte das Feld im Response, meldete die WPF-Seite
+    // also "Embedding vorhanden" statt "keins".
+    int EmbeddingDim = 0,
     List<SceneInfo>? Scenes = null,
     MotionData? Motion = null,
     int EmbeddingSamples = 0,

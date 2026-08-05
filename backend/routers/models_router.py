@@ -118,6 +118,15 @@ class ModelListEntry(BaseModel):
     inventory_sources: list[str] = Field(default_factory=list)
     verified_at: str = ""
     status_reason: str = ""
+    # Audit 2026-08-05 (H-3/T3.9): Diese vier Felder liefert LM Studio
+    # nachweislich, sie wurden aber auf drei Schichten hintereinander
+    # abgeschnitten und erreichten die Modell-Karte nie. Das Kontextfenster ist
+    # dabei die praktisch wichtigste Zahl: der Chat-Agent verweist im Fehlerfall
+    # selbst darauf ("Verlauf kuerzen oder groesseres Kontextfenster waehlen").
+    context_length: Optional[int] = None
+    architecture: Optional[str] = None
+    publisher: Optional[str] = None
+    runtime_state: Optional[str] = None
 
 
 class ProviderStatusEntry(BaseModel):
@@ -232,11 +241,37 @@ class TestRequest(BaseModel):
     provider: Optional[str] = Field(default=None, description="lmstudio|ollama")
 
 
+class ModelSelectionReceiptSchema(BaseModel):
+    """
+    Nachvollziehbarkeits-Beleg der Modellauswahl.
+
+    Audit 2026-08-05 (H-2/T3.10): Der Receipt existierte als vollstaendig
+    strukturiertes, frozen dataclass und wurde ausschliesslich per
+    ``logger.info`` ausgegeben — nie persistiert, nie in einer Response, nie in
+    der UI. Die Frage "welches Modell hat DIESE Antwort geliefert, mit welchen
+    Capabilities, aus welcher Quelle" war damit nur ueber backend.log
+    beantwortbar. IRON RULE 10 verlangt genau diese Nachvollziehbarkeit.
+    """
+
+    provider: str
+    model_id: str
+    task: str
+    mode: str
+    required_capabilities: list[str] = Field(default_factory=list)
+    verified_capabilities: list[str] = Field(default_factory=list)
+    source: str
+    reason: str
+    selected_at: str
+
+
 class ModelTestResponse(BaseModel):
     success: bool
     latency_ms: float = 0.0
     response: str = ""
     error: Optional[str] = None
+    # Audit 2026-08-05 (H-2/T3.10): Der Smoke-Test baut den Receipt bereits,
+    # loggte ihn aber nur. Jetzt Teil der Antwort.
+    selection_receipt: Optional[ModelSelectionReceiptSchema] = None
 
 
 def _enrich_model_entry(entry: ModelListEntry) -> ModelListEntry:
@@ -460,6 +495,11 @@ async def list_models(
             verified_at=model.verified_at,
             status_reason=model.status_reason,
             vision="vision" in model.capabilities,
+            # Audit 2026-08-05 (H-3/T3.9)
+            context_length=getattr(model, "context_length", None),
+            architecture=getattr(model, "architecture", None),
+            publisher=getattr(model, "publisher", None),
+            runtime_state=getattr(model, "runtime_state", None),
         )
         enriched = _enrich_model_entry(entry)
         enriched.vision = "vision" in model.capabilities
@@ -1071,6 +1111,19 @@ async def test_model(
         selected_at=datetime.now(timezone.utc).isoformat(),
     )
     logger.info("ModelSelectionReceipt: %s", receipt.to_dict())
+    # Audit 2026-08-05 (H-2/T3.10): Receipt in die Antwort heben, damit die
+    # Auswahl nachvollziehbar wird statt nur im Log zu landen.
+    receipt_schema = ModelSelectionReceiptSchema(
+        provider=receipt.provider,
+        model_id=receipt.model_id,
+        task=receipt.task,
+        mode=receipt.mode,
+        required_capabilities=list(receipt.required_capabilities),
+        verified_capabilities=list(receipt.verified_capabilities),
+        source=receipt.source,
+        reason=receipt.reason,
+        selected_at=receipt.selected_at,
+    )
     client = get_llm_client(provider=selected.provider)
 
     start_time = time.perf_counter()
@@ -1088,7 +1141,8 @@ async def test_model(
         return ModelTestResponse(
             success=True,
             latency_ms=round(latency, 1),
-            response=response_text.strip() or "OK"
+            response=response_text.strip() or "OK",
+            selection_receipt=receipt_schema,
         )
     except Exception as exc:
         latency = (time.perf_counter() - start_time) * 1000.0
@@ -1097,6 +1151,9 @@ async def test_model(
             success=False,
             latency_ms=round(latency, 1),
             error=f"Modell-Smoke-Test fehlgeschlagen ({type(exc).__name__}).",
+            # Auch im Fehlerfall: gerade dann ist interessant, WELCHES Modell
+            # mit welchen Capabilities ausgewaehlt wurde.
+            selection_receipt=receipt_schema,
         )
 
 

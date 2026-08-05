@@ -514,6 +514,106 @@ async def delete_clips_batch(
     return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
 
 
+def _band_stft_params(
+    sr: int,
+    fmin: float,
+    fmax: float | None,
+    max_mels: int = 64,
+) -> tuple[int, int]:
+    """
+    Waehlt ``n_fft`` und ``n_mels`` passend zur Bandbreite.
+
+    Audit 2026-08-05 (M-2): Eine feste Filterzahl ueber ein schmales Band
+    erzeugt leere Mel-Filter — das Band liefert dann keine oder eine
+    unbrauchbare Onset-Envelope. Regel: erst die FFT-Auflousung so waehlen,
+    dass genug Bins im Band liegen, dann hoechstens halb so viele Filter wie
+    Bins vergeben.
+
+    Returns:
+        ``(n_fft, n_mels)`` — ``n_fft`` als Zweierpotenz, ``n_mels`` mindestens 4.
+    """
+    upper = float(fmax) if fmax else float(sr) / 2.0
+    span = max(1.0, upper - float(fmin))
+
+    n_fft = 2048
+    # Mindestens 24 Bins im Band anstreben, aber nicht ueber 8192 gehen.
+    while n_fft < 8192 and (span / (sr / n_fft)) < 24.0:
+        n_fft *= 2
+
+    bins_in_band = max(1, int(span / (sr / n_fft)))
+    n_mels = max(4, min(max_mels, bins_in_band // 2))
+    return n_fft, n_mels
+
+
+async def _store_audio_embedding_in_brain_cache(
+    *,
+    audio_path: str,
+    audio_hash: str | None,
+) -> None:
+    """
+    Erzeugt das CLAP-Audio-Embedding und legt es im Brain-EmbeddingCache ab.
+
+    Audit 2026-08-05 (C-3/H-5): Der Lesepfad existierte laengst
+    (``post_processor._load_audio_embedding``), der Schreibpfad nie. Ohne
+    Audio-Embedding meldet ``feature_adapter._semantic_availability`` bestenfalls
+    ``partial`` und die Bruecke ``semantic_match_weight`` faellt komplett aus dem
+    Score — sie fehlte empirisch in allen 2576 persistierten Cuts.
+
+    Bewusst best-effort: schlaegt die Berechnung fehl (Asset fehlt, GPU belegt),
+    bleibt die Audio-Analyse gueltig. Kein CPU-Fallback (IRON RULE 1) — CLAP
+    laeuft ueber DirectML oder gar nicht.
+    """
+    if not audio_hash:
+        logger.debug("CLAP-Cache-Write uebersprungen: kein audio_hash")
+        return
+
+    try:
+        from pb_studio.audio import audio_embedder
+        from pb_studio.brain.brain_service import BrainService
+
+        cache = getattr(BrainService.get().brain, "cache", None)
+        if cache is None:
+            return
+
+        existing = cache.lookup(
+            str(audio_hash),
+            audio_embedder.CURRENT_MODEL_NAME,
+            audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        if existing is not None:
+            return
+
+        from pb_studio.ai.clap_wrapper import CLAPAnalyzer
+
+        analyzer = CLAPAnalyzer()
+        embedding = await asyncio.to_thread(analyzer.encode_audio, audio_path)
+        if embedding is None:
+            logger.info(
+                "CLAP-Audio-Embedding nicht verfuegbar fuer %s — "
+                "Semantik-Achse bleibt fuer diesen Clip unavailable",
+                Path(audio_path).name,
+            )
+            return
+
+        cache.store(
+            media_hash=str(audio_hash),
+            media_type="audio",
+            embedding=embedding,
+            model_name=audio_embedder.CURRENT_MODEL_NAME,
+            model_version=audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        logger.info(
+            "CLAP-Audio-Embedding im Brain-Cache abgelegt (dim=%d)",
+            int(getattr(embedding, "size", 0)),
+        )
+    except Exception as exc:  # noqa: BLE001 - darf die Analyse nie abbrechen
+        logger.warning(
+            "CLAP-Cache-Write fehlgeschlagen (Analyse bleibt gueltig): %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
+
 @router.post(
     "/analyze",
     response_model=AudioAnalysisResult,
@@ -610,6 +710,17 @@ async def _analyze_audio_in_context(
         analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
         if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
             clip["duration_seconds"] = analysis_dur
+
+        # Audit 2026-08-05 (C-3/H-5, T3.4): CLAP-Audio-Embedding erzeugen und in
+        # den Brain-Cache schreiben. Bis hierher existierte KEIN Producer fuer
+        # Audio-Embeddings — `EmbeddingCache.store(media_type="audio", ...)` kam
+        # ausschliesslich in Tests vor. Zusammen mit der fehlenden Video-Seite
+        # war das der Grund, warum `semantic_match_weight` in 0 von 2576 Cuts
+        # auftauchte und der Cross-Modal-Projektor nie Trainingspaare bekam.
+        await _store_audio_embedding_in_brain_cache(
+            audio_path=audio_path,
+            audio_hash=clip.get("audio_hash"),
+        )
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
         import json as _json
@@ -1290,23 +1401,38 @@ def _run_audio_analysis(
             logger.warning(f"Onset-Detection fehlgeschlagen: {e}")
         try:
             _hop = 512
+            # Audit 2026-08-05 (M-2/HIGH-AUDIO-1): Hier standen fuer alle drei
+            # Baender fest 64 Mel-Filter. Bei sr=22050 und n_fft=2048 ist ein
+            # FFT-Bin ~10,8 Hz breit — fuer das Kick-Band (20-150 Hz) stehen
+            # damit nur ~12 Bins zur Verfuegung. 64 Filter darauf ergeben eine
+            # degenerierte Filterbank; librosa warnt mit "Empty filters detected
+            # in mel frequency basis". Empirisch: kick_times war in 4 von 6
+            # Rows leer, und onset/snare/hihat kollabierten auf identische
+            # Trefferzahlen (15/15/15) — die Bandtrennung fand faktisch nicht
+            # statt. Filterzahl und FFT-Groesse haengen jetzt an der Bandbreite.
+            _kick_fft, _kick_mels = _band_stft_params(sr, 20.0, 150.0)
             kick_env = librosa.onset.onset_strength(
                 y=librosa.effects.preemphasis(y), sr=sr, hop_length=_hop,
-                aggregate=np.median, fmax=150, n_mels=64,
+                aggregate=np.median, fmax=150,
+                n_fft=_kick_fft, n_mels=_kick_mels,
             )
             kick_times = librosa.frames_to_time(
                 librosa.onset.onset_detect(onset_envelope=kick_env, sr=sr, hop_length=_hop),
                 sr=sr, hop_length=_hop,
             ).tolist()
+            _snare_fft, _snare_mels = _band_stft_params(sr, 200.0, 400.0)
             snare_env = librosa.onset.onset_strength(
-                y=y, sr=sr, hop_length=_hop, fmin=200, fmax=400, n_mels=64,
+                y=y, sr=sr, hop_length=_hop, fmin=200, fmax=400,
+                n_fft=_snare_fft, n_mels=_snare_mels,
             )
             snare_times = librosa.frames_to_time(
                 librosa.onset.onset_detect(onset_envelope=snare_env, sr=sr, hop_length=_hop),
                 sr=sr, hop_length=_hop,
             ).tolist()
+            _hihat_fft, _hihat_mels = _band_stft_params(sr, 5000.0, None)
             hihat_env = librosa.onset.onset_strength(
-                y=y, sr=sr, hop_length=_hop, fmin=5000, n_mels=64,
+                y=y, sr=sr, hop_length=_hop, fmin=5000,
+                n_fft=_hihat_fft, n_mels=_hihat_mels,
             )
             hihat_times = librosa.frames_to_time(
                 librosa.onset.onset_detect(onset_envelope=hihat_env, sr=sr, hop_length=_hop),
@@ -1352,7 +1478,11 @@ def _run_audio_analysis(
     spectral_data = None
     if request.spectral_analysis:
         try:
-            from pb_studio.audio.spectral_analyzer import SpectralAnalyzer, FREQUENCY_BANDS
+            from pb_studio.audio.spectral_analyzer import (
+                SpectralAnalyzer,
+                FREQUENCY_BANDS,
+                add_aggregate_bands,
+            )
             if _use_streaming:
                 if _stream_features is None or not _stream_features.spectral_times:
                     raise RuntimeError("Streaming-Spektralrepräsentation ist leer")
@@ -1379,10 +1509,16 @@ def _run_audio_analysis(
                 }
             else:
                 spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
+            # Audit 2026-08-05 (CRIT-AUDIO-1/T2.4): Aggregate low/mid/high
+            # ergaenzen — die Pacing-Engine liest genau diese drei Namen, der
+            # Analyzer lieferte nur die acht Einzelbaender.
+            _spec_bands = add_aggregate_bands(
+                dict(spec_result.get("band_energies", {}) or {})
+            )
             spectral_data = {
                 "clip_id": clip_id,
                 "times": spec_result.get("times", []),
-                "bands": spec_result.get("band_energies", {}),
+                "bands": _spec_bands,
                 "centroids": spec_result.get("centroids", []),
                 "frequency_ranges": {k: list(v) for k, v in FREQUENCY_BANDS.items()},
                 # L-AUDIO-4 / Z4: Drop/Buildup/Breakdown-Events + Band-Statistik

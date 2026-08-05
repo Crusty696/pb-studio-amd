@@ -54,6 +54,38 @@ VALID_MODEL_CAPABILITIES = frozenset({
     MODEL_CAPABILITY_EMBEDDING,
 })
 
+# Audit 2026-08-05 (C-2): LM Studio meldet audio.cpp-basierte GGUFs mit
+# ``type="vlm"``. Das ist ein Upstream-Mislabeling — es sind reine
+# Audio-Generierungsmodelle ohne Chat- und ohne Vision-Faehigkeit. Live belegt:
+#   audio-cpp/audio.cpp-gguf/stable-audio-3-medium-f16.gguf | type=vlm | arch=audiocpp
+#   audio-cpp/audio.cpp-gguf/vevo2-f16.gguf                 | type=vlm | arch=audiocpp
+# Ein Chat-Request darauf endet mit
+#   "Engine protocol runtime llama-server ... exited before becoming healthy".
+_AUDIO_GENERATION_ARCHS = frozenset({"audiocpp", "audio.cpp"})
+_AUDIO_GENERATION_ID_TOKENS = (
+    "audio-cpp/",
+    "audio.cpp",
+    "stable-audio",
+    "vevo",
+)
+
+
+def _is_audio_generation_model(name: str, arch: str = "") -> bool:
+    """
+    True fuer reine Audio-Generierungsmodelle, die faelschlich als ``vlm``
+    ausgeliefert werden.
+
+    Die Architektur ist das verlaessliche Signal; die ID-Token sind der
+    Rueckfall, falls ``arch`` fehlt (z.B. beim OpenAI-kompatiblen
+    ``/v1/models``-Endpoint, der weder ``type`` noch ``arch`` liefert).
+    """
+    arch_normalized = (arch or "").strip().lower()
+    if arch_normalized in _AUDIO_GENERATION_ARCHS:
+        return True
+
+    name_normalized = (name or "").strip().lower()
+    return any(token in name_normalized for token in _AUDIO_GENERATION_ID_TOKENS)
+
 
 class LMStudioError(RuntimeError):
     """Basis-Exception fuer alle LM-Studio-HTTP-Fehler."""
@@ -104,6 +136,16 @@ class LMStudioModelInfo:
     family: Optional[str] = None
     parameter_size: Optional[str] = None
     quantization_level: Optional[str] = None
+    # Audit 2026-08-05 (H-3/T3.9): LM Studio liefert diese Felder nachweislich
+    # ueber /api/v0/models (live geprueft), sie wurden aber bereits hier
+    # verworfen — es gab keinen Traeger. Besonders folgenreich beim
+    # Kontextfenster: der Chat-Agent meldet bei zu langem Verlauf "Verlauf
+    # kuerzen oder groesseres Kontextfenster waehlen", und genau diese Zahl war
+    # in der Oberflaeche nirgends ablesbar.
+    context_length: Optional[int] = None
+    architecture: Optional[str] = None
+    publisher: Optional[str] = None
+    state: Optional[str] = None
 
     @property
     def size_mb(self) -> float:
@@ -471,19 +513,88 @@ class LMStudioClient:
                 f"list_models: ungueltige JSON-Antwort: {exc}"
             ) from exc
         raw_models = payload.get("data") or []
+        # Audit 2026-08-05 (H-3/T3.9): /v1/models ist OpenAI-kompatibel und
+        # liefert weder arch noch max_context_length. Die native API kennt beide.
+        # Best-effort: schlaegt der Zusatzcall fehl, bleiben die Felder None.
+        details = await self._get_native_model_details()
         result = []
         for raw in raw_models:
             name = str(raw.get("id") or raw.get("name") or "unknown")
+            detail = details.get(name, {})
             # OpenAI-Schema kennt size nicht direkt. LM Studio fuegt manchmal
             # owned_by, object, created — nicht hilfreich. Wir lassen size=0.
+            #
+            # Audit 2026-08-05 (C-2/T2.2): Hier stand frueher
+            # ``family=raw.get("type")``. ``type`` ist bei LM Studio aber die
+            # Modell-KLASSE ("llm"/"vlm"/"embeddings"), nicht die Architektur —
+            # die steht in ``arch`` ("qwen35", "granitehybrid", ...). Dadurch
+            # enthielt ``family`` konstant "llm", und der Family-Prefix-Match in
+            # models_router schlug systematisch fehl. ``/v1/models`` liefert
+            # ohnehin weder ``type`` noch ``arch``; wir nehmen was da ist und
+            # raten nicht.
             result.append(LMStudioModelInfo(
                 name=name,
                 size_bytes=0,
                 modified_at=str(raw.get("created") or ""),
                 digest="",
-                family=raw.get("type"),
+                family=raw.get("arch") or detail.get("arch") or None,
+                quantization_level=detail.get("quantization") or None,
+                context_length=detail.get("max_context_length"),
+                architecture=detail.get("arch") or None,
+                publisher=detail.get("publisher") or None,
+                state=detail.get("state") or None,
             ))
         return result
+
+    async def _get_native_model_details(self) -> dict[str, dict[str, Any]]:
+        """
+        Liest die Zusatzmetadaten aus LM Studios nativer ``/api/v0/models``-API.
+
+        Audit 2026-08-05 (H-3/T3.9): Live verifiziert liefert dieser Endpoint pro
+        Modell ``arch``, ``max_context_length``, ``quantization``, ``publisher``
+        und ``state`` — Felder, die das OpenAI-kompatible ``/v1/models`` nicht
+        kennt und die deshalb bisher gar nicht erst eingesammelt wurden.
+
+        Best-effort: bei jedem Fehler ein leeres Mapping, damit die
+        Modellliste selbst nie an den Zusatzdaten scheitert.
+        """
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        try:
+            client = await self._ensure_client()
+            response = await client.get(f"{base}/api/v0/models")
+            if response.status_code != 200:
+                return {}
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.debug(
+                "Native Modelldetails nicht verfuegbar: %s: %r",
+                type(exc).__name__,
+                exc,
+            )
+            return {}
+
+        details: dict[str, dict[str, Any]] = {}
+        for raw in (payload.get("data") or []):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("id") or raw.get("name") or "").strip()
+            if not name:
+                continue
+            context_length = raw.get("max_context_length")
+            details[name] = {
+                "arch": raw.get("arch"),
+                "publisher": raw.get("publisher"),
+                "quantization": raw.get("quantization"),
+                "state": raw.get("state"),
+                "max_context_length": (
+                    int(context_length)
+                    if isinstance(context_length, (int, float))
+                    else None
+                ),
+            }
+        return details
 
     async def get_vision_model_names(self) -> set[str]:
         """Liefert die Namen aller vision-faehigen Modelle (``type == 'vlm'``).
@@ -518,8 +629,16 @@ class LMStudioClient:
                 continue
             if str(raw.get("type") or "").lower() == "vlm":
                 name = str(raw.get("id") or raw.get("name") or "").strip()
-                if name:
-                    vision.add(name)
+                if not name:
+                    continue
+                # Audit 2026-08-05 (C-2/T2.1): gleiche Fehlklassifikation wie in
+                # get_model_capabilities — audio.cpp-GGUFs tragen upstream
+                # type="vlm". Ohne diesen Filter bleiben sie hier weiterhin
+                # "vision-faehig", auch wenn die Capability-Seite sie ausschliesst.
+                arch = str(raw.get("arch") or "").strip().lower()
+                if _is_audio_generation_model(name, arch):
+                    continue
+                vision.add(name)
         return vision
 
     async def get_model_capabilities(self) -> dict[str, frozenset[str]]:
@@ -573,7 +692,22 @@ class LMStudioClient:
                     capabilities.add(MODEL_CAPABILITY_EMBEDDING)
             else:
                 model_type = str(raw.get("type") or "").strip().lower()
-                if model_type == "vlm":
+                arch = str(raw.get("arch") or "").strip().lower()
+                if _is_audio_generation_model(name, arch):
+                    # Audit 2026-08-05 (C-2/T2.1): LM Studio labelt audio.cpp-GGUFs
+                    # upstream als type="vlm". Diese Modelle sind reine
+                    # Audio-Generatoren (stable-audio, vevo2) und koennen weder
+                    # chatten noch Bilder lesen. Ungeprueft uebernommen landeten
+                    # sie als "verifiziert vision-faehig" an Position 1 der
+                    # Failover-Kette und haben 467 Tagging-Versuche mit je ~15 s
+                    # Ladeversuch verbrannt (~2 h). Keine Capability vergeben.
+                    logger.debug(
+                        "Audio-Generierungsmodell ignoriert: name=%s arch=%s type=%s",
+                        name,
+                        arch or "-",
+                        model_type or "-",
+                    )
+                elif model_type == "vlm":
                     capabilities.update({
                         MODEL_CAPABILITY_CHAT,
                         MODEL_CAPABILITY_VISION,

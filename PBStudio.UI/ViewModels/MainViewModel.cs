@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Services;
@@ -53,6 +54,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private Brush _llmStatusColor = Brushes.Gray;
 
+    // Audit 2026-08-05 (C-A): Persistenzfehler-Banner. Das Backend publisht
+    // "persist_error" seit jeher, aber der Event wurde im Filter und im
+    // SSEClient verworfen — der User sah einen fehlgeschlagenen Speichervorgang
+    // nie. Beides ist gefixt, hier liegt die Anzeige.
+    [ObservableProperty]
+    private bool _hasPersistError;
+
+    [ObservableProperty]
+    private string _persistErrorText = string.Empty;
+
     // Review-Fix LOW (2026-07-09): frozen statt pro Event neu allokiert (GC-Churn)
     private static readonly SolidColorBrush LlmLoadingBrush = CreateFrozen(Color.FromRgb(255, 110, 0));
 
@@ -85,6 +96,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.ProgressReceived += OnProgressReceived;
         _sse.GpuStatusReceived += OnGpuStatusReceived;
         _sse.LlmStatusReceived += OnLlmStatusReceived;
+        _sse.PersistErrorReceived += OnPersistErrorReceived;
         // Spec 00010 T004: Latched-reachability fuer Overlay.
         _sse.BackendReachabilityChanged += OnBackendReachabilityChanged;
         _projects.ProjectChanged += OnProjectChanged;
@@ -181,12 +193,55 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 LlmStatusText = "Fehler / Fallback";
                 LlmStatusColor = Brushes.Red;
             }
+            else if (e.Status == "unavailable")
+            {
+                // Audit 2026-08-05 (H-6): Der Vision-Wrapper sendet ausdruecklich
+                // "unavailable" (z.B. Moondream-Caption ohne ONNX-Decoder). Ohne
+                // eigenen Zweig landete das im Default und wurde als "Bereit"
+                // angezeigt — genau die Art Beschoenigung, die IRON RULE 10 verbietet.
+                LlmStatusText = "Nicht verfügbar";
+                LlmStatusColor = Brushes.OrangeRed;
+            }
             else
             {
+                // "idle" und unbekannte Stati: neutral, kein Erfolgsversprechen.
                 LlmStatusText = "Bereit";
                 LlmStatusColor = Brushes.Gray;
             }
         });
+    }
+
+    /// <summary>
+    /// Persistenzfehler sichtbar machen (IRON RULE 10). Zuvor wurde dieser Kanal
+    /// zweifach verworfen, sodass ein fehlgeschlagener Speichervorgang fuer den
+    /// User wie ein Erfolg aussah (Audit 2026-08-05, C-A).
+    /// </summary>
+    private void OnPersistErrorReceived(object? sender, PersistErrorEventArgs e)
+    {
+        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        {
+            var source = string.IsNullOrWhiteSpace(e.Source) ? "Backend" : e.Source;
+            var message = string.IsNullOrWhiteSpace(e.Message)
+                ? "Persistenzfehler ohne Detailangabe"
+                : e.Message;
+
+            PersistErrorText = $"Speicherfehler ({source}): {message}";
+            HasPersistError = true;
+
+            _logger?.LogError(
+                "Persistenzfehler vom Backend: source={Source} message={Message} detail={Detail}",
+                source,
+                message,
+                e.Detail);
+        });
+    }
+
+    /// <summary>Loescht die Persistenzfehler-Anzeige (Button "Verstanden").</summary>
+    [RelayCommand]
+    private void DismissPersistError()
+    {
+        HasPersistError = false;
+        PersistErrorText = string.Empty;
     }
 
     private void OnBackendReachabilityChanged(object? sender, bool reachable)
@@ -246,6 +301,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sse.ProgressReceived -= OnProgressReceived;
         _sse.GpuStatusReceived -= OnGpuStatusReceived;
         _sse.LlmStatusReceived -= OnLlmStatusReceived;
+        _sse.PersistErrorReceived -= OnPersistErrorReceived;
         _sse.BackendReachabilityChanged -= OnBackendReachabilityChanged;
         _projects.ProjectChanged -= OnProjectChanged;
         WeakReferenceMessenger.Default.UnregisterAll(this);

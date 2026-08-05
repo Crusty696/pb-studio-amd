@@ -50,4 +50,13 @@ public record ModelListEntry(
     List<string>? Capabilities = null,
     List<string>? InventorySources = null,
     string VerifiedAt = "",
-    string StatusReason = "");
+    string StatusReason = "",
+    // Audit 2026-08-05 (H-3/T3.9): LM Studio liefert diese Werte nachweislich
+    // ueber /api/v0/models. Sie wurden auf drei Schichten hintereinander
+    // abgeschnitten (Client -> Inventar -> Response) und erreichten die
+    // Modell-Karte nie. ContextLength ist die Zahl, auf die der Chat-Agent im
+    // Fehlerfall selbst verweist.
+    int? ContextLength = null,
+    string? Architecture = null,
+    string? Publisher = null,
+    string? RuntimeState = null);

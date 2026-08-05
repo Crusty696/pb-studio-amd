@@ -743,7 +743,24 @@ async def _start_render_for_project(
     output_p_check = Path(request.output_path).resolve()
     allowed_render = context.project_root
     if not output_p_check.is_relative_to(allowed_render):
-        raise HTTPException(status_code=403, detail="Output-Pfad außerhalb des erlaubten Verzeichnisses")
+        # Audit 2026-08-05 (C-1): Dieses 403 wurde zuvor ohne jede Logzeile
+        # geworfen. Im Backend-Log stand nur das gpu_lock-Paar, der Client
+        # verwarf den detail-Body -- der Export war damit fuer den User und
+        # fuer die Diagnose grundlos blockiert.
+        logger.warning(
+            "Render abgelehnt: Output-Pfad ausserhalb der Projektwurzel. "
+            "output_path=%s aufgeloest=%s erlaubt=%s",
+            request.output_path,
+            output_p_check,
+            allowed_render,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Output-Pfad liegt ausserhalb des Projektverzeichnisses. "
+                f"Gewaehlt: {output_p_check} — erlaubt ist nur: {allowed_render}"
+            ),
+        )
 
     project_db_id = context.project_id
     media_hash, identity_snapshot = await asyncio.to_thread(

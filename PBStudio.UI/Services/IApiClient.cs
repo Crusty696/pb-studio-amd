@@ -9,6 +9,15 @@ namespace PBStudio.UI.Services;
 public interface IApiClient : IDisposable
 {
     void BeginShutdown();
+
+    /// <summary>
+    /// Grund des zuletzt fehlgeschlagenen Requests aus dem <c>detail</c>-Feld des
+    /// Backend-Body. Vor dem Fix (Audit 2026-08-05, C-1) wurde dieser Body verworfen —
+    /// jedes 4xx blieb dadurch fuer User und Log grundlos. ViewModels sollen diesen
+    /// Text anzeigen statt einer generischen Fehlermeldung.
+    /// </summary>
+    string? LastErrorDetail { get; }
+
     Task<T?> GetAsync<T>(string url, CancellationToken ct = default) where T : class;
 
     // --- Health ---

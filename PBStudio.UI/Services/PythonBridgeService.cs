@@ -356,19 +356,69 @@ public class PythonBridgeService : IDisposable
     {
         _ = Task.Run(async () =>
         {
-            while (_isRunning)
+            // Audit 2026-08-05 (H-2/T1.3): Zuvor stand hier eine Schleife, die bei
+            // JEDEM fehlgeschlagenen Health-/Proof-Check "_isRunning = false" setzte
+            // und dann wegen "if (_isStopping || !_ownsProcess) break;" abbrach —
+            // im Attach-Modus (_ownsProcess == false) also immer. Das Revalidation-
+            // Lease wurde dabei ohne CompleteVerification verworfen, wodurch
+            // _isVerified permanent false blieb: die gesamte API war bis zum
+            // App-Neustart tot, und zwar OHNE einen einzigen Logeintrag, weil das
+            // LogWarning erst NACH dem break stand.
+            //
+            // Jetzt: im Attach-Modus weiter revalidieren statt aufgeben, mit
+            // Backoff und sichtbarer Meldung. Erholt sich das Backend, wird der
+            // Zustand aktiv zurueckgesetzt.
+            var consecutiveFailures = 0;
+
+            while (!_isStopping)
             {
-                await Task.Delay(10_000).ConfigureAwait(false);
+                var delayMs = _isRunning
+                    ? 10_000
+                    : Math.Min(10_000 * Math.Max(1, consecutiveFailures), 60_000);
+                await Task.Delay(delayMs).ConfigureAwait(false);
+
+                if (_isStopping)
+                    break;
+
                 if (await IsBackendOwnedHealthyAsync().ConfigureAwait(false))
                 {
+                    if (!_isRunning)
+                    {
+                        // Backend ist zurueck — Zustand wiederherstellen statt
+                        // dauerhaft im Fehlerzustand zu verharren.
+                        _isRunning = true;
+                        consecutiveFailures = 0;
+                        _logger.LogInformation(
+                            "Python Backend wieder erreichbar und Owner-Proof gueltig — Verbindung wiederhergestellt");
+                        StatusChanged?.Invoke(this, true);
+                    }
+                    else
+                    {
+                        consecutiveFailures = 0;
+                    }
                     continue;
                 }
 
+                consecutiveFailures++;
+                var wasRunning = _isRunning;
                 _isRunning = false;
-                StatusChanged?.Invoke(this, false);
+                if (wasRunning)
+                    StatusChanged?.Invoke(this, false);
 
-                if (_isStopping || !_ownsProcess)
+                if (_isStopping)
                     break;
+
+                if (!_ownsProcess)
+                {
+                    // Log VOR dem frueheren break — diese Zeile war bisher
+                    // strukturell unerreichbar.
+                    _logger.LogWarning(
+                        "Externes Python Backend nicht erreichbar oder Owner-Proof ungueltig "
+                        + "(Versuch {Attempt}) — revalidiere weiter, kein Prozess-Neustart "
+                        + "da fremder Prozess",
+                        consecutiveFailures);
+                    continue;
+                }
 
                 _logger.LogWarning("Python Backend Health- oder Owner-Proof verlorengegangen – starte owned Prozess neu...");
                 var process = _pythonProcess;

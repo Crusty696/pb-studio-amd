@@ -150,9 +150,15 @@ class CanonicalFeatureAdapter:
         video = self.video_by_clip.get(str(clip_id), {})
         nested = video.get("motion") or {}
         values = video.get("motion_curve")
-        if values is None and isinstance(nested, dict):
+        # Audit 2026-08-05 (H-7/T2.5): Der Fallback prueft auf "is None", der
+        # Top-Level-Key ist aber ein Migrations-Default `[]` — also nicht None,
+        # sondern leer. Der Fallback auf die verschachtelte, real gefuellte
+        # Variante griff dadurch NIE: das Brain sah bei allen 1359 analysierten
+        # Clips leere Motion-Kurven, obwohl die Daten direkt danebenlagen.
+        # Truthiness statt Identitaetsvergleich (PEP 8: leere Sequenzen sind falsy).
+        if not values and isinstance(nested, dict):
             values = nested.get("motion_curve")
-        if values is None:
+        if not values:
             return []
         return [
             _clip01(_finite_float(value, 0.0) / self.motion_scale)

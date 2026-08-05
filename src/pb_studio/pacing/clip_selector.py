@@ -635,22 +635,83 @@ class ClipSelector:
         diff = abs(motion_norm - intensity)
         return 1.0 - diff
 
+    def _embedding_from_vector_store(self, target_absolute: str):
+        """
+        Holt den Vektor eines Clips direkt aus dem VectorStore.
+
+        Audit 2026-08-05 (H-4): Ersetzt die Abhaengigkeit von ``clip_cache``,
+        der produktiv nie befuellt wird. Die FAISS-Metadaten tragen den Pfad
+        bereits; der Vektor selbst laesst sich per ``reconstruct`` zurueckholen.
+
+        Returns:
+            Den Vektor oder ``None``, wenn der Clip nicht im Index liegt.
+        """
+        store = self.vector_store
+        metadata = getattr(store, "metadata", None)
+        index = getattr(store, "index", None)
+        if not metadata or index is None:
+            return None
+
+        tombstoned = set(getattr(store, "tombstoned_ids", set()) or set())
+        for faiss_id, meta in list(metadata.items()):
+            if not isinstance(meta, dict):
+                continue
+            raw_path = meta.get("path") or meta.get("file_path")
+            if not raw_path:
+                continue
+            try:
+                if str(Path(raw_path).absolute()) != target_absolute:
+                    continue
+            except (OSError, ValueError):
+                continue
+            try:
+                numeric_id = int(faiss_id)
+            except (TypeError, ValueError):
+                continue
+            if numeric_id in tombstoned:
+                continue
+            try:
+                return index.reconstruct(numeric_id)
+            except Exception as exc:  # noqa: BLE001 - defekte ID ueberspringen
+                logger.debug(
+                    "Vektor-Rekonstruktion fuer faiss_id=%s fehlgeschlagen: %r",
+                    numeric_id,
+                    exc,
+                )
+                continue
+        return None
+
     def _get_clip_neighbors(self, target_path: str) -> List[str]:
         """Findet die 10 ähnlichsten Clips für einen bestimmten Clip im Vektorraum (Stufe 4)."""
         if not self.vector_store or not target_path:
             return []
         
+        target_absolute = str(Path(target_path).absolute())
+
         # Finde das Embedding des Target-Clips in unserem cache/index
         target_emb = None
         for metadata in self.clip_cache.values():
-            if str(Path(metadata.file_path).absolute()) == str(Path(target_path).absolute()):
+            if str(Path(metadata.file_path).absolute()) == target_absolute:
                 target_emb = metadata.embedding
                 break
-        
+
         if target_emb is None:
-            # Falls kein direktes Metadatenobjekt, suche über textuelle oder strukturelle Übereinstimmung
+            # Audit 2026-08-05 (H-4): Hier wurde bisher aufgegeben. Der
+            # clip_cache wird produktiv nie befuellt — `ClipSelector.add_clip`
+            # hat repo-weit keinen Aufrufer (nur Tests und Docs). Damit war
+            # target_emb ausnahmslos None, `_get_clip_neighbors` gab immer eine
+            # leere Liste zurueck, und die Bridging-Bonusse von +400 in
+            # `_select_by_motion` konnten nie feuern: das Anker-Bridging existierte
+            # im UI-Konzept, war aber strukturell unerreichbar.
+            #
+            # Der Vektor liegt bereits im VectorStore und ist dort ueber den
+            # Pfad in den Metadaten auffindbar — kein Sekundaercache noetig.
+            target_emb = self._embedding_from_vector_store(target_absolute)
+
+        if target_emb is None:
             return []
-            
+
+
         try:
             results = self.vector_store.search(target_emb, k=10)
             neighbors = []

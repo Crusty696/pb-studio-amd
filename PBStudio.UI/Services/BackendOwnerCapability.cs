@@ -159,9 +159,41 @@ internal static class BackendOwnerCapability
         }
     }
 
+    /// <summary>
+    /// Wartezeit fuer die erste Verifikation nach App-Start.
+    ///
+    /// Audit 2026-08-05 (C/T1.4): Beim Start feuerten ViewModel-Konstruktoren
+    /// Requests, bevor PythonBridgeService die Owner-Verifikation abgeschlossen
+    /// hatte — im Log 53 ms zu frueh. Da das Gate zu diesem Zeitpunkt frei ist,
+    /// wartete niemand: der Aufruf flog sofort mit "not verified" heraus, und es
+    /// gab keinen Retry. Sichtbar als leere Projekt-Info direkt nach dem Start.
+    /// Jetzt wird einmalig auf die Erstverifikation gewartet, statt zu scheitern.
+    /// </summary>
+    private static readonly TimeSpan FirstVerificationTimeout = TimeSpan.FromSeconds(15);
+
+    private static readonly TaskCompletionSource FirstVerification =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public static async ValueTask<RequestLease> AcquireRequestLeaseAsync(
         CancellationToken cancellationToken)
     {
+        // Vor dem Gate warten, nicht darin — sonst blockiert der Wartende genau
+        // die Revalidierung, auf deren Ergebnis er wartet.
+        if (!FirstVerification.Task.IsCompleted)
+        {
+            try
+            {
+                await FirstVerification.Task
+                    .WaitAsync(FirstVerificationTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // Kein Backend in Sicht — unten greift die regulaere
+                // fail-closed-Pruefung mit klarer Meldung.
+            }
+        }
+
         await RevalidationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -200,6 +232,12 @@ internal static class BackendOwnerCapability
         lock (Sync)
         {
             _isVerified = verified;
+        }
+        if (verified)
+        {
+            // Erste erfolgreiche Verifikation entsperrt die beim Start
+            // wartenden Requests (Audit 2026-08-05, T1.4).
+            FirstVerification.TrySetResult();
         }
         RevalidationGate.Release();
     }

@@ -50,18 +50,42 @@ def test_legacy_video_metadata_gets_default_fields():
 def test_legacy_video_ai_data_gets_default_fields():
     legacy = {"scene_count": 5}
     migrated = migrate_video_ai_data(legacy)
-    assert migrated["brightness_curve"] == []
-    assert migrated["saturation_curve"] == []
-    assert migrated["color_temp_curve"] == []
-    assert migrated["motion_curve"] == []
     assert migrated["mood_tags"] == []
-    assert migrated["style_tags"] == []
-    assert migrated["object_tags"] == []
     assert migrated["dominant_colors"] == []
     assert migrated["embedding_dim"] == 0
     assert migrated["embedding_samples"] == 0
     assert migrated["has_embedding"] is False
     assert migrated[SCHEMA_VERSION_KEY] == CURRENT_SCHEMA_VERSION
+
+
+def test_legacy_video_ai_data_has_no_producerless_defaults():
+    """
+    Audit 2026-08-05 (H-1/T5): Diese Felder duerfen nicht mehr als Default
+    angelegt werden.
+
+    Fuenf davon hatten weder Producer noch Consumer — empirisch in 1359
+    analysierten Rows 1359-mal vorhanden und 0-mal gefuellt. Ein Default ohne
+    Producer ist eine Luege: Code, der mit ``.get(feld, [])`` prueft, sieht
+    einen vorhandenen Key und haelt die Praesenz fuer aussagekraeftig.
+
+    ``motion_curve`` war der schaedlichste Fall: der echte Wert liegt
+    verschachtelt unter ``motion.motion_curve``, und der ``is None``-Fallback im
+    Brain-Adapter griff wegen des ``[]``-Defaults nie — das Brain sah dauerhaft
+    leere Motion-Kurven.
+    """
+    migrated = migrate_video_ai_data({"scene_count": 5})
+    for field in (
+        "brightness_curve",
+        "saturation_curve",
+        "color_temp_curve",
+        "style_tags",
+        "object_tags",
+        "motion_curve",
+    ):
+        assert field not in migrated, (
+            f"{field} wird wieder als Migrations-Default angelegt, obwohl es "
+            f"keinen Producer hat. Entweder verdrahten oder Default weglassen."
+        )
 
 
 def test_already_current_version_no_double_migration():

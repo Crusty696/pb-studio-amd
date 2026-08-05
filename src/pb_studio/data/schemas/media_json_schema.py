@@ -132,14 +132,32 @@ def _v0_to_v1_video_metadata(blob: dict[str, Any]) -> dict[str, Any]:
 
 
 def _v0_to_v1_video_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
-    """Legacy -> v1: Defaults fuer Per-Frame-Curves + Tags + Embedding-Dim."""
-    blob.setdefault("brightness_curve", [])
-    blob.setdefault("saturation_curve", [])
-    blob.setdefault("color_temp_curve", [])
-    blob.setdefault("motion_curve", [])
+    """
+    Legacy -> v1: Defaults fuer Tags, Farben und Embedding-Metadaten.
+
+    Audit 2026-08-05 (H-1/T5): Sieben Defaults sind hier entfernt worden.
+
+    Fuenf Felder hatten weder einen Producer noch einen Consumer — verifiziert
+    per repo-weitem Grep (0 Schreibstellen, 0 Lesestellen) und empirisch: in
+    1359 analysierten Rows waren sie 1359-mal vorhanden und 0-mal gefuellt.
+    Ein Audit vom 2026-05-11 (L-VIDEO-4) hatte bereits gefordert, sie entweder
+    zu verdrahten oder zu entfernen; verdrahtet wurden damals nur ``mood_tags``
+    und die ``avg_*``-Felder:
+        brightness_curve, saturation_curve, color_temp_curve,
+        style_tags, object_tags
+
+    Dazu ``motion_curve``: dieser Default war aktiv schaedlich. Der echte Wert
+    liegt verschachtelt unter ``motion.motion_curve``; der Brain-Adapter hatte
+    einen Fallback darauf, prueft aber mit ``is None`` — und ein
+    Migrations-Default ``[]`` ist nicht None. Der Fallback griff deshalb NIE,
+    und das Brain sah bei allen Clips leere Motion-Kurven, obwohl die Daten
+    danebenlagen. Die Truthiness-Pruefung im Adapter ist gefixt (T2.5); ohne
+    diesen Default gibt es das irrefuehrende Duplikat gar nicht mehr.
+
+    ``mood_tags`` bleibt: seit dem 2026-07-10 gibt es dafuer einen echten
+    Producer (``compute_color_features``).
+    """
     blob.setdefault("mood_tags", [])
-    blob.setdefault("style_tags", [])
-    blob.setdefault("object_tags", [])
     blob.setdefault("dominant_colors", [])
     blob.setdefault("embedding_dim", 0)
     blob.setdefault("embedding_samples", 0)

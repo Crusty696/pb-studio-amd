@@ -44,15 +44,28 @@ def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> No
     _status_publisher = fn
 
 
-def _publish_status(model: str, status: str, percent: float) -> None:
-    """Best-effort llm_status-Event. Darf NIE den Chat-Turn abbrechen."""
+def _publish_status(
+    model: str,
+    status: str,
+    percent: float,
+    provider: str | None = None,
+) -> None:
+    """
+    Best-effort llm_status-Event. Darf NIE den Chat-Turn abbrechen.
+
+    Audit 2026-08-05 (H-4): ``provider`` war fest auf "LM Studio" verdrahtet.
+    Antwortete ein Ollama-Modell, zeigte die Statusleiste trotzdem "LM Studio" —
+    Falschinformation, die IRON RULE 10 widerspricht. Der Aufrufer reicht den
+    Provider jetzt aus dem ModelSelectionReceipt durch; ohne Angabe bleibt das
+    Feld leer, damit die UI ihren neutralen Default nutzt statt zu raten.
+    """
     fn = _status_publisher
     if fn is None:
         return
     try:
         fn("llm_status", {
             "model": model,
-            "provider": "LM Studio",
+            "provider": provider or "",
             "status": status,
             "percent": percent,
         })
@@ -432,6 +445,8 @@ class ChatAgent:
         assert self._llm is not None
 
         receipt = self._active_selection_receipt
+        # Audit 2026-08-05 (H-4): Provider aus dem Receipt statt hartkodiert.
+        active_provider = getattr(receipt, "provider", None) or ""
         yield ChatEvent("model", {
             "model": model,
             "provider": getattr(receipt, "provider", None),
@@ -441,7 +456,7 @@ class ChatAgent:
                 receipt.to_dict() if receipt is not None else None
             ),
         })
-        _publish_status(model, "loading", 50.0)
+        _publish_status(model, "loading", 50.0, provider=active_provider)
 
         messages = [{"role": "system", "content": self._system_prompt}]
         if history:
@@ -832,12 +847,19 @@ class ChatAgent:
                             "stage": "summary",
                         })
 
-            _publish_status(model, "active" if final_text else "failed", 100.0 if final_text else 0.0)
+            # Audit 2026-08-05 (M-5): Bei Erfolg wurde "active" gesendet und nie
+            # zurueckgesetzt -- der Statusbalken blieb dauerhaft gruen auf "Aktiv",
+            # auch wenn seit einer halben Stunde nichts lief. Ein beendeter Turn
+            # ist "idle", nicht "active".
+            if final_text:
+                _publish_status(model, "idle", 100.0, provider=active_provider)
+            else:
+                _publish_status(model, "failed", 0.0, provider=active_provider)
             _status_final_published = True
             yield ChatEvent("done", {"final_text": final_text})
         finally:
             if not _status_final_published:
-                _publish_status(model, "failed", 0.0)
+                _publish_status(model, "failed", 0.0, provider=active_provider)
 
 
 __all__ = [

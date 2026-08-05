@@ -123,6 +123,20 @@
                     <Button Command="{Binding DeselectAllCommand}" Style="{StaticResource BatchBtn}"
                             Content="_Keine" Margin="2,0"
                             AutomationProperties.Name="Audio-Auswahl aufheben"/>
+                    <!-- Audit 2026-08-05 (H-1/T3b.2): IsDeleting war an kein
+                         XAML-Element gebunden. Der User klickte "Loeschen" und
+                         bekam bis zum Ende der Batch-Operation keinerlei
+                         Rueckmeldung — genau das Symptom "Buttons reagieren
+                         nicht". Gleiche Klasse wie BrainViewModel-StatusText
+                         und Timeline-StatusText im CHANGELOG. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0"
+                                Visibility="{Binding IsDeleting, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="Loading" Width="12" Height="12"
+                                               VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Foreground="{StaticResource AbletonAccent}"/>
+                        <TextBlock Text="Loesche..." VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,4"/>
                     <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource BatchBtn}"
                              ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die selektierten Songs vollständig aus der Projektdatenbank.&#x0a;• Wozu es dient: Bereinigt die Audiobibliothek. Die Originaldateien auf Ihrer Festplatte bleiben unangetastet.&#x0a;• Wann nutzen: Zum Entfernen nicht mehr benötigter Songs aus dem Projekt."

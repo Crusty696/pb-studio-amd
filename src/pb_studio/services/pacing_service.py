@@ -105,6 +105,50 @@ class PacingService:
             )
             return False, None
 
+    def prime_duration_cache(self, clips: Optional[List[Dict[str, Any]]]) -> int:
+        """
+        Befuellt den Dauer-Cache aus den bereits vorhandenen Clip-Metadaten.
+
+        Audit 2026-08-05 (H-8/T3.12): ``_get_clip_duration`` cachte pro Pfad,
+        aber bei 571 verschiedenen Clips bedeutete das 571 ffprobe-Subprozesse
+        à 50–100 ms — gemessen ~63 der 71 Sekunden eines Pacing-Laufs, nur fuer
+        Metadaten, die der Router aus der DB bereits mitliefert
+        (``duration``/``duration_seconds`` im Clip-Dict).
+
+        Returns:
+            Anzahl der vorbefuellten Eintraege.
+        """
+        if not clips:
+            return 0
+
+        primed = 0
+        for clip in clips:
+            if not isinstance(clip, dict):
+                continue
+            raw_path = clip.get("file_path") or clip.get("path")
+            if not raw_path:
+                continue
+            raw_duration = clip.get("duration", clip.get("duration_seconds"))
+            try:
+                duration = float(raw_duration or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if duration <= 0.0:
+                continue
+
+            key = str(Path(raw_path).absolute())
+            if key not in self._duration_cache:
+                self._duration_cache[key] = duration
+                primed += 1
+
+        if primed:
+            logger.info(
+                "Dauer-Cache aus Clip-Metadaten vorbefuellt: %d Eintraege "
+                "(spart ebenso viele ffprobe-Aufrufe)",
+                primed,
+            )
+        return primed
+
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
         key = str(clip_path)
@@ -139,8 +183,19 @@ class PacingService:
         """Konvertiert Pacing-Cuts zu CutListEntry-Liste."""
         cut_list = []
         for i in range(len(cut_with_clips) - 1):
-            current_cut, clip_path, clip_id = cut_with_clips[i]
-            next_cut, _, _ = cut_with_clips[i + 1]
+            # Audit 2026-08-05 (H-5/T3.11): Die Tupel tragen jetzt ein viertes
+            # Element — die Metadaten des ClipSelectors. Bisher wurden sie beim
+            # Aufbau von cut_with_clips weggeworfen (`(cut, sel.clip_path,
+            # sel.clip_id)`), obwohl _select_via_brain dort Achsen-Scores,
+            # Feature-Provenienz und Semantik-Status hinterlegt hatte. Dass es
+            # trotzdem funktionierte, lag daran, dass annotate_cuts_with_brain
+            # dieselben Werte danach ein ZWEITES Mal berechnet hat — Ursache der
+            # 7,3 Sekunden Brain-Overhead bei 571 Clips.
+            # Aeltere 3er-Tupel bleiben lesbar.
+            entry = cut_with_clips[i]
+            current_cut, clip_path, clip_id = entry[0], entry[1], entry[2]
+            selector_meta = entry[3] if len(entry) > 3 else None
+            next_cut = cut_with_clips[i + 1][0]
 
             if target_duration is not None and current_cut.time >= target_duration:
                 break
@@ -172,6 +227,15 @@ class PacingService:
                 metadata["segment_type"] = current_cut.segment_type
             if getattr(current_cut, "provenance", None):
                 metadata["trigger_provenance"] = dict(current_cut.provenance)
+
+            # Selektor-Metadaten uebernehmen. Der Brain-Post-Processor laeuft
+            # danach und darf gleichnamige Felder ueberschreiben — er hat den
+            # spaeteren, autoritativen Stand. Werte, die er nicht setzt
+            # (brain_scores, feature_provenance), bleiben dadurch erhalten
+            # statt verloren zu gehen.
+            if isinstance(selector_meta, dict):
+                for key, value in selector_meta.items():
+                    metadata.setdefault(key, value)
 
             normalized_clip_id = str(clip_id)
             if not normalized_clip_id.startswith("clip_"):
@@ -688,6 +752,9 @@ class PacingService:
         if not clips:
             logger.warning("Keine Video-Clips vorhanden.")
             return []
+        # Audit 2026-08-05 (H-8/T3.12): siehe generate_cut_list — ffprobe-Flut
+        # durch vorhandene Metadaten ersetzen.
+        self.prime_duration_cache(clips)
         if not stems:
             logger.warning("L-K5: stems leer -> fallback auf generate_cut_list (no-stems)")
             return self.generate_cut_list(
@@ -848,7 +915,9 @@ class PacingService:
                         else 1.0
                     ),
                 )
-                cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+                cut_with_clips.append(
+                    (cut, sel.clip_path, sel.clip_id, getattr(sel, "metadata", None))
+                )
 
                 # Zurücksetzen der Bridge-Variablen
                 pacing_engine.clip_selector.bridging_in_to = None
@@ -905,6 +974,11 @@ class PacingService:
         if not clips:
             logger.warning("Keine Video-Clips vorhanden.")
             return []
+
+        # Audit 2026-08-05 (H-8/T3.12): Dauern aus den mitgelieferten
+        # Clip-Metadaten uebernehmen, statt sie pro Clip per ffprobe-Subprozess
+        # neu zu ermitteln.
+        self.prime_duration_cache(clips)
 
         # 1. Sequencer Cuts (höchste Priorität)
         if sequencer_cuts:
@@ -1182,7 +1256,9 @@ class PacingService:
                             else 1.0
                         ),
                     )
-                    cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+                    cut_with_clips.append(
+                        (cut, sel.clip_path, sel.clip_id, getattr(sel, "metadata", None))
+                    )
 
                     # Zurücksetzen der Bridge-Variablen
                     pacing_engine.clip_selector.bridging_in_to = None

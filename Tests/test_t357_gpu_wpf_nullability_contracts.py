@@ -36,6 +36,30 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _read_generated_dtos() -> str:
+    """
+    Liest die von NSwag generierten DTOs.
+
+    Audit 2026-08-05: Zwei Tests lasen fest ``PBStudio.UI/Generated/ApiTypes.g.cs``.
+    Dieses Verzeichnis ist eine Altlast — in git liegt dort nur ``.gitkeep``,
+    ``nswag.json`` schreibt nach ``obj/Generated/ApiTypes.g.cs``, und die
+    ``.csproj`` schliesst ``Generated\\*.g.cs`` ausdruecklich vom Kompilieren aus.
+    Die Tests prueften also einen Stand, der nicht mehr gebaut wird. Jetzt wird
+    der echte Output bevorzugt, der Legacy-Pfad bleibt Rueckfall.
+    """
+    for candidate in (
+        "PBStudio.UI/obj/Generated/ApiTypes.g.cs",
+        "PBStudio.UI/Generated/ApiTypes.g.cs",
+    ):
+        path = ROOT / candidate
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
+    pytest.skip(
+        "ApiTypes.g.cs nicht gebaut — "
+        "`dotnet build PBStudio.UI/PBStudio.UI.csproj` ausfuehren"
+    )
+
+
 def _method_block(source: str, marker: str, next_marker: str) -> str:
     start = source.index(marker)
     end = source.index(next_marker, start + len(marker))
@@ -322,7 +346,7 @@ def test_settings_gui_binds_every_additive_gpu_truth_field():
     view_model = _read("PBStudio.UI/ViewModels/SettingsViewModel.cs")
     view = _read("PBStudio.UI/Views/SettingsView.xaml")
     schema = json.loads(_read("PBStudio.UI/openapi.snapshot.json"))
-    generated = _read("PBStudio.UI/Generated/ApiTypes.g.cs")
+    generated = _read_generated_dtos()
 
     for dto_field in (
         "AdapterIndex",
@@ -505,7 +529,13 @@ def test_model_provider_identity_is_forwarded_from_card_to_backend():
         in client
     )
     assert '"/models/test"' in client
-    assert "BackendOwnerCapability.Current" in client
+    # Audit 2026-08-05 (H-1): Die frühere Vorabprüfung auf
+    # BackendOwnerCapability.Current lief ausserhalb des RevalidationGate und
+    # brach jeden Request hart ab, der in das 10-Sekunden-Revalidierungsfenster
+    # des Watchdogs fiel ("Button reagiert nicht"). Sie ist entfernt; die
+    # fail-closed-Prüfung findet unter Lease im Handler statt. Der Contract ist
+    # daher: ApiClient darf NICHT mehr vorab prüfen, der Handler MUSS es tun.
+    assert "BackendOwnerCapability.Current" not in client
     assert "AcquireRequestLeaseAsync" in owner_handler
     assert "TryAddWithoutValidation" in owner_handler
     assert "BackendOwnerCapability.HeaderName" in owner_handler
@@ -550,7 +580,7 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
     assert confidence["nullable"] is True
     assert "confidence" not in scene_schema["required"]
 
-    generated = _read("PBStudio.UI/Generated/ApiTypes.g.cs")
+    generated = _read_generated_dtos()
     generated_scene = _method_block(
         generated,
         "public partial class SceneInfo",

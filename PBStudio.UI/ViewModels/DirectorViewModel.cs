@@ -38,6 +38,21 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _maxClipLength = 8.0;
     [ObservableProperty] private double _onsetSensitivity = 0.5;
     [ObservableProperty] private double _minCutInterval = 0.5;
+
+    // Audit 2026-08-05 (H-1/T3.1): Diese drei Felder existieren im
+    // TriggerSettings-Record und werden von der Engine gelesen, wurden vom
+    // ViewModel aber nie gesetzt — der positional record nahm still seine
+    // Defaults an, ohne dass der Compiler warnt. Konsequenz: beat_trigger_mode
+    // ("downbeat_only"/"strong_only") war ueber die Oberflaeche prinzipiell
+    // unerreichbar, und clip_length_variation blieb konstant 0.0, wodurch der
+    // Jitter fuer Auto-Splits dauerhaft deaktiviert war.
+    [ObservableProperty] private double _clipLengthVariation = 0.0;
+    [ObservableProperty] private double _maxCutInterval = 10.0;
+    [ObservableProperty] private string _beatTriggerMode = "all";
+
+    /// <summary>Auswahlwerte fuer den Beat-Trigger-Modus (XAML-ComboBox).</summary>
+    public IReadOnlyList<string> BeatTriggerModes { get; } =
+        new[] { "all", "downbeat_only", "strong_only" };
     [ObservableProperty] private bool _useMotionMatching;
     [ObservableProperty] private bool _useSemanticMatching;
     [ObservableProperty] private bool _useStructureAwareness;
@@ -315,7 +330,12 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     EnergyThreshold: EnergyThreshold,
                     MinClipLength: MinClipLength,
                     MaxClipLength: MaxClipLength,
-                    OnsetSensitivity: OnsetSensitivity
+                    OnsetSensitivity: OnsetSensitivity,
+                    // Audit 2026-08-05 (H-1/T3.1): zuvor ausgelassen -> C#-Defaults
+                    // gewannen still, die Engine-Features waren unerreichbar.
+                    ClipLengthVariation: ClipLengthVariation,
+                    MaxCutInterval: MaxCutInterval,
+                    BeatTriggerMode: BeatTriggerMode
                 ),
                 UseBrain: UseBrain,
                 BrainMinConfidence: BrainMinConfidence,

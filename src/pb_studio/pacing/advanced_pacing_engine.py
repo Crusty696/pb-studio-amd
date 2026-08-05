@@ -1580,7 +1580,32 @@ class AdvancedPacingEngine:
                 stem_triggers.extend(bass_triggers)
                 _emit(75.0, force=True)
 
-        all_triggers = base_cuts + stem_triggers
+        # Audit 2026-08-05 (H-0): Stem-Trigger wurden hier als ZUSAETZLICHE
+        # Kandidaten in die Liste geworfen. Weil die Cut-Anzahl aber bereits
+        # durch min_clip_length gesaettigt ist, konnten 42.188 Stem-Trigger
+        # (27.337 Drums + 14.851 Bass in einem 55-Min-Mix) rechnerisch keinen
+        # einzigen Cut hinzufuegen — sie konnten ueber den Replace-Zweig von
+        # _enforce_minimum_interval nur Zeitpunkte verschieben. Netto kamen
+        # dabei sogar 18 Cuts weniger heraus (2595 -> 2577), weil jede
+        # Ersetzung das Fenster nach vorn schob und einen nachfolgenden
+        # legalen Slot verschluckte. Ergebnis: 12 Sekunden Rechenzeit fuer
+        # praktisch keine Wirkung, und die Regler fuer Kick/Snare/HiHat/Bass
+        # fuehlten sich fuer den User wirkungslos an.
+        #
+        # Jetzt werden Stem-Trigger auf die Basis-Trigger PROJIZIERT: sie
+        # erhoehen die Staerke des zeitlich passenden Basis-Triggers. Damit
+        # entscheiden die Stem-Gewichte darueber, WELCHE Cuts die spaetere
+        # Laengen-Erzwingung ueberleben — das ist der hoerbare Effekt, den die
+        # Regler versprechen — ohne gegen die Laengen-Constraints zu arbeiten.
+        # Stem-Trigger in echten Luecken bleiben zusaetzlich als Kandidaten
+        # erhalten, weil sie dort ohne Konflikt Platz haben.
+        gap_triggers = self._project_stem_triggers_onto_base(
+            base_cuts=base_cuts,
+            stem_triggers=stem_triggers,
+            min_cut_interval=min_cut_interval,
+        )
+
+        all_triggers = base_cuts + gap_triggers
         all_triggers.sort(key=lambda x: x.time)
 
         filtered = self._enforce_minimum_interval(all_triggers, min_cut_interval)
@@ -2052,6 +2077,79 @@ class AdvancedPacingEngine:
                                                   strength=float(rms_norm[best]) * ts.energy_weight))
 
         return triggers
+
+    def _project_stem_triggers_onto_base(
+        self,
+        base_cuts: List["PacingCut"],
+        stem_triggers: List["PacingCut"],
+        min_cut_interval: float,
+    ) -> List["PacingCut"]:
+        """
+        Projiziert Stem-Trigger auf die Basis-Trigger und liefert die Rest-Trigger.
+
+        Audit 2026-08-05 (H-0). Zwei Wirkungen:
+
+        1. **Boost** — liegt ein Stem-Trigger naeher als ``min_cut_interval / 2``
+           an einem Basis-Trigger, erhoeht er dessen ``strength``. Damit
+           beeinflussen die Stem-Gewichte, welche Cuts die anschliessende
+           Laengen-Erzwingung ueberleben. Genau das erwartet der User, wenn er
+           am Kick- oder Snare-Regler dreht.
+        2. **Luecken-Fuellung** — Stem-Trigger, die weit genug von jedem
+           Basis-Trigger entfernt sind, bleiben als eigene Kandidaten erhalten
+           und werden zurueckgegeben. Dort ist echter Platz, ohne gegen die
+           Mindestabstaende zu arbeiten.
+
+        Der Boost ist gedaempft und gedeckelt: mehrere Stem-Hits am selben
+        Basis-Trigger sollen ihn nicht beliebig dominieren lassen.
+        """
+        if not base_cuts or not stem_triggers:
+            return list(stem_triggers)
+
+        import bisect
+
+        base_sorted = sorted(base_cuts, key=lambda cut: cut.time)
+        base_times = [cut.time for cut in base_sorted]
+        snap_window = max(1e-6, min_cut_interval / 2.0)
+
+        # Deckel relativ zur Ausgangsstaerke, damit ein Basis-Trigger durch
+        # viele Stem-Hits nicht unbegrenzt hochgezogen wird.
+        original_strength = {id(cut): float(cut.strength) for cut in base_sorted}
+        boost_cap_factor = 2.0
+        boost_share = 0.25
+
+        gap_triggers: List["PacingCut"] = []
+        boosted = 0
+
+        for stem in stem_triggers:
+            position = bisect.bisect_left(base_times, stem.time)
+            best_index = -1
+            best_distance = float("inf")
+            for candidate in (position - 1, position):
+                if 0 <= candidate < len(base_sorted):
+                    distance = abs(base_times[candidate] - stem.time)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_index = candidate
+
+            if best_index >= 0 and best_distance <= snap_window:
+                target = base_sorted[best_index]
+                ceiling = original_strength[id(target)] * boost_cap_factor
+                target.strength = min(
+                    ceiling,
+                    float(target.strength) + float(stem.strength) * boost_share,
+                )
+                boosted += 1
+            elif best_distance >= min_cut_interval:
+                gap_triggers.append(stem)
+
+        logger.info(
+            "Stem-Projektion: %d Trigger auf Basis-Cuts geboostet, "
+            "%d in Luecken uebernommen, %d verworfen (zu dicht)",
+            boosted,
+            len(gap_triggers),
+            len(stem_triggers) - boosted - len(gap_triggers),
+        )
+        return gap_triggers
 
     def _enforce_minimum_interval(
         self,

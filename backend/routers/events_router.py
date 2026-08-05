@@ -19,7 +19,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from .. import dependencies
-from ..dependencies import get_event_queue
+from ..dependencies import get_event_queue, get_journaled_events_since
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["Events (SSE)"])
@@ -67,6 +67,27 @@ async def _event_stream(
     """
     try:
         queue = get_event_queue(client_id, event_filter)
+
+        # Audit 2026-08-05 (H-1/T3.13): Reconnect-Replay nach WHATWG-SSE.
+        # Der Client schickt beim Wiederverbinden "Last-Event-ID"; alles was
+        # seither publiziert wurde, wird nachgeliefert. Ohne das blieb eine
+        # Fortschrittsanzeige dauerhaft haengen, wenn das abschliessende
+        # "completed" in das Reconnect-Fenster fiel.
+        last_event_id = _parse_last_event_id(request)
+        if last_event_id > 0:
+            missed = get_journaled_events_since(last_event_id, event_filter)
+            if missed:
+                logger.info(
+                    "SSE Reconnect %s: liefere %d verpasste Events ab id=%d nach",
+                    client_id,
+                    len(missed),
+                    last_event_id,
+                )
+            for sequence, event in missed:
+                data = json.dumps(event.get("data", {}), ensure_ascii=False)
+                event_type = event.get("event", "message")
+                yield f"id: {sequence}\nevent: {event_type}\ndata: {data}\n\n"
+
         while True:
             if await request.is_disconnected():
                 logger.debug("SSE Client getrennt: %s", client_id)
@@ -83,9 +104,25 @@ async def _event_stream(
                 continue
 
             data = json.dumps(event.get("data", {}), ensure_ascii=False)
-            yield f"event: {event_type}\ndata: {data}\n\n"
+            sequence = event.get("_seq")
+            if sequence is not None:
+                yield f"id: {sequence}\nevent: {event_type}\ndata: {data}\n\n"
+            else:
+                yield f"event: {event_type}\ndata: {data}\n\n"
     finally:
         _cleanup_client_queue(client_id)
+
+
+def _parse_last_event_id(request: Request) -> int:
+    """Liest den ``Last-Event-ID``-Header robust; ungueltige Werte ergeben 0."""
+    raw = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    if not raw:
+        return 0
+    try:
+        return max(0, int(str(raw).strip()))
+    except (TypeError, ValueError):
+        logger.debug("Ungueltige Last-Event-ID ignoriert: %r", raw)
+        return 0
 
 
 @router.get("/progress")
@@ -93,7 +130,21 @@ async def progress_stream(request: Request) -> StreamingResponse:
     """SSE Stream für Progress-Updates (Analyse, Rendering, Import)."""
     client_id = _register_client_queue("progress")
     logger.info("SSE Client verbunden: /events/progress (%s)", client_id)
-    progress_events = {"analysis_progress", "render_progress", "stem_progress", "import_progress", "pacing_progress", "gpu_error", "llm_status"}
+    # Audit 2026-08-05 (C-A): "persist_error" fehlte hier. app_state._emit_persist_error
+    # publisht diesen Typ genau deshalb, weil IRON RULE 10 verlangt, dass der User
+    # einen fehlgeschlagenen Speichervorgang sieht -- der Filter hat ihn still
+    # verworfen, und der SSEClient hatte zusaetzlich keinen Handler dafuer.
+    # Gleiche Fehlerklasse wie 2026-07-09, als llm_status hier fehlte.
+    progress_events = {
+        "analysis_progress",
+        "render_progress",
+        "stem_progress",
+        "import_progress",
+        "pacing_progress",
+        "gpu_error",
+        "llm_status",
+        "persist_error",
+    }
     return StreamingResponse(
         _event_stream(request, client_id=client_id, event_filter=progress_events),
         media_type="text/event-stream",
@@ -143,16 +194,30 @@ async def gpu_stream(request: Request) -> StreamingResponse:
                     raise RuntimeError("GPU-Monitor nicht verfügbar")
 
                 gpu_info = await asyncio.to_thread(monitor.get_stats) or {}
-                data = json.dumps(
-                    {
-                        "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
-                        "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
-                        "temperature_c": gpu_info.get("gpu_temp", 0),
-                        "gpu_load": gpu_info.get("gpu_load", 0),
-                        "timestamp": time.time(),
-                    },
-                    ensure_ascii=False,
-                )
+                # Audit 2026-08-05 (H-5/T3.7): Hier wurden vier von rund zwanzig
+                # erhobenen Sensorwerten weitergegeben, der Rest fiel weg. Die
+                # zusaetzlichen Felder kommen additiv dazu, damit bestehende
+                # Konsumenten unveraendert weiterlaufen.
+                payload = {
+                    "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
+                    "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
+                    "temperature_c": gpu_info.get("gpu_temp", 0),
+                    "gpu_load": gpu_info.get("gpu_load", 0),
+                    "timestamp": time.time(),
+                }
+                for extra_key in (
+                    "cpu_load",
+                    "driver_version",
+                    "adapter_name",
+                    "adapter_index",
+                    "monitoring_status",
+                ):
+                    if extra_key in gpu_info:
+                        payload[extra_key] = gpu_info[extra_key]
+                sensors = gpu_info.get("gpu_sensors")
+                if sensors:
+                    payload["sensors"] = sensors
+                data = json.dumps(payload, ensure_ascii=False)
                 yield f"event: gpu_status\ndata: {data}\n\n"
             except Exception as exc:
                 logger.debug("GPU-Status nicht verfügbar: %s", exc)

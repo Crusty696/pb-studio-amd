@@ -175,6 +175,11 @@ class SystemMonitor:
         self._lhm_app_domain = None
         self._cache_ttl: float = 10.0  # Sekunden
         self._bg_refresh_running = False
+        # Audit 2026-08-05 (M-4): Dedup-Flag fuer die VRAM-Ceiling-Warnung.
+        # Bewusst hier im Konstruktor und nicht per hasattr-Kruecke am
+        # Verwendungsort — genau so entstand der AttributeError auf
+        # `_cached_y` in advanced_pacing_engine (Log 2026-07-29).
+        self._vram_ceiling_warned: bool = False
         if _HAS_CLR:
             self._initialize_lhm()
         else:
@@ -452,10 +457,27 @@ class SystemMonitor:
                             stats["cpu_load"] = s.Value or 0.0
 
             if self.gpu_sensor:
+                # Audit 2026-08-05 (H-5/T3.7): Der Filter unten behaelt genau
+                # vier Werte (Load, Temperatur, VRAM used/total) und verwirft
+                # alles andere — Luefterdrehzahl, Core- und Speichertakt,
+                # Leistungsaufnahme, Spannung, Hot-Spot-Temperatur und die
+                # Video-Encode-/Decode-Last. Die Daten liegen an: der Init-Code
+                # loggt zwei Zeilen weiter jeden einzelnen Sensor mit Namen und
+                # Wert. Ohne sie ist kein Luefterausfall, kein
+                # Hot-Spot-Throttling und keine Encoder-Saettigung erkennbar.
+                # Wir sammeln sie jetzt zusaetzlich nach SensorType gruppiert;
+                # die vier bestehenden Felder bleiben unveraendert, damit kein
+                # Konsument bricht.
+                sensor_groups: dict[str, dict[str, float]] = {}
                 for s in self.gpu_sensor.Sensors:
                     s_type = str(s.SensorType)
                     name = s.Name.lower()
-                    
+
+                    if s.Value is not None:
+                        sensor_groups.setdefault(s_type.lower(), {})[s.Name] = round(
+                            float(s.Value), 2
+                        )
+
                     # Load
                     if s_type == "Load" and "core" in name:
                         stats["gpu_load"] = max(stats["gpu_load"], s.Value or 0.0)
@@ -481,14 +503,29 @@ class SystemMonitor:
                             # Fallback: D3D Dedicated als Total nur wenn kein GPU Memory Total
                             stats["gpu_memory_total"] = s.Value or 0.0
 
+                if sensor_groups:
+                    stats["gpu_sensors"] = sensor_groups
+
             physical_total = float(self.selected_adapter.dedicated_vram_mb)
             if stats["gpu_memory_total"] > physical_total:
-                logger.warning(
-                    "LHM VRAM total %.0fMB exceeds selected adapter physical "
-                    "ceiling %.0fMB; clamped",
-                    stats["gpu_memory_total"],
-                    physical_total,
-                )
+                # Audit 2026-08-05 (M-4): Diese Warnung stand 2983-mal in einer
+                # einzigen Session im Log — alle 15 Sekunden identisch. Die
+                # Abweichung ist kein Fehler: LHM meldet den physischen
+                # Board-Speicher (16368 MB), DXGI den treiberseitig nutzbaren
+                # Dedicated-Pool (16177 MB). 1,2 % Differenz ist fuer eine
+                # RX 7800 XT normal. Nur noch einmal pro Prozess warnen, und
+                # erst ab 5 % Abweichung — darunter ist es Rauschen.
+                if (
+                    not self._vram_ceiling_warned
+                    and stats["gpu_memory_total"] > physical_total * 1.05
+                ):
+                    logger.warning(
+                        "LHM VRAM total %.0fMB exceeds selected adapter physical "
+                        "ceiling %.0fMB; clamped (weitere Meldungen unterdrueckt)",
+                        stats["gpu_memory_total"],
+                        physical_total,
+                    )
+                    self._vram_ceiling_warned = True
                 stats["gpu_memory_total"] = physical_total
             if stats["gpu_memory_used"] > physical_total:
                 stats["gpu_memory_used"] = physical_total

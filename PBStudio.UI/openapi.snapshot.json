@@ -2507,7 +2507,7 @@
           "Chat"
         ],
         "summary": "Get History",
-        "description": "Liefert die Server-Side Chat-History.",
+        "description": "Liefert die Server-Side Chat-History des aktiven Projekts.",
         "operationId": "get_history_chat_history_get",
         "responses": {
           "200": {
@@ -2527,7 +2527,7 @@
           "Chat"
         ],
         "summary": "Clear History",
-        "description": "Leert die Server-Side Chat-History.",
+        "description": "Leert die Server-Side Chat-History des aktiven Projekts.",
         "operationId": "clear_history_chat_history_delete",
         "responses": {
           "200": {
@@ -3869,6 +3869,26 @@
             "type": "string",
             "title": "Status Reason",
             "default": ""
+          },
+          "context_length": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Context Length"
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true,
+            "title": "Architecture"
+          },
+          "publisher": {
+            "type": "string",
+            "nullable": true,
+            "title": "Publisher"
+          },
+          "runtime_state": {
+            "type": "string",
+            "nullable": true,
+            "title": "Runtime State"
           }
         },
         "type": "object",
@@ -3929,6 +3949,64 @@
         ],
         "title": "ModelListResponse"
       },
+      "ModelSelectionReceiptSchema": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model_id": {
+            "type": "string",
+            "title": "Model Id"
+          },
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Capabilities"
+          },
+          "verified_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verified Capabilities"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "selected_at": {
+            "type": "string",
+            "title": "Selected At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "model_id",
+          "task",
+          "mode",
+          "source",
+          "reason",
+          "selected_at"
+        ],
+        "title": "ModelSelectionReceiptSchema",
+        "description": "Nachvollziehbarkeits-Beleg der Modellauswahl.\n\nAudit 2026-08-05 (H-2/T3.10): Der Receipt existierte als vollstaendig\nstrukturiertes, frozen dataclass und wurde ausschliesslich per\n``logger.info`` ausgegeben — nie persistiert, nie in einer Response, nie in\nder UI. Die Frage \"welches Modell hat DIESE Antwort geliefert, mit welchen\nCapabilities, aus welcher Quelle\" war damit nur ueber backend.log\nbeantwortbar. IRON RULE 10 verlangt genau diese Nachvollziehbarkeit."
+      },
       "ModelTestResponse": {
         "properties": {
           "success": {
@@ -3949,6 +4027,10 @@
             "type": "string",
             "nullable": true,
             "title": "Error"
+          },
+          "selection_receipt": {
+            "$ref": "#/components/schemas/ModelSelectionReceiptSchema",
+            "nullable": true
           }
         },
         "type": "object",
@@ -4956,6 +5038,7 @@
               "$ref": "#/components/schemas/TimelineEntrySchema"
             },
             "type": "array",
+            "maxItems": 144000,
             "title": "Entries"
           }
         },

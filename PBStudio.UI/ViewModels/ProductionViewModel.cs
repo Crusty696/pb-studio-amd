@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -63,6 +64,9 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             {
                 HasProject = true;
                 StatusText = "Bereit für Rendering";
+                // Audit 2026-08-05 (C-1/T1.1): gueltigen Ausgabepfad vorbelegen,
+                // sonst laeuft der erste Render-Klick ins 403-Gate.
+                ApplyDefaultOutputPath();
                 StartRenderCommand.NotifyCanExecuteChanged();
                 _ = SyncAudioPathFromTimelineAsync();
             });
@@ -81,16 +85,83 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Prueft, ob ein Pfad innerhalb der Projektwurzel liegt.
+    ///
+    /// Audit 2026-08-05 (C-1/T1.1): Das Backend lehnt Ausgabepfade ausserhalb
+    /// des Projektverzeichnisses mit 403 ab (SEC-002, render_router.py). Die UI
+    /// liess den Pfad aber frei waehlen und validierte nichts — der Export war
+    /// dadurch blockiert, ohne dass ein Grund sichtbar wurde. Wir pruefen jetzt
+    /// clientseitig, bevor der Request rausgeht.
+    /// </summary>
+    private bool IsInsideProjectRoot(string candidate, out string projectRoot)
+    {
+        projectRoot = _projects.CurrentProjectPath ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        try
+        {
+            var root = Path.GetFullPath(projectRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var full = Path.GetFullPath(candidate);
+            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     [RelayCommand]
     private void BrowseOutput()
     {
+        // Dialog in der Projektwurzel oeffnen statt im zuletzt genutzten Ordner —
+        // sonst landet der User systematisch im 403-Gate des Backends.
+        var projectRoot = _projects.CurrentProjectPath;
         var file = _dialogService.SaveFile(
             "Ausgabedatei wählen",
             "MP4 Video|*.mp4|MKV Video|*.mkv",
-            "output.mp4"
+            "output.mp4",
+            string.IsNullOrWhiteSpace(projectRoot) ? null : projectRoot
         );
-        if (!string.IsNullOrEmpty(file))
-            OutputPath = file;
+        if (string.IsNullOrEmpty(file))
+            return;
+
+        if (!IsInsideProjectRoot(file, out var root))
+        {
+            AppendLog(
+                "error",
+                $"Ausgabepfad liegt ausserhalb des Projektverzeichnisses und wird vom Backend "
+                + $"abgelehnt. Gewaehlt: {file} — erlaubt ist nur: {root}");
+            StatusText = "Ausgabepfad ausserhalb des Projektverzeichnisses";
+            return;
+        }
+
+        OutputPath = file;
+    }
+
+    /// <summary>
+    /// Belegt den Ausgabepfad beim Projektwechsel mit einem gueltigen Default vor,
+    /// damit der erste Render-Klick nicht ins 403-Gate laeuft.
+    /// </summary>
+    private void ApplyDefaultOutputPath()
+    {
+        var projectRoot = _projects.CurrentProjectPath;
+        if (string.IsNullOrWhiteSpace(projectRoot))
+            return;
+        if (!string.IsNullOrWhiteSpace(OutputPath) && IsInsideProjectRoot(OutputPath, out _))
+            return;
+
+        try
+        {
+            OutputPath = Path.Combine(projectRoot, "output.mp4");
+        }
+        catch (ArgumentException)
+        {
+            // Ungueltiger Projektpfad — lieber leer lassen als raten.
+        }
     }
 
     private bool CanStartRender() => HasProject && !IsRendering;
@@ -168,7 +239,21 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             }
             else
             {
-                ResetRenderState("Rendering konnte nicht gestartet werden", "error", "Render-Start fehlgeschlagen");
+                // Audit 2026-08-05 (C-1/T0.1): Der Grund kam vom Backend im
+                // detail-Feld, wurde aber vom ApiClient verworfen. Jetzt liegt er
+                // in LastErrorDetail und gehoert in die Anzeige — "Rendering
+                // konnte nicht gestartet werden" allein hat den User drei
+                // Fehlversuche lang im Dunkeln gelassen.
+                var reason = _api.LastErrorDetail;
+                var statusText = string.IsNullOrWhiteSpace(reason)
+                    ? "Rendering konnte nicht gestartet werden"
+                    : $"Rendering abgelehnt: {reason}";
+                ResetRenderState(
+                    statusText,
+                    "error",
+                    string.IsNullOrWhiteSpace(reason)
+                        ? "Render-Start fehlgeschlagen (kein Grund vom Backend geliefert)"
+                        : $"Render-Start fehlgeschlagen: {reason}");
             }
         }
         catch (Exception ex)
