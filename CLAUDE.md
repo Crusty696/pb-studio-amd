@@ -8,6 +8,14 @@ Read this file ENTIRELY before executing any tasks. Do not look for other .agent
 ## 0. ⚡ COMMANDS (copy-paste ready)
 ```powershell
 # Python Backend starten
+# WICHTIG (Audit 2026-08-05, H-7): NICHT nur PYTHONPATH setzen. Ohne
+# PBSTUDIO_LHM_MANIFEST_SHA256 meldet der SystemMonitor "LibreHardwareMonitor
+# deaktiviert" und das GPU-Monitoring ist tot (21x im Log nachgewiesen).
+# Ohne PBSTUDIO_OWNER_CAPABILITY kann die WPF das Backend nicht uebernehmen.
+# Fuer echte Arbeit daher immer den Launcher nehmen:
+.\start.bat            # bzw. .\launch.ps1 — setzt Owner-Token + LHM-Hashes
+
+# Nur fuer reine Backend-Tests ohne GUI und ohne GPU-Monitoring:
 $env:PYTHONPATH = (Join-Path (Get-Location) "src")
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 
@@ -69,7 +77,34 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-02 (Reparaturplan 00013, OBJ-72 T413)
+- **Date:** 2026-08-06 (Datenfluss-Audit + 38 Fixes, Commit `7a604de`)
+- **Status (2026-08-06 — autoritativ):**
+  - Auslöser: User-Meldung „viele daten werden nicht weiter geleitet" —
+    **messbar bestätigt**. Kernmuster 5× unabhängig: Feature implementiert und
+    getestet, aber Producer fehlt. Tests befüllten ihren eigenen Store.
+  - Dokumente: `docs/LOG_AUDIT_2026-08-05.md`, `docs/REPARATURSTRATEGIE_2026-08-05.md`
+  - **38 Fixes** in `7a604de` (52 Dateien, 3548 Zeilen), gepusht auf
+    `origin/00013-system-wide-bug-hunting-audit`, Remote-SHA verifiziert.
+  - Verifiziert: pytest **1267 passed / 13 skipped / 0 failed**, C# **42/42**,
+    WPF Release **0/0**. **Live in der laufenden App** bestätigt: 8 neue
+    Director-Regler im UIA-Baum, Kontextfenster `1'048'576 Tokens` gerendert,
+    Architekturen `qwen35`/`granitehybrid` statt `llm`/`vlm`, GPU-Telemetrie aktiv.
+  - **DB auf Wunsch komplett zurückgesetzt:** 24 Projekte → 0, 2354 Media-Rows → 0,
+    FAISS und Brain-Cache geleert, 38 Projektordner entfernt, 31,2 GB frei.
+    Backup `data\backups\full_reset_20260805_054257\`. Renders endgültig gelöscht.
+  - **Neue Guards:** `Tests/test_trigger_settings_full_wiring.py` (Kette Schema →
+    C#-Record → Konstruktoraufruf → XAML-Binding → Engine-Leser),
+    `Tests/test_viewmodel_binding_wiring.py` (jede ObservableProperty gebunden
+    oder mit Begründung dokumentiert).
+  - **Log trägt jetzt ein Datum** — vorher nur `%H:%M:%S` über Wochen angehängt,
+    wodurch zwei längst gefixte Fehler zunächst als offen fehlbewertet wurden.
+  - **Offen (6 Entscheidungen, T4.1–T4.6):** madmom (BeatNet installiert, madmom
+    in keiner requirements-Datei → Downbeats existieren nirgends) · Stem-Timeout
+    (saubere Lösung berührt `separator.py`, LOCKED) · Anker-Tab (null Backend) ·
+    Brain-Auto-Wipe owner-gaten · NSwag-Layer · 5 wirkungslose config.json-Schlüssel.
+  - **Unbewiesen:** `semantic_match_weight` ist implementiert, aber erst nach
+    einem Analyselauf mit Audio **und** Video belegbar.
+- **Historischer Stand:** 2026-08-02 (Reparaturplan 00013, OBJ-72 T413)
 - **Phase:** 🟠 OBJ-72 bei 44/46 PASS; lokaler Kandidat technisch geprüft,
   aber nicht release-ready. T415 und die abschließende T414-Digestkonvergenz
   fehlen; `.qc-passed` bleibt gesperrt.
