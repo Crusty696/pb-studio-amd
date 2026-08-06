@@ -18,6 +18,9 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -741,6 +744,125 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
             )
     logger.info(f"Projekt geschlossen: {name}")
     return StatusResponse(success=True, message=f"Projekt '{name}' geschlossen")
+
+
+# ---------------------------------------------------------------------------
+# Manuelle Anker (Audit 2026-08-06, T4.3)
+#
+# Der ANCHOR-Tab der WPF hatte KEIN Backend-Gegenstueck: `AddAnchor` mutierte
+# nur eine ObservableCollection, es gab weder Route noch Schema noch Persistenz,
+# und beim Projektwechsel wurde die Liste geleert. Was der User dort anlegte,
+# beeinflusste weder Schnitte noch Render und ueberlebte keinen Tab-Wechsel.
+#
+# Die Engine kann manuelle Anker laengst — `PacingService.load_canvas_manual_anchors`
+# baut aus einem Obsidian-.canvas-File Dicts der Form
+# {id, file_path, mix_start, mix_end}. Es fehlte nur der Weg von der UI dorthin.
+# Persistenz als anchors.json neben timeline.json, gleiches Muster wie dort.
+# ---------------------------------------------------------------------------
+_ANCHORS_FILE = "anchors.json"
+
+
+class AnchorEntry(BaseModel):
+    """Ein manueller Anker: fixiert einen Clip auf eine Zeit im Mix."""
+
+    time: float = Field(ge=0.0, description="Position im Mix in Sekunden.")
+    label: str = ""
+    video_clip_id: Optional[int] = None
+
+
+class AnchorListResponse(BaseModel):
+    anchors: list[AnchorEntry] = Field(default_factory=list)
+    count: int = 0
+
+
+def _anchors_path(project_root: str | Path) -> Path:
+    return Path(project_root) / _ANCHORS_FILE
+
+
+def load_project_anchors(project_root: str | Path) -> list[dict]:
+    """Liest die manuellen Anker eines Projekts. Fehler ergeben eine leere Liste."""
+    path = _anchors_path(project_root)
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        logger.warning("anchors.json nicht lesbar: %s", path)
+        return []
+    if not isinstance(raw, list):
+        return []
+    result: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            seconds = float(item.get("time", -1.0))
+        except (TypeError, ValueError):
+            continue
+        if seconds < 0.0:
+            continue
+        result.append({
+            "time": seconds,
+            "label": str(item.get("label") or ""),
+            "video_clip_id": item.get("video_clip_id"),
+        })
+    result.sort(key=lambda entry: entry["time"])
+    return result
+
+
+@router.get("/anchors", response_model=AnchorListResponse)
+async def get_anchors(
+    state: AppState = Depends(get_app_state),
+) -> AnchorListResponse:
+    """Liefert die manuellen Anker des aktiven Projekts."""
+    if not state.current_project:
+        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
+    entries = load_project_anchors(state.current_project["path"])
+    return AnchorListResponse(
+        anchors=[AnchorEntry(**entry) for entry in entries],
+        count=len(entries),
+    )
+
+
+@router.post("/anchors", response_model=AnchorListResponse)
+async def set_anchors(
+    payload: list[AnchorEntry],
+    state: AppState = Depends(get_app_state),
+) -> AnchorListResponse:
+    """Ersetzt die manuellen Anker des aktiven Projekts."""
+    if not state.current_project:
+        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
+
+    root = Path(state.current_project["path"])
+    normalized = sorted(
+        ({
+            "time": float(entry.time),
+            "label": entry.label,
+            "video_clip_id": entry.video_clip_id,
+        } for entry in payload),
+        key=lambda entry: entry["time"],
+    )
+    path = _anchors_path(root)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(normalized, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+    except OSError as exc:
+        logger.error("anchors.json nicht schreibbar: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Anker konnten nicht gespeichert werden: {exc}",
+        ) from exc
+
+    logger.info("Manuelle Anker gespeichert: %d in %s", len(normalized), path)
+    return AnchorListResponse(
+        anchors=[AnchorEntry(**entry) for entry in normalized],
+        count=len(normalized),
+    )
 
 
 @router.get("/info", response_model=ProjectInfo)

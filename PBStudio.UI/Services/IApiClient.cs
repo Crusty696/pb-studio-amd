@@ -32,6 +32,12 @@ public interface IApiClient : IDisposable
     Task<StatusResponse?> CloseProjectAsync();
     Task<ProjectInfo?> GetProjectInfoAsync();
 
+    // Audit 2026-08-06 (T4.3): Der ANCHOR-Tab hatte kein Backend-Gegenstueck.
+    Task<AnchorListResponse?> GetProjectAnchorsAsync(CancellationToken ct = default);
+    Task<AnchorListResponse?> SetProjectAnchorsAsync(
+        List<AnchorEntry> anchors,
+        CancellationToken ct = default);
+
     // --- Audio ---
     Task<AudioClipInfo?> ImportAudioAsync(string path);
     Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200);

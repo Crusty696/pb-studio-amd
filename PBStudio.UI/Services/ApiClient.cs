@@ -141,6 +141,19 @@ public class ApiClient : IApiClient
     public async Task<StatusResponse?> CloseProjectAsync()
         => await PostAsync<StatusResponse>("/project/close", null).ConfigureAwait(false);
 
+    /// <summary>
+    /// Laedt die manuellen Anker des aktiven Projekts.
+    /// Audit 2026-08-06 (T4.3): neu, der ANCHOR-Tab hatte kein Backend.
+    /// </summary>
+    public Task<AnchorListResponse?> GetProjectAnchorsAsync(CancellationToken ct = default)
+        => GetAsync<AnchorListResponse>("/project/anchors", ct);
+
+    /// <summary>Ersetzt die manuellen Anker des aktiven Projekts.</summary>
+    public Task<AnchorListResponse?> SetProjectAnchorsAsync(
+        List<AnchorEntry> anchors,
+        CancellationToken ct = default)
+        => PostAsync<AnchorListResponse>("/project/anchors", anchors, ct);
+
     public async Task<ProjectInfo?> GetProjectInfoAsync()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/project/info");

@@ -22,6 +22,11 @@ anyio==4.13.0 --hash=sha256:08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf
 audio-separator==0.30.2 --hash=sha256:6cbb9d775fca421090614a77b03814f964f083ec898154ae144351ac2ba4de2b
 audioread==3.1.0 --hash=sha256:b30d1df6c5d3de5dcef0fb0e256f6ea17bdcf5f979408df0297d8a408e2971b4
 beartype==0.18.5 --hash=sha256:5301a14f2a9a5540fe47ec6d34d758e9cd8331d36c4760fc7a5499ab86310089
+# BeatNet deklariert madmom NICHT als Dependency, importiert es aber zur Laufzeit
+# (Packaging-Bug upstream). Ohne madmom laeuft jede Beat-Analyse ueber den
+# librosa-Fallback und `get_downbeats()` liefert hart `[]` — Downbeats existieren
+# dann im gesamten Produkt nicht. madmom hat kein Wheel und braucht MSVC, deshalb
+# steht es bewusst in requirements-optional-beatnet.txt (Audit 2026-08-06).
 BeatNet==1.1.1 --hash=sha256:5c77255b0679bdff1a97ba6248581991c3182afb63ff693ab782ea3c250b6f7d
 certifi==2026.4.22 --hash=sha256:3cb2210c8f88ba2318d29b0388d1023c8492ff72ecdde4ebdaddbb13a31b1c4a
 cffi==2.0.0 --hash=sha256:66f011380d0e49ed280c789fbd08ff0d40968ee7b665575489afa95c98196ab5

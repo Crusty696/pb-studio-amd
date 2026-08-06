@@ -115,6 +115,33 @@ router = APIRouter(
 )
 
 
+def _load_ui_anchors(state) -> list[dict]:
+    """
+    Laedt die im Projekt gespeicherten manuellen Anker.
+
+    Audit 2026-08-06 (T4.3): Der ANCHOR-Tab hatte kein Backend-Gegenstueck.
+    Jetzt liegen die Anker als ``anchors.json`` im Projektordner; die
+    Pacing-Engine konsumiert sie ueber ``PacingService._merge_ui_anchors``.
+    Best-effort: ein Fehler hier darf die Cut-Generierung nicht verhindern.
+    """
+    project = getattr(state, "current_project", None)
+    if not isinstance(project, dict):
+        return []
+    root = project.get("path")
+    if not root:
+        return []
+    try:
+        from .project_router import load_project_anchors
+
+        return load_project_anchors(root)
+    except Exception as exc:  # noqa: BLE001 - Anker sind optional
+        logger.warning(
+            "Manuelle Anker nicht ladbar (%s) — fahre ohne fort",
+            type(exc).__name__,
+        )
+        return []
+
+
 def _requires_video_analysis(config: PacingConfigSchema) -> bool:
     return bool(config.use_motion_matching or config.use_brain)
 
@@ -192,9 +219,14 @@ async def _generate_cut_list_for_project(
         _t_pacing_start = _time.perf_counter()
         # Audit L-M7: event-loop fuer SSE progress events aus Worker-Thread reichen.
         _loop = asyncio.get_running_loop()
+        # Audit 2026-08-06 (T4.3): Anker hier laden, nicht in
+        # _run_pacing_generation. Diese Funktion arbeitet absichtlich nur mit
+        # Snapshots und laeuft im Worker-Thread — AppState dort hineinzuziehen
+        # waere ein Bruch dieses Vertrags (und war mein erster Fehlversuch).
+        _ui_anchors = _load_ui_anchors(state)
         cuts = await asyncio.to_thread(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
-            cached_analysis, video_analysis_snapshot, _loop,
+            cached_analysis, video_analysis_snapshot, _loop, _ui_anchors,
         )
         _t_pacing_elapsed_ms = (_time.perf_counter() - _t_pacing_start) * 1000.0
         _t_brain_elapsed_ms = 0.0
@@ -654,6 +686,7 @@ def _run_pacing_generation(
     cached_analysis: dict[str, Any] | None = None,
     video_analysis_cache: dict[int, dict[str, Any]] | None = None,
     loop: Any | None = None,
+    ui_anchors: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Generiert Cut-Liste via PacingService (blockierend).
 
@@ -725,6 +758,10 @@ def _run_pacing_generation(
         # Audit E1: Forward Tonart-Matching flag to PacingService → AdvancedPacingEngine.
         "use_key_matching": getattr(config, "use_key_matching", False),
         "canvas_path": config.canvas_path,
+        # Audit 2026-08-06 (T4.3): Anker aus dem ANCHOR-Tab. Bewusst vom
+        # Aufrufer geladen und hier nur durchgereicht — diese Funktion bleibt
+        # snapshot-basiert und ohne AppState-Zugriff.
+        "ui_anchors": ui_anchors or [],
         "min_cut_interval": config.min_cut_interval,
         # Plan Phase 4 deep-hook: forward brain flags to PacingService
         "use_brain": getattr(config, "use_brain", False),

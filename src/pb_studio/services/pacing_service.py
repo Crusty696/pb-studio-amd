@@ -624,6 +624,95 @@ class PacingService:
         
         return chapters
 
+    def _merge_ui_anchors(
+        self,
+        canvas_anchors: List[dict],
+        ui_anchors: Optional[List[dict]],
+        clips: List[dict],
+    ) -> List[dict]:
+        """
+        Fuegt Anker aus dem ANCHOR-Tab zu den Canvas-Ankern hinzu.
+
+        Audit 2026-08-06 (T4.3): Der ANCHOR-Tab hatte kein Backend — `AddAnchor`
+        mutierte nur eine ObservableCollection, ohne Route, Schema oder
+        Persistenz. Die Engine konnte manuelle Anker aber laengst, nur eben
+        ausschliesslich aus einem Obsidian-.canvas-File. Hier ist die fehlende
+        Bruecke: UI-Anker werden ins gleiche Format uebersetzt
+        (``{id, file_path, mix_start, mix_end}``).
+
+        Canvas-Anker haben Vorrang: ueberlappt ein UI-Anker einen bestehenden,
+        wird er verworfen statt die Storyboard-Absicht zu ueberschreiben.
+        """
+        if not ui_anchors:
+            return canvas_anchors
+
+        by_id: dict[int, dict] = {}
+        for clip in clips:
+            raw_id = clip.get("id", clip.get("clip_id"))
+            try:
+                by_id[int(raw_id)] = clip
+            except (TypeError, ValueError):
+                continue
+
+        merged = list(canvas_anchors)
+        skipped_overlap = 0
+        skipped_unknown = 0
+
+        for entry in sorted(
+            (e for e in ui_anchors if isinstance(e, dict)),
+            key=lambda e: float(e.get("time", 0.0) or 0.0),
+        ):
+            clip_id = entry.get("video_clip_id")
+            if clip_id is None:
+                skipped_unknown += 1
+                continue
+            try:
+                clip = by_id.get(int(clip_id))
+            except (TypeError, ValueError):
+                clip = None
+            if not clip:
+                skipped_unknown += 1
+                continue
+
+            file_path = clip.get("file_path") or clip.get("path")
+            if not file_path:
+                skipped_unknown += 1
+                continue
+
+            try:
+                start = float(entry.get("time", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            try:
+                clip_duration = self._get_clip_duration(str(file_path))
+            except Exception:  # noqa: BLE001 - Anker darf Lauf nicht kippen
+                clip_duration = 4.0
+            end = start + max(0.5, float(clip_duration))
+
+            if any(
+                start < existing["mix_end"] and end > existing["mix_start"]
+                for existing in merged
+            ):
+                skipped_overlap += 1
+                continue
+
+            merged.append({
+                "id": f"ui_anchor_{clip_id}_{start:.2f}",
+                "file_path": file_path,
+                "mix_start": start,
+                "mix_end": end,
+            })
+
+        merged.sort(key=lambda anchor: anchor["mix_start"])
+        logger.info(
+            "UI-Anker eingespeist: %d uebernommen, %d wegen Ueberlappung "
+            "verworfen, %d ohne aufloesbaren Clip",
+            len(merged) - len(canvas_anchors),
+            skipped_overlap,
+            skipped_unknown,
+        )
+        return merged
+
     def load_canvas_manual_anchors(self, canvas_path: str | None, clips: List[dict]) -> List[dict]:
         """Storyboard-Anker und manuelle Clips aus Obsidian .canvas File einlesen (Stufe 4)."""
         if not canvas_path:
@@ -853,6 +942,14 @@ class PacingService:
             # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
             canvas_path = pacing_config.get("canvas_path")
             manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
+            # Audit 2026-08-06 (T4.3): Anker aus dem ANCHOR-Tab dazunehmen.
+            # Sie hatten bis hierher keinen Weg in die Engine -- der Tab war
+            # reine Dekoration. Canvas-Anker behalten Vorrang bei Kollision.
+            manual_anchors = self._merge_ui_anchors(
+                manual_anchors,
+                pacing_config.get("ui_anchors"),
+                clips,
+            )
 
             cut_with_clips = []
             last_manual_end = 0.0
@@ -1193,6 +1290,12 @@ class PacingService:
                 # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
                 canvas_path = pacing_config.get("canvas_path")
                 manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
+                # Audit 2026-08-06 (T4.3): siehe generate_cut_list_with_stems.
+                manual_anchors = self._merge_ui_anchors(
+                    manual_anchors,
+                    pacing_config.get("ui_anchors"),
+                    clips,
+                )
 
                 cut_with_clips = []
                 last_manual_end = 0.0

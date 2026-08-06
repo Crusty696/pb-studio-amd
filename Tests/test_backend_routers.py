@@ -475,9 +475,21 @@ class TestPacingRouter:
 
         async def fake_pub(*a, **kw): pass
 
-        def fake_run(config, audio_clips, video_clips, cached_analysis=None, video_analysis_cache=None, loop=None):
+        def fake_run(
+            config,
+            audio_clips,
+            video_clips,
+            cached_analysis=None,
+            video_analysis_cache=None,
+            loop=None,
+            ui_anchors=None,
+        ):
             # Audit L-M7: _run_pacing_generation hat jetzt optionalen loop Param fuer
             # per-iteration pacing_progress callback (SSE).
+            # Audit 2026-08-06 (T4.3): dazu ui_anchors — die manuellen Anker aus
+            # dem ANCHOR-Tab werden vom Aufrufer geladen und durchgereicht,
+            # damit diese Funktion snapshot-basiert und ohne AppState-Zugriff
+            # bleibt. Genau dieser Vertrag ist es, den dieser Test absichert.
             # Überprüfung: Snapshots wurden korrekt übergeben
             assert 1 in audio_clips
             assert 1 in video_clips

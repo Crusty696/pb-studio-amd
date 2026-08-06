@@ -15,6 +15,7 @@ import hmac
 import json as _json
 import logging
 import secrets
+import sqlite3
 import time
 from typing import Optional
 
@@ -214,6 +215,7 @@ async def feedback(
                             detail=str(exc),
                         ) from exc
                 total = await asyncio.to_thread(svc.weights.total_clicks)
+                await _maybe_train_projector(svc, total)
                 return BrainFeedbackResponse(
                     status="ok",
                     updated_buckets=bumps,
@@ -297,6 +299,73 @@ async def learning_session(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+# Audit 2026-08-06 (T3.5): `projector_trainer.run_fit_step` und
+# `collect_training_pairs` hatten repo-weit KEINEN Aufrufer ausserhalb der
+# eigenen Datei und der Tests. Der CrossModalProjector blieb dadurch dauerhaft
+# auf den zufaelligen Johnson-Lindenstrauss-Matrizen aus `_init_random_matrices`
+# — die komplette R-Brain-05-Architektur (Rating -> Label -> fit_pairs) war rein
+# hypothetisch. Hier ist der fehlende Producer: alle N erfolgreichen Feedbacks
+# ein Fit-Schritt.
+PROJECTOR_TRAIN_EVERY_N_FEEDBACKS = 20
+
+
+async def _maybe_train_projector(svc, total_clicks: int) -> None:
+    """
+    Trainiert den Cross-Modal-Projektor periodisch aus echtem Feedback.
+
+    Best-effort und bewusst nach dem Response-relevanten Teil: ein Fehler hier
+    darf ein erfolgreich verbuchtes Feedback niemals zu einem Fehler machen.
+    """
+    if total_clicks <= 0 or total_clicks % PROJECTOR_TRAIN_EVERY_N_FEEDBACKS != 0:
+        return
+
+    def _fit() -> dict:
+        from pb_studio.brain.cross_modal_projector import get_default_projector
+        from pb_studio.brain.projector_trainer import run_fit_step
+
+        state = get_app_state()
+
+        def _audio_hash(clip_id: int):
+            clip = (state.audio_clips or {}).get(int(clip_id)) or {}
+            return clip.get("audio_hash")
+
+        def _video_hash(clip_id: str):
+            raw = str(clip_id)
+            if raw.startswith("clip_"):
+                raw = raw[len("clip_"):]
+            try:
+                key = int(raw)
+            except (TypeError, ValueError):
+                return None
+            clip = (state.video_clips or {}).get(key) or {}
+            return clip.get("video_hash")
+
+        # state_conn haengt am BrainService, der Cache am BrainStore, und der
+        # Projektor ist ein eigenes Lazy-Singleton — empirisch geprueft, nicht
+        # geraten (svc.brain ist ein BrainStore ohne state_conn/projector).
+        return run_fit_step(
+            get_default_projector(),
+            state_conn=svc.state_conn,
+            embedding_cache=svc.brain.cache,
+            audio_hash_for_clip_id=_audio_hash,
+            video_hash_for_clip_id=_video_hash,
+        )
+
+    try:
+        result = await asyncio.to_thread(_fit)
+        logger.info(
+            "Cross-Modal-Projektor nach %d Feedbacks trainiert: %s",
+            total_clicks,
+            result,
+        )
+    except Exception as exc:  # noqa: BLE001 - Feedback bleibt gueltig
+        logger.warning(
+            "Projektor-Training uebersprungen (%s): %r",
+            type(exc).__name__,
+            exc,
+        )
+
+
 @router.get("/stats", response_model=BrainStatsResponse)
 async def stats() -> BrainStatsResponse:
     svc = get_brain_service()
@@ -342,9 +411,49 @@ async def stats() -> BrainStatsResponse:
                     "WHERE positive_count + negative_count >= 10"
                 ).fetchall()
             }
-        return positive, negative, learned_axes, svc.weights.total_clicks()
+            # Audit 2026-08-06 (T4.4): Herkunftsangaben mitlesen. Ohne sie
+            # sieht der User bei archivierter Historie exakt dasselbe wie bei
+            # "noch nie bewertet" — naemlich 0 Klicks.
+            meta: dict[str, str] = {}
+            try:
+                meta = {
+                    str(k): str(v)
+                    for k, v in svc.brain.weights_conn.execute(
+                        "SELECT key, value FROM brain_meta"
+                    ).fetchall()
+                }
+            except sqlite3.Error:
+                meta = {}
 
-    top_pos, top_neg, learned, total_clicks = await asyncio.to_thread(_read_stats)
+            archived = 0
+            archive_table = meta.get("legacy_archive_table")
+            if archive_table:
+                try:
+                    row = svc.brain.weights_conn.execute(
+                        "SELECT COALESCE(SUM(positive_count + negative_count), 0) "
+                        f"FROM {archive_table}"  # noqa: S608 - Name aus brain_meta
+                    ).fetchone()
+                    archived = int(float(row[0])) if row else 0
+                except sqlite3.Error:
+                    archived = 0
+
+        return (
+            positive,
+            negative,
+            learned_axes,
+            svc.weights.total_clicks(),
+            meta,
+            archived,
+        )
+
+    (
+        top_pos,
+        top_neg,
+        learned,
+        total_clicks,
+        meta,
+        archived,
+    ) = await asyncio.to_thread(_read_stats)
 
     from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
     cold_list = [a for a in BRIDGE_AXES if a not in learned]
@@ -356,6 +465,9 @@ async def stats() -> BrainStatsResponse:
         top_positive=top_pos,
         top_negative=top_neg,
         cold_start_axes_list=cold_list,
+        weight_semantics_version=meta.get("weight_semantics_version"),
+        archived_observations=archived,
+        migration_reason=meta.get("migration_reason"),
     )
 
 

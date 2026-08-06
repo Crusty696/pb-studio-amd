@@ -130,20 +130,16 @@ def mock_config():
             "db_path": "./data/test_pb_studio.db",
             "models_dir": "./models"
         },
+        # Audit 2026-08-06 (T4.6): fuenf wirkungslose Schluessel entfernt,
+        # synchron zu ConfigManager.DEFAULTS.
         "hardware": {
             "gpu_backend": "directml",
-            "vram_limit_mb": 4096,
-            "enable_monitoring": True
+            "vram_limit_mb": 4096
         },
         "ai": {
-            "vision_model": "moondream2_fp16",
-            "audio_backend": "demucs_dml",
-            "parallel_tasks": False
+            "vision_model": "moondream2_fp16"
         },
-        "ui": {
-            "theme": "dark_red",
-            "scale_factor": 1.0
-        }
+        "ui": {}
     }
 
 

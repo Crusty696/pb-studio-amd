@@ -926,9 +926,43 @@ async def _separate_stems_in_context(
         # statt gpu_timeout_seconds 300s) — Demucs auf 90min Mixe brauchte
         # in der Vergangenheit >300s und brach mit GPU-Task-Timeout ab.
         from backend.config import config as _server_config
+        # Audit 2026-08-06 (T4.2): Das dauerabhaengige Budget existierte laengst,
+        # aber es griff nicht. Im Log vom 2026-07-28 feuerte der Timeout nach
+        # 900 s, obwohl die Datei 6335 s lang war — 0.75 * 6335 = 4751 s haetten
+        # gereicht (die Separation brauchte real 2710 s). Ursache: `clip
+        # ["duration_seconds"]` war 0, weil ffprobe beim Import 0 geliefert hatte
+        # und die Korrektur erst in /audio/analyze passiert. Wer Stems ohne
+        # vorherige Analyse trennt, landete damit auf dem Minimum-Budget.
+        # Folge fuer den User: HTTP 500, waehrend der Worker 30 Minuten
+        # weiterlief und am Ende doch korrekt schrieb — beim Retry dann
+        # "magischer" Erfolg aus dem Cache.
+        _stem_duration = float(clip.get("duration_seconds", 0.0) or 0.0)
+        if _stem_duration <= 0.0:
+            try:
+                import librosa as _librosa
+
+                _stem_duration = float(
+                    await asyncio.to_thread(_librosa.get_duration, path=clip["path"])
+                )
+                logger.info(
+                    "Stem-Timeout: Dauer war unbekannt, nachgemessen: %.1fs",
+                    _stem_duration,
+                )
+            except Exception as exc:  # noqa: BLE001 - Floor bleibt als Rueckfall
+                logger.warning(
+                    "Dauer fuer Stem-Timeout nicht messbar (%s) — nutze Minimum-Budget",
+                    type(exc).__name__,
+                )
+                _stem_duration = 0.0
         stem_timeout = _stem_timeout_for_duration(
-            clip.get("duration_seconds", 0.0),
+            _stem_duration,
             _server_config.stem_timeout,
+        )
+        logger.info(
+            "Stem-Separation Budget: %.0fs (Dauer %.1fs, Minimum %.0fs)",
+            stem_timeout,
+            _stem_duration,
+            float(_server_config.stem_timeout),
         )
         result = await with_gpu_task(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,

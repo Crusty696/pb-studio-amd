@@ -48,7 +48,12 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
-        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
+        {
+            _ = RequestAudioReloadAsync();
+            // Audit 2026-08-06 (T4.3): gespeicherte Anker beim Projektwechsel laden.
+            _ = LoadAnchorsAsync();
+        });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
             System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
 
@@ -181,6 +186,7 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         Anchors.Add(anchor);
         SelectedAnchor = anchor;
         StatusText = $"Anchor bei {CurrentPosition:F2}s hinzugefügt";
+        _ = PersistAnchorsAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveAnchor))]
@@ -192,9 +198,71 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         Anchors.Remove(SelectedAnchor);
         SelectedAnchor = null;
         StatusText = "Anchor entfernt";
+        _ = PersistAnchorsAsync();
     }
 
     private bool CanRemoveAnchor() => SelectedAnchor != null;
+
+    /// <summary>
+    /// Speichert die Anker im Projekt.
+    ///
+    /// Audit 2026-08-06 (T4.3): Vorher mutierten AddAnchor/RemoveAnchor nur die
+    /// ObservableCollection. Es gab keine Route, kein Schema, keine Persistenz —
+    /// und beim Projektwechsel wurde die Liste geleert. Was der User hier anlegte,
+    /// beeinflusste weder Schnitte noch Render und ueberlebte keinen Tab-Wechsel.
+    /// Jetzt liegen die Anker als anchors.json im Projekt und werden von der
+    /// Pacing-Engine als manuelle Anker konsumiert.
+    /// </summary>
+    private async Task PersistAnchorsAsync()
+    {
+        try
+        {
+            var payload = Anchors
+                .Select(a => new AnchorEntry(a.Time, a.Label, a.VideoClipId))
+                .ToList();
+            var result = await _api.SetProjectAnchorsAsync(payload).ConfigureAwait(true);
+            if (result is null)
+            {
+                var reason = _api.LastErrorDetail;
+                StatusText = string.IsNullOrWhiteSpace(reason)
+                    ? "Anker konnten nicht gespeichert werden"
+                    : $"Anker nicht gespeichert: {reason}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Anker nicht gespeichert: {ex.Message}";
+        }
+    }
+
+    /// <summary>Laedt die im Projekt gespeicherten Anker.</summary>
+    private async Task LoadAnchorsAsync()
+    {
+        try
+        {
+            var result = await _api.GetProjectAnchorsAsync().ConfigureAwait(true);
+            if (result?.Anchors is null)
+                return;
+
+            Anchors.Clear();
+            foreach (var entry in result.Anchors)
+            {
+                Anchors.Add(new AnchorPoint
+                {
+                    Time = entry.Time,
+                    Label = entry.Label ?? "",
+                    VideoClipId = entry.VideoClipId,
+                });
+            }
+            StatusText = Anchors.Count > 0
+                ? $"{Anchors.Count} Anker geladen"
+                : "Keine Anker im Projekt";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Anker nicht geladen: {ex.Message}";
+        }
+    }
 
     private async Task LoadWaveformAndBeatsAsync(bool forceBeatReload)
     {

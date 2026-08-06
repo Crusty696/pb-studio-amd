@@ -30,33 +30,26 @@ class ConfigManager:
             "temp_dir": "./temp",
             "db_path": "./data/pb_studio.db"
         },
-        # Audit 2026-08-05 (M-3): Fuenf Schluessel sind WIRKUNGSLOS — repo-weit
-        # verifiziert ohne einen einzigen Leser ausserhalb dieser DEFAULTS.
-        # Wer sie in config.json setzt, aendert nichts. Sie stehen weiterhin
-        # hier, weil das Entfernen die nutzersichtbare Config-Oberflaeche
-        # aendert (Entscheidung offen, siehe docs/REPARATURSTRATEGIE_2026-08-05.md
-        # T4.6) — aber sie sind hiermit als Attrappe gekennzeichnet, statt
-        # stillschweigend Funktionalitaet zu suggerieren.
+        # Audit 2026-08-06 (T4.6): Fuenf wirkungslose Schluessel entfernt —
+        # `hardware.enable_monitoring`, `ai.audio_backend`, `ai.parallel_tasks`,
+        # `ui.theme`, `ui.scale_factor`. Repo-weit verifiziert ohne einen
+        # einzigen Leser ausserhalb dieser DEFAULTS: wer sie in config.json
+        # setzte, aenderte nichts. Das Stem-Backend entscheidet der
+        # StemSeparator selbst, Theme und Skalierung fuehrt das WPF-Frontend.
+        # Ein Schalter, der nichts schaltet, ist schlimmer als kein Schalter.
+        # Bestehende config.json-Dateien behalten die Keys — sie werden nur
+        # nicht mehr angelegt und weiterhin ignoriert.
         "hardware": {
             "gpu_backend": "directml",
             "directml_adapter_policy": "highest_vram_amd",
             "vram_limit_mb": 0,   # 0 = auto-detect (VRAMBudgetManager reads actual capacity)
-            "enable_monitoring": True,   # UNGENUTZT (Audit 2026-08-05, kein Leser)
         },
         "ai": {
             "vision_model": "moondream2_fp16",
-            "audio_backend": "demucs_cpu",   # UNGENUTZT (kein Leser; Stem-Backend
-                                             # entscheidet StemSeparator selbst)
-            "parallel_tasks": False,         # UNGENUTZT (kein Leser)
             "task_overrides": {},
             "task_provider_overrides": {}
         },
-        "ui": {
-            # Beide UNGENUTZT: das WPF-Frontend fuehrt Theme und Skalierung
-            # ausschliesslich selbst, das Backend liest hier nichts.
-            "theme": "dark_red",
-            "scale_factor": 1.0
-        }
+        "ui": {}
     }
 
     def __new__(cls):

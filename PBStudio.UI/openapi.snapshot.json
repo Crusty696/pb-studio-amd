@@ -264,6 +264,72 @@
         }
       }
     },
+    "/project/anchors": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get Anchors",
+        "description": "Liefert die manuellen Anker des aktiven Projekts.",
+        "operationId": "get_anchors_project_anchors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Set Anchors",
+        "description": "Ersetzt die manuellen Anker des aktiven Projekts.",
+        "operationId": "set_anchors_project_anchors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/AnchorEntry"
+                },
+                "type": "array",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/project/info": {
       "get": {
         "tags": [
@@ -2574,6 +2640,50 @@
         ],
         "title": "ActivateRequest"
       },
+      "AnchorEntry": {
+        "properties": {
+          "time": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Time",
+            "description": "Position im Mix in Sekunden."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "video_clip_id": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Video Clip Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time"
+        ],
+        "title": "AnchorEntry",
+        "description": "Ein manueller Anker: fixiert einen Clip auf eine Zeit im Mix."
+      },
+      "AnchorListResponse": {
+        "properties": {
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/AnchorEntry"
+            },
+            "type": "array",
+            "title": "Anchors"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AnchorListResponse"
+      },
       "AudioAnalysisResult": {
         "properties": {
           "clip_id": {
@@ -3322,6 +3432,24 @@
             "type": "array",
             "title": "Cold Start Axes List",
             "description": "Achsen aus BRIDGE_AXES, die noch nicht gelernt sind (positive_count + negative_count < 10). UX-Anzeige im HIRN-Tab fuers Brain-Coaching."
+          },
+          "weight_semantics_version": {
+            "type": "string",
+            "nullable": true,
+            "title": "Weight Semantics Version",
+            "description": "Version der Gewichtssemantik im WeightStore."
+          },
+          "archived_observations": {
+            "type": "integer",
+            "title": "Archived Observations",
+            "description": "Beobachtungen in der archivierten v1-Tabelle. > 0 bedeutet: es gab bereits gelernte Historie, die bei einem Semantik-Wechsel archiviert wurde.",
+            "default": 0
+          },
+          "migration_reason": {
+            "type": "string",
+            "nullable": true,
+            "title": "Migration Reason",
+            "description": "Begruendung des letzten Semantik-Wechsels, falls einer stattgefunden hat."
           }
         },
         "type": "object",
