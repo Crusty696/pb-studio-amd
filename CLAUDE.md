@@ -98,12 +98,27 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
     oder mit Begründung dokumentiert).
   - **Log trägt jetzt ein Datum** — vorher nur `%H:%M:%S` über Wochen angehängt,
     wodurch zwei längst gefixte Fehler zunächst als offen fehlbewertet wurden.
-  - **Offen (6 Entscheidungen, T4.1–T4.6):** madmom (BeatNet installiert, madmom
-    in keiner requirements-Datei → Downbeats existieren nirgends) · Stem-Timeout
-    (saubere Lösung berührt `separator.py`, LOCKED) · Anker-Tab (null Backend) ·
-    Brain-Auto-Wipe owner-gaten · NSwag-Layer · 5 wirkungslose config.json-Schlüssel.
-  - **Unbewiesen:** `semantic_match_weight` ist implementiert, aber erst nach
-    einem Analyselauf mit Audio **und** Video belegbar.
+  - **5 von 6 Entscheidungen umgesetzt** (Commit `39aaa3b`, gepusht):
+    - **madmom läuft** — die Annahme „auf 3.11 nicht installierbar" ist
+      **widerlegt**. `BEATNET_AVAILABLE` erstmals `True`, Downbeats existieren.
+      Liegt in `requirements-optional-beatnet.txt` (kein Wheel, braucht MSVC).
+    - **Brain-Herkunft sichtbar** — `/brain/stats` meldet archivierte
+      Beobachtungen, Semantikversion und Migrationsgrund. Die Migration 002 war
+      eine Einmal-Migration und fachlich korrekt; falsch war nur die Unsichtbarkeit.
+    - **Stem-Timeout** — Ursache war `duration_seconds == 0`, nicht das Budget.
+      Dauer wird jetzt nachgemessen. `separator.py` unangetastet (LOCKED).
+    - **Anker-Tab fertig** — `GET`/`POST /project/anchors`, `anchors.json`,
+      Einspeisung über `PacingService._merge_ui_anchors`.
+    - **5 wirkungslose config.json-Schlüssel entfernt**, `conftest.py` synchron.
+    - Dazu **T3.5**: `projector_trainer` hat einen Aufrufer (Fit alle 20 Feedbacks).
+  - **Offen: nur T4.5 (NSwag-Layer)** — Architekturwahl, kein Defekt: 4450 Zeilen
+    generierter Code testgeschützt, während der real genutzte Hand-Record-Pfad
+    ungeschützt ist. Beide Auswege ändern die Contract-Pflege im Team.
+  - **Unbewiesen:** `semantic_match_weight` und der Projector-Hook brauchen einen
+    echten Analyselauf mit Audio **und** Video plus 20 echte Bewertungen.
+  - **Lehre für künftige Arbeit:** vor Signatur-, Pfad- oder Dateiänderungen
+    repo-weit nach Aufrufern, Test-Fakes und lesenden Tests greppen. In dieser
+    Session zweimal versäumt, beide Male von der Suite gefangen.
 - **Historischer Stand:** 2026-08-02 (Reparaturplan 00013, OBJ-72 T413)
 - **Phase:** 🟠 OBJ-72 bei 44/46 PASS; lokaler Kandidat technisch geprüft,
   aber nicht release-ready. T415 und die abschließende T414-Digestkonvergenz
@@ -189,7 +204,10 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *Motion Analysis:* RAFT ONNX via DirectML (`raft.py → MotionAnalyzer`)
 - *Stem Separation:* htdemucs runs on CPU because PyTorch CPU is used in the pinned environment. DirectML acceleration only applies to ONNX-MDX paths in StemSeparator.
 - *Vector DB:* FAISS-CPU (1152-dim SigLIP SO400M embeddings) + sqlite-vec (Brain-Modul KNN)
-- *Beat Detection:* BeatDetector mit librosa-Fallback (madmom nicht installierbar auf 3.11)
+- *Beat Detection:* BeatNet (madmom) aktiv, librosa als Fallback. **Korrektur
+  2026-08-06:** die frühere Angabe „madmom nicht installierbar auf 3.11" war
+  falsch — madmom 0.16.1 baut auf 3.11.9, siehe `requirements-optional-beatnet.txt`.
+  Ohne madmom liefert `get_downbeats()` hart `[]`, dann existieren keine Downbeats.
 - *Key Detection:* `src/pb_studio/audio/key_detector.py` Krumhansl-Kessler via librosa
 - *SSE Fan-out:* `publish_event` broadcastet an ALLE registrierten Queues
 - *Path-Traversal-Schutz:* `Path.is_relative_to()` in project_router + render_router
