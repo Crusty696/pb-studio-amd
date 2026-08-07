@@ -214,3 +214,30 @@ def test_extract_tags_empty_input_returns_empty():
 
     assert extract_tags_via_moondream(None) == []
     assert extract_tags_via_moondream(np.array([])) == []
+
+
+# ======================================================================
+# onnx_models_available — Decoder-Pflicht (Audit 2026-08-07)
+#
+# Frueher genuegte der Encoder. Tag-Generierung braucht aber den Decoder:
+# mit reinem Encoder reservierte jeder Clip 1800 MB und den GPU-Lock fuer
+# einen Load, der garantiert null Tags liefert (logs/backend.log 2026-08-07).
+# ======================================================================
+def test_onnx_models_available_verlangt_decoder(tmp_path):
+    from pb_studio.video.moondream import onnx_models_available
+
+    (tmp_path / "moondream_encoder.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is False, (
+        "Encoder allein darf keinen GPU-Task rechtfertigen"
+    )
+
+    (tmp_path / "moondream_decoder.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is True
+
+
+def test_onnx_models_available_akzeptiert_kombiniertes_modell(tmp_path):
+    from pb_studio.video.moondream import onnx_models_available
+
+    assert onnx_models_available(str(tmp_path)) is False
+    (tmp_path / "moondream.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is True

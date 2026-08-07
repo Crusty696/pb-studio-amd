@@ -15,7 +15,23 @@
         "enable_monitoring": true
     },
     "ai": {
-        "vision_model": "llava:13b",
+        "vision_model": "qwen2.5-vl-7b-instruct",
+        "task_overrides": {
+            "video_captioning": "qwen2.5-vl-7b-instruct",
+            "image_captioning": "qwen2.5-vl-7b-instruct",
+            "chat": "qwen3.5-9b",
+            "chat_general": "qwen3.5-9b",
+            "chat_tool_use": "qwen3.5-9b",
+            "brain_explanation": "qwen3.5-9b"
+        },
+        "task_provider_overrides": {
+            "video_captioning": "lmstudio",
+            "image_captioning": "lmstudio",
+            "chat": "lmstudio",
+            "chat_general": "lmstudio",
+            "chat_tool_use": "lmstudio",
+            "brain_explanation": "lmstudio"
+        },
         "audio_backend": "demucs_cpu",
         "parallel_tasks": false,
         "provider": "auto",
@@ -25,85 +41,83 @@
         "task_preferences": {
             "video_captioning": {
                 "speed": [
-                    "qwen/qwen3.5-9b",
-                    "google/gemma-4-e4b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "balance": [
-                    "qwen/qwen3.5-9b",
-                    "qwen/qwen3-vl-8b",
-                    "google/gemma-4-e4b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "quality": [
-                    "qwen/qwen3.6-27b",
-                    "qwen/qwen3.5-9b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct",
+                    "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive"
                 ]
             },
             "image_captioning": {
                 "speed": [
-                    "qwen/qwen3.5-9b",
-                    "google/gemma-4-e4b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "balance": [
-                    "qwen/qwen3.5-9b",
-                    "qwen/qwen3-vl-8b",
-                    "google/gemma-4-e4b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "quality": [
-                    "qwen/qwen3.6-27b",
-                    "qwen/qwen3.5-9b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct",
+                    "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive"
                 ]
             },
             "brain_explanation": {
                 "speed": [
-                    "qwen/qwen3-4b-thinking-2507",
-                    "google/gemma-4-e4b"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
-                    "qwen/qwen3-4b-thinking-2507",
-                    "qwen/qwen3.6-27b",
-                    "google/gemma-4-e4b"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ],
                 "quality": [
-                    "qwen/qwen3.6-27b",
-                    "qwen/qwen3-4b-thinking-2507",
-                    "google/gemma-4-e4b"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "ornith-1.0-35b-a3b_moe_hybrid-imatrix"
+                ]
+            },
+            "chat": {
+                "speed": [
+                    "qwen3.5-9b",
+                    "granite-4.0-h-tiny"
+                ],
+                "balance": [
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
+                ],
+                "quality": [
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             },
             "chat_general": {
                 "speed": [
-                    "google/gemma-4-e4b",
-                    "qwen/qwen3.5-9b"
+                    "qwen3.5-9b",
+                    "granite-4.0-h-tiny"
                 ],
                 "balance": [
-                    "gemma-4-12b-it-uncensored@q4_k_s",
-                    "google/gemma-4-e4b"
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
-                    "qwen/qwen3.6-27b",
-                    "gemma-4-12b-it-uncensored@q4_k_s"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             },
             "chat_tool_use": {
                 "speed": [
-                    "distil-home-assistant-functiongemma",
-                    "google/gemma-4-e4b"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
-                    "qwen/qwen3-coder-30b",
-                    "distil-home-assistant-functiongemma"
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
-                    "qwen/qwen3-coder-30b",
-                    "qwen/qwen3.6-27b"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             }
-        },
-        "task_overrides": {},
-        "task_provider_overrides": {}
+        }
     },
     "ui": {
         "theme": "dark_red",

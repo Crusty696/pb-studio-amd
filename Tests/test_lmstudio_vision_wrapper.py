@@ -6,6 +6,7 @@ Endpunkte: GET /v1/models, POST /v1/chat/completions.
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import patch, AsyncMock, MagicMock
 
 import httpx
@@ -347,3 +348,240 @@ def test_extract_tags_via_lmstudio_cache_hits():
         second = extract_tags_via_lmstudio(frame, mode="balance")
     assert first == second == ["tanzen", "club"]
     assert call_count["chat"] == 1  # Cache hit beim 2. Aufruf
+
+
+# ======================================================================
+# Kaltstart-Ladebudget + Task-Sperre (Audit 2026-08-07)
+#
+# LM Studio laedt ein Modell erst beim ersten Request (JIT). Live gemessen:
+# 15.8 s kalt, 1.2 s warm. Das feste 15-s-Timeout traf damit immer den
+# Kaltstart, der Failover probierte drei Kandidaten und jeder Frame zahlte
+# erneut — 150.69 s pro Clip mit dem Ergebnis "0 tags".
+# ======================================================================
+def _record_wait_for_timeouts():
+    """Contextmanager, der die Timeouts der Chat-Calls sammelt.
+
+    Nur ``client.chat``-Coroutinen zaehlen — der Inventory-Refresh nutzt
+    ebenfalls ``asyncio.wait_for`` (3 s) und wuerde die Liste sonst verwaessern.
+    """
+    import contextlib
+
+    seen: list[float] = []
+    original = asyncio.wait_for
+
+    async def spy(awaitable, timeout=None):
+        code = getattr(awaitable, "cr_code", None)
+        if code is not None and code.co_name == "chat":
+            seen.append(timeout)
+        return await original(awaitable, timeout=timeout)
+
+    @contextlib.contextmanager
+    def _cm():
+        with patch.object(asyncio, "wait_for", spy):
+            yield seen
+
+    return _cm()
+
+
+def test_erster_call_bekommt_ladebudget_zweiter_das_kurze_timeout():
+    from pb_studio.video.lmstudio_vision_wrapper import DEFAULT_LOAD_TIMEOUT_SECONDS
+
+    frame_a = np.zeros((32, 32, 3), dtype=np.uint8)
+    frame_b = np.full((32, 32, 3), 90, dtype=np.uint8)  # anderer Hash -> kein Cache
+
+    transport = _make_vision_transport(DEFAULT_VISION_MODEL, "tanzen, club")
+    with _record_wait_for_timeouts() as timeouts, _patch_client_factory(transport):
+        assert extract_tags_via_lmstudio(frame_a, mode="balance") == ["tanzen", "club"]
+        assert extract_tags_via_lmstudio(frame_b, mode="balance") == ["tanzen", "club"]
+
+    assert len(timeouts) == 2, timeouts
+    assert timeouts[0] == DEFAULT_LOAD_TIMEOUT_SECONDS
+    assert timeouts[1] == 60.0  # Default von extract_tags_via_lmstudio
+
+
+def test_ladebudget_wird_nach_timeout_nicht_erneut_vergeben():
+    """Reicht das Ladebudget nicht, bekommt dasselbe Modell keinen zweiten Langlaeufer."""
+    from pb_studio.video.lmstudio_vision_wrapper import DEFAULT_LOAD_TIMEOUT_SECONDS
+
+    frame_a = np.zeros((32, 32, 3), dtype=np.uint8)
+    frame_b = np.full((32, 32, 3), 90, dtype=np.uint8)
+    transport = _make_vision_transport(DEFAULT_VISION_MODEL, "tanzen, club")
+
+    original = asyncio.wait_for
+    seen: list[float] = []
+
+    async def spy(awaitable, timeout=None):
+        code = getattr(awaitable, "cr_code", None)
+        if code is not None and code.co_name == "chat":
+            seen.append(timeout)
+            awaitable.close()          # Coroutine sauber schliessen
+            raise asyncio.TimeoutError()
+        return await original(awaitable, timeout=timeout)
+
+    with patch.object(asyncio, "wait_for", spy), _patch_client_factory(transport):
+        assert extract_tags_via_lmstudio(frame_a, mode="balance") == []
+        assert extract_tags_via_lmstudio(frame_b, mode="balance") == []
+
+    assert seen, "kein Chat-Call beobachtet"
+    assert seen[0] == DEFAULT_LOAD_TIMEOUT_SECONDS
+    # Jeder weitere Call — auch der des naechsten Frames — nur noch kurz.
+    assert all(t == 60.0 for t in seen[1:]), seen
+
+
+def test_nur_ein_kandidat_pro_frame_bekommt_ladebudget():
+    """Sonst kostet ein einziger Frame 3 x Ladebudget."""
+    from pb_studio.video.lmstudio_vision_wrapper import DEFAULT_LOAD_TIMEOUT_SECONDS
+
+    frame = np.zeros((32, 32, 3), dtype=np.uint8)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/api/v0/models") and request.method == "GET":
+            return httpx.Response(200, json={"data": [
+                {"id": "vlm-a", "type": "vlm", "state": "not-loaded"},
+                {"id": "vlm-b", "type": "vlm", "state": "not-loaded"},
+                {"id": "vlm-c", "type": "vlm", "state": "not-loaded"},
+            ]})
+        if path.endswith("/models") and request.method == "GET":
+            return httpx.Response(200, json={"object": "list", "data": [
+                {"id": n, "object": "model"} for n in ("vlm-a", "vlm-b", "vlm-c")]})
+        if path.endswith("/chat/completions"):
+            return httpx.Response(200, json={
+                "id": "x", "object": "chat.completion", "model": "vlm-a",
+                "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": ""}}]})
+        return httpx.Response(404)
+
+    original = asyncio.wait_for
+    seen: list[float] = []
+
+    async def spy(awaitable, timeout=None):
+        code = getattr(awaitable, "cr_code", None)
+        if code is not None and code.co_name == "chat":
+            seen.append(timeout)
+        return await original(awaitable, timeout=timeout)
+
+    with patch.object(asyncio, "wait_for", spy),          _patch_client_factory(httpx.MockTransport(handler)):
+        assert extract_tags_via_lmstudio(frame, mode="balance") == []
+
+    lang = [t for t in seen if t == DEFAULT_LOAD_TIMEOUT_SECONDS]
+    assert len(seen) >= 2, seen
+    assert len(lang) == 1, f"mehr als ein Ladebudget in einem Frame: {seen}"
+
+
+def test_task_sperre_verhindert_failover_wiederholung_pro_frame():
+    """Nach erschoepftem Failover darf der naechste Frame keinen Call mehr ausloesen."""
+    frame_a = np.zeros((32, 32, 3), dtype=np.uint8)
+    frame_b = np.full((32, 32, 3), 90, dtype=np.uint8)
+    call_count = {"chat": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/api/v0/models") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={"data": [{"id": DEFAULT_VISION_MODEL, "type": "vlm",
+                                "state": "not-loaded"}]},
+            )
+        if path.endswith("/models") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={"data": [{"id": DEFAULT_VISION_MODEL, "object": "model"}],
+                      "object": "list"},
+            )
+        if path.endswith("/chat/completions"):
+            call_count["chat"] += 1
+            # Leerer Content -> keine nutzbaren Tags -> Failover bis erschoepft.
+            return httpx.Response(
+                200,
+                json={"id": "x", "object": "chat.completion",
+                      "model": DEFAULT_VISION_MODEL,
+                      "choices": [{"index": 0,
+                                   "message": {"role": "assistant", "content": ""},
+                                   "finish_reason": "stop"}]},
+            )
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client_factory(transport):
+        assert extract_tags_via_lmstudio(frame_a, mode="balance") == []
+        calls_after_first_frame = call_count["chat"]
+        assert extract_tags_via_lmstudio(frame_b, mode="balance") == []
+
+    assert calls_after_first_frame >= 1
+    assert call_count["chat"] == calls_after_first_frame, (
+        "Zweiter Frame hat die erschoepfte Failover-Kette erneut durchlaufen"
+    )
+
+
+def test_parse_tags_bremst_wortschleifen():
+    """VLMs geraten bei Tag-Listen in Wortschleifen — live beobachtet."""
+    raw = ("dunkel, fetisch, fetischkleidung, fetischmode, fetischlook, "
+           "fetischtanz, fetischparty, fetischstimmung, fetischambiente, wasser")
+    out = _parse_tags(raw)
+    fetisch = [t for t in out if t.startswith("fetisch")]
+    assert len(fetisch) <= 2, out
+    # Die inhaltlich verschiedenen Tags muessen erhalten bleiben.
+    assert "dunkel" in out
+    assert "wasser" in out
+
+
+def test_parse_tags_erlaubt_zwei_aehnliche_stämme():
+    """Zwei gleiche Staemme sind erlaubt, der dritte faellt weg."""
+    out = _parse_tags("schwarz, schwarzlicht, schwarzweiss, rot")
+    assert out == ["schwarz", "schwarzlicht", "rot"], out
+
+
+def test_parse_tags_kurze_tags_kollidieren_nicht():
+    """Tags kuerzer als _STEM_LEN bilden eigene Schluessel."""
+    out = _parse_tags("tanz, tanzen, wasser, neonlicht")
+    assert out == ["tanz", "tanzen", "wasser", "neonlicht"]
+
+
+def test_produktionsdefault_ist_45s_nicht_15s():
+    """video_router ruft extract_tags_and_model_via_lmstudio ohne Timeout-Argument."""
+    from pb_studio.video.lmstudio_vision_wrapper import (
+        DEFAULT_LOAD_TIMEOUT_SECONDS,
+        extract_tags_and_model_via_lmstudio,
+    )
+
+    frame_a = np.zeros((32, 32, 3), dtype=np.uint8)
+    frame_b = np.full((32, 32, 3), 90, dtype=np.uint8)
+    transport = _make_vision_transport(DEFAULT_VISION_MODEL, "tanzen, club")
+
+    with _record_wait_for_timeouts() as timeouts, _patch_client_factory(transport):
+        extract_tags_and_model_via_lmstudio(frame_a, mode="balance")
+        extract_tags_and_model_via_lmstudio(frame_b, mode="balance")
+
+    assert timeouts == [DEFAULT_LOAD_TIMEOUT_SECONDS, 45.0], timeouts
+
+
+def test_warm_status_laeuft_ab_und_gibt_ladebudget_zurueck():
+    """LM Studio entlaedt per JIT-TTL — 'warm' darf nicht ewig gelten."""
+    import pb_studio.video.lmstudio_vision_wrapper as w
+
+    key = ("lmstudio", "irgendein-vlm")
+    w._WARM_MODELS[key] = time.monotonic()
+    w._LOAD_BUDGET_SPENT.add(key)
+    assert w._ist_warm(key) is True
+
+    w._WARM_MODELS[key] = time.monotonic() - w._WARM_WINDOW_SECONDS - 1.0
+    assert w._ist_warm(key) is False
+    assert key not in w._WARM_MODELS
+    assert key not in w._LOAD_BUDGET_SPENT, "Ladebudget muss nach Abkuehlen neu gelten"
+
+
+def test_task_sperre_laeuft_ab():
+    """Startet der Nutzer LM Studio nach, darf die Sperre nicht kleben bleiben."""
+    import pb_studio.video.lmstudio_vision_wrapper as w
+
+    frame = np.zeros((32, 32, 3), dtype=np.uint8)
+    transport = _make_vision_transport(DEFAULT_VISION_MODEL, "tanzen, club")
+
+    w._TASK_UNAVAILABLE_UNTIL["video_captioning"] = time.monotonic() + 60.0
+    with _patch_client_factory(transport):
+        assert extract_tags_via_lmstudio(frame, mode="balance") == []
+
+        w._TASK_UNAVAILABLE_UNTIL["video_captioning"] = time.monotonic() - 1.0
+        assert extract_tags_via_lmstudio(frame, mode="balance") == ["tanzen", "club"]
+    assert "video_captioning" not in w._TASK_UNAVAILABLE_UNTIL

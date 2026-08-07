@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import httpx
 import pytest
@@ -367,3 +368,40 @@ def test_recommendation_when_none_installed():
     out = _run(go())
     assert out["model"] is None
     assert out["installed"] == []
+
+
+# ======================================================================
+# Sessionsperre nicht ladbarer Modelle (Audit 2026-08-07)
+#
+# Die Sperre war unbefristet. Live reproduziert: ein grosses Modell mit
+# JIT-TTL im VRAM laesst den Ladeversuch mit "Failed to load model ...
+# Engine protocol startup was aborted" scheitern — nach dem Entladen laedt
+# dasselbe Modell wieder. Unbefristet haette das Vision-Tagging fuer den
+# Rest der Backend-Laufzeit ausgesetzt.
+# ======================================================================
+def test_unloadable_sperre_laeuft_ab():
+    import pb_studio.ai.model_registry as mr
+
+    mr.reset_unloadable_models()
+    key = ("lmstudio", "irgendein-modell")
+    try:
+        mr._UNLOADABLE_MODELS[key] = time.monotonic() + 900.0
+        assert key in mr.get_unloadable_models()
+
+        # Ablaufzeitpunkt in die Vergangenheit setzen -> Sperre faellt weg.
+        mr._UNLOADABLE_MODELS[key] = time.monotonic() - 1.0
+        assert key not in mr.get_unloadable_models()
+        assert key not in mr._UNLOADABLE_MODELS, "abgelaufener Eintrag muss entfernt werden"
+    finally:
+        mr.reset_unloadable_models()
+
+
+def test_is_unloadable_error_erkennt_engine_abbruch():
+    import pb_studio.ai.model_registry as mr
+
+    exc = RuntimeError(
+        'Failed to load model "qwen3.5-9b". '
+        "Error: Engine protocol startup was aborted."
+    )
+    assert mr._is_unloadable_error(exc) is True
+    assert mr._is_unloadable_error(TimeoutError()) is False

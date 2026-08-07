@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypeVar
@@ -713,7 +714,15 @@ class ModelRegistry:
 # geladen werden kann. Transiente Fehler (Timeout, Verbindungsabbruch) fuehren
 # bewusst NICHT zur Sperre.
 # ---------------------------------------------------------------------------
-_UNLOADABLE_MODELS: set[tuple[str, str]] = set()
+# Audit 2026-08-07: die Sperre war unbefristet. Live reproduziert: liegt in
+# LM Studio noch ein grosses Modell mit JIT-TTL im VRAM, scheitert der Ladeversuch
+# mit "Failed to load model ... Engine protocol startup was aborted" — ein
+# Marker aus dieser Liste. Nach dem Entladen laedt dasselbe Modell wieder
+# problemlos. Eine unbefristete Sperre haette das Vision-Tagging fuer den Rest
+# der Backend-Laufzeit deaktiviert. Die Sperre laeuft daher ab.
+_UNLOADABLE_LOCK_SECONDS = 900.0
+
+_UNLOADABLE_MODELS: dict[tuple[str, str], float] = {}
 
 _UNLOADABLE_ERROR_MARKERS = (
     "failed to load model",
@@ -730,12 +739,21 @@ def _is_unloadable_error(exc: Exception) -> bool:
 
 
 def get_unloadable_models() -> frozenset[tuple[str, str]]:
-    """Aktuell fuer diese Session gesperrte (provider, model_id)-Paare."""
+    """Aktuell gesperrte (provider, model_id)-Paare; abgelaufene fallen raus."""
+    now = time.monotonic()
+    # list(...) kopiert auf C-Ebene in einem Schritt. Eine Comprehension mit
+    # Bedingung iteriert dagegen auf Python-Ebene und kann von einem parallelen
+    # Schreiber (Vision laeuft in asyncio.to_thread, der Brain-Narrator im
+    # Event-Loop) mit "dictionary changed size during iteration" abgebrochen
+    # werden — mitten in der Modellauswahl, ausserhalb jedes Retry-Pfads.
+    for key, until in list(_UNLOADABLE_MODELS.items()):
+        if until <= now:
+            _UNLOADABLE_MODELS.pop(key, None)
     return frozenset(_UNLOADABLE_MODELS)
 
 
 def reset_unloadable_models() -> None:
-    """Hebt die Sessionsperre auf (Tests, sowie nach Modell-Installation)."""
+    """Hebt die Sperre sofort auf (Tests, sowie nach Modell-Installation)."""
     _UNLOADABLE_MODELS.clear()
 
 
@@ -761,7 +779,7 @@ async def execute_with_model_failover(
     snapshot = await inventory.refresh()
     # Sessionweite Sperre als Startmenge: Modelle, die in dieser Session
     # nachweislich nicht ladbar waren, werden gar nicht erst erneut probiert.
-    excluded: set[tuple[str, str]] = set(_UNLOADABLE_MODELS)
+    excluded: set[tuple[str, str]] = set(get_unloadable_models())
     attempts: list[ModelSelectionReceipt] = []
     refreshed_after_failure = False
     last_error: Optional[Exception] = None
@@ -797,11 +815,15 @@ async def execute_with_model_failover(
             excluded.add((receipt.provider, receipt.model_id))
             if _is_unloadable_error(exc):
                 key = (receipt.provider, receipt.model_id)
-                if key not in _UNLOADABLE_MODELS:
-                    _UNLOADABLE_MODELS.add(key)
+                first_lock = key not in _UNLOADABLE_MODELS
+                _UNLOADABLE_MODELS[key] = (
+                    time.monotonic() + _UNLOADABLE_LOCK_SECONDS
+                )
+                if first_lock:
                     logger.warning(
-                        "Modell fuer diese Session gesperrt (nicht ladbar): "
+                        "Modell fuer %.0fs gesperrt (nicht ladbar): "
                         "provider=%s model=%s grund=%s",
+                        _UNLOADABLE_LOCK_SECONDS,
                         receipt.provider,
                         receipt.model_id,
                         exc,

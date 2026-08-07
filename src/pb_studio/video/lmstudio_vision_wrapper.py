@@ -21,6 +21,8 @@ import asyncio
 import hashlib
 import logging
 import re
+import time
+from collections import defaultdict
 from typing import Any, Callable, Optional
 
 import numpy as np
@@ -30,6 +32,57 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TASK = "video_captioning"
 DEFAULT_MODE = "balance"
+
+# ---------------------------------------------------------------------------
+# Audit 2026-08-07: Kaltstart-Budget fuer LM Studios JIT-Load.
+#
+# ``timeout_seconds`` war 15.0 und galt fuer JEDEN Call. LM Studio laedt ein
+# Modell aber erst beim ersten Request (JIT) — live gemessen 15.8 s fuer
+# qwen3.5-9b, danach 1.2–6.2 s pro Frame. Der erste Call lief damit immer in
+# den Timeout, der Failover probierte drei Kandidaten a 15 s, und das pro
+# Frame: 3 Frames = 150.69 s je Clip mit dem Ergebnis "0 tags (none)".
+# Kein Kandidat wurde je warm, weil jeder Ladeversuch vorher abgebrochen wurde.
+#
+# Der erste Call gegen ein Modell bekommt jetzt ein Ladebudget; ist das Modell
+# einmal warm, gilt wieder das kurze Timeout. Das Ladebudget wird pro Modell
+# und Prozess genau einmal vergeben — sonst kostet ein wirklich totes Modell
+# das Vielfache des alten Zustands.
+# ---------------------------------------------------------------------------
+# Knapp unter DEFAULT_GENERATION_TIMEOUT (180 s) des HTTP-Clients, damit bei
+# Ueberschreitung deterministisch dieser Timeout greift und nicht httpx.
+DEFAULT_LOAD_TIMEOUT_SECONDS = 165.0
+
+# Nach erschoepftem Failover ist LM Studio fuer diesen Task nachweislich nicht
+# nutzbar. Ohne Sperre wiederholt jeder weitere Frame dieselbe Kette.
+# Bewusst kurz: startet der Nutzer LM Studio direkt nach einem Fehlschlag, soll
+# der naechste Clip wieder Tags bekommen und nicht minutenlang leer bleiben.
+# Die Frames innerhalb dieses Fensters werden als "analysiert, keine Tags"
+# persistiert — je laenger die Sperre, desto mehr falsch-leere Clips.
+_UNAVAILABLE_COOLDOWN_SECONDS = 60.0
+
+# Warm heisst: dieses Modell hat kuerzlich geantwortet, ohne geladen werden zu
+# muessen. LM Studio entlaedt per JIT-TTL (Default 3600 s) wieder. Ein
+# unbefristetes "warm" wuerde nach einer Pause genau den Zustand herstellen,
+# den dieser Fix beseitigt: kaltes Modell, kurzes Timeout, Failover.
+_WARM_WINDOW_SECONDS = 600.0
+
+_WARM_MODELS: dict[tuple[str, str], float] = {}
+_LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
+_TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+
+
+def _ist_warm(model_key: tuple[str, str]) -> bool:
+    """True, solange das Modell innerhalb des Warm-Fensters geantwortet hat."""
+    zuletzt = _WARM_MODELS.get(model_key)
+    if zuletzt is None:
+        return False
+    if time.monotonic() - zuletzt > _WARM_WINDOW_SECONDS:
+        # Abgekuehlt: Warm-Status faellt weg UND das Ladebudget wird neu
+        # gewaehrt, sonst laeuft der Reload in das kurze Timeout.
+        _WARM_MODELS.pop(model_key, None)
+        _LOAD_BUDGET_SPENT.discard(model_key)
+        return False
+    return True
 
 # Review-Fix 2026-07-09: injizierbarer Status-Publisher statt Direktimport von
 # backend.dependencies (Layering-Inversion). Backend wired beim Startup
@@ -74,6 +127,20 @@ _STOPWORDS = frozenset({
     "of", "to", "as", "it", "this", "that", "be", "can", "which", "while",
     "show", "shows", "showing", "depicts", "depicting",
 })
+
+# Wortschleifen-Bremse: hoechstens ``_MAX_PER_STEM`` Tags duerfen sich die
+# ersten ``_STEM_LEN`` Zeichen teilen.
+#
+# Kurze Tags sind nicht betroffen, weil ein Tag kuerzer als _STEM_LEN seinen
+# eigenen Schluessel bildet: 'tanz' und 'tanzen' kollidieren nicht.
+#
+# Ehrlich benannter Preis: bei drei oder mehr echten Komposita mit gleichem
+# Stamm faellt das dritte weg — 'schwarz, schwarzlicht, schwarzweiss' verliert
+# 'schwarzweiss'. Das ist in Kauf genommen, weil die beobachtete Alternative
+# zehn Varianten desselben Wortes waren und der Informationsverlust dort
+# ungleich groesser ist.
+_STEM_LEN = 7
+_MAX_PER_STEM = 2
 
 _INVALID_RESPONSE_PATTERNS = (
     re.compile(r"\b(?:sorry|cannot|can['’]t|unable\s+to|not\s+able\s+to)\b", re.IGNORECASE),
@@ -142,6 +209,7 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
     parts = [chunk.strip() for chunk in text.replace("\n", ",").split(",")]
     tags: list[str] = []
     seen: set[str] = set()
+    stem_counts: dict[str, int] = defaultdict(int)
     prose = _looks_like_prose(text, parts, has_list_prefix=has_list_prefix)
     candidates = (
         re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE)
@@ -162,6 +230,14 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         # Mehr-Wort-Tags begrenzen
         if len(cleaned.split()) > 4:
             continue
+        # Audit 2026-08-07: VLMs geraten bei Tag-Listen in Wortschleifen —
+        # live beobachtet 'fetisch, fetischkleidung, fetischmode, fetischlook,
+        # fetischtanz, fetischparty, ...' (8 von 10 Tags mit gleichem Stamm).
+        # frequency_penalty daempft das, beseitigt es aber nicht zuverlaessig.
+        stem = cleaned[:_STEM_LEN]
+        if stem_counts[stem] >= _MAX_PER_STEM:
+            continue
+        stem_counts[stem] += 1
         tags.append(cleaned)
         seen.add(cleaned)
         if len(tags) >= max_tags:
@@ -170,6 +246,11 @@ def _parse_tags(raw: str, *, max_tags: int = 10) -> list[str]:
         for word in re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE):
             if len(word) < 3 or word in _STOPWORDS or word in seen:
                 continue
+            # Gleiche Bremse wie oben — sonst ist dieser Pfad ein Schlupfloch.
+            stem = word[:_STEM_LEN]
+            if stem_counts[stem] >= _MAX_PER_STEM:
+                continue
+            stem_counts[stem] += 1
             tags.append(word)
             seen.add(word)
             if len(tags) >= max_tags:
@@ -216,6 +297,7 @@ async def _async_extract_tags(
     prompt: str,
     model_override: Optional[str],
     timeout_seconds: float,
+    load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
 ) -> tuple[list[str], str]:
     from pb_studio.ai.model_registry import (
         ModelFailoverExhaustedError,
@@ -229,16 +311,31 @@ async def _async_extract_tags(
         is_provider_failure,
     )
 
+    blocked_until = _TASK_UNAVAILABLE_UNTIL.get(task)
+    if blocked_until is not None:
+        if time.monotonic() < blocked_until:
+            # Kein erneuter Failover-Durchlauf — der letzte hat bewiesen, dass
+            # kein Kandidat liefert. Sonst zahlt jeder Frame denselben Preis.
+            _publish_status("none", "LLM", "unavailable", 0.0)
+            return [], "none"
+        _TASK_UNAVAILABLE_UNTIL.pop(task, None)
+
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
 
     class _NoUsableTagsError(RuntimeError):
         pass
 
+    # Nur EIN Kandidat pro Frame darf das Ladebudget ziehen. Ohne diese Grenze
+    # kostet ein einziger Frame im schlechtesten Fall 3 x load_timeout_seconds
+    # — mehr als der Zustand, den dieser Fix beseitigen soll.
+    budget_granted_here = False
+
     async def _call(
         client: LMStudioClient,
         receipt: ModelSelectionReceipt,
     ) -> list[str]:
+        nonlocal budget_granted_here
         provider_name = (
             "Ollama" if receipt.provider == "ollama" else "LM Studio"
         )
@@ -252,15 +349,51 @@ async def _async_extract_tags(
             _publish_status(receipt.model_id, provider_name, "active", 100.0)
             return list(cached)
         _publish_status(receipt.model_id, provider_name, "loading", 25.0)
-        response = await asyncio.wait_for(
-            client.chat(
-                model=receipt.model_id,
-                messages=[{"role": "user", "content": prompt}],
-                images=[frame_rgb],
-                options={"temperature": 0.2},
-            ),
-            timeout=timeout_seconds,
+
+        model_key = (receipt.provider, receipt.model_id)
+        gewaehrt_budget = (
+            not _ist_warm(model_key)
+            and model_key not in _LOAD_BUDGET_SPENT
+            and not budget_granted_here
         )
+        if gewaehrt_budget:
+            budget_granted_here = True
+            effective_timeout = max(timeout_seconds, load_timeout_seconds)
+            logger.info(
+                "Kalter Vision-Call gegen %s/%s — Ladebudget %.0fs (JIT-Load).",
+                receipt.provider,
+                receipt.model_id,
+                effective_timeout,
+            )
+        else:
+            effective_timeout = timeout_seconds
+
+        try:
+            response = await asyncio.wait_for(
+                client.chat(
+                    model=receipt.model_id,
+                    messages=[{"role": "user", "content": prompt}],
+                    images=[frame_rgb],
+                    # Kein frequency_penalty: gegen die Wortschleifen wirkt
+                    # bereits _MAX_PER_STEM im Parser, und zwar deterministisch.
+                    # Die Penalty wurde live gegengemessen (2 Laeufe x 3 Frames)
+                    # und war schlechter — ohne sie 41 Tags/0 verklebt, mit 0.6
+                    # nur 30 Tags/4 verklebt ("bewegtefiguren").
+                    options={"temperature": 0.2},
+                ),
+                timeout=effective_timeout,
+            )
+        except asyncio.TimeoutError:
+            if gewaehrt_budget:
+                # Das Ladebudget hat nicht gereicht. Kein zweiter Langlaeufer
+                # fuer dieses Modell, bis es nachweislich wieder warm war.
+                # Wichtig: NUR beim Timeout sperren — ein HTTP-500 oder ein
+                # Verbindungsabbruch sagt nichts ueber die Ladezeit aus und
+                # darf das einmalige Budget nicht verbrennen.
+                _LOAD_BUDGET_SPENT.add(model_key)
+            raise
+        _WARM_MODELS[model_key] = time.monotonic()
+        _LOAD_BUDGET_SPENT.discard(model_key)
         message = response.get("message") or {}
         raw = message.get("content") or response.get("response") or ""
         tags = _parse_tags(str(raw))
@@ -288,7 +421,16 @@ async def _async_extract_tags(
         )
         return tags, receipt.model_id
     except ModelFailoverExhaustedError as exc:
-        logger.warning("Keine nutzbare Receipt-Auswahl für Tags: %s", exc)
+        _TASK_UNAVAILABLE_UNTIL[task] = (
+            time.monotonic() + _UNAVAILABLE_COOLDOWN_SECONDS
+        )
+        logger.warning(
+            "Keine nutzbare Receipt-Auswahl für Tags: %s — Task %r fuer %.0fs "
+            "gesperrt, sonst wiederholt jeder Frame dieselbe Kette.",
+            exc,
+            task,
+            _UNAVAILABLE_COOLDOWN_SECONDS,
+        )
         _publish_status("none", "LLM", "unavailable", 0.0)
         return [], "none"
 
@@ -300,7 +442,13 @@ def extract_tags_and_model_via_lmstudio(
     task: str = DEFAULT_TASK,
     prompt: str = DEFAULT_PROMPT,
     model_override: Optional[str] = None,
-    timeout_seconds: float = 15.0,
+    # 15.0 war zu knapp: die installierten VLMs (qwen3.5-9b,
+    # ministral-3-14b-reasoning) sind Reasoning-Modelle und verbrauchen vor der
+    # Tag-Zeile mehrere hundert Denk-Token — warm gemessen 1.2 s bis 10.6 s je
+    # nach Bildinhalt. Ein knappes Timeout wirft den Frame in den Failover,
+    # obwohl das Modell laeuft.
+    timeout_seconds: float = 45.0,
+    load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
 ) -> tuple[list[str], str]:
     """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell inkl. verwendetem Modellnamen.
 
@@ -314,7 +462,10 @@ def extract_tags_and_model_via_lmstudio(
             ``video_captioning``).
         prompt: Override fuer den Default-Prompt (deutsch).
         model_override: Wenn gesetzt, ueberspringt Auto-Selection.
-        timeout_seconds: HTTP-Timeout fuer den Chat-Call.
+        timeout_seconds: Timeout fuer einen Call gegen ein bereits warmes Modell.
+        load_timeout_seconds: Einmaliges Budget fuer den ersten Call gegen ein
+            Modell, das LM Studio noch laden muss (JIT). Pro Modell und Prozess
+            genau einmal vergeben.
 
     Returns:
         Tuple aus:
@@ -338,6 +489,7 @@ def extract_tags_and_model_via_lmstudio(
                 prompt=prompt,
                 model_override=model_override,
                 timeout_seconds=timeout_seconds,
+                load_timeout_seconds=load_timeout_seconds,
             )
         )
     except RuntimeError as exc:
@@ -354,6 +506,7 @@ def extract_tags_and_model_via_lmstudio(
                     prompt=prompt,
                     model_override=model_override,
                     timeout_seconds=timeout_seconds,
+                    load_timeout_seconds=load_timeout_seconds,
                 )
             )
         except Exception as inner:
@@ -401,8 +554,11 @@ def extract_tags_via_lmstudio(
 
 
 def clear_tag_cache() -> None:
-    """Test-Helper: leert den prozesslokalen Tag-Cache."""
+    """Test-Helper: leert Tag-Cache, Warm-Status und Task-Sperre."""
     _TAG_CACHE.clear()
+    _WARM_MODELS.clear()
+    _LOAD_BUDGET_SPENT.clear()
+    _TASK_UNAVAILABLE_UNTIL.clear()
 
 
 # Backwards-compatibility-Alias: alter Name funktioniert noch (Deprecated).

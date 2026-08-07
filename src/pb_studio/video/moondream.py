@@ -68,6 +68,12 @@ def onnx_models_available(models_dir: Optional[str] = None) -> bool:
     Vermeidet, dass Aufrufer einen with_gpu_task-Slot fuer eine Inferenz
     reservieren, die per IRON RULE (kein CPU-Fallback) ohnehin nur
     fehlschlagen kann, wenn die ONNX-Modelle fehlen.
+
+    Audit 2026-08-07: die Pruefung liess frueher den Encoder allein genuegen.
+    Tag-Generierung braucht aber den Decoder — mit reinem Encoder lief pro Clip
+    eine 1800-MB-Reservierung samt GPU-Lock in einen Load, der garantiert
+    "Moondream-Decoder (ONNX) fehlt" meldet und null Tags liefert. Belegt in
+    logs/backend.log, 2026-08-07 (je Clip ~3 s verschenkt).
     """
     if models_dir is None:
         from pb_studio.config_manager import ConfigManager
@@ -77,8 +83,12 @@ def onnx_models_available(models_dir: Optional[str] = None) -> bool:
         models_path / "moondream_encoder.onnx",
         models_path / "moondream_vision.onnx",
     ]
+    decoder_path = models_path / "moondream_decoder.onnx"
     combined_path = models_path / "moondream.onnx"
-    return any(c.exists() for c in encoder_candidates) or combined_path.exists()
+    split_vollstaendig = (
+        any(c.exists() for c in encoder_candidates) and decoder_path.exists()
+    )
+    return split_vollstaendig or combined_path.exists()
 
 
 class MoondreamAnalyzer:
