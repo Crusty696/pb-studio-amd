@@ -77,7 +77,41 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-06 (Datenfluss-Audit + 38 Fixes, Commit `7a604de`)
+- **Date:** 2026-08-07 (Vision-Tagging repariert, Commit `74c5807`, gepusht)
+- **Status (2026-08-07 — autoritativ):**
+  - Auslöser: „DIE ANALYSE STIMMT NICHT DAS GEHT VIEL ZU LANGE / VIDEO ANALYSE".
+    **Bestätigt.** `/video/analyze` brauchte **150,69 s pro Clip** und lieferte
+    **`0 tags (none)`**.
+  - Ursache: das 15,0-s-Timeout um den LM-Studio-Chat-Call war **kürzer als
+    LM Studios JIT-Ladezeit** (gemessen 15,8 s). Jeder erste Call lief in den
+    Timeout, der Failover verbrannte 3 Kandidaten × 15 s **pro Frame**. Kein
+    Modell wurde je warm, weil jeder Ladeversuch vorher abgebrochen wurde.
+  - **Neues Modell:** `qwen2.5-vl-7b-instruct` (Non-Reasoning-VLM, Apache-2.0,
+    6,04 GB) installiert und als Override für `video_captioning`/`image_captioning`
+    gesetzt. Die vorherigen Kandidaten sind Reasoning-Modelle und verbrennen
+    mehrere hundert Denk-Token vor der Tag-Zeile.
+  - **Failover-Ketten gekürzt** — jeder Schritt zwingt LM Studio zum
+    Modellwechsel, live gemessen **72–120 s pro Wechsel**. Die Kette war selbst
+    der Schaden. Alle Preference-Listen gegen das Live-Inventar neu gesetzt
+    (6 nicht mehr installierte IDs raus, fehlender `chat`-Block ergänzt).
+  - **Moondream:** `onnx_models_available()` ließ den Encoder allein genügen →
+    pro Clip 1800 MB + GPU-Lock für einen Load, der garantiert nichts liefert.
+    Decoder ist jetzt Pflicht.
+  - **Live verifiziert am laufenden Backend:** `POST /video/analyze` → **15,2 s**,
+    `captions: completed`, `tag_source: qwen2.5-vl-7b-instruct`, 10 deutsche Tags,
+    persistiert in `media.id 205`. Keine Moondream-Reservierung mehr im Log.
+    pytest **1281 passed / 13 skipped / 0 failed**.
+  - **Vier Review-Agents** haben **6 Defekte in der ersten Fassung meines
+    eigenen Fixes** gefunden, alle behoben: fehlende TTL auf `_WARM_MODELS`,
+    Ladebudget von Nicht-Ladefehlern verbrannt, Worst Case 3 × 165 s pro Frame,
+    Dict-Iteration ohne Snapshot, Cooldown zu lang, ein Test der nichts prüfte.
+  - **Offen (Vorbestand, nicht angefasst):** `VRAMArbiter.can_allocate()` hat
+    keinen Produktions-Aufrufer — der Sensor-Gegencheck ist unerreichbar,
+    deshalb rechnet der Budget-Manager mit VRAM, das LM Studio hält.
+    Override und Preference tragen dieselbe `source` im Receipt.
+  - **Datenrest:** 50 Clips in der DB tragen `tag_source: "none"` mit leeren
+    Tags aus der kaputten Phase und werden ohne Zurücksetzen nicht neu analysiert.
+- **Historischer Stand:** 2026-08-06 (Datenfluss-Audit + 38 Fixes, `7a604de`)
 - **Status (2026-08-06 — autoritativ):**
   - Auslöser: User-Meldung „viele daten werden nicht weiter geleitet" —
     **messbar bestätigt**. Kernmuster 5× unabhängig: Feature implementiert und
