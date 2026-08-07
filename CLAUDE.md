@@ -105,12 +105,30 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
     eigenen Fixes** gefunden, alle behoben: fehlende TTL auf `_WARM_MODELS`,
     Ladebudget von Nicht-Ladefehlern verbrannt, Worst Case 3 × 165 s pro Frame,
     Dict-Iteration ohne Snapshot, Cooldown zu lang, ein Test der nichts prüfte.
-  - **Offen (Vorbestand, nicht angefasst):** `VRAMArbiter.can_allocate()` hat
-    keinen Produktions-Aufrufer — der Sensor-Gegencheck ist unerreichbar,
-    deshalb rechnet der Budget-Manager mit VRAM, das LM Studio hält.
-    Override und Preference tragen dieselbe `source` im Receipt.
-  - **Datenrest:** 50 Clips in der DB tragen `tag_source: "none"` mit leeren
-    Tags aus der kaputten Phase und werden ohne Zurücksetzen nicht neu analysiert.
+  - **Zweite Runde, Commit `db9f3eb` (gepusht):** die Review-Restliste ist
+    abgearbeitet. pytest **1288 passed / 13 skipped / 0 failed**.
+    - **VRAM-Sensor verdrahtet.** `VRAMBudgetManager.monitor` wurde von genau
+      einem Aufrufer gesetzt — `VRAMArbiter`, im eigenen Docstring
+      „DEPRECATED" und ohne Produktions-Aufrufer. In Produktion war der Monitor
+      **immer `None`**; die Eigenbuchhaltung konnte nie gegen die Realität
+      geprüft werden. Jetzt im Lifespan verbunden, live belegt:
+      `Buchhaltung=15277MB, Sensor=8686MB (Differenz=6591MB)` — das ist
+      LM Studio auf derselben Karte. **Meldet, sperrt nicht:** DirectML kann
+      auf Shared Memory ausweichen, ein Gate würde „langsam" zu
+      „fehlgeschlagen" machen. `Tests/test_vram_sensor_wiring.py` prüft den
+      Produzenten; Gegenprobe gemacht, bei entfernter Verdrahtung fällt er.
+    - **Merke:** die erste Fassung dieses Checks war selbst toter Code — die
+      Unit-Tests injizieren ihren Monitor und blieben grün. Producer-ohne-
+      Consumer, diesmal selbst produziert. Nur der fehlende Logeintrag verriet es.
+    - `user_task_override` als eigene Receipt-Quelle (Override und
+      Präferenzliste teilten sich einen Wert).
+    - **6 tote Config-Schlüssel entfernt** (`ai.vision_model` + die fünf
+      T4.6-Reste), gegen Python und C# auf Leser geprüft.
+    - **50 Clips** mit leeren Tags zurückgesetzt; Szenen/Motion/Embedding
+      erhalten, Backup in `data/backups/`.
+    - `_VISION_NAME_TOKENS`: `qwen/qwen3.5-`/`qwen/qwen3.6-` **bleiben**. Sie
+      decken die präfigierte Namensform ab; Verkürzen fängt je ein reines
+      Textmodell mit ein (live gegengeprüft).
 - **Historischer Stand:** 2026-08-06 (Datenfluss-Audit + 38 Fixes, `7a604de`)
 - **Status (2026-08-06 — autoritativ):**
   - Auslöser: User-Meldung „viele daten werden nicht weiter geleitet" —
