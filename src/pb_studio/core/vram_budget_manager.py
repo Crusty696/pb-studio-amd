@@ -28,6 +28,11 @@ from pb_studio.core.directml_adapter import get_directml_adapter
 
 logger = logging.getLogger(__name__)
 
+# Ab dieser Abweichung zwischen Eigenbuchhaltung und LHM-Sensor wird gemeldet.
+_SENSOR_DISCREPANCY_TOLERANCE_MB = 500
+# Hoechstens alle 60 s melden — reserve() laeuft mehrfach pro Clip.
+_SENSOR_DISCREPANCY_LOG_INTERVAL = 60.0
+
 
 class ModelPriority(IntEnum):
     """Model priority levels for eviction decisions."""
@@ -237,6 +242,10 @@ class VRAMBudgetManager:
             self._telemetry: Dict[str, TelemetryEntry] = {}
             self._telemetry_lock = threading.RLock()
 
+            # Drossel fuer die Sensor-Diskrepanz-Meldung: reserve() laeuft
+            # mehrfach pro Clip, die Meldung soll das Log nicht fluten.
+            self._last_discrepancy_log = 0.0
+
             self._initialized = True
             logger.info(
                 f"VRAMBudgetManager initialized: "
@@ -328,9 +337,82 @@ class VRAMBudgetManager:
 
     @property
     def available_vram_mb(self) -> int:
-        """Get available VRAM (usable - reserved - committed)."""
+        """Get available VRAM (usable - reserved - committed).
+
+        Achtung: reine Eigenbuchhaltung. Fremdprozesse auf derselben Karte
+        (LM Studio haelt z.B. dauerhaft ~6,8 GB) tauchen hier NICHT auf.
+        Der Abgleich mit der Realitaet passiert in ``sensor_free_vram_mb``.
+        """
         with self._registry_lock:
             return max(0, self._usable_vram_mb - self._reserved_mb - self._committed_mb)
+
+    def sensor_free_vram_mb(self) -> Optional[int]:
+        """Real freier VRAM laut LibreHardwareMonitor, oder None ohne Sensor.
+
+        Audit 2026-08-07: ``self.monitor`` wurde gesetzt und danach in KEINER
+        Allokationsentscheidung gelesen — der einzige Gegencheck lebte in
+        ``VRAMArbiter.can_allocate()``, das repo-weit keinen Aufrufer hat.
+        Ergebnis: in 56.746 Logzeilen kein einziges "VRAM tracking discrepancy",
+        obwohl die Eigenbuchhaltung um ~7,5 GB danebenlag.
+        """
+        monitor = self.monitor
+        if monitor is None:
+            return None
+        try:
+            stats = monitor.get_stats()
+        except Exception as exc:  # noqa: BLE001 — Telemetrie darf nie werfen
+            logger.debug("VRAM-Sensor nicht lesbar: %s", exc)
+            return None
+        if stats.get("monitoring_status") != "ready":
+            return None
+        adapter_luid = getattr(self.adapter, "luid", None)
+        sensor_luid = stats.get("adapter_luid")
+        if adapter_luid and sensor_luid and sensor_luid != adapter_luid:
+            # Sensor misst eine andere Karte (iGPU) — Wert waere irrefuehrend.
+            return None
+        total = int(stats.get("gpu_memory_total") or 0)
+        used = int(stats.get("gpu_memory_used") or 0)
+        if total <= 0:
+            return None
+        return max(0, total - used - self._safety_buffer_mb)
+
+    def _log_sensor_discrepancy(self, model_id: str, needed_mb: int) -> None:
+        """Meldet, wenn Eigenbuchhaltung und Sensor auseinanderlaufen.
+
+        Bewusst nur Meldung, keine Ablehnung: DirectML kann bei knappem
+        dedizierten VRAM auf Shared Memory ausweichen. Eine Sperre wuerde aus
+        "langsam" ein "fehlgeschlagen" machen — ein neuer Fehlermodus, den es
+        heute nicht gibt. Sichtbarkeit ist das, was fehlte.
+        """
+        real_free = self.sensor_free_vram_mb()
+        if real_free is None:
+            return
+        buchhaltung = self.available_vram_mb
+        now = time.monotonic()
+        if abs(real_free - buchhaltung) <= _SENSOR_DISCREPANCY_TOLERANCE_MB:
+            return
+        if now - self._last_discrepancy_log < _SENSOR_DISCREPANCY_LOG_INTERVAL:
+            return
+        self._last_discrepancy_log = now
+        logger.warning(
+            "VRAM tracking discrepancy: Buchhaltung=%dMB, Sensor=%dMB "
+            "(Differenz=%dMB) — Fremdprozesse auf der Karte werden nicht "
+            "mitgezaehlt. Anforderung: %dMB fuer %s.",
+            buchhaltung,
+            real_free,
+            abs(real_free - buchhaltung),
+            needed_mb,
+            model_id,
+        )
+        if real_free < needed_mb:
+            logger.warning(
+                "VRAM real knapp: %dMB frei laut Sensor, %dMB angefordert fuer "
+                "%s. Reservierung laeuft trotzdem — DirectML kann auf Shared "
+                "Memory ausweichen.",
+                real_free,
+                needed_mb,
+                model_id,
+            )
 
     def update_max_vram(self, limit_mb: int) -> None:
         """Dynamically update maximum VRAM limit with safety protection.
@@ -585,9 +667,13 @@ class VRAMBudgetManager:
             budget.touch()
             self._reserved_mb += budget.estimated_vram_mb
             self._models.move_to_end(model_id)
+            benoetigt = budget.estimated_vram_mb
 
             logger.info(f"Reserved {budget.estimated_vram_mb}MB for {budget.name}")
-            return True
+
+        # Ausserhalb des Registry-Locks: der Sensorabruf kann I/O kosten.
+        self._log_sensor_discrepancy(model_id, benoetigt)
+        return True
 
 
     def commit(self, model_id: str) -> bool:

@@ -44,8 +44,11 @@ class ConfigManager:
             "directml_adapter_policy": "highest_vram_amd",
             "vram_limit_mb": 0,   # 0 = auto-detect (VRAMBudgetManager reads actual capacity)
         },
+        # Audit 2026-08-07: `ai.vision_model` ebenfalls entfernt. Er wurde von
+        # models_router geschrieben, aber repo-weit nie gelesen — die
+        # Vision-Auswahl laeuft komplett ueber task_overrides/task_preferences.
+        # Gleiche Kategorie wie die fuenf Schluessel aus T4.6.
         "ai": {
-            "vision_model": "moondream2_fp16",
             "task_overrides": {},
             "task_provider_overrides": {}
         },

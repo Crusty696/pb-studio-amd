@@ -975,8 +975,13 @@ async def activate_model(
             provider_overrides[task] = selected.provider
         ai_cfg["task_overrides"] = overrides
         ai_cfg["task_provider_overrides"] = provider_overrides
-        if "vision" in capabilities:
-            ai_cfg["vision_model"] = selected.name
+        # Audit 2026-08-07: ``ai.vision_model`` wurde hier geschrieben, aber
+        # repo-weit nirgends gelesen — die Vision-Auswahl laeuft ausschliesslich
+        # ueber task_overrides/task_preferences. Ein Schein-Schalter derselben
+        # Sorte, die T4.6 fuer fuenf andere Schluessel bereits ausgeraeumt hat.
+        # Der Schluessel wird jetzt aktiv entfernt, damit alte Configs nicht
+        # weiter einen Wert anzeigen, der nichts bewirkt.
+        ai_cfg.pop("vision_model", None)
         cfg_manager.set("ai", ai_cfg)
         persisted = json.loads(
             cfg_manager.config_file.read_text(encoding="utf-8")

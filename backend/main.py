@@ -134,6 +134,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except ImportError as e:
         logger.warning(f"  llm_status-Publisher (llm_narrator) nicht verdrahtet: {e}")
 
+    # Audit 2026-08-07: Den VRAM-Budget-Manager mit dem echten Sensor verbinden.
+    # Vorher uebergab GENAU EIN Aufrufer einen Monitor — der als deprecated
+    # markierte VRAMArbiter, der repo-weit keinen Produktions-Aufrufer hat.
+    # In Produktion blieb ``VRAMBudgetManager.monitor`` damit immer None, und
+    # die Eigenbuchhaltung konnte nie gegen die Realitaet geprueft werden.
+    # Live gemessen betrug die Abweichung 4966 MB, weil LM Studio auf derselben
+    # Karte liegt. Der Manager lehnt nichts ab, er macht die Luecke sichtbar.
+    try:
+        from pb_studio.core.system_monitor import SystemMonitor
+        from pb_studio.core.vram_budget_manager import get_vram_manager
+        get_vram_manager(monitor=SystemMonitor())
+        logger.info("  VRAM-Budget-Manager mit Hardware-Sensor verbunden")
+    except Exception as e:  # noqa: BLE001 — Telemetrie darf den Start nie kippen
+        logger.warning(f"  VRAM-Sensor nicht verdrahtet (nicht fatal): {e}")
+
     # Prüfe ob src/ importierbar ist
     try:
         import pb_studio

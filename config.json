@@ -11,11 +11,9 @@
     "hardware": {
         "gpu_backend": "directml",
         "directml_adapter_policy": "highest_vram_amd",
-        "vram_limit_mb": 0,
-        "enable_monitoring": true
+        "vram_limit_mb": 0
     },
     "ai": {
-        "vision_model": "qwen2.5-vl-7b-instruct",
         "task_overrides": {
             "video_captioning": "qwen2.5-vl-7b-instruct",
             "image_captioning": "qwen2.5-vl-7b-instruct",
@@ -32,8 +30,6 @@
             "chat_tool_use": "lmstudio",
             "brain_explanation": "lmstudio"
         },
-        "audio_backend": "demucs_cpu",
-        "parallel_tasks": false,
         "provider": "auto",
         "lmstudio_base_url": "http://127.0.0.1:1234/v1",
         "ollama_base_url": "http://localhost:11434/v1",
@@ -119,8 +115,5 @@
             }
         }
     },
-    "ui": {
-        "theme": "dark_red",
-        "scale_factor": 1.0
-    }
+    "ui": {}
 }

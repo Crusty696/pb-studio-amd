@@ -262,6 +262,21 @@ class ModelRegistry:
     # Strikte Vision-Tokens fuer den Keyword-Fallback (wenn /api/v0/models keine
     # Capability liefert, z.B. bei Ollama). Bewusst KEIN bare "qwen" — das matchte
     # Text-Modelle wie deepseek-r1-qwen3 faelschlich als Vision.
+    # Zu "qwen/qwen3.5-" und "qwen/qwen3.6-" (Audit 2026-08-07): sie decken nur
+    # die praefigierte Namensform ab (Ollama, aeltere LM-Studio-Staende). Die
+    # aktuell hier installierten IDs heissen bloss "qwen3.5-9b" bzw.
+    # "qwen3.6-35b-a3b-...", werden von diesen Tokens also nicht getroffen.
+    #
+    # Verkuerzen waere trotzdem falsch — beide Kurzformen fangen ein reines
+    # Textmodell mit ein, live gegengeprueft:
+    #   "qwen3.5-" -> kshitijthakkar-qwen3.5-moe-0.87b-d0.8b  (type=llm)
+    #   "qwen3.6-" -> qwen3.6-27b-mtp-pi-reasoning            (type=llm)
+    # Ein falsch als vision-faehig markiertes Textmodell kostet im Failover
+    # einen kompletten Modellwechsel (live 72-120 s) und liefert nichts.
+    #
+    # Aus Namen laesst sich das nicht sauber trennen. Die belastbare Aussage
+    # kommt aus ``type == "vlm"``; diese Liste ist nur der Notnagel, wenn
+    # /api/v0/models nicht antwortet, und bleibt deshalb bewusst strikt.
     _VISION_NAME_TOKENS = (
         "-vl", "vl-", "vl:", "vision", "vlm", "llava", "moondream", "multimodal",
         "minicpm-v", "internvl", "pixtral", "smolvlm", "gemma-3n", "gemma3n",
@@ -481,8 +496,13 @@ class ModelRegistry:
             consume_matches(
                 [persisted_model],
                 provider=persisted_provider,
-                source="persisted_task_preference",
-                reason="Persistierte Aufgabenpräferenz ist live nutzbar.",
+                # Audit 2026-08-07: hiess frueher ebenfalls
+                # "persisted_task_preference" — am Receipt war damit nicht
+                # erkennbar, ob ein harter Override (ai.task_overrides) oder
+                # die Modus-Praeferenzliste gegriffen hat. Genau diese
+                # Unterscheidung braucht man bei der Diagnose zuerst.
+                source="user_task_override",
+                reason="Harter Override aus ai.task_overrides ist live nutzbar.",
                 require_unique_without_provider=True,
             )
 

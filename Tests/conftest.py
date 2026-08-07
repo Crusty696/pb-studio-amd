@@ -132,13 +132,12 @@ def mock_config():
         },
         # Audit 2026-08-06 (T4.6): fuenf wirkungslose Schluessel entfernt,
         # synchron zu ConfigManager.DEFAULTS.
+        # Audit 2026-08-07: `ai.vision_model` ebenfalls — geschrieben, nie gelesen.
         "hardware": {
             "gpu_backend": "directml",
             "vram_limit_mb": 4096
         },
-        "ai": {
-            "vision_model": "moondream2_fp16"
-        },
+        "ai": {},
         "ui": {}
     }
 

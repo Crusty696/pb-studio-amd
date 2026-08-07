@@ -75,3 +75,117 @@ def test_eviction_lru():
     assert mgr.is_model_loaded("m2")
     assert mgr.commit("m3")
     assert mgr.is_model_loaded("m3")
+
+
+# ======================================================================
+# Sensor-Gegencheck (Audit 2026-08-07)
+#
+# self.monitor war gesetzt, wurde aber in keiner Allokationsentscheidung
+# gelesen. Der einzige Gegencheck lag in VRAMArbiter.can_allocate(), das
+# repo-weit keinen Aufrufer hat — deshalb stand in 56.746 Logzeilen kein
+# einziges "VRAM tracking discrepancy", obwohl die Eigenbuchhaltung um
+# ~7,5 GB danebenlag (LM Studio haelt dauerhaft ~6,8 GB auf derselben Karte).
+# ======================================================================
+class _FakeMonitor:
+    """Monitor-Double. ``selected_adapter_luid`` muss zur DirectML-Karte passen,
+    sonst verwirft ``_coherent_monitor`` ihn (bewusste Sicherung gegen iGPU-Werte)."""
+
+    def __init__(self, luid, **stats):
+        self.selected_adapter_luid = luid
+        self._stats = stats
+        self.aufrufe = 0
+
+    def get_stats(self, *, force_refresh: bool = False) -> dict:
+        self.aufrufe += 1
+        return dict(self._stats)
+
+
+def _adapter_luid():
+    from pb_studio.core.directml_adapter import get_directml_adapter
+
+    return get_directml_adapter().luid
+
+
+def _manager_mit_monitor(monitor):
+    from pb_studio.core.vram_budget_manager import VRAMBudgetManager
+
+    VRAMBudgetManager.reset_for_testing()
+    return VRAMBudgetManager(monitor=monitor, max_vram_mb=16000)
+
+
+def test_sensor_free_vram_zieht_sicherheitspuffer_ab():
+    monitor = _FakeMonitor(
+        _adapter_luid(),
+        monitoring_status="ready", gpu_memory_total=16177, gpu_memory_used=11470,
+        adapter_luid=_adapter_luid(),
+    )
+    mgr = _manager_mit_monitor(monitor)
+    try:
+        # 16177 - 11470 - 500 Puffer
+        assert mgr.sensor_free_vram_mb() == 16177 - 11470 - 500
+    finally:
+        type(mgr).reset_for_testing()
+
+
+def test_sensor_free_vram_ist_none_ohne_verlaesslichen_sensor():
+    from pb_studio.core.vram_budget_manager import VRAMBudgetManager
+
+    for stats in (
+        {"monitoring_status": "degraded", "gpu_memory_total": 16177, "gpu_memory_used": 100},
+        {"monitoring_status": "ready", "gpu_memory_total": 0, "gpu_memory_used": 0},
+    ):
+        mgr = _manager_mit_monitor(_FakeMonitor(_adapter_luid(), **stats))
+        try:
+            assert mgr.sensor_free_vram_mb() is None, stats
+        finally:
+            VRAMBudgetManager.reset_for_testing()
+
+    mgr = _manager_mit_monitor(None)
+    try:
+        assert mgr.sensor_free_vram_mb() is None
+    finally:
+        VRAMBudgetManager.reset_for_testing()
+
+
+def test_reserve_meldet_diskrepanz_zwischen_buchhaltung_und_sensor(caplog):
+    import logging as _logging
+    from pb_studio.core.vram_budget_manager import VRAMBudgetManager
+
+    # Sensor sieht real fast nichts frei, die Eigenbuchhaltung glaubt an viel.
+    monitor = _FakeMonitor(
+        _adapter_luid(),
+        monitoring_status="ready", gpu_memory_total=16177, gpu_memory_used=15000,
+        adapter_luid=_adapter_luid(),
+    )
+    mgr = _manager_mit_monitor(monitor)
+    try:
+        mgr.register_model("testmodell", "Testmodell", 2000)
+        with caplog.at_level(_logging.WARNING, logger="pb_studio.core.vram_budget_manager"):
+            assert mgr.reserve("testmodell") is True
+        text = caplog.text
+        assert "VRAM tracking discrepancy" in text, text
+        assert "VRAM real knapp" in text, text
+    finally:
+        VRAMBudgetManager.reset_for_testing()
+
+
+def test_diskrepanz_meldung_ist_gedrosselt(caplog):
+    import logging as _logging
+    from pb_studio.core.vram_budget_manager import VRAMBudgetManager
+
+    monitor = _FakeMonitor(
+        _adapter_luid(),
+        monitoring_status="ready", gpu_memory_total=16177, gpu_memory_used=15000,
+        adapter_luid=_adapter_luid(),
+    )
+    mgr = _manager_mit_monitor(monitor)
+    try:
+        for i in range(3):
+            mgr.register_model(f"m{i}", f"M{i}", 100)
+        with caplog.at_level(_logging.WARNING, logger="pb_studio.core.vram_budget_manager"):
+            for i in range(3):
+                mgr.reserve(f"m{i}")
+        treffer = caplog.text.count("VRAM tracking discrepancy")
+        assert treffer == 1, f"Meldung nicht gedrosselt: {treffer}x"
+    finally:
+        VRAMBudgetManager.reset_for_testing()

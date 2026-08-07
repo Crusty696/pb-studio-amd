@@ -410,7 +410,7 @@ def test_recommendation_receipt_binds_persisted_provider_and_capabilities(
     assert body["model"] == "shared-chat"
     assert body["required_capabilities"] == ["chat"]
     assert body["verified_capabilities"] == ["chat"]
-    assert body["selection_source"] == "persisted_task_preference"
+    assert body["selection_source"] == "user_task_override"
     assert body["selected_at"]
 
 

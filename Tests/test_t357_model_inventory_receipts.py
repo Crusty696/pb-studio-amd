@@ -297,7 +297,7 @@ def test_receipt_priority_is_explicit_persisted_then_recommendation():
         for receipt in receipts
     ] == [
         ("ollama", "explicit-chat", "explicit_override"),
-        ("lmstudio", "persisted-chat", "persisted_task_preference"),
+        ("lmstudio", "persisted-chat", "user_task_override"),
         (
             "lmstudio",
             "gemma-4-12b-it-uncensored@q4_k_s",
