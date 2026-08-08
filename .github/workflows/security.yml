@@ -205,10 +205,14 @@ jobs:
         id: wrong_hash_validation
         shell: pwsh
         run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "requirements-wrong-hash.txt"
+          Copy-Item `
+            Tests/security/fixtures/python-wrong-hash.fixture `
+            $fixture
           $output = & $env:SCANNER_PYTHON -m pip download `
             --require-hashes --only-binary=:all: --no-deps `
             --dest artifacts/security/python-sca-wrong-hash `
-            -r Tests/security/fixtures/requirements-wrong-hash.txt 2>&1
+            -r $fixture 2>&1
           $exitCode = $LASTEXITCODE
           $text = $output | Out-String
           $expectedHash = "0000000000000000000000000000000000000000000000000000000000000000"

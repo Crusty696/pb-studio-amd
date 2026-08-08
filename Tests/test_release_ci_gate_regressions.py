@@ -10,10 +10,11 @@ def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_sdd_archive_text_is_checked_out_with_stable_lf_bytes() -> None:
+def test_sdd_archive_text_preserves_manifest_bytes_on_windows() -> None:
     attributes = _read(".gitattributes")
 
     assert "*.md   text eol=lf" in attributes
+    assert "specs/**/history/*.md text eol=crlf" in attributes
     assert "specs/**/history/*.txt text eol=lf" in attributes
 
 
@@ -25,10 +26,20 @@ def test_python_quality_gate_disables_repository_pytest_cache() -> None:
 
 def test_expected_wrong_hash_failure_returns_success_to_github() -> None:
     workflow = _read(".github/workflows/security.yml")
+    tracked_requirements = _read(
+        "Tests/security/fixtures/requirements-wrong-hash.txt"
+    )
+    fixture_template = _read(
+        "Tests/security/fixtures/python-wrong-hash.fixture"
+    )
     block = workflow.split(
         "      - name: Verify wrong Python package hash is rejected", 1
     )[1].split("      - name: Bind Python SCA receipt to commit", 1)[0]
 
+    assert "urllib3" not in tracked_requirements
+    assert "urllib3==1.26.5" in fixture_template
+    assert 'Join-Path $env:RUNNER_TEMP "requirements-wrong-hash.txt"' in block
+    assert "python-wrong-hash.fixture" in block
     pass_message = block.index("PYTHON_PACKAGE_HASH_NEGATIVE_FIXTURE_PASS")
     assert block.index("exit 0", pass_message) > pass_message
 
