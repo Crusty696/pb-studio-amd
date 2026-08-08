@@ -165,6 +165,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                             Id = clip.Id,
                             Name = clip.Name,
                             DurationSeconds = clip.DurationSeconds,
+                            AnalysisStatus = clip.AnalysisStatus,
+                            StageStatus = clip.StageStatus,
                             IsSelected = previousSelection.TryGetValue(clip.Id, out var wasSelected) ? wasSelected : true
                         });
                     }
@@ -196,6 +198,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                             Key = clip.Key ?? "",
                             BeatCount = clip.BeatCount,
                             IsAnalyzed = clip.IsAnalyzed,
+                            AnalysisStatus = clip.AnalysisStatus,
+                            StageErrors = clip.StageErrors,
                             // L-FE-13: AudioHash + StemsPaths durchreichen,
                             // sonst ist SelectedAudioClip.HasStems im Director-Kontext
                             // immer false und UseStemPacing-Toggle bleibt blind.
@@ -376,7 +380,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             }
             else
             {
-                StatusText = result == null ? "Fehler: Backend-Antwort ungültig" : "Warnung: Keine Schnitte generiert (Audio-Dauer prüfen)";
+                StatusText = result == null
+                    ? $"Pacing nicht möglich: {_api.LastErrorDetail ?? "Backend-Antwort ungültig"}"
+                    : "Warnung: Keine Schnitte generiert (Audio-Dauer prüfen)";
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     CutList.Clear();
@@ -523,6 +529,16 @@ public partial class SelectableVideoClip : ObservableObject
     public string Name { get; set; } = "";
     public double DurationSeconds { get; set; }
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
+    public string AnalysisStatus { get; set; } = "unavailable";
+    public Dictionary<string, string>? StageStatus { get; set; }
+    public string AnalysisStatusText => AnalysisStatus switch
+    {
+        "completed" => "analysiert",
+        "partial" => "teilweise",
+        "failed" => "fehlerhaft",
+        "interrupted" => "unterbrochen",
+        _ => "offen",
+    };
 
     [ObservableProperty] private bool _isSelected;
 }

@@ -17,6 +17,9 @@ public partial class VideoClipModel : ObservableObject
     public List<string> Tags { get; set; } = [];
     [ObservableProperty] private BitmapImage? _thumbnail;
     [ObservableProperty] private bool _isAnalyzed;
+    [ObservableProperty] private string _analysisStatus = "unavailable";
+    [ObservableProperty] private Dictionary<string, string>? _stageStatus;
+    [ObservableProperty] private Dictionary<string, string>? _stageErrors;
     [ObservableProperty] private bool _isMarked;
     [ObservableProperty] private string? _tagSource;
     /// <summary>R15/C-03: Flag aus Python VideoClipInfo.thumbnail_available — gibt an, ob das
@@ -53,4 +56,42 @@ public partial class VideoClipModel : ObservableObject
 
     public string DurationText => TimeSpan.FromSeconds(DurationSeconds).ToString(@"mm\:ss");
     public string ResolutionText => $"{Width}x{Height}";
+    public string AnalysisStatusText => AnalysisStatus switch
+    {
+        "completed" => "ANALYSIERT",
+        "partial" => "TEILANALYSE",
+        "failed" => "ANALYSEFEHLER",
+        "interrupted" => "UNTERBROCHEN",
+        _ => "NICHT ANALYSIERT",
+    };
+    public string AnalysisDetail
+    {
+        get
+        {
+            if (StageErrors is { Count: > 0 })
+                return string.Join(" | ", StageErrors.Select(item => $"{item.Key}: {item.Value}"));
+            if (StageStatus is { Count: > 0 })
+            {
+                var open = StageStatus
+                    .Where(item => item.Value is "failed" or "partial" or "interrupted")
+                    .Select(item => item.Key)
+                    .ToList();
+                if (open.Count > 0)
+                    return $"Fehlende Stufen: {string.Join(", ", open)}";
+            }
+            return AnalysisStatusText;
+        }
+    }
+
+    partial void OnAnalysisStatusChanged(string value)
+    {
+        OnPropertyChanged(nameof(AnalysisStatusText));
+        OnPropertyChanged(nameof(AnalysisDetail));
+    }
+
+    partial void OnStageStatusChanged(Dictionary<string, string>? value)
+        => OnPropertyChanged(nameof(AnalysisDetail));
+
+    partial void OnStageErrorsChanged(Dictionary<string, string>? value)
+        => OnPropertyChanged(nameof(AnalysisDetail));
 }

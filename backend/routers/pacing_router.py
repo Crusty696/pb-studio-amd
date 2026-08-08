@@ -143,7 +143,150 @@ def _load_ui_anchors(state) -> list[dict]:
 
 
 def _requires_video_analysis(config: PacingConfigSchema) -> bool:
-    return bool(config.use_motion_matching or config.use_brain)
+    return bool(
+        config.use_motion_matching
+        or config.use_semantic_matching
+        or config.use_key_matching
+        or config.use_brain
+    )
+
+
+def _pacing_stage_payload_is_valid(
+    domain: str,
+    stage: str,
+    payload: dict[str, Any],
+) -> bool:
+    """Reject completed markers whose persisted payload is missing or invalid."""
+    if domain == "audio":
+        if stage == "beats":
+            required_lists = (
+                "beats",
+                "energy_curve",
+                "downbeats",
+                "onset_times",
+                "kick_times",
+                "snare_times",
+                "hihat_times",
+            )
+            return (
+                isinstance(payload.get("bpm"), (int, float))
+                and isinstance(payload.get("beat_count"), int)
+                and all(isinstance(payload.get(name), list) for name in required_lists)
+                and isinstance(payload.get("downbeat_provenance"), dict)
+            )
+        if stage == "structure":
+            return bool(payload.get("structure_segments"))
+        if stage == "key":
+            value = payload.get("key")
+            return (
+                isinstance(value, str)
+                and bool(value.strip())
+                and value.strip().casefold() != "unknown"
+            )
+    elif domain == "video":
+        if stage == "motion":
+            motion = payload.get("motion")
+            return (
+                isinstance(motion, dict)
+                and isinstance(motion.get("motion_curve"), list)
+                and bool(motion["motion_curve"])
+            )
+        if stage == "embedding":
+            try:
+                return (
+                    payload.get("has_embedding") is True
+                    and int(payload.get("embedding_dim", 0) or 0) == 1152
+                    and int(payload.get("embedding_samples", 0) or 0) > 0
+                )
+            except (TypeError, ValueError):
+                return False
+        if stage == "audio_key":
+            value = payload.get("audio_key")
+            return isinstance(value, str) and bool(value.strip())
+    return False
+
+
+def _missing_pacing_stages(
+    domain: str,
+    payload: dict[str, Any],
+    required_stages: list[str],
+) -> list[dict[str, Any]]:
+    status_map = payload.get("_stage_status") or payload.get("stage_status") or {}
+    if not isinstance(status_map, dict):
+        status_map = {}
+    missing = []
+    for stage in required_stages:
+        status = str(status_map.get(stage) or "missing")
+        payload_valid = _pacing_stage_payload_is_valid(domain, stage, payload)
+        if status != "completed" or not payload_valid:
+            missing.append(
+                {
+                    "stage": stage,
+                    "status": status,
+                    "payload_valid": payload_valid,
+                }
+            )
+    return missing
+
+
+def _validate_pacing_analysis_preflight(
+    config: PacingConfigSchema,
+    audio_analysis: dict[str, Any],
+    video_analysis_by_clip: dict[int, dict[str, Any]],
+) -> None:
+    """Block generation when an enabled Pacing mode lacks truthful analysis."""
+    required_audio = ["beats"]
+    if config.use_structure_awareness:
+        required_audio.append("structure")
+    if config.use_key_matching:
+        required_audio.append("key")
+
+    required_video = []
+    if config.use_motion_matching:
+        required_video.append("motion")
+    if config.use_semantic_matching:
+        required_video.append("embedding")
+    if config.use_key_matching:
+        required_video.append("audio_key")
+
+    missing_audio = _missing_pacing_stages(
+        "audio",
+        audio_analysis if isinstance(audio_analysis, dict) else {},
+        required_audio,
+    )
+    missing_video = []
+    for clip_id in config.video_clip_ids:
+        payload = video_analysis_by_clip.get(clip_id)
+        if payload is None:
+            payload = video_analysis_by_clip.get(str(clip_id), {})
+        stages = _missing_pacing_stages(
+            "video",
+            payload if isinstance(payload, dict) else {},
+            required_video,
+        )
+        if stages:
+            missing_video.append({"clip_id": clip_id, "stages": stages})
+
+    if missing_audio or missing_video:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "pacing_analysis_incomplete",
+                "message": "Pacing-Voraussetzungen fehlen oder sind ungültig",
+                "required": {
+                    "audio": required_audio,
+                    "video": required_video,
+                },
+                "missing": {
+                    "audio": (
+                        [{"clip_id": config.audio_clip_id, "stages": missing_audio}]
+                        if missing_audio
+                        else []
+                    ),
+                    "video": missing_video,
+                },
+            },
+        )
 
 
 @router.post(
@@ -212,6 +355,11 @@ async def _generate_cut_list_for_project(
         state.get_video_analysis_snapshot()
         if _requires_video_analysis(config)
         else {}
+    )
+    _validate_pacing_analysis_preflight(
+        config,
+        cached_analysis,
+        video_analysis_snapshot,
     )
 
     try:

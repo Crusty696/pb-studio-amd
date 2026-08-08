@@ -1370,7 +1370,10 @@ public record VideoClipInfo(
     bool HasVideoEmbedding = false,
     int? EmbeddingDim = null,
     int? EmbeddingSamples = null,
-    bool HasEmbedding = false);
+    bool HasEmbedding = false,
+    string AnalysisStatus = "unavailable",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
 public record VideoAnalysisResult(
     int ClipId,

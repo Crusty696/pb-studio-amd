@@ -401,6 +401,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         var total = AudioClips.Count;
         var done = 0;
         var partial = 0;
+        var failed = 0;
+        var failures = new List<string>();
 
         try
         {
@@ -411,27 +413,49 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalysisProgress = (double)done / total * 100;
 
-                var result = await _api.AnalyzeAudioAsync(clip.Id, operation.CancellationToken);
-                if (!_projectService.IsCurrent(operation))
-                    return;
-                if (result != null)
+                try
                 {
-                    clip.Bpm = result.Bpm;
-                    clip.BeatCount = result.BeatCount;
-                    clip.Key = result.Key ?? "";
-                    clip.AnalysisStatus = result.AnalysisStatus;
-                    clip.StageErrors = result.StageErrors;
-                    clip.IsAnalyzed = result.AnalysisStatus == "completed";
-                    if (result.AnalysisStatus == "partial")
-                        partial++;
+                    var result = await _api.AnalyzeAudioAsync(clip.Id, operation.CancellationToken);
+                    if (!_projectService.IsCurrent(operation))
+                        return;
+                    if (result == null)
+                    {
+                        failed++;
+                        failures.Add($"{clip.Name}: leere Backend-Antwort");
+                    }
+                    else
+                    {
+                        clip.Bpm = result.Bpm;
+                        clip.BeatCount = result.BeatCount;
+                        clip.Key = result.Key ?? "";
+                        clip.AnalysisStatus = result.AnalysisStatus;
+                        clip.StageErrors = result.StageErrors;
+                        clip.IsAnalyzed = result.AnalysisStatus == "completed";
+                        if (result.AnalysisStatus == "partial")
+                            partial++;
+                        else if (result.AnalysisStatus != "completed")
+                        {
+                            failed++;
+                            failures.Add($"{clip.Name}: {FormatStageErrors(result.StageErrors)}");
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (operation.CancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    failures.Add($"{clip.Name}: {ex.Message}");
                 }
                 done++;
             }
 
             AnalysisProgress = 100;
-            StatusText = partial > 0
-                ? $"Analyse beendet: {total - partial} vollständig, {partial} partiell"
-                : $"Alle {total} Clips vollständig analysiert";
+            var completed = total - partial - failed;
+            StatusText = $"Analyse beendet: {completed} vollständig, {partial} partiell, {failed} fehlgeschlagen"
+                + (failures.Count > 0 ? $". Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             if (_projectService.IsCurrent(operation))
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
         }

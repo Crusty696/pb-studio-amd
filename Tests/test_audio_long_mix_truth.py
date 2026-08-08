@@ -427,7 +427,11 @@ def test_partial_result_never_publishes_completed(monkeypatch, tmp_path):
         "_stage_status": {"beats": "completed", "key": "failed"},
         "_stage_errors": {"key": "forced key failure"},
     }
-    monkeypatch.setattr(audio_router, "_run_audio_analysis", lambda *_args: result)
+    monkeypatch.setattr(
+        audio_router,
+        "_run_audio_analysis",
+        lambda *_args, **_kwargs: result,
+    )
     monkeypatch.setattr(audio_router, "publish_event", capture_event)
     monkeypatch.setattr(
         audio_router,
