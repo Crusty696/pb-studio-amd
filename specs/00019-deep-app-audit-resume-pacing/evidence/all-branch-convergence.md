@@ -63,4 +63,46 @@ Every `ours` merge was guarded by an identical tree hash. Baseline and post-merg
 
 ## Ref cleanup gate
 
-No branch ref was deleted. Redundant local and remote refs are eligible for cleanup only after this integration reaches protected `main` and the user gives a fresh explicit deletion confirmation.
+The integration reached protected `main` as PR #25, merge commit
+`f6ae5234864997d05a2d57f0f2ac8a33c6a9a72e`. The user then gave the required
+fresh explicit deletion confirmation.
+
+Deleted local refs:
+
+```text
+00013-system-wide-bug-hunting-audit
+backup/pre-hybrid-alignment-2026-03-09
+claude/competent-shaw
+claude/cranky-hodgkin
+claude/nifty-sammet
+claude/upbeat-liskov
+codex/finalize-obj73-release
+codex/obj74-deep-audit-claude-integration
+```
+
+Deleted remote refs:
+
+```text
+origin/00013-system-wide-bug-hunting-audit
+origin/backup/pre-hybrid-alignment-2026-03-09
+origin/bolt-optimize-checkerboard-novelty-4639455432380006930
+origin/bolt-semantic-matcher-cache-10971711345514938352
+origin/bolt-sqlite-synchronous-optimization-12870257090745113121
+origin/claude/cranky-hodgkin
+origin/claude/nifty-sammet
+origin/codex/finalize-obj73-release
+origin/codex/obj74-deep-audit-claude-integration
+origin/feat-preview-renderer-tests-15077044930625159154
+origin/fix-dummy-embeddings-pacing-5699629546609309049
+origin/jules-15487637999750232221-8724e04d
+origin/pacing-service-dead-code-removal-14057687362481284002
+origin/pacing-structure-weighting-4362049196895279299
+origin/perf-optimize-media-dedup-audit-query-5659391175589865201
+origin/security-fix-cors-restriction-18420067296954344044
+```
+
+Deletion receipt: 8 local plus 16 remote historical refs removed; `git fetch
+--prune origin` leaves only `main` and the cleanup delivery branch locally and
+remotely. The delivery refs `codex/obj74-branch-convergence` and
+`origin/codex/obj74-branch-convergence` are removed as the final protected-PR
+cleanup step, after this receipt is part of `main`.
