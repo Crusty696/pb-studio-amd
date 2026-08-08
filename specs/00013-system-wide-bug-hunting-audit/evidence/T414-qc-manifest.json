@@ -2,7 +2,7 @@
   "schema_version": 1,
   "objective": "OBJ-72",
   "task_range": "T370-T414",
-  "commit_sha": "d8c4bfb866be90ea50751f56802f5b996949e838",
+  "commit_sha": "734550601b7a45967bc9a0f7dab585b04e7510ac",
   "receipts": [
     { "task_id": "T370", "path": "evidence/T414-qc-digest-convergence.md", "sha256": "ca069dcc6a4fdd5608808de145474df19680f6f08fe0e55ae08a792dc705fe17" },
     { "task_id": "T371", "path": "evidence/T414-qc-digest-convergence.md", "sha256": "ca069dcc6a4fdd5608808de145474df19680f6f08fe0e55ae08a792dc705fe17" },
