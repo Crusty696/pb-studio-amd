@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,11 +22,12 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     private IReadOnlyDictionary<string, string> _projectVideoPaths =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private bool _isRating;
 
     public event Action? RequestClose;
-    public event Action? PlayRequested;
+    public event Action<double, double>? PlayRequested;
     public event Action? PauseRequested;
-    public event Action? RestartRequested;
+    public event Action<double, double>? RestartRequested;
 
     [ObservableProperty] private int _currentIndex;
     [ObservableProperty] private int _totalCount;
@@ -95,6 +97,7 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
 
         Status = $"Cut {CurrentIndex + 1}/{TotalCount}: {c.ClipId} @ {c.StartTime:F2}s";
         OnPropertyChanged(nameof(CurrentIndexDisplay));
+        NotifyRatingCommandsCanExecuteChanged();
     }
 
     private Uri? ResolveVideoUri(string? clipId)
@@ -131,40 +134,73 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRateCurrentCut))]
     public Task RatePerfectAsync() => RateAsync("perfect");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRateCurrentCut))]
     public Task RateFitsAsync() => RateAsync("fits");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRateCurrentCut))]
     public Task RateNotQuiteAsync() => RateAsync("not_quite");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRateCurrentCut))]
     public Task RateNoMatchAsync() => RateAsync("no_match");
 
     private async Task RateAsync(string rating)
     {
-        if (_cuts.Count == 0) return;
+        if (_disposed || _cuts.Count == 0)
+            return;
         var c = _cuts[CurrentIndex];
-        if (c.CutId == null)
+        var ratedIndex = CurrentIndex;
+        var cutId = c.CutId;
+        if (cutId == null)
         {
             Status = "Kein cut_id verfügbar.";
             return;
         }
-        var cutId = c.CutId.Value;
-        var resp = await _api.BrainFeedbackAsync(cutId, rating);
-        if (resp == null)
-        {
-            Status = "Feedback fehlgeschlagen.";
+        if (!CutRatingGate.TryEnter(cutId.Value))
             return;
-        }
-        if (!string.Equals(resp.Status, "ok", StringComparison.OrdinalIgnoreCase))
+
+        SetRatingState(true);
+        try
         {
-            Status = resp.Message ?? "Feedback wurde abgelehnt.";
-            return;
+            var resp = await _api.BrainFeedbackAsync(cutId.Value, rating);
+            if (_disposed || CurrentIndex != ratedIndex || CurrentCutId != cutId.Value)
+                return;
+            if (resp == null)
+            {
+                Status = "Feedback fehlgeschlagen.";
+                return;
+            }
+            if (!string.Equals(resp.Status, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                Status = resp.Message ?? "Feedback wurde abgelehnt.";
+                return;
+            }
+            Status = $"OK — {resp.UpdatedBuckets} buckets, total={resp.TotalClicks}. → next";
+            // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
+            WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId.Value));
+            Next();
         }
-        Status = $"OK — {resp.UpdatedBuckets} buckets, total={resp.TotalClicks}. → next";
-        // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
-        WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
-        Next();
+        finally
+        {
+            SetRatingState(false);
+            CutRatingGate.Exit(cutId.Value);
+        }
+    }
+
+    private bool CanRateCurrentCut() =>
+        !_disposed && !_isRating && CurrentCutId > 0;
+
+    private void SetRatingState(bool value)
+    {
+        _isRating = value;
+        NotifyRatingCommandsCanExecuteChanged();
+    }
+
+    private void NotifyRatingCommandsCanExecuteChanged()
+    {
+        RatePerfectCommand.NotifyCanExecuteChanged();
+        RateFitsCommand.NotifyCanExecuteChanged();
+        RateNotQuiteCommand.NotifyCanExecuteChanged();
+        RateNoMatchCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -177,8 +213,8 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
             return;
         }
 
-        PlayRequested?.Invoke();
         IsPlaying = true;
+        PlayRequested?.Invoke(CurrentStartTime, CurrentEndTime);
     }
 
     // B5-Fix (2026-05-19): PauseRequested event wurde in Dispose auf null gesetzt
@@ -195,8 +231,14 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void Restart()
     {
-        RestartRequested?.Invoke();
         IsPlaying = true;
+        RestartRequested?.Invoke(CurrentStartTime, CurrentEndTime);
+    }
+
+    public void NotifyPlaybackCompleted()
+    {
+        IsPlaying = false;
+        Status = $"Cut {CurrentIndex + 1}/{TotalCount} abgespielt.";
     }
 
     [RelayCommand]
@@ -218,4 +260,13 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.UnregisterAll(this);
         GC.SuppressFinalize(this);
     }
+}
+
+internal static class CutRatingGate
+{
+    private static readonly ConcurrentDictionary<int, byte> ActiveCuts = new();
+
+    public static bool TryEnter(int cutId) => ActiveCuts.TryAdd(cutId, 0);
+
+    public static void Exit(int cutId) => ActiveCuts.TryRemove(cutId, out _);
 }

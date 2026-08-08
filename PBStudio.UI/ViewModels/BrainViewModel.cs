@@ -24,6 +24,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
     private bool _disposed;
+    private bool _isFeedbackPending;
     private int _statsLoadVersion;
     private int _learningLoadVersion;
     private int _loadingVersion;
@@ -47,6 +48,9 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     {
         SelectedCutId = value?.CutId ?? 0;
     }
+
+    partial void OnSelectedCutIdChanged(int value) =>
+        NotifyFeedbackCommandsCanExecuteChanged();
 
     public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
@@ -143,43 +147,74 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RatePerfectAsync() => SendFeedbackAsync("perfect");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateFitsAsync() => SendFeedbackAsync("fits");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateNotQuiteAsync() => SendFeedbackAsync("not_quite");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateNoMatchAsync() => SendFeedbackAsync("no_match");
 
     private async Task SendFeedbackAsync(string rating)
     {
-        if (SelectedCutId <= 0)
+        if (_disposed || SelectedCutId <= 0)
         {
             Status = "Bitte zuerst einen Cut auswählen.";
             return;
         }
         var cutId = SelectedCutId;
+        if (!CutRatingGate.TryEnter(cutId))
+            return;
+
         var feedbackVersion = Interlocked.Increment(ref _feedbackVersion);
-        var resp = await _api.BrainFeedbackAsync(cutId, rating);
-        if (_disposed || feedbackVersion != Volatile.Read(ref _feedbackVersion))
-            return;
-        if (resp == null)
+        SetFeedbackPending(true);
+        try
         {
-            Status = "Feedback fehlgeschlagen.";
-            return;
+            var resp = await _api.BrainFeedbackAsync(cutId, rating);
+            if (_disposed
+                || feedbackVersion != Volatile.Read(ref _feedbackVersion)
+                || cutId != SelectedCutId)
+                return;
+            if (resp == null)
+            {
+                Status = "Feedback fehlgeschlagen.";
+                return;
+            }
+            if (!resp.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+            {
+                Status = string.IsNullOrWhiteSpace(resp.Message)
+                    ? "Feedback wurde nicht angewendet."
+                    : resp.Message;
+                return;
+            }
+            Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
+            // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
+            WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
+            await RefreshStatsAsync();
         }
-        if (!resp.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+        finally
         {
-            Status = string.IsNullOrWhiteSpace(resp.Message)
-                ? "Feedback wurde nicht angewendet."
-                : resp.Message;
-            return;
+            SetFeedbackPending(false);
+            CutRatingGate.Exit(cutId);
         }
-        Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
-        // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
-        WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
-        await RefreshStatsAsync();
+    }
+
+    private bool CanSendFeedback() =>
+        !_disposed && !_isFeedbackPending && SelectedCutId > 0;
+
+    private void SetFeedbackPending(bool value)
+    {
+        _isFeedbackPending = value;
+        NotifyFeedbackCommandsCanExecuteChanged();
+    }
+
+    private void NotifyFeedbackCommandsCanExecuteChanged()
+    {
+        RatePerfectCommand.NotifyCanExecuteChanged();
+        RateFitsCommand.NotifyCanExecuteChanged();
+        RateNotQuiteCommand.NotifyCanExecuteChanged();
+        RateNoMatchCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]

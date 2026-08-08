@@ -15,5 +15,5 @@ def test_learning_session_play_pause_is_a_real_toggle():
     assert "[ObservableProperty] private bool _isPlaying;" in view_model
     assert "if (IsPlaying)" in view_model
     assert "PauseRequested?.Invoke();" in view_model
-    assert "PlayRequested?.Invoke();" in view_model
+    assert "PlayRequested?.Invoke(CurrentStartTime, CurrentEndTime);" in view_model
     assert 'Content="{Binding PlayPauseLabel}"' in view
