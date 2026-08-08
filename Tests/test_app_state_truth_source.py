@@ -7,6 +7,7 @@ geschrieben (analog video_analysis_cache + video_clips).
 """
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -64,6 +65,36 @@ def test_update_audio_analysis_writes_to_audio_clips(state, tmp_path):
         "D-C1 Regression: audio_clips wurde nicht synchronisiert (key)"
     assert state.audio_clips[clip_id]["is_analyzed"] is True, \
         "D-C1 Regression: audio_clips.is_analyzed nicht synchronisiert"
+
+
+def test_update_audio_analysis_exposes_beats_to_live_consumers_without_reload(state):
+    """Persistierte Beats muessen sofort unter dem Consumer-Key verfuegbar sein."""
+    clip_id = 2
+    beats = [
+        {"time": 0.5, "strength": 0.8, "beat_type": "beat"},
+        {"time": 1.0, "strength": 1.0, "beat_type": "downbeat"},
+    ]
+    state.audio_clips[clip_id] = {
+        "id": clip_id,
+        "path": "beats.wav",
+        "duration_seconds": 10.0,
+    }
+
+    with patch("pb_studio.data.repositories.media_repository.MediaRepository") as MockRepo:
+        mock_repo = MockRepo.return_value
+        mock_repo.find_by_project_and_path.return_value = {
+            "id": 101,
+            "ai_data_json": "{}",
+        }
+
+        state.update_audio_analysis(
+            clip_id=clip_id,
+            beats_json=json.dumps(beats),
+        )
+
+    assert state.get_audio_analysis(clip_id)["beats"] == beats
+    persisted_ai_data = mock_repo.update_status.call_args.kwargs["ai_data"]
+    assert persisted_ai_data["beats_json"] == beats
 
 
 def test_update_video_analysis_writes_to_video_clips(state):

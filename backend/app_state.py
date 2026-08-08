@@ -944,7 +944,7 @@ class AppState:
             if beat_count is not None:
                 cache_update["beat_count"] = beat_count
             if beats_json is not None:
-                cache_update["beats_json"] = ai_data["beats_json"]
+                cache_update["beats"] = ai_data["beats_json"]
             if is_analyzed is not None:
                 cache_update["is_analyzed"] = is_analyzed
             if energy_curve is not None:
