@@ -74,3 +74,15 @@ def test_vulnerable_python_fixture_is_materialized_only_in_runner_temp() -> None
     assert 'Join-Path $env:RUNNER_TEMP "requirements-vulnerable.txt"' in workflow
     assert "python-vulnerable.fixture" in workflow
     assert "--lock ${{ runner.temp }}\\requirements-vulnerable.txt" in workflow
+
+
+def test_malformed_python_hash_fixture_is_not_a_dependency_manifest() -> None:
+    tracked_requirements = _read(
+        "Tests/security/fixtures/requirements-invalid-hash.txt"
+    )
+    fixture_template = _read(
+        "Tests/security/fixtures/python-invalid-hash.fixture"
+    )
+
+    assert "urllib3" not in tracked_requirements
+    assert "sha256:not-a-valid-sha256" in fixture_template

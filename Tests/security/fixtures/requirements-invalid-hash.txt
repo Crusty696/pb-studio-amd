@@ -1,2 +1,2 @@
-urllib3==1.26.5 \
-    --hash=sha256:not-a-valid-sha256
+# Intentionally dependency-free. The malformed-hash parser fixture lives in
+# python-invalid-hash.fixture so dependency review never treats it as a lock.

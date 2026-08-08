@@ -18,6 +18,9 @@ from scripts import security_gate
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "Tests" / "security" / "fixtures"
+INVALID_HASH_FIXTURE = FIXTURES / "python-invalid-hash.fixture"
+WRONG_HASH_FIXTURE = FIXTURES / "python-wrong-hash.fixture"
+VULNERABLE_FIXTURE = FIXTURES / "python-vulnerable.fixture"
 SCANNER_LOCK = ROOT / "config" / "pip-audit-2.10.1-win-py311.lock"
 SCA_EXCEPTIONS = ROOT / "config" / "python-sca-exceptions.json"
 SCANNER_LOCK_SHA256 = (
@@ -84,14 +87,14 @@ def test_python_sca_lock_rejects_missing_or_malformed_hashes(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="SHA-256 hashes"):
         security_gate._parse_hashed_lock(missing)
     with pytest.raises(ValueError, match="SHA-256 hashes"):
-        security_gate._parse_hashed_lock(FIXTURES / "requirements-invalid-hash.txt")
+        security_gate._parse_hashed_lock(INVALID_HASH_FIXTURE)
     assert security_gate._parse_hashed_lock(
-        FIXTURES / "requirements-wrong-hash.txt"
+        WRONG_HASH_FIXTURE
     ) == [{"name": "urllib3", "version": "1.26.5"}]
     assert (
         security_gate._python_lock(
             SimpleNamespace(
-                lock=FIXTURES / "requirements-invalid-hash.txt",
+                lock=INVALID_HASH_FIXTURE,
                 expect_hash_failure=True,
             )
         )
@@ -100,13 +103,9 @@ def test_python_sca_lock_rejects_missing_or_malformed_hashes(tmp_path: Path) -> 
 
 
 def test_python_sca_hash_fixtures_are_explicit_and_distinct() -> None:
-    malformed = (FIXTURES / "requirements-invalid-hash.txt").read_text(
-        encoding="utf-8"
-    )
-    wrong = (FIXTURES / "requirements-wrong-hash.txt").read_text(encoding="utf-8")
-    vulnerable = (FIXTURES / "requirements-vulnerable.txt").read_text(
-        encoding="utf-8"
-    )
+    malformed = INVALID_HASH_FIXTURE.read_text(encoding="utf-8")
+    wrong = WRONG_HASH_FIXTURE.read_text(encoding="utf-8")
+    vulnerable = VULNERABLE_FIXTURE.read_text(encoding="utf-8")
 
     assert "sha256:not-a-valid-sha256" in malformed
     assert "sha256:" + "0" * 64 in wrong
@@ -329,7 +328,14 @@ def test_python_sca_workflow_uses_isolated_exact_scanner_and_direct_cli() -> Non
         "--disable-pip --require-hashes --no-deps --strict --aliases=on "
         "--desc=off --progress-spinner=off --format=json "
         "--output=artifacts/security/python-sca-fixture.json "
-        "--requirement Tests/security/fixtures/requirements-vulnerable.txt"
+        "--requirement $fixture"
+    )
+    fixture_receipt_command = (
+        "& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv "
+        "--disable-pip --require-hashes --no-deps --strict --aliases=on "
+        "--desc=off --progress-spinner=off --format=json "
+        "--output=artifacts/security/python-sca-fixture.json "
+        "--requirement $env:RUNNER_TEMP\\requirements-vulnerable.txt"
     )
 
     def collapse_invocation(block: str) -> str:
@@ -397,7 +403,7 @@ def test_python_sca_workflow_uses_isolated_exact_scanner_and_direct_cli() -> Non
     assert collapse_invocation(production_audit) == production_command
     assert f"--local-command '{production_command}'" in production_validation
     assert collapse_invocation(vulnerable_fixture) == fixture_command
-    assert f"--local-command '{fixture_command}'" in fixture_validation
+    assert f"--local-command '{fixture_receipt_command}'" in fixture_validation
     assert "$auditExit -notin @(0, 1)" in production_audit
     assert "python-sca-production-exit.json" in production_audit
     assert production_audit.rstrip().endswith("exit 0")
@@ -510,7 +516,7 @@ def test_python_sca_hashed_vulnerable_fixture_uses_osv_report_path(
         security_gate._pip_audit_report(
             _args(
                 report,
-                FIXTURES / "requirements-vulnerable.txt",
+                VULNERABLE_FIXTURE,
                 receipt,
                 expect_clean=False,
             )
@@ -532,7 +538,7 @@ def test_python_sca_hashed_vulnerable_fixture_uses_osv_report_path(
     }
     assert "action" not in payload
     assert payload["lock"]["sha256"] == hashlib.sha256(
-        (FIXTURES / "requirements-vulnerable.txt").read_bytes()
+        VULNERABLE_FIXTURE.read_bytes()
     ).hexdigest()
     assert payload["lock"]["packages"] == [
         {"name": "urllib3", "version": "1.26.5"}
@@ -562,7 +568,7 @@ def test_python_sca_local_cli_records_verified_scanner_without_action_claim(
             "--report",
             str(report),
             "--lock",
-            str(FIXTURES / "requirements-vulnerable.txt"),
+            str(VULNERABLE_FIXTURE),
             "--provider",
             "osv",
             "--scanner-version",
@@ -680,7 +686,7 @@ def test_python_sca_rejects_report_package_set_mismatch(tmp_path: Path) -> None:
         security_gate._pip_audit_report(
             _args(
                 report_path,
-                FIXTURES / "requirements-vulnerable.txt",
+                VULNERABLE_FIXTURE,
                 tmp_path / "receipt.json",
                 expect_clean=True,
             )
@@ -713,7 +719,7 @@ def test_python_sca_exception_requires_exact_alias_binding(tmp_path: Path) -> No
         security_gate._pip_audit_report(
             _args(
                 report,
-                FIXTURES / "requirements-vulnerable.txt",
+                VULNERABLE_FIXTURE,
                 tmp_path / "receipt.json",
                 expect_clean=True,
                 exceptions=exceptions,
@@ -747,7 +753,7 @@ def test_python_sca_merges_transitive_alias_overlap_into_one_component(
         security_gate._pip_audit_report(
             _args(
                 report_path,
-                FIXTURES / "requirements-vulnerable.txt",
+                VULNERABLE_FIXTURE,
                 receipt,
                 expect_clean=False,
             )
@@ -795,7 +801,7 @@ def test_python_sca_rejects_unused_exception(tmp_path: Path) -> None:
         security_gate._pip_audit_report(
             _args(
                 report,
-                FIXTURES / "requirements-vulnerable.txt",
+                VULNERABLE_FIXTURE,
                 tmp_path / "receipt.json",
                 expect_clean=True,
                 exceptions=exceptions,
