@@ -417,6 +417,19 @@ def _commit_distance(feature: Path, commit_sha: str, head: str) -> int | None:
         return None
 
 
+def _qc_commit_is_current(feature: Path, commit_sha: str, head: str) -> bool:
+    distance = _commit_distance(feature, commit_sha, head)
+    if distance is not None and distance <= 1:
+        return True
+    result = subprocess.run(
+        ["git", "-C", str(feature), "rev-parse", f"{head}^2^"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and result.stdout.strip().lower() == commit_sha
+
+
 def _git_show(feature: Path, commit_sha: str, source_path: str) -> bytes | None:
     root = _repository_root(feature)
     source = Path(source_path.replace("\\", "/"))
@@ -614,9 +627,13 @@ def _validate_qc_marker(
     elif not _commit_is_ancestor(feature, commit_sha, repository_head):
         _add(findings, "MARKER_COMMIT", path, "commit_sha is not an ancestor of HEAD")
     else:
-        distance = _commit_distance(feature, commit_sha, repository_head)
-        if distance is None or distance > 1:
-            _add(findings, "QC_GATE_COMMIT", path, "QC commit is not HEAD or its parent")
+        if not _qc_commit_is_current(feature, commit_sha, repository_head):
+            _add(
+                findings,
+                "QC_GATE_COMMIT",
+                path,
+                "QC commit is not current for HEAD or its direct PR merge",
+            )
     _validate_evidence_reference(feature, marker, path, findings, "QC")
 
 

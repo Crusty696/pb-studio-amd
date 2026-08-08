@@ -2,16 +2,15 @@
 
 ## Authoritative OBJ-72 Gate — 2026-07-31
 
-- **Overall result:** **REOPENED / NOT RELEASE-READY**.
-- **Reason:** OBJ-72/T370–T415 supersedes the historical OBJ-71 release gate.
-- **Current progress:** 44/46 OBJ-72 tasks PASS. T370–T413 einschließlich
-  Betriebssicherheits-, Gesamt-, Native-, Clean-Checkout-, GUI-, Hardware-,
-  Security-, SCA-, SBOM- und Clean-SHA-Provenienz-Gates sind PASS. T414 und
-  T415 bleiben offen. Historische OBJ-71-Evidenz unter `history/` gilt nur für
-  ihren abgeschlossenen Scope.
-- **Release rule:** `.completed` bindet die Implementierung T370–T403.
-  `.qc-passed` bleibt bis zum geschützten Main-/Release-SHA aus T415 und der
-  anschließenden T414-Digestkonvergenz gesperrt.
+- **Overall result:** **PASSED / RELEASE-READY**.
+- **Reason:** OBJ-72/T370–T415 einschließlich lokaler QC, acht Required Checks,
+  geschütztem Default-Branch `main` und Remote-Merge sind vollständig PASS.
+- **Current result:** PR #22 wurde auf
+  `947ff3885f402ec72c0659edafa20c78107fbf08` gemerged. Python Quality meldete
+  1.291 PASS, 18 geregelte Skips, 0 ungeregelte Skips und 60,8 % Coverage.
+- **Release rule:** `.completed` bindet T370–T403; `.qc-passed` bindet
+  T370–T414 an die geprüften Receipt- und Report-Digests. T415 ist durch das
+  Protected-Main-Receipt abgeschlossen.
 
 ## Authoritative OBJ-71 End-QC Gate — 2026-07-30
 
@@ -337,5 +336,4 @@ The statements below record the 2026-06-09 snapshot only. They are not evidence 
 ### Historical Conclusion — Invalidated
 
 The former release-ready conclusion no longer applies. The authoritative current result is **FAILED / NOT RELEASE-READY**.
-
 

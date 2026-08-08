@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-72",
+  "phase": "qc",
+  "task_range": "T370-T414",
+  "task_digest_sha256": "07bcdb79c7a80ba33c6f892def0530e26ea84fe23d73d287fbabb917a743f931",
+  "completed_marker_sha256": "b25581cc05eebea584ca122e687da2879547c4576f21441fc859c766e31ad822",
+  "qc_report_sha256": "f2b8033aa8f1119a46f1ef9c15a752ffb29feffcae40180982a14a0ef0dbb5d7",
+  "evidence_manifest": "evidence/T414-qc-manifest.json",
+  "evidence_manifest_sha256": "5001aa1758743c82c889c83dfdb058bb56e78187f0130400ed597765607c7d31",
+  "commit_sha": "840d02be5a5637d44db5080519c5b9699a768d0d"
+}

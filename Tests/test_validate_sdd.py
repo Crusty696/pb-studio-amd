@@ -266,6 +266,7 @@ def valid_feature(tmp_path: Path) -> Path:
     _git(feature, "init")
     _git(feature, "config", "user.email", "sdd-test@example.invalid")
     _git(feature, "config", "user.name", "SDD Test")
+    _git(feature, "config", "core.autocrlf", "false")
     _git(feature, "add", ".")
     _git(feature, "commit", "-m", "fixture baseline")
     (feature / ".completed").unlink()
@@ -520,6 +521,50 @@ def test_rejects_bad_qc_report_digest(valid_feature: Path):
     marker_path.write_text(json.dumps(marker), encoding="utf-8")
 
     assert "QC_REPORT_DIGEST" in _codes(valid_feature)
+
+
+def test_accepts_qc_commit_through_direct_pr_merge_after_main_advances(
+    valid_feature: Path,
+):
+    tasks_path = valid_feature / "tasks.md"
+    tasks_path.write_text(
+        tasks_path.read_text(encoding="utf-8").replace("- [ ]", "- [X]"),
+        encoding="utf-8",
+    )
+    _write_completed_marker(valid_feature)
+    _write_qc_marker(valid_feature)
+    _git(valid_feature, "add", "evidence/qc.json", ".qc-passed")
+    _git(valid_feature, "commit", "-m", "publish qc marker")
+    pr_head = _git(valid_feature, "rev-parse", "HEAD")
+    qc_commit = _git(valid_feature, "rev-parse", "HEAD^")
+    base = _git(valid_feature, "rev-parse", f"{qc_commit}^")
+    _git(valid_feature, "branch", "pr-head", pr_head)
+    _git(valid_feature, "switch", "-c", "protected-main", base)
+    (valid_feature / "main-advanced.txt").write_text("advanced\n", encoding="utf-8")
+    _git(valid_feature, "add", "main-advanced.txt")
+    _git(valid_feature, "commit", "-m", "advance protected main")
+    _git(valid_feature, "merge", "--no-ff", "pr-head", "-m", "merge release PR")
+
+    report = validate_feature(valid_feature, "release")
+
+    assert report.valid, report.findings
+
+
+def test_rejects_qc_commit_two_non_merge_commits_behind(valid_feature: Path):
+    tasks_path = valid_feature / "tasks.md"
+    tasks_path.write_text(
+        tasks_path.read_text(encoding="utf-8").replace("- [ ]", "- [X]"),
+        encoding="utf-8",
+    )
+    _write_completed_marker(valid_feature)
+    _write_qc_marker(valid_feature)
+    _git(valid_feature, "add", "evidence/qc.json", ".qc-passed")
+    _git(valid_feature, "commit", "-m", "publish qc marker")
+    (valid_feature / "after-marker.txt").write_text("later\n", encoding="utf-8")
+    _git(valid_feature, "add", "after-marker.txt")
+    _git(valid_feature, "commit", "-m", "unrelated later commit")
+
+    assert "QC_GATE_COMMIT" in _codes(valid_feature, "release")
 
 
 def test_rejects_historical_qc_status_before_current(valid_feature: Path):

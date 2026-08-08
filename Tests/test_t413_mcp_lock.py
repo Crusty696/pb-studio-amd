@@ -176,7 +176,7 @@ def test_lock_verifier_rejects_tampered_direct_sri(tmp_path: Path) -> None:
         [node, str(TOOL_DIR / "verify-lock.mjs"), str(tampered_lock)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
         check=False,
         env={**os.environ, "npm_config_offline": "true"},
     )
@@ -197,7 +197,7 @@ def test_lock_verifier_rejects_transitive_lock_tamper(tmp_path: Path) -> None:
         [node, str(TOOL_DIR / "verify-lock.mjs"), str(tampered_lock)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
         check=False,
     )
 

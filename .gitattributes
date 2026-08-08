@@ -9,6 +9,8 @@
 *.md   text eol=lf
 *.json text eol=lf
 *.lock text eol=lf
+.completed text eol=lf
+.qc-passed text eol=lf
 
 # Security allowlists and scanner hashes bind exact LF bytes on every runner.
 Tests/security/fixtures/*.txt text eol=lf

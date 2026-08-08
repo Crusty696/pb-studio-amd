@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-72",
+  "task_id": "T415",
+  "verified_at": "2026-08-08T13:39:13Z",
+  "repository": "Crusty696/pb-studio-amd",
+  "pull_request": {
+    "number": 22,
+    "url": "https://github.com/Crusty696/pb-studio-amd/pull/22",
+    "state": "MERGED",
+    "head_sha": "c6ae67b5c10a432eae73c919deaaa479c3da9ba9",
+    "merge_sha": "947ff3885f402ec72c0659edafa20c78107fbf08"
+  },
+  "default_branch": "main",
+  "branch_protection": {
+    "strict_status_checks": true,
+    "pull_request_required": true,
+    "required_approvals": 0,
+    "enforce_admins": true,
+    "conversation_resolution_required": true,
+    "force_pushes_allowed": false,
+    "deletions_allowed": false
+  },
+  "required_checks": [
+    {
+      "name": "Dependency review",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127329/job/93107055635"
+    },
+    {
+      "name": "Native C# tests and WPF Release",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127328/job/93107055548"
+    },
+    {
+      "name": "NuGet SCA",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127329/job/93107055620"
+    },
+    {
+      "name": "Python 3.11 quality gate",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127328/job/93107055608"
+    },
+    {
+      "name": "Python SCA",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127329/job/93107055565"
+    },
+    {
+      "name": "SBOM and provenance",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127329/job/93107055618"
+    },
+    {
+      "name": "SDD and release contracts",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127328/job/93107055558"
+    },
+    {
+      "name": "Secret scan",
+      "conclusion": "success",
+      "url": "https://github.com/Crusty696/pb-studio-amd/actions/runs/31259127329/job/93107055644"
+    }
+  ],
+  "python_quality": {
+    "passed": 1291,
+    "governed_skips": 18,
+    "deselected": 9,
+    "coverage_percent": 60.8,
+    "unapproved_skips": 0
+  },
+  "result": "PASS",
+  "open_blockers": []
+}
