@@ -421,8 +421,6 @@ def _qc_commit_is_current(feature: Path, commit_sha: str, head: str) -> bool:
     distance = _commit_distance(feature, commit_sha, head)
     if distance is not None and distance <= 1:
         return True
-    if distance != 2:
-        return False
     result = subprocess.run(
         ["git", "-C", str(feature), "rev-parse", f"{head}^2^"],
         capture_output=True,

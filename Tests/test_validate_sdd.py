@@ -523,7 +523,9 @@ def test_rejects_bad_qc_report_digest(valid_feature: Path):
     assert "QC_REPORT_DIGEST" in _codes(valid_feature)
 
 
-def test_accepts_qc_commit_through_direct_pr_merge(valid_feature: Path):
+def test_accepts_qc_commit_through_direct_pr_merge_after_main_advances(
+    valid_feature: Path,
+):
     tasks_path = valid_feature / "tasks.md"
     tasks_path.write_text(
         tasks_path.read_text(encoding="utf-8").replace("- [ ]", "- [X]"),
@@ -538,6 +540,9 @@ def test_accepts_qc_commit_through_direct_pr_merge(valid_feature: Path):
     base = _git(valid_feature, "rev-parse", f"{qc_commit}^")
     _git(valid_feature, "branch", "pr-head", pr_head)
     _git(valid_feature, "switch", "-c", "protected-main", base)
+    (valid_feature / "main-advanced.txt").write_text("advanced\n", encoding="utf-8")
+    _git(valid_feature, "add", "main-advanced.txt")
+    _git(valid_feature, "commit", "-m", "advance protected main")
     _git(valid_feature, "merge", "--no-ff", "pr-head", "-m", "merge release PR")
 
     report = validate_feature(valid_feature, "release")
