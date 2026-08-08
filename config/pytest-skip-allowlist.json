@@ -98,6 +98,18 @@
       "reason": "Physical RX 7800 XT and LHM identity belongs to the hardware lane."
     },
     {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_settings_gui_binds_every_additive_gpu_truth_field",
+      "owner": "ui-services",
+      "expires_on": "2026-09-30",
+      "reason": "Generated ApiTypes.g.cs is verified by the locked Windows .NET/NSwag lane."
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts",
+      "owner": "ui-services",
+      "expires_on": "2026-09-30",
+      "reason": "Generated ApiTypes.g.cs is verified by the locked Windows .NET/NSwag lane."
+    },
+    {
       "nodeid": "Tests/test_timeline_integrity.py::test_auto_pacing_pipeline_chronological_no_violations",
       "owner": "pacing",
       "expires_on": "2026-08-31",

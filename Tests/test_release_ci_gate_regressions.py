@@ -1,5 +1,7 @@
 """Contracts for the release-gate failures observed on PR #22."""
 
+import json
+
 from pathlib import Path
 
 
@@ -31,6 +33,24 @@ def test_python_quality_checkout_contains_sdd_source_commits() -> None:
     )[0]
 
     assert "fetch-depth: 0" in python_job
+
+
+def test_python_quality_governs_generated_dto_skips() -> None:
+    policy = json.loads(_read("config/pytest-skip-allowlist.json"))
+    entries = {entry["nodeid"]: entry for entry in policy["entries"]}
+    expected = {
+        "Tests/test_t357_gpu_wpf_nullability_contracts.py::"
+        "test_settings_gui_binds_every_additive_gpu_truth_field",
+        "Tests/test_t357_gpu_wpf_nullability_contracts.py::"
+        "test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts",
+    }
+
+    assert expected <= entries.keys()
+    for nodeid in expected:
+        entry = entries[nodeid]
+        assert entry["owner"] == "ui-services"
+        assert entry["expires_on"] == "2026-09-30"
+        assert "Windows .NET/NSwag lane" in entry["reason"]
 
 
 def test_expected_wrong_hash_failure_returns_success_to_github() -> None:
