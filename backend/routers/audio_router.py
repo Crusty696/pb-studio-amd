@@ -13,6 +13,7 @@ Endpoints:
 
 import asyncio
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -640,6 +641,10 @@ _AUDIO_STAGE_RESULT_FIELDS = {
 }
 
 
+class _AudioAnalysisInterrupted(RuntimeError):
+    """Stops the worker after its owning async request was cancelled."""
+
+
 def _audio_stage_result_is_valid(stage: str, analysis: dict[str, Any]) -> bool:
     """Return whether a completed cached stage still has its required payload."""
     if stage == "beats":
@@ -740,7 +745,14 @@ def _merge_audio_analysis_result(
         if field in fresh and fresh[field] is not None:
             merged[field] = fresh[field]
 
+    requested_stages = [
+        stage
+        for stage, request_field in _AUDIO_STAGE_REQUEST_FIELDS.items()
+        if bool(getattr(requested, request_field))
+    ]
     degraded = any(
+        stage_status.get(stage) != "completed" for stage in requested_stages
+    ) or any(
         status in {"partial", "failed", "interrupted"}
         for status in stage_status.values()
     )
@@ -810,11 +822,72 @@ async def _analyze_audio_in_context(
         "message": f"Analyse gestartet: Clip {request.clip_id}",
     })
 
+    _checkpoint_cancel_event = threading.Event()
+    _checkpoint_lock = threading.Lock()
+    _checkpoint_state: dict[str, Any] = {}
+    _checkpoint_finished: set[str] = set()
+    planned_request: AudioAnalyzeRequest | None = None
+
     try:
         _loop = asyncio.get_running_loop()
         # Cache bleibt Merge-Basis: gezielte Retries bewahren alle anderen Stages.
         _pre_cached = dict(state.get_audio_analysis(request.clip_id) or {})
         planned_request = _plan_audio_analysis(request, _pre_cached)
+        _checkpoint_state.update(_pre_cached)
+
+        def _persist_checkpoint_snapshot(snapshot: dict[str, Any]) -> None:
+            import json as _json
+
+            beats = snapshot.get("beats")
+            beats_json = _json.dumps(beats) if beats is not None else None
+            analysis_status = snapshot.get("_analysis_status", "partial")
+            with state.project_commit(context):
+                state.update_audio_analysis(
+                    clip_id=request.clip_id,
+                    bpm=snapshot.get("bpm"),
+                    key=snapshot.get("key"),
+                    beat_count=snapshot.get("beat_count"),
+                    beats_json=beats_json,
+                    is_analyzed=analysis_status == "completed",
+                    energy_curve=snapshot.get("energy_curve"),
+                    structure_segments=snapshot.get("structure_segments"),
+                    spectral_data=snapshot.get("spectral_data"),
+                    subtrack_segments=snapshot.get("subtrack_segments"),
+                    tempo_curve=snapshot.get("tempo_curve"),
+                    onset_times=snapshot.get("onset_times"),
+                    kick_times=snapshot.get("kick_times"),
+                    snare_times=snapshot.get("snare_times"),
+                    hihat_times=snapshot.get("hihat_times"),
+                    chunk_evidence=snapshot.get("_chunk_evidence"),
+                    analysis_status=analysis_status,
+                    stage_status=snapshot.get("_stage_status", {}),
+                    stage_errors=snapshot.get("_stage_errors", {}),
+                    downbeats=snapshot.get("downbeats"),
+                    downbeat_provenance=snapshot.get("downbeat_provenance"),
+                )
+
+        def _checkpoint_stage(stage: str, fresh: dict[str, Any]) -> None:
+            if _checkpoint_cancel_event.is_set():
+                raise _AudioAnalysisInterrupted("Audio analysis cancelled")
+            plan_updates = {
+                request_field: name == stage
+                for name, request_field in _AUDIO_STAGE_REQUEST_FIELDS.items()
+            }
+            stage_plan = planned_request.model_copy(update=plan_updates)
+            with _checkpoint_lock:
+                if _checkpoint_cancel_event.is_set():
+                    raise _AudioAnalysisInterrupted("Audio analysis cancelled")
+                merged = _merge_audio_analysis_result(
+                    cached=_checkpoint_state,
+                    fresh=fresh,
+                    requested=request,
+                    planned=stage_plan,
+                )
+                _persist_checkpoint_snapshot(merged)
+                _checkpoint_state.clear()
+                _checkpoint_state.update(merged)
+                _checkpoint_finished.add(stage)
+
         stems_paths = clip.get("stems_paths") or {}
         if isinstance(stems_paths, str):
             try:
@@ -831,6 +904,7 @@ async def _analyze_audio_in_context(
                 planned_request,
                 stems_paths,
                 _loop,
+                on_stage_checkpoint=_checkpoint_stage,
             )
         else:
             fresh_result = {
@@ -927,6 +1001,45 @@ async def _analyze_audio_in_context(
         public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
         return AudioAnalysisResult(**public_result)
     except asyncio.CancelledError:
+        _checkpoint_cancel_event.set()
+        if planned_request is not None:
+            try:
+                with _checkpoint_lock:
+                    interrupted = dict(_checkpoint_state)
+                    stage_status = dict(interrupted.get("_stage_status") or {})
+                    stage_errors = dict(interrupted.get("_stage_errors") or {})
+                    for stage, request_field in _AUDIO_STAGE_REQUEST_FIELDS.items():
+                        if (
+                            bool(getattr(planned_request, request_field))
+                            and stage not in _checkpoint_finished
+                        ):
+                            stage_status[stage] = "interrupted"
+                            stage_errors[stage] = "Audio analysis interrupted"
+                    interrupted["_analysis_status"] = "partial"
+                    interrupted["_stage_status"] = stage_status
+                    interrupted["_stage_errors"] = stage_errors
+                    _persist_checkpoint_snapshot(interrupted)
+                    _checkpoint_state.clear()
+                    _checkpoint_state.update(interrupted)
+            except ProjectContextChangedError:
+                pass
+        try:
+            await publish_event("analysis_progress", {
+                "event": "analysis_progress",
+                "task_id": str(request.clip_id),
+                "status": "interrupted",
+                "percent": 0,
+                "message": f"Audio-Analyse unterbrochen: {clip['name']}",
+                "stage_status": dict(_checkpoint_state.get("_stage_status") or {}),
+                "stage_errors": dict(_checkpoint_state.get("_stage_errors") or {}),
+            })
+        except asyncio.CancelledError:
+            pass
+        except Exception as publish_exc:
+            logger.warning(
+                "Terminales Audioanalyse-Abbruch-Event fehlgeschlagen: %s",
+                publish_exc,
+            )
         raise
     except ProjectContextChangedError:
         raise
@@ -1293,6 +1406,7 @@ def _run_audio_analysis(
     request: AudioAnalyzeRequest,
     stems_paths: dict[str, str] = None,
     _loop=None,
+    on_stage_checkpoint=None,
 ) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
@@ -1335,6 +1449,23 @@ def _run_audio_analysis(
     _stream_chunk_evidence: dict = {}
     _stage_status: dict[str, str] = {}
     _stage_errors: dict[str, str] = {}
+
+    def _checkpoint(stage: str, payload: dict[str, Any]) -> None:
+        if on_stage_checkpoint is None:
+            return
+        status = _stage_status.get(stage)
+        if status not in {"completed", "partial", "failed"}:
+            return
+        fresh = {
+            "clip_id": clip_id,
+            "duration_seconds": duration,
+            "_stage_status": {stage: status},
+            "_stage_errors": (
+                {stage: _stage_errors[stage]} if stage in _stage_errors else {}
+            ),
+            **payload,
+        }
+        on_stage_checkpoint(stage, fresh)
 
     def _mark_stage_completed(stage: str, stream_error_keys: tuple[str, ...]) -> None:
         errors = [
@@ -1624,6 +1755,24 @@ def _run_audio_analysis(
         except Exception as e:
             logger.warning(f"Drum-Onset-Detection fehlgeschlagen: {e}")
 
+    if request.detect_beats:
+        _checkpoint(
+            "beats",
+            {
+                "bpm": bpm,
+                "beat_count": len(beats),
+                "beats": beats,
+                "energy_curve": energy_curve,
+                "downbeats": downbeats,
+                "downbeat_provenance": downbeat_provenance,
+                "onset_times": onset_times,
+                "kick_times": kick_times,
+                "snare_times": snare_times,
+                "hihat_times": hihat_times,
+                "_chunk_evidence": _stream_chunk_evidence,
+            },
+        )
+
     _emit_analysis_progress(_loop, "beats", 45.0, "Beats erkannt — starte Struktur-Analyse…")
 
     # 2. Struktur-Analyse (Novelty + Clustering)
@@ -1654,6 +1803,9 @@ def _run_audio_analysis(
             _stage_errors["structure"] = str(e)
     else:
         _stage_status["structure"] = "skipped"
+
+    if request.detect_structure:
+        _checkpoint("structure", {"structure_segments": structure_segments})
 
     _emit_analysis_progress(_loop, "structure", 70.0, "Struktur analysiert — starte Spektral-Analyse…")
 
@@ -1720,6 +1872,9 @@ def _run_audio_analysis(
     else:
         _stage_status["spectral"] = "skipped"
 
+    if request.spectral_analysis:
+        _checkpoint("spectral", {"spectral_data": spectral_data})
+
     _emit_analysis_progress(_loop, "spectral", 85.0, "Spektrum analysiert — starte Tonart-Erkennung…")
 
     # 4. Tonart-Erkennung (Krumhansl-Kessler)
@@ -1748,6 +1903,9 @@ def _run_audio_analysis(
             _stage_errors["key"] = str(e)
     else:
         _stage_status["key"] = "skipped"
+
+    if request.detect_key:
+        _checkpoint("key", {"key": key})
 
 
     _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")

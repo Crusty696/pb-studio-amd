@@ -10,6 +10,7 @@ class _FakeState:
         self.clip = clip
         self.analysis = analysis
         self.persisted: dict = {}
+        self.persisted_history: list[dict] = []
 
     @asynccontextmanager
     async def project_operation(self):
@@ -27,6 +28,7 @@ class _FakeState:
 
     def update_audio_analysis(self, **kwargs) -> None:
         self.persisted = kwargs
+        self.persisted_history.append(dict(kwargs))
 
 
 def _completed_cache() -> dict:
@@ -87,7 +89,14 @@ def test_retry_runs_only_missing_stage_and_preserves_completed_data(
     )
     calls = []
 
-    def run_analysis(_path, clip_id, request, _stems, _loop):
+    def run_analysis(
+        _path,
+        clip_id,
+        request,
+        _stems,
+        _loop,
+        on_stage_checkpoint=None,
+    ):
         calls.append(request)
         return {
             "clip_id": clip_id,
@@ -189,7 +198,14 @@ def test_force_recomputes_only_explicitly_requested_stage(
     )
     calls = []
 
-    def run_analysis(_path, clip_id, request, _stems, _loop):
+    def run_analysis(
+        _path,
+        clip_id,
+        request,
+        _stems,
+        _loop,
+        on_stage_checkpoint=None,
+    ):
         calls.append(request)
         return {
             "clip_id": clip_id,
@@ -248,3 +264,114 @@ def test_force_recomputes_only_explicitly_requested_stage(
     assert response.structure_segments[0].label == "verse"
     assert response.spectral_data is not None
     assert response.key == "C major"
+
+
+def test_cancel_preserves_checkpoint_and_blocks_late_worker_commit(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import threading
+
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+
+    audio_router = importlib.import_module("backend.routers.audio_router")
+    audio = tmp_path / "cancel.wav"
+    audio.write_bytes(b"audio")
+    state = _FakeState(
+        {
+            "id": 7,
+            "name": "cancel",
+            "path": str(audio),
+            "duration_seconds": 30.0,
+            "audio_hash": None,
+            "is_analyzed": False,
+        },
+        {},
+    )
+    checkpoint_done = threading.Event()
+    release_worker = threading.Event()
+    worker_done = threading.Event()
+
+    def run_analysis(
+        _path,
+        clip_id,
+        _request,
+        _stems,
+        _loop,
+        on_stage_checkpoint=None,
+    ):
+        try:
+            on_stage_checkpoint(
+                "beats",
+                {
+                    "clip_id": clip_id,
+                    "duration_seconds": 30.0,
+                    "bpm": 128.0,
+                    "beat_count": 1,
+                    "beats": [
+                        {"time": 0.5, "strength": 0.8, "beat_type": "beat"}
+                    ],
+                    "energy_curve": [0.8],
+                    "downbeats": [],
+                    "downbeat_provenance": {"status": "unavailable"},
+                    "onset_times": [0.5],
+                    "kick_times": [0.5],
+                    "snare_times": [],
+                    "hihat_times": [],
+                    "_stage_status": {"beats": "completed"},
+                    "_stage_errors": {},
+                },
+            )
+            checkpoint_done.set()
+            release_worker.wait(timeout=3.0)
+            on_stage_checkpoint(
+                "structure",
+                {
+                    "clip_id": clip_id,
+                    "duration_seconds": 30.0,
+                    "structure_segments": [
+                        {"start_time": 0.0, "end_time": 30.0, "label": "late"}
+                    ],
+                    "_stage_status": {"structure": "completed"},
+                    "_stage_errors": {},
+                },
+            )
+            raise AssertionError("late checkpoint must stop cancelled worker")
+        finally:
+            worker_done.set()
+
+    async def no_event(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(audio_router, "_run_audio_analysis", run_analysis)
+    monkeypatch.setattr(audio_router, "publish_event", no_event)
+    monkeypatch.setattr(audio_router, "publish_log", no_event)
+
+    async def scenario() -> None:
+        request = AudioAnalyzeRequest(
+            clip_id=7,
+            detect_beats=True,
+            detect_structure=True,
+            spectral_analysis=False,
+            detect_key=False,
+        )
+        task = asyncio.create_task(audio_router.analyze_audio(request, state))
+        assert await asyncio.to_thread(checkpoint_done.wait, 2.0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        release_worker.set()
+        assert await asyncio.to_thread(worker_done.wait, 2.0)
+
+    asyncio.run(scenario())
+
+    assert len(state.persisted_history) == 2
+    assert state.persisted_history[0]["stage_status"] == {"beats": "completed"}
+    assert state.persisted_history[-1]["stage_status"] == {
+        "beats": "completed",
+        "structure": "interrupted",
+    }
+    assert state.persisted_history[-1]["bpm"] == 128.0
+    assert state.persisted_history[-1]["structure_segments"] is None
