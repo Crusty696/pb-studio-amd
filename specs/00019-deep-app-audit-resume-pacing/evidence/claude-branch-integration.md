@@ -60,7 +60,17 @@ Nutzerdateien oder parallel vorbereitete Arbeitsstände zurückzusetzen.
 
 ## Ausstehende Nachweise
 
-- [ ] Selektive Ports und fokussierte Tests
-- [ ] Konfliktmarker-/Diff-Prüfung
-- [ ] Merge-Parent-Ancestry aller noch offenen Tips
-- [ ] Python-Gesamtsuite, C#-Tests und WPF Release-Build
+- [X] `4d36225` selektiv portiert: `53ef566`; Windows-Subprozesse verdeckt.
+- [X] `c6a0ddd` selektiv portiert: `506b928`; echte Clip-Embeddings als Fallback.
+- [X] `42c63a7` nach 11 Paritätstests verworfen: ungerade Kernel ändern Ergebnisse;
+  der Vektorpfad kann zusätzlich rund 154 MiB temporären Speicher materialisieren.
+- [X] Kombinierter Minimal-Lauf: 24 Tests bestanden; Syntaxprüfung bestanden.
+- [X] WPF Release-Build: 0 Fehler, 0 Warnungen.
+- [X] Baseline-Gesamtsuite: 1320 Tests, 2 Failures, 13 Skips; JUnit liegt in
+  `pytest-full.xml`. Ein mtime-Fehlalarm wurde durch expliziten NSwag-Build-Stamp
+  korrigiert und fokussiert grün geprüft; der zweite Fehler war RAM-Erschöpfung
+  nach rund 5 GiB im Timeline-Integritätstest und bleibt Teil des Tiefenaudits.
+- [X] `6c09c1f`: geprüfte `nifty-sammet`-Historie per unverändertem Tree erfasst.
+- [X] `6e38c20`: geprüfte `cranky-hodgkin`-Historie per unverändertem Tree erfasst.
+- [X] Alle lokalen/Remote-Claude-Tips sind Ancestors des Integrations-HEAD;
+  `git diff 506b928..6e38c20` ist leer und `git diff --check` besteht.
