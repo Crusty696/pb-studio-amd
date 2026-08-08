@@ -167,6 +167,15 @@ class MotionAnalyzer:
             self._init_failed = True
             return False
 
+        vram_manager = None
+        vram_model_id = (
+            "raft_small"
+            if "raft_small" in str(self.model_path).lower()
+            else "raft_standard"
+        )
+        vram_reserved = False
+        vram_committed = False
+
         try:
             sess_options = self._create_session_options()
             providers = self._get_providers()
@@ -180,6 +189,20 @@ class MotionAnalyzer:
                 return False
 
             logger.info(f"Loading RAFT model from {self.model_path}...")
+
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+
+            vram_manager = get_vram_manager()
+            budget = vram_manager.get_model(vram_model_id)
+            if budget is None:
+                raise RuntimeError(
+                    f"RAFT VRAM budget '{vram_model_id}' is not registered"
+                )
+            if not vram_manager.reserve(vram_model_id, force=False):
+                raise RuntimeError(
+                    f"RAFT VRAM reservation failed for '{vram_model_id}'"
+                )
+            vram_reserved = True
 
             self.session = enforce_directml_session(
                 ort.InferenceSession(
@@ -197,30 +220,38 @@ class MotionAnalyzer:
                 and isinstance(input_shape[-1], int)
             ):
                 self.target_size = (input_shape[-1], input_shape[-2])
+            self._log_model_info()
+
+            if not vram_manager.commit(vram_model_id):
+                raise RuntimeError(
+                    f"RAFT VRAM commit failed for '{vram_model_id}'"
+                )
+            vram_reserved = False
+            vram_committed = True
+            budget.unload_callback = self.unload
             self._initialized = True
 
             logger.info(f"RAFT model loaded. Active Provider: {self._active_provider}")
-            self._log_model_info()
-
-            if self._active_provider == "DmlExecutionProvider":
-                try:
-                    from pb_studio.core.vram_budget_manager import get_vram_manager
-                    mgr = get_vram_manager()
-                    model_id = "raft_small" if "raft_small" in str(self.model_path).lower() else "raft_standard"
-                    budget = mgr.get_model(model_id)
-                    if budget is not None:
-                        budget.unload_callback = self.unload
-                    mgr.reserve(model_id, force=False)
-                    mgr.commit(model_id)
-                    logger.info("RAFT model registered and committed with VRAMBudgetManager")
-                except Exception as ve:
-                    logger.warning("VRAM-Manager-Registrierung fuer RAFT fehlgeschlagen: %s", ve)
+            logger.info("RAFT model registered and committed with VRAMBudgetManager")
 
             return True
 
         except Exception as e:
             logger.error(f"Failed to initialize RAFT model: {e}")
             self.session = None
+            self._initialized = False
+            if vram_manager is not None:
+                try:
+                    if vram_committed:
+                        vram_manager.release(vram_model_id)
+                    elif vram_reserved:
+                        vram_manager.cancel_reservation(vram_model_id)
+                except Exception as rollback_error:
+                    logger.error(
+                        "RAFT VRAM rollback failed for %s: %s",
+                        vram_model_id,
+                        rollback_error,
+                    )
             self._init_failed = True
             return False
 

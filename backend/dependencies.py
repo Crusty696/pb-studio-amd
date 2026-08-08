@@ -388,19 +388,18 @@ async def publish_event(event_type: str, data: dict[str, Any], client_id: str = 
     BUG-028 Fix: Fan-out an alle registrierten Queues, damit /events/progress und
     /events/log gleichzeitig betrieben werden können ohne sich Events zu stehlen.
     """
-    if not _event_queues:
-        return
     _fanout_event({"event": event_type, "data": data})
 
 
 def publish_event_threadsafe(event_type: str, data: dict[str, Any]) -> None:
     """Thread-sichere Variante für Worker-Threads/-Loops (Review-Fix HIGH-1).
 
-    Best-effort: ohne gesetzten Main-Loop oder ohne Queues wird still verworfen
-    (Status-Events sind rein kosmetisch, dürfen nie Inferenz abbrechen).
+    Best-effort: ohne gesetzten Main-Loop wird still verworfen. Bei einem
+    laufenden Main-Loop wird das Event auch ohne verbundene Queues journalisiert,
+    damit ein Reconnect die Luecke per Last-Event-ID nachladen kann.
     """
     loop = _main_loop
-    if loop is None or loop.is_closed() or not _event_queues:
+    if loop is None or loop.is_closed():
         return
     event = {"event": event_type, "data": data}
     try:

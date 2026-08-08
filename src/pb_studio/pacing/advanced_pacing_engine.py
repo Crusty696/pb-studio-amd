@@ -962,6 +962,7 @@ class AdvancedPacingEngine:
                             stems=stems_dict,
                             expected_bpm=expected_bpm,
                             min_cut_interval=min_cut_interval,
+                            song_sections=song_sections,
                             on_progress=on_progress,
                         )
                 except (json.JSONDecodeError, Exception) as e:
@@ -1505,6 +1506,7 @@ class AdvancedPacingEngine:
         stems: Dict[str, str],
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
+        song_sections: Optional[List[Any]] = None,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
@@ -1545,12 +1547,19 @@ class AdvancedPacingEngine:
 
         _emit(5.0, force=True)
 
+        normalized_sections = (
+            self._coerce_song_structure(song_sections)
+            if song_sections
+            else None
+        )
+
         # Basis-Cuts aus Original-Audio (größerer min_interval für Basis).
         # Inner progress 0..40 mappen auf 5..40.
         base_cuts = self._generate_cut_list_from_audio(
             audio_path=audio_path,
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval * 2,
+            song_sections=normalized_sections,
             on_progress=lambda p: _emit(5.0 + (p / 100.0) * 35.0),
         )
 
@@ -1579,6 +1588,12 @@ class AdvancedPacingEngine:
                     t.strength *= 0.7
                 stem_triggers.extend(bass_triggers)
                 _emit(75.0, force=True)
+
+        if normalized_sections:
+            stem_triggers = self._apply_structure_weights(
+                stem_triggers,
+                normalized_sections,
+            )
 
         # Audit 2026-08-05 (H-0): Stem-Trigger wurden hier als ZUSAETZLICHE
         # Kandidaten in die Liste geworfen. Weil die Cut-Anzahl aber bereits

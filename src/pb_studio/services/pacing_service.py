@@ -908,6 +908,23 @@ class PacingService:
         target_duration = duration_limit or total_duration
         min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
         expected_bpm = pacing_config.get("expected_bpm", 120)
+        song_sections = None
+        if pacing_config.get("use_structure_awareness", False):
+            cached_segments = (
+                cached_analysis.get("structure_segments")
+                if cached_analysis
+                else None
+            )
+            if cached_segments:
+                song_sections = cached_segments
+                self._last_skipped_structure_reanalyze = True
+                logger.info(
+                    "Stem-Pacing: %d cached structure_segments verwendet",
+                    len(cached_segments),
+                )
+            else:
+                song_sections = pacing_engine.analyze_song_structure(audio_path)
+                self._last_skipped_structure_reanalyze = False
 
         logger.info(
             f"L-K5 Stem-Pacing: stems={list(stems.keys())} target={target_duration:.2f}s"
@@ -919,6 +936,7 @@ class PacingService:
                 stems=stems,
                 expected_bpm=expected_bpm,
                 min_cut_interval=min_cut_interval,
+                song_sections=song_sections,
                 on_progress=on_progress,
             )
 

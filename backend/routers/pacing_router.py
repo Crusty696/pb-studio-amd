@@ -22,7 +22,7 @@ from ..app_state import (
     ProjectOperationContext,
     get_app_state,
 )
-from ..dependencies import publish_event, publish_log
+from ..dependencies import gpu_lock, publish_event, publish_log
 from ..media_path_policy import (
     MediaPathPolicyError,
     validate_registered_media_path,
@@ -562,9 +562,12 @@ async def generate_preview(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        preview_path = await asyncio.to_thread(
-            _render_preview, timeline_snapshot, request.start_sec, request.duration
-        )
+        async with gpu_lock:
+            preview_path = await asyncio.to_thread(
+                _render_preview, timeline_snapshot, request.start_sec, request.duration
+            )
+        if not preview_path:
+            raise RuntimeError("Preview-Rendering lieferte keine Ausgabedatei")
         return PreviewResponse(
             preview_path=preview_path,
             duration=request.duration,
@@ -867,6 +870,8 @@ def _render_preview(timeline: list[dict[str, Any]], start_sec: float, duration: 
             ))
         generator = PreviewGenerator()
         result = generator.generate_preview(entries, start_sec, duration)
-        return str(result) if result else ""
+        if result is None:
+            raise RuntimeError("Preview-Rendering fehlgeschlagen")
+        return str(result)
     except ImportError:
         raise RuntimeError("PreviewGenerator nicht verfügbar")
