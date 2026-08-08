@@ -27,7 +27,8 @@ Daten sichtbar zu machen.
   Motion, Struktur, Key, Brain, Anchors und Triggerdaten
 - DB-/Cache-/FAISS-/SSE-/WPF-Vertragsparität und Abbruch-/Restart-Verhalten
 - vollständige Prüfung und nachvollziehbare Integration aller vorhandenen
-  `claude/*`-Branches ohne Rücknahme neuerer Main-Fixes oder fremder Arbeitsdateien
+  lokalen und Remote-Branches ohne Rücknahme neuerer Main-Fixes oder fremder
+  Arbeitsdateien; `claude/*` bleibt eine separat belegte Teilmenge
 - Regressionstests, reale Testdaten und belegte Auditberichte
 
 ### Ausgeschlossen
@@ -81,6 +82,11 @@ sichtbar melden.
   semantisch klassifiziert. Noch gültige Änderungen werden modern portiert;
   vollständig enthaltene oder überholte Änderungen werden mit Evidenz als
   verarbeitet markiert, ohne veraltete Trees in den Produktcode zu übernehmen.
+- **FR-367:** Jeder übrige lokale und Remote-Branch wird commit- und
+  funktionsbezogen gegen den aktuellen Main klassifiziert. Gültige Änderungen
+  werden modern portiert; doppelte oder überholte Trees werden nicht
+  eingespielt, ihre Historie wird vor einer optionalen Ref-Bereinigung
+  nachvollziehbar als verarbeitet erfasst.
 
 ## Operational Requirements
 
@@ -92,6 +98,10 @@ sichtbar melden.
   Testartefakte werden über vorab erfasste IDs/Pfade isoliert und bereinigt.
 - **OR-341:** Jeder CRITICAL/HIGH-Befund besitzt Reproduktion, file:line-Beleg,
   Impact und quellenbelegte Reparaturempfehlung.
+- **OR-342:** Branch-Ref-Löschungen erfolgen ausschließlich nach vollständiger
+  Ancestry-/Patch-Evidenz und einer unmittelbar davor wiederholten expliziten
+  Bestätigung; Produktdateien, Nutzerdaten und geschützte Historie werden nicht
+  gelöscht.
 
 ## Test Requirements
 
@@ -119,6 +129,9 @@ sichtbar melden.
   Pacing und Analyse werden zusätzlich semantisch geprüft.
 - **TR-365:** Branch-Integration belegt Ref, Merge-Base, Ahead/Behind,
   Commitentscheidung, Diff-Prüfung und Tests der selektiv portierten Änderungen.
+- **TR-366:** Nach Konvergenz sind alle verarbeiteten Branch-Tips Ancestors des
+  Integrationsstands, dessen Tree gegenüber dem beabsichtigten aktuellen Main
+  nur die dokumentierten selektiven Ports und Evidence-Änderungen enthält.
 
 ## Success Criteria
 
@@ -137,6 +150,10 @@ sichtbar melden.
 - **SC-090 [OBJ-74]:** Alle Claude-Branch-Tips sind entweder bereits exakte
   Main-Ancestors oder im Integrations-Branch als geprüfte Merge-Eltern erfasst;
   kein gültiger Hunk bleibt unbehandelt und kein Konfliktartefakt gelangt in Main.
+- **SC-091 [OBJ-74]:** Alle übrigen lokalen und Remote-Branch-Tips sind entweder
+  bereits Main-Ancestors oder als geprüfte Merge-Eltern erfasst. Doppelte oder
+  überholte Branch-Refs können danach ohne Verlust aktueller Produktfunktion
+  gezielt bereinigt werden.
 
 ## Traceability
 
@@ -147,8 +164,9 @@ sichtbar melden.
 | FR-362–FR-364 | Pacing-Preflight und Clip-Auswahl |
 | TR-356–TR-364 | automatisierte, Live- und GUI-QC |
 | FR-366, TR-365, SC-090 | Claude-Branch-Audit und verlustfreie Integration |
+| FR-367, OR-342, TR-366, SC-091 | vollständige Branch-Konvergenz und kontrollierte Ref-Bereinigung |
 | SC-085–SC-089 | Abschluss- und Release-Gates |
 
 ## Task Range
 
-T001–T031 implementieren und prüfen OBJ-74.
+T001–T035 implementieren und prüfen OBJ-74.
