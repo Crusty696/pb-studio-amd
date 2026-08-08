@@ -49,6 +49,10 @@ Pacing Request
 6. Alle Claude-Branches gegen Main prüfen, gültige Änderungen auf aktuelle
    Architektur portieren und die geprüften Branch-Tips ohne Tree-Rückschritt
    als verarbeitet in der Integrationshistorie erfassen.
+7. Alle übrigen lokalen und Remote-Branches commit- und funktionsbezogen prüfen,
+   gültige Änderungen selektiv portieren, jeden Tip ohne Tree-Rückschritt als
+   verarbeitet erfassen und redundante Branch-Refs erst nach separater
+   Löschbestätigung bereinigen.
 
 ## Zonen und Reihenfolge
 
@@ -117,4 +121,5 @@ Audits und disjunkte Tests dürfen parallel laufen.
 - `specs/00019-deep-app-audit-resume-pacing/evidence/`
 - `FULLSTACK_AUDIT_PB_STUDIO_2026-08-08.md`
 - `specs/00019-deep-app-audit-resume-pacing/evidence/claude-branch-integration.md`
+- `specs/00019-deep-app-audit-resume-pacing/evidence/all-branch-convergence.md`
 - `qc-report.md`, `.completed`, `.qc-passed` erst nach ihren Gates
