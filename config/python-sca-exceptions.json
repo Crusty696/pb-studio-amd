@@ -5,7 +5,7 @@
       "id": "T413-TORCH-CVE-2025-3000",
       "package": "torch",
       "version": "2.11.0+cpu",
-      "alias": "CVE-2025-3000",
+      "alias": "GHSA-RRMF-RVHW-RF47",
       "owner": "PB Studio Release Owner",
       "expires_on": "2026-09-01",
       "reason": "Affected torch.jit.script is absent in the shipped repository; fresh-target compatibility and runtime tests remain required."

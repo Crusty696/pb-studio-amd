@@ -200,7 +200,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "id": "T413-TORCH-CVE-2025-3000",
                 "package": "torch",
                 "version": "2.11.0+cpu",
-                "alias": "CVE-2025-3000",
+                "alias": "GHSA-RRMF-RVHW-RF47",
                 "owner": "PB Studio Release Owner",
                 "expires_on": "2026-09-01",
                 "reason": (
@@ -370,7 +370,10 @@ def test_python_sca_workflow_uses_isolated_exact_scanner_and_direct_cli() -> Non
     assert "PIP_AUDIT_ACTION_REVISION" not in workflow
     assert "--tool-version" not in workflow
     assert workflow.count("allow-ghsas:") == 1
-    assert "allow-ghsas: GHSA-h35f-9h28-mq5c" in workflow
+    assert (
+        "allow-ghsas: GHSA-h35f-9h28-mq5c, GHSA-rrmf-rvhw-rf47"
+        in workflow
+    )
     assert "requirements-invalid-hash.txt" not in workflow
     assert "requirements-wrong-hash.txt" in workflow
     assert (
