@@ -1,0 +1,11 @@
+# OBJ-73 Tasks
+
+- [X] T001 [P] [OBJ-73] {(FR-354)} {(TR-356)} Normalize fresh beat results to the live `beats` cache key and add analyze-to-read regression coverage in `backend/app_state.py` and `Tests/` [Z-DATA-SHARED]
+- [X] T002 [P] [OBJ-73] {(FR-354)} {(TR-356)} Journal SSE completion events without connected clients and prove Last-Event-ID replay in `backend/dependencies.py` and `Tests/` [Z-BACKEND]
+- [X] T003 [P] [OBJ-73] {(FR-355)} {(TR-356)} Make RAFT VRAM accounting fail-closed and serialize truthful preview rendering through the central GPU contract in `src/pb_studio/video/raft.py`, `backend/routers/pacing_router.py`, `src/pb_studio/rendering/preview_renderer.py` and `Tests/` [Z-BACKEND]
+- [X] T004 [P] [OBJ-73] {(FR-359)} {(TR-356)} Port the current structure-awareness behavior into the stem pacing path with focused tests in `src/pb_studio/services/pacing_service.py`, `src/pb_studio/pacing/advanced_pacing_engine.py` and `Tests/` [Z-BACKEND]
+- [X] T005 [P] [OBJ-73] {(FR-356)} {(TR-357)} Serialize and project-bind anchor loads/writes with native regression tests in `PBStudio.UI/ViewModels/AnchorViewModel.cs` and `PBStudio.UI.Tests/` [Z-UI]
+- [X] T006 [P] [OBJ-73] {(FR-356)} {(FR-357)} {(TR-357)} Gate ratings per displayed cut and seek/stop learning playback at the rated range in `PBStudio.UI/ViewModels/`, `PBStudio.UI/Views/LearningSessionDialog.xaml*` and `PBStudio.UI.Tests/` [Z-UI]
+- [X] T007 [OBJ-73] {(FR-358)} {(TR-358)} {(TR-359)} Repair LF-stable SDD, clean hardware-independent Python quality, governed skip receipts, negative SCA exit status and ephemeral vulnerable NuGet fixtures in `.gitattributes`, `.github/workflows/`, `scripts/run_python_quality_gate.ps1`, `config/pytest-skip-allowlist.json`, `Tests/security/` and related tests [Z-INFRA]
+- [X] T008 [OBJ-73] {(TR-360)} {(SC-084)} {(SC-085)} Run targeted regressions, full Python, locked native C#, WPF Release, immutable OBJ-72 SDD plus OBJ-73 phase-gate checks and three clean quality-gate validations and record evidence under `specs/00018-release-gate-remediation/` [QC/Z-DOCS]
+- [ ] T009 [OBJ-73] {(OR-338)} {(OR-339)} {(OR-340)} {(TR-359)} {(SC-086)} Synchronize Brain and release truth, push PR #22 through green required checks, protect/default `main`, merge and verify the resulting SHA [Z-DOCS/Git/Remote]

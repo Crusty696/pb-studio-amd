@@ -77,7 +77,18 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-07 (Vision-Tagging repariert, Commit `74c5807`, gepusht)
+- **Date:** 2026-08-08 (OBJ-73 lokal PASS; PR #22 Remote-Gates/`main`-Merge offen)
+- **Status (2026-08-08 — autoritativ):**
+  - Vier rote PR-Gates lokal repariert: Python SCA, Dependency Review,
+    SDD-/Release-Contracts und Python-3.11-Quality-Gate.
+  - Acht High-Runtimebefunde behoben: Live-Beat-Cache, SSE-Abschlussjournal,
+    RAFT-VRAM-Transaktion, Preview-GPU-Lock/Fehlersignal, Stem-Strukturpfad,
+    Anchor-Races, doppeltes Brain-Feedback und Cut-synchrone Wiedergabe.
+  - Drei vollständige Quality-Gate-Läufe: jeweils **1291 passed / 13 governed
+    skips / 0 failed**; native UI **49/49**, WPF Release **0 Warnungen/0 Fehler**.
+  - SDD: `specs/00018-release-gate-remediation/` lokal implementiert; T009 und
+    `.qc-passed` bleiben bis zu grünen Remote-Checks und Merge bewusst offen.
+- **Historischer Stand:** 2026-08-07 (Vision-Tagging + VRAM-Sensor)
 - **Status (2026-08-07 — autoritativ):**
   - Auslöser: „DIE ANALYSE STIMMT NICHT DAS GEHT VIEL ZU LANGE / VIDEO ANALYSE".
     **Bestätigt.** `/video/analyze` brauchte **150,69 s pro Clip** und lieferte
