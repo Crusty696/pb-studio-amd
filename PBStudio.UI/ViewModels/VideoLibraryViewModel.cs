@@ -578,6 +578,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             return false;
 
         clip.IsAnalyzed = IsCompleted(result);
+        clip.AnalysisStatus = result.Status;
+        clip.StageStatus = result.StageStatus;
+        clip.StageErrors = result.StageErrors;
         ApplyMotionResult(clip, result);
         return true;
     }
@@ -870,6 +873,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                         Fps = c.Fps,
                         Tags = c.Tags,
                         IsAnalyzed = c.IsAnalyzed,
+                        AnalysisStatus = c.AnalysisStatus,
+                        StageStatus = c.StageStatus,
+                        StageErrors = c.StageErrors,
                         ThumbnailAvailable = c.ThumbnailAvailable,
                         AvgMotion = c.AvgMotion,
                         PeakMotion = c.PeakMotion,

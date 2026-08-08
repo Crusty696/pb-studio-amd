@@ -131,4 +131,26 @@ public sealed class TransportContractTests
         Assert.IsFalse(save.Success);
         Assert.AreEqual("disk full", save.Message);
     }
+
+    [TestMethod]
+    public void VideoClipInfo_PreservesPartialStageTruth()
+    {
+        var transport = JsonSerializer.Deserialize<VideoClipInfo>(
+            """{"id":7,"name":"clip","path":"C:\\\\media\\\\clip.mp4","duration_seconds":4,"width":1920,"height":1080,"fps":30,"codec":"h264","thumbnail_available":true,"tags":[],"analysis_status":"partial","stage_status":{"scenes":"completed","embedding":"failed"},"stage_errors":{"embedding":"interrupted"}}""",
+            SnakeCaseJson);
+
+        Assert.IsNotNull(transport);
+        Assert.AreEqual("partial", transport.AnalysisStatus);
+        Assert.AreEqual("completed", transport.StageStatus!["scenes"]);
+        Assert.AreEqual("interrupted", transport.StageErrors!["embedding"]);
+
+        var model = new VideoClipModel
+        {
+            AnalysisStatus = transport.AnalysisStatus,
+            StageStatus = transport.StageStatus,
+            StageErrors = transport.StageErrors,
+        };
+        Assert.AreEqual("TEILANALYSE", model.AnalysisStatusText);
+        StringAssert.Contains(model.AnalysisDetail, "embedding: interrupted");
+    }
 }
