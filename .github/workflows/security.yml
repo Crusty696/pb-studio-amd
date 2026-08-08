@@ -167,6 +167,10 @@ jobs:
         id: vulnerable_fixture
         shell: pwsh
         run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "requirements-vulnerable.txt"
+          Copy-Item `
+            Tests/security/fixtures/python-vulnerable.fixture `
+            $fixture
           & $env:SCANNER_PYTHON -m pip_audit `
             --vulnerability-service osv `
             --disable-pip `
@@ -178,7 +182,7 @@ jobs:
             --progress-spinner=off `
             --format=json `
             --output=artifacts/security/python-sca-fixture.json `
-            --requirement Tests/security/fixtures/requirements-vulnerable.txt
+            --requirement $fixture
           if ($LASTEXITCODE -ne 1 -or
               -not (Test-Path -LiteralPath artifacts/security/python-sca-fixture.json)) {
             throw "Vulnerable Python fixture was not rejected with a report."
@@ -190,13 +194,13 @@ jobs:
         run: >-
           python scripts/security_gate.py pip-audit-report
           --report artifacts/security/python-sca-fixture.json
-          --lock Tests/security/fixtures/requirements-vulnerable.txt
+          --lock ${{ runner.temp }}\requirements-vulnerable.txt
           --provider osv
           --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
           --scanner-version-status verified
           --invocation-kind local
           --local-source config/pip-audit-2.10.1-win-py311.lock@sha256:${{ env.PIP_AUDIT_SCANNER_LOCK_SHA256 }}
-          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-fixture.json --requirement Tests/security/fixtures/requirements-vulnerable.txt'
+          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-fixture.json --requirement $env:RUNNER_TEMP\requirements-vulnerable.txt'
           --receipt artifacts/security/python-sca-fixture-validation.json
           --expect-package urllib3
           --expect-version 1.26.5

@@ -14,7 +14,7 @@ def test_sdd_archive_text_preserves_manifest_bytes_on_windows() -> None:
     attributes = _read(".gitattributes")
 
     assert "*.md   text eol=lf" in attributes
-    assert "specs/**/history/*.md text eol=crlf" in attributes
+    assert "specs/**/history/*.md -text !eol -diff" in attributes
     assert "specs/**/history/*.txt text eol=lf" in attributes
 
 
@@ -58,3 +58,19 @@ def test_vulnerable_nuget_fixture_is_materialized_only_in_runner_temp() -> None:
     assert 'Join-Path $env:RUNNER_TEMP "pb-studio-vulnerable-nuget"' in workflow
     assert "Copy-Item `" in workflow
     assert "--expect-project VulnerableNuGet.csproj" in workflow
+
+
+def test_vulnerable_python_fixture_is_materialized_only_in_runner_temp() -> None:
+    tracked_requirements = _read(
+        "Tests/security/fixtures/requirements-vulnerable.txt"
+    )
+    fixture_template = _read(
+        "Tests/security/fixtures/python-vulnerable.fixture"
+    )
+    workflow = _read(".github/workflows/security.yml")
+
+    assert "urllib3" not in tracked_requirements
+    assert "urllib3==1.26.5" in fixture_template
+    assert 'Join-Path $env:RUNNER_TEMP "requirements-vulnerable.txt"' in workflow
+    assert "python-vulnerable.fixture" in workflow
+    assert "--lock ${{ runner.temp }}\\requirements-vulnerable.txt" in workflow

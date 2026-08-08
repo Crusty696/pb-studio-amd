@@ -1,2 +1,2 @@
-urllib3==1.26.5 \
-    --hash=sha256:753a0374df26658f99d826cfe40394a686d05985786d946fbe4165b5148f5a7c
+# Intentionally dependency-free. The vulnerable SCA fixture is materialized
+# from python-vulnerable.fixture into the runner temp directory by security.yml.
