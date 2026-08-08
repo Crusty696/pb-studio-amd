@@ -2850,6 +2850,16 @@
             "type": "boolean",
             "title": "Spectral Analysis",
             "default": true
+          },
+          "detect_key": {
+            "type": "boolean",
+            "title": "Detect Key",
+            "default": true
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
           }
         },
         "type": "object",
@@ -5532,6 +5542,16 @@
             "type": "boolean",
             "title": "Analyze Colors",
             "default": true
+          },
+          "analyze_audio_key": {
+            "type": "boolean",
+            "title": "Analyze Audio Key",
+            "default": true
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
           }
         },
         "type": "object",

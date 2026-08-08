@@ -176,7 +176,10 @@
                                               Unchecked="VideoClipCheckBox_Changed">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}" Foreground="{StaticResource AbletonText}" FontSize="11"/>
-                                            <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource AbletonTextDim}"
+                                             <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource AbletonTextDim}"
+                                                        FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding AnalysisStatusText, StringFormat={}({0})}"
+                                                       Foreground="{StaticResource AbletonTextDim}"
                                                        FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </CheckBox>
