@@ -671,11 +671,14 @@ def _expected_requirement_registry(
 
 def _validate_archive(feature: Path, spec: str, findings: list[Finding]) -> None:
     anchor = _archive_anchor(spec)
+    history = feature / "history"
+    if anchor is None and not history.exists():
+        return
     if anchor is None:
         _add(findings, "ARCHIVE_ANCHOR", feature / "spec.md", "archive anchor missing")
         return
     anchored_name, anchored_digest = anchor
-    manifests = sorted((feature / "history").glob("archive-manifest-*.json"))
+    manifests = sorted(history.glob("archive-manifest-*.json"))
     if len(manifests) != 1:
         _add(
             findings,

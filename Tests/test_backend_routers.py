@@ -36,6 +36,22 @@ def _get_module(name: str):
     return sys.modules[name]
 
 
+def _completed_beats_analysis():
+    return {
+        "bpm": 120.0,
+        "beat_count": 2,
+        "beats": [0.0, 0.5],
+        "energy_curve": [0.5, 0.6],
+        "downbeats": [0.0],
+        "onset_times": [0.0],
+        "kick_times": [0.0],
+        "snare_times": [0.5],
+        "hihat_times": [0.25],
+        "downbeat_provenance": {"source": "test"},
+        "_stage_status": {"beats": "completed"},
+    }
+
+
 # ─────────────────────────────────────────────────────────────────
 # Fixture: frischer AppState pro Test (Dependency Override)
 # ─────────────────────────────────────────────────────────────────
@@ -365,7 +381,9 @@ class TestVideoRouter:
                     "end_time": 1.0,
                     "scene_type": "cut",
                     "confidence": 0.9,
-                }]
+                }],
+                "stage_status": {"scenes": "completed"},
+                "stage_errors": {},
             }
 
         def fake_gpu(video_path, clip_id, request, _loop=None, *args):
@@ -380,14 +398,23 @@ class TestVideoRouter:
                 },
                 "embedding_dim": 512,
                 "embedding_samples": 1,
-                "has_embedding": True
+                "has_embedding": True,
+                "stage_status": {"motion": "completed", "embedding": "skipped"},
+                "stage_errors": {},
             }
 
-        async def fake_color(video_path, clip_id, generate_captions):
+        async def fake_color(
+            video_path,
+            clip_id,
+            generate_captions,
+            analyze_colors=True,
+        ):
             return {
                 "dominant_colors": ["#000000"],
                 "tags": ["test"],
-                "tag_source": "mock"
+                "tag_source": "mock",
+                "stage_status": {"colors": "completed", "captions": "skipped"},
+                "stage_errors": {},
             }
 
         video_mod._run_scene_detection = fake_scene
@@ -504,6 +531,7 @@ class TestPacingRouter:
 
         fresh_state.audio_clips[1] = {"id": 1, "path": "/audio.mp3", "duration_seconds": 120.0}
         fresh_state.video_clips[1] = {"id": 1, "path": "/clip.mp4", "duration_seconds": 10.0}
+        fresh_state.audio_analysis_cache[1] = _completed_beats_analysis()
 
         try:
             r = client.post("/pacing/generate", json={
@@ -535,6 +563,7 @@ class TestPacingRouter:
         # Gültige Clip-IDs im State anlegen, damit Validierung durchläuft
         fresh_state.audio_clips[1] = {"id": 1, "path": "/audio.mp3", "duration_seconds": 60.0}
         fresh_state.video_clips[1] = {"id": 1, "path": "/clip.mp4", "duration_seconds": 5.0}
+        fresh_state.audio_analysis_cache[1] = _completed_beats_analysis()
 
         try:
             r = client.post("/pacing/generate", json={

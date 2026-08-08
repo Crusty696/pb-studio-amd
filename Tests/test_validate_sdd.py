@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -296,6 +297,23 @@ def _codes(feature: Path, phase: str = "open") -> set[str]:
 
 
 def test_valid_open_workspace_passes(valid_feature: Path):
+    report = validate_feature(valid_feature, "open")
+
+    assert report.valid, report.findings
+
+
+def test_new_open_workspace_without_history_does_not_require_archive(
+    valid_feature: Path,
+):
+    shutil.rmtree(valid_feature / "history")
+    spec_path = valid_feature / "spec.md"
+    spec_lines = spec_path.read_text(encoding="utf-8").splitlines()
+    spec_path.write_text(
+        "\n".join(line for line in spec_lines if "archive-manifest-" not in line)
+        + "\n",
+        encoding="utf-8",
+    )
+
     report = validate_feature(valid_feature, "open")
 
     assert report.valid, report.findings

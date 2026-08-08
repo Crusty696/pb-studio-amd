@@ -3,7 +3,7 @@
 **Status:** TASKS OPEN
 
 - [X] T001 [OBJ-74] {(FR-354)} Erstelle den vollständigen UI/API/Core/SSE-Funktionskatalog in `test-report/function-catalog.md` [Z-DOCS]
-- [ ] T002 [P] [OBJ-74] {(TR-356)} Erfasse frische Repository-, Endpoint-, Test-, Skip-, Coverage- und Build-Baselines und generalisiere den SDD-Open-Validator für neue Objectives in `specs/00019-deep-app-audit-resume-pacing/evidence/`, `scripts/validate_sdd.py` und `Tests/test_validate_sdd.py` [Z-TESTS/Z-DOCS]
+- [X] T002 [P] [OBJ-74] {(TR-356)} Erfasse frische Repository-, Endpoint-, Test-, Skip-, Coverage- und Build-Baselines und generalisiere den SDD-Open-Validator für neue Objectives in `specs/00019-deep-app-audit-resume-pacing/evidence/`, `scripts/validate_sdd.py` und `Tests/test_validate_sdd.py` [Z-TESTS/Z-DOCS]
 - [X] T003 [OBJ-74] {(FR-355)} {(FR-365)} Auditiere Analysezustand, DB-/Cache-/FAISS-/Brain-Merges und Reload-Verträge in `backend/app_state.py` und `src/pb_studio/data/` [SHARED/Z-DATA]
 - [X] T004 [P] [OBJ-74] {(FR-356)} {(FR-357)} {(TR-358)} Schreibe verlustbeweisende Audio-Teilretry-Regressionen in `Tests/test_audio_analysis_resume.py` [Z-TESTS]
 - [X] T005 [P] [OBJ-74] {(FR-356)} {(FR-357)} {(TR-358)} Schreibe verlustbeweisende Video-Teilretry-Regressionen in `Tests/test_video_analysis_resume.py` [Z-TESTS]
@@ -31,5 +31,5 @@
 - [X] T027 [OBJ-74] {(OR-338)} Synchronisiere PB-Studio-Brain-INDEX, Log und Learnings; dokumentiere den fehlenden globalen Decisions-Pfad und speichere den Nachweis in `specs/00019-deep-app-audit-resume-pacing/evidence/brain-sync.md` [Z-DOCS]
 - [ ] T028 [OBJ-74] {(OR-341)} Erstelle `specs/00019-deep-app-audit-resume-pacing/.qc-passed` nur bei vollständigem PASS und gebundenen Evidence-/Report-/Brain-Digests [QC/Z-DOCS]
 - [X] T029 [P] [OBJ-74] {(FR-366)} {(TR-365)} Inventarisiere und auditiere alle lokalen und Remote-`claude/*`-Branches gegen Main; klassifiziere jeden eindeutigen Commit als enthalten, selektiv zu portieren oder überholt in `specs/00019-deep-app-audit-resume-pacing/evidence/claude-branch-integration.md` [Z-DOCS/READ-ONLY]
-- [X] T030 [OBJ-74] {(FR-366)} Portiere ausschließlich noch gültige Claude-Änderungen auf die aktuelle Architektur und ergänze fokussierte Regressionstests in den jeweils disjunkten Produkt- und Testzonen [Z-AUDIO/Z-VIDEO/Z-PACING/Z-TESTS]
-- [X] T031 [OBJ-74] {(TR-365)} {(SC-090)} Erfasse alle geprüften, noch nicht enthaltenen Claude-Branch-Tips als Merge-Eltern ohne Tree-Rückschritt; verifiziere Diff, Konfliktmarker, vorhandene Baseline plus kombinierten Minimal-Regressionslauf und Branch-Ancestry im Integrations-Branch [GIT/QC]
+- [X] T030 [OBJ-74] {(FR-366)} Portiere ausschließlich noch gültige Claude-Änderungen auf die aktuelle Architektur und ergänze fokussierte Regressionstests in `Tests/test_video_subprocess_startup.py`, `Tests/test_clip_selector_semantic_fallback.py` und `Tests/test_structure_novelty_vectorization.py` [Z-AUDIO/Z-VIDEO/Z-PACING/Z-TESTS]
+- [X] T031 [OBJ-74] {(TR-365)} {(SC-090)} Erfasse alle geprüften, noch nicht enthaltenen Claude-Branch-Tips als Merge-Eltern ohne Tree-Rückschritt; verifiziere Diff, Konfliktmarker, vorhandene Baseline plus kombinierten Minimal-Regressionslauf und Branch-Ancestry in `specs/00019-deep-app-audit-resume-pacing/evidence/claude-branch-integration.md` [GIT/QC]

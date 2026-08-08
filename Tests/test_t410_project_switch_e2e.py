@@ -183,7 +183,21 @@ def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, Ap
                 "duration_seconds": 30.0,
             }
         },
-        audio_analysis_cache={1: {"bpm": 120.0, "beats": [0.0, 0.5]}},
+        audio_analysis_cache={
+            1: {
+                "bpm": 120.0,
+                "beat_count": 2,
+                "beats": [0.0, 0.5],
+                "energy_curve": [0.5, 0.6],
+                "downbeats": [0.0],
+                "onset_times": [0.0],
+                "kick_times": [0.0],
+                "snare_times": [0.5],
+                "hihat_times": [0.25],
+                "downbeat_provenance": {"source": "test"},
+                "_stage_status": {"beats": "completed"},
+            }
+        },
         video_clips={
             1: {
                 "id": 1,

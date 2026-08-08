@@ -1,4 +1,4 @@
-"""Regression coverage for Epic 00013 SDD/QC truthfulness."""
+"""Regression coverage for the active OBJ-74 SDD workspace."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +7,7 @@ from scripts.validate_sdd import validate_feature
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-FEATURE = WORKSPACE / "specs" / "00013-system-wide-bug-hunting-audit"
+FEATURE = WORKSPACE / "specs" / "00019-deep-app-audit-resume-pacing"
 
 
 def test_completed_tasks_use_canonical_uppercase_checkbox():

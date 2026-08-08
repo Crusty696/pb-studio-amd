@@ -40,11 +40,24 @@ def test_run_video_analysis_sets_peak_motion(tmp_path):
         },
         "embedding_dim": 512,
         "embedding_samples": 1,
-        "has_embedding": True
+        "has_embedding": True,
+        "stage_status": {"motion": "completed", "embedding": "skipped"},
+        "stage_errors": {},
     }
     
-    async def fake_color(video_path, clip_id, generate_captions):
-        return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
+    async def fake_color(
+        video_path,
+        clip_id,
+        generate_captions,
+        analyze_colors=True,
+    ):
+        return {
+            "dominant_colors": [],
+            "tags": [],
+            "tag_source": "mock",
+            "stage_status": {"colors": "completed", "captions": "skipped"},
+            "stage_errors": {},
+        }
     video_mod._run_color_and_caption_analysis = fake_color
 
     clip = {
@@ -114,11 +127,24 @@ def test_peak_motion_zero_when_empty(tmp_path):
         },
         "embedding_dim": 512,
         "embedding_samples": 0,
-        "has_embedding": False
+        "has_embedding": False,
+        "stage_status": {"motion": "completed", "embedding": "skipped"},
+        "stage_errors": {},
     }
     
-    async def fake_color(video_path, clip_id, generate_captions):
-        return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
+    async def fake_color(
+        video_path,
+        clip_id,
+        generate_captions,
+        analyze_colors=True,
+    ):
+        return {
+            "dominant_colors": [],
+            "tags": [],
+            "tag_source": "mock",
+            "stage_status": {"colors": "completed", "captions": "skipped"},
+            "stage_errors": {},
+        }
     video_mod._run_color_and_caption_analysis = fake_color
 
     clip = {

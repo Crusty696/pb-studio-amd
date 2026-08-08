@@ -44,18 +44,27 @@ def test_video_analysis_populates_dominant_colors(tmp_path):
         "has_embedding": False
     }
     
-    async def fake_color(video_path, clip_id, generate_captions):
+    async def fake_color(
+        video_path,
+        clip_id,
+        generate_captions,
+        analyze_colors=True,
+    ):
         if generate_captions:
             return {
                 "dominant_colors": ["#ff0000"],
                 "tags": ["red", "static"],
-                "tag_source": "mock"
+                "tag_source": "mock",
+                "stage_status": {"colors": "completed", "captions": "completed"},
+                "stage_errors": {},
             }
         else:
             return {
                 "dominant_colors": [],
                 "tags": [],
-                "tag_source": "mock"
+                "tag_source": "mock",
+                "stage_status": {"colors": "completed", "captions": "skipped"},
+                "stage_errors": {},
             }
     video_mod._run_color_and_caption_analysis = fake_color
 
@@ -131,18 +140,27 @@ def test_video_analysis_skips_phase4_when_captions_disabled(tmp_path):
         "has_embedding": False
     }
     
-    async def fake_color(video_path, clip_id, generate_captions):
+    async def fake_color(
+        video_path,
+        clip_id,
+        generate_captions,
+        analyze_colors=True,
+    ):
         if generate_captions:
             return {
                 "dominant_colors": ["#ff0000"],
                 "tags": ["red", "static"],
-                "tag_source": "mock"
+                "tag_source": "mock",
+                "stage_status": {"colors": "completed", "captions": "completed"},
+                "stage_errors": {},
             }
         else:
             return {
                 "dominant_colors": [],
                 "tags": [],
-                "tag_source": "mock"
+                "tag_source": "mock",
+                "stage_status": {"colors": "completed", "captions": "skipped"},
+                "stage_errors": {},
             }
     video_mod._run_color_and_caption_analysis = fake_color
 
