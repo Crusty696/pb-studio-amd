@@ -851,9 +851,9 @@ class ClipSelector:
         audio_state: str = "normal",
     ) -> SelectedClip:
         """
-        FAISS-basierte semantische Auswahl.
+        Semantische Auswahl via FAISS oder direkte Clip-Embeddings.
         Nutzt TRIGGER_PROMPTS für Text→Embedding Query.
-        Fallback auf motion-basierte Auswahl wenn FAISS nicht verfügbar.
+        Fallback auf motion-basierte Auswahl wenn keine Embeddings verfügbar sind.
 
         L-TI-1: Wenn select_clip einen expliziten prompt-Override geliefert hat,
         wird dieser bevorzugt verwendet (z.B. mood-aware song-prompt aus
@@ -864,33 +864,120 @@ class ClipSelector:
             trigger_type, DEFAULT_PROMPT
         )
 
-        # FAISS-Suche via SigLIP Embedding
-        try:
-            embedding = self._get_text_embedding(prompt)
-            if embedding is not None and self.vector_store is not None:
-                results = self.vector_store.search(embedding, k=min(10, len(clips)))
+        query_embedding = self._get_text_embedding(prompt)
+        if query_embedding is None:
+            return self._select_by_motion(
+                clips,
+                trigger_strength,
+                trigger_type,
+                current_time=current_time,
+                audio_state=audio_state,
+            )
 
-                # Ergebnis-Pfade aus FAISS
-                faiss_paths = set()
-                for meta, score in results:
-                    p = meta.get("path", meta.get("file_path", ""))
-                    if p:
-                        faiss_paths.add(p)
-
-                # Kandidaten filtern: Nur Clips die in FAISS-Ergebnis sind
+        # 1. FAISS bleibt der bevorzugte Pfad. Ein leerer oder defekter Store
+        # darf den direkten, bereits analysierten Clip-Vektor aber nicht verdecken.
+        if self._vector_store_has_embeddings():
+            try:
+                results = self.vector_store.search(
+                    query_embedding,
+                    k=min(10, len(clips)),
+                )
+                faiss_paths = {
+                    self._normalized_path_key(self._metadata_path(meta))
+                    for meta, _score in results
+                    if isinstance(meta, dict)
+                }
+                faiss_paths.discard("")
                 semantic_candidates = [
-                    c for c in clips
-                    if c.get("file_path", c.get("path", "")) in faiss_paths
+                    clip
+                    for clip in clips
+                    if self._normalized_path_key(self._metadata_path(clip))
+                    in faiss_paths
                 ]
-
                 if semantic_candidates:
-                    # Unter semantischen Kandidaten nach Motion wählen
-                    return self._select_by_motion(semantic_candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+                    return self._select_by_motion(
+                        semantic_candidates,
+                        trigger_strength,
+                        trigger_type,
+                        current_time=current_time,
+                        audio_state=audio_state,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "FAISS-Semantik fehlgeschlagen: %s — direkte Embeddings werden versucht",
+                    exc,
+                )
 
-        except Exception as e:
-            logger.warning(f"Semantische Suche fehlgeschlagen: {e} — Fallback auf Motion")
+        # 2. Der Router liefert produktiv ``video_embedding``; ``embedding``
+        # bleibt für bestehende Aufrufer kompatibel. Keine Dummy-Vektoren.
+        scored_candidates = []
+        for clip in clips:
+            clip_embedding = clip.get("embedding")
+            if clip_embedding is None:
+                clip_embedding = clip.get("video_embedding")
+            if clip_embedding is None:
+                continue
+            try:
+                query = np.asarray(query_embedding, dtype=np.float32).reshape(-1)
+                candidate = np.asarray(clip_embedding, dtype=np.float32).reshape(-1)
+                if (
+                    query.size == 0
+                    or candidate.shape != query.shape
+                    or not np.all(np.isfinite(candidate))
+                    or not np.all(np.isfinite(query))
+                ):
+                    continue
+                similarity = self._cosine_similarity(query, candidate)
+            except (TypeError, ValueError):
+                continue
+            scored_candidates.append((clip, similarity))
+
+        if scored_candidates:
+            scored_candidates.sort(key=lambda item: item[1], reverse=True)
+            semantic_candidates = [
+                clip for clip, _score in scored_candidates[:10]
+            ]
+            return self._select_by_motion(
+                semantic_candidates,
+                trigger_strength,
+                trigger_type,
+                current_time=current_time,
+                audio_state=audio_state,
+            )
 
         return self._select_by_motion(clips, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+
+    def _vector_store_has_embeddings(self) -> bool:
+        """Prüft defensiv, ob der injizierte Store durchsuchbare Vektoren hat."""
+        if self.vector_store is None:
+            return False
+        try:
+            index = getattr(self.vector_store, "index", None)
+            if index is not None and hasattr(index, "ntotal"):
+                return int(index.ntotal) > 0
+            if hasattr(self.vector_store, "ntotal"):
+                return int(self.vector_store.ntotal) > 0
+        except (AttributeError, TypeError, ValueError):
+            return False
+        return False
+
+    @staticmethod
+    def _metadata_path(metadata: dict) -> str:
+        """Liest beide produktiven Path-Keys und ignoriert leere Primärwerte."""
+        if not isinstance(metadata, dict):
+            return ""
+        raw_path = metadata.get("file_path") or metadata.get("path")
+        return str(raw_path).strip() if raw_path is not None else ""
+
+    @staticmethod
+    def _normalized_path_key(raw_path: str) -> str:
+        """Normalisiert FAISS-/Clip-Pfade robust für Windows-Vergleiche."""
+        if not raw_path:
+            return ""
+        try:
+            return str(Path(raw_path).expanduser().resolve(strict=False)).casefold()
+        except (OSError, RuntimeError, ValueError):
+            return str(raw_path).replace("\\", "/").casefold()
 
     def _get_text_embedding(self, text: str) -> Optional[np.ndarray]:
         """
@@ -916,8 +1003,8 @@ class ClipSelector:
         except Exception:
             pass
 
-        # Fallback: Zufälliges Embedding (degraded mode)
-        logger.debug(f"Text-Embedding nicht verfügbar für: '{text}' — degraded mode")
+        # No-Dummies-Regel: Ohne echtes Text-Embedding semantischen Pfad verlassen.
+        logger.debug(f"Text-Embedding nicht verfügbar für: '{text}'")
         return None
 
     def _analyze_clip_motion(self, file_path: str) -> float:
