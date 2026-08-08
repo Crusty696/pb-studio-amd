@@ -49,6 +49,8 @@ class TestStemSeparatorSeparation:
         # Create dummy file
         test_file = temp_dir / "test.wav"
         test_file.touch()
+        model_file = temp_dir / "test.yaml"
+        model_file.touch()
 
         sep = StemSeparator.__new__(StemSeparator)
         mock_sep = MagicMock()
@@ -59,13 +61,15 @@ class TestStemSeparatorSeparation:
         mock_sep.onnx_execution_provider = ["DmlExecutionProvider"]
         sep.separator = mock_sep
         sep._has_directml = True
+        sep.config = MagicMock()
+        sep.config.get.return_value = {"models_dir": str(temp_dir)}
         mock_sep.load_model.side_effect = lambda _name: setattr(
             sep,
             "_directml_session_created",
             True,
         )
 
-        result = sep.separate(str(test_file))
+        result = sep.separate(str(test_file), model_name=model_file.name)
 
         assert "stems" in result
         assert len(result["stems"]) == 2

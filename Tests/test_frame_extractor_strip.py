@@ -5,6 +5,9 @@ import pytest
 from pb_studio.video.frame_extractor import FrameGrabber
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.fixture
 def sample_video(tmp_path: Path) -> Path:
     """Erzeugt ein 3s farbiges Testvideo via ffmpeg (lavfi color source)."""

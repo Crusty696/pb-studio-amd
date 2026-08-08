@@ -401,6 +401,7 @@ def test_settings_gui_binds_every_additive_gpu_truth_field():
     assert "public partial class GpuStatusResponse" in generated
 
 
+@pytest.mark.gpu
 def test_lhm_runtime_contract_hashes_bundle_and_bridge_forwards_trust_anchors():
     contract = json.loads(_read("config/lhm-runtime.json"))
     active = contract["active"]
@@ -447,6 +448,7 @@ def test_lhm_runtime_contract_hashes_bundle_and_bridge_forwards_trust_anchors():
     assert "LhmLibrarySha256 = $lhmLibraryHash" in runtime_contract
 
 
+@pytest.mark.gpu
 def test_lhm_backup_restore_copy_reproduces_exact_file_set_and_hashes(tmp_path):
     inventory = json.loads(
         _read(

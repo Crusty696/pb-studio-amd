@@ -205,6 +205,7 @@ def test_lock_verifier_rejects_transitive_lock_tamper(tmp_path: Path) -> None:
     assert "lock SHA-256: expected" in result.stderr
 
 
+@pytest.mark.integration
 def test_runtime_verifier_rejects_range_compatible_installed_drift(tmp_path: Path) -> None:
     node = shutil.which("node")
     assert node, "Node.js is required to verify the MCP runtime"

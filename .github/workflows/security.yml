@@ -222,6 +222,7 @@ jobs:
             exit 1
           }
           Write-Output "PYTHON_PACKAGE_HASH_NEGATIVE_FIXTURE_PASS"
+          exit 0
 
       - name: Bind Python SCA receipt to commit
         if: always()
@@ -296,11 +297,17 @@ jobs:
       - name: Export vulnerable NuGet fixture report
         shell: pwsh
         run: |
-          dotnet restore Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj `
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP "pb-studio-vulnerable-nuget"
+          New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+          $fixtureProject = Join-Path $fixtureRoot "VulnerableNuGet.csproj"
+          Copy-Item `
+            Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj.txt `
+            $fixtureProject
+          dotnet restore $fixtureProject `
             -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
             /warnaserror:NU1900
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet list Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj `
+          dotnet list $fixtureProject `
             package --vulnerable --include-transitive `
             --format json --output-version 1 |
             Set-Content -LiteralPath artifacts/security/nuget-sca-fixture.json -Encoding utf8
@@ -311,7 +318,7 @@ jobs:
         run: >-
           python scripts/security_gate.py nuget-audit-report
           --report artifacts/security/nuget-sca-fixture.json
-          --expect-project Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj
+          --expect-project VulnerableNuGet.csproj
           --expect-package Newtonsoft.Json
           --expect-version 12.0.1
 

@@ -22,6 +22,37 @@ TEST_OWNER_CAPABILITY = "pb-studio-pytest-owner-capability"
 os.environ["PBSTUDIO_OWNER_CAPABILITY"] = TEST_OWNER_CAPABILITY
 
 
+@pytest.fixture(scope="session", autouse=True)
+def directml_adapter_contract_for_hardwareless_tests():
+    """Use a deterministic AMD descriptor when a test runner has no AMD GPU."""
+    from pb_studio.core import directml_adapter
+
+    original = directml_adapter._selected_adapter
+    try:
+        selected = directml_adapter.select_directml_adapter(
+            directml_adapter.enumerate_dxgi_adapters(),
+            {"hardware": {}, "ai": {}},
+        )
+    except directml_adapter.DirectMLAdapterError:
+        selected = directml_adapter.DirectMLAdapter(
+            device_id=0,
+            luid="0x00000000_0x00000001",
+            name="AMD DirectML Test Adapter",
+            vendor_id=0x1002,
+            device_id_pci=0,
+            dedicated_vram_bytes=8 * 1024 * 1024 * 1024,
+            shared_system_memory_bytes=0,
+            is_software=False,
+            is_discrete=True,
+            high_performance_preferred=True,
+            selection_policy="highest_vram_amd",
+            selection_reason="hardwareless test contract",
+        )
+    directml_adapter._selected_adapter = selected
+    yield selected
+    directml_adapter._selected_adapter = original
+
+
 @pytest.fixture(autouse=True)
 def authorize_main_app_test_client(request, monkeypatch):
     """Authenticate legacy tests that exercise the real default-deny ASGI app."""

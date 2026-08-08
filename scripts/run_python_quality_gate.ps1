@@ -153,6 +153,7 @@ try {
             "-m", "coverage", "run", "--rcfile=.coveragerc",
             "-m", "pytest", "Tests",
             "-p", "scripts.pytest_release_guard",
+            "-p", "no:cacheprovider",
             "--basetemp=$ownedTemp",
             "--junitxml=$junitReport"
         )

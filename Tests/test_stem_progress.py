@@ -26,6 +26,10 @@ def test_stem_separator_calls_on_progress(tmp_path):
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     progress_calls: list[float] = []
 
@@ -34,6 +38,7 @@ def test_stem_separator_calls_on_progress(tmp_path):
 
     result = sep.separate(
         file_path=str(test_file),
+        model_name=model_file.name,
         on_progress=lambda pct: progress_calls.append(pct),
     )
 
@@ -64,11 +69,15 @@ def test_stem_separator_works_without_callback(tmp_path):
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     sep._run_inference = lambda path: [str(tmp_path / "vocals.wav")]
 
     # Should not raise — the default on_progress=None must be handled cleanly.
-    result = sep.separate(file_path=str(test_file))
+    result = sep.separate(file_path=str(test_file), model_name=model_file.name)
     assert "stems" in result
 
 
@@ -111,6 +120,10 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     sep._run_inference = lambda path: [str(tmp_path / "vocals.wav")]
 
@@ -121,6 +134,7 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
 
     result = sep.separate(
         file_path=str(test_file),
+        model_name=model_file.name,
         callback=legacy_cb,
     )
     assert "stems" in result

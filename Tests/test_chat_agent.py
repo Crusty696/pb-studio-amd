@@ -136,6 +136,19 @@ def _install_chat_inventory(
     return service
 
 
+@pytest.fixture(autouse=True)
+def default_chat_inventory(monkeypatch: pytest.MonkeyPatch):
+    """Keep ChatAgent unit tests independent of local provider discovery."""
+    return _install_chat_inventory(
+        monkeypatch,
+        _chat_model(
+            "lmstudio",
+            "qwen3.5-9b-uncensored-hauhaucs-aggressive",
+            loaded=True,
+        ),
+    )
+
+
 # ----------------------------------------------------------------------
 # Mock-Backend fuer Tool-Handler
 # ----------------------------------------------------------------------

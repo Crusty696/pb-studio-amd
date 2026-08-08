@@ -38,6 +38,12 @@
       "reason": "Input-dependent no-cut branch requires a deterministic fixture."
     },
     {
+      "nodeid": "Tests/test_trigger_settings_full_wiring.py::*",
+      "owner": "pacing",
+      "expires_on": "2026-08-31",
+      "reason": "Two documented engine-reader decisions remain open for max-cut interval and onset sensitivity."
+    },
+    {
       "nodeid": "Tests/test_pacing_video_key.py::test_audio_key_detector_with_real_audio",
       "owner": "video",
       "expires_on": "2026-09-30",
