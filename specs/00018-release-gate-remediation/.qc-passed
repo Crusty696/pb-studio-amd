@@ -8,7 +8,7 @@
   "qc_report_sha256": "838c588629cd31ae6f20d5dfaf893f7bc1609874781109de50d7101551292391",
   "remote_receipt": "remote-release-receipt.json",
   "remote_receipt_sha256": "38be0a65db955c6a8619a7e94fd4f3e31d9ba86992e679ac01f9a50df4cac957",
-  "commit_sha": "734550601b7a45967bc9a0f7dab585b04e7510ac",
+  "commit_sha": "e45ae503c7edce2a1cfa67c73aa0ccbf43af7da5",
   "result": "PASS",
   "open_blockers": []
 }
