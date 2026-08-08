@@ -17,9 +17,13 @@ def test_completed_tasks_use_canonical_uppercase_checkbox():
 
 
 def test_current_feature_workspace_passes_fail_closed_sdd_gate():
-    phase = "qc" if (FEATURE / ".qc-passed").exists() else (
-        "qc-progress" if (FEATURE / ".completed").exists() else "open"
-    )
+    tasks = (FEATURE / "tasks.md").read_text(encoding="utf-8-sig")
+    if (FEATURE / ".qc-passed").exists():
+        phase = "release" if "- [X] T415 " in tasks else "qc"
+    elif (FEATURE / ".completed").exists():
+        phase = "qc-progress"
+    else:
+        phase = "open"
     report = validate_feature(FEATURE, phase)
 
     assert report.valid, report.findings
@@ -35,4 +39,6 @@ def test_ci_selects_qc_progress_after_qc_execution_starts():
 
     assert "'(?m)^- \\[X\\] T404 '" in phase_selection
     assert '"qc-progress"' in phase_selection
+    assert "T415" in phase_selection
+    assert '"release"' in phase_selection
     assert phase_selection.index("T404") < phase_selection.index('"qc-progress"')
