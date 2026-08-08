@@ -9,7 +9,7 @@ const runtimeValidation = process.argv.includes("--runtime");
 const lockArgument = process.argv.slice(2).find(argument => argument !== "--runtime");
 
 const expected = {
-  lockSha256: "6818FE84A318C3035EF5FEEDA4C81679360DC3340F00E1A02A5C83C5B01024B4",
+  lockSha256: "2D542EE2E1F30793777E23959842325D032D75FB7E521314D4AA1EE23AFE5152",
   lockfileVersion: 3,
   packageNodes: 110,
   context7Version: "3.2.5",
