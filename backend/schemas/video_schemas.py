@@ -52,6 +52,8 @@ class VideoAnalyzeRequest(BaseModel):
     analyze_motion: bool = True
     generate_captions: bool = False
     analyze_colors: bool = True
+    analyze_audio_key: bool = True
+    force: bool = False
 
 
 class VideoAnalysisResult(BaseModel):
