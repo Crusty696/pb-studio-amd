@@ -1,7 +1,7 @@
 # QC Report — OBJ-73 Release Gate Remediation
 
 **Date:** 2026-08-08
-**Status:** LOCAL PASS / REMOTE GATE OPEN
+**Status:** PASS / RELEASE-READY
 
 ## Runtime Regressions
 
@@ -28,8 +28,11 @@
   package reference.
 - Archive clean-filter blobs: 6/6 match the immutable Git blobs under LF.
 
-## Open Gate
+## Remote Gate
 
-T009 remains open until PR #22 passes all required GitHub checks, `main` is the
-default protected branch, the PR is merged and the resulting SHA is verified.
-`.qc-passed` must not exist before that remote gate.
+- PR #22: MERGED.
+- Required checks: 8/8 PASS.
+- Default protected branch: `main`.
+- Verified main SHA: `947ff3885f402ec72c0659edafa20c78107fbf08`.
+- Receipt: `remote-release-receipt.json`.
+- Open blockers: none.

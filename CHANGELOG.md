@@ -3,6 +3,21 @@
 
 ---
 
+## 2026-08-08 - OBJ-73 Release-Gate-Remediation
+
+### Fixed
+- Live-Beat-Cache, SSE-Abschlussjournal, RAFT-VRAM-Buchung, Preview-GPU-Lock,
+  Stem-Strukturpfad, Anchor-Projektbindung, Rating-Gate und Cut-Wiedergabe.
+- Python SCA, Dependency Review, SDD-/Release-Contracts und Python-Quality-CI.
+- SDD-QC-Marker für den direkten GitHub-PR-Mergecommit plattformneutralisiert.
+
+### Verified
+- PR #22: alle acht Required Checks PASS; Merge-SHA
+  `947ff3885f402ec72c0659edafa20c78107fbf08`.
+- Python Quality: 1.291 PASS, 18 geregelte Skips, 0 ungeregelte Skips,
+  60,8 % Coverage; Native C# 49/49; WPF Release 0 Warnungen/Fehler.
+- `main` ist geschützter Default-Branch; Force-Pushes und Löschungen gesperrt.
+
 ## 2026-08-02 - T413 Release-Security und reproduzierbare Lieferkette
 
 ### Fixed
