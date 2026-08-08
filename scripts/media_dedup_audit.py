@@ -67,17 +67,31 @@ def main() -> int:
     cur = conn.cursor()
 
     tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-    ref_tables: list[dict[str, Any]] = []
-    for table in tables:
-        for fk in cur.execute(f'PRAGMA foreign_key_list("{table}")').fetchall():
-            if fk[2] == "media":
-                ref_tables.append({
-                    "table": table,
-                    "from_column": fk[3],
-                    "to_column": fk[4],
-                    "on_delete": fk[6],
-                    "on_update": fk[5],
-                })
+    ref_tables = [
+        {
+            "table": row["source_table"],
+            "from_column": row["from_column"],
+            "to_column": row["to_column"],
+            "on_delete": row["on_delete"],
+            "on_update": row["on_update"],
+        }
+        for row in cur.execute(
+            """
+            SELECT
+                schema_table.name AS source_table,
+                foreign_key.[from] AS from_column,
+                foreign_key.[to] AS to_column,
+                foreign_key.on_delete AS on_delete,
+                foreign_key.on_update AS on_update
+            FROM sqlite_master AS schema_table
+            JOIN pragma_foreign_key_list(schema_table.name) AS foreign_key
+              ON foreign_key.[table] = 'media'
+            WHERE schema_table.type = 'table'
+              AND schema_table.name NOT LIKE 'sqlite_%'
+            ORDER BY schema_table.name, foreign_key.id, foreign_key.seq
+            """
+        ).fetchall()
+    ]
 
     vector_ref_map = {
         row[0]: row[1]
