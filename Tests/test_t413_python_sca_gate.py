@@ -212,7 +212,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "id": "T413-SETUPTOOLS-CVE-2026-59890",
                 "package": "setuptools",
                 "version": "81.0.0",
-                "alias": "CVE-2026-59890",
+                "alias": "GHSA-H35F-9H28-MQ5C",
                 "owner": "PB Studio Release Owner",
                 "expires_on": "2026-09-01",
                 "reason": (
@@ -369,6 +369,8 @@ def test_python_sca_workflow_uses_isolated_exact_scanner_and_direct_cli() -> Non
     assert "--invocation-kind github-action" not in workflow
     assert "PIP_AUDIT_ACTION_REVISION" not in workflow
     assert "--tool-version" not in workflow
+    assert workflow.count("allow-ghsas:") == 1
+    assert "allow-ghsas: GHSA-h35f-9h28-mq5c" in workflow
     assert "requirements-invalid-hash.txt" not in workflow
     assert "requirements-wrong-hash.txt" in workflow
     assert (

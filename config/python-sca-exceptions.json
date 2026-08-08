@@ -14,7 +14,7 @@
       "id": "T413-SETUPTOOLS-CVE-2026-59890",
       "package": "setuptools",
       "version": "81.0.0",
-      "alias": "CVE-2026-59890",
+      "alias": "GHSA-H35F-9H28-MQ5C",
       "owner": "PB Studio Release Owner",
       "expires_on": "2026-09-01",
       "reason": "The release target is Windows x64 with wheel-only installation, which defeats the macOS sdist precondition."

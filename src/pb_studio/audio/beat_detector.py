@@ -51,7 +51,7 @@ try:
         np.bool = bool
 
     # Patch 4: pkg_resources-Shim (Audit 2026-08-06)
-    # setuptools >= 81 hat pkg_resources entfernt; hier laeuft 82.0.1. madmom
+    # setuptools >= 81 hat pkg_resources entfernt; Production pinnt 81.0.0. madmom
     # importiert es in seiner __init__ und nutzt es fuer GENAU eine Sache:
     # `pkg_resources.get_distribution("madmom").version`. Ein Downgrade von
     # setuptools waere ein Eingriff in die gepinnte Umgebung fuer eine

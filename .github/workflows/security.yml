@@ -373,6 +373,7 @@ jobs:
           base-ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           head-ref: ${{ github.sha }}
           fail-on-severity: low
+          allow-ghsas: GHSA-h35f-9h28-mq5c
           comment-summary-in-pr: never
 
       - name: Bind dependency review receipt to commit
