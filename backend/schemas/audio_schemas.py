@@ -49,6 +49,8 @@ class AudioAnalyzeRequest(BaseModel):
     detect_beats: bool = True
     detect_structure: bool = True
     spectral_analysis: bool = True
+    detect_key: bool = True
+    force: bool = False
     # CLEANUP-001: waveform-Feld entfernt — Waveform nur via GET /audio/waveform/{id}
 
 

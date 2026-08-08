@@ -614,6 +614,142 @@ async def _store_audio_embedding_in_brain_cache(
         )
 
 
+_AUDIO_STAGE_REQUEST_FIELDS = {
+    "beats": "detect_beats",
+    "structure": "detect_structure",
+    "spectral": "spectral_analysis",
+    "key": "detect_key",
+}
+_AUDIO_STAGE_RESULT_FIELDS = {
+    "beats": (
+        "bpm",
+        "beat_count",
+        "beats",
+        "energy_curve",
+        "downbeats",
+        "downbeat_provenance",
+        "onset_times",
+        "kick_times",
+        "snare_times",
+        "hihat_times",
+        "_chunk_evidence",
+    ),
+    "structure": ("structure_segments",),
+    "spectral": ("spectral_data",),
+    "key": ("key",),
+}
+
+
+def _audio_stage_result_is_valid(stage: str, analysis: dict[str, Any]) -> bool:
+    """Return whether a completed cached stage still has its required payload."""
+    if stage == "beats":
+        required_lists = (
+            "beats",
+            "energy_curve",
+            "downbeats",
+            "onset_times",
+            "kick_times",
+            "snare_times",
+            "hihat_times",
+        )
+        return (
+            isinstance(analysis.get("bpm"), (int, float))
+            and isinstance(analysis.get("beat_count"), int)
+            and all(isinstance(analysis.get(name), list) for name in required_lists)
+            and isinstance(analysis.get("downbeat_provenance"), dict)
+        )
+    if stage == "structure":
+        return bool(analysis.get("structure_segments"))
+    if stage == "spectral":
+        spectral = analysis.get("spectral_data")
+        return (
+            isinstance(spectral, dict)
+            and bool(spectral.get("times"))
+            and isinstance(spectral.get("bands"), dict)
+        )
+    if stage == "key":
+        key = analysis.get("key")
+        return isinstance(key, str) and bool(key.strip()) and key != "Unknown"
+    return False
+
+
+def _plan_audio_analysis(
+    request: AudioAnalyzeRequest,
+    cached: dict[str, Any],
+) -> AudioAnalyzeRequest:
+    """Plan only requested stages that are not reusable, unless force is set."""
+    cached_status = dict(cached.get("_stage_status") or {})
+    updates: dict[str, bool] = {}
+    for stage, request_field in _AUDIO_STAGE_REQUEST_FIELDS.items():
+        requested = bool(getattr(request, request_field))
+        reusable = (
+            cached_status.get(stage) == "completed"
+            and _audio_stage_result_is_valid(stage, cached)
+        )
+        updates[request_field] = requested and (request.force or not reusable)
+    return request.model_copy(update=updates)
+
+
+def _audio_plan_has_work(request: AudioAnalyzeRequest) -> bool:
+    return any(
+        bool(getattr(request, request_field))
+        for request_field in _AUDIO_STAGE_REQUEST_FIELDS.values()
+    )
+
+
+def _merge_audio_analysis_result(
+    *,
+    cached: dict[str, Any],
+    fresh: dict[str, Any],
+    requested: AudioAnalyzeRequest,
+    planned: AudioAnalyzeRequest,
+) -> dict[str, Any]:
+    """Merge stage payloads without clearing data from stages not executed."""
+    merged = dict(cached)
+    if "_chunk_evidence" not in merged and "chunk_evidence" in merged:
+        merged["_chunk_evidence"] = merged["chunk_evidence"]
+    merged["clip_id"] = int(fresh.get("clip_id", requested.clip_id))
+    fresh_duration = float(fresh.get("duration_seconds", 0.0) or 0.0)
+    if fresh_duration > 0.0:
+        merged["duration_seconds"] = fresh_duration
+
+    stage_status = dict(cached.get("_stage_status") or {})
+    stage_errors = dict(cached.get("_stage_errors") or {})
+    fresh_status = dict(fresh.get("_stage_status") or {})
+    fresh_errors = dict(fresh.get("_stage_errors") or {})
+
+    for stage, request_field in _AUDIO_STAGE_REQUEST_FIELDS.items():
+        if not bool(getattr(planned, request_field)):
+            continue
+        status = fresh_status.get(stage, "completed")
+        if status == "skipped":
+            continue
+        stage_status[stage] = status
+        if status == "completed":
+            stage_errors.pop(stage, None)
+        elif stage in fresh_errors:
+            stage_errors[stage] = fresh_errors[stage]
+
+        if status not in {"completed", "partial"}:
+            continue
+        for field in _AUDIO_STAGE_RESULT_FIELDS[stage]:
+            if field in fresh and fresh[field] is not None:
+                merged[field] = fresh[field]
+
+    for field in ("subtrack_segments", "tempo_curve"):
+        if field in fresh and fresh[field] is not None:
+            merged[field] = fresh[field]
+
+    degraded = any(
+        status in {"partial", "failed", "interrupted"}
+        for status in stage_status.values()
+    )
+    merged["_analysis_status"] = "partial" if degraded else "completed"
+    merged["_stage_status"] = stage_status
+    merged["_stage_errors"] = stage_errors
+    return merged
+
+
 @router.post(
     "/analyze",
     response_model=AudioAnalysisResult,
@@ -676,13 +812,9 @@ async def _analyze_audio_in_context(
 
     try:
         _loop = asyncio.get_running_loop()
-        # L-AUDIO-5 / Z5: Import-Pfad hat ggf. subtrack_segments + tempo_curve in
-        # den Cache geschrieben (audio_router.py:130-161). _run_audio_analysis
-        # kennt sie nicht — set_audio_analysis(result) ohne Merge wuerde sie
-        # ueberschreiben. Vorher cached-Werte sichern.
-        _pre_cached = state.get_audio_analysis(request.clip_id) or {}
-        _pre_subtracks = _pre_cached.get("subtrack_segments") or []
-        _pre_tempo_curve = _pre_cached.get("tempo_curve") or []
+        # Cache bleibt Merge-Basis: gezielte Retries bewahren alle anderen Stages.
+        _pre_cached = dict(state.get_audio_analysis(request.clip_id) or {})
+        planned_request = _plan_audio_analysis(request, _pre_cached)
         stems_paths = clip.get("stems_paths") or {}
         if isinstance(stems_paths, str):
             try:
@@ -691,16 +823,32 @@ async def _analyze_audio_in_context(
                 stems_paths = parsed if isinstance(parsed, dict) else {}
             except Exception:
                 stems_paths = {}
-        result = await asyncio.to_thread(
-            _run_audio_analysis, audio_path, request.clip_id, request, stems_paths, _loop
+        if _audio_plan_has_work(planned_request):
+            fresh_result = await asyncio.to_thread(
+                _run_audio_analysis,
+                audio_path,
+                request.clip_id,
+                planned_request,
+                stems_paths,
+                _loop,
+            )
+        else:
+            fresh_result = {
+                "clip_id": request.clip_id,
+                "duration_seconds": float(
+                    _pre_cached.get("duration_seconds", clip.get("duration_seconds", 0.0))
+                    or 0.0
+                ),
+                "_stage_status": {},
+                "_stage_errors": {},
+            }
+        result = _merge_audio_analysis_result(
+            cached=_pre_cached,
+            fresh=fresh_result,
+            requested=request,
+            planned=planned_request,
         )
 
-        # L-AUDIO-5 / Z5: Subtracks + tempo_curve in result mergen wenn der
-        # Analyse-Pfad sie nicht selbst geliefert hat — sonst gehen sie verloren.
-        if not result.get("subtrack_segments"):
-            result["subtrack_segments"] = _pre_subtracks
-        if not result.get("tempo_curve"):
-            result["tempo_curve"] = _pre_tempo_curve
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
@@ -717,10 +865,11 @@ async def _analyze_audio_in_context(
         # ausschliesslich in Tests vor. Zusammen mit der fehlenden Video-Seite
         # war das der Grund, warum `semantic_match_weight` in 0 von 2576 Cuts
         # auftauchte und der Cross-Modal-Projektor nie Trainingspaare bekam.
-        await _store_audio_embedding_in_brain_cache(
-            audio_path=audio_path,
-            audio_hash=clip.get("audio_hash"),
-        )
+        if _audio_plan_has_work(planned_request):
+            await _store_audio_embedding_in_brain_cache(
+                audio_path=audio_path,
+                audio_hash=clip.get("audio_hash"),
+            )
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
         import json as _json
@@ -1573,29 +1722,32 @@ def _run_audio_analysis(
 
     _emit_analysis_progress(_loop, "spectral", 85.0, "Spektrum analysiert — starte Tonart-Erkennung…")
 
-    # 4. Tonart-Erkennung (Krumhansl-Kessler, immer aktiv)
+    # 4. Tonart-Erkennung (Krumhansl-Kessler)
     key = None
-    try:
-        from pb_studio.audio.key_detector import KeyDetector
-        if _use_streaming:
-            if _stream_features is None or not _stream_features.chroma_mean:
-                raise RuntimeError("Streaming-Chromarepräsentation ist leer")
-            key = KeyDetector().detect_key_from_chroma(
-                _stream_features.chroma_mean
-            )
-        elif instrumental_path and Path(instrumental_path).exists():
-            logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
-            y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
-            key = KeyDetector().detect_key(y_inst, sr_inst)
-        else:
-            key = KeyDetector().detect_key(y, sr)
-        if not key or key == "Unknown":
-            raise RuntimeError("Tonart konnte nicht ermittelt werden")
-        _mark_stage_completed("key", ("load", "features"))
-    except Exception as e:
-        logger.warning(f"Key-Detection fehlgeschlagen: {e}")
-        _stage_status["key"] = "failed"
-        _stage_errors["key"] = str(e)
+    if request.detect_key:
+        try:
+            from pb_studio.audio.key_detector import KeyDetector
+            if _use_streaming:
+                if _stream_features is None or not _stream_features.chroma_mean:
+                    raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+                key = KeyDetector().detect_key_from_chroma(
+                    _stream_features.chroma_mean
+                )
+            elif instrumental_path and Path(instrumental_path).exists():
+                logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
+                y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
+                key = KeyDetector().detect_key(y_inst, sr_inst)
+            else:
+                key = KeyDetector().detect_key(y, sr)
+            if not key or key == "Unknown":
+                raise RuntimeError("Tonart konnte nicht ermittelt werden")
+            _mark_stage_completed("key", ("load", "features"))
+        except Exception as e:
+            logger.warning(f"Key-Detection fehlgeschlagen: {e}")
+            _stage_status["key"] = "failed"
+            _stage_errors["key"] = str(e)
+    else:
+        _stage_status["key"] = "skipped"
 
 
     _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")
@@ -1606,7 +1758,7 @@ def _run_audio_analysis(
             ("beats", request.detect_beats),
             ("structure", request.detect_structure),
             ("spectral", request.spectral_analysis),
-            ("key", True),
+            ("key", request.detect_key),
         )
         if enabled
     ]
