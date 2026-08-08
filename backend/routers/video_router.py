@@ -341,12 +341,13 @@ def _persist_video_analysis_outcome(
     )
 
 
-def _compensate_new_video_embedding(result: dict[str, Any]) -> None:
-    """Remove a newly published vector when the canonical analysis commit fails."""
+def _compensate_new_video_embedding(result: dict[str, Any]) -> bool:
+    """Discard pending/published vectors when canonical analysis commit fails."""
+    discarded = result.pop("_pending_embedding", None) is not None
     media_id = result.pop("_new_embedding_media_id", None)
     faiss_id = result.pop("_new_embedding_faiss_id", None)
     if media_id is None or faiss_id is None:
-        return
+        return discarded
 
     from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
 
@@ -362,6 +363,33 @@ def _compensate_new_video_embedding(result: dict[str, Any]) -> None:
     result["has_embedding"] = False
     result["embedding_dim"] = 0
     result["embedding_samples"] = 0
+    return True
+
+
+def _restore_video_embedding_after_compensation(
+    result: dict[str, Any],
+    resume_base: dict[str, Any],
+) -> None:
+    """Restore prior durable embedding truth after interrupted replacement."""
+    if (
+        resume_base.get("stage_status", {}).get("embedding") == "completed"
+        and _video_stage_data_is_valid("embedding", resume_base)
+    ):
+        for field in VIDEO_ANALYSIS_STAGE_FIELDS["embedding"]:
+            result[field] = deepcopy(resume_base[field])
+        result["stage_status"]["embedding"] = "completed"
+        old_error = resume_base.get("stage_errors", {}).get("embedding")
+        if old_error:
+            result["stage_errors"]["embedding"] = old_error
+        else:
+            result["stage_errors"].pop("embedding", None)
+        return
+
+    result["has_embedding"] = False
+    result["embedding_dim"] = 0
+    result["embedding_samples"] = 0
+    result["stage_status"]["embedding"] = "interrupted"
+    result["stage_errors"]["embedding"] = "Embedding-Analyse unterbrochen"
 
 
 def _commit_pending_video_embedding(result: dict[str, Any]) -> None:
@@ -1003,16 +1031,21 @@ async def _analyze_video_in_project(
     for stage, requested in requested_stages.items():
         if not requested and stage not in result["stage_status"]:
             result["stage_status"][stage] = "skipped"
+    resume_base = deepcopy(result)
+    active_stages: tuple[str, ...] = ()
+    outcome_persisted = False
     current_stage = "scenes"
     try:
         # Step 2: Scene Detection (CPU-only)
         if run_stage["scenes"]:
+            active_stages = ("scenes",)
             scene_res = await asyncio.to_thread(
                 _run_scene_detection,
                 clip["path"],
                 True,
             )
             _merge_video_stage_outcome(result, scene_res, "scenes")
+            active_stages = ()
 
         await publish_event("analysis_progress", {
             "clip_id": request.clip_id,
@@ -1027,6 +1060,11 @@ async def _analyze_video_in_project(
         _loop = asyncio.get_running_loop()
         gpu_res: dict[str, Any] = {}
         if run_stage["motion"] or run_stage["embedding"]:
+            active_stages = tuple(
+                stage
+                for stage in ("motion", "embedding")
+                if run_stage[stage]
+            )
             gpu_request = request.model_copy(update={
                 "analyze_motion": run_stage["motion"],
                 "generate_embeddings": run_stage["embedding"],
@@ -1056,11 +1094,17 @@ async def _analyze_video_in_project(
                     and gpu_res.get("_pending_embedding") is not None
                 ):
                     result["_pending_embedding"] = gpu_res["_pending_embedding"]
+            active_stages = ()
 
         # Step 3: Color + Caption (CPU/HTTP & optional Moondream GPU Fallback)
         current_stage = "colors_captions"
         color_caption_res: dict[str, Any] = {}
         if run_stage["colors"] or run_stage["captions"]:
+            active_stages = tuple(
+                stage
+                for stage in ("colors", "captions")
+                if run_stage[stage]
+            )
             color_caption_res = await _run_color_and_caption_analysis(
                 clip["path"],
                 request.clip_id,
@@ -1071,6 +1115,7 @@ async def _analyze_video_in_project(
                 _merge_video_stage_outcome(result, color_caption_res, "colors")
             if run_stage["captions"]:
                 _merge_video_stage_outcome(result, color_caption_res, "captions")
+            active_stages = ()
 
         stage_status = dict(result["stage_status"])
         stage_errors = dict(result["stage_errors"])
@@ -1101,6 +1146,7 @@ async def _analyze_video_in_project(
         # den GPU-Lock NICHT halten (sonst blocken parallele Stem-/Render-Tasks).
         current_stage = "audio_key"
         if run_stage["audio_key"]:
+            active_stages = ("audio_key",)
             try:
                 from pb_studio.video.audio_key_detector import detect_video_audio_key
                 audio_key_val = await asyncio.to_thread(detect_video_audio_key, clip["path"])
@@ -1115,6 +1161,7 @@ async def _analyze_video_in_project(
                 logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
                 result["stage_status"]["audio_key"] = "unavailable"
                 result["stage_errors"]["audio_key"] = str(e)
+            active_stages = ()
 
         stage_status = dict(result["stage_status"])
         stage_errors = dict(result["stage_errors"])
@@ -1124,6 +1171,7 @@ async def _analyze_video_in_project(
         with state.project_commit(context):
             _commit_pending_video_embedding(result)
             _persist_video_analysis_outcome(state, context, clip, result)
+        outcome_persisted = True
         try:
             _dedupe_old_video_embeddings(result)
         except Exception as dedupe_exc:
@@ -1176,7 +1224,68 @@ async def _analyze_video_in_project(
             logger.warning("Videoanalyse-Complete-Event fehlgeschlagen: %s", publish_exc)
         return VideoAnalysisResult(**result)
     except asyncio.CancelledError:
-        _compensate_new_video_embedding(result)
+        if not outcome_persisted:
+            try:
+                embedding_discarded = _compensate_new_video_embedding(result)
+                if embedding_discarded:
+                    _restore_video_embedding_after_compensation(result, resume_base)
+            except Exception as compensation_exc:
+                logger.error(
+                    "Embedding-Kompensation nach Videoanalyse-Abbruch fehlgeschlagen: %s",
+                    compensation_exc,
+                    exc_info=True,
+                )
+                result["stage_errors"]["embedding_compensation"] = str(
+                    compensation_exc
+                )
+
+            for stage in active_stages:
+                result["stage_status"][stage] = "interrupted"
+                result["stage_errors"][stage] = "Video-Analyse unterbrochen"
+            result["status"] = _derive_video_analysis_status(
+                result["stage_status"]
+            )
+            try:
+                with state.project_commit(context):
+                    _persist_video_analysis_outcome(
+                        state,
+                        context,
+                        clip,
+                        result,
+                    )
+            except ProjectContextChangedError:
+                logger.info(
+                    "Videoanalyse-Abbruch nicht persistiert: Projektkontext wechselte"
+                )
+            except Exception as persist_exc:
+                logger.error(
+                    "Videoanalyse-Abbruchstatus konnte nicht persistiert werden: %s",
+                    persist_exc,
+                    exc_info=True,
+                )
+
+        terminal_step = "complete" if outcome_persisted else "interrupted"
+        try:
+            await publish_event("analysis_progress", {
+                "clip_id": request.clip_id,
+                "step": terminal_step,
+                "percent": 100.0 if outcome_persisted else 0.0,
+                "status": result["status"],
+                "stage_status": dict(result["stage_status"]),
+                "stage_errors": dict(result["stage_errors"]),
+                "message": (
+                    f"Video-Analyse {result['status']}: {clip['name']}"
+                    if outcome_persisted
+                    else f"Video-Analyse unterbrochen: {clip['name']}"
+                ),
+            })
+        except asyncio.CancelledError:
+            pass
+        except Exception as publish_exc:
+            logger.warning(
+                "Terminales Videoanalyse-Abbruch-Event fehlgeschlagen: %s",
+                publish_exc,
+            )
         raise
     except ProjectContextChangedError:
         _compensate_new_video_embedding(result)

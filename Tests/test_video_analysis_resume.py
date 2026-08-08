@@ -268,3 +268,94 @@ def test_missing_file_does_not_persist_defaults(monkeypatch, tmp_path):
 
     assert exc_info.value.status_code == 422
     assert state.analysis == _existing_analysis()
+
+
+def test_cancellation_persists_completed_stages_and_interrupts_active_stage(
+    monkeypatch,
+    tmp_path,
+):
+    video_router = importlib.import_module("backend.routers.video_router")
+
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"video")
+    state = _State(media, _existing_analysis())
+    captured = {"persisted": None, "events": []}
+
+    def scene_stage(*_args, **_kwargs):
+        return {
+            "scene_count": 1,
+            "scenes": [
+                {
+                    "start_time": 0.0,
+                    "end_time": 6.0,
+                    "scene_type": "cut",
+                    "confidence": None,
+                }
+            ],
+            "stage_status": {"scenes": "completed"},
+            "stage_errors": {},
+        }
+
+    async def gpu_stage(_func, *_args, **_kwargs):
+        return {
+            "avg_motion": 0.0,
+            "motion": None,
+            "embedding_dim": 1152,
+            "embedding_samples": 3,
+            "has_embedding": True,
+            "stage_status": {"motion": "skipped", "embedding": "completed"},
+            "stage_errors": {},
+            "_pending_embedding": {"not_committed": True},
+        }
+
+    async def cancelled_caption_stage(*_args, **_kwargs):
+        raise asyncio.CancelledError
+
+    async def capture_event(name, payload):
+        captured["events"].append((name, deepcopy(payload)))
+
+    def persist(_state, _context, _clip, result):
+        captured["persisted"] = deepcopy(result)
+
+    monkeypatch.setattr(video_router, "_run_scene_detection", scene_stage)
+    monkeypatch.setattr(video_router, "with_gpu_task", gpu_stage)
+    monkeypatch.setattr(
+        video_router,
+        "_run_color_and_caption_analysis",
+        cancelled_caption_stage,
+    )
+    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", persist)
+    monkeypatch.setattr(video_router, "publish_event", capture_event)
+    monkeypatch.setattr(video_router, "publish_log", _noop)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            video_router._analyze_video_in_project(
+                VideoAnalyzeRequest(
+                    clip_id=7,
+                    detect_scenes=True,
+                    generate_embeddings=True,
+                    analyze_motion=False,
+                    generate_captions=True,
+                    analyze_colors=False,
+                    analyze_audio_key=False,
+                    force=True,
+                ),
+                state,
+                SimpleNamespace(project_id=1),
+            )
+        )
+
+    persisted = captured["persisted"]
+    assert persisted["scenes"][0]["end_time"] == 6.0
+    assert persisted["motion"] == _existing_analysis()["motion"]
+    assert persisted["dominant_colors"] == ["#112233"]
+    assert persisted["tags"] == ["concert", "stage"]
+    assert persisted["has_embedding"] is False
+    assert persisted["embedding_dim"] == 0
+    assert persisted["stage_status"]["embedding"] == "interrupted"
+    assert persisted["stage_status"]["captions"] == "interrupted"
+    assert persisted["stage_status"]["colors"] == "completed"
+    assert persisted["status"] == "partial"
+    assert "_pending_embedding" not in persisted
+    assert captured["events"][-1][1]["step"] == "interrupted"
