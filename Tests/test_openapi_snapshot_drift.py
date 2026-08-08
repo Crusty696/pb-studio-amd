@@ -84,31 +84,24 @@ def test_snapshot_schemas_consistent():
 
 
 def test_generated_dtos_not_stale_relative_to_snapshot():
-    """If Generated/ApiTypes.g.cs is older than the snapshot, NSwag
-    didn't run since the last snapshot refresh. Caller should rebuild."""
+    """The NSwag build stamp must be newer than the checked-in snapshot.
+
+    NSwag deliberately keeps an unchanged generated file untouched, so its
+    mtime cannot prove whether the generator ran. The MSBuild target writes a
+    separate stamp after a successful generation instead.
+    """
     repo_root = Path(__file__).parent.parent
     snapshot = repo_root / "PBStudio.UI" / "openapi.snapshot.json"
 
-    # Audit 2026-08-05: Der Test zeigte auf PBStudio.UI/Generated/ApiTypes.g.cs.
-    # Dieses Verzeichnis ist aber eine Altlast — in git liegt dort nur .gitkeep,
-    # und nswag.json schreibt ausdruecklich nach obj/Generated/ApiTypes.g.cs
-    # (siehe auch PBStudio.UI.csproj: "Compile Remove=Generated\*.g.cs" plus
-    # "Compile Include=obj/Generated/ApiTypes.g.cs"). Der Test hat also die
-    # Frische einer Datei geprueft, die gar nicht mehr kompiliert wird — und
-    # bestand nur, solange die Altlast zufaellig neuer war als der Snapshot.
-    # Jetzt wird der echte NSwag-Output geprueft, der Legacy-Pfad bleibt als
-    # Rueckfall fuer aeltere Arbeitskopien.
-    candidates = [
-        repo_root / "PBStudio.UI" / "obj" / "Generated" / "ApiTypes.g.cs",
-        repo_root / "PBStudio.UI" / "Generated" / "ApiTypes.g.cs",
-    ]
-    generated = next((path for path in candidates if path.exists()), None)
-    if generated is None:
+    # The generated DTO and the explicit successful-build stamp live together.
+    generated = repo_root / "PBStudio.UI" / "obj" / "Generated" / "ApiTypes.g.cs"
+    stamp = repo_root / "PBStudio.UI" / "obj" / "Generated" / "openapi.stamp"
+    if not generated.exists() or not stamp.exists():
         pytest.skip(
-            "ApiTypes.g.cs not built yet — "
+            "Generated DTOs or NSwag build stamp missing — "
             "run `dotnet build PBStudio.UI/PBStudio.UI.csproj` first"
         )
-    assert generated.stat().st_mtime >= snapshot.stat().st_mtime - 1.0, (
+    assert stamp.stat().st_mtime >= snapshot.stat().st_mtime - 1.0, (
         f"Generated DTOs older than snapshot. "
         f"Rebuild WPF: dotnet build PBStudio.UI/PBStudio.UI.csproj"
     )
