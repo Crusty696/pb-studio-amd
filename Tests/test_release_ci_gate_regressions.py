@@ -24,6 +24,15 @@ def test_python_quality_gate_disables_repository_pytest_cache() -> None:
     assert '"-p", "no:cacheprovider"' in gate
 
 
+def test_python_quality_checkout_contains_sdd_source_commits() -> None:
+    workflow = _read(".github/workflows/ci.yml")
+    python_job = workflow.split("  python-quality:", 1)[1].split(
+        "  windows-native:", 1
+    )[0]
+
+    assert "fetch-depth: 0" in python_job
+
+
 def test_expected_wrong_hash_failure_returns_success_to_github() -> None:
     workflow = _read(".github/workflows/security.yml")
     tracked_requirements = _read(
