@@ -16,6 +16,8 @@ def test_sdd_archive_text_preserves_manifest_bytes_on_windows() -> None:
     attributes = _read(".gitattributes")
 
     assert "*.md   text eol=lf" in attributes
+    assert ".completed text eol=lf" in attributes
+    assert ".qc-passed text eol=lf" in attributes
     assert "specs/**/history/*.md -text !eol -diff" in attributes
     assert "specs/**/history/*.txt text eol=lf" in attributes
 
