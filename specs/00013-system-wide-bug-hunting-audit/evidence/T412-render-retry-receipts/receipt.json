@@ -1,0 +1,30 @@
+﻿{
+    "captured_at":  "2026-08-02T00:10:55.3359977+02:00",
+    "tested_commit":  "ec3a0d81f2e30f0ba639ffe6bf0c68e14936ed9a",
+    "worktree_code_clean":  true,
+    "python":  "3.11.9",
+    "tests":  {
+                  "count":  68,
+                  "failures":  0,
+                  "errors":  0,
+                  "skipped":  0,
+                  "seconds":  18.339,
+                  "xml_sha256":  "DCC9F4E6A2A84BB691E4DFE37FC49CE130AAF859B5E48B58243859195FBDEE43",
+                  "log_sha256":  "ACB9CF06941EF97C323FCFFDE5EE75BB8C5A3D7DB6BF03717677CD1123BDF27E"
+              },
+    "contracts":  {
+                      "cross_process_active_dedupe":  "pass",
+                      "terminal_history_immutable":  "pass",
+                      "terminal_retry_new_attempt":  "completed/failed/cancelled pass",
+                      "startup_resume":  "interrupted-\u003erunning-\u003ecompleted pass",
+                      "content_identity":  "project+timeline+settings+audio/video sha256 pass",
+                      "missing_catalog_hash":  "actual file sha256 fallback pass"
+                  },
+    "source_sha256":  {
+                          "render_queue":  "BA76A680CC06138E6DC706A03C4E891F98A97E64769C413FC60C429E50D8D7F7",
+                          "render_router":  "667F66FEF0EE4DA06DE5251A42E1DF910E134BB4A8175B00C20F2A75D31904AF",
+                          "test_persistence":  "FAD2068F50F4C87D5F22757CFD370FCFBE116DE443688F0D9DAA26C0FF556A2E",
+                          "test_t412":  "DEAD5DA5964D5D0952E006A701D58BC06EBCEBFA4915EA974FF5BCA02DD62C06"
+                      },
+    "independent_review":  "PASS - no blockers"
+}

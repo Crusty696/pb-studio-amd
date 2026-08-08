@@ -30,6 +30,7 @@ class TestWaveformAnalyzer:
         assert analyzer.bands['low'] == (20, 200)
         assert analyzer.bands['mid'] == (200, 2000)
         assert analyzer.bands['high'] == (2000, 20000)
+        assert analyzer.sr == 44100
 
     def test_empty_waveform(self):
         """Test empty waveform structure."""
@@ -93,6 +94,26 @@ class TestWaveformAnalyzer:
         assert len(time_axis) == num_frames
         assert time_axis[0] >= 0
         assert time_axis[-1] > time_axis[0]  # Monotonically increasing
+
+    def test_downsampling_never_exceeds_target_points(self, monkeypatch):
+        analyzer = WaveformAnalyzer()
+        source = np.arange(1999, dtype=np.float32)
+        monkeypatch.setattr(
+            analyzer,
+            "extract_3band_waveform",
+            lambda *_args, **_kwargs: {
+                "low": source,
+                "mid": source,
+                "high": source,
+            },
+        )
+
+        result = analyzer.get_downsampled_waveform(
+            "unused.wav",
+            target_points=1000,
+        )
+
+        assert {len(values) for values in result.values()} == {1000}
 
     @pytest.mark.skipif(not Path("tests/fixtures/test_audio.mp3").exists(),
                         reason="Test audio file not available")
@@ -318,3 +339,14 @@ class TestWaveformCache:
         # 3 bands * 100 floats * 8 bytes per float = 2400 bytes
         expected_size = 3 * 100 * 8
         assert size == expected_size
+
+    def test_hash_covers_file_tail(self, tmp_path):
+        cache = WaveformCache()
+        prefix = b"x" * (1024 * 1024)
+        first = tmp_path / "first.bin"
+        second = tmp_path / "second.bin"
+        first.write_bytes(prefix + b"A")
+        second.write_bytes(prefix + b"B")
+
+        assert first.stat().st_size == second.stat().st_size
+        assert cache._compute_hash(str(first)) != cache._compute_hash(str(second))

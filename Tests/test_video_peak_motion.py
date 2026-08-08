@@ -4,13 +4,17 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 
 
-def test_run_video_analysis_sets_peak_motion():
+def test_run_video_analysis_sets_peak_motion(tmp_path):
     import sys
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "MotionTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -43,11 +47,13 @@ def test_run_video_analysis_sets_peak_motion():
         return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[1] = {
+    clip = {
         "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
 
     from pathlib import Path as _Path
     try:
@@ -72,13 +78,17 @@ def test_run_video_analysis_sets_peak_motion():
     assert body["motion"]["peak_motion"] == pytest.approx(99.5, abs=0.1)
 
 
-def test_peak_motion_zero_when_empty():
+def test_peak_motion_zero_when_empty(tmp_path):
     import sys
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "MotionTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -111,11 +121,13 @@ def test_peak_motion_zero_when_empty():
         return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[1] = {
+    clip = {
         "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
 
     from pathlib import Path as _Path
     try:

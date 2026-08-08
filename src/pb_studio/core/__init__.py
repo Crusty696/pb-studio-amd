@@ -13,6 +13,13 @@ Components:
 """
 
 from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.core.directml_adapter import (
+    DirectMLAdapter,
+    DirectMLAdapterError,
+    enumerate_dxgi_adapters,
+    get_directml_adapter,
+    get_directml_provider,
+)
 from pb_studio.core.vram_arbiter import VRAMArbiter
 from pb_studio.core.vram_budget_manager import (
     VRAMBudgetManager,
@@ -49,6 +56,11 @@ from pb_studio.core.crash_handler import CrashHandler
 __all__ = [
     # Monitoring
     "SystemMonitor",
+    "DirectMLAdapter",
+    "DirectMLAdapterError",
+    "enumerate_dxgi_adapters",
+    "get_directml_adapter",
+    "get_directml_provider",
 
     # VRAM Management
     "VRAMArbiter",

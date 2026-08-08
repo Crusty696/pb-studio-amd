@@ -3,10 +3,9 @@ using System.Collections.Generic;
 namespace PBStudio.UI.Models;
 
 // =====================================================================
-// Ollama Model Manager — kuratierte Modell-Liste (GET /models/available).
+// Live verifizierte Downloadzustände und allgemeine Discover-Aktionen.
 // Spiegelt backend/routers/models_router.py::AvailableModelsResponse.
-// Jede Entry traegt das ``installed``-Flag, das das Backend serverseitig
-// gegen die echte /api/tags-Liste setzt.
+// Keine statische Modellkarte gilt als herunterladbar.
 // =====================================================================
 
 /// <summary>Antwort von <c>GET /models/available</c>.</summary>
@@ -14,13 +13,29 @@ public record AvailableModelsResponse(
     bool OllamaAvailable,
     string BaseUrl,
     List<AvailableModelEntry> Available,
-    bool LmstudioAvailable = false);
+    bool LmstudioAvailable = false,
+    List<DiscoverAction>? DiscoverActions = null,
+    int InventoryGeneration = 0,
+    string VerifiedAt = "");
 
-/// <summary>Ein kuratierter Eintrag: Default-Modelle, die PB Studio empfiehlt.</summary>
+public record DiscoverAction(
+    string Provider,
+    string Label,
+    string Url,
+    string CatalogStatus);
+
+/// <summary>Ein live gegen ein Provider-Manifest verifizierter Eintrag.</summary>
 public record AvailableModelEntry(
     string Name,
     string Description,
     string SuggestedMode,
     double SizeEstimateGb,
     bool Vision,
-    bool Installed);
+    bool Installed,
+    string Provider = "lmstudio",
+    bool Loaded = false,
+    bool Downloadable = false,
+    bool Usable = false,
+    List<string>? Capabilities = null,
+    string VerifiedAt = "",
+    string StatusReason = "");

@@ -43,6 +43,130 @@ def test_streaming_long_file_uses_streaming(tmp_path):
     assert result.window_count >= 2
     assert result.duration_seconds == pytest.approx(90.0, abs=0.5)
     assert len(result.beats) > 0
+    assert result.onset_times
+    assert max(result.onset_times) > 60.0
+
+
+def test_streaming_energy_only_skips_trigger_detection(tmp_path):
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
+    audio = _make_audio(tmp_path, duration_sec=60.0)
+    analyzer = StreamingAudioAnalyzer(window_sec=20.0, overlap_sec=2.0)
+    result = analyzer.analyze(str(audio), energy_only=True)
+
+    assert result.onset_times == []
+    assert result.kick_times == []
+    assert result.snare_times == []
+    assert result.hihat_times == []
+
+
+def test_streaming_energy_preserves_time_after_middle_chunk_failure(
+    monkeypatch,
+    tmp_path,
+):
+    import soundfile as sf
+
+    from pb_studio.audio.streaming_analyzer import StreamingAudioAnalyzer
+
+    audio = tmp_path / "timeline.wav"
+    audio.write_bytes(b"placeholder")
+    analyzer = StreamingAudioAnalyzer(window_sec=10.0, overlap_sec=0.0)
+
+    monkeypatch.setattr(
+        sf,
+        "info",
+        lambda _path: type("Info", (), {"samplerate": analyzer.SR})(),
+    )
+
+    def load_chunk(_path, offset, duration):
+        if offset == pytest.approx(10.0):
+            raise OSError("forced middle chunk failure")
+        amplitude = 0.2 if offset < 10.0 else 1.0
+        return np.full(
+            int(duration * analyzer.SR),
+            amplitude,
+            dtype=np.float32,
+        )
+
+    monkeypatch.setattr(analyzer, "_load_chunk", load_chunk)
+
+    result = analyzer._analyze_streaming(
+        audio,
+        duration=30.0,
+        on_progress=None,
+        energy_only=True,
+    )
+
+    peak_position = int(np.argmax(result.energy_curve)) / len(result.energy_curve)
+    assert peak_position >= 0.65
+    middle = result.energy_curve[
+        len(result.energy_curve) // 3: 2 * len(result.energy_curve) // 3
+    ]
+    assert middle
+    assert max(middle) == 0.0
+
+
+def test_audio_router_uses_full_streaming_triggers(monkeypatch, tmp_path):
+    import librosa
+
+    from backend.routers.audio_router import _run_audio_analysis
+    from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.key_detector import KeyDetector
+    from pb_studio.audio.streaming_analyzer import (
+        StreamingAnalysisResult,
+        StreamingAudioAnalyzer,
+    )
+
+    audio_path = tmp_path / "long.wav"
+    audio_path.write_bytes(b"placeholder")
+    streamed = StreamingAnalysisResult(
+        duration_seconds=900.0,
+        bpm=120.0,
+        beats=[0.5, 700.5],
+        energy_curve=[0.2, 0.8],
+        onset_times=[1.0, 701.0],
+        kick_times=[2.0, 702.0],
+        snare_times=[3.0, 703.0],
+        hihat_times=[4.0, 704.0],
+        window_count=36,
+    )
+
+    monkeypatch.setattr(librosa, "get_duration", lambda **_kwargs: 900.0)
+    monkeypatch.setattr(
+        librosa,
+        "load",
+        lambda *_args, **_kwargs: (np.zeros(22050, dtype=np.float32), 22050),
+    )
+    monkeypatch.setattr(
+        librosa.onset,
+        "onset_detect",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("600-second snapshot trigger extraction must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        StreamingAudioAnalyzer,
+        "analyze",
+        lambda *_args, **_kwargs: streamed,
+    )
+    monkeypatch.setattr(KeyDetector, "detect_key", lambda *_args, **_kwargs: "C Major")
+
+    result = _run_audio_analysis(
+        str(audio_path),
+        7,
+        AudioAnalyzeRequest(
+            clip_id=7,
+            detect_beats=True,
+            detect_structure=False,
+            spectral_analysis=False,
+        ),
+    )
+
+    assert result["duration_seconds"] == 900.0
+    assert result["onset_times"] == [1.0, 701.0]
+    assert result["kick_times"] == [2.0, 702.0]
+    assert result["snare_times"] == [3.0, 703.0]
+    assert result["hihat_times"] == [4.0, 704.0]
 
 
 def test_streaming_progress_callback(tmp_path):

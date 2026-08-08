@@ -173,13 +173,33 @@ class WeightStore:
 
     def reset(self) -> None:
         with self._conn_lock:
-            self.conn.execute("DELETE FROM axis_weights")
+            try:
+                self.conn.execute("BEGIN IMMEDIATE")
+                self.conn.execute("DELETE FROM axis_weights")
+                self.conn.execute(
+                    "INSERT INTO brain_meta(key, value) VALUES "
+                    "('feedback_count', '0') "
+                    "ON CONFLICT(key) DO UPDATE SET value='0'"
+                )
+                self.conn.execute("COMMIT")
+            except Exception:
+                self.conn.execute("ROLLBACK")
+                raise
         self._invalidate()
 
     # ---------- diagnostics ----------
 
     def total_clicks(self) -> int:
         with self._conn_lock:
+            meta_exists = self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='brain_meta'"
+            ).fetchone()
+            if meta_exists is not None:
+                row = self.conn.execute(
+                    "SELECT value FROM brain_meta WHERE key='feedback_count'"
+                ).fetchone()
+                return int(row[0]) if row is not None else 0
             row = self.conn.execute(
                 "SELECT COALESCE(SUM(positive_count + negative_count), 0) "
                 "FROM axis_weights WHERE context_level = 0 AND context_key = ''"

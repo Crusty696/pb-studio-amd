@@ -101,6 +101,9 @@ def test_explicit_kwargs_filter_covers_all_documented_fields():
         "embedding_samples",
         "has_embedding",
         "tag_source",
+        "analysis_status",
+        "stage_status",
+        "stage_errors",
     }
     missing = expected - found
     extra = found - expected

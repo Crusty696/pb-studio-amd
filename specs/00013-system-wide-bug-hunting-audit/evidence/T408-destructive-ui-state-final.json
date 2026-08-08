@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "note": "Controls were inspected through UIA and were not invoked.",
+  "controls": [
+    {
+      "tab": "AUDIO",
+      "name": "Markierte Audio-Clips löschen",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "AUDIO",
+      "name": "Alle Audio-Clips löschen",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "VIDEO",
+      "name": "Markierte Video-Clips löschen",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "VIDEO",
+      "name": "Alle Video-Clips löschen",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "HIRN",
+      "name": "Hirn-Reset anfordern",
+      "enabled": true,
+      "expected_enabled": true
+    },
+    {
+      "tab": "HIRN",
+      "name": "Hirn-Reset bestätigen",
+      "enabled": false,
+      "expected_enabled": false
+    },
+    {
+      "tab": "SETTINGS",
+      "name": "Inaktive GPU-Modelle entladen",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "CHAT",
+      "name": "Chat-Verlauf leeren",
+      "enabled": true,
+      "expected_enabled": null
+    },
+    {
+      "tab": "ANCHOR",
+      "name": "Ausgewählten Anchor-Punkt entfernen",
+      "enabled": false,
+      "expected_enabled": false
+    }
+  ],
+  "failures": [],
+  "passed": true
+}

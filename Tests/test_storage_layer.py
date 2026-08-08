@@ -126,6 +126,39 @@ def test_embedding_cache_store_and_lookup(tmp_path: Path):
     finally:
         cache.close()
 
+def test_embedding_cache_failed_replace_restores_previous_array(tmp_path: Path):
+    cache = EmbeddingCache(tmp_path / "cache.db", tmp_path / "embeddings")
+    try:
+        original = np.asarray([1.0, 2.0, 3.0], dtype=np.float32)
+        entry = cache.store(
+            media_hash="same-hash",
+            media_type="audio",
+            embedding=original,
+            model_name="model",
+            model_version="1",
+        )
+        cache.conn.execute(
+            "CREATE TRIGGER reject_failed_cache_write "
+            "BEFORE INSERT ON media_embedding_index "
+            "WHEN NEW.media_type='fail' "
+            "BEGIN SELECT RAISE(ABORT, 'forced cache failure'); END"
+        )
+
+        with pytest.raises(sqlite3.IntegrityError, match="forced cache failure"):
+            cache.store(
+                media_hash="same-hash",
+                media_type="fail",
+                embedding=np.asarray([9.0, 9.0, 9.0], dtype=np.float32),
+                model_name="model",
+                model_version="1",
+            )
+
+        np.testing.assert_array_equal(np.load(entry.embedding_path), original)
+        assert not list((tmp_path / "embeddings").glob(".*.tmp"))
+        assert not list((tmp_path / "embeddings").glob(".*.bak"))
+    finally:
+        cache.close()
+
 
 def test_brain_store_initializes_three_dbs(tmp_path: Path):
     store = BrainStore(tmp_path / "brain")
@@ -163,13 +196,14 @@ def test_migration_runner_numerical_prefix(tmp_path: Path):
     mig = tmp_path / "mig"
     mig.mkdir()
     (mig / "10_second.sql").write_text("CREATE TABLE x2 (id INTEGER);")
-    (mig / "2_first.sql").write_text("CREATE TABLE x1 (id INTEGER);")
+    (mig / "9_first.sql").write_text("CREATE TABLE x1 (id INTEGER);")
     db = tmp_path / "y.db"
-    
-    # 2_first.sql has version 2, 10_second.sql has version 10.
-    # They should be applied in numerical order: 2, then 10.
-    # If list index or string order was used, "10_second.sql" (string comparison "10" < "2")
-    # might be run first. But numerically, 2 is run first, then 10.
+
+    conn = sqlite3.connect(str(db))
+    conn.execute("PRAGMA user_version = 8")
+    conn.close()
+
+    # 9_first.sql must run before 10_second.sql despite lexical ordering.
     v = migrate(db, mig)
     assert v == 10
     
@@ -250,3 +284,33 @@ def test_migration_duplicate_prefix_raises(tmp_path):
 
     with pytest.raises(ValueError, match="[Dd]oppelt"):
         migrate(tmp_path / "m.db", mig)
+
+
+def test_migration_gap_raises_without_advancing_version(tmp_path):
+    """L-07: a missing migration version must never be skipped permanently."""
+    mig = tmp_path / "migs"
+    mig.mkdir()
+    (mig / "001_initial.sql").write_text(
+        "CREATE TABLE first_table (x INT);", encoding="utf-8"
+    )
+    (mig / "003_gap.sql").write_text(
+        "CREATE TABLE skipped_table (x INT);", encoding="utf-8"
+    )
+    db = tmp_path / "m.db"
+
+    with pytest.raises(ValueError, match="Migrationsluecke"):
+        migrate(db, mig)
+
+    conn = sqlite3.connect(str(db))
+    try:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 0
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "first_table" not in tables
+        assert "skipped_table" not in tables
+    finally:
+        conn.close()

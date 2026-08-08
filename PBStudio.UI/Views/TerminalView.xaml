@@ -8,7 +8,13 @@
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
              mc:Ignorable="d" 
              d:DesignHeight="600" d:DesignWidth="800"
-             d:DataContext="{d:DesignInstance vm:TerminalViewModel}">
+             d:DataContext="{d:DesignInstance vm:TerminalViewModel}"
+             AutomationProperties.Name="Backend-Terminal"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding ClearCommand}"/>
+    </UserControl.InputBindings>
     
     <Grid Background="{StaticResource AbletonBg}">
         <Grid.RowDefinitions>
@@ -36,7 +42,10 @@
                         Background="Transparent"
                         BorderBrush="{StaticResource AbletonBorder}"
                         Foreground="{StaticResource AbletonText}"
-                        Height="28" Padding="12,0" FontSize="11">
+                        Height="28" Padding="12,0" FontSize="11"
+                        AutomationProperties.Name="Terminal leeren"
+                        AutomationProperties.HelpText="Entfernt alle aktuell angezeigten Logzeilen. Dieser Vorgang kann nicht rückgängig gemacht werden."
+                        AutomationProperties.AcceleratorKey="Strg+L">
                     <StackPanel Orientation="Horizontal">
                         <icon:PackIconMaterial Kind="TrashCanOutline" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <TextBlock Text="Terminal leeren" VerticalAlignment="Center"/>
@@ -47,10 +56,20 @@
 
         <!-- Terminal Output Box -->
         <Border Grid.Row="1" 
-                Background="#0C0C0C" 
                 BorderBrush="{StaticResource AbletonBorder}" 
                 BorderThickness="1" 
                 Margin="12" CornerRadius="4">
+            <Border.Style>
+                <Style TargetType="{x:Type Border}">
+                    <Setter Property="Background" Value="#0C0C0C"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <TextBox x:Name="TxtLog"
                      Text="{Binding LogContent, Mode=OneWay}"
                      IsReadOnly="True"
@@ -58,15 +77,28 @@
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Auto"
-                     Background="Transparent"
                      BorderThickness="0"
-                     Foreground="#FF764D" 
                      FontFamily="Consolas, Courier New, monospace"
                      FontSize="12"
                      Padding="12"
-                     SelectionBrush="#FF764D"
                      md:TextFieldAssist.DecorationVisibility="Collapsed"
-                     TextChanged="TxtLog_TextChanged"/>
+                     AutomationProperties.Name="Live-Backend-Protokoll"
+                     AutomationProperties.HelpText="Schreibgeschützte Echtzeit-Logausgabe. Text kann markiert und kopiert werden."
+                     TextChanged="TxtLog_TextChanged">
+                <TextBox.Style>
+                    <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource {x:Type TextBox}}">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="#FF764D"/>
+                        <Setter Property="SelectionBrush" Value="#FF764D"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Source={x:Static SystemParameters.HighContrast}}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+                                <Setter Property="SelectionBrush" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
         </Border>
     </Grid>
 </UserControl>

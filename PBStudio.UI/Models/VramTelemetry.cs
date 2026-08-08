@@ -18,3 +18,33 @@ global using VramPeakStats = PBStudio.UI.Generated.VramPeakStats;
 global using VramLimitRequest = PBStudio.UI.Generated.VramLimitRequest;
 global using VramLimitResponse = PBStudio.UI.Generated.VramLimitResponse;
 
+namespace PBStudio.UI.Models;
+
+/// <summary>
+/// Hält die bestehende Multi-Modell-UI-Shape kompatibel, ohne Einzelmodell-JSON
+/// in den falschen Transporttyp zu deserialisieren.
+/// </summary>
+public static class VramTelemetryUiAdapter
+{
+    public static VramHealthResponse ToMultiModelSnapshot(
+        this VramHealthSingleResponse response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        var entry = response.Telemetry;
+        var models = new Dictionary<string, VramTelemetryEntry>
+        {
+            [entry.Model_id] = entry,
+        };
+        var summary = new VramTelemetrySummary(
+            duration_buckets_ms: null,
+            models_tracked: 1,
+            observations: entry.Count ?? 0,
+            vram_buckets_mb: null);
+
+        return new VramHealthResponse(
+            response.Budget,
+            response.Status,
+            new VramTelemetryMulti(models, summary));
+    }
+}

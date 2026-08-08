@@ -1,0 +1,17 @@
+{
+  "audio_path": "https://example.invalid/pb-learning-session-probe.wav",
+  "timeline": [
+    {
+      "clip_id": "clip_1",
+      "start_time": 0.0,
+      "end_time": 1.0,
+      "metadata": {
+        "clip_name": "inert-security-fixture",
+        "file_path": "",
+        "clip_start": 0.0,
+        "cut_id": 1
+      }
+    }
+  ],
+  "saved_at": "2000-01-01T00:00:00Z"
+}

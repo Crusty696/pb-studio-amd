@@ -18,6 +18,7 @@ from pb_studio.ai.lmstudio_client import (
     LMStudioConnectionError,
     LMStudioError,
     LMStudioResponseError,
+    is_provider_failure,
 )
 
 
@@ -106,6 +107,92 @@ def test_list_models_handles_connect_error_retries_then_fails():
 
     with pytest.raises(LMStudioConnectionError):
         _run(go())
+
+
+def test_ollama_list_models_fails_closed_without_openai_source_fallback():
+    requested_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        assert request.url.path == "/api/tags"
+        return httpx.Response(503, text="native inventory unavailable")
+
+    async def go():
+        async with LMStudioClient(
+            base_url="http://localhost:11434/v1",
+            provider="ollama",
+            transport=_make_transport(handler),
+        ) as client:
+            return await client.list_models()
+
+    with pytest.raises(LMStudioResponseError):
+        _run(go())
+    assert requested_paths == ["/api/tags"]
+
+
+def test_provider_failure_classification_excludes_model_specific_4xx():
+    assert is_provider_failure(LMStudioConnectionError("offline")) is True
+    assert is_provider_failure(
+        LMStudioResponseError("server", status_code=503)
+    ) is True
+    assert is_provider_failure(
+        LMStudioResponseError("rate limited", status_code=429)
+    ) is True
+    assert is_provider_failure(
+        LMStudioResponseError("bad request", status_code=400)
+    ) is False
+    assert is_provider_failure(
+        LMStudioResponseError("missing model", status_code=404)
+    ) is False
+
+
+def test_lmstudio_capabilities_distinguish_embedding_from_chat_and_vision():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(200, json={"data": [
+                {"id": "embed-only", "type": "embeddings"},
+                {"id": "chat-model", "type": "llm"},
+                {"id": "vision-model", "type": "vlm"},
+            ]})
+        return httpx.Response(200, json={"data": [
+            {"id": "embed-only"},
+            {"id": "chat-model"},
+            {"id": "vision-model"},
+        ]})
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            capabilities = await client.get_model_capabilities()
+            has_chat = await client.supports_capability("chat")
+            has_vision = await client.supports_capability("vision")
+            return capabilities, has_chat, has_vision
+
+    capabilities, has_chat, has_vision = _run(go())
+    assert capabilities["embed-only"] == {"embedding"}
+    assert capabilities["chat-model"] == {"chat"}
+    assert capabilities["vision-model"] == {"chat", "vision"}
+    assert has_chat is True
+    assert has_vision is True
+
+
+def test_embedding_only_provider_is_alive_but_not_chat_or_vision_capable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(
+                200,
+                json={"data": [{"id": "embed-only", "type": "embeddings"}]},
+            )
+        return httpx.Response(200, json={"data": [{"id": "embed-only"}]})
+
+    async def go():
+        async with LMStudioClient(transport=_make_transport(handler)) as client:
+            return (
+                await client.is_alive(),
+                await client.supports_capability("chat"),
+                await client.supports_capability("vision"),
+            )
+
+    assert _run(go()) == (True, False, False)
 
 
 # ======================================================================

@@ -20,12 +20,17 @@ except ImportError:
         GraphOptimizationLevel = object
         InferenceSession = object
         @staticmethod
-        def get_available_providers() -> List[str]: return ["CPUExecutionProvider"]
+        def get_available_providers() -> List[str]: return []
     ort = _FallbackOrt()
 
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 
 
 # SigLIP preprocessing constants
@@ -45,7 +50,6 @@ class SigLIPWrapper:
 
         self.vision_session: Optional[ort.InferenceSession] = None
         self.text_session: Optional[ort.InferenceSession] = None
-        self.text_model_fallback: Optional[Any] = None
         self.tokenizer = None
 
         self._active_provider = "Unknown"
@@ -55,9 +59,7 @@ class SigLIPWrapper:
             self._init_model()
 
     def _create_session_options(self) -> ort.SessionOptions:
-        sess_options = ort.SessionOptions()
-        sess_options.enable_mem_pattern = False
-        sess_options.enable_cpu_mem_arena = False
+        sess_options = configure_directml_session_options(ort.SessionOptions())
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         return sess_options
 
@@ -73,8 +75,7 @@ class SigLIPWrapper:
                 "SigLIP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
                 "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
             )
-        device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-        return [('DmlExecutionProvider', {'device_id': device_id})]
+        return [get_directml_provider()]
 
     def _init_tokenizer(self) -> bool:
         try:
@@ -85,21 +86,11 @@ class SigLIPWrapper:
             return False
 
     def _init_text_fallback(self) -> bool:
-        allow_fallback = self.config.get("ai", {}).get("allow_cpu_text_fallback", False)
-        if not allow_fallback:
-            # PyTorch CPU Fallback deaktiviert um VRAM/RAM-Spikes (>1.5GB) und OOM-Abstuerze auf Windows zu verhindern.
-            logger.warning("SigLIP text model PyTorch CPU fallback is disabled to prevent VRAM/RAM OOM crashes. Set 'allow_cpu_text_fallback': true under 'ai' in config.json to enable.")
-            return False
-
-        try:
-            from transformers import SiglipTextModel
-            logger.info("Loading SigLIP text model (PyTorch fallback)...")
-            self.text_model_fallback = SiglipTextModel.from_pretrained("google/siglip-so400m-patch14-384", local_files_only=True)
-            self.text_model_fallback.eval()
-            return True
-        except Exception as e:
-            logger.error(f"Text fallback fail: {e}")
-            return False
+        logger.warning(
+            "SigLIP text ONNX asset unavailable; text semantics remain "
+            "disabled (DirectML-only, no runtime fallback)."
+        )
+        return False
 
 
     def _init_model(self) -> bool:
@@ -119,26 +110,27 @@ class SigLIPWrapper:
             if vision_path.exists():
                 self.vision_session = loader.load_model("siglip_vision", force=True)
                 if self.vision_session is None:
-                    self.vision_session = ort.InferenceSession(str(vision_path), sess_options, providers=providers)
-                
-                self._active_provider = self.vision_session.get_providers()[0]
-                if self._active_provider != 'DmlExecutionProvider':
-                    raise RuntimeError(
-                        f"SigLIP vision session was loaded on {self._active_provider}, "
-                        f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                    self.vision_session = enforce_directml_session(
+                        ort.InferenceSession(
+                            str(vision_path),
+                            sess_options,
+                            providers=providers,
+                        )
                     )
+                self.vision_session = enforce_directml_session(self.vision_session)
+                self._active_provider = "DmlExecutionProvider"
                 
                 if text_path.exists():
                     self.text_session = loader.load_model("siglip_text", force=True)
                     if self.text_session is None:
-                        self.text_session = ort.InferenceSession(str(text_path), sess_options, providers=providers)
-                    
-                    text_provider = self.text_session.get_providers()[0]
-                    if text_provider != 'DmlExecutionProvider':
-                        raise RuntimeError(
-                            f"SigLIP text session was loaded on {text_provider}, "
-                            f"but GPU (DmlExecutionProvider) is required (IRON RULE 1: AMD DirectML ONLY)."
+                        self.text_session = enforce_directml_session(
+                            ort.InferenceSession(
+                                str(text_path),
+                                sess_options,
+                                providers=providers,
+                            )
                         )
+                    self.text_session = enforce_directml_session(self.text_session)
                 else:
                     self._init_text_fallback()
                 
@@ -207,19 +199,20 @@ class SigLIPWrapper:
 
     def encode_text(self, texts: Union[str, List[str]]) -> Optional[np.ndarray]:
         if not self._initialized and not self._init_model(): return None
-        if self.text_session is None and self.text_model_fallback is None: return None
+        if self.text_session is None: return None
         if isinstance(texts, str): texts = [texts]
         try:
             inputs = self.tokenizer(texts, padding="max_length", max_length=64, truncation=True, return_tensors="np")
-            if self.text_session:
-                feed = {inp.name: inputs["input_ids"] if "input_ids" in inp.name else inputs["attention_mask"] for inp in self.text_session.get_inputs()}
-                with gpu_inference_lock:
-                    embeddings = self.text_session.run(None, feed)[0]
-            else:
-                import torch
-                with torch.no_grad():
-                    pt_in = {k: torch.from_numpy(v) for k, v in inputs.items() if k in ["input_ids", "attention_mask"]}
-                    embeddings = self.text_model_fallback(**pt_in).pooler_output.cpu().numpy()
+            feed = {
+                inp.name: (
+                    inputs["input_ids"]
+                    if "input_ids" in inp.name
+                    else inputs["attention_mask"]
+                )
+                for inp in self.text_session.get_inputs()
+            }
+            with gpu_inference_lock:
+                embeddings = self.text_session.run(None, feed)[0]
             embeddings = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-8)
             return embeddings[0] if len(texts) == 1 and not isinstance(texts, list) else embeddings
         except Exception:
@@ -240,7 +233,7 @@ class SigLIPWrapper:
     def is_ready(self) -> bool: return self._initialized and self.vision_session is not None
 
     @property
-    def has_text_encoder(self) -> bool: return (self.text_session is not None) or (self.text_model_fallback is not None)
+    def has_text_encoder(self) -> bool: return self.text_session is not None
 
     @property
     def active_provider(self) -> str: return self._active_provider

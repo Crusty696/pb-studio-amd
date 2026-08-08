@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.Services;
+using PBStudio.UI.Services.Messages;
 
 namespace PBStudio.UI.ViewModels;
 
@@ -21,12 +24,18 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     private readonly TimelineStateService? _timelineState;
     private string? _pendingResetToken;
     private bool _disposed;
+    private bool _isFeedbackPending;
+    private int _statsLoadVersion;
+    private int _learningLoadVersion;
+    private int _loadingVersion;
+    private int _feedbackVersion;
 
     [ObservableProperty] private int _totalClicks;
     [ObservableProperty] private int _coldStartAxes = 17;
     [ObservableProperty] private int _learnedAxes;
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private int _selectedCutId;
+    [ObservableProperty] private BrainSuggestion? _selectedLearningSessionCut;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _isResetPending;
 
@@ -35,21 +44,83 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> ColdStartAxesList { get; } = new();
     public ObservableCollection<BrainSuggestion> LearningSessionCuts { get; } = new();
 
+    partial void OnSelectedLearningSessionCutChanged(BrainSuggestion? value)
+    {
+        SelectedCutId = value?.CutId ?? 0;
+    }
+
+    partial void OnSelectedCutIdChanged(int value) =>
+        NotifyFeedbackCommandsCanExecuteChanged();
+
     public BrainViewModel(IApiClient api, ProjectService? projectService = null, TimelineStateService? timelineState = null)
     {
         _api = api;
         _projectService = projectService;
         _timelineState = timelineState;
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
         _ = RefreshStatsAsync();
+
+        // Audit-Fix 2026-07-10 (Sweep-Finding HIGH-11): BrainViewModel abonnierte
+        // weder ProjectOpenedMessage noch ProjectClosedMessage, obwohl Backend den
+        // Brain-State pro Projekt bindet/entbindet — Tab zeigte Confidence/
+        // Suggestions vom vorherigen Projekt bis zum manuellen Reload. Muster
+        // uebernommen von TimelineViewModel.
+        // AUDIT-FIX C#-1: Messages koennen vom Background-Thread gesendet werden (ProjectService).
+        // RefreshStatsAsync/ResetForProjectClose mutieren an die UI gebundene ObservableCollections
+        // → auf den Dispatcher marshallen, sonst NotSupportedException (Cross-Thread-Collection).
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(() => _ = RefreshStatsAsync()));
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
+            System.Windows.Application.Current.Dispatcher.Invoke(ResetForProjectClose));
+    }
+
+    /// <summary>Setzt alle projektgebundenen Anzeigen auf Leerzustand zurueck (Audit-Fix 2026-07-10).</summary>
+    private void ResetForProjectClose()
+    {
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        IsLoading = false;
+        TotalClicks = 0;
+        ColdStartAxes = 17;
+        LearnedAxes = 0;
+        TopPositive.Clear();
+        TopNegative.Clear();
+        ColdStartAxesList.Clear();
+        LearningSessionCuts.Clear();
+        SelectedLearningSessionCut = null;
+        SelectedCutId = 0;
+        IsResetPending = false;
+        _pendingResetToken = null;
+        Status = "Kein Projekt geladen.";
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        IsLoading = false;
     }
 
     [RelayCommand]
     public async Task RefreshStatsAsync()
     {
+        if (_disposed)
+            return;
+
+        var statsVersion = Interlocked.Increment(ref _statsLoadVersion);
+        var loadVersion = Interlocked.Increment(ref _loadingVersion);
         IsLoading = true;
         try
         {
             var stats = await _api.BrainStatsAsync();
+            if (_disposed || statsVersion != Volatile.Read(ref _statsLoadVersion))
+                return;
+
             if (stats == null)
             {
                 Status = "Hirn-Stats nicht verfügbar.";
@@ -71,56 +142,108 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (!_disposed && loadVersion == Volatile.Read(ref _loadingVersion))
+                IsLoading = false;
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RatePerfectAsync() => SendFeedbackAsync("perfect");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateFitsAsync() => SendFeedbackAsync("fits");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateNotQuiteAsync() => SendFeedbackAsync("not_quite");
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSendFeedback))]
     public Task RateNoMatchAsync() => SendFeedbackAsync("no_match");
 
     private async Task SendFeedbackAsync(string rating)
     {
-        if (SelectedCutId <= 0)
+        if (_disposed || SelectedCutId <= 0)
         {
             Status = "Bitte zuerst einen Cut auswählen.";
             return;
         }
         var cutId = SelectedCutId;
-        var resp = await _api.BrainFeedbackAsync(cutId, rating);
-        if (resp == null)
-        {
-            Status = "Feedback fehlgeschlagen.";
+        if (!CutRatingGate.TryEnter(cutId))
             return;
+
+        var feedbackVersion = Interlocked.Increment(ref _feedbackVersion);
+        SetFeedbackPending(true);
+        try
+        {
+            var resp = await _api.BrainFeedbackAsync(cutId, rating);
+            if (_disposed
+                || feedbackVersion != Volatile.Read(ref _feedbackVersion)
+                || cutId != SelectedCutId)
+                return;
+            if (resp == null)
+            {
+                Status = "Feedback fehlgeschlagen.";
+                return;
+            }
+            if (!resp.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+            {
+                Status = string.IsNullOrWhiteSpace(resp.Message)
+                    ? "Feedback wurde nicht angewendet."
+                    : resp.Message;
+                return;
+            }
+            Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
+            // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
+            WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
+            await RefreshStatsAsync();
         }
-        Status = $"OK — {resp.UpdatedBuckets} Buckets aktualisiert (Total: {resp.TotalClicks}).";
-        // Cross-VM-Refresh: TimelineViewModel laedt Confidence + Tooltip fuer diesen Cut neu.
-        WeakReferenceMessenger.Default.Send(new BrainFeedbackAppliedMessage(cutId));
-        await RefreshStatsAsync();
+        finally
+        {
+            SetFeedbackPending(false);
+            CutRatingGate.Exit(cutId);
+        }
+    }
+
+    private bool CanSendFeedback() =>
+        !_disposed && !_isFeedbackPending && SelectedCutId > 0;
+
+    private void SetFeedbackPending(bool value)
+    {
+        _isFeedbackPending = value;
+        NotifyFeedbackCommandsCanExecuteChanged();
+    }
+
+    private void NotifyFeedbackCommandsCanExecuteChanged()
+    {
+        RatePerfectCommand.NotifyCanExecuteChanged();
+        RateFitsCommand.NotifyCanExecuteChanged();
+        RateNotQuiteCommand.NotifyCanExecuteChanged();
+        RateNoMatchCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     public async Task LoadLearningSessionAsync()
     {
+        if (_disposed)
+            return;
+
+        var learningVersion = Interlocked.Increment(ref _learningLoadVersion);
+        var loadVersion = Interlocked.Increment(ref _loadingVersion);
         IsLoading = true;
         try
         {
             var resp = await _api.BrainLearningSessionAsync();
+            if (_disposed || learningVersion != Volatile.Read(ref _learningLoadVersion))
+                return;
+
             LearningSessionCuts.Clear();
             if (resp?.Cuts != null)
             {
                 foreach (var c in resp.Cuts) LearningSessionCuts.Add(c);
             }
+            SelectedLearningSessionCut = LearningSessionCuts.FirstOrDefault();
             Status = $"Lern-Session: {LearningSessionCuts.Count} unsichere Cuts geladen.";
         }
         finally
         {
-            IsLoading = false;
+            if (!_disposed && loadVersion == Volatile.Read(ref _loadingVersion))
+                IsLoading = false;
         }
     }
 
@@ -135,8 +258,8 @@ public partial class BrainViewModel : ObservableObject, IDisposable
 
             // Pfade aus aktuellem Projekt + Timeline ableiten, sonst bleibt der Walkthrough
             // ohne Audio-/Video-Preview (siehe Audit C3).
-            var (audioPath, videoBase) = await ResolveSessionPathsAsync();
-            await vm.LoadAsync(audioPath, videoBase);
+            var (audioPath, videoPaths) = await ResolveSessionPathsAsync();
+            await vm.LoadAsync(audioPath, videoPaths);
 
             dialog.Owner = System.Windows.Application.Current.MainWindow;
             dialog.ShowDialog();
@@ -144,34 +267,39 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task<(string? audioPath, string? videoBase)> ResolveSessionPathsAsync()
+    private async Task<(
+        string? audioPath,
+        IReadOnlyDictionary<string, string> videoPaths)> ResolveSessionPathsAsync()
     {
-        // Audio: aktuelle Timeline-Response liefert audio_path.
-        string? audioPath = _timelineState?.CurrentTimeline?.AudioPath;
-        if (string.IsNullOrEmpty(audioPath))
+        var timeline = _timelineState?.CurrentTimeline;
+        if (timeline == null)
         {
             try
             {
-                var refreshed = _timelineState != null
+                timeline = _timelineState != null
                     ? await _timelineState.RefreshAsync()
                     : await _api.GetTimelineAsync();
-                audioPath = refreshed?.AudioPath;
             }
             catch
             {
-                // Best-effort — Walkthrough fällt auf "kein Audio" zurück.
+                // Best-effort -- Walkthrough remains available without preview.
             }
         }
 
-        // Video-Base: Projekt-Root\videos\ falls vorhanden, sonst Projekt-Root.
-        string? videoBase = null;
-        var projectPath = _projectService?.CurrentProjectPath;
-        if (!string.IsNullOrEmpty(projectPath))
+        var videoPaths = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        if (timeline?.Entries != null)
         {
-            var videosDir = System.IO.Path.Combine(projectPath, "videos");
-            videoBase = System.IO.Directory.Exists(videosDir) ? videosDir : projectPath;
+            foreach (var entry in timeline.Entries)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.ClipId)
+                    && !string.IsNullOrWhiteSpace(entry.FilePath))
+                {
+                    videoPaths[entry.ClipId] = entry.FilePath;
+                }
+            }
         }
-        return (audioPath, videoBase);
+        return (timeline?.AudioPath, videoPaths);
     }
 
     [RelayCommand]
@@ -210,6 +338,12 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _statsLoadVersion);
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _loadingVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
         GC.SuppressFinalize(this);
     }

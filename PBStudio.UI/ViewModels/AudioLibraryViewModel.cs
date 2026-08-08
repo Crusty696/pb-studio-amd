@@ -20,6 +20,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly SSEClient _sseClient;
     private readonly IDialogService _dialogService;
+    private readonly ProjectService _projectService;
 
     [ObservableProperty] private AudioClipModel? _selectedClip;
     [ObservableProperty] private string _statusText = "";
@@ -40,14 +41,21 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
     public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
 
-    public AudioLibraryViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, SSEClient sseClient, IDialogService dialogService)
+    public AudioLibraryViewModel(
+        IApiClient api,
+        AudioLibraryStateService audioLibraryState,
+        SSEClient sseClient,
+        IDialogService dialogService,
+        ProjectService projectService)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
         _sseClient = sseClient;
         _dialogService = dialogService;
+        _projectService = projectService;
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
         WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = LoadAudioClipsAsync());
@@ -91,14 +99,34 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     private async Task DeleteSelectedAsync()
     {
         if (SelectedClips.Count == 0 || IsDeleting) return;
+        var clips = SelectedClips.ToList();
+        var confirmationMessage = clips.Count == 1
+            ? $"Audio-Clip \"{clips[0].Name}\" (ID {clips[0].Id}) dauerhaft löschen?"
+            : $"{clips.Count} ausgewählte Audio-Clips dauerhaft löschen?";
+        if (!_dialogService.ConfirmDestructiveAction("Audio-Clips löschen", confirmationMessage))
+            return;
+
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
-            var ids = SelectedClips.Select(c => c.Id).ToList();
+            var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Audio-Clips...";
             var resp = ids.Count == 1
-                ? await _api.DeleteAudioClipAsync(ids[0])
-                : await _api.DeleteAudioClipsBatchAsync(ids);
+                ? await _api.DeleteAudioClipAsync(ids[0], projectContext.CancellationToken)
+                : await _api.DeleteAudioClipsBatchAsync(ids, projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
@@ -107,19 +135,51 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             }
             else StatusText = "Delete fehlgeschlagen.";
         }
-        finally { IsDeleting = false; }
+        catch (Exception ex)
+        {
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
+        }
+        finally
+        {
+            if (_projectService.IsCurrent(projectContext))
+                IsDeleting = false;
+        }
     }
 
     [RelayCommand]
     private async Task DeleteAllAsync()
     {
         if (AudioClips.Count == 0 || IsDeleting) return;
+        var clips = AudioClips.ToList();
+        if (!_dialogService.ConfirmDestructiveAction(
+                "Alle Audio-Clips löschen",
+                $"ALLE {clips.Count} Audio-Clips dauerhaft löschen?"))
+        {
+            return;
+        }
+
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Löschen nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         IsDeleting = true;
         try
         {
-            var ids = AudioClips.Select(c => c.Id).ToList();
+            var ids = clips.Select(c => c.Id).ToList();
             StatusText = $"Loesche ALLE {ids.Count} Audio-Clips...";
-            var resp = await _api.DeleteAudioClipsBatchAsync(ids);
+            var resp = await _api.DeleteAudioClipsBatchAsync(
+                ids,
+                projectContext.CancellationToken);
+            if (!_projectService.IsCurrent(projectContext))
+                return;
             if (resp != null)
             {
                 StatusText = $"{resp.DeletedCount} Audio-Clips geloescht.";
@@ -128,7 +188,16 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             }
             else StatusText = "Delete-All fehlgeschlagen.";
         }
-        finally { IsDeleting = false; }
+        catch (Exception ex)
+        {
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Löschen fehlgeschlagen: {ex.Message}";
+        }
+        finally
+        {
+            if (_projectService.IsCurrent(projectContext))
+                IsDeleting = false;
+        }
     }
 
 
@@ -280,6 +349,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         Key = clipInfo.Key ?? "",
                         BeatCount = clipInfo.BeatCount,
                         IsAnalyzed = clipInfo.IsAnalyzed,
+                        AnalysisStatus = clipInfo.AnalysisStatus,
+                        StageErrors = clipInfo.StageErrors,
                         // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
                         AudioHash = clipInfo.AudioHash,
                         // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
@@ -323,11 +394,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanAnalyzeAll))]
     private async Task AnalyzeAllAsync()
     {
+        var operation = _projectService.CaptureOperationContext();
         IsAnalyzing = true;
         AnalysisProgress = 0.01;  // sichtbarer Start
         CurrentStep = "init";
         var total = AudioClips.Count;
         var done = 0;
+        var partial = 0;
 
         try
         {
@@ -338,31 +411,43 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalysisProgress = (double)done / total * 100;
 
-                var result = await _api.AnalyzeAudioAsync(clip.Id);
+                var result = await _api.AnalyzeAudioAsync(clip.Id, operation.CancellationToken);
+                if (!_projectService.IsCurrent(operation))
+                    return;
                 if (result != null)
                 {
                     clip.Bpm = result.Bpm;
                     clip.BeatCount = result.BeatCount;
                     clip.Key = result.Key ?? "";
-                    clip.IsAnalyzed = true;
+                    clip.AnalysisStatus = result.AnalysisStatus;
+                    clip.StageErrors = result.StageErrors;
+                    clip.IsAnalyzed = result.AnalysisStatus == "completed";
+                    if (result.AnalysisStatus == "partial")
+                        partial++;
                 }
                 done++;
             }
 
             AnalysisProgress = 100;
-            StatusText = $"Alle {total} Clips analysiert";
-            WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
+            StatusText = partial > 0
+                ? $"Analyse beendet: {total - partial} vollständig, {partial} partiell"
+                : $"Alle {total} Clips vollständig analysiert";
+            if (_projectService.IsCurrent(operation))
+                WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
         }
         catch (Exception ex)
         {
-            StatusText = $"Analysefehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Analysefehler: {ex.Message}";
         }
         finally
         {
-            IsAnalyzing = false;
+            if (_projectService.IsCurrent(operation))
+                IsAnalyzing = false;
         }
 
-        if (SelectedClip != null) OnSelectedClipChanged(SelectedClip);
+        if (_projectService.IsCurrent(operation) && SelectedClip != null)
+            OnSelectedClipChanged(SelectedClip);
     }
 
     private bool CanAnalyzeSelected() => SelectedClip != null && !IsAnalyzing;
@@ -376,6 +461,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var operation = _projectService.CaptureOperationContext();
+        var clip = SelectedClip;
         IsAnalyzing = true;
         AnalysisProgress = 0.01;  // sichtbarer Start (0.00% Label)
         CurrentStep = "init";
@@ -383,17 +470,23 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _api.AnalyzeAudioAsync(SelectedClip.Id);
+            var result = await _api.AnalyzeAudioAsync(clip.Id, operation.CancellationToken);
+            if (!_projectService.IsCurrent(operation))
+                return;
             if (result != null)
             {
-                SelectedClip.Bpm = result.Bpm;
-                SelectedClip.BeatCount = result.BeatCount;
-                SelectedClip.Key = result.Key ?? "";
-                SelectedClip.IsAnalyzed = true;
+                clip.Bpm = result.Bpm;
+                clip.BeatCount = result.BeatCount;
+                clip.Key = result.Key ?? "";
+                clip.AnalysisStatus = result.AnalysisStatus;
+                clip.StageErrors = result.StageErrors;
+                clip.IsAnalyzed = result.AnalysisStatus == "completed";
                 Bpm = result.Bpm;
                 BeatCount = result.BeatCount;
                 Key = result.Key ?? "";
-                StatusText = $"Analyse fertig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
+                StatusText = result.AnalysisStatus == "partial"
+                    ? $"Analyse partiell: {FormatStageErrors(result.StageErrors)}"
+                    : $"Analyse vollständig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
             }
             else
@@ -403,11 +496,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Analysefehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Analysefehler: {ex.Message}";
         }
         finally
         {
-            IsAnalyzing = false;
+            if (_projectService.IsCurrent(operation))
+                IsAnalyzing = false;
         }
     }
 
@@ -420,12 +515,19 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var operation = _projectService.CaptureOperationContext();
+        var clip = SelectedClip;
         IsSeparating = true;
         StatusText = $"Stem-Separation läuft: {SelectedClip.Name}...";
 
         try
         {
-            var result = await _api.SeparateStemsAsync(SelectedClip.Id, "htdemucs.yaml");
+            var result = await _api.SeparateStemsAsync(
+                clip.Id,
+                "htdemucs.yaml",
+                operation.CancellationToken);
+            if (!_projectService.IsCurrent(operation))
+                return;
 
             if (result != null)
             {
@@ -437,7 +539,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 if (!string.IsNullOrEmpty(result.DrumsPath)) stems["drums"] = result.DrumsPath!;
                 if (!string.IsNullOrEmpty(result.BassPath)) stems["bass"] = result.BassPath!;
                 if (!string.IsNullOrEmpty(result.OtherPath)) stems["other"] = result.OtherPath!;
-                if (stems.Count > 0) SelectedClip.StemsPaths = stems;
+                if (stems.Count > 0) clip.StemsPaths = stems;
                 StatusText = $"Stems getrennt: {result.ModelUsed}";
             }
             else
@@ -447,11 +549,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Stem-Fehler: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Stem-Fehler: {ex.Message}";
         }
         finally
         {
-            IsSeparating = false;
+            if (_projectService.IsCurrent(operation))
+                IsSeparating = false;
         }
     }
 
@@ -491,6 +595,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void ResetProjectState()
     {
+        _audioLibraryState.Clear();
         AudioClips.Clear();
         SelectedClip = null;
         StatusText = "Kein Projekt geöffnet";
@@ -503,11 +608,27 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         DurationSeconds = 0;
     }
 
+    private static string FormatStageErrors(Dictionary<string, string>? errors)
+    {
+        if (errors == null || errors.Count == 0)
+            return "unvollständige Chunk-/Stage-Evidenz";
+        return string.Join("; ", errors.Select(pair => $"{pair.Key}: {pair.Value}"));
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        IsAnalyzing = false;
+        IsSeparating = false;
+        AnalysisProgress = 0;
+        CurrentStep = string.Empty;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

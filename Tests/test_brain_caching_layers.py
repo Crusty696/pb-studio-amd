@@ -17,6 +17,8 @@ from pb_studio.brain.loader_cache import (
 from pb_studio.brain.cross_modal_projector import (
     CrossModalProjector,
     DEFAULT_AUDIO_DIM,
+    DEFAULT_AUDIO_MODEL_NAME,
+    DEFAULT_AUDIO_MODEL_VERSION,
     DEFAULT_VIDEO_DIM,
 )
 
@@ -123,12 +125,10 @@ def test_post_processor_uses_loader_cache(tmp_path: Path, monkeypatch):
             media_hash="abc",
             media_type="audio",
             embedding=emb,
-            model_name="t",
-            model_version="1",
+            model_name=DEFAULT_AUDIO_MODEL_NAME,
+            model_version=DEFAULT_AUDIO_MODEL_VERSION,
         )
 
-        # Bypass importable audio_embedder check by hiding it - the helper
-        # already falls back to _load_first_match if not importable
         clear_default_loader_cache()
         out1 = _load_audio_embedding(cache, "abc")
         assert out1 is not None

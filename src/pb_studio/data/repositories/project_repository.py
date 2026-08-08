@@ -74,6 +74,63 @@ class ProjectRepository:
             logger.error(f"Failed to create project '{name}': {e}", exc_info=True)
             return -1
 
+    @_retry_on_database_lock
+    def create_owned_project(
+        self,
+        name: str,
+        data: Dict,
+        owner_token: str,
+    ) -> int:
+        """Insert a creation-owned project row without swallowing failures."""
+        if not owner_token:
+            raise ValueError("owner_token must not be empty")
+
+        payload = dict(data or {})
+        payload["_creation_owner"] = owner_token
+        with self.db.transaction(immediate=True) as conn:
+            cursor = conn.execute(
+                "INSERT INTO projects (name, json_data) VALUES (?, ?)",
+                (name, json.dumps(payload)),
+            )
+            project_id = int(cursor.lastrowid)
+            payload["db_project_id"] = project_id
+            conn.execute(
+                "UPDATE projects SET json_data = ? WHERE id = ?",
+                (json.dumps(payload), project_id),
+            )
+        logger.info("Created owned Project: %s (ID: %s)", name, project_id)
+        return project_id
+
+    @_retry_on_database_lock
+    def delete_owned_project(self, project_id: int, owner_token: str) -> bool:
+        """Delete only the exact row created under ``owner_token``."""
+        if not owner_token:
+            raise ValueError("owner_token must not be empty")
+
+        with self.db.transaction(immediate=True) as conn:
+            row = conn.execute(
+                "SELECT json_data FROM projects WHERE id = ?",
+                (int(project_id),),
+            ).fetchone()
+            if row is None:
+                return False
+            try:
+                payload = json.loads(row["json_data"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise RuntimeError(
+                    f"Owned project {project_id} has unreadable ownership data"
+                ) from exc
+            if payload.get("_creation_owner") != owner_token:
+                raise RuntimeError(
+                    f"Refusing to delete project {project_id}: ownership mismatch"
+                )
+            conn.execute(
+                "DELETE FROM projects WHERE id = ?",
+                (int(project_id),),
+            )
+        logger.info("Compensated owned Project ID: %s", project_id)
+        return True
+
     def get_all(self) -> List[Dict]:
         """Get all projects ordered by last modified."""
         conn = self.db.get_connection()
@@ -145,7 +202,11 @@ class ProjectRepository:
         
         try:
             with self.db.transaction(immediate=True) as conn:
-                conn.execute(sql, tuple(params))
+                cursor = conn.execute(sql, tuple(params))
+                if cursor.rowcount != 1:
+                    raise LookupError(
+                        f"Projekt {project_id} existiert nicht mehr"
+                    )
                 logger.info(f"Updated Project {project_id}")
                 
         except Exception as e:
@@ -172,4 +233,3 @@ class ProjectRepository:
     def rename_project(self, project_id: int, new_name: str):
         """Rename a project."""
         self.update_project(project_id, name=new_name)
-

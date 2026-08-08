@@ -1,5 +1,14 @@
 # Pacing Engine Integration Guide
 
+> **SUPERSEDED (2026-07-29):** Dieses Dokument beschreibt die historische
+> Prototyp-Integration über `VideoGenerator`, `VectorStore` und direkte
+> Dateipfade. Diese API ist kein aktiver Produktvertrag und die Beispiele sind
+> nicht ausführbar. Verbindlich sind `backend/routers/pacing_router.py`,
+> `src/pb_studio/services/pacing_service.py`,
+> `src/pb_studio/pacing/advanced_pacing_engine.py` sowie
+> `docs/PACING_ENGINE_IMPLEMENTATION.md`. Medien werden über den Projektkatalog
+> adressiert; aktive SigLIP-Vektoren haben 1152 Dimensionen.
+
 ## Overview
 
 The **Pacing Engine** provides intelligent, rhythm-synchronized video editing capabilities for PB Studio. It analyzes audio structure (beats, energy, musical phrases) and generates optimal cut timelines that align with the music.
@@ -20,7 +29,7 @@ src/pb_studio/pacing/
 Configuration dataclass compatible with VideoGenerator:
 
 ```python
-from src.pb_studio.pacing import PacingConfig, SyncMode
+from pb_studio.pacing import PacingConfig, SyncMode
 
 config = PacingConfig(
     pacing=4,                    # 1-5 (slow to fast)
@@ -40,7 +49,7 @@ config = PacingConfig(
 Main engine for timeline generation:
 
 ```python
-from src.pb_studio.pacing import AdvancedPacingEngine
+from pb_studio.pacing import AdvancedPacingEngine
 import librosa
 
 # Initialize engine
@@ -53,7 +62,7 @@ rms = librosa.feature.rms(y=y)[0]
 times = librosa.times_like(rms, sr=sr)
 
 # Get beat analysis from AudioAnalyzer
-from src.pb_studio.audio.analyzer import AudioAnalyzer
+from pb_studio.audio.analyzer import AudioAnalyzer
 analyzer = AudioAnalyzer()
 analysis = analyzer.analyze_file(audio_path)
 
@@ -70,9 +79,9 @@ edl = engine.generate_edit_decision_list()
 Intelligent video clip selection using vector embeddings:
 
 ```python
-from src.pb_studio.pacing import ClipSelector
-from src.pb_studio.pacing.clip_selector import ClipMetadata
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.pacing import ClipSelector
+from pb_studio.pacing.clip_selector import ClipMetadata
+from pb_studio.data.vector_store import VectorStore
 
 # Initialize with vector store
 vector_store = VectorStore()
@@ -87,7 +96,7 @@ clip = ClipMetadata(
     motion_score=0.8,
     energy_score=0.7,
     tags=["action", "outdoor"],
-    embedding=video_embedding  # 768-dim numpy array
+    embedding=video_embedding  # historisch; aktiv: 1152-dim SigLIP
 )
 selector.add_clip(clip)
 
@@ -114,7 +123,7 @@ best_clips = selector.select_hybrid(
 Replace the `_plan_cuts` method in `video/engine.py`:
 
 ```python
-from src.pb_studio.pacing import AdvancedPacingEngine, PacingConfig
+from pb_studio.pacing import AdvancedPacingEngine, PacingConfig
 
 class VideoGenerator:
     def generate(self, config: dict, callback=None):
@@ -288,9 +297,9 @@ config = PacingConfig(pacing=1, precision=3, energy_react=4, chaos=1)
 Generate embeddings for all source videos:
 
 ```python
-from src.pb_studio.ai.moondream import MoondreamVision
+from pb_studio.ai import SigLIPWrapper
 
-vision = MoondreamVision()
+vision = SigLIPWrapper(lazy_load=False)
 selector = ClipSelector(vector_store)
 
 for video_path in source_videos:
@@ -299,6 +308,8 @@ for video_path in source_videos:
 
     # Get embedding
     embedding = vision.encode_image(frame)
+    if embedding is None:
+        raise RuntimeError("SigLIP semantic embedding unavailable")
 
     # Calculate motion/energy
     motion_score = calculate_optical_flow(video_path)
@@ -381,4 +392,5 @@ Planned features:
 
 ## API Reference
 
-Full API documentation: [docs/api/pacing.md](api/pacing.md)
+Current module documentation:
+[Pacing Engine Implementation](PACING_ENGINE_IMPLEMENTATION.md)

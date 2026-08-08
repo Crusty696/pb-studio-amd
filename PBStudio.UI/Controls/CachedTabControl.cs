@@ -38,6 +38,7 @@ public class CachedTabControl : TabControl
 
     public override void OnApplyTemplate()
     {
+        var previousItemsHolderPanel = _itemsHolderPanel;
         base.OnApplyTemplate();
 
         // Erstelle unser internes Grid das alle Contents hält
@@ -57,6 +58,22 @@ public class CachedTabControl : TabControl
         {
             // Fallback: bekanntes Content-Panel im Template
             panel.Children.Add(_itemsHolderPanel);
+        }
+
+        if (previousItemsHolderPanel != null)
+        {
+            foreach (var presenter in _cachedPresenters.Values)
+            {
+                if (previousItemsHolderPanel.Children.Contains(presenter))
+                {
+                    previousItemsHolderPanel.Children.Remove(presenter);
+                }
+
+                if (!_itemsHolderPanel.Children.Contains(presenter))
+                {
+                    _itemsHolderPanel.Children.Add(presenter);
+                }
+            }
         }
 
         // Initialisiere vorhandene Tabs

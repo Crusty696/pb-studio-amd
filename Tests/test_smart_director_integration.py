@@ -236,6 +236,7 @@ class TestGenerationServiceRouting:
 
         # Worker should be started
         mock_pool.return_value.start.assert_called_once()
+        mock_engine.return_value.reset_cancel.assert_called_once_with()
 
     @patch("pb_studio.services.generation_service.Worker")
     @patch("pb_studio.services.generation_service.VideoGenerator")
@@ -259,6 +260,7 @@ class TestGenerationServiceRouting:
 
         # Worker should still be started (in background thread)
         mock_pool.return_value.start.assert_called_once()
+        mock_engine.return_value.reset_cancel.assert_called_once_with()
 
     @patch("pb_studio.services.generation_service.VideoGenerator")
     @patch("pb_studio.services.generation_service.ThreadPoolManager")
@@ -298,8 +300,8 @@ class TestGenerateFromTimeline:
     @patch("pb_studio.video.engine.get_encoder_info")
     @patch("pb_studio.video.engine.check_amf_available")
     def test_generate_from_timeline_renders_all_clips(self, mock_amf, mock_info):
-        mock_info.return_value = {"amf_available": False}
-        mock_amf.return_value = False
+        mock_info.return_value = {"amf_available": True}
+        mock_amf.return_value = True
 
         from pb_studio.video.engine import VideoGenerator
 
@@ -321,7 +323,7 @@ class TestGenerateFromTimeline:
         config = {
             "master_audio": "track.mp3",
             "output_path": "out.mp4",
-            "use_hardware_encoding": False,
+            "use_hardware_encoding": True,
         }
 
         progress_calls = []
@@ -379,3 +381,24 @@ class TestGenerateFromTimeline:
              patch.object(gen, "_concat_segments"):
             result = gen.generate_from_timeline(config, timeline)
             assert result.get("cancelled") is True
+
+    @patch("pb_studio.video.engine.get_encoder_info")
+    @patch("pb_studio.video.engine.check_amf_available")
+    def test_basic_generate_respects_pre_set_cancel(self, mock_amf, mock_info):
+        mock_info.return_value = {"amf_available": True}
+        mock_amf.return_value = True
+
+        from pb_studio.video.engine import VideoGenerator
+
+        gen = VideoGenerator()
+        gen.cancel()
+
+        result = gen.generate(
+            {
+                "master_audio": "missing.mp3",
+                "source_videos": ["missing.mp4"],
+                "output_path": "out.mp4",
+            }
+        )
+
+        assert result.get("cancelled") is True

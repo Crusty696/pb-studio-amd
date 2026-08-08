@@ -40,6 +40,8 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _lmStudioAvailable;
     [ObservableProperty] private string _activeProvider = "unbekannt";
     [ObservableProperty] private string _providerBadge = "OFFLINE";
+    [ObservableProperty] private string _providerStatusText = "Noch nicht verifiziert";
+    [ObservableProperty] private string _discoverActionsText = "Katalog nicht verifiziert";
     [ObservableProperty] private DateTime? _lastFetchedAt;
 
     public ObservableCollection<InstalledModelCardViewModel> InstalledModels { get; } = new();
@@ -68,23 +70,21 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
 
-        _loadCts?.Cancel();
-        _loadCts = new CancellationTokenSource();
-        var token = _loadCts.Token;
+        var previous = _loadCts;
+        var current = new CancellationTokenSource();
+        _loadCts = current;
+        previous?.Cancel();
+        var token = current.Token;
 
         IsLoading = true;
         ErrorText = null;
         try
         {
-            // Parallel installiert + verfuegbar laden — spart ~50% Wartezeit.
-            var installedTask = _api.GetInstalledModelsAsync(token);
-            var availableTask = _api.GetAvailableModelsAsync(token);
-            await Task.WhenAll(installedTask, availableTask).ConfigureAwait(true);
-
+            // /models/list invalidiert genau einmal; /available liest danach
+            // dieselbe Inventargeneration ohne parallelen Provider-Sturm.
+            var installed = await _api.GetInstalledModelsAsync(token).ConfigureAwait(true);
             if (token.IsCancellationRequested) return;
-
-            var installed = await installedTask.ConfigureAwait(true);
-            var available = await availableTask.ConfigureAwait(true);
+            var available = await _api.GetAvailableModelsAsync(token).ConfigureAwait(true);
 
             ApplyInstalled(installed);
             ApplyAvailable(available);
@@ -93,18 +93,21 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             LmStudioAvailable = (installed?.LmstudioAvailable ?? false) || (available?.LmstudioAvailable ?? false);
             BaseUrl = installed?.BaseUrl ?? available?.BaseUrl ?? "";
             LastFetchedAt = DateTime.Now;
+            var providerStates = installed?.Providers ?? new List<ProviderStatusEntry>();
+            ProviderStatusText = providerStates.Count > 0
+                ? string.Join(" · ", providerStates.Select(p =>
+                    $"{ProviderLabel(p.Provider)}: {p.Status.ToUpperInvariant()}" +
+                    (string.IsNullOrWhiteSpace(p.StatusReason) ? "" : $" ({p.StatusReason})")))
+                : "Providerstatus nicht verifiziert";
+            DiscoverActionsText = available?.DiscoverActions is { Count: > 0 }
+                ? string.Join(" · ", available.DiscoverActions.Select(action =>
+                    $"{action.Label}: {CatalogLabel(action.CatalogStatus)}"))
+                : "Keine live verifizierte Discover-Aktion";
 
-            // W-QA-2 (2026-05-22): Provider-Status-Badge fuer User-Sichtbarkeit.
-            // base_url verraet welcher Provider live aktiv ist (1234 = LM Studio, 11434 = Ollama).
-            if (LmStudioAvailable && BaseUrl.Contains("1234"))
+            if (LmStudioAvailable && OllamaAvailable)
             {
-                ActiveProvider = "LM Studio";
-                ProviderBadge = "LM STUDIO";
-            }
-            else if (OllamaAvailable && BaseUrl.Contains("11434"))
-            {
-                ActiveProvider = "Ollama";
-                ProviderBadge = "OLLAMA";
+                ActiveProvider = "Hybrid";
+                ProviderBadge = "HYBRID";
             }
             else if (LmStudioAvailable)
             {
@@ -144,15 +147,37 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (ReferenceEquals(_loadCts, current))
+            {
+                _loadCts = null;
+                if (!_disposed)
+                    IsLoading = false;
+            }
+            current.Dispose();
         }
     }
+
+    private static string ProviderLabel(string provider) =>
+        provider.Equals("lmstudio", StringComparison.OrdinalIgnoreCase)
+            ? "LM Studio"
+            : provider.Equals("ollama", StringComparison.OrdinalIgnoreCase)
+                ? "Ollama"
+                : provider;
+
+    private static string CatalogLabel(string status) =>
+        status.Equals("discover_only", StringComparison.OrdinalIgnoreCase)
+            ? "allgemeine Suche"
+            : status.Equals("verified", StringComparison.OrdinalIgnoreCase)
+                ? "live verifiziert"
+                : "nicht verifiziert";
 
     private void ApplyInstalled(ModelListResponse? resp)
     {
         InstalledModels.Clear();
         if (resp?.Models is null) return;
-        foreach (var entry in resp.Models.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var entry in resp.Models
+            .OrderBy(m => m.Provider, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
             InstalledModels.Add(new InstalledModelCardViewModel(entry, this));
     }
 
@@ -173,29 +198,33 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Wird von einer InstalledModelCard aufgerufen.
-    /// LM Studio Refactor 2026-05-17: Backend antwortet 501 — wir zeigen
-    /// den User-tauglichen Hinweis an statt einer Fehlermeldung.</summary>
+    /// <summary>Wird von einer providergebundenen InstalledModelCard aufgerufen.</summary>
     internal async Task DeleteInstalledAsync(InstalledModelCardViewModel card)
     {
+        if (!card.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                $"Bitte oeffne LM Studio -> My Models und entferne '{card.Name}' dort.",
+                "LM-Studio-Modell verwalten",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
         var info = MessageBox.Show(
-            $"Modelle koennen nicht mehr ueber PB Studio geloescht werden.\n\n" +
-            $"Bitte oeffne LM Studio -> My Models und entferne '{card.Name}' dort.\n\n" +
-            $"LM Studio jetzt oeffnen?",
-            "Modell-Verwaltung",
+            $"Ollama-Modell '{card.Name}' wirklich loeschen?",
+            "Ollama-Modell loeschen",
             MessageBoxButton.YesNo,
-            MessageBoxImage.Information);
+            MessageBoxImage.Warning);
         if (info != MessageBoxResult.Yes) return;
 
         card.IsBusy = true;
         try
         {
-            await _api.DeleteModelAsync(card.Name).ConfigureAwait(true);
-            StatusText = $"Bitte LM Studio fuer '{card.Name}' verwenden.";
-        }
-        catch (NotSupportedException ex)
-        {
-            StatusText = ex.Message;
+            var deleted = await _api.DeleteModelAsync(card.Name).ConfigureAwait(true);
+            StatusText = deleted
+                ? $"Ollama-Modell '{card.Name}' geloescht."
+                : $"Ollama-Modell '{card.Name}' konnte nicht geloescht werden.";
         }
         catch (Exception ex)
         {
@@ -208,9 +237,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         await LoadAsync().ConfigureAwait(true);
     }
 
-    /// <summary>Wird von einer AvailableModelCard aufgerufen.
-    /// LM Studio Refactor 2026-05-17: Downloads werden nicht mehr unterstuetzt;
-    /// stattdessen erscheint ein Hinweis-Dialog, der zum LM-Studio Discover-Tab leitet.</summary>
+    /// <summary>Wird von einer providergebundenen AvailableModelCard aufgerufen.</summary>
     internal async Task DownloadAvailableAsync(AvailableModelCardViewModel card)
     {
         if (card.Installed)
@@ -220,31 +247,42 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!card.Provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                $"Bitte lade '{card.Name}' im Discover-Tab von LM Studio herunter.",
+                "LM-Studio-Modell herunterladen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
         MessageBox.Show(
-            $"Modell-Downloads laufen jetzt ueber LM Studio.\n\n" +
-            $"Bitte oeffne LM Studio -> Discover-Tab und lade '{card.Name}' dort herunter.\n\n" +
-            $"Nach dem Download ist das Modell sofort in PB Studio verfuegbar (LM Studio Server muss laufen).",
-            "Modell-Download",
+            $"Das live verifizierte Ollama-Modell '{card.Name}' wird jetzt heruntergeladen.",
+            "Ollama-Modell herunterladen",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
 
-        // Optional: Backend trotzdem anrufen — antwortet 501, was wir im ApiClient
-        // in NotSupportedException ueberfuehren. Reines Logging.
         card.IsBusy = true;
         try
         {
-            await foreach (var _ in _api.PullModelAsync(card.Name).WithCancellation(default).ConfigureAwait(true))
+            var receivedEvent = false;
+            await foreach (var progress in _api.PullModelAsync(card.Name)
+                .WithCancellation(default)
+                .ConfigureAwait(true))
             {
-                // nichts — wir erwarten ohnehin keine Events mehr
+                receivedEvent = true;
+                if (!string.IsNullOrWhiteSpace(progress.Error))
+                    throw new InvalidOperationException(progress.Error);
+                StatusText = $"Ollama-Download '{card.Name}': {progress.Status ?? "laeuft"}";
             }
+            if (!receivedEvent)
+                throw new InvalidOperationException("Backend lieferte keinen Downloadstatus.");
+            StatusText = $"Ollama-Modell '{card.Name}' heruntergeladen.";
         }
-        catch (NotSupportedException)
+        catch (Exception ex)
         {
-            // erwarteter Pfad — der Hinweis war oben.
-        }
-        catch
-        {
-            // egal — User hat schon den Hinweis bekommen
+            ErrorText = $"Download fehlgeschlagen fuer '{card.Name}': {ex.Message}";
         }
         finally
         {
@@ -260,7 +298,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         card.IsBusy = true;
         try
         {
-            var success = await _api.ActivateModelAsync(card.Name).ConfigureAwait(true);
+            var success = await _api.ActivateModelAsync(card.Name, card.Provider).ConfigureAwait(true);
             if (success)
             {
                 StatusText = $"Modell '{card.Name}' erfolgreich aktiviert.";
@@ -291,7 +329,14 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         card.TestStatusColor = "#CCCCCC";
         try
         {
-            var resp = await _api.TestModelAsync(card.Name).ConfigureAwait(true);
+            var resp = await _api.TestModelAsync(card.Name, card.Provider).ConfigureAwait(true);
+            // Audit 2026-08-05 (H-2/T3.10): Der Auswahl-Beleg wird jetzt vom
+            // Backend mitgeliefert und angezeigt — vorher landete er nur im
+            // backend.log, das bis zu diesem Audit nicht einmal ein Datum im
+            // Zeitstempel hatte. Gilt auch im Fehlerfall: gerade dann ist
+            // interessant, welches Modell mit welchen Capabilities gewaehlt wurde.
+            card.SelectionReceiptText = FormatSelectionReceipt(resp?.SelectionReceipt);
+
             if (resp != null && resp.Success)
             {
                 card.TestStatus = $"Erfolgreich ({resp.LatencyMs:F0} ms)";
@@ -313,6 +358,29 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         {
             card.IsTesting = false;
         }
+    }
+
+    /// <summary>
+    /// Formatiert den Auswahl-Beleg fuer die Anzeige auf der Modell-Karte.
+    /// Leerer String, wenn kein Receipt geliefert wurde — dann bleibt der
+    /// Bereich in der UI ausgeblendet statt eine Leerzeile zu zeigen.
+    /// </summary>
+    private static string FormatSelectionReceipt(ModelSelectionReceipt? receipt)
+    {
+        if (receipt is null || string.IsNullOrWhiteSpace(receipt.ModelId))
+            return string.Empty;
+
+        var verified = receipt.VerifiedCapabilities is { Count: > 0 }
+            ? string.Join("+", receipt.VerifiedCapabilities)
+            : "keine";
+        var required = receipt.RequiredCapabilities is { Count: > 0 }
+            ? string.Join("+", receipt.RequiredCapabilities)
+            : "keine";
+
+        return $"Gewaehlt: {receipt.ModelId} ({receipt.Provider}) · "
+               + $"Task {receipt.Task}/{receipt.Mode} · "
+               + $"benoetigt {required}, verifiziert {verified} · "
+               + $"Quelle {receipt.Source}";
     }
 
     private async Task StreamPullAsync(string name, DownloadProgressViewModel vm, CancellationToken ct)
@@ -368,7 +436,20 @@ public partial class InstalledModelCardViewModel : ObservableObject
     public string ModifiedDisplay { get; }
     public string ParameterSize { get; }
     public string Quantization { get; }
-    
+
+    /// <summary>
+    /// Kontextfenster in Tokens, formatiert. Audit 2026-08-05 (H-3): LM Studio
+    /// liefert diese Zahl, sie wurde aber auf drei Schichten hintereinander
+    /// verworfen. Der Chat-Agent verweist im Fehlerfall selbst darauf
+    /// ("Verlauf kuerzen oder groesseres Kontextfenster waehlen") — der User
+    /// konnte den Rat nicht befolgen, weil die Zahl nirgends stand.
+    /// </summary>
+    public string ContextWindowDisplay { get; }
+
+    /// <summary>Architektur laut LM Studio (z.B. "qwen35", "granitehybrid").</summary>
+    public string ArchitectureDisplay { get; }
+
+
     [ObservableProperty] private string _description = "—";
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private string _activeTasksText = "—";
@@ -379,7 +460,18 @@ public partial class InstalledModelCardViewModel : ObservableObject
     [ObservableProperty] private bool _isTesting;
     [ObservableProperty] private string _provider = "lmstudio";
     [ObservableProperty] private string _providerBadgeText = "LM STUDIO";
+    [ObservableProperty] private string _stateText = "NICHT VERIFIZIERT";
+    [ObservableProperty] private string _statusReason = "";
+
+    /// <summary>
+    /// Auswahl-Beleg des letzten Smoke-Tests (Audit 2026-08-05, H-2). Leer,
+    /// solange kein Test gelaufen ist — die Anzeige bleibt dann ausgeblendet.
+    /// </summary>
+    [ObservableProperty] private string _selectionReceiptText = "";
     public bool Vision { get; }
+    public bool Loaded { get; }
+    public bool Usable { get; }
+    public string StateColor { get; }
 
     [ObservableProperty] private bool _isBusy;
 
@@ -391,20 +483,42 @@ public partial class InstalledModelCardViewModel : ObservableObject
         ParameterSize = entry.ParameterSize ?? "—";
         Quantization = entry.QuantizationLevel ?? "—";
         ModifiedDisplay = FormatTimestamp(entry.ModifiedAt);
-        
+        ContextWindowDisplay = entry.ContextLength is > 0
+            ? $"{entry.ContextLength.Value:N0} Tokens"
+            : "—";
+        ArchitectureDisplay = string.IsNullOrWhiteSpace(entry.Architecture)
+            ? "—"
+            : entry.Architecture;
+
+
         Description = entry.Description ?? "—";
         IsActive = entry.IsActive;
         Vision = entry.Vision;
-        CapabilitiesText = entry.Vision ? "Vision & Text" : "Text (Chat)";
+        var capabilities = entry.Capabilities ?? new List<string>();
+        CapabilitiesText = capabilities.Count > 0
+            ? string.Join(" + ", capabilities.Select(c => c.ToUpperInvariant()))
+            : "Keine Capability verifiziert";
         ActiveTasksText = entry.ActiveTasks != null && entry.ActiveTasks.Count > 0 
             ? string.Join(", ", entry.ActiveTasks) 
             : "Keine";
         HasActiveTasks = entry.IsActive;
         Provider = entry.Provider;
+        Loaded = entry.Loaded;
+        Usable = entry.Usable;
+        StateText = entry.Loaded
+            ? "GELADEN"
+            : entry.Usable
+                ? "ON-DEMAND"
+                : "NICHT NUTZBAR";
+        StateColor = entry.Loaded
+            ? "#00FF66"
+            : entry.Usable
+                ? "#FF8C00"
+                : "#FF4444";
+        StatusReason = entry.StatusReason;
         ProviderBadgeText = entry.Provider switch
         {
             "ollama" => "OLLAMA",
-            "both" => "BEIDE",
             _ => "LM STUDIO"
         };
     }
@@ -438,6 +552,9 @@ public partial class AvailableModelCardViewModel : ObservableObject
     public string SuggestedMode { get; }
     public double SizeEstimateGb { get; }
     public bool Installed { get; }
+    public string Provider { get; }
+    public string StatusReason { get; }
+    public bool Downloadable { get; }
 
     [ObservableProperty] private bool _isBusy;
 
@@ -449,11 +566,29 @@ public partial class AvailableModelCardViewModel : ObservableObject
         SuggestedMode = entry.SuggestedMode;
         SizeEstimateGb = entry.SizeEstimateGb;
         Installed = entry.Installed;
+        Provider = entry.Provider;
+        StatusReason = entry.StatusReason;
+        Downloadable = entry.Downloadable;
     }
 
     public string SizeDisplay => $"~{SizeEstimateGb:F1} GB";
     public string ModeBadge => SuggestedMode?.ToUpperInvariant() ?? "—";
-    public bool CanDownload => !Installed && !IsBusy;
+    public string ProviderLabel => Provider.Equals(
+        "ollama",
+        StringComparison.OrdinalIgnoreCase)
+        ? "OLLAMA"
+        : "LM STUDIO";
+    public string DownloadActionText => Provider.Equals(
+        "ollama",
+        StringComparison.OrdinalIgnoreCase)
+        ? "Mit Ollama laden"
+        : "In LM Studio";
+    public string DownloadToolTip => Provider.Equals(
+        "ollama",
+        StringComparison.OrdinalIgnoreCase)
+        ? "Live verifiziertes Modell über die lokale Ollama-API herunterladen."
+        : "Modell im Discover-Tab von LM Studio herunterladen.";
+    public bool CanDownload => Downloadable && !Installed && !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanDownload))]
     private Task DownloadAsync() => _parent.DownloadAvailableAsync(this);

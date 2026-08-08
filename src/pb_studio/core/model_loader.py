@@ -27,6 +27,11 @@ from pb_studio.core.vram_budget_manager import (
     KNOWN_MODEL_BUDGETS,
     get_vram_manager
 )
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -181,16 +186,13 @@ class ModelLoader:
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create DirectML-compatible session options."""
-        opts = ort.SessionOptions()
+        opts = configure_directml_session_options(ort.SessionOptions())
 
         # KRITISCH: Beide Memory-Flags MÜSSEN für DirectML deaktiviert sein.
         # enable_mem_pattern=False: Pflicht für DmlExecutionProvider (Graph-Speicher
         #   wird dynamisch, nicht vorab alloziert — DirectML erfordert das).
         # enable_cpu_mem_arena=False: CPU-Arena konkurriert mit DirectML-Allocator
         #   und führt zu Instabilität / OOM. R16/IRON-RULE fix (war True — falsch).
-        opts.enable_mem_pattern = False
-        opts.enable_cpu_mem_arena = False
-
         # Optimierungen
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         opts.intra_op_num_threads = 0  # Auto
@@ -199,17 +201,28 @@ class ModelLoader:
         return opts
 
     def _get_providers(self) -> list:
-        """Get execution providers with DirectML priority."""
+        """Return the mandatory DirectML execution provider."""
         available = ort.get_available_providers()
-        providers = []
+        if "DmlExecutionProvider" not in available:
+            raise RuntimeError(
+                "DmlExecutionProvider is unavailable; CPU ONNX fallback is disabled"
+            )
 
-        if "DmlExecutionProvider" in available:
-            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-            providers.append(("DmlExecutionProvider", {"device_id": device_id}))
+        return [get_directml_provider()]
 
-        providers.append("CPUExecutionProvider")
-
-        return providers
+    @staticmethod
+    def _create_onnx_session(
+        model_path: Path,
+        options: ort.SessionOptions,
+        providers: list,
+    ) -> ort.InferenceSession:
+        return enforce_directml_session(
+            ort.InferenceSession(
+                str(model_path),
+                options,
+                providers=providers,
+            )
+        )
 
     def can_load(self, model_id: str) -> bool:
         """
@@ -309,8 +322,14 @@ class ModelLoader:
                     self.vram_manager.cancel_reservation(model_id)
                     return None
 
-                # Commit VRAM
-                self.vram_manager.commit(model_id)
+                # Publish the session only after the reservation was committed.
+                if not self.vram_manager.commit(model_id):
+                    logger.error(f"VRAM commit failed after loading {spec.name}")
+                    session = None
+                    import gc
+                    gc.collect()
+                    self.vram_manager.cancel_reservation(model_id)
+                    return None
                 self._sessions[model_id] = session
 
                 logger.info(f"Loaded model: {spec.name} (Provider: {self._get_active_provider(session)})")
@@ -332,11 +351,7 @@ class ModelLoader:
         opts = self._create_session_options()
         providers = self._get_providers()
 
-        return ort.InferenceSession(
-            str(model_path),
-            opts,
-            providers=providers
-        )
+        return self._create_onnx_session(model_path, opts, providers)
 
     def _load_onnx_split(self, spec: ModelSpec) -> Optional[Dict[str, ort.InferenceSession]]:
         """Load a split encoder/decoder model."""
@@ -347,7 +362,11 @@ class ModelLoader:
             providers = self._get_providers()
 
             return {
-                "combined": ort.InferenceSession(str(combined_path), opts, providers=providers),
+                "combined": self._create_onnx_session(
+                    combined_path,
+                    opts,
+                    providers,
+                ),
                 "is_combined": True
             }
 
@@ -363,8 +382,16 @@ class ModelLoader:
         providers = self._get_providers()
 
         return {
-            "encoder": ort.InferenceSession(str(encoder_path), opts, providers=providers),
-            "decoder": ort.InferenceSession(str(decoder_path), opts, providers=providers),
+            "encoder": self._create_onnx_session(
+                encoder_path,
+                opts,
+                providers,
+            ),
+            "decoder": self._create_onnx_session(
+                decoder_path,
+                opts,
+                providers,
+            ),
             "is_combined": False
         }
 
@@ -409,8 +436,10 @@ class ModelLoader:
         import gc
         gc.collect()
 
-        # Update VRAM budget after memory is actually released
-        self.vram_manager.release(model_id)
+        # Update VRAM budget after memory is actually released.
+        if not self.vram_manager.release(model_id):
+            logger.error(f"VRAM release confirmation failed for model: {model_id}")
+            return False
 
         logger.info(f"Unloaded model: {model_id}")
         return True
@@ -449,22 +478,31 @@ class ModelLoader:
                 "vram_stats": self.vram_manager.get_stats()
             }
 
-    def unload_all(self):
-        """Unload all models."""
+    def unload_all(self) -> bool:
+        """Unload all models and confirm every budget release."""
+        unloaded_ids = []
         with self._session_lock:
             for model_id in list(self._sessions.keys()):
-                # _do_unload acquires lock, but we already hold it — need to call inner logic
                 if model_id in self._sessions:
                     session = self._sessions.pop(model_id)
                     if isinstance(session, dict):
                         for key in list(session.keys()):
                             session[key] = None
                     session = None
-                    self.vram_manager.release(model_id)
+                    unloaded_ids.append(model_id)
 
         import gc
         gc.collect()
-        logger.info("All models unloaded")
+
+        released_all = True
+        for model_id in unloaded_ids:
+            if not self.vram_manager.release(model_id):
+                released_all = False
+                logger.error(f"VRAM release confirmation failed for model: {model_id}")
+
+        if released_all:
+            logger.info("All models unloaded")
+        return released_all
 
 
 # =========================================================================

@@ -21,6 +21,10 @@ from pb_studio.core.model_loader import (
     get_model_loader,
     MODEL_SPECS,
 )
+from pb_studio.core.directml_adapter import (
+    DirectMLAdapterError,
+    enforce_directml_session,
+)
 from pb_studio.core.vram_budget_manager import ModelPriority
 
 
@@ -133,6 +137,91 @@ def test_unload_all_clears_sessions(loader):
 
 def test_can_load_unknown_model_returns_false(loader):
     assert loader.can_load("nonexistent_model_xyz") is False
+
+
+# ---------- DirectML contract ----------
+
+def test_session_options_disable_both_directml_memory_optimizations(loader):
+    options = loader._create_session_options()
+
+    assert options.enable_mem_pattern is False
+    assert options.enable_cpu_mem_arena is False
+
+
+def test_get_providers_is_directml_only(loader):
+    from pb_studio.core.directml_adapter import get_directml_provider
+
+    with patch(
+        "pb_studio.core.model_loader.ort.get_available_providers",
+        return_value=["DmlExecutionProvider", "CPUExecutionProvider"],
+    ):
+        providers = loader._get_providers()
+
+    assert providers == [get_directml_provider()]
+    assert providers[0][0] == "DmlExecutionProvider"
+
+
+def test_get_providers_fails_when_directml_is_unavailable(loader):
+    with patch(
+        "pb_studio.core.model_loader.ort.get_available_providers",
+        return_value=["CPUExecutionProvider"],
+    ):
+        with pytest.raises(RuntimeError, match="DmlExecutionProvider"):
+            loader._get_providers()
+
+
+class _SessionOptionsContract:
+    enable_mem_pattern = False
+    enable_cpu_mem_arena = False
+
+    def __init__(self, cpu_fallback: str = "1"):
+        self.cpu_fallback = cpu_fallback
+
+    def get_session_config_entry(self, key):
+        assert key == "session.disable_cpu_ep_fallback"
+        return self.cpu_fallback
+
+
+class _DirectMLSessionContract:
+    def __init__(self, providers, options=None):
+        self.providers = providers
+        self.options = options or _SessionOptionsContract()
+        self.fallback_disabled = False
+
+    def get_session_options(self):
+        return self.options
+
+    def disable_fallback(self):
+        self.fallback_disabled = True
+
+    def get_providers(self):
+        return self.providers
+
+
+def test_enforcer_accepts_ort_implicit_cpu_registration_when_fallback_is_disabled():
+    session = _DirectMLSessionContract(
+        ["DmlExecutionProvider", "CPUExecutionProvider"]
+    )
+
+    assert enforce_directml_session(session) is session
+    assert session.fallback_disabled is True
+
+
+def test_enforcer_rejects_session_without_directml_priority():
+    session = _DirectMLSessionContract(["CPUExecutionProvider"])
+
+    with pytest.raises(DirectMLAdapterError, match="prioritize DirectML"):
+        enforce_directml_session(session)
+
+
+def test_enforcer_rejects_session_without_cpu_ep_fallback_guard():
+    session = _DirectMLSessionContract(
+        ["DmlExecutionProvider", "CPUExecutionProvider"],
+        options=_SessionOptionsContract(cpu_fallback="0"),
+    )
+
+    with pytest.raises(DirectMLAdapterError, match="CPU EP fallback"):
+        enforce_directml_session(session)
 
 
 # ---------- Singleton ----------

@@ -50,6 +50,8 @@ ENERGY_PHASE_MULTIPLIERS = {
     "plateau": 0.8
 }
 
+STRONG_BEAT_THRESHOLD = 0.75
+
 # =============================================================================
 # Audit E1: Camelot-Wheel Key Compatibility (Tonart-Matching)
 # =============================================================================
@@ -208,6 +210,9 @@ class AdvancedPacingEngine:
         self.audio_analysis: Optional[Dict] = None
         self.energy_curve: Optional[np.ndarray] = None
         self.timeline: List[CutPoint] = []
+        self._cached_audio_path: Optional[str] = None
+        self._cached_y: Optional[np.ndarray] = None
+        self._cached_sr = 22050
         # Audit A3: Optional pre-injected song structure (cached_analysis["structure_segments"]).
         # Wenn gesetzt (Liste von Dicts oder SongSection), überspringt
         # generate_cut_list_with_structure die librosa-Re-Analyse.
@@ -616,24 +621,35 @@ class AdvancedPacingEngine:
 
     def _identify_downbeats(self, beats: List[float]) -> List[float]:
         """
-        Identify downbeats (first beat of each measure).
-
-        Assumes 4/4 time signature.
+        Return only measured downbeats from BeatNet beat-position output.
         """
-        if not beats or len(beats) < 4:
-            return beats
+        if not beats:
+            self._last_downbeat_provenance = {
+                "status": "unavailable",
+                "method": "no_beats",
+                "synthetic": False,
+                "measured_count": 0,
+            }
+            return []
 
-        # Use beat strength from analysis if available
-        beat_data = self.audio_analysis.get("beat_data", [])
-
+        beat_data = (self.audio_analysis or {}).get("beat_data", [])
         if beat_data and all(len(b) >= 2 for b in beat_data[:10]):
-            # BeatNet provides beat position (1, 2, 3, 4)
             downbeats = [b[0] for b in beat_data if len(b) >= 2 and b[1] == 1]
-        else:
-            # Fallback: Assume every 4th beat is a downbeat
-            downbeats = [beats[i] for i in range(0, len(beats), 4)]
+            self._last_downbeat_provenance = {
+                "status": "measured",
+                "method": "beatnet_bar_position",
+                "synthetic": False,
+                "measured_count": len(downbeats),
+            }
+            return downbeats
 
-        return downbeats
+        self._last_downbeat_provenance = {
+            "status": "unavailable",
+            "method": "beat_positions_missing",
+            "synthetic": False,
+            "measured_count": 0,
+        }
+        return []
 
     def _smooth_energy(self, energy: np.ndarray, smoothing: float) -> np.ndarray:
         """Apply moving average smoothing to energy curve."""
@@ -946,6 +962,7 @@ class AdvancedPacingEngine:
                             stems=stems_dict,
                             expected_bpm=expected_bpm,
                             min_cut_interval=min_cut_interval,
+                            song_sections=song_sections,
                             on_progress=on_progress,
                         )
                 except (json.JSONDecodeError, Exception) as e:
@@ -1012,39 +1029,42 @@ class AdvancedPacingEngine:
 
         _emit(5.0, force=True)
 
-        # --- Cache-Check: SessionManager ---
-        cached_audio_data = None
-        onset_times = None
+        # --- Cache-Check: echte pre-cached Audio-Analyse-Daten ---
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-1): dieser Block importierte
+        # frueher `..core.session_manager.get_session_manager` — ein Modul das
+        # nirgends im Repo existiert. Der ImportError wurde von `except Exception:
+        # pass` stillschweigend verschluckt, wodurch Onset/Kick/Snare/HiHat/Energy-
+        # Trigger im normalen (pre-cached) Pacing-Pfad komplett wirkungslos waren.
+        # Jetzt: echte, von `pacing_service._inject_cached_into_engine` injizierte
+        # Werte aus der Audio-Analyse (`/audio/analyze`).
+        onset_times = getattr(self, "_pre_cached_onset_times", None) or []
+        kick_times = getattr(self, "_pre_cached_kick_times", None) or []
+        snare_times = getattr(self, "_pre_cached_snare_times", None) or []
+        hihat_times = getattr(self, "_pre_cached_hihat_times", None) or []
         energy_curve = None
+        if getattr(self, "_pre_cached_energy", None) is not None and len(self._pre_cached_energy) > 0:
+            energy_curve = self._pre_cached_energy
         duration = 0.0
 
-        try:
-            from ..core.session_manager import get_session_manager
-            mgr = get_session_manager()
-            cached_audio_data = (
-                mgr.get_audio_data() if hasattr(mgr, "get_audio_data") else
-                getattr(mgr, "_audio_data", None)
-            )
-            if cached_audio_data:
-                onset_times = cached_audio_data.get("onset_times", [])
-                energy_curve = cached_audio_data.get("energy_curve", [])
-                duration = cached_audio_data.get("duration", 0.0)
-                logger.info(f"SessionManager-Cache: {len(onset_times)} Onsets, {duration:.0f}s")
-        except Exception:
-            pass
-
-        # --- Beats holen (pre-cached > SessionManager-Cache > BeatDetector) ---
+        # --- Beats holen (pre-cached > BeatDetector) ---
         beats: List[float] = []
         downbeats: List[float] = []
 
         # 1. Pre-cached Beats von PacingService (aus /audio/analyze Cache)
         if hasattr(self, "_pre_cached_beats") and self._pre_cached_beats:
             beats = self._pre_cached_beats
+            downbeats = getattr(self, "_pre_cached_downbeats", None) or []
+            self._last_downbeat_provenance = getattr(
+                self,
+                "_pre_cached_downbeat_provenance",
+                {
+                    "status": "unavailable",
+                    "method": "cached_downbeats_missing",
+                    "synthetic": False,
+                    "measured_count": 0,
+                },
+            )
             logger.info(f"Pre-cached Beats: {len(beats)}")
-        elif cached_audio_data and cached_audio_data.get("beat_times"):
-            beats = cached_audio_data["beat_times"]
-            downbeats = cached_audio_data.get("downbeat_times", [])
-            logger.info(f"Cache-Beats: {len(beats)}")
         else:
             try:
                 from ..audio.beat_detector import get_beat_detector
@@ -1080,12 +1100,22 @@ class AdvancedPacingEngine:
                 duration = beats[-1] + 1.0
                 logger.info(f"Dauer aus pre-cached Beats geschätzt: {duration:.1f}s")
 
-        if not has_pre_cached and not (onset_times and energy_curve and duration > 0):
-            if not hasattr(self, "_cached_audio_path"):
-                self._cached_audio_path = None
-                self._cached_y = None
-                self._cached_sr = 22050
+        # Audit-Fix 2026-07-10: Audio nur dann neu laden, wenn fuer eine aktuell
+        # aktive Trigger-Gewichtung (Onset/Kick/Snare/HiHat/Energy) keine
+        # gecachten Kandidaten vorliegen. Vorher wurde bei has_pre_cached=True
+        # (Normalfall) NIE Audio geladen, unabhaengig davon ob Onset/Drum-Cache
+        # ueberhaupt existierte — die entsprechenden Regler wirkten nie.
+        _ts_gate = self.trigger_settings
+        _missing_for_active_weights = (
+            (_ts_gate.onset_weight > 0 and not onset_times)
+            or (_ts_gate.kick_weight > 0 and not kick_times)
+            or (_ts_gate.snare_weight > 0 and not snare_times)
+            or (_ts_gate.hihat_weight > 0 and not hihat_times)
+            or (_ts_gate.energy_weight > 0 and energy_curve is None)
+        )
+        _no_cache_at_all = not (onset_times and energy_curve is not None and duration > 0)
 
+        if (not has_pre_cached and _no_cache_at_all) or _missing_for_active_weights:
             if self._cached_audio_path != audio_path or self._cached_y is None:
                 if self._cached_y is not None:
                     del self._cached_y
@@ -1101,10 +1131,8 @@ class AdvancedPacingEngine:
 
         # --- BPM schätzen ---
         if expected_bpm is None:
-            if cached_audio_data and cached_audio_data.get("bpm"):
-                bpm = float(cached_audio_data["bpm"])
             # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
-            elif hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
+            if hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
                 bpm = float(self._pre_cached_bpm)
                 logger.info(f"BPM aus gecachter Audio-Analyse: {bpm:.1f}")
             elif len(beats) >= 2:
@@ -1132,12 +1160,21 @@ class AdvancedPacingEngine:
         if not triggers or (triggers[0].time > 0.5):
             triggers.insert(0, PacingCut(time=0.0, trigger_type="start", strength=0.8))
 
-        if onset_times and energy_curve:
-            triggers.extend(
-                self._build_triggers_from_cache(onset_times, energy_curve, bpm)
-            )
-        elif y is not None:
+        # Audit-Fix 2026-07-10: wenn Audio geladen wurde (weil fuer eine aktive
+        # Gewichtung kein Cache existierte), IMMER die vollstaendige Live-
+        # Extraktion nutzen — verhindert doppelte/inkonsistente Trigger aus
+        # Cache+Audio gleichzeitig. Nur wenn y NICHT geladen wurde (Cache war
+        # fuer alle aktiven Gewichtungen ausreichend), den Cache-Pfad nutzen.
+        if y is not None:
             triggers.extend(self._extract_other_triggers(y, sr, bpm))
+        elif onset_times or energy_curve is not None or kick_times or snare_times or hihat_times:
+            triggers.extend(
+                self._build_triggers_from_cache(
+                    onset_times, energy_curve, bpm,
+                    kick_times=kick_times, snare_times=snare_times,
+                    hihat_times=hihat_times, duration=duration,
+                )
+            )
 
         # Audit L-M7: Trigger-Pool steht -> ca. 60%
         _emit(60.0, force=True)
@@ -1345,11 +1382,40 @@ class AdvancedPacingEngine:
                     best_dist = d
                     best_idx = i
             if best_idx >= 0:
-                snapped[best_idx].time = float(t)
+                cut = snapped[best_idx]
+                source_time = float(cut.time)
+                source_type = cut.trigger_type
+                source_strength = float(cut.strength)
+                cut.time = float(t)
+                cut.trigger_type = "subtrack"
+                cut.strength = 1.0
+                cut.provenance = {
+                    "classification": "derived",
+                    "operation": "endpoint_snap",
+                    "source_trigger_type": source_type,
+                    "source_time_seconds": source_time,
+                    "source_strength": source_strength,
+                    "target_type": "subtrack_boundary",
+                    "target_time_seconds": float(t),
+                    "snap_distance_seconds": abs(source_time - float(t)),
+                    "alignment_quality": "exact",
+                    "target_quality": "detected_subtrack_boundary",
+                }
             else:
-                snapped.append(PacingCut(time=float(t),
-                                         trigger_type="subtrack",
-                                         strength=1.0))
+                snapped.append(PacingCut(
+                    time=float(t),
+                    trigger_type="subtrack",
+                    strength=1.0,
+                    provenance={
+                        "classification": "derived",
+                        "operation": "boundary_insert",
+                        "target_type": "subtrack_boundary",
+                        "target_time_seconds": float(t),
+                        "snap_distance_seconds": None,
+                        "alignment_quality": "exact",
+                        "target_quality": "detected_subtrack_boundary",
+                    },
+                ))
         snapped.sort(key=lambda x: x.time)
         return snapped
 
@@ -1440,6 +1506,7 @@ class AdvancedPacingEngine:
         stems: Dict[str, str],
         expected_bpm: Optional[float] = None,
         min_cut_interval: float = 0.5,
+        song_sections: Optional[List[Any]] = None,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> List["PacingCut"]:
         """
@@ -1480,12 +1547,19 @@ class AdvancedPacingEngine:
 
         _emit(5.0, force=True)
 
+        normalized_sections = (
+            self._coerce_song_structure(song_sections)
+            if song_sections
+            else None
+        )
+
         # Basis-Cuts aus Original-Audio (größerer min_interval für Basis).
         # Inner progress 0..40 mappen auf 5..40.
         base_cuts = self._generate_cut_list_from_audio(
             audio_path=audio_path,
             expected_bpm=expected_bpm,
             min_cut_interval=min_cut_interval * 2,
+            song_sections=normalized_sections,
             on_progress=lambda p: _emit(5.0 + (p / 100.0) * 35.0),
         )
 
@@ -1515,7 +1589,38 @@ class AdvancedPacingEngine:
                 stem_triggers.extend(bass_triggers)
                 _emit(75.0, force=True)
 
-        all_triggers = base_cuts + stem_triggers
+        if normalized_sections:
+            stem_triggers = self._apply_structure_weights(
+                stem_triggers,
+                normalized_sections,
+            )
+
+        # Audit 2026-08-05 (H-0): Stem-Trigger wurden hier als ZUSAETZLICHE
+        # Kandidaten in die Liste geworfen. Weil die Cut-Anzahl aber bereits
+        # durch min_clip_length gesaettigt ist, konnten 42.188 Stem-Trigger
+        # (27.337 Drums + 14.851 Bass in einem 55-Min-Mix) rechnerisch keinen
+        # einzigen Cut hinzufuegen — sie konnten ueber den Replace-Zweig von
+        # _enforce_minimum_interval nur Zeitpunkte verschieben. Netto kamen
+        # dabei sogar 18 Cuts weniger heraus (2595 -> 2577), weil jede
+        # Ersetzung das Fenster nach vorn schob und einen nachfolgenden
+        # legalen Slot verschluckte. Ergebnis: 12 Sekunden Rechenzeit fuer
+        # praktisch keine Wirkung, und die Regler fuer Kick/Snare/HiHat/Bass
+        # fuehlten sich fuer den User wirkungslos an.
+        #
+        # Jetzt werden Stem-Trigger auf die Basis-Trigger PROJIZIERT: sie
+        # erhoehen die Staerke des zeitlich passenden Basis-Triggers. Damit
+        # entscheiden die Stem-Gewichte darueber, WELCHE Cuts die spaetere
+        # Laengen-Erzwingung ueberleben — das ist der hoerbare Effekt, den die
+        # Regler versprechen — ohne gegen die Laengen-Constraints zu arbeiten.
+        # Stem-Trigger in echten Luecken bleiben zusaetzlich als Kandidaten
+        # erhalten, weil sie dort ohne Konflikt Platz haben.
+        gap_triggers = self._project_stem_triggers_onto_base(
+            base_cuts=base_cuts,
+            stem_triggers=stem_triggers,
+            min_cut_interval=min_cut_interval,
+        )
+
+        all_triggers = base_cuts + gap_triggers
         all_triggers.sort(key=lambda x: x.time)
 
         filtered = self._enforce_minimum_interval(all_triggers, min_cut_interval)
@@ -1809,6 +1914,7 @@ class AdvancedPacingEngine:
 
         ts = self.trigger_settings
         downbeat_set = set(downbeats)
+        mode = ts.beat_trigger_mode
 
         # L-N8: per-beat strengths from audio_router (via pacing_service)
         strengths = getattr(self, "_pre_cached_beat_strengths", None)
@@ -1830,7 +1936,12 @@ class AdvancedPacingEngine:
                 multiplier = max(0.0, min(1.0, float(strengths[i])))
                 strength = ts.beat_weight * base * multiplier
             else:
+                multiplier = base
                 strength = ts.beat_weight * base
+            if mode == "downbeat_only" and not is_downbeat:
+                continue
+            if mode == "strong_only" and multiplier < STRONG_BEAT_THRESHOLD:
+                continue
             out.append(PacingCut(
                 time=float(t),
                 trigger_type="downbeat" if is_downbeat else "beat",
@@ -1843,10 +1954,18 @@ class AdvancedPacingEngine:
         onset_times: List[float],
         energy_curve: List[float],
         bpm: float,
+        *,
+        kick_times: Optional[List[float]] = None,
+        snare_times: Optional[List[float]] = None,
+        hihat_times: Optional[List[float]] = None,
+        duration: float = 0.0,
     ) -> List["PacingCut"]:
         """
         Baut Trigger aus gecachten Audio-Analyse-Daten (ohne Audio neu zu laden).
         RAM-Optimierung für DJ-Mixes (z.B. 105 Minuten = 6335s).
+
+        Audit-Fix 2026-07-10: Kick/Snare/HiHat-Kandidaten + echte Dauer als
+        Parameter statt aus dem toten `core.session_manager`-Cache zu raten.
         """
         from .pacing_models import PacingCut
 
@@ -1862,22 +1981,28 @@ class AdvancedPacingEngine:
                     strength=min(ts.onset_weight * 0.5, 1.0),
                 ))
 
+        # 1b. Kick/Snare/HiHat (gleiche Strength-Formeln wie _extract_other_triggers)
+        for _times, _weight, _ttype, _mult in (
+            (kick_times, ts.kick_weight, "kick", 0.9),
+            (snare_times, ts.snare_weight, "snare", 0.85),
+            (hihat_times, ts.hihat_weight, "hihat", 0.4),
+        ):
+            if _weight > 0 and _times:
+                for t in _times:
+                    triggers.append(PacingCut(
+                        time=float(t),
+                        trigger_type=_ttype,
+                        strength=_weight * _mult,
+                    ))
+
         # 2. Energie-Spitzen
-        if ts.energy_weight > 0 and energy_curve:
+        if ts.energy_weight > 0 and energy_curve is not None and len(energy_curve) > 0:
             try:
                 energy_array = np.array(energy_curve)
                 energy_norm = energy_array / (np.max(energy_array) + 1e-10)
                 peaks = np.where(energy_norm > ts.energy_threshold)[0]
 
-                duration_estimate = 180.0
-                try:
-                    from ..core.session_manager import get_session_manager
-                    mgr = get_session_manager()
-                    ad = mgr.get_audio_data() if hasattr(mgr, "get_audio_data") else None
-                    if ad and "duration" in ad:
-                        duration_estimate = ad["duration"]
-                except Exception:
-                    duration_estimate = max(180.0, len(energy_curve) / 10.0)
+                duration_estimate = duration if duration > 0 else max(180.0, len(energy_curve) / 10.0)
 
                 time_per_sample = duration_estimate / len(energy_curve)
                 peak_groups = np.split(peaks, np.where(np.diff(peaks) > 5)[0] + 1) if len(peaks) > 0 else []
@@ -1967,6 +2092,79 @@ class AdvancedPacingEngine:
                                                   strength=float(rms_norm[best]) * ts.energy_weight))
 
         return triggers
+
+    def _project_stem_triggers_onto_base(
+        self,
+        base_cuts: List["PacingCut"],
+        stem_triggers: List["PacingCut"],
+        min_cut_interval: float,
+    ) -> List["PacingCut"]:
+        """
+        Projiziert Stem-Trigger auf die Basis-Trigger und liefert die Rest-Trigger.
+
+        Audit 2026-08-05 (H-0). Zwei Wirkungen:
+
+        1. **Boost** — liegt ein Stem-Trigger naeher als ``min_cut_interval / 2``
+           an einem Basis-Trigger, erhoeht er dessen ``strength``. Damit
+           beeinflussen die Stem-Gewichte, welche Cuts die anschliessende
+           Laengen-Erzwingung ueberleben. Genau das erwartet der User, wenn er
+           am Kick- oder Snare-Regler dreht.
+        2. **Luecken-Fuellung** — Stem-Trigger, die weit genug von jedem
+           Basis-Trigger entfernt sind, bleiben als eigene Kandidaten erhalten
+           und werden zurueckgegeben. Dort ist echter Platz, ohne gegen die
+           Mindestabstaende zu arbeiten.
+
+        Der Boost ist gedaempft und gedeckelt: mehrere Stem-Hits am selben
+        Basis-Trigger sollen ihn nicht beliebig dominieren lassen.
+        """
+        if not base_cuts or not stem_triggers:
+            return list(stem_triggers)
+
+        import bisect
+
+        base_sorted = sorted(base_cuts, key=lambda cut: cut.time)
+        base_times = [cut.time for cut in base_sorted]
+        snap_window = max(1e-6, min_cut_interval / 2.0)
+
+        # Deckel relativ zur Ausgangsstaerke, damit ein Basis-Trigger durch
+        # viele Stem-Hits nicht unbegrenzt hochgezogen wird.
+        original_strength = {id(cut): float(cut.strength) for cut in base_sorted}
+        boost_cap_factor = 2.0
+        boost_share = 0.25
+
+        gap_triggers: List["PacingCut"] = []
+        boosted = 0
+
+        for stem in stem_triggers:
+            position = bisect.bisect_left(base_times, stem.time)
+            best_index = -1
+            best_distance = float("inf")
+            for candidate in (position - 1, position):
+                if 0 <= candidate < len(base_sorted):
+                    distance = abs(base_times[candidate] - stem.time)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_index = candidate
+
+            if best_index >= 0 and best_distance <= snap_window:
+                target = base_sorted[best_index]
+                ceiling = original_strength[id(target)] * boost_cap_factor
+                target.strength = min(
+                    ceiling,
+                    float(target.strength) + float(stem.strength) * boost_share,
+                )
+                boosted += 1
+            elif best_distance >= min_cut_interval:
+                gap_triggers.append(stem)
+
+        logger.info(
+            "Stem-Projektion: %d Trigger auf Basis-Cuts geboostet, "
+            "%d in Luecken uebernommen, %d verworfen (zu dicht)",
+            boosted,
+            len(gap_triggers),
+            len(stem_triggers) - boosted - len(gap_triggers),
+        )
+        return gap_triggers
 
     def _enforce_minimum_interval(
         self,

@@ -2,18 +2,21 @@
 
 ## ML-Modelle
 
-### CLAP (laion/larger_clap_music) — **CC-BY-4.0**
+### CLAP (derived DirectML ONNX) — **BSD-3-Clause AND Apache-2.0**
 
 Audio-Embedding-Modell für DJ-Mix-Charakterisierung.
 
-> **Attribution Required.** Modell zitieren in App-Credits / About-Dialog:
->
-> "Audio-Embedding by **LAION CLAP** (`laion/larger_clap_music`),
-> licensed under CC-BY-4.0 — https://creativecommons.org/licenses/by/4.0/"
+Audio-/Text-ONNX:
+`ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`.
 
-Source: <https://huggingface.co/laion/larger_clap_music>
+Processor:
+`laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`.
 
-### SigLIP-2 (google/siglip2-base-patch16-384) — **Apache 2.0**
+Die exakten Source-/Target-Hashes und der gebündelte Lizenztext
+`licenses/CLAP-license-chain.txt` sind in
+`config/directml-asset-bundle.json` gebunden.
+
+### SigLIP SO400M (google/siglip-so400m-patch14-384) — **Apache 2.0**
 
 Video-Vision-Tower für Scene-Embeddings.
 
@@ -25,7 +28,7 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 | Komponente            | Lizenz       |
 |-----------------------|--------------|
 | torch                 | BSD-3-Clause |
-| torch-directml        | MIT          |
+| onnxruntime-directml  | MIT          |
 | transformers          | Apache 2.0   |
 | librosa               | ISC          |
 | scipy                 | BSD-3-Clause |
@@ -38,17 +41,22 @@ Volltext: <http://www.apache.org/licenses/LICENSE-2.0>
 
 ## Externe Tools
 
-- FFmpeg / ffprobe — LGPL/GPL (dynamisch verlinkt)
+- FFmpeg / ffprobe `6.1.1-essentials_build-www.gyan.dev` —
+  **GPL-3.0-or-later**, statischer Windows-Build. Das gegen
+  `config/ffmpeg-runtime.json` hashverifizierte Binary meldet
+  `--enable-gpl --enable-version3 --enable-static`; das mitgelieferte
+  `README.txt` nennt GPL v3 und den FFmpeg-Quellstand `e38092ef93`.
 - UVR-MDX-NET-Inst_HQ_3.onnx — MIT
 
 ## App-Credits (Mindestumfang)
 
 ```
 PB Studio nutzt unter anderem:
-  • LAION CLAP (laion/larger_clap_music) — CC-BY-4.0
-  • SigLIP-2 (google/siglip2-base-patch16-384) — Apache 2.0
-  • FFmpeg — LGPL
+  • CLAP DirectML ONNX — BSD-3-Clause AND Apache-2.0
+  • SigLIP SO400M (google/siglip-so400m-patch14-384) — Apache 2.0
+  • FFmpeg 6.1.1 essentials (statischer Gyan.dev-Build) — GPL-3.0-or-later
   • UVR-MDX-NET — MIT
 
-Alle Lizenztexte siehe LICENSES.md im Repository.
+Lizenzdetails siehe LICENSES.md. Der FFmpeg-GPL-Volltext liegt im
+installierten FFmpeg-Bundle als LICENSE bei.
 ```

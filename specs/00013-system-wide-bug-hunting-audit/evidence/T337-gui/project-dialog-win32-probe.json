@@ -1,0 +1,746 @@
+{
+  "completed_at": "2026-07-29T21:25:39.346231+02:00",
+  "dialog": {
+    "children_after_navigation": [
+      {
+        "class_name": "DUIViewWndClassName",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 210438814,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 18156630,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 11930066,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "NamespaceTreeControl",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 97585732,
+        "title": "Namespacestruktursteuerelement",
+        "visible": true
+      },
+      {
+        "class_name": "Static",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 69667762,
+        "title": "Namespacestruktursteuerelement",
+        "visible": false
+      },
+      {
+        "class_name": "SysTreeView32",
+        "control_id": 100,
+        "enabled": true,
+        "handle": 26741112,
+        "title": "Navigationsbereich",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 60819966,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SHELLDLL_DefView",
+        "control_id": 1121,
+        "enabled": true,
+        "handle": 164169864,
+        "title": "ShellView",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 29625522,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 2690156,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 98044876,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 920674,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 210766256,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1090,
+        "enabled": true,
+        "handle": 43125872,
+        "title": "Ordner:",
+        "visible": true
+      },
+      {
+        "class_name": "Edit",
+        "control_id": 1152,
+        "enabled": true,
+        "handle": 100141678,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Button",
+        "control_id": 1,
+        "enabled": true,
+        "handle": 22284772,
+        "title": "Ordner auswählen",
+        "visible": true
+      },
+      {
+        "class_name": "Button",
+        "control_id": 2,
+        "enabled": true,
+        "handle": 43452638,
+        "title": "Abbrechen",
+        "visible": true
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": -1,
+        "enabled": true,
+        "handle": 234621572,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1092,
+        "enabled": true,
+        "handle": 167316128,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1091,
+        "enabled": true,
+        "handle": 28183006,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1093,
+        "enabled": true,
+        "handle": 33229058,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ListBox",
+        "control_id": 1120,
+        "enabled": true,
+        "handle": 66783682,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1095,
+        "enabled": true,
+        "handle": 24184630,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Button",
+        "control_id": 1038,
+        "enabled": false,
+        "handle": 77072424,
+        "title": "&Hilfe",
+        "visible": false
+      },
+      {
+        "class_name": "WorkerW",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 217254938,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ReBarWindow32",
+        "control_id": 40965,
+        "enabled": true,
+        "handle": 112068802,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "TravelBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 156306466,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 294912022,
+        "title": "Navigationsschaltflächen",
+        "visible": true
+      },
+      {
+        "class_name": "UpBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 15403436,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 20252916,
+        "title": "Aufwärts-Band",
+        "visible": true
+      },
+      {
+        "class_name": "Address Band Root",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 45156480,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "msctls_progress32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 108530280,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Breadcrumb Parent",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 25692264,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 1001,
+        "enabled": true,
+        "handle": 42011790,
+        "title": "Adresse: C:\\Users\\david\\Documents\\PBStudio\\ReleaseSmoke_20260727_083320",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 28314356,
+        "title": "Adressband",
+        "visible": true
+      },
+      {
+        "class_name": "ComboBoxEx32",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 82381838,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ComboBox",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 461946,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Edit",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 13110338,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "SeparatorBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 149031848,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "UniversalSearchBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 92538682,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Search Box",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 28970090,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SearchEditBoxWrapperClass",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 461698,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 79169884,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SeparatorBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 13962072,
+        "title": "",
+        "visible": true
+      }
+    ],
+    "children_before": [
+      {
+        "class_name": "DUIViewWndClassName",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 210438814,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 18156630,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 11930066,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "NamespaceTreeControl",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 97585732,
+        "title": "Namespacestruktursteuerelement",
+        "visible": true
+      },
+      {
+        "class_name": "Static",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 69667762,
+        "title": "Namespacestruktursteuerelement",
+        "visible": false
+      },
+      {
+        "class_name": "SysTreeView32",
+        "control_id": 100,
+        "enabled": true,
+        "handle": 26741112,
+        "title": "Navigationsbereich",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 11799046,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SHELLDLL_DefView",
+        "control_id": 1121,
+        "enabled": true,
+        "handle": 30149354,
+        "title": "ShellView",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 12454940,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 257559158,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 11930232,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "CtrlNotifySink",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 42994502,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 45025814,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1090,
+        "enabled": true,
+        "handle": 43125872,
+        "title": "Ordner:",
+        "visible": true
+      },
+      {
+        "class_name": "Edit",
+        "control_id": 1152,
+        "enabled": true,
+        "handle": 100141678,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Button",
+        "control_id": 1,
+        "enabled": true,
+        "handle": 22284772,
+        "title": "Ordner auswählen",
+        "visible": true
+      },
+      {
+        "class_name": "Button",
+        "control_id": 2,
+        "enabled": true,
+        "handle": 43452638,
+        "title": "Abbrechen",
+        "visible": true
+      },
+      {
+        "class_name": "ScrollBar",
+        "control_id": -1,
+        "enabled": true,
+        "handle": 234621572,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1092,
+        "enabled": true,
+        "handle": 167316128,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1091,
+        "enabled": true,
+        "handle": 28183006,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1093,
+        "enabled": true,
+        "handle": 33229058,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ListBox",
+        "control_id": 1120,
+        "enabled": true,
+        "handle": 66783682,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Static",
+        "control_id": 1095,
+        "enabled": true,
+        "handle": 24184630,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Button",
+        "control_id": 1038,
+        "enabled": false,
+        "handle": 77072424,
+        "title": "&Hilfe",
+        "visible": false
+      },
+      {
+        "class_name": "WorkerW",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 217254938,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ReBarWindow32",
+        "control_id": 40965,
+        "enabled": true,
+        "handle": 112068802,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "TravelBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 156306466,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 294912022,
+        "title": "Navigationsschaltflächen",
+        "visible": true
+      },
+      {
+        "class_name": "UpBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 15403436,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 20252916,
+        "title": "Aufwärts-Band",
+        "visible": true
+      },
+      {
+        "class_name": "Address Band Root",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 45156480,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "msctls_progress32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 108530280,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Breadcrumb Parent",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 25692264,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 1001,
+        "enabled": true,
+        "handle": 42011790,
+        "title": "Adresse: Dokumente",
+        "visible": true
+      },
+      {
+        "class_name": "ToolbarWindow32",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 28314356,
+        "title": "Adressband",
+        "visible": true
+      },
+      {
+        "class_name": "ComboBoxEx32",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 82381838,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "ComboBox",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 461946,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "Edit",
+        "control_id": 41477,
+        "enabled": true,
+        "handle": 13110338,
+        "title": "",
+        "visible": false
+      },
+      {
+        "class_name": "SeparatorBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 149031848,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "UniversalSearchBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 92538682,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "Search Box",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 28970090,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SearchEditBoxWrapperClass",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 461698,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "DirectUIHWND",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 79169884,
+        "title": "",
+        "visible": true
+      },
+      {
+        "class_name": "SeparatorBand",
+        "control_id": 0,
+        "enabled": true,
+        "handle": 13962072,
+        "title": "",
+        "visible": true
+      }
+    ],
+    "handle": 4000188,
+    "observed": [
+      {
+        "class_name": "#32770",
+        "handle": 4000188,
+        "owner": 42861882,
+        "title": "Projektordner öffnen"
+      }
+    ],
+    "select_buttons": [
+      {
+        "class_name": "Button",
+        "control_id": 1,
+        "enabled": true,
+        "handle": 22284772,
+        "title": "Ordner auswählen",
+        "visible": true
+      }
+    ]
+  },
+  "project_info": {
+    "audio_count": 1,
+    "created_at": "2026-07-27T06:33:26Z",
+    "db_project_id": 33,
+    "has_timeline": true,
+    "modified_at": "2026-07-27T06:33:29Z",
+    "name": "ReleaseSmoke_20260727_083320",
+    "path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseSmoke_20260727_083320",
+    "video_count": 2
+  },
+  "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-10-project-switch\\project-after-dialog-probe.png",
+  "started_at": "2026-07-29T21:25:35.229592+02:00",
+  "status": "pass",
+  "target": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseSmoke_20260727_083320"
+}

@@ -9,16 +9,21 @@ namespace PBStudio.UI.ViewModels;
 
 /// <summary>
 /// ViewModel für die Einstellungen. Verwaltet GPU-Status, VRAM-Cap-Slider,
-/// FFmpeg-Pfad-Picker (mit Validation + Version-Probe) und PB_STUDIO_FORCED_VRAM
+/// kanonische FFmpeg-Runtime-Provenienz und PB_STUDIO_FORCED_VRAM
 /// Env-Var. Persistenz via <see cref="ISettingsService"/> nach %APPDATA%\PBStudio\settings.json.
 /// </summary>
 public partial class SettingsViewModel : ObservableObject, IDisposable
 {
+    private const string RecommendationTask = "video_captioning";
+
     private readonly IApiClient _api;
-    private readonly IDialogService _dialogs;
     private readonly ISettingsService _settings;
+    private readonly ProjectService? _projects;
     private CancellationTokenSource? _probeCts;
     private CancellationTokenSource? _vramDebounceCts;
+    private CancellationTokenSource? _recommendationCts;
+    private long _recommendationGeneration;
+    private long _recommendationProjectGeneration;
     private bool _disposed;
 
     // ── GPU Status ────────────────────────────────────────────────────────
@@ -27,6 +32,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _vramUsed;
     [ObservableProperty] private double _temperature;
     [ObservableProperty] private string _driverVersion = "";
+    [ObservableProperty] private string _gpuAdapterIndex = "–";
+    [ObservableProperty] private string _gpuAdapterLuid = "–";
+    [ObservableProperty] private string _gpuSelectionPolicy = "–";
+    [ObservableProperty] private string _directmlStatus = "Wird geladen...";
+    [ObservableProperty] private string _monitoringStatus = "Wird geladen...";
+    [ObservableProperty] private string? _monitoringError;
     [ObservableProperty] private bool _backendOnline;
 
     // ── VRAM Cap (Slider, persistiert) ────────────────────────────────────
@@ -36,6 +47,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _ffmpegPath = "";
     [ObservableProperty] private string? _ffmpegPathError;
     [ObservableProperty] private string? _ffmpegVersion;   // null = nicht geprüft (NullToVisibility blendet aus)
+    [ObservableProperty] private string? _ffmpegProvenance;
     [ObservableProperty] private bool _isProbingFfmpeg;
 
     // ── Forced VRAM (Env-Var für nächsten Backend-Start) ──────────────────
@@ -56,7 +68,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // ── UI State ──────────────────────────────────────────────────────────
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isSaving;
+    [ObservableProperty] private bool _isCleaningGpu;
     [ObservableProperty] private string _settingsFilePath = "";
+    [ObservableProperty] private string? _settingsPersistenceError;
 
     public SettingsViewModel(IApiClient api, IDialogService dialogs)
         : this(api, dialogs, new SettingsService())
@@ -64,11 +78,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Test-Konstruktor: erlaubt Mocken aller Dependencies.</summary>
-    public SettingsViewModel(IApiClient api, IDialogService dialogs, ISettingsService settings)
+    public SettingsViewModel(
+        IApiClient api,
+        IDialogService dialogs,
+        ISettingsService settings,
+        ProjectService? projects = null)
     {
         _api = api;
-        _dialogs = dialogs;
+        _ = dialogs;
         _settings = settings;
+        _projects = projects;
         StatusText = "Backend: Startet...";
 
         SettingsFilePath = _settings.ConfigFilePath;
@@ -79,6 +98,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         // 2. Initiales Laden des Backend-Status
         WeakReferenceMessenger.Default.Register<BackendReadyMessage>(this, (_, _) => _ = RefreshAsync());
         WeakReferenceMessenger.Default.Register<AppShutdownMessage>(this, (_, _) => BackendOnline = false);
+        WeakReferenceMessenger.Default.Register<ProjectClosingMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: false));
+        WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: true));
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(
+            this,
+            (_, _) => InvalidateRecommendationForProjectChange(refresh: true));
 
         _ = RefreshAsync();
 
@@ -89,32 +117,24 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     private void LoadPersistedSettings()
     {
-        _settings.Load();
+        var loadResult = _settings.Load();
+        SettingsPersistenceError = loadResult.ErrorMessage;
         var s = _settings.Current;
 
+        PythonBridgeService.ApplyRuntimeEnvironment(s);
         FfmpegPath = s.FfmpegPath ?? "";
         VramLimitMb = s.VramCapMb > 0 ? s.VramCapMb : 8192;
-        PythonBridgeService.SetVramLimitEnvVar(VramLimitMb);
-
-        // FFmpeg-Pfad sofort als Env-Var setzen, damit Backend beim ERSTEN Start
-        // den persistierten Pfad nutzt (analog SetForcedVramEnvVar unten).
-        PythonBridgeService.SetFfmpegPathEnvVar(FfmpegPath);
 
         if (s.ForcedVramMb.HasValue && s.ForcedVramMb.Value > 0)
         {
             ForceVramEnabled = true;
             ForcedVramMb = s.ForcedVramMb.Value;
-            // Setze sofort die Env-Var beim App-Start, damit ein
-            // Re-Start des Backends den persistierten Wert nutzt.
-            PythonBridgeService.SetForcedVramEnvVar(s.ForcedVramMb.Value);
         }
         else
         {
             ForceVramEnabled = false;
             ForcedVramMb = 8192;
-            PythonBridgeService.SetForcedVramEnvVar(null);
         }
-
         // KI-Modus: String -> Slider-Index (speed=0, balance=1, quality=2). Default balance.
         KiModeIndex = (s.KiMode ?? "balance").ToLowerInvariant() switch
         {
@@ -139,41 +159,45 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // T2.2: Live-VRAM-Slider Debounce (500ms) und API-Call
     partial void OnVramLimitMbChanged(int value)
     {
-        _vramDebounceCts?.Cancel();
-        _vramDebounceCts = new CancellationTokenSource();
-        var ct = _vramDebounceCts.Token;
+        var previous = _vramDebounceCts;
+        var current = new CancellationTokenSource();
+        _vramDebounceCts = current;
+        previous?.Cancel();
+        previous?.Dispose();
+        _ = UpdateVramLimitAfterDelayAsync(value, current.Token);
+    }
 
-        _ = Task.Run(async () =>
+    private async Task UpdateVramLimitAfterDelayAsync(int value, CancellationToken ct)
+    {
+        try
         {
-            try
-            {
-                await Task.Delay(500, ct).ConfigureAwait(true);
-                
-                if (ct.IsCancellationRequested) return;
-                
-                StatusText = "Aktualisiere VRAM-Limit...";
-                var res = await _api.UpdateVramLimitAsync(value, ct).ConfigureAwait(true);
-                
-                if (ct.IsCancellationRequested) return;
+            await Task.Delay(500, ct);
+            if (_disposed || ct.IsCancellationRequested)
+                return;
 
-                if (res != null)
-                {
-                    StatusText = $"VRAM-Limit live gedrosselt auf {value} MB.";
-                }
-                else
-                {
-                    StatusText = "Warnung: Live-Drosselung fehlgeschlagen. Wert liegt evtl. unter dem aktiven VRAM-Bedarf.";
-                }
-            }
-            catch (OperationCanceledException)
+            StatusText = "Aktualisiere VRAM-Limit...";
+            var res = await _api.UpdateVramLimitAsync(value, ct);
+            if (_disposed || ct.IsCancellationRequested)
+                return;
+
+            if (res != null)
             {
-                // Erwartet bei schnellem Schieben
+                StatusText = $"VRAM-Limit live gedrosselt auf {value} MB.";
             }
-            catch (Exception ex)
+            else
             {
+                StatusText = "Warnung: Live-Drosselung fehlgeschlagen. Wert liegt evtl. unter dem aktiven VRAM-Bedarf.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Erwartet bei schnellem Schieben oder Dispose
+        }
+        catch (Exception ex)
+        {
+            if (!_disposed && !ct.IsCancellationRequested)
                 StatusText = $"Fehler beim Live-Drosseln: {ex.Message}";
-            }
-        }, ct);
+        }
     }
 
     private void UpdateKiModeLabels()
@@ -201,50 +225,150 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task RefreshKiAutoSelectionAsync()
     {
+        if (_disposed)
+            return;
+
+        var requestedMode = KiMode;
+        var requestedProjectPath = _projects?.CurrentProjectPath;
+        var requestedProjectGeneration =
+            Volatile.Read(ref _recommendationProjectGeneration);
+        ProjectOperationContext? projectContext = null;
+        if (_projects?.HasProject == true)
+        {
+            try
+            {
+                projectContext = _projects.CaptureOperationContext();
+            }
+            catch (InvalidOperationException)
+            {
+                KiModeAutoSelectionText = "Projektwechsel läuft; Vorschau wird neu geladen.";
+                return;
+            }
+        }
+
+        var generation = Interlocked.Increment(ref _recommendationGeneration);
+        var previous = _recommendationCts;
+        var current = projectContext.HasValue
+            ? CancellationTokenSource.CreateLinkedTokenSource(
+                projectContext.Value.CancellationToken)
+            : new CancellationTokenSource();
+        _recommendationCts = current;
+        previous?.Cancel();
+
         try
         {
-            var rec = await _api.GetModelRecommendationAsync("video_captioning", KiMode).ConfigureAwait(true);
+            var rec = await _api.GetModelRecommendationAsync(
+                RecommendationTask,
+                requestedMode,
+                current.Token).ConfigureAwait(true);
+            if (!IsCurrentRecommendation(
+                    current,
+                    generation,
+                    requestedMode,
+                    requestedProjectPath,
+                    requestedProjectGeneration,
+                    projectContext))
+            {
+                return;
+            }
+
             if (rec == null)
             {
                 KiModeAutoSelectionText = "Backend nicht erreichbar.";
                 return;
             }
+
+            if (!string.Equals(rec.Task, RecommendationTask, StringComparison.Ordinal)
+                || !string.Equals(rec.Mode, requestedMode, StringComparison.OrdinalIgnoreCase))
+            {
+                KiModeAutoSelectionText = "Auto-Selection-Antwort passt nicht zur Anfrage.";
+                return;
+            }
+
             if (!string.IsNullOrEmpty(rec.Model))
-                KiModeAutoSelectionText = $"Aktuell wuerde Auto-Selection: '{rec.Model}' waehlen.";
+            {
+                var provider = string.IsNullOrWhiteSpace(rec.Provider)
+                    ? "Provider unbekannt"
+                    : rec.Provider;
+                var capabilities = rec.VerifiedCapabilities is { Count: > 0 }
+                    ? string.Join(", ", rec.VerifiedCapabilities)
+                    : "keine verifizierten Capabilities";
+                var source = string.IsNullOrWhiteSpace(rec.SelectionSource)
+                    ? "Quelle unbekannt"
+                    : rec.SelectionSource;
+                KiModeAutoSelectionText =
+                    $"Auto-Selection: {provider}:{rec.Model} | {source} | {capabilities}.";
+            }
             else
-                KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {KiMode}: {rec.Reason}";
+                KiModeAutoSelectionText = $"Kein Modell verfuegbar fuer {requestedMode}: {rec.Reason}";
+        }
+        catch (OperationCanceledException)
+        {
+            // Erwartet bei Modus-/Projektwechsel oder Dispose.
         }
         catch
         {
-            KiModeAutoSelectionText = "Auto-Selection-Preview fehlgeschlagen.";
+            if (IsCurrentRecommendation(
+                    current,
+                    generation,
+                    requestedMode,
+                    requestedProjectPath,
+                    requestedProjectGeneration,
+                    projectContext))
+            {
+                KiModeAutoSelectionText = "Auto-Selection-Preview fehlgeschlagen.";
+            }
         }
+        finally
+        {
+            if (ReferenceEquals(_recommendationCts, current))
+                _recommendationCts = null;
+            current.Dispose();
+        }
+    }
+
+    private bool IsCurrentRecommendation(
+        CancellationTokenSource owner,
+        long generation,
+        string requestedMode,
+        string? requestedProjectPath,
+        long requestedProjectGeneration,
+        ProjectOperationContext? projectContext)
+    {
+        if (_disposed
+            || owner.IsCancellationRequested
+            || !ReferenceEquals(_recommendationCts, owner)
+            || generation != Volatile.Read(ref _recommendationGeneration)
+            || requestedProjectGeneration != Volatile.Read(ref _recommendationProjectGeneration)
+            || !string.Equals(requestedMode, KiMode, StringComparison.Ordinal)
+            || !string.Equals(
+                requestedProjectPath,
+                _projects?.CurrentProjectPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !projectContext.HasValue
+            || (_projects?.IsCurrent(projectContext.Value) == true);
+    }
+
+    private void InvalidateRecommendationForProjectChange(bool refresh)
+    {
+        Interlocked.Increment(ref _recommendationProjectGeneration);
+        Interlocked.Increment(ref _recommendationGeneration);
+        _recommendationCts?.Cancel();
+        if (refresh && !_disposed)
+            _ = RefreshKiAutoSelectionAsync();
     }
 
     // Live-Validation bei jeder Änderung des FFmpeg-Pfads
     partial void OnFfmpegPathChanged(string value)
     {
+        _probeCts?.Cancel();
         _settings.ValidateFFmpegPath(value, out var err);
         FfmpegPathError = err;
         FfmpegVersion = null; // Version invalidieren bis erneut geprüft
-    }
-
-    [RelayCommand]
-    private void BrowseFfmpeg()
-    {
-        var initial = !string.IsNullOrWhiteSpace(FfmpegPath) && System.IO.File.Exists(FfmpegPath)
-            ? System.IO.Path.GetDirectoryName(FfmpegPath)
-            : null;
-
-        var picked = _dialogs.OpenFile(
-            title: "FFmpeg-Executable auswählen",
-            filter: "FFmpeg Executable (ffmpeg.exe)|ffmpeg.exe|Alle Dateien (*.*)|*.*",
-            initialDirectory: initial);
-
-        if (string.IsNullOrEmpty(picked))
-            return;
-
-        FfmpegPath = picked;
-        _ = ProbeFfmpegAsync();
     }
 
     [RelayCommand]
@@ -264,40 +388,57 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Cancel laufende Probe
-        _probeCts?.Cancel();
-        _probeCts = new CancellationTokenSource();
-        var ct = _probeCts.Token;
+        var previous = _probeCts;
+        var current = new CancellationTokenSource();
+        _probeCts = current;
+        previous?.Cancel();
+        var ct = current.Token;
 
         IsProbingFfmpeg = true;
         try
         {
-            var version = await _settings.ProbeFFmpegVersionAsync(FfmpegPath, ct).ConfigureAwait(true);
+            var runtime = await _settings.ProbeCanonicalFFmpegRuntimeAsync(ct).ConfigureAwait(true);
             if (ct.IsCancellationRequested) return;
 
-            if (!string.IsNullOrEmpty(version))
+            if (!string.IsNullOrWhiteSpace(runtime.RuntimePath))
+                FfmpegPath = runtime.RuntimePath;
+            FfmpegVersion = runtime.Version;
+
+            if (runtime.Succeeded)
             {
-                FfmpegVersion = version;
                 FfmpegPathError = null;
+                FfmpegProvenance =
+                    $"Manifest verifiziert · FFmpeg SHA-256 {runtime.Sha256} · " +
+                    $"FFprobe SHA-256 {runtime.FfprobeSha256} · Quelle: {runtime.AssetSource}";
             }
             else
             {
-                FfmpegVersion = null;
-                FfmpegPathError = "Version konnte nicht ermittelt werden.";
+                FfmpegProvenance = null;
+                FfmpegPathError = runtime.ErrorMessage;
             }
         }
         catch (OperationCanceledException)
         {
             // Erwartet bei Re-Probe / Dispose
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            FfmpegPathError = "Probe fehlgeschlagen: " + ex.Message;
-            FfmpegVersion = null;
+            if (!_disposed && !ct.IsCancellationRequested)
+            {
+                FfmpegPathError = "Die FFmpeg-Runtime-Prüfung ist fehlgeschlagen.";
+                FfmpegVersion = null;
+                FfmpegProvenance = null;
+            }
         }
         finally
         {
-            IsProbingFfmpeg = false;
+            if (ReferenceEquals(_probeCts, current))
+            {
+                _probeCts = null;
+                if (!_disposed)
+                    IsProbingFfmpeg = false;
+            }
+            current.Dispose();
         }
     }
 
@@ -307,14 +448,18 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (IsSaving) return;
         IsSaving = true;
         StatusText = "Speichere Einstellungen...";
+        var persisted = false;
 
         try
         {
-            // 1. Validierung FFmpeg-Pfad - kein hard-stop, nur Hinweis
+            FfmpegPath = PythonBridgeService.GetCanonicalFfmpegPath();
+
+            // 1. Validierung des kanonischen FFmpeg-Pfads
             if (!_settings.ValidateFFmpegPath(FfmpegPath, out var ffErr))
             {
                 FfmpegPathError = ffErr;
-                StatusText = "Warnung: FFmpeg-Pfad ungültig - andere Settings wurden gespeichert.";
+                StatusText = "FFmpeg-Projekt-Runtime ist ungültig.";
+                return;
             }
 
             // 2. In-Memory-Settings updaten und persistieren
@@ -324,12 +469,18 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 ? ForcedVramMb
                 : null;
             _settings.Current.KiMode = KiMode;
-            _settings.Save();
+            var saveResult = _settings.Save();
+            if (!saveResult.Succeeded)
+            {
+                SettingsPersistenceError = saveResult.ErrorMessage;
+                StatusText = saveResult.ErrorMessage ?? "Einstellungen konnten nicht gespeichert werden.";
+                return;
+            }
+            SettingsPersistenceError = null;
+            persisted = true;
 
             // 3. Env-Vars aktualisieren (für nächsten Backend-Start)
-            PythonBridgeService.SetForcedVramEnvVar(_settings.Current.ForcedVramMb);
-            PythonBridgeService.SetVramLimitEnvVar(_settings.Current.VramCapMb);
-            PythonBridgeService.SetFfmpegPathEnvVar(_settings.Current.FfmpegPath);
+            PythonBridgeService.ApplyRuntimeEnvironment(_settings.Current);
 
             // KI-Modus ins Backend synchronisieren
             var modeSyncSuccess = await _api.UpdateKiModeAsync(KiMode).ConfigureAwait(true);
@@ -346,9 +497,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 StatusText = "Einstellungen gespeichert" + syncHint + ": " + _settings.ConfigFilePath;
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText = "Fehler beim Speichern: " + ex.Message;
+            StatusText = persisted
+                ? "Einstellungen gespeichert, aber nicht vollständig angewendet."
+                : "Einstellungen konnten nicht gespeichert werden.";
         }
         finally
         {
@@ -365,8 +518,26 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var gpu = await _api.GetGpuStatusAsync();
         if (gpu != null)
         {
-            GpuName = gpu.Name;
-            VramTotal = gpu.VramTotalMb;
+            GpuName = gpu.AdapterName ?? gpu.Name;
+            GpuAdapterIndex = gpu.AdapterIndex?.ToString() ?? "–";
+            GpuAdapterLuid = gpu.AdapterLuid ?? "–";
+            GpuSelectionPolicy = gpu.SelectionPolicy ?? "–";
+            DirectmlStatus = gpu.DirectmlActive
+                ? "Aktiv auf ausgewähltem Adapter"
+                : "Fehler: DirectML nicht aktiv";
+            MonitoringStatus = gpu.MonitoringStatus switch
+            {
+                "ready" => "Bereit",
+                "degraded" => "Eingeschränkt",
+                "error" => "Fehler",
+                _ => gpu.MonitoringStatus,
+            };
+            MonitoringError = string.IsNullOrWhiteSpace(gpu.MonitoringError)
+                ? null
+                : gpu.MonitoringError;
+            VramTotal = gpu.DedicatedVramTotalMb > 0
+                ? gpu.DedicatedVramTotalMb
+                : gpu.VramTotalMb;
             VramUsed = gpu.VramUsedMb;
             Temperature = gpu.TemperatureC;
             DriverVersion = gpu.DriverVersion;
@@ -388,9 +559,39 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task CleanupGpuAsync()
     {
+        if (_disposed || IsCleaningGpu)
+            return;
+
+        IsCleaningGpu = true;
         StatusText = "VRAM aufräumen...";
-        await _api.CleanupGpuAsync();
-        StatusText = "VRAM aufgeräumt";
+        try
+        {
+            var result = await _api.CleanupGpuAsync().ConfigureAwait(true);
+            if (_disposed)
+                return;
+
+            StatusText = result switch
+            {
+                null => "GPU-Cleanup fehlgeschlagen; VRAM-Zustand ist unverändert.",
+                { Success: false, Error: not null } =>
+                    $"GPU-Cleanup fehlgeschlagen: {result.Error}",
+                { Success: false } =>
+                    "GPU-Cleanup fehlgeschlagen; das Backend bestätigte keinen Erfolg.",
+                { FreedMb: >= 0 } =>
+                    $"GPU-Cleanup abgeschlossen ({result.FreedMb} MB gemeldet).",
+                _ => "GPU-Cleanup lieferte ein ungültiges Ergebnis.",
+            };
+        }
+        catch
+        {
+            if (!_disposed)
+                StatusText = "GPU-Cleanup fehlgeschlagen; VRAM-Zustand ist unverändert.";
+        }
+        finally
+        {
+            if (!_disposed)
+                IsCleaningGpu = false;
+        }
     }
 
     public void Dispose()
@@ -401,6 +602,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _probeCts?.Dispose();
         try { _vramDebounceCts?.Cancel(); } catch { /* ignore */ }
         _vramDebounceCts?.Dispose();
+        try { _recommendationCts?.Cancel(); } catch { /* ignore */ }
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

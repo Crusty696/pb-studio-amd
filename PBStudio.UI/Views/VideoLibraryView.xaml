@@ -8,7 +8,20 @@
              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Video-Bibliothek"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="I" Modifiers="Control" Command="{Binding ImportVideosCommand}"/>
+        <KeyBinding Key="I" Modifiers="Control+Shift" Command="{Binding ImportFolderCommand}"/>
+        <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding AnalyzeSelectedCommand}"/>
+        <KeyBinding Key="Enter" Modifiers="Control+Shift" Command="{Binding AnalyzeAllCommand}"/>
+        <KeyBinding Key="M" Modifiers="Alt" Command="{Binding AnalyzeMarkedCommand}"/>
+        <KeyBinding Key="A" Modifiers="Control" Command="{Binding SelectAllVideosCommand}"/>
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}"/>
+        <KeyBinding Key="Delete" Modifiers="Control+Shift" Command="{Binding DeleteAllVideosCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <converters:TimeToPixelConverter x:Key="TimeToPixelConverter"/>
@@ -43,10 +56,18 @@
 
         <!-- ── Toolbar ── -->
         <Border Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource AbletonToolbar}" Margin="0,0,0,12">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <WrapPanel Grid.Row="0" Orientation="Horizontal">
                     <Button Command="{Binding ImportVideosCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Dateien importieren&#x0a;• Was es macht: Öffnet einen Dialog zur Auswahl einzelner Videodateien (MP4, MOV, AVI etc.).&#x0a;• Wozu es dient: Fügt neue Video-Clips Ihrer lokalen PB Studio Bibliothek hinzu.&#x0a;• Wann nutzen: Wann immer Sie neues Ausgangsmaterial für Ihre automatischen Schnitte bereitstellen möchten.">
+                            ToolTip="Dateien importieren&#x0a;• Was es macht: Öffnet einen Dialog zur Auswahl einzelner Videodateien (MP4, MOV, AVI etc.).&#x0a;• Wozu es dient: Fügt neue Video-Clips Ihrer lokalen PB Studio Bibliothek hinzu.&#x0a;• Wann nutzen: Wann immer Sie neues Ausgangsmaterial für Ihre automatischen Schnitte bereitstellen möchten."
+                            AutomationProperties.Name="Video-Dateien importieren"
+                            AutomationProperties.HelpText="Importiert ausgewählte Video-Dateien in das aktive Projekt."
+                            AutomationProperties.AcceleratorKey="Strg+I">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="VideoPlus" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -55,7 +76,10 @@
                     </Button>
                     
                     <Button Command="{Binding ImportFolderCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Ordner importieren&#x0a;• Was es macht: Importiert alle kompatiblen Videodateien aus einem ausgewählten Ordner auf einmal.&#x0a;• Wozu es dient: Spart Zeit beim Einlesen großer Videosammlungen.&#x0a;• Wann nutzen: Ideal zum schnellen Hinzufügen von Clip-Paketen oder B-Roll-Sammlungen." Margin="4,0,0,0">
+                            ToolTip="Ordner importieren&#x0a;• Was es macht: Importiert alle kompatiblen Videodateien aus einem ausgewählten Ordner auf einmal.&#x0a;• Wozu es dient: Spart Zeit beim Einlesen großer Videosammlungen.&#x0a;• Wann nutzen: Ideal zum schnellen Hinzufügen von Clip-Paketen oder B-Roll-Sammlungen." Margin="4,0,0,0"
+                            AutomationProperties.Name="Video-Ordner importieren"
+                            AutomationProperties.HelpText="Importiert unterstützte Video-Dateien aus einem ausgewählten Ordner."
+                            AutomationProperties.AcceleratorKey="Strg+Umschalt+I">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="FolderPlus" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -66,7 +90,10 @@
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                     <Button Command="{Binding AnalyzeSelectedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Ausgewählten Clip analysieren&#x0a;• Was es macht: Startet die KI-Szenen- und Bewegungserkennung für den aktuell ausgewählten Clip auf der GPU.&#x0a;• Wozu es dient: Ermittelt Schnittpunkte (Cuts) und die Dynamik (Motion) für das rhythmische Pacing.&#x0a;• Wann nutzen: Vor dem Generieren der Cut-Liste, um präzise Schnitte zu gewährleisten.">
+                            ToolTip="Ausgewählten Clip analysieren&#x0a;• Was es macht: Startet die KI-Szenen- und Bewegungserkennung für den aktuell ausgewählten Clip auf der GPU.&#x0a;• Wozu es dient: Ermittelt Schnittpunkte (Cuts) und die Dynamik (Motion) für das rhythmische Pacing.&#x0a;• Wann nutzen: Vor dem Generieren der Cut-Liste, um präzise Schnitte zu gewährleisten."
+                            AutomationProperties.Name="Ausgewählten Video-Clip analysieren"
+                            AutomationProperties.HelpText="Führt die aktivierten Szenen-, Bewegungs-, Embedding- und Tag-Schritte für den ausgewählten Clip aus."
+                            AutomationProperties.AcceleratorKey="Strg+Eingabe">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -77,7 +104,10 @@
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
                     <Button Command="{Binding AnalyzeAllCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Alle Clips analysieren&#x0a;• Was es macht: Analysiert die gesamte Bibliothek nacheinander vollautomatisch auf der GPU.&#x0a;• Wozu es dient: Bereitet alle importierten Videos komplett für die spätere Verwendung vor.&#x0a;• Wann nutzen: Empfohlen nach dem ersten Import einer größeren Anzahl neuer Videos (z. B. über Nacht laufen lassen).">
+                            ToolTip="Alle Clips analysieren&#x0a;• Was es macht: Analysiert die gesamte Bibliothek nacheinander vollautomatisch auf der GPU.&#x0a;• Wozu es dient: Bereitet alle importierten Videos komplett für die spätere Verwendung vor.&#x0a;• Wann nutzen: Empfohlen nach dem ersten Import einer größeren Anzahl neuer Videos (z. B. über Nacht laufen lassen)."
+                            AutomationProperties.Name="Alle Video-Clips analysieren"
+                            AutomationProperties.HelpText="Analysiert die gesamte Video-Bibliothek mit den aktivierten Schritten."
+                            AutomationProperties.AcceleratorKey="Strg+Umschalt+Eingabe">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="PlaylistCheck" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -86,7 +116,10 @@
                     </Button>
 
                     <Button Command="{Binding AnalyzeMarkedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Markierte Clips analysieren&#x0a;• Was es macht: Analysiert ausschließlich die in der Übersicht selektierten Clips.&#x0a;• Wozu es dient: Ermöglicht eine gezielte Aufbereitung bestimmter Videos ohne Wartezeit für den Rest.&#x0a;• Wann nutzen: Nützlich, wenn Sie nur eine handverlesene Auswahl neu hinzugefügter Clips analysieren wollen.">
+                            ToolTip="Markierte Clips analysieren&#x0a;• Was es macht: Analysiert ausschließlich die in der Übersicht selektierten Clips.&#x0a;• Wozu es dient: Ermöglicht eine gezielte Aufbereitung bestimmter Videos ohne Wartezeit für den Rest.&#x0a;• Wann nutzen: Nützlich, wenn Sie nur eine handverlesene Auswahl neu hinzugefügter Clips analysieren wollen."
+                            AutomationProperties.Name="Markierte Video-Clips analysieren"
+                            AutomationProperties.HelpText="Analysiert nur die als markiert gekennzeichneten Clips."
+                            AutomationProperties.AccessKey="Alt+M">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -123,10 +156,36 @@
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
                      
                     <Button Command="{Binding SelectAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
-                            Content="Alle markieren"/>
+                            Content="_Alle markieren"
+                            AutomationProperties.Name="Alle Video-Clips markieren"
+                            AutomationProperties.AcceleratorKey="Strg+A"/>
+
+                    <!-- Audit 2026-08-05 (H-1/T3b.2): IsDeleting und IsLoadingClips
+                         hatten kein XAML-Element. Laufende Batch-Loeschungen und
+                         das initiale Laden der Bibliothek waren fuer den User
+                         unsichtbar. -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0"
+                                Visibility="{Binding IsDeleting, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="Loading" Width="14" Height="14"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"
+                                               Foreground="{StaticResource AbletonAccent}"/>
+                        <TextBlock Text="Loesche..." VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0"
+                                Visibility="{Binding IsLoadingClips, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <icon:PackIconMaterial Kind="Loading" Width="14" Height="14"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"
+                                               Foreground="{StaticResource AbletonAccent}"/>
+                        <TextBlock Text="Lade Bibliothek..." VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonAccent}"/>
+                    </StackPanel>
 
                     <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die ausgewählten Videos vollständig aus der Datenbank und dem Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt.">
+                            ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die ausgewählten Videos vollständig aus der Datenbank und dem Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt."
+                            AutomationProperties.Name="Markierte Video-Clips löschen"
+                            AutomationProperties.HelpText="Entfernt markierte Clips aus Projekt und Cache; Originaldateien bleiben erhalten."
+                            AutomationProperties.AcceleratorKey="Entfernen">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -135,7 +194,10 @@
                     </Button>
 
                     <Button Command="{Binding DeleteAllVideosCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Gesamte Bibliothek löschen&#x0a;• Was es macht: Löscht die gesamte Videodatenbank dieses Projekts unwiderruflich.&#x0a;• Wozu es dient: Setzt das Projekt komplett zurück, um z. B. mit völlig neuem Material von vorne zu beginnen.&#x0a;• Wann nutzen: Mit Vorsicht nutzen, wenn Sie die Bibliothek vollständig leeren möchten.">
+                            ToolTip="Gesamte Bibliothek löschen&#x0a;• Was es macht: Löscht die gesamte Videodatenbank dieses Projekts unwiderruflich.&#x0a;• Wozu es dient: Setzt das Projekt komplett zurück, um z. B. mit völlig neuem Material von vorne zu beginnen.&#x0a;• Wann nutzen: Mit Vorsicht nutzen, wenn Sie die Bibliothek vollständig leeren möchten."
+                            AutomationProperties.Name="Alle Video-Clips löschen"
+                            AutomationProperties.HelpText="Leert die Video-Bibliothek des aktiven Projekts vollständig; Originaldateien bleiben erhalten."
+                            AutomationProperties.AcceleratorKey="Strg+Umschalt+Entfernen">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteSweep" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"
@@ -147,28 +209,33 @@
 
                     <Rectangle Width="1" Fill="{StaticResource AbletonBorder}" Margin="4,6"/>
 
-                    <!-- Analysed-counts indicator -->
-                    <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
-                               Foreground="{StaticResource AbletonGreen}" FontSize="11">
-                        <Run Text="✓ "/><Run Text="{Binding AnalyzedCount, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
-                               Foreground="{StaticResource AbletonTextDim}" FontSize="11">
-                        <Run Text="Offen: "/><Run Text="{Binding PendingCount, Mode=OneWay}"/>
-                    </TextBlock>
-                </StackPanel>
+                </WrapPanel>
 
-                <!-- Thumbnail loading indicator -->
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right"
-                            Visibility="{Binding IsLoadingThumbnails, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <ProgressBar IsIndeterminate="True" Width="60" Height="3"
-                                 Foreground="{StaticResource AbletonAccent}"
-                                 Background="{StaticResource AbletonBorder}"
-                                 Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Thumbnails…" FontSize="11"
-                               Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center"/>
-                </StackPanel>
-            </DockPanel>
+                <!-- Status and progress wrap independently below the action controls. -->
+                <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="6,6,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{StaticResource AbletonGreen}" FontSize="11">
+                            <Run Text="✓ "/><Run Text="{Binding AnalyzedCount, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Foreground="{StaticResource AbletonTextDim}" FontSize="11">
+                            <Run Text="Offen: "/><Run Text="{Binding PendingCount, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Thumbnail loading indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="12,0,0,0"
+                                Visibility="{Binding IsLoadingThumbnails, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ProgressBar IsIndeterminate="True" Width="60" Height="3"
+                                     Foreground="{StaticResource AbletonAccent}"
+                                     Background="{StaticResource AbletonBorder}"
+                                     Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Thumbnails…" FontSize="11"
+                                   Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </WrapPanel>
+            </Grid>
         </Border>
 
         <!-- ── Thumbnail Grid (Multi-Select) ── -->
@@ -182,7 +249,9 @@
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  VirtualizingPanel.IsVirtualizing="True"
                  VirtualizingPanel.VirtualizationMode="Recycling"
-                 Margin="0,0,12,0">
+                 Margin="0,0,12,0"
+                 AutomationProperties.Name="Video-Clip-Liste"
+                 AutomationProperties.HelpText="Mehrfachauswahl mit Umschalt- oder Strg-Taste; Entfernen löscht markierte Clips aus dem Projekt.">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
                     <WrapPanel/>
@@ -392,7 +461,7 @@
                                             <Setter Property="Kind" Value="CheckCircleOutline"/>
                                             <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedClip.HasCacheHash}" Value="False">
+                                                <DataTrigger Binding="{Binding SelectedClip.HasEmbedding}" Value="False">
                                                     <Setter Property="Kind" Value="ClockOutline"/>
                                                     <Setter Property="Foreground" Value="{StaticResource AbletonTextDim}"/>
                                                 </DataTrigger>
@@ -449,7 +518,9 @@
 
                     <ListBox Grid.Row="1" ItemsSource="{Binding SelectedClipScenes}" 
                              Background="Transparent" BorderThickness="0" 
-                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             AutomationProperties.Name="Szenen des ausgewählten Video-Clips"
+                             AutomationProperties.HelpText="Liste erkannter Szenen mit Zeitbereich und Erkennungs-Konfidenz.">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="{StaticResource AbletonPanel}" Margin="0,0,0,4" Padding="8,6" CornerRadius="3">
@@ -525,7 +596,9 @@
                     <TextBlock Text="{Binding CurrentStep}" Foreground="{StaticResource AbletonText}" FontSize="12" FontStyle="Italic"/>
                 </StackPanel>
                 <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AbletonTextDim}"
-                           FontSize="12" Margin="2,4,0,0"/>
+                           FontSize="12" Margin="2,4,0,0"
+                           AutomationProperties.Name="{Binding StatusText}"
+                           AutomationProperties.LiveSetting="Polite"/>
             </StackPanel>
         </Border>
     </Grid>

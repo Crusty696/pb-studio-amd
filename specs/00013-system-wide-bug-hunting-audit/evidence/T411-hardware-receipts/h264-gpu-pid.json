@@ -1,0 +1,362 @@
+﻿[
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.5812050112749818,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620618789)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.917167806019314,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620619999)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.9298233692106161,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620621181)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.9194269380063231,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620622377)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.9430632903314209,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620624753)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.9236435354741603,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620625929)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.93753947999603,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620627110)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  1.9035585470387619,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0,
+        "Status":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785620628293)\/",
+        "InstanceName":  "pid_15388_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0,
+        "Status":  0
+    }
+]

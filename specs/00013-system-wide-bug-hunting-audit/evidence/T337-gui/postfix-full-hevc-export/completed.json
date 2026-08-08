@@ -1,0 +1,50 @@
+{
+  "completed_at": "2026-07-29T20:06:27.359229+02:00",
+  "elapsed_seconds": 754.1719999999987,
+  "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t337_postfix.mp4",
+  "output_sha256": "9ad896ef336b3a0da72fc936efa19dcadd9931423ba40d6146316b508eb913e7",
+  "output_size": 3687203928,
+  "render_result": {
+    "end_pts_seconds": 6335.0,
+    "exit_code": 0,
+    "expected_duration_seconds": 6335.027,
+    "expected_frames": 190051,
+    "failure_fingerprint": null,
+    "fps": 564.06,
+    "frame": 190051,
+    "job_id": "t337-postfix-hevc-full-length",
+    "out_time_us": 6335000000,
+    "progress_end": true,
+    "progress_log_sha256": "7d04914839acb8189e80480cab9212ab3d3b1684666d6c4b9abd557a3485ca5e",
+    "recorded_at_epoch": 1785347975.9874592,
+    "run_id": "da38df4aca43418881f9ca42d2473074",
+    "schema_version": 1,
+    "speed": "18.8x",
+    "status": "completed",
+    "stderr_log_sha256": "5073f77147115b69be9bc44b1913b4dc7328e5e7e7f5d9ae6dc4156ccf782f8f",
+    "total_size": 3687203928
+  },
+  "render_result_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t337-postfix-hevc-full-length\\da38df4aca43418881f9ca42d2473074\\result.json",
+  "result": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t337_postfix.mp4",
+  "run_id": "da38df4aca43418881f9ca42d2473074",
+  "validation": {
+    "error": null,
+    "failure_fingerprint": null,
+    "job_id": "t337-postfix-hevc-full-length",
+    "metrics": {
+      "audio_end_pts": 6335.04,
+      "container_duration": 6335.033333,
+      "decoded_frames": 190051,
+      "end_silence_seconds": 58.215083,
+      "expected_end_silence_seconds": 58.222062,
+      "expected_frames": 190051,
+      "true_peak_dbtp": -1.06,
+      "video_end_pts": 6335.033333
+    },
+    "recorded_at_epoch": 1785348387.2150798,
+    "run_id": "da38df4aca43418881f9ca42d2473074",
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "validation_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t337-postfix-hevc-full-length\\da38df4aca43418881f9ca42d2473074\\validation.json"
+}

@@ -13,7 +13,9 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource AbletonBg}"
         ResizeMode="NoResize"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        AutomationProperties.Name="Modell-Download"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -42,6 +44,8 @@
                    Text="{Binding StatusText}"
                    Foreground="{StaticResource AbletonAccent}"
                    FontSize="12" FontWeight="SemiBold"
+                   AutomationProperties.Name="{Binding StatusText}"
+                   AutomationProperties.LiveSetting="Polite"
                    Margin="0,0,0,4"/>
 
         <!-- Progress Bar -->
@@ -51,6 +55,8 @@
                      IsIndeterminate="{Binding IsIndeterminate}"
                      Minimum="0" Maximum="100"
                      Foreground="{StaticResource AbletonAccent}"
+                     AutomationProperties.Name="Download-Fortschritt"
+                     AutomationProperties.HelpText="Fortschritt des aktuellen Modell-Downloads in Prozent."
                      Margin="0,4,0,8"/>
 
         <!-- Detail-Text -->
@@ -82,6 +88,8 @@
                                TextWrapping="Wrap"
                                Padding="0"
                                Cursor="IBeam"
+                               AutomationProperties.Name="Download-Fehler"
+                               AutomationProperties.LiveSetting="Assertive"
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
@@ -90,10 +98,15 @@
         <!-- Buttons -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <!-- Cancel waehrend Download -->
-            <Button Content="Abbrechen"
+            <Button x:Name="CancelButton"
+                    Content="_Abbrechen"
                     Command="{Binding CancelCommand}"
                     Foreground="{StaticResource AbletonRed}"
-                    Padding="14,4">
+                    Padding="14,4"
+                    IsCancel="True"
+                    AutomationProperties.Name="Modell-Download abbrechen"
+                    AutomationProperties.HelpText="Bricht den laufenden Download ab. Bereits geladene unvollständige Daten werden nicht als Modell aktiviert."
+                    AutomationProperties.AccessKey="Alt+A">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
                         <Setter Property="Visibility" Value="Visible"/>
@@ -107,12 +120,16 @@
             </Button>
 
             <!-- Schliessen wenn fertig -->
-            <Button Content="Schliessen"
+            <Button Content="_Schließen"
                     Click="OnCloseClicked"
                     Background="{StaticResource AbletonAccent}"
                     BorderThickness="0"
                     Padding="14,4"
-                    Margin="8,0,0,0">
+                    Margin="8,0,0,0"
+                    IsDefault="True"
+                    AutomationProperties.Name="Download-Dialog schließen"
+                    AutomationProperties.HelpText="Schließt den Dialog nach Abschluss oder Fehler."
+                    AutomationProperties.AccessKey="Alt+S">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                         <Setter Property="Visibility" Value="Collapsed"/>

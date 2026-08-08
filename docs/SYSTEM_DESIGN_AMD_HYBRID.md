@@ -1,10 +1,35 @@
 # System Design: PB Studio AMD – C# WPF + Python FastAPI Hybrid
 
 **Datum:** 2026-03-04
-**Status:** ENTWURF – Hybrid-Stack ist GEPLANT, nicht implementiert.
-FastAPI Backend und C# WPF Frontend existieren noch NICHT.
-Aktuelle App läuft vollständig als PyQt6/Python Desktop-App.
+**Status:** SUPERSEDED – historischer Migrationsentwurf vom 2026-03-04.
+FastAPI-Backend und C#-WPF-Frontend sind inzwischen implementiert; WPF ist der
+aktive Produktpfad. Aktuelle Verträge stehen in ADR-002/ADR-003, den
+projektspezifischen Agent-Referenzen und den T311-T329-Reparaturbelegen.
 **Verantwortlich:** Claude (Opus 4.6)
+
+---
+
+## Aktueller Architekturvertrag
+
+- WPF (.NET 9) kommuniziert über REST/SSE ausschließlich mit
+  `127.0.0.1:8765`.
+- Python 3.11.x und NumPy 1.26.4 sind fest.
+- ONNX-ML nutzt nur `DmlExecutionProvider`; `enable_mem_pattern=False` und
+  `enable_cpu_mem_arena=False` sind gemeinsam Pflicht. Kein CPU-Fallback.
+- Rendering nutzt ausschließlich `h264_amf`, `hevc_amf` oder `av1_amf` und
+  schlägt ohne AMF geschlossen fehl.
+- SigLIP liefert 1152-dimensionale ONNX-Embeddings. CLAP-Semantik ist nur mit
+  registriertem CLAP-ONNX-Modell verfügbar und sonst explizit `unavailable`.
+- Modellquelle, Transformation, Lizenzkette und Release-Hash sind ausschließlich
+  in [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+  und [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json)
+  autoritativ.
+- Medien werden als lokale Projektkatalog-Einträge importiert und über
+  registrierte Clip-IDs an Timeline/Preview/Render gebunden.
+
+Alle folgenden Plan-, Bestands- und Implementierungsangaben sind historische
+Migrationsdokumentation und dürfen nicht als aktuelle Betriebsanleitung
+verwendet werden.
 
 ---
 
@@ -32,7 +57,7 @@ Die App soll in eine **C# WPF + Python FastAPI Hybrid-Architektur** migriert wer
 |--------|--------|-----|
 | GPU-Inference | CUDA + torch.cuda | DirectML + ONNX Runtime |
 | Video-Encoder | NVENC (hevc_nvenc) | AMF (hevc_amf) |
-| Embeddings | CLIP 512-dim + CLAP | SigLIP 1152-dim (kein CLAP) |
+| Embeddings | CLIP 512-dim + CLAP | SigLIP 1152-dim + registriertes CLAP-ONNX |
 | Vector Store | ChromaDB | FAISS-CPU |
 | Vision LLM | Moondream (PyTorch) | Moondream ONNX (FP16 DirectML) |
 | Motion | RAFT (PyTorch CUDA) | RAFT ONNX (Opset 17 DirectML) |
@@ -144,10 +169,10 @@ PBStudio.UI/
 | System.Net.Http | built-in | HTTP Client |
 | Microsoft.Extensions.DI | ≥9.0 | Dependency Injection |
 
-### 3.2 Python FastAPI Backend (NOCH NICHT IMPLEMENTIERT)
+### 3.2 Python FastAPI Backend (historischer Plan)
 
 ```
-backend/    # ← Muss noch erstellt werden
+backend/    # historischer Zielbaum; inzwischen implementiert
 ├── main.py                          # FastAPI App, Startup/Shutdown
 ├── config.py                        # Server-Konfiguration (Port, Paths)
 ├── dependencies.py                  # Shared Dependencies (DB, GPU Lock)
@@ -354,12 +379,13 @@ async def with_gpu_lock(func, *args):
 
 | Modul | GPU (DirectML) | CPU | Anmerkung |
 |-------|---------------|-----|-----------|
-| Moondream ONNX | Ja | Fallback | Vision-Language Model |
+| Moondream ONNX | Ja | Nein | Vision-Language Model; fail closed |
 | RAFT ONNX | Ja | Nein | Optical Flow |
-| SigLIP ONNX | Ja | Fallback | Video Embeddings |
-| Demucs | Ja (patched) | Fallback | Stem Separation |
+| SigLIP ONNX | Ja | Nein | Video Embeddings; fail closed |
+| Demucs/htdemucs (PyTorch) | Nein | Ja | Stem Separation; freigegebene CPU-Ausnahme |
+| UVR-MDX-NET (ONNX) | Ja | Nein | Stem Separation via DirectML; fail closed |
 | BeatNet | Nein | Ja | Immer CPU (AMD Constraint) |
-| FFmpeg AMF | Ja (HW Encoder) | libx264 | Video Rendering |
+| FFmpeg AMF | Ja (HW Encoder) | Nein | Video Rendering; AMF-only |
 | FAISS | Nein | Ja | Vector Search |
 | librosa | Nein | Ja | Audio Features |
 
@@ -371,7 +397,7 @@ import onnxruntime as ort
 session_options = ort.SessionOptions()
 session_options.enable_mem_pattern = False  # MANDATORY für DirectML
 session_options.enable_cpu_mem_arena = False
-providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+providers = ["DmlExecutionProvider"]
 ```
 
 ---
@@ -540,7 +566,7 @@ launch.ps1
 | Python-Prozess Crash bei langem Rendering | Mittel | Auto-Restart + State Recovery |
 | VRAM-Engpass bei großen ONNX-Modellen | Mittel | VRAM Arbiter + Session Cleanup |
 | C# WPF Lernkurve (Team kennt PyQt6) | Niedrig | MVVM Toolkit vereinfacht vieles |
-| FFmpeg AMF nicht auf allen AMD-GPUs verfügbar | Niedrig | libx264 Software-Fallback |
+| FFmpeg AMF nicht auf allen AMD-GPUs verfügbar | Hoch | Vor Renderstart explizit `unavailable`; kein Software-Fallback |
 
 ---
 

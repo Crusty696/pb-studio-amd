@@ -48,7 +48,7 @@ def test_audio_key_detector_with_real_audio(tmp_path):
         assert any(c in key for c in ["A", "F", "D", "C"])
 
 
-def test_video_analysis_includes_audio_key_field():
+def test_video_analysis_includes_audio_key_field(tmp_path):
     """Y3 / GPU-F2: audio_key Detection wurde aus with_gpu_task rausgenommen.
     Der analyze_video Route-Handler ruft detect_video_audio_key NACH dem GPU-Lock.
     
@@ -59,7 +59,11 @@ def test_video_analysis_includes_audio_key_field():
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "VideoKeyTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -81,11 +85,13 @@ def test_video_analysis_includes_audio_key_field():
     }
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[1] = {
+    clip = {
         "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
 
     from pathlib import Path as _Path
     try:
@@ -110,14 +116,18 @@ def test_video_analysis_includes_audio_key_field():
     assert body["audio_key"] == "C Major"
 
 
-def test_video_analysis_audio_key_none_on_failure():
+def test_video_analysis_audio_key_none_on_failure(tmp_path):
     """Detect-Fehler -> audio_key=None, kein Crash."""
     import sys
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "VideoKeyTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -139,11 +149,13 @@ def test_video_analysis_audio_key_none_on_failure():
     }
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[1] = {
+    clip = {
         "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
 
     from pathlib import Path as _Path
     try:

@@ -1,5 +1,11 @@
 # PB Studio AMD Version - Vollständige Fehleranalyse
 
+> **HISTORISCH / SUPERSEDED (2026-07-29):** Diese Bestandsaufnahme vom
+> 2026-02-04 dokumentiert damalige Fehlerbilder und bewusst auch verbotene
+> Beispielkonfigurationen. Sie ist kein aktiver Implementierungs-, Runtime-
+> oder Releasevertrag. Aktuelle Wahrheit steht im Spec-Workspace
+> `specs/00013-system-wide-bug-hunting-audit/`.
+
 **Datum:** 2026-02-04
 **Analysiert von:** 5 Auto-Agenten (code-analyzer, researcher, reviewer x2, config-analyzer)
 **Gesamtstatus:** 75-80% implementiert, 47 Probleme gefunden

@@ -45,6 +45,11 @@ def fresh_state():
     """Gibt einen frischen AppState zurück und überschreibt die DI."""
     from backend.app_state import get_app_state
     state = AppState()
+    state.current_project = {
+        "name": "RouterTests",
+        "path": r"C:\PBStudioTests\RouterTests",
+        "db_project_id": 1,
+    }
     app.dependency_overrides[get_app_state] = lambda: state
     yield state
     app.dependency_overrides.clear()
@@ -75,6 +80,15 @@ class TestHealth:
 # ─────────────────────────────────────────────────────────────────
 
 class TestAudioRouter:
+
+    def test_import_ohne_projekt_409_und_keine_state_mutation(self, client, fresh_state):
+        fresh_state.current_project = None
+
+        response = client.post("/audio/import", json={"path": r"C:\media\track.wav"})
+
+        assert response.status_code == 409
+        assert "projekt" in response.json()["detail"].lower()
+        assert fresh_state.audio_clips == {}
 
     def test_reimport_gleiche_datei_reused_clip_id(self, client, tmp_path, fresh_state):
         audio_mod = _get_module("backend.routers.audio_router")
@@ -251,6 +265,15 @@ class TestAudioRouter:
 # ─────────────────────────────────────────────────────────────────
 
 class TestVideoRouter:
+
+    def test_import_ohne_projekt_409_und_keine_state_mutation(self, client, fresh_state):
+        fresh_state.current_project = None
+
+        response = client.post("/video/import", json={"paths": [r"C:\media\clip.mp4"]})
+
+        assert response.status_code == 409
+        assert "projekt" in response.json()["detail"].lower()
+        assert fresh_state.video_clips == {}
     def test_reimport_gleiches_video_reused_clip_id(self, client, tmp_path, fresh_state):
         video_mod = _get_module("backend.routers.video_router")
         orig_info = video_mod._get_video_info
@@ -345,7 +368,7 @@ class TestVideoRouter:
                 }]
             }
 
-        def fake_gpu(video_path, clip_id, request, _loop=None):
+        def fake_gpu(video_path, clip_id, request, _loop=None, *args):
             return {
                 "avg_motion": 12.5,
                 "motion": {
@@ -371,11 +394,13 @@ class TestVideoRouter:
         video_mod._run_video_gpu_analysis = fake_gpu
         video_mod._run_color_and_caption_analysis = fake_color
 
-        fresh_state.video_clips[1] = {
+        clip = {
             "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
             "duration_seconds": 10.0, "width": 1920, "height": 1080,
             "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
         }
+        fresh_state.persist_video_clip(clip, project_id=1)
+        fresh_state.set_video_clip(1, clip)
 
         # R15/C-02: Patch Path.exists so the new file-existence guard passes in tests.
         from pathlib import Path as _Path
@@ -450,9 +475,21 @@ class TestPacingRouter:
 
         async def fake_pub(*a, **kw): pass
 
-        def fake_run(config, audio_clips, video_clips, cached_analysis=None, video_analysis_cache=None, loop=None):
+        def fake_run(
+            config,
+            audio_clips,
+            video_clips,
+            cached_analysis=None,
+            video_analysis_cache=None,
+            loop=None,
+            ui_anchors=None,
+        ):
             # Audit L-M7: _run_pacing_generation hat jetzt optionalen loop Param fuer
             # per-iteration pacing_progress callback (SSE).
+            # Audit 2026-08-06 (T4.3): dazu ui_anchors — die manuellen Anker aus
+            # dem ANCHOR-Tab werden vom Aufrufer geladen und durchgereicht,
+            # damit diese Funktion snapshot-basiert und ohne AppState-Zugriff
+            # bleibt. Genau dieser Vertrag ist es, den dieser Test absichert.
             # Überprüfung: Snapshots wurden korrekt übergeben
             assert 1 in audio_clips
             assert 1 in video_clips

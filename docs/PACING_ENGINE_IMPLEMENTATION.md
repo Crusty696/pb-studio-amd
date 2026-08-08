@@ -2,10 +2,16 @@
 
 **Projekt:** PB Studio AMD Version
 **Modul:** Rhythm-basierte Video-Schnittsteuerung
-**Status:** ✓ Vollständig implementiert und validiert
+**Status:** SUPERSEDED – historische Implementierungszusammenfassung; keine aktuelle Release-Freigabe
 **Datum:** 2026-02-04
 
 ---
+
+> Die Test-, Performance- und Production-Ready-Aussagen unten dokumentieren
+> den damaligen Stand und sind durch das Audit 00013 sowie T305 invalidiert.
+> Aktuell sind kanonische 1152-dimensionale SigLIP-ONNX-Features,
+> autoritative Beat-/Downbeat-Provenienz, exakte Timeline-Grenzen,
+> projektregistrierte Clip-IDs und explizite Semantic-Availability bindend.
 
 ## Übersicht
 
@@ -54,7 +60,7 @@ Die **Pacing Engine** ist ein intelligentes System zur rhythmus-synchronisierten
 
 ### 2. Tests
 
-**Datei:** `tests/test_pacing_engine.py` (400+ Zeilen)
+**Datei:** `Tests/test_pacing_engine.py` (400+ Zeilen)
 
 **Test-Klassen:**
 - `TestPacingConfig` - Konfigurations-Validierung
@@ -98,7 +104,7 @@ Die **Pacing Engine** ist ein intelligentes System zur rhythmus-synchronisierten
 Ersetze `_plan_cuts()` in `src/pb_studio/video/engine.py`:
 
 ```python
-from src.pb_studio.pacing import AdvancedPacingEngine, PacingConfig
+from pb_studio.pacing import AdvancedPacingEngine, PacingConfig
 
 def _plan_cuts(self, config, analysis, rms, times, total_duration):
     # Pacing-Konfiguration erstellen
@@ -130,8 +136,8 @@ def _plan_cuts(self, config, analysis, rms, times, total_duration):
 ### Erweiterte Integration mit ClipSelector
 
 ```python
-from src.pb_studio.pacing import ClipSelector
-from src.pb_studio.data.vector_store import VectorStore
+from pb_studio.pacing import ClipSelector
+from pb_studio.data.vector_store import VectorStore
 
 class VideoGenerator:
     def __init__(self):
@@ -264,7 +270,7 @@ tools/
    - Automatische Taktart-Erkennung (4/4 Standard)
 
 4. **Clip-Selektion:**
-   - FAISS-basierte Vektorsuche (768-dim)
+   - FAISS-basierte Vektorsuche (1152-dim kanonischer SigLIP-Vertrag)
    - Cosine Similarity für semantisches Matching
    - Multi-Kriterien-Scoring mit Gewichtung
 
@@ -283,12 +289,12 @@ tools/
 
 ### Kompatibilität
 
-- ✓ Python 3.10, 3.11, 3.12+
-- ✓ NumPy 1.26.4+
+- Python 3.11.x (fest)
+- NumPy 1.26.4 (fest)
 - ✓ Librosa 0.10.0+
 - ✓ FAISS-CPU 1.7.0+
 - ✓ VideoGenerator (Legacy-Format-Kompatibilität)
-- ✓ VectorStore Integration (768-dim Embeddings)
+- VectorStore Integration (1152-dim SigLIP-Embeddings)
 
 ---
 
@@ -298,7 +304,7 @@ tools/
 
 ```python
 # Immer BeatNet + Librosa kombinieren
-from src.pb_studio.audio.analyzer import AudioAnalyzer
+from pb_studio.audio.analyzer import AudioAnalyzer
 import librosa
 
 analyzer = AudioAnalyzer()
@@ -322,12 +328,14 @@ config = PacingConfig(pacing=2, precision=5, sync_mode=SyncMode.ENERGY_SYNC)
 ### 3. Clip-Embeddings vorberechnen
 
 ```python
-from src.pb_studio.ai.moondream import MoondreamVision
+from pb_studio.ai import SigLIPWrapper
 
-vision = MoondreamVision()
+vision = SigLIPWrapper(lazy_load=False)
 for video in source_videos:
     frame = extract_keyframe(video)
     embedding = vision.encode_image(frame)
+    if embedding is None:
+        raise RuntimeError("SigLIP semantic embedding unavailable")
     # Cache in VectorStore
 ```
 
@@ -407,15 +415,16 @@ results = selector.select_hybrid(
 
 ### 1. Basic Timeline-Generierung
 
-```bash
-cd C:\Users\david\Dokumente\Pb_studio_AMD_version
-python docs/examples/pacing_example.py
+```powershell
+cd <PB-Studio-Repository>
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe docs/examples/pacing_example.py
 ```
 
 ### 2. Tests ausführen
 
-```bash
-python -m pytest tests/test_pacing_engine.py -v
+```powershell
+.\.venv\Scripts\python.exe -m pytest Tests/test_pacing_engine.py -v
 ```
 
 ### 3. Validation
@@ -449,7 +458,7 @@ Siehe `docs/pacing_engine_integration.md` für detaillierte Anleitung.
 - ✓ Type Hints auf allen Funktionen
 - ✓ Vollständige Dokumentation
 
-**Production-Ready:** JA
+**Historische Production-Ready-Aussage:** INVALIDIERT DURCH T305
 
 Die Pacing Engine ist vollständig implementiert, getestet und dokumentiert. Sie kann sofort in VideoGenerator integriert werden und bietet professionelle rhythmus-synchronisierte Videobearbeitung für PB Studio AMD Edition.
 
@@ -458,4 +467,4 @@ Die Pacing Engine ist vollständig implementiert, getestet und dokumentiert. Sie
 **Implementiert von:** Chronos (AI Pacing Specialist)
 **Datum:** 2026-02-04
 **Version:** 1.0.0
-**Status:** ✓ Production Ready
+**Status:** SUPERSEDED / NICHT RELEASE-READY

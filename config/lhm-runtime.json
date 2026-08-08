@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "active": {
+    "version": "0.9.6",
+    "bundle_dir": "tools/LibreHardwareMonitor",
+    "manifest": "pb-studio-lhm-manifest.json",
+    "manifest_sha256": "AF9C9CF981F92A0BD6EA5CC80FDDF0822DAAE76E60F42636AA5B65757CC5B001",
+    "library": "LibreHardwareMonitorLib.dll",
+    "library_sha256": "6EBC194316536BA61AF5BE24508AD9FCBB2ECC685E716C12E787C79530F66BF0"
+  },
+  "source": {
+    "release_url": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/tag/v0.9.6",
+    "asset_url": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.zip",
+    "asset_sha256": "086D9F1B5A99E643EDC2CFAAAC16051685B551E4C5AC0B32A57C58C0E529C001"
+  }
+}

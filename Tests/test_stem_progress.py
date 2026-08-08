@@ -16,11 +16,20 @@ def test_stem_separator_calls_on_progress(tmp_path):
     # Bypass __init__ so we don't trigger the real audio-separator/onnx loader.
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False  # skip the SessionOptions monkeypatch
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     progress_calls: list[float] = []
 
@@ -29,6 +38,7 @@ def test_stem_separator_calls_on_progress(tmp_path):
 
     result = sep.separate(
         file_path=str(test_file),
+        model_name=model_file.name,
         on_progress=lambda pct: progress_calls.append(pct),
     )
 
@@ -49,16 +59,25 @@ def test_stem_separator_works_without_callback(tmp_path):
 
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     sep._run_inference = lambda path: [str(tmp_path / "vocals.wav")]
 
     # Should not raise — the default on_progress=None must be handled cleanly.
-    result = sep.separate(file_path=str(test_file))
+    result = sep.separate(file_path=str(test_file), model_name=model_file.name)
     assert "stems" in result
 
 
@@ -91,11 +110,20 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
 
     sep = StemSeparator.__new__(StemSeparator)
     sep.separator = MagicMock()
-    sep.separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    sep._has_directml = False
+    sep.separator.onnx_execution_provider = ["DmlExecutionProvider"]
+    sep._has_directml = True
+    sep.separator.load_model.side_effect = lambda _name: setattr(
+        sep,
+        "_directml_session_created",
+        True,
+    )
 
     test_file = tmp_path / "test.wav"
     test_file.touch()
+    model_file = tmp_path / "test.yaml"
+    model_file.touch()
+    sep.config = MagicMock()
+    sep.config.get.return_value = {"models_dir": str(tmp_path)}
 
     sep._run_inference = lambda path: [str(tmp_path / "vocals.wav")]
 
@@ -106,7 +134,42 @@ def test_stem_separator_legacy_callback_still_works(tmp_path):
 
     result = sep.separate(
         file_path=str(test_file),
+        model_name=model_file.name,
         callback=legacy_cb,
     )
     assert "stems" in result
     assert len(legacy_calls) >= 2
+
+
+def test_stem_router_keeps_lock_and_telemetry_without_outer_budget(monkeypatch):
+    """H-05: the router must not reserve a second model budget."""
+    import asyncio
+    import importlib
+
+    from backend.schemas.audio_schemas import StemModel, StemSeparateRequest
+
+    audio_router = importlib.import_module("backend.routers.audio_router")
+    captured = {}
+
+    async def fake_gpu_task(func, *args, **kwargs):
+        captured.update(kwargs)
+        return {"model_used": args[1]}
+
+    state = MagicMock()
+    state.get_audio_clip.return_value = {
+        "id": 7,
+        "name": "mix",
+        "path": "mix.wav",
+    }
+    monkeypatch.setattr(audio_router, "with_gpu_task", fake_gpu_task)
+
+    result = asyncio.run(
+        audio_router.separate_stems(
+            StemSeparateRequest(clip_id=7, model=StemModel.HTDEMUCS),
+            state,
+        )
+    )
+
+    assert result.model_used == StemModel.HTDEMUCS.value
+    assert captured["model_id"] == "stem_separation_full"
+    assert captured["manage_vram"] is False

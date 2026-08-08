@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -40,7 +41,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> RenderLogEntries { get; } = [];
     public List<string> QualityOptions { get; } = ["preview", "standard", "high", "ultra"];
     // L-N6: Verfuegbare Encoder. "auto" -> null im Request (Backend default-Logik).
-    public List<string> AvailableEncoders { get; } = ["auto", "h264_amf", "hevc_amf", "av1_amf", "libx264"];
+    public List<string> AvailableEncoders { get; } = ["auto", "h264_amf", "hevc_amf", "av1_amf"];
 
     public ProductionViewModel(IApiClient api, SSEClient sse, TimelineStateService timelineState, ProjectService projects, IDialogService dialogService)
     {
@@ -62,11 +63,20 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 HasProject = true;
+                StatusText = "Bereit für Rendering";
+                // Audit 2026-08-05 (C-1/T1.1): gueltigen Ausgabepfad vorbelegen,
+                // sonst laeuft der erste Render-Klick ins 403-Gate.
+                ApplyDefaultOutputPath();
                 StartRenderCommand.NotifyCanExecuteChanged();
+                _ = SyncAudioPathFromTimelineAsync();
             });
         });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _timelineState.Clear();
+                ResetProjectState();
+            }));
 
         if (HasProject)
         {
@@ -75,16 +85,83 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Prueft, ob ein Pfad innerhalb der Projektwurzel liegt.
+    ///
+    /// Audit 2026-08-05 (C-1/T1.1): Das Backend lehnt Ausgabepfade ausserhalb
+    /// des Projektverzeichnisses mit 403 ab (SEC-002, render_router.py). Die UI
+    /// liess den Pfad aber frei waehlen und validierte nichts — der Export war
+    /// dadurch blockiert, ohne dass ein Grund sichtbar wurde. Wir pruefen jetzt
+    /// clientseitig, bevor der Request rausgeht.
+    /// </summary>
+    private bool IsInsideProjectRoot(string candidate, out string projectRoot)
+    {
+        projectRoot = _projects.CurrentProjectPath ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        try
+        {
+            var root = Path.GetFullPath(projectRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var full = Path.GetFullPath(candidate);
+            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     [RelayCommand]
     private void BrowseOutput()
     {
+        // Dialog in der Projektwurzel oeffnen statt im zuletzt genutzten Ordner —
+        // sonst landet der User systematisch im 403-Gate des Backends.
+        var projectRoot = _projects.CurrentProjectPath;
         var file = _dialogService.SaveFile(
             "Ausgabedatei wählen",
             "MP4 Video|*.mp4|MKV Video|*.mkv",
-            "output.mp4"
+            "output.mp4",
+            string.IsNullOrWhiteSpace(projectRoot) ? null : projectRoot
         );
-        if (!string.IsNullOrEmpty(file))
-            OutputPath = file;
+        if (string.IsNullOrEmpty(file))
+            return;
+
+        if (!IsInsideProjectRoot(file, out var root))
+        {
+            AppendLog(
+                "error",
+                $"Ausgabepfad liegt ausserhalb des Projektverzeichnisses und wird vom Backend "
+                + $"abgelehnt. Gewaehlt: {file} — erlaubt ist nur: {root}");
+            StatusText = "Ausgabepfad ausserhalb des Projektverzeichnisses";
+            return;
+        }
+
+        OutputPath = file;
+    }
+
+    /// <summary>
+    /// Belegt den Ausgabepfad beim Projektwechsel mit einem gueltigen Default vor,
+    /// damit der erste Render-Klick nicht ins 403-Gate laeuft.
+    /// </summary>
+    private void ApplyDefaultOutputPath()
+    {
+        var projectRoot = _projects.CurrentProjectPath;
+        if (string.IsNullOrWhiteSpace(projectRoot))
+            return;
+        if (!string.IsNullOrWhiteSpace(OutputPath) && IsInsideProjectRoot(OutputPath, out _))
+            return;
+
+        try
+        {
+            OutputPath = Path.Combine(projectRoot, "output.mp4");
+        }
+        catch (ArgumentException)
+        {
+            // Ungueltiger Projektpfad — lieber leer lassen als raten.
+        }
     }
 
     private bool CanStartRender() => HasProject && !IsRendering;
@@ -141,12 +218,42 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             if (result != null)
             {
                 _currentTaskId = result.TaskId;
-                ApplyProgressUpdate(result.TaskId, result.Status, result.Percent, "Render-Task registriert", result.CurrentFrame, result.TotalFrames, result.ElapsedSeconds, result.EtaSeconds, result.OutputPath, result.Error);
+                ApplyProgressUpdate(
+                    result.TaskId,
+                    result.Status,
+                    result.Percent,
+                    result.Message ?? "Render-Task registriert",
+                    result.CurrentFrame,
+                    result.TotalFrames,
+                    result.ElapsedSeconds,
+                    result.EtaSeconds,
+                    result.OutputPath,
+                    result.Error,
+                    result.QueueJobId,
+                    result.RunId,
+                    result.EvidencePath,
+                    result.ValidationPath,
+                    result.ProgressEnd,
+                    result.ValidationStatus);
                 AppendLog("info", $"Render-Task gestartet: {result.TaskId}");
             }
             else
             {
-                ResetRenderState("Rendering konnte nicht gestartet werden", "error", "Render-Start fehlgeschlagen");
+                // Audit 2026-08-05 (C-1/T0.1): Der Grund kam vom Backend im
+                // detail-Feld, wurde aber vom ApiClient verworfen. Jetzt liegt er
+                // in LastErrorDetail und gehoert in die Anzeige — "Rendering
+                // konnte nicht gestartet werden" allein hat den User drei
+                // Fehlversuche lang im Dunkeln gelassen.
+                var reason = _api.LastErrorDetail;
+                var statusText = string.IsNullOrWhiteSpace(reason)
+                    ? "Rendering konnte nicht gestartet werden"
+                    : $"Rendering abgelehnt: {reason}";
+                ResetRenderState(
+                    statusText,
+                    "error",
+                    string.IsNullOrWhiteSpace(reason)
+                        ? "Render-Start fehlgeschlagen (kein Grund vom Backend geliefert)"
+                        : $"Render-Start fehlgeschlagen: {reason}");
             }
         }
         catch (Exception ex)
@@ -212,7 +319,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 e.ElapsedSeconds,
                 e.EtaSeconds,
                 e.OutputPath,
-                e.Error);
+                e.Error,
+                e.QueueJobId,
+                e.RunId,
+                e.EvidencePath,
+                e.ValidationPath,
+                e.ProgressEnd,
+                e.ValidationStatus);
         });
     }
 
@@ -226,7 +339,13 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         double elapsedSeconds,
         double etaSeconds,
         string? outputPath,
-        string? error)
+        string? error,
+        string? queueJobId,
+        string? runId,
+        string? evidencePath,
+        string? validationPath,
+        bool progressEnd,
+        string? validationStatus)
     {
         var normalizedStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
         var effectiveMessage = string.IsNullOrWhiteSpace(message)
@@ -255,6 +374,17 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 AppendLog("info", taskId is null ? effectiveMessage : $"{effectiveMessage} ({taskId})");
                 if (!string.IsNullOrWhiteSpace(outputPath))
                     AppendLog("info", $"Output: {outputPath}");
+                if (!string.IsNullOrWhiteSpace(queueJobId))
+                    AppendLog("info", $"Queue-Job: {queueJobId}");
+                if (!string.IsNullOrWhiteSpace(runId))
+                    AppendLog("info", $"Render-Run: {runId}");
+                AppendLog(
+                    progressEnd && validationStatus == "validated" ? "info" : "warn",
+                    $"Abschlussvertrag: progress_end={progressEnd}, validation={validationStatus ?? "unknown"}");
+                if (!string.IsNullOrWhiteSpace(evidencePath))
+                    AppendLog("info", $"Render-Evidenz: {evidencePath}");
+                if (!string.IsNullOrWhiteSpace(validationPath))
+                    AppendLog("info", $"Validierungs-Evidenz: {validationPath}");
                 _currentTaskId = null;
                 break;
 

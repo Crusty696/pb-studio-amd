@@ -7,7 +7,10 @@ Diese DB ist nur Index. Cross-project Re-Use über media_hash.
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
+import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +42,7 @@ class EmbeddingCache:
     def __init__(self, db_path: str | Path, embeddings_dir: str | Path):
         self.db_path = Path(db_path)
         self.embeddings_dir = Path(embeddings_dir)
+        self._lock = threading.RLock()
         self.embeddings_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,36 +58,38 @@ class EmbeddingCache:
         migrate(self.db_path, _MIGRATIONS_DIR)
 
     def close(self) -> None:
-        try:
-            self.conn.close()
-        except Exception:
-            pass
-        self.conn = None
+        with self._lock:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
 
     def lookup(
         self, media_hash: str, model_name: str, model_version: str
     ) -> Optional[CacheEntry]:
-        row = self.conn.execute(
-            "SELECT media_hash, media_type, embedding_path, model_name, "
-            "model_version, computed_at, file_size_bytes "
-            "FROM media_embedding_index WHERE media_hash=? "
-            "AND model_name=? AND model_version=?",
-            (media_hash, model_name, model_version),
-        ).fetchone()
-        if row is None:
-            return None
-        path = Path(row[2])
-        if not path.is_file():
-            return None
-        return CacheEntry(
-            media_hash=row[0],
-            media_type=row[1],
-            embedding_path=path,
-            model_name=row[3],
-            model_version=row[4],
-            computed_at=row[5],
-            file_size_bytes=row[6],
-        )
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT media_hash, media_type, embedding_path, model_name, "
+                "model_version, computed_at, file_size_bytes "
+                "FROM media_embedding_index WHERE media_hash=? "
+                "AND model_name=? AND model_version=?",
+                (media_hash, model_name, model_version),
+            ).fetchone()
+            if row is None:
+                return None
+            path = Path(row[2])
+            if not path.is_file():
+                return None
+            return CacheEntry(
+                media_hash=row[0],
+                media_type=row[1],
+                embedding_path=path,
+                model_name=row[3],
+                model_version=row[4],
+                computed_at=row[5],
+                file_size_bytes=row[6],
+            )
 
     def store(
         self,
@@ -102,26 +108,44 @@ class EmbeddingCache:
         # bei lookup. model_version wird wie model_name sanitisiert.
         safe_version = str(model_version).replace("/", "_").replace(":", "_").replace("\\", "_")
         target = self.embeddings_dir / f"{media_hash}_{safe_model}_v{safe_version}.npy"
-        np.save(target, emb)
-
         now = datetime.now(timezone.utc).isoformat()
-        size = target.stat().st_size
+        temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+        previous = target.with_name(f".{target.name}.{uuid.uuid4().hex}.bak")
+        published = False
 
-        try:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO media_embedding_index "
-                "(media_hash, media_type, embedding_path, model_name, "
-                "model_version, computed_at, file_size_bytes) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (media_hash, media_type, str(target), model_name,
-                 model_version, now, size),
-            )
-        except Exception as e:
+        with self._lock:
             try:
-                target.unlink(missing_ok=True)
-            except Exception as unlink_err:
-                logger.warning("EmbeddingCache: failed to delete orphan file %s: %s", target, unlink_err)
-            raise e
+                with temp.open("wb") as handle:
+                    np.save(handle, emb)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                size = temp.stat().st_size
+                self.conn.execute("BEGIN IMMEDIATE")
+                if target.exists():
+                    os.replace(target, previous)
+                os.replace(temp, target)
+                published = True
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO media_embedding_index "
+                    "(media_hash, media_type, embedding_path, model_name, "
+                    "model_version, computed_at, file_size_bytes) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (media_hash, media_type, str(target), model_name,
+                     model_version, now, size),
+                )
+                self.conn.execute("COMMIT")
+                previous.unlink(missing_ok=True)
+            except Exception:
+                try:
+                    self.conn.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                temp.unlink(missing_ok=True)
+                if published:
+                    target.unlink(missing_ok=True)
+                if previous.exists():
+                    os.replace(previous, target)
+                raise
 
         return CacheEntry(
             media_hash=media_hash,
@@ -134,7 +158,8 @@ class EmbeddingCache:
         )
 
     def load_array(self, entry: CacheEntry) -> np.ndarray:
-        return np.load(entry.embedding_path)
+        with self._lock:
+            return np.load(entry.embedding_path)
 
     # M7-Fix (I-M1, 2026-05-20): LRU-size-bounded cleanup
     # Vor Fix: embedding_cache wuchs unbegrenzt — kein TTL, keine Size-Limits.

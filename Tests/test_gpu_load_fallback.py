@@ -1,13 +1,10 @@
-"""Test: GPU Load Fallback wenn LHM 0 liefert (Audit D2)."""
-import pytest
+"""GPU load monitoring remains adapter-bound without aggregate fallbacks."""
 
 
-def test_load_alternative_returns_float():
+def test_cross_adapter_load_fallback_is_removed():
     from pb_studio.core.system_monitor import SystemMonitor
-    sm = SystemMonitor()
-    val = sm._query_load_alternative()
-    assert isinstance(val, float)
-    assert 0.0 <= val <= 100.0
+
+    assert not hasattr(SystemMonitor, "_query_load_alternative")
 
 
 def test_get_stats_includes_load_field():

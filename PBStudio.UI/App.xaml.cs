@@ -1,4 +1,6 @@
 using System;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.DependencyInjection;
@@ -16,37 +18,47 @@ namespace PBStudio.UI;
 public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
+    private int _fatalShutdownStarted;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // R10/WPF-01: Global exception handlers — prevent silent crash swallowing
+        // Unknown dispatcher failures are fatal: continuing can corrupt project state.
         DispatcherUnhandledException += (_, args) =>
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[PBStudio] Unhandled UI exception: {args.Exception}");
-            _serviceProvider?.GetService<ILogger<App>>()
-                ?.LogCritical(args.Exception, "Unbehandelte UI-Exception");
-            args.Handled = true; // Prevent crash — log and continue
+            try
+            {
+                LogRedactedException(
+                    LogLevel.Critical,
+                    "Unbehandelte UI-Exception",
+                    args.Exception);
+                args.Handled = true;
+                BeginFatalShutdown();
+            }
+            catch
+            {
+                // If even the fatal path fails, let WPF terminate normally.
+                args.Handled = false;
+            }
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[PBStudio] Unhandled domain exception: {ex}");
-                _serviceProvider?.GetService<ILogger<App>>()
-                    ?.LogCritical(ex, "Unbehandelte Domain-Exception");
+                LogRedactedException(
+                    LogLevel.Critical,
+                    "Unbehandelte Domain-Exception",
+                    ex);
             }
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[PBStudio] Unobserved task exception: {args.Exception}");
-            _serviceProvider?.GetService<ILogger<App>>()
-                ?.LogError(args.Exception, "Unbeobachtete Task-Exception");
-            args.SetObserved(); // Prevent finalization crash
+            LogRedactedException(
+                LogLevel.Error,
+                "Unbeobachtete Task-Exception",
+                args.Exception);
+            args.SetObserved();
         };
 
         var services = new ServiceCollection();
@@ -54,6 +66,12 @@ public partial class App : Application
         _serviceProvider = services.BuildServiceProvider();
 
         Ioc.Default.ConfigureServices(_serviceProvider);
+
+        // H-18: Runtime-Environment muss gesetzt sein, bevor der Backend-Prozess
+        // erzeugt wird. SettingsViewModel entsteht erst beim ersten SETTINGS-Tab.
+        var settings = _serviceProvider.GetRequiredService<ISettingsService>();
+        settings.Load();
+        PythonBridgeService.ApplyRuntimeEnvironment(settings.Current);
 
         // MainWindow SOFORT zeigen
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
@@ -75,8 +93,36 @@ public partial class App : Application
         });
     }
 
+    private void BeginFatalShutdown()
+    {
+        if (Interlocked.Exchange(ref _fatalShutdownStarted, 1) != 0)
+            return;
+
+        MessageBox.Show(
+            "PB Studio muss nach einem unerwarteten Fehler beendet werden. "
+            + "Details wurden sicher im Protokoll gespeichert.",
+            "PB Studio – Schwerwiegender Fehler",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        Shutdown(-1);
+    }
+
+    private void LogRedactedException(
+        LogLevel level,
+        string source,
+        Exception exception)
+    {
+        var redacted = TerminalLogRedactor.Redact(exception.ToString());
+        System.Diagnostics.Debug.WriteLine($"[PBStudio] {source}: {redacted}");
+        _serviceProvider?.GetService<ILogger<App>>()
+            ?.Log(level, "{Source}: {Crash}", source, redacted);
+    }
+
     private static void ConfigureServices(IServiceCollection services)
     {
+        var terminalLogBuffer = new TerminalLogBuffer();
+        services.AddSingleton(terminalLogBuffer);
+
         // Logging — Console + Datei
         var logPath = System.IO.Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "logs", "wpf_app.log");
@@ -89,18 +135,24 @@ public partial class App : Application
         {
             builder.AddConsole();
             builder.AddProvider(new FileLoggerProvider(logFile));
-            builder.AddProvider(new TerminalLoggerProvider());
+            builder.AddProvider(new TerminalLoggerProvider(terminalLogBuffer));
             builder.SetMinimumLevel(LogLevel.Debug);
             builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
             builder.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
         });
 
         // HTTP Client für API-Kommunikation (ApiClient + SSEClient)
+        services.AddTransient<OwnerCapabilityRequestHandler>();
         services.AddHttpClient<ApiClient>(client =>
         {
             client.BaseAddress = new Uri("http://127.0.0.1:8765");
             client.Timeout = TimeSpan.FromMinutes(20);
-        });
+        })
+        .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+        })
+        .AddHttpMessageHandler<OwnerCapabilityRequestHandler>();
 
         // Services (Singleton für Desktop-App)
         services.AddSingleton<PythonBridgeService>();   // erstellt HttpClient intern (kein DI-HttpClient)
@@ -108,6 +160,7 @@ public partial class App : Application
         services.AddSingleton<IApiClient>(sp => sp.GetRequiredService<ApiClient>());
         services.AddSingleton<SSEClient>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ProjectService>();
         services.AddSingleton<TimelineStateService>();
         services.AddSingleton<AudioLibraryStateService>();
@@ -147,37 +200,55 @@ public partial class App : Application
             var sp = _serviceProvider;
             if (sp != null)
             {
+                var externalBackendFlag =
+                    Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY");
+                var externalBackendManaged = externalBackendFlag is not null &&
+                    (externalBackendFlag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                     externalBackendFlag.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                     externalBackendFlag.Equals("yes", StringComparison.OrdinalIgnoreCase));
+
                 var cleanup = Task.Run(async () =>
                 {
                     using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                     var api = sp.GetService<IApiClient>();
                     if (api != null)
                     {
-                        // K7: Speichern VOR BeginShutdown (Token-Cancel) ausführen
-                        try
+                        // Unknown UI failures may have left in-memory state inconsistent.
+                        // A normal user exit still saves before cancellation.
+                        if (Volatile.Read(ref _fatalShutdownStarted) == 0)
                         {
-                            await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-                        }
-                        catch (Exception saveEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                            try
+                            {
+                                await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                            }
+                            catch (Exception saveEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"[PBStudio] Project save on exit failed: {saveEx.Message}");
+                            }
                         }
 
                         // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
                         (api as ApiClient)?.BeginShutdown();
 
-                        try
+                        if (!externalBackendManaged)
                         {
-                            await api.ShutdownAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-                        }
-                        catch (Exception shutdownEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[PBStudio] Backend shutdown call failed: {shutdownEx.Message}");
+                            try
+                            {
+                                await api.ShutdownAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                            }
+                            catch (Exception shutdownEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[PBStudio] Backend shutdown call failed: {shutdownEx.Message}");
+                            }
                         }
                     }
                     var bridge = sp.GetService<PythonBridgeService>();
-                    if (bridge != null)
-                        await bridge.StopAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                    if (!externalBackendManaged)
+                    {
+                        if (bridge != null)
+                            await bridge.StopAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
+                    }
                 });
 
                 if (!cleanup.Wait(TimeSpan.FromSeconds(12)))

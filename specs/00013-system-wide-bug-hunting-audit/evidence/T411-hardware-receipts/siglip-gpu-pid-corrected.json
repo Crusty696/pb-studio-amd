@@ -1,0 +1,642 @@
+﻿[
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  91.611202674381857
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619143024)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.071927091380957
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619144034)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  91.487537150798317
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619145045)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  91.7625422749271
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619146056)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  100.12659057329184
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619147068)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.0498622193781
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619148079)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  83.555860622568773
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619149090)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.069052207167317
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619150101)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  91.977032134966109
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619151112)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.060336420871991
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619152123)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.255980488406891
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619153134)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.040089202149716
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619154146)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.28036492572474
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619155159)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  100.57333521265642
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619156170)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.271452935022353
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619157182)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_0_engtype_3d",
+        "CookedValue":  92.225265710792812
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_1_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_2_engtype_compute 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_3_engtype_copy",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_4_engtype_timer 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_5_engtype_security 1",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_6_engtype_video jpeg 0",
+        "CookedValue":  0
+    },
+    {
+        "Timestamp":  "\/Date(1785619158193)\/",
+        "InstanceName":  "pid_8544_luid_0x00000000_0x00012a2a_phys_0_eng_7_engtype_video codec engine",
+        "CookedValue":  0
+    }
+]

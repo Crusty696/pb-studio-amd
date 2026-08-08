@@ -19,10 +19,16 @@ Die App deckt heute bereits zentrale Kernpfade ab:
 - Render start / status / cancel
 - Projekt save / open / close / reopen
 - **Brain-Modul** (online-Lernen via Beta-Bernoulli, 17 Bridge-Achsen,
-  CLAP+SigLIP-2 via torch-directml, sqlite-vec KNN, 5 REST-Endpoints,
+  SigLIP-ONNX mit 1152-D-Vektoren sowie registriertes CLAP-ONNX über
+  ONNX Runtime DirectML, sqlite-vec KNN, 6 REST-Endpoints,
   WPF HIRN-Tab + Lern-Session-Walkthrough + Confidence-Balken)
 
 Wichtiger Hinweis:
+- Der Reparaturplan `00013-system-wide-bug-hunting-audit` befindet sich vor
+  dem End-QC; der aktuelle Worktree ist nicht release-ready.
+- Verbindliche Freigabekriterien stehen im
+  [Deployment- und Betriebsvertrag](specs/dod.md). Frühere Testzahlen oder
+  Hardwarebelege ersetzen dessen aktuelle QC-Gates nicht.
 - Die Architektur befindet sich in einer laufenden Hybrid-Migration.
 - WPF ist die aktive UI.
 - Einige reichere Interaktionsflächen (z. B. echter Timeline-/Player-Editor) sind noch im Ausbau.
@@ -39,8 +45,8 @@ Wichtiger Hinweis:
 - ausreichend VRAM für Analyse-/ML-Pfade
 
 ### Software
-- Python **3.10 oder 3.11**
-- FFmpeg mit AMF-Support bzw. das projektinterne FFmpeg-Setup
+- Python **3.11.x**
+- das in `config/ffmpeg-runtime.json` hashgebundene projektinterne FFmpeg
 - funktionierende `.venv`
 
 ---
@@ -85,7 +91,10 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 
 ### One-Shot Setup für Endanwender (Doppelklick)
 
-`setup.bat` doppelklicken — fragt automatisch nach Admin-Rechten und installiert alles.
+`setup.bat` doppelklicken. Der Wrapper fordert nicht automatisch erhöhte
+Rechte an. Fehlende systemweite Voraussetzungen werden ausschließlich über
+verifizierte `winget`-Pfade installiert; ohne passende Berechtigung bricht das
+Setup nachvollziehbar ab.
 
 | Datei      | Zweck                                                  |
 |------------|--------------------------------------------------------|
@@ -127,20 +136,31 @@ exe stderr, alles erfasst).
 Optionen:
 - `-SkipBuildTools`     VS Build Tools install ueberspringen
 - `-SkipBackupPrompt`   keine Frage fuer Auto-Backup-Task
-- `-SkipModelPrecache`  CLAP+SigLIP Download (~1.8 GB) skippen
-- `-SkipGpuVerify`      DirectML-Verify-Run skippen
+- `-SkipModelPrecache`  veralteter Kompatibilitätsschalter; wird ignoriert,
+  Pflichtassets werden immer verifiziert
+- `-SkipGpuVerify`      veralteter Kompatibilitätsschalter; wird ignoriert,
+  ONNX-DirectML-Verifikation bleibt Pflicht
 - `-SkipPytest`         pytest am Ende skippen
 - `-NoPause`            Kein "Press Enter" am Ende
 - `-Force`              venv neu anlegen (statt re-use)
 
-Installiert Python-Venv, FFmpeg, LibreHardwareMonitor, AMD-DirectML-Stack inkl. Brain-Modul (torch-directml + transformers 4.49 + sqlite-vec + librosa) und richtet Pre-commit-Hook ein.
+Installiert Python-Venv, das hashgebundene FFmpeg, ONNX Runtime DirectML und
+die freigegebenen CPU-Ausnahmen (FAISS, BeatNet/librosa und Demucs).
+LibreHardwareMonitor bleibt deaktiviert, solange kein extern freigegebenes
+Bundle-Manifest samt beiden SHA-256-Werten vorliegt. CLAP-/SigLIP-Assets
+werden ausschließlich aus dem freigegebenen, SHA-256-gebundenen Archiv
+installiert. Quelle, Transformation und Lizenzkette stehen in
+[`config/directml-model-assets.json`](config/directml-model-assets.json);
+[`config/directml-asset-bundle.json`](config/directml-asset-bundle.json)
+bindet das konkrete Release-Archiv. Die Installation übernimmt
+[`scripts/provision_directml_assets.ps1`](scripts/provision_directml_assets.ps1).
 
 ### Manuell
 
 ```powershell
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### .NET / WPF
@@ -179,7 +199,8 @@ dotnet build .\PBStudio.UI\PBStudio.UI.csproj -c Debug
 ### Python-Tests
 
 ```powershell
-pytest Tests -q -rs
+$env:PYTHONPATH = (Join-Path (Get-Location) 'src')
+.\.venv\Scripts\python.exe -m pytest Tests -q -rs
 ```
 
 ### WPF Build-Smoke
@@ -211,6 +232,8 @@ powershell -ExecutionPolicy Bypass -File .\verify_release_smoke.ps1
 ```
 
 Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Projekt, prüft Audio/Video/Waveform/Beats, generiert eine Timeline, speichert das Projekt und verifiziert einen sicheren Render-Start+Cancel-Pfad.
+Er ist ein Teil-Gate. Eine Release-Freigabe gilt erst nach allen Kriterien im
+[Deployment- und Betriebsvertrag](specs/dod.md).
 
 ---
 
@@ -225,12 +248,17 @@ Der Release-Smoke startet bei Bedarf das Backend selbst, öffnet das aktive Proj
 
 ## Wichtige Dateien für den Projektstatus
 
-- `STATUS_MATRIX.md` — Ampel-/Verifikationsstand
-- `WORKLOG.md` — zuletzt erledigte Blöcke
-- `PYQT_MIGRATION_CLASSIFICATION.md` — Alt-UI-zu-WPF-Klassifikation
-- `docs/BRAIN_USER_GUIDE.md` — Brain-Modul für End-User
-- `docs/HARDWARE_VERIFY_GUIDE.md` — DirectML-Hardware-Verifikation
-- `LICENSES.md` — Lizenz-Attribution (CC-BY-4.0 für CLAP-Modell)
+- [`specs/dod.md`](specs/dod.md) — verbindlicher Deployment-, Betriebs- und
+  Releasevertrag
+- [`specs/00013-system-wide-bug-hunting-audit/tasks.md`](specs/00013-system-wide-bug-hunting-audit/tasks.md)
+  — aktueller Reparatur- und QC-Stand
+- [`docs/BRAIN_USER_GUIDE.md`](docs/BRAIN_USER_GUIDE.md) — Brain-Modul für
+  Endanwender
+- [`docs/HARDWARE_VERIFY_GUIDE.md`](docs/HARDWARE_VERIFY_GUIDE.md) —
+  DirectML-Hardware-Verifikation
+- [`config/directml-model-assets.json`](config/directml-model-assets.json) und
+  [`config/directml-asset-bundle.json`](config/directml-asset-bundle.json) —
+  Modellherkunft, Transformationen, Lizenzkette und Release-Hashes
 
 ---
 
@@ -243,4 +271,5 @@ Bei Problemen zuerst prüfen:
 1. startet das Backend?
 2. ist `.venv` vollständig?
 3. ist FFmpeg erreichbar?
-4. zeigt `STATUS_MATRIX.md` den Bereich als live-getestet oder nur code-inspected?
+4. besitzt der aktuelle Reparaturstand echte QC-Belege und die erforderlichen
+   Freigabemarker gemäß `specs/dod.md`?

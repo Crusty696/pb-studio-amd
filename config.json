@@ -3,128 +3,117 @@
     "version": "1.0.0-amd",
     "paths": {
         "ffmpeg_bin": "./tools/ffmpeg/bin/ffmpeg.exe",
+        "ffprobe_bin": "./tools/ffmpeg/bin/ffprobe.exe",
         "lhm_lib": "./tools/LibreHardwareMonitor/LibreHardwareMonitorLib.dll",
         "temp_dir": "./temp",
         "db_path": "./data/pb_studio.db"
     },
     "hardware": {
         "gpu_backend": "directml",
-        "vram_limit_mb": 0,
-        "enable_monitoring": true
+        "directml_adapter_policy": "highest_vram_amd",
+        "vram_limit_mb": 0
     },
     "ai": {
-        "vision_model": "llava:13b",
-        "audio_backend": "demucs_dml",
-        "parallel_tasks": false,
+        "task_overrides": {
+            "video_captioning": "qwen2.5-vl-7b-instruct",
+            "image_captioning": "qwen2.5-vl-7b-instruct",
+            "chat": "qwen3.5-9b",
+            "chat_general": "qwen3.5-9b",
+            "chat_tool_use": "qwen3.5-9b",
+            "brain_explanation": "qwen3.5-9b"
+        },
+        "task_provider_overrides": {
+            "video_captioning": "lmstudio",
+            "image_captioning": "lmstudio",
+            "chat": "lmstudio",
+            "chat_general": "lmstudio",
+            "chat_tool_use": "lmstudio",
+            "brain_explanation": "lmstudio"
+        },
         "provider": "auto",
-        "lmstudio_base_url": "http://127.0.0.1:12341/v1",
+        "lmstudio_base_url": "http://127.0.0.1:1234/v1",
         "ollama_base_url": "http://localhost:11434/v1",
-        "default_mode": "speed",
+        "default_mode": "balance",
         "task_preferences": {
             "video_captioning": {
                 "speed": [
-                    "moondream:latest",
-                    "llava:13b",
-                    "qwen/qwen3-vl-8b",
-                    "google/gemma-4-e4b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "balance": [
-                    "llava:13b",
-                    "moondream:latest",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "quality": [
-                    "llava:13b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct",
+                    "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive"
                 ]
             },
             "image_captioning": {
                 "speed": [
-                    "moondream:latest",
-                    "llava:13b",
-                    "qwen/qwen3-vl-8b",
-                    "google/gemma-4-e4b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "balance": [
-                    "llava:13b",
-                    "moondream:latest",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct"
                 ],
                 "quality": [
-                    "llava:13b",
-                    "qwen/qwen3-vl-8b"
+                    "qwen2.5-vl-7b-instruct",
+                    "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive"
                 ]
             },
             "brain_explanation": {
                 "speed": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "google/gemma-4-e4b",
-                    "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
-                    "google/gemma-4-e4b"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ],
                 "quality": [
-                    "samsonium/qwen2.5-osdev:latest",
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "gemma-4-26b-a4b-it-ultra-uncensored-heretic",
-                    "google/gemma-4-e4b"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "ornith-1.0-35b-a3b_moe_hybrid-imatrix"
+                ]
+            },
+            "chat": {
+                "speed": [
+                    "qwen3.5-9b",
+                    "granite-4.0-h-tiny"
+                ],
+                "balance": [
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
+                ],
+                "quality": [
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             },
             "chat_general": {
                 "speed": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "google/gemma-4-e4b",
-                    "gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"
+                    "qwen3.5-9b",
+                    "granite-4.0-h-tiny"
                 ],
                 "balance": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
-                    "google/gemma-4-e4b"
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
-                    "samsonium/qwen2.5-osdev:latest",
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "gemma-4-31b-it-uncensored",
-                    "gemma-4-26b-a4b-it-ultra-uncensored-heretic"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             },
             "chat_tool_use": {
                 "speed": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "qwen3.5-9b-uncensored-hauhaucs-aggressive",
-                    "google/gemma-4-e4b"
+                    "qwen3.5-9b"
                 ],
                 "balance": [
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "samsonium/qwen2.5-osdev:latest",
-                    "raw-uncensored-qwen3-14b-heretic-recovered",
-                    "qwen3.5-9b-uncensored-hauhaucs-aggressive"
+                    "qwen3.5-9b",
+                    "qwen3.6-27b-mtp-pi-reasoning"
                 ],
                 "quality": [
-                    "samsonium/qwen2.5-osdev:latest",
-                    "joe-speedboat/Gemma-4-Uncensored-HauhauCS-Aggressive:e4b",
-                    "raw-uncensored-qwen3-14b-heretic-recovered",
-                    "gemma-4-31b-it-uncensored"
+                    "qwen3.6-27b-mtp-pi-reasoning",
+                    "qwen3.5-9b"
                 ]
             }
-        },
-        "task_overrides": {
-            "chat": "gemma4:12b",
-            "chat_general": "gemma4:12b",
-            "chat_tool_use": "gemma4:12b",
-            "brain_explanation": "gemma4:12b"
         }
     },
-    "ui": {
-        "theme": "dark_red",
-        "scale_factor": 1.0
-    }
+    "ui": {}
 }

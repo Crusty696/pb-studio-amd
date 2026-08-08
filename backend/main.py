@@ -19,11 +19,18 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .config import config
+from .owner_capability import (
+    OWNER_CAPABILITY_HEADER,
+    authorize_owner,
+    create_health_proof,
+)
 from .middleware.gpu_lock import GPULockMiddleware
+from .middleware.owner_capability import OwnerCapabilityMiddleware
 
 # --------------------------------------------------------------------------
 # Logging Setup (Aufgabe J: Rotation + Retention)
@@ -113,6 +120,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except ImportError as e:
         logger.warning(f"  llm_status-Publisher nicht verdrahtet: {e}")
 
+    # Audit-Fix (2026-07-10): gleiches Wiring fuer Chat-Agent und Brain-Narrator,
+    # damit die WPF-Statusleiste auch bei Chat/Brain-Explain-LLM-Calls reagiert
+    # (vorher nur Video-Frame-Tagging abgedeckt).
+    try:
+        from pb_studio.ai.chat_agent import set_status_publisher as set_chat_status_publisher
+        set_chat_status_publisher(publish_event_threadsafe)
+    except ImportError as e:
+        logger.warning(f"  llm_status-Publisher (chat_agent) nicht verdrahtet: {e}")
+    try:
+        from pb_studio.brain.llm_narrator import set_status_publisher as set_narrator_status_publisher
+        set_narrator_status_publisher(publish_event_threadsafe)
+    except ImportError as e:
+        logger.warning(f"  llm_status-Publisher (llm_narrator) nicht verdrahtet: {e}")
+
+    # Audit 2026-08-07: Den VRAM-Budget-Manager mit dem echten Sensor verbinden.
+    # Vorher uebergab GENAU EIN Aufrufer einen Monitor — der als deprecated
+    # markierte VRAMArbiter, der repo-weit keinen Produktions-Aufrufer hat.
+    # In Produktion blieb ``VRAMBudgetManager.monitor`` damit immer None, und
+    # die Eigenbuchhaltung konnte nie gegen die Realitaet geprueft werden.
+    # Live gemessen betrug die Abweichung 4966 MB, weil LM Studio auf derselben
+    # Karte liegt. Der Manager lehnt nichts ab, er macht die Luecke sichtbar.
+    try:
+        from pb_studio.core.system_monitor import SystemMonitor
+        from pb_studio.core.vram_budget_manager import get_vram_manager
+        get_vram_manager(monitor=SystemMonitor())
+        logger.info("  VRAM-Budget-Manager mit Hardware-Sensor verbunden")
+    except Exception as e:  # noqa: BLE001 — Telemetrie darf den Start nie kippen
+        logger.warning(f"  VRAM-Sensor nicht verdrahtet (nicht fatal): {e}")
+
     # Prüfe ob src/ importierbar ist
     try:
         import pb_studio
@@ -134,14 +170,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
 
+    # Provider-/Modellwahrheit einmal pro Backendstart neu erfassen. Der
+    # Service bündelt LM-Studio- und Ollama-Abfragen und publiziert atomar.
+    try:
+        from pb_studio.ai.model_inventory import get_model_inventory_service
+
+        model_inventory = await get_model_inventory_service().refresh(force=True)
+        provider_states = ", ".join(
+            f"{provider.provider}={provider.status}"
+            for provider in model_inventory.providers
+        )
+        logger.info(
+            "  Modellinventar aktualisiert: %d Modelle (%s)",
+            len(model_inventory.models),
+            provider_states or "keine Provider",
+        )
+    except Exception as e:
+        logger.warning(f"  Modellinventar-Startup-Refresh fehlgeschlagen: {e}")
+
     # Kein automatischer Medien-Restore beim Startup:
     # Der aktive Projektkontext entsteht erst via /project/open oder /project/create.
 
-    # Render-Queue Resume-on-Startup (Aufgabe I): Jobs, die beim letzten Crash
-    # 'running' waren, werden auf 'interrupted' überführt und damit re-queued.
+    # Render-Queue Resume-on-Startup: Jobs werden nicht nur als interrupted
+    # markiert, sondern aus ihrem persistierten Request-/Timeline-Snapshot
+    # rekonstruiert und erneut eingeplant.
     try:
         from .app_state import get_app_state
-        get_app_state().restore_render_queue_on_startup()
+        from .routers.render_router import (
+            _reset_render_runtime_for_startup,
+            _resume_render_queue_on_startup,
+        )
+        _reset_render_runtime_for_startup()
+        await _resume_render_queue_on_startup(get_app_state())
     except Exception as e:
         logger.warning(f"  Render-Queue Restore-on-Startup übersprungen: {e}")
 
@@ -208,10 +268,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    watcher_task.cancel()
     try:
-        watcher_task.cancel()
-    except Exception:
+        await watcher_task
+    except asyncio.CancelledError:
         pass
+
+    try:
+        from .app_state import get_app_state
+        from .routers.render_router import _shutdown_active_renders
+
+        render_shutdown = await _shutdown_active_renders(get_app_state())
+        if render_shutdown["tasks"]:
+            logger.info("  Render-Shutdown: %s", render_shutdown)
+    except Exception as e:
+        logger.warning(f"  Render-Shutdown fehlgeschlagen: {e}")
 
     # Review-Fix 2026-07-09: Publisher/Loop-Referenzen zurücksetzen
     try:
@@ -297,14 +368,40 @@ app.add_middleware(
         "http://localhost",
     ],
     allow_methods=["GET", "POST", "DELETE", "PUT"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_headers=["Content-Type", "Accept", OWNER_CAPABILITY_HEADER],
 )
 
 # GPU-Lock Middleware
 app.add_middleware(GPULockMiddleware)
 
+# Owner-Capability is outermost: reject unauthorised calls before routers or GPU work.
+# OPTIONS bypasses in the middleware so the CORS middleware above can answer preflights.
+app.add_middleware(OwnerCapabilityMiddleware)
+
 
 # --- Health Router (inline, da minimal) ---
+
+
+class GpuStatusResponse(BaseModel):
+    name: str
+    vram_total_mb: int
+    vram_used_mb: float
+    temperature_c: float
+    driver_version: str
+    adapter_index: int | None = None
+    adapter_luid: str | None = None
+    adapter_name: str | None = None
+    selection_policy: str | None = None
+    dedicated_vram_total_mb: int
+    directml_active: bool
+    monitoring_status: str
+    monitoring_error: str | None = None
+
+
+class GpuCleanupResponse(BaseModel):
+    success: bool
+    freed_mb: int
+    error: str | None = None
 
 @app.get("/health")
 async def health_check() -> dict[str, Any]:
@@ -316,26 +413,50 @@ async def health_check() -> dict[str, Any]:
     }
 
 
+@app.get("/health/proof", include_in_schema=False)
+async def health_proof(nonce: str) -> dict[str, str]:
+    """Return a nonce-bound proof for launcher verification without exposing its capability."""
+    return {"status": "ok", "proof": create_health_proof(nonce)}
+
+
 @app.get("/health/heartbeat")
 async def heartbeat() -> dict[str, Any]:
     """Leichtgewichtiger Herzschlag für UI-Resilienz."""
     return {"status": "alive", "timestamp": time.time()}
 
 
-@app.get("/gpu/status")
+@app.get("/gpu/status", response_model=GpuStatusResponse)
 async def gpu_status() -> dict[str, Any]:
     """GPU-Status via LibreHardwareMonitor."""
     try:
+        from pb_studio.core.directml_adapter import get_directml_adapter
         from pb_studio.core.system_monitor import SystemMonitor
+        adapter = get_directml_adapter()
         monitor = SystemMonitor()
-        # BUG-013 Fix: Methode heißt get_stats(), nicht get_gpu_info()
         gpu_info = monitor.get_stats()
+        directml_active = _check_gpu_available()
+        monitoring_status = gpu_info.get("monitoring_status", "degraded")
         return {
-            "name": gpu_info.get("gpu_name", "Unknown"),
-            "vram_total_mb": gpu_info.get("gpu_memory_total", 0),
+            "name": adapter.name,
+            "vram_total_mb": adapter.dedicated_vram_mb,
             "vram_used_mb": gpu_info.get("gpu_memory_used", 0),
             "temperature_c": gpu_info.get("gpu_temp", 0),
             "driver_version": gpu_info.get("driver_version", "Unknown"),
+            "adapter_index": adapter.device_id,
+            "adapter_luid": adapter.luid,
+            "adapter_name": adapter.name,
+            "selection_policy": adapter.selection_policy,
+            "dedicated_vram_total_mb": adapter.dedicated_vram_mb,
+            "directml_active": directml_active,
+            "monitoring_status": monitoring_status,
+            "monitoring_error": (
+                None
+                if monitoring_status == "ready"
+                else (
+                    "LibreHardwareMonitor ist eingeschränkt; "
+                    "Details stehen im Backend-Log."
+                )
+            ),
         }
     except Exception as e:
         logger.warning(f"GPU-Status nicht verfügbar: {e}")
@@ -344,31 +465,111 @@ async def gpu_status() -> dict[str, Any]:
             "vram_total_mb": 0,
             "vram_used_mb": 0,
             "temperature_c": 0,
-            "driver_version": str(e),
+            "driver_version": "Unknown",
+            "adapter_index": None,
+            "adapter_luid": None,
+            "adapter_name": None,
+            "selection_policy": None,
+            "dedicated_vram_total_mb": 0,
+            "directml_active": False,
+            "monitoring_status": "error",
+            "monitoring_error": (
+                "GPU-Status ist nicht verfügbar; "
+                "Details stehen im Backend-Log."
+            ),
         }
 
 
-@app.post("/gpu/cleanup")
-async def gpu_cleanup() -> dict[str, int]:
-    """VRAM aufräumen."""
-    freed_mb = 0
+@app.post("/gpu/cleanup", response_model=GpuCleanupResponse)
+async def gpu_cleanup() -> GpuCleanupResponse:
+    """Idle GPU models unload and report only confirmed releases."""
     try:
-        # BUG-014 Fix: VRAMArbiter braucht monitor-Argument; cleanup() → get_stats()
-        from pb_studio.core.system_monitor import SystemMonitor
-        from pb_studio.core.vram_arbiter import VRAMArbiter
-        monitor = SystemMonitor()
-        arbiter = VRAMArbiter(monitor=monitor)
-        stats = arbiter.get_stats()
-        freed_mb = max(0, stats.get("budget_reserved_mb", 0))
-        logger.info(f"GPU-Cleanup: {freed_mb}MB reserviert (Budget-Reset)")
-    except Exception as e:
-        logger.warning(f"GPU-Cleanup fehlgeschlagen: {e}")
-    return {"freed_mb": freed_mb}
+        from pb_studio.core.vram_budget_manager import (
+            ModelPriority,
+            get_vram_manager,
+        )
+
+        manager = get_vram_manager()
+        before = manager.get_stats()["models"]
+        eligible_ids = {
+            model_id
+            for model_id, state in before.items()
+            if state["is_loaded"]
+            and ModelPriority[state["priority"]] >= ModelPriority.LOW
+            and manager.get_model_budget(model_id).unload_callback is not None
+        }
+
+        freed_mb = await asyncio.to_thread(
+            manager.evict_all,
+            ModelPriority.LOW,
+        )
+        remaining = {
+            model_id
+            for model_id in eligible_ids
+            if manager.is_model_loaded(model_id)
+        }
+        if remaining:
+            logger.warning(
+                "GPU-Cleanup konnte %d Idle-Modelle nicht bestätigen.",
+                len(remaining),
+            )
+            return GpuCleanupResponse(
+                success=False,
+                freed_mb=max(0, freed_mb),
+                error=(
+                    "Nicht alle inaktiven GPU-Modelle konnten sicher "
+                    "freigegeben werden."
+                ),
+            )
+
+        logger.info(
+            "GPU-Cleanup bestätigt: %dMB aus %d Idle-Modellen freigegeben.",
+            freed_mb,
+            len(eligible_ids),
+        )
+        return GpuCleanupResponse(
+            success=True,
+            freed_mb=max(0, freed_mb),
+        )
+    except Exception:
+        logger.exception("GPU-Cleanup fehlgeschlagen.")
+        return GpuCleanupResponse(
+            success=False,
+            freed_mb=0,
+            error="GPU-Cleanup ist fehlgeschlagen; Details stehen im Backend-Log.",
+        )
 
 
-@app.post("/shutdown")
-async def shutdown() -> dict[str, str]:
-    """Graceful Shutdown (aufgerufen von C# beim App-Close)."""
+@app.post(
+    "/shutdown",
+    responses={
+        403: {"description": "Owner-Capability fehlt oder ist ungueltig."},
+        503: {"description": "Backend wurde ohne Owner-Capability gestartet."},
+    },
+    openapi_extra={
+        "parameters": [
+            {
+                "name": OWNER_CAPABILITY_HEADER,
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+                "description": (
+                    "Runtime-required launcher capability for destructive "
+                    "loopback operations."
+                ),
+            }
+        ]
+    },
+)
+async def shutdown(
+    owner_capability: str | None = Header(
+        default=None,
+        alias=OWNER_CAPABILITY_HEADER,
+        include_in_schema=False,
+    ),
+) -> dict[str, str]:
+    """Owner-authorized graceful shutdown called by the WPF launcher."""
+    authorize_owner(owner_capability, operation="Backend-Shutdown")
     logger.info("Shutdown-Request erhalten, fahre in 2s herunter...")
     # Windows/Uvicorn: loop.call_later() hat hier im detached Launcher-Pfad
     # nicht zuverlässig ausgelöst, wodurch der alte Prozess Port 8765 belegt hielt.
@@ -403,7 +604,14 @@ def _force_exit() -> None:
     import threading as _threading
     import gc
 
-    fallback = _threading.Timer(10.0, lambda: os._exit(0))
+    def _hard_exit() -> None:
+        try:
+            from pb_studio.rendering.render_service import RenderService
+            RenderService.terminate_active_processes(grace_seconds=1.0)
+        finally:
+            os._exit(0)
+
+    fallback = _threading.Timer(10.0, _hard_exit)
     fallback.daemon = True
     fallback.start()
     
@@ -421,7 +629,7 @@ def _force_exit() -> None:
     try:
         signal.raise_signal(signal.SIGINT)
     except Exception:
-        os._exit(0)
+        _hard_exit()
 
 
 # Router importieren

@@ -46,3 +46,37 @@ def test_threadsafe_publish_same_loop_direct():
             deps.set_main_loop(None)
 
     asyncio.run(main())
+
+
+def test_queue_full_drops_oldest_and_keeps_latest_event():
+    client_id = "test_queue_full"
+    queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=2)
+    queue.put_nowait({"event": "first", "data": {"sequence": 1}})
+    queue.put_nowait({"event": "second", "data": {"sequence": 2}})
+    before = deps.get_event_queue_drop_metrics()["total"]
+
+    deps._enqueue_event(
+        client_id,
+        queue,
+        {"event": "third", "data": {"sequence": 3}},
+    )
+
+    assert queue.get_nowait()["data"]["sequence"] == 2
+    assert queue.get_nowait()["data"]["sequence"] == 3
+    metrics = deps.get_event_queue_drop_metrics()
+    assert metrics["total"] == before + 1
+    assert metrics["by_client"][client_id] == 1
+    assert deps.unregister_event_queue(client_id) == 1
+
+
+def test_filtered_event_never_consumes_queue_capacity_or_drop_budget():
+    client_id = "test_filtered_queue"
+    queue = deps.get_event_queue(client_id, {"progress"})
+    before = deps.get_event_queue_drop_metrics()["total"]
+    try:
+        deps._fanout_event({"event": "log", "data": {"message": "ignored"}})
+
+        assert queue.empty()
+        assert deps.get_event_queue_drop_metrics()["total"] == before
+    finally:
+        assert deps.unregister_event_queue(client_id) == 0

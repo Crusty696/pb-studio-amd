@@ -5,6 +5,8 @@ from pathlib import Path as _Path
 from typing import Optional
 from enum import Enum
 
+from ..media_path_policy import canonical_local_media_file
+
 
 class RenderQuality(str, Enum):
     """Render-Qualitätsstufen."""
@@ -19,8 +21,6 @@ class RenderEncoder(str, Enum):
     HEVC_AMF = "hevc_amf"    # AMD Hardware H.265
     H264_AMF = "h264_amf"    # AMD Hardware H.264
     AV1_AMF = "av1_amf"      # AMD Hardware AV1
-    LIBX265 = "libx265"      # Software H.265
-    LIBX264 = "libx264"      # Software H.264
 
 
 class RenderRequest(BaseModel):
@@ -48,9 +48,9 @@ class RenderRequest(BaseModel):
     @field_validator("audio_path")
     @classmethod
     def audio_path_must_exist(cls, v: str) -> str:
-        if v and not _Path(v).exists():
-            raise ValueError(f"audio_path existiert nicht: {v!r}")
-        return v
+        if not v:
+            return v
+        return str(canonical_local_media_file(v, label="audio_path"))
 
 
 class RenderProgress(BaseModel):
@@ -65,6 +65,13 @@ class RenderProgress(BaseModel):
     eta_seconds: float = 0.0
     output_path: Optional[str] = None
     error: Optional[str] = None
+    message: Optional[str] = None
+    queue_job_id: Optional[str] = None
+    run_id: Optional[str] = None
+    evidence_path: Optional[str] = None
+    validation_path: Optional[str] = None
+    progress_end: bool = False
+    validation_status: Optional[str] = None
 
 
 class RenderResult(BaseModel):

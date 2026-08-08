@@ -52,6 +52,15 @@ def select_theme_for_chapter(energy: float, prev_theme: Optional[str]) -> str:
     return prev_theme
 
 
+def _uses_advanced_pacing(pacing_config: dict, semantic_enabled: bool) -> bool:
+    return bool(
+        pacing_config.get("use_motion_matching", False)
+        or semantic_enabled
+        or pacing_config.get("use_structure_awareness", False)
+        or pacing_config.get("use_brain", False)
+    )
+
+
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
@@ -73,6 +82,72 @@ class PacingService:
         # Audit L-M1: Test-Hint — wurde cached tempo_curve (SubtrackDetector
         # DJ-Tempo-Variation) in den Engine injiziert (fuer varying-BPM mixes)?
         self._last_used_cached_tempo: bool = False
+
+    def _resolve_semantic_audio(
+        self,
+        audio_path: str,
+        requested: bool,
+    ) -> tuple[bool, Optional[str]]:
+        """Resolve Semantic Audio once and fail closed when CLAP is unavailable."""
+        if not requested:
+            return False, None
+
+        try:
+            from pb_studio.ai.smart_director import SmartDirector
+
+            director = SmartDirector.get_instance()
+            prompt = director.get_dominant_mood(audio_path)
+            return True, prompt
+        except Exception as exc:
+            logger.warning(
+                "Semantic Audio unavailable; semantic matching disabled: %s",
+                exc,
+            )
+            return False, None
+
+    def prime_duration_cache(self, clips: Optional[List[Dict[str, Any]]]) -> int:
+        """
+        Befuellt den Dauer-Cache aus den bereits vorhandenen Clip-Metadaten.
+
+        Audit 2026-08-05 (H-8/T3.12): ``_get_clip_duration`` cachte pro Pfad,
+        aber bei 571 verschiedenen Clips bedeutete das 571 ffprobe-Subprozesse
+        à 50–100 ms — gemessen ~63 der 71 Sekunden eines Pacing-Laufs, nur fuer
+        Metadaten, die der Router aus der DB bereits mitliefert
+        (``duration``/``duration_seconds`` im Clip-Dict).
+
+        Returns:
+            Anzahl der vorbefuellten Eintraege.
+        """
+        if not clips:
+            return 0
+
+        primed = 0
+        for clip in clips:
+            if not isinstance(clip, dict):
+                continue
+            raw_path = clip.get("file_path") or clip.get("path")
+            if not raw_path:
+                continue
+            raw_duration = clip.get("duration", clip.get("duration_seconds"))
+            try:
+                duration = float(raw_duration or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if duration <= 0.0:
+                continue
+
+            key = str(Path(raw_path).absolute())
+            if key not in self._duration_cache:
+                self._duration_cache[key] = duration
+                primed += 1
+
+        if primed:
+            logger.info(
+                "Dauer-Cache aus Clip-Metadaten vorbefuellt: %d Eintraege "
+                "(spart ebenso viele ffprobe-Aufrufe)",
+                primed,
+            )
+        return primed
 
     def _get_clip_duration(self, clip_path: str) -> float:
         """Ermittelt Clip-Dauer via ffprobe (kein ffmpeg-python). Cached per Pfad."""
@@ -108,8 +183,19 @@ class PacingService:
         """Konvertiert Pacing-Cuts zu CutListEntry-Liste."""
         cut_list = []
         for i in range(len(cut_with_clips) - 1):
-            current_cut, clip_path, clip_id = cut_with_clips[i]
-            next_cut, _, _ = cut_with_clips[i + 1]
+            # Audit 2026-08-05 (H-5/T3.11): Die Tupel tragen jetzt ein viertes
+            # Element — die Metadaten des ClipSelectors. Bisher wurden sie beim
+            # Aufbau von cut_with_clips weggeworfen (`(cut, sel.clip_path,
+            # sel.clip_id)`), obwohl _select_via_brain dort Achsen-Scores,
+            # Feature-Provenienz und Semantik-Status hinterlegt hatte. Dass es
+            # trotzdem funktionierte, lag daran, dass annotate_cuts_with_brain
+            # dieselben Werte danach ein ZWEITES Mal berechnet hat — Ursache der
+            # 7,3 Sekunden Brain-Overhead bei 571 Clips.
+            # Aeltere 3er-Tupel bleiben lesbar.
+            entry = cut_with_clips[i]
+            current_cut, clip_path, clip_id = entry[0], entry[1], entry[2]
+            selector_meta = entry[3] if len(entry) > 3 else None
+            next_cut = cut_with_clips[i + 1][0]
 
             if target_duration is not None and current_cut.time >= target_duration:
                 break
@@ -139,9 +225,24 @@ class PacingService:
             }
             if hasattr(current_cut, "segment_type") and current_cut.segment_type:
                 metadata["segment_type"] = current_cut.segment_type
+            if getattr(current_cut, "provenance", None):
+                metadata["trigger_provenance"] = dict(current_cut.provenance)
+
+            # Selektor-Metadaten uebernehmen. Der Brain-Post-Processor laeuft
+            # danach und darf gleichnamige Felder ueberschreiben — er hat den
+            # spaeteren, autoritativen Stand. Werte, die er nicht setzt
+            # (brain_scores, feature_provenance), bleiben dadurch erhalten
+            # statt verloren zu gehen.
+            if isinstance(selector_meta, dict):
+                for key, value in selector_meta.items():
+                    metadata.setdefault(key, value)
+
+            normalized_clip_id = str(clip_id)
+            if not normalized_clip_id.startswith("clip_"):
+                normalized_clip_id = f"clip_{normalized_clip_id}"
 
             cut = CutListEntry(
-                clip_id=f"clip_{clip_id}",
+                clip_id=normalized_clip_id,
                 start_time=current_cut.time,
                 end_time=current_cut.time + duration,
                 metadata=metadata,
@@ -171,11 +272,48 @@ class PacingService:
         last.end_time = audio_duration
         return cut_list
 
-    def _finalize_cut_list(self, cut_list: list, total_duration: float) -> list:
+    def _finalize_cut_list(self, cut_list: list, target_duration: float) -> list:
         """Single exit-point post-processing for all auto-pacing return paths.
         Future cut-list invariants (e.g. min-gap normalization, last-cut stretch)
-        belong here, not at each return site."""
-        return self._stretch_last_cut_to_audio(cut_list, total_duration)
+        belong here, not at each return site.
+
+        BUGFIX H1: target_duration MUST be the same budget the cuts were generated
+        against (duration_limit or total_duration), NOT the full song length.
+        Passing total_duration here stretched the last cut of a duration_limit'd
+        (preview/short) render across the entire song -> giant runaway final clip.
+        """
+        if not cut_list or target_duration <= 0.0:
+            return cut_list
+
+        cut_list[:] = [
+            cut for cut in cut_list
+            if float(cut.start_time) < target_duration
+        ]
+        if not cut_list:
+            return cut_list
+
+        first = cut_list[0]
+        original_start = float(first.start_time)
+        if abs(original_start) > 0.001:
+            metadata = first.metadata if isinstance(first.metadata, dict) else {}
+            first.metadata = metadata
+            clip_start = float(metadata.get("clip_start", 0.0) or 0.0)
+            if original_start > 0.0:
+                metadata["clip_start"] = max(0.0, clip_start - original_start)
+            else:
+                metadata["clip_start"] = clip_start + abs(original_start)
+            metadata["boundary_original_start"] = original_start
+            metadata["boundary_normalized_start"] = 0.0
+            first.start_time = 0.0
+
+        last = cut_list[-1]
+        original_end = float(last.end_time)
+        last.end_time = target_duration
+        if isinstance(last.metadata, dict) and abs(original_end - target_duration) > 0.001:
+            last.metadata["boundary_original_end"] = original_end
+            last.metadata["boundary_normalized_end"] = target_duration
+
+        return cut_list
 
     def _inject_cached_into_engine(
         self,
@@ -200,10 +338,31 @@ class PacingService:
         # Beats + BPM + Duration (+ Audit L-N8: per-beat strength)
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
+        pre_cached_downbeats: List[float] = []
+        downbeat_provenance = cached_analysis.get("downbeat_provenance") or {
+            "status": "unavailable",
+            "method": "cache_field_missing",
+            "synthetic": False,
+            "measured_count": 0,
+        }
+        if not isinstance(downbeat_provenance, dict):
+            downbeat_provenance = {
+                "status": "unavailable",
+                "method": "invalid_cache_field",
+                "synthetic": False,
+                "measured_count": 0,
+            }
         has_real_strengths = False
         for b in cached_analysis.get("beats", []):
             if isinstance(b, dict):
-                pre_cached_beats.append(b.get("time", 0.0))
+                beat_time = float(b.get("time", 0.0))
+                pre_cached_beats.append(beat_time)
+                if (
+                    downbeat_provenance.get("status") == "measured"
+                    and str(b.get("beat_type") or "").lower()
+                    in {"downbeat", "bar"}
+                ):
+                    pre_cached_downbeats.append(beat_time)
                 # L-N8: preserve per-beat strength. Engine uses it as
                 # trigger-weight multiplier instead of the previous
                 # hardcoded 1.0.
@@ -218,8 +377,16 @@ class PacingService:
                 pre_cached_beat_strengths.append(1.0)
         pre_cached_bpm = cached_analysis.get("bpm") or None
         if pre_cached_beats:
-            pacing_engine._cached_audio_path = audio_path
             pacing_engine._pre_cached_beats = pre_cached_beats
+            measured_downbeats = cached_analysis.get("downbeats") or []
+            if downbeat_provenance.get("status") == "measured":
+                pre_cached_downbeats.extend(
+                    float(value) for value in measured_downbeats
+                )
+                pre_cached_downbeats = sorted(set(pre_cached_downbeats))
+            if pre_cached_downbeats:
+                pacing_engine._pre_cached_downbeats = pre_cached_downbeats
+            pacing_engine._pre_cached_downbeat_provenance = downbeat_provenance
             if has_real_strengths:
                 pacing_engine._pre_cached_beat_strengths = pre_cached_beat_strengths
             if pre_cached_bpm:
@@ -302,6 +469,20 @@ class PacingService:
         else:
             self._last_used_cached_tempo = False
 
+        # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-1): Onset/Kick/Snare/HiHat-
+        # Trigger-Kandidaten mit-injizieren. Ersetzt den toten
+        # `core.session_manager`-Import in AdvancedPacingEngine — vorher blieben
+        # diese Trigger im normalen (pre-cached) Pacing-Pfad komplett wirkungslos.
+        for _field, _attr in (
+            ("onset_times", "_pre_cached_onset_times"),
+            ("kick_times", "_pre_cached_kick_times"),
+            ("snare_times", "_pre_cached_snare_times"),
+            ("hihat_times", "_pre_cached_hihat_times"),
+        ):
+            _values = cached_analysis.get(_field)
+            if _values:
+                setattr(pacing_engine, _attr, list(_values))
+
         # Stufe 2 Audio-Heuristik: Kurven an Selector spiegeln
         cs = pacing_engine.clip_selector
         if hasattr(pacing_engine, "_pre_cached_bass_curve"):
@@ -310,6 +491,65 @@ class PacingService:
             cs.energy_curve = pacing_engine._pre_cached_energy
         if hasattr(pacing_engine, "_pre_cached_duration"):
             cs.duration_seconds = pacing_engine._pre_cached_duration
+
+    def _configure_brain_selector(
+        self,
+        pacing_engine: AdvancedPacingEngine,
+        pacing_config: dict,
+        cached_analysis: Dict | None,
+        clips: list,
+        total_duration: float,
+        song_mood: Optional[str],
+    ) -> None:
+        """Bind Brain reranker and forward real analysis features to ClipSelector."""
+        if not pacing_config.get("use_brain", False):
+            return
+
+        try:
+            from pb_studio.brain.brain_service import BrainService
+            from pb_studio.brain.feature_adapter import CanonicalFeatureAdapter
+
+            selector = pacing_engine.clip_selector
+            selector.brain_reranker = BrainService.get().reranker
+            selector.brain_context_keys = [""]
+            selector.brain_min_confidence = float(
+                pacing_config.get("brain_min_confidence", 0.0)
+            )
+
+            analysis = cached_analysis or {}
+            mood_tags = list(analysis.get("mood_tags") or [])
+            if not mood_tags and song_mood:
+                mood_tags = [str(song_mood)]
+
+            video_features = {
+                str(clip.get("id")): dict(clip)
+                for clip in clips
+                if clip.get("id") is not None
+            }
+            adapter = CanonicalFeatureAdapter(
+                audio_analysis=analysis,
+                video_analysis_by_clip=video_features,
+                fallback_duration=total_duration,
+                fallback_mood_tags=mood_tags,
+            )
+            selector.brain_feature_adapter = adapter
+            selector.brain_audio_features = {
+                "energy_curve": list(adapter.energy_curve),
+                "centroid_curve": list(adapter.centroid_curve),
+                "duration_seconds": adapter.duration_seconds,
+                "mood_tags": list(adapter.audio_mood_tags),
+                "audio_embedding": analysis.get("audio_embedding"),
+                "confidence": adapter.audio_confidence,
+            }
+            selector.brain_video_features_by_clip = video_features
+            logger.info(
+                "Brain reranker bound: audio_features=%s video_features=%d threshold=%.3f",
+                bool(selector.brain_audio_features["energy_curve"]),
+                len(selector.brain_video_features_by_clip),
+                selector.brain_min_confidence,
+            )
+        except Exception as exc:
+            logger.warning("Brain deep-hook bind fehlgeschlagen: %s", exc)
 
     def segment_timeline_into_chapters(
         self,
@@ -383,6 +623,95 @@ class PacingService:
         chapters[-1]["end"] = duration
         
         return chapters
+
+    def _merge_ui_anchors(
+        self,
+        canvas_anchors: List[dict],
+        ui_anchors: Optional[List[dict]],
+        clips: List[dict],
+    ) -> List[dict]:
+        """
+        Fuegt Anker aus dem ANCHOR-Tab zu den Canvas-Ankern hinzu.
+
+        Audit 2026-08-06 (T4.3): Der ANCHOR-Tab hatte kein Backend — `AddAnchor`
+        mutierte nur eine ObservableCollection, ohne Route, Schema oder
+        Persistenz. Die Engine konnte manuelle Anker aber laengst, nur eben
+        ausschliesslich aus einem Obsidian-.canvas-File. Hier ist die fehlende
+        Bruecke: UI-Anker werden ins gleiche Format uebersetzt
+        (``{id, file_path, mix_start, mix_end}``).
+
+        Canvas-Anker haben Vorrang: ueberlappt ein UI-Anker einen bestehenden,
+        wird er verworfen statt die Storyboard-Absicht zu ueberschreiben.
+        """
+        if not ui_anchors:
+            return canvas_anchors
+
+        by_id: dict[int, dict] = {}
+        for clip in clips:
+            raw_id = clip.get("id", clip.get("clip_id"))
+            try:
+                by_id[int(raw_id)] = clip
+            except (TypeError, ValueError):
+                continue
+
+        merged = list(canvas_anchors)
+        skipped_overlap = 0
+        skipped_unknown = 0
+
+        for entry in sorted(
+            (e for e in ui_anchors if isinstance(e, dict)),
+            key=lambda e: float(e.get("time", 0.0) or 0.0),
+        ):
+            clip_id = entry.get("video_clip_id")
+            if clip_id is None:
+                skipped_unknown += 1
+                continue
+            try:
+                clip = by_id.get(int(clip_id))
+            except (TypeError, ValueError):
+                clip = None
+            if not clip:
+                skipped_unknown += 1
+                continue
+
+            file_path = clip.get("file_path") or clip.get("path")
+            if not file_path:
+                skipped_unknown += 1
+                continue
+
+            try:
+                start = float(entry.get("time", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            try:
+                clip_duration = self._get_clip_duration(str(file_path))
+            except Exception:  # noqa: BLE001 - Anker darf Lauf nicht kippen
+                clip_duration = 4.0
+            end = start + max(0.5, float(clip_duration))
+
+            if any(
+                start < existing["mix_end"] and end > existing["mix_start"]
+                for existing in merged
+            ):
+                skipped_overlap += 1
+                continue
+
+            merged.append({
+                "id": f"ui_anchor_{clip_id}_{start:.2f}",
+                "file_path": file_path,
+                "mix_start": start,
+                "mix_end": end,
+            })
+
+        merged.sort(key=lambda anchor: anchor["mix_start"])
+        logger.info(
+            "UI-Anker eingespeist: %d uebernommen, %d wegen Ueberlappung "
+            "verworfen, %d ohne aufloesbaren Clip",
+            len(merged) - len(canvas_anchors),
+            skipped_overlap,
+            skipped_unknown,
+        )
+        return merged
 
     def load_canvas_manual_anchors(self, canvas_path: str | None, clips: List[dict]) -> List[dict]:
         """Storyboard-Anker und manuelle Clips aus Obsidian .canvas File einlesen (Stufe 4)."""
@@ -512,6 +841,9 @@ class PacingService:
         if not clips:
             logger.warning("Keine Video-Clips vorhanden.")
             return []
+        # Audit 2026-08-05 (H-8/T3.12): siehe generate_cut_list — ffprobe-Flut
+        # durch vorhandene Metadaten ersetzen.
+        self.prime_duration_cache(clips)
         if not stems:
             logger.warning("L-K5: stems leer -> fallback auf generate_cut_list (no-stems)")
             return self.generate_cut_list(
@@ -534,21 +866,16 @@ class PacingService:
                 logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
                 total_duration = 30.0
 
+        semantic_enabled, song_mood = self._resolve_semantic_audio(
+            audio_path,
+            pacing_config.get("use_semantic_matching", False),
+        )
+
         pacing_engine = AdvancedPacingEngine(
             trigger_settings=pacing_config["trigger_settings"]
         )
         pacing_engine.clip_selector.vector_store = vstore
-        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
-
-        # Brain reranker hook (gleich wie generate_cut_list)
-        if pacing_config.get("use_brain", False):
-            try:
-                from pb_studio.brain.brain_service import BrainService
-                svc = BrainService.get()
-                pacing_engine.clip_selector.brain_reranker = svc.reranker
-                pacing_engine.clip_selector.brain_context_keys = [""]
-            except Exception as e:
-                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
+        pacing_engine.clip_selector.use_semantic = semantic_enabled
 
         # Key-matching hook (E1 + L-K4) — auch fuer stem-pacing relevant
         if pacing_config.get("use_key_matching", False):
@@ -569,10 +896,35 @@ class PacingService:
 
         # Pre-cached injection (Beats/Energy/Bass/Subtracks)
         self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
+        self._configure_brain_selector(
+            pacing_engine,
+            pacing_config,
+            cached_analysis,
+            clips,
+            total_duration,
+            song_mood,
+        )
 
         target_duration = duration_limit or total_duration
         min_cut_interval = float(pacing_config.get("min_cut_interval", 0.5))
         expected_bpm = pacing_config.get("expected_bpm", 120)
+        song_sections = None
+        if pacing_config.get("use_structure_awareness", False):
+            cached_segments = (
+                cached_analysis.get("structure_segments")
+                if cached_analysis
+                else None
+            )
+            if cached_segments:
+                song_sections = cached_segments
+                self._last_skipped_structure_reanalyze = True
+                logger.info(
+                    "Stem-Pacing: %d cached structure_segments verwendet",
+                    len(cached_segments),
+                )
+            else:
+                song_sections = pacing_engine.analyze_song_structure(audio_path)
+                self._last_skipped_structure_reanalyze = False
 
         logger.info(
             f"L-K5 Stem-Pacing: stems={list(stems.keys())} target={target_duration:.2f}s"
@@ -584,6 +936,7 @@ class PacingService:
                 stems=stems,
                 expected_bpm=expected_bpm,
                 min_cut_interval=min_cut_interval,
+                song_sections=song_sections,
                 on_progress=on_progress,
             )
 
@@ -604,24 +957,23 @@ class PacingService:
             )
 
             # Clip-Zuweisung via clip_selector (mit semantic prompt falls aktiv)
-            song_mood = "energetic music"
-            if pacing_config.get("use_semantic_matching", False):
-                try:
-                    from pb_studio.ai.smart_director import SmartDirector
-                    director = SmartDirector.get_instance()
-                    song_mood = director.get_dominant_mood(audio_path)
-                except Exception as e:
-                    logger.warning(f"SmartDirector mood-detection failed: {e}")
-
             # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
             canvas_path = pacing_config.get("canvas_path")
             manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
+            # Audit 2026-08-06 (T4.3): Anker aus dem ANCHOR-Tab dazunehmen.
+            # Sie hatten bis hierher keinen Weg in die Engine -- der Tab war
+            # reine Dekoration. Canvas-Anker behalten Vorrang bei Kollision.
+            manual_anchors = self._merge_ui_anchors(
+                manual_anchors,
+                pacing_config.get("ui_anchors"),
+                clips,
+            )
 
             cut_with_clips = []
             last_manual_end = 0.0
             last_manual_clip = None
 
-            for cut in pacing_cuts:
+            for cut_index, cut in enumerate(pacing_cuts):
                 # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
                 active_anchor = None
                 for ma in manual_anchors:
@@ -636,7 +988,7 @@ class PacingService:
                     last_manual_clip = active_anchor
                     continue
 
-                prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                prompt = song_mood if semantic_enabled else None
                 if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                     prompt = f"{cut.segment_type} {prompt}"
                 
@@ -666,9 +1018,21 @@ class PacingService:
                 pacing_engine.clip_selector.bridging_out_of = bridging_out_of
 
                 sel = pacing_engine.clip_selector.select_clip(
-                    clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
+                    clips,
+                    cut.strength,
+                    cut.trigger_type,
+                    prompt=prompt,
+                    current_time=cut.time,
+                    active_theme=active_theme,
+                    cut_duration_sec=(
+                        pacing_cuts[cut_index + 1].time - cut.time
+                        if cut_index + 1 < len(pacing_cuts)
+                        else 1.0
+                    ),
                 )
-                cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+                cut_with_clips.append(
+                    (cut, sel.clip_path, sel.clip_id, getattr(sel, "metadata", None))
+                )
 
                 # Zurücksetzen der Bridge-Variablen
                 pacing_engine.clip_selector.bridging_in_to = None
@@ -682,10 +1046,10 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
             cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-            return self._finalize_cut_list(cut_list, total_duration)
+            return self._finalize_cut_list(cut_list, duration_limit or total_duration)
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
@@ -695,7 +1059,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
                 raise RuntimeError(
                     f"L-K5 Stem-Cut-Generierung endgueltig fehlgeschlagen: {final_e}"
@@ -725,6 +1089,11 @@ class PacingService:
         if not clips:
             logger.warning("Keine Video-Clips vorhanden.")
             return []
+
+        # Audit 2026-08-05 (H-8/T3.12): Dauern aus den mitgelieferten
+        # Clip-Metadaten uebernehmen, statt sie pro Clip per ffprobe-Subprozess
+        # neu zu ermitteln.
+        self.prime_duration_cache(clips)
 
         # 1. Sequencer Cuts (höchste Priorität)
         if sequencer_cuts:
@@ -761,14 +1130,20 @@ class PacingService:
                         pass  # ffprobe failed — let render handle it
 
                     final_cuts.append(cut)
-            return final_cuts
+            return self._finalize_cut_list(
+                final_cuts,
+                duration_limit or total_duration,
+            )
 
         # 2. Rule Engine (mittlere Priorität)
         if rule_engine and hasattr(rule_engine, "rules") and rule_engine.rules:
             logger.info(f"Rule Engine mit {len(rule_engine.rules)} Regeln.")
             rule_engine.available_clips = clips
             target = duration_limit or total_duration
-            return rule_engine.apply_rules(duration=target)
+            return self._finalize_cut_list(
+                rule_engine.apply_rules(duration=target),
+                target,
+            )
 
         # 3. Automatisches Pacing (Standard)
         from pb_studio.data.vector_store import VectorStore
@@ -782,27 +1157,19 @@ class PacingService:
             except Exception as e:
                 logger.warning(f"Ad-hoc Probe fehlgeschlagen: {e}")
                 total_duration = 30.0 # Absoluter Notfall-Fallback
-        
+
+        semantic_enabled, song_mood = self._resolve_semantic_audio(
+            audio_path,
+            pacing_config.get("use_semantic_matching", False),
+        )
+
         pacing_engine = AdvancedPacingEngine(
             trigger_settings=pacing_config["trigger_settings"]
         )
         # VectorStore für semantische Auswahl injizieren
         pacing_engine.clip_selector.vector_store = vstore
-        pacing_engine.clip_selector.use_semantic = pacing_config.get("use_semantic_matching", False)
+        pacing_engine.clip_selector.use_semantic = semantic_enabled
 
-        # Plan Phase 4 deep hook: BrainReranker an clip_selector binden, wenn use_brain=true.
-        # Pro Cut wird vom Caller context_keys + audio/video features gesetzt.
-        if pacing_config.get("use_brain", False):
-            try:
-                from pb_studio.brain.brain_service import BrainService
-                svc = BrainService.get()
-                pacing_engine.clip_selector.brain_reranker = svc.reranker
-                # Default-Kontext (level-0 only, übersteuert pro Cut wenn vorhanden):
-                pacing_engine.clip_selector.brain_context_keys = [""]
-                logger.info("Brain reranker an clip_selector gebunden (deep hook)")
-            except Exception as e:
-                logger.warning(f"Brain deep-hook bind fehlgeschlagen: {e}")
-        
         target_duration = duration_limit or total_duration
 
         # Gecachte Beats aus vorheriger Audio-Analyse extrahieren
@@ -837,11 +1204,19 @@ class PacingService:
         logger.info(
             f"Cut-Liste für {target_duration:.2f}s generieren "
             f"(Motion={pacing_config.get('use_motion_matching', False)}, "
-            f"Semantic={pacing_config.get('use_semantic_matching', False)})"
+            f"Semantic={semantic_enabled})"
         )
 
         # Pre-cached Beats + Dauer + Kurven injizieren
         self._inject_cached_into_engine(pacing_engine, audio_path, cached_analysis)
+        self._configure_brain_selector(
+            pacing_engine,
+            pacing_config,
+            cached_analysis,
+            clips,
+            total_duration,
+            song_mood,
+        )
 
         # Audit E1 + L-K4: use_key_matching — Camelot-Wheel key compatibility scoring.
         if pacing_config.get("use_key_matching", False):
@@ -868,11 +1243,7 @@ class PacingService:
 
         try:
             # Entscheide welche Generierungsmethode genutzt wird
-            use_advanced = (
-                pacing_config.get("use_motion_matching", False) or 
-                pacing_config.get("use_semantic_matching", False) or
-                pacing_config.get("use_structure_awareness", False)
-            )
+            use_advanced = _uses_advanced_pacing(pacing_config, semantic_enabled)
 
             if use_advanced:
                 if pacing_config.get("use_motion_matching", False):
@@ -934,21 +1305,21 @@ class PacingService:
                 )
 
                 # Stimmung ermitteln für semantisches Matching
-                song_mood = "energetic music"
-                if pacing_config.get("use_semantic_matching", False):
-                    from pb_studio.ai.smart_director import SmartDirector
-                    director = SmartDirector.get_instance()
-                    song_mood = director.get_dominant_mood(audio_path)
-
                 # Stufe 4: Obsidian Canvas & manuelle Anker einlesen
                 canvas_path = pacing_config.get("canvas_path")
                 manual_anchors = self.load_canvas_manual_anchors(canvas_path, clips) if canvas_path else []
+                # Audit 2026-08-06 (T4.3): siehe generate_cut_list_with_stems.
+                manual_anchors = self._merge_ui_anchors(
+                    manual_anchors,
+                    pacing_config.get("ui_anchors"),
+                    clips,
+                )
 
                 cut_with_clips = []
                 last_manual_end = 0.0
                 last_manual_clip = None
 
-                for cut in pacing_cuts:
+                for cut_index, cut in enumerate(pacing_cuts):
                     # Prüfen, ob wir uns in einem reservierten manuellen Storyboard-Clip-Intervall befinden
                     active_anchor = None
                     for ma in manual_anchors:
@@ -963,7 +1334,7 @@ class PacingService:
                         last_manual_clip = active_anchor
                         continue
 
-                    prompt = song_mood if pacing_config.get("use_semantic_matching", False) else None
+                    prompt = song_mood if semantic_enabled else None
                     # Falls Struktur aktiv, prompt verfeinern
                     if prompt and hasattr(cut, "segment_type") and cut.segment_type:
                         prompt = f"{cut.segment_type} {prompt}"
@@ -994,9 +1365,21 @@ class PacingService:
                     pacing_engine.clip_selector.bridging_out_of = bridging_out_of
 
                     sel = pacing_engine.clip_selector.select_clip(
-                        clips, cut.strength, cut.trigger_type, prompt=prompt, current_time=cut.time, active_theme=active_theme
+                        clips,
+                        cut.strength,
+                        cut.trigger_type,
+                        prompt=prompt,
+                        current_time=cut.time,
+                        active_theme=active_theme,
+                        cut_duration_sec=(
+                            pacing_cuts[cut_index + 1].time - cut.time
+                            if cut_index + 1 < len(pacing_cuts)
+                            else 1.0
+                        ),
                     )
-                    cut_with_clips.append((cut, sel.clip_path, sel.clip_id))
+                    cut_with_clips.append(
+                        (cut, sel.clip_path, sel.clip_id, getattr(sel, "metadata", None))
+                    )
 
                     # Zurücksetzen der Bridge-Variablen
                     pacing_engine.clip_selector.bridging_in_to = None
@@ -1010,10 +1393,10 @@ class PacingService:
                         min_cut_interval=min_cut_interval,
                         on_progress=on_progress,
                     )
-                    return self._finalize_cut_list(cut_list, total_duration)
+                    return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
                 cut_list = self._process_pacing_cuts_to_cutlist(cut_with_clips, target_duration)
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             else:
                 cut_list = self._generate_simple_round_robin(
                     pacing_engine, audio_path, clips,
@@ -1021,7 +1404,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
             # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
@@ -1032,7 +1415,7 @@ class PacingService:
                     min_cut_interval=min_cut_interval,
                     on_progress=on_progress,
                 )
-                return self._finalize_cut_list(cut_list, total_duration)
+                return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
                 raise RuntimeError(f"Cut-List-Generierung endgültig fehlgeschlagen: {final_e}") from e
 
@@ -1085,6 +1468,11 @@ class PacingService:
                     "clip_start": cs,
                     "trigger_type": cur.trigger_type,
                     "trigger_strength": cur.strength,
+                    **(
+                        {"trigger_provenance": dict(cur.provenance)}
+                        if getattr(cur, "provenance", None)
+                        else {}
+                    ),
                 },
             ))
             idx += 1

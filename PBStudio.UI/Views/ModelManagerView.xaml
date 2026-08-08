@@ -11,7 +11,13 @@
              d:DataContext="{d:DesignInstance vm:ModelManagerViewModel}"
              Background="{StaticResource AbletonBg}"
              Loaded="OnLoaded"
-             Unloaded="OnUnloaded">
+             Unloaded="OnUnloaded"
+             AutomationProperties.Name="Modellverwaltung"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
@@ -41,7 +47,10 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="6,4" Height="28"
-                            ToolTip="Modell-Liste aktualisieren&#x0a;• Was es macht: Fragt den aktiven LLM-Provider (z.B. LM Studio) nach allen installierten und geladenen Modellen ab.&#x0a;• Wozu es dient: Bringt die Liste der verfügbaren Modelle auf den neuesten Stand, wenn du in LM Studio neue Modelle hinzugefügt hast.&#x0a;• Wann &amp; wie nutzen: Immer dann anklicken, wenn du ein neues Modell in LM Studio geladen hast und dieses hier nicht sofort siehst.">
+                            ToolTip="Modell-Liste aktualisieren&#x0a;• Was es macht: Fragt den aktiven LLM-Provider (z.B. LM Studio) nach allen installierten und geladenen Modellen ab.&#x0a;• Wozu es dient: Bringt die Liste der verfügbaren Modelle auf den neuesten Stand, wenn du in LM Studio neue Modelle hinzugefügt hast.&#x0a;• Wann &amp; wie nutzen: Immer dann anklicken, wenn du ein neues Modell in LM Studio geladen hast und dieses hier nicht sofort siehst."
+                            AutomationProperties.Name="Modell-Liste aktualisieren"
+                            AutomationProperties.HelpText="Lädt Providerstatus sowie installierte, aktive und verfügbare Modelle neu."
+                            AutomationProperties.AcceleratorKey="F5">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -64,7 +73,13 @@
                     </StackPanel>
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11" Margin="0,2,0,0"/>
+                               FontSize="11" Margin="0,2,0,0"
+                               AutomationProperties.Name="{Binding StatusText}"
+                               AutomationProperties.LiveSetting="Polite"/>
+                    <TextBlock Text="{Binding ProviderStatusText}"
+                               Foreground="{StaticResource AbletonTextDim}"
+                               FontSize="10" Margin="0,2,0,0"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -117,7 +132,8 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <ItemsControl ItemsSource="{Binding InstalledModels}" Margin="0,0,0,18">
+                <ItemsControl ItemsSource="{Binding InstalledModels}" Margin="0,0,0,18"
+                              AutomationProperties.Name="Installierte Modelle">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>
@@ -149,6 +165,8 @@
                                                 Padding="6,2" Height="24"
                                                 Opacity="0.65"
                                                 IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                                AutomationProperties.Name="{Binding Name, StringFormat=Modell {0} entfernen}"
+                                                AutomationProperties.HelpText="Öffnet eine Anleitung zum sicheren Entfernen dieses Modells aus LM Studio."
                                                 ToolTip="Modell entfernen&#x0a;• Was es macht: Zeigt eine Schritt-für-Schritt-Anleitung an, wie du das Modell sicher aus LM Studio entfernst.&#x0a;• Wozu es dient: Gibt wertvollen Festplattenspeicher frei, wenn du ein Modell nicht mehr benötigst.&#x0a;• Wann &amp; wie nutzen: Klicken, wenn du alte Modelle dauerhaft löschen willst, um Platz auf deinem Laufwerk zu schaffen.">
                                             <StackPanel Orientation="Horizontal">
                                                 <icon:PackIconMaterial Kind="TrashCanOutline" Width="13" Height="13"
@@ -203,10 +221,6 @@
                                                             <Setter Property="Background" Value="#4d2215"/>
                                                             <Setter Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Provider}" Value="both">
-                                                            <Setter Property="Background" Value="#253d1a"/>
-                                                            <Setter Property="BorderBrush" Value="{StaticResource AbletonGreen}"/>
-                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
@@ -222,13 +236,20 @@
                                                             <DataTrigger Binding="{Binding Provider}" Value="lmstudio">
                                                                 <Setter Property="Foreground" Value="{StaticResource AbletonAccent}"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Provider}" Value="both">
-                                                                <Setter Property="Foreground" Value="{StaticResource AbletonGreen}"/>
-                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                        </Border>
+
+                                        <Border Padding="6,2" CornerRadius="2"
+                                                Margin="6,0,0,0"
+                                                Background="{StaticResource AbletonPanel}"
+                                                BorderBrush="{StaticResource AbletonBorder}"
+                                                BorderThickness="1">
+                                            <TextBlock Text="{Binding StateText}"
+                                                       FontSize="10"
+                                                       Foreground="{Binding StateColor}"/>
                                         </Border>
 
                                         <!-- Aktive Zuweisungen (falls aktiv) -->
@@ -248,6 +269,12 @@
                                                Height="34"
                                                TextTrimming="WordEllipsis"
                                                ToolTip="{Binding Description}"/>
+                                    <TextBlock Text="{Binding StatusReason}"
+                                               Foreground="{StaticResource AbletonTextDim}"
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,8"
+                                               ToolTip="{Binding StatusReason}"/>
 
                                     <!-- Detail-Grid (Groesse, Params, Quant) -->
                                     <Grid Margin="0,0,0,10">
@@ -275,6 +302,32 @@
                                         </StackPanel>
                                     </Grid>
 
+                                    <!-- Audit 2026-08-05 (H-3/T3.9): Kontextfenster und
+                                         Architektur. LM Studio liefert beide, sie wurden
+                                         bisher dreifach abgeschnitten. Ohne das
+                                         Kontextfenster konnte der User den eigenen
+                                         Ratschlag des Chat-Agents ("groesseres
+                                         Kontextfenster waehlen") nicht befolgen. -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="KONTEXT" Style="{StaticResource ParamLabel}"/>
+                                            <TextBlock Text="{Binding ContextWindowDisplay}"
+                                                       Style="{StaticResource ParamValue}"
+                                                       Foreground="{StaticResource AbletonAccent}"
+                                                       ToolTip="Maximale Kontextlaenge in Tokens. Ist der Chat-Verlauf laenger, lehnt das Modell die Anfrage ab."/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="ARCH" Style="{StaticResource ParamLabel}"/>
+                                            <TextBlock Text="{Binding ArchitectureDisplay}"
+                                                       Style="{StaticResource ParamValue}"
+                                                       Foreground="{StaticResource AbletonTextDim}"/>
+                                        </StackPanel>
+                                    </Grid>
+
                                     <!-- modified-Text und Busy-Overlay -->
                                     <Grid Margin="0,0,0,8">
                                         <TextBlock Foreground="{StaticResource AbletonTextDim}"
@@ -293,6 +346,8 @@
                                                     Foreground="{StaticResource AbletonAccent}"
                                                     Padding="6,2" Height="26"
                                                     IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat=DirectML-Test für {0}}"
+                                                    AutomationProperties.HelpText="Führt eine kurze, providergebundene Test-Inferenz auf der ausgewählten AMD-GPU aus."
                                                     ToolTip="DirectML GPU-Smoke-Test&#x0a;• Was es macht: Führt eine kleine Test-Inferenz auf deiner AMD-Grafikkarte über die DirectML-Schnittstelle aus.&#x0a;• Wozu es dient: Verifiziert blitzschnell, ob das Modell auf deiner GPU fehlerfrei und beschleunigt läuft.&#x0a;• Wann &amp; wie nutzen: Direkt nach der ersten Installation oder Aktivierung eines Modells ausführen, um Kompatibilitätsprobleme sofort aufzudecken.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <icon:PackIconMaterial Kind="PlayCircleOutline" Width="14" Height="14"
@@ -317,6 +372,8 @@
                                                     Padding="12,2" Height="26"
                                                     HorizontalAlignment="Right"
                                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat=Modell {0} aktivieren}"
+                                                    AutomationProperties.HelpText="Aktiviert dieses Modell als bevorzugtes Hauptmodell und bestätigt die persistierte Auswahl."
                                                     ToolTip="Als Hauptmodell aktivieren&#x0a;• Was es macht: Setzt das gewählte Modell als Standard-Modell für alle zukünftigen Chat- und Analyse-Aufgaben fest.&#x0a;• Wozu es dient: Stellt sicher, dass PB Studio für den KI-Chat und die Director-Analysen immer dein bevorzugtes Modell anspricht.&#x0a;• Wann &amp; wie nutzen: Anklicken, wenn du ein anderes Modell (z.B. ein größeres für bessere Qualität oder ein kleineres für mehr Performance) standardmäßig verwenden möchtest.">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
@@ -364,6 +421,20 @@
                                         </DockPanel>
                                     </Border>
 
+                                    <!-- Audit 2026-08-05 (H-2/T3.10): Auswahl-Beleg
+                                         des Smoke-Tests. Der Receipt wurde backendseitig
+                                         vollstaendig gebaut, aber nur ins Log geschrieben —
+                                         Nachvollziehbarkeit existierte damit nur fuer
+                                         jemanden, der backend.log liest. Leerer Text =
+                                         ausgeblendet (noch kein Test gelaufen). -->
+                                    <TextBlock Text="{Binding SelectionReceiptText}"
+                                               Visibility="{Binding SelectionReceiptText, Converter={StaticResource NullToVisibilityConverter}}"
+                                               FontSize="10"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource AbletonTextDim}"
+                                               ToolTip="Belegt, welches Modell fuer diesen Test ausgewaehlt wurde, welche Capabilities verlangt und welche live verifiziert wurden."/>
+
                                     <!-- Busy-Overlay -->
                                     <ProgressBar Height="3" Margin="0,6,0,0"
                                                  IsIndeterminate="True"
@@ -376,12 +447,34 @@
                 </ItemsControl>
 
                 <!-- ══ Verfuegbar ══ -->
-                <TextBlock Text="VERFUEGBAR"
+                <TextBlock Text="LIVE-VERIFIZIERTE DOWNLOADS"
                            FontSize="12" FontWeight="SemiBold"
                            Foreground="{StaticResource AbletonTextDim}"
                            Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding DiscoverActionsText}"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10"/>
+                <TextBlock Text="Keine individuellen Downloadmodelle wurden live verifiziert. Es werden keine statischen Modellkarten eingeblendet."
+                           Foreground="{StaticResource AbletonTextDim}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AvailableModels.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
-                <ItemsControl ItemsSource="{Binding AvailableModels}">
+                <ItemsControl ItemsSource="{Binding AvailableModels}"
+                              AutomationProperties.Name="Verfügbare Modelle">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>
@@ -413,6 +506,12 @@
                                                    TextTrimming="CharacterEllipsis"
                                                    Margin="0,0,6,0"/>
                                     </DockPanel>
+
+                                    <TextBlock Text="{Binding ProviderLabel}"
+                                               Foreground="{StaticResource AbletonAccent}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,6"/>
 
                                     <TextBlock Text="{Binding Description}"
                                                Foreground="{StaticResource AbletonTextDim}"
@@ -447,7 +546,9 @@
                                                 HorizontalAlignment="Right"
                                                 Padding="8,2" Height="28"
                                                 Opacity="0.75"
-                                                ToolTip="Modelle über LM Studio herunterladen&#x0a;• Was es macht: Öffnet eine bebilderte Anleitung, wie du Modelle im Discover-Tab von LM Studio suchst und herunterlädst.&#x0a;• Wozu es dient: Da PB Studio komplett offline läuft, delegieren wir die Modell-Downloads an das mächtige LM Studio Interface.&#x0a;• Wann &amp; wie nutzen: Klicken, wenn du ein Modell aus der Liste 'Verfügbar' nutzen möchtest, das noch nicht auf deiner Festplatte installiert ist.">
+                                                AutomationProperties.Name="{Binding Name, StringFormat=Modell {0} herunterladen}"
+                                                AutomationProperties.HelpText="{Binding DownloadToolTip}"
+                                                ToolTip="{Binding DownloadToolTip}">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -461,7 +562,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <icon:PackIconMaterial Kind="OpenInNew" Width="14" Height="14"
                                                                        VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                                <TextBlock Text="In LM Studio" FontSize="11" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding DownloadActionText}" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                     </DockPanel>

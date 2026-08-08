@@ -18,11 +18,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly VideoLibraryStateService _videoLibraryState;
     private readonly SSEClient _sseClient;
+    private readonly ProjectService _projectService;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _loadVersion;
     private volatile bool _reloadQueued;
     private volatile bool _isShuttingDown;
     private bool _disposed;
+    private int? _activePacingAudioClipId;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -36,6 +38,21 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _maxClipLength = 8.0;
     [ObservableProperty] private double _onsetSensitivity = 0.5;
     [ObservableProperty] private double _minCutInterval = 0.5;
+
+    // Audit 2026-08-05 (H-1/T3.1): Diese drei Felder existieren im
+    // TriggerSettings-Record und werden von der Engine gelesen, wurden vom
+    // ViewModel aber nie gesetzt — der positional record nahm still seine
+    // Defaults an, ohne dass der Compiler warnt. Konsequenz: beat_trigger_mode
+    // ("downbeat_only"/"strong_only") war ueber die Oberflaeche prinzipiell
+    // unerreichbar, und clip_length_variation blieb konstant 0.0, wodurch der
+    // Jitter fuer Auto-Splits dauerhaft deaktiviert war.
+    [ObservableProperty] private double _clipLengthVariation = 0.0;
+    [ObservableProperty] private double _maxCutInterval = 10.0;
+    [ObservableProperty] private string _beatTriggerMode = "all";
+
+    /// <summary>Auswahlwerte fuer den Beat-Trigger-Modus (XAML-ComboBox).</summary>
+    public IReadOnlyList<string> BeatTriggerModes { get; } =
+        new[] { "all", "downbeat_only", "strong_only" };
     [ObservableProperty] private bool _useMotionMatching;
     [ObservableProperty] private bool _useSemanticMatching;
     [ObservableProperty] private bool _useStructureAwareness;
@@ -51,6 +68,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     // Cut-Trigger. Backend-Schema: use_stem_pacing (default false).
     [ObservableProperty] private bool _useStemPacing;
     [ObservableProperty] private double? _durationLimit;
+    [ObservableProperty] private string? _canvasPath;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCutListCommand))]
@@ -71,14 +89,21 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _generationProgress;
     [ObservableProperty] private string _currentStep = "";
 
-    public DirectorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState, VideoLibraryStateService videoLibraryState, SSEClient sseClient)
+    public DirectorViewModel(
+        IApiClient api,
+        AudioLibraryStateService audioLibraryState,
+        VideoLibraryStateService videoLibraryState,
+        SSEClient sseClient,
+        ProjectService projectService)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
         _videoLibraryState = videoLibraryState;
         _sseClient = sseClient;
+        _projectService = projectService;
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         void HandleReload()
         {
@@ -107,6 +132,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task LoadClipsAsync()
     {
+        if (_isShuttingDown)
+            return;
+
         _reloadQueued = false;
         var version = Interlocked.Increment(ref _loadVersion);
 
@@ -119,10 +147,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         try
         {
             var videoClips = await _videoLibraryState.RefreshAsync();
-            if (videoClips != null && version == _loadVersion)
+            if (videoClips != null && version == _loadVersion && !_isShuttingDown)
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (version != Volatile.Read(ref _loadVersion) || _isShuttingDown)
+                        return;
+
                     // Review-Fix MEDIUM (2026-07-09): User-Deselektionen ueber
                     // Library-Refreshes erhalten — nur NEUE Clips defaulten auf true.
                     var previousSelection = AvailableVideoClips.ToDictionary(c => c.Id, c => c.IsSelected);
@@ -141,11 +172,14 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             }
 
             var audioClips = await _audioLibraryState.RefreshAsync();
-            if (audioClips != null && version == _loadVersion)
+            if (audioClips != null && version == _loadVersion && !_isShuttingDown)
             {
                 var previousAudioClipId = SelectedAudioClip?.Id;
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (version != Volatile.Read(ref _loadVersion) || _isShuttingDown)
+                        return;
+
                     AvailableAudioClips.Clear();
                     foreach (var clip in audioClips)
                     {
@@ -177,7 +211,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 });
             }
 
-            if (version == _loadVersion)
+            if (version == _loadVersion && !_isShuttingDown)
             {
                 UpdateSelectedCount();
                 StatusText = $"{AvailableVideoClips.Count} Video / {AvailableAudioClips.Count} Audio Clips geladen";
@@ -188,7 +222,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             _loadGate.Release();
         }
 
-        if (_reloadQueued)
+        if (_reloadQueued && !_isShuttingDown)
             await LoadClipsAsync();
     }
 
@@ -269,13 +303,16 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var operation = _projectService.CaptureOperationContext();
+        var audioClip = SelectedAudioClip;
         IsGenerating = true;
+        _activePacingAudioClipId = audioClip.Id;
         StatusText = "Generiere Cut-Liste...";
 
         try
         {
             var config = new PacingConfig(
-                AudioClipId: SelectedAudioClip.Id,
+                AudioClipId: audioClip.Id,
                 VideoClipIds: selectedVideoIds,
                 ExpectedBpm: ExpectedBpm,
                 UseMotionMatching: UseMotionMatching,
@@ -293,15 +330,23 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     EnergyThreshold: EnergyThreshold,
                     MinClipLength: MinClipLength,
                     MaxClipLength: MaxClipLength,
-                    OnsetSensitivity: OnsetSensitivity
+                    OnsetSensitivity: OnsetSensitivity,
+                    // Audit 2026-08-05 (H-1/T3.1): zuvor ausgelassen -> C#-Defaults
+                    // gewannen still, die Engine-Features waren unerreichbar.
+                    ClipLengthVariation: ClipLengthVariation,
+                    MaxCutInterval: MaxCutInterval,
+                    BeatTriggerMode: BeatTriggerMode
                 ),
                 UseBrain: UseBrain,
                 BrainMinConfidence: BrainMinConfidence,
                 UseKeyMatching: UseKeyMatching,
-                UseStemPacing: UseStemPacing
+                UseStemPacing: UseStemPacing,
+                CanvasPath: CanvasPath
             );
 
-            var result = await _api.GenerateCutListAsync(config);
+            var result = await _api.GenerateCutListAsync(config, operation.CancellationToken);
+            if (!_projectService.IsCurrent(operation))
+                return;
             if (result != null && result.Cuts.Count > 0)
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -342,11 +387,16 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Cut-Liste generieren fehlgeschlagen: {ex.Message}";
+            if (_projectService.IsCurrent(operation))
+                StatusText = $"Cut-Liste generieren fehlgeschlagen: {ex.Message}";
         }
         finally
         {
-            IsGenerating = false;
+            if (_projectService.IsCurrent(operation))
+            {
+                _activePacingAudioClipId = null;
+                IsGenerating = false;
+            }
         }
     }
 
@@ -432,15 +482,25 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if ((e.EventType == "analysis_progress" || e.EventType == "pacing_progress") && IsGenerating)
+        if (e.EventType != "pacing_progress" || !IsGenerating ||
+            !_activePacingAudioClipId.HasValue ||
+            e.ClipId != _activePacingAudioClipId.Value)
+            return;
+
+        Application.Current.Dispatcher.Invoke(() =>
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                StatusText = e.Message;
-                if (e.Percent >= 0) GenerationProgress = e.Percent;
-                if (!string.IsNullOrEmpty(e.Step)) CurrentStep = e.Step;
-            });
-        }
+            StatusText = e.Message;
+            if (e.Percent >= 0) GenerationProgress = e.Percent;
+            if (!string.IsNullOrEmpty(e.Step)) CurrentStep = e.Step;
+        });
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        _activePacingAudioClipId = null;
+        IsGenerating = false;
+        GenerationProgress = 0;
+        CurrentStep = string.Empty;
     }
 
     public void Dispose()
@@ -448,9 +508,11 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _isShuttingDown = true;
+        Interlocked.Increment(ref _loadVersion);
+        _reloadQueued = false;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
+        _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
-        _loadGate.Dispose();
     }
 }
 

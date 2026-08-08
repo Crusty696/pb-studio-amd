@@ -1,5 +1,6 @@
 # LM Studio Tool-Use Test - test multiple text models - 2026-05-17
-$outFile = 'C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_tools_check.json'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$outFile = Join-Path $repoRoot '.lm_studio_tools_check.json'
 
 # Candidates (skip vision model + embedding model)
 $candidates = @(

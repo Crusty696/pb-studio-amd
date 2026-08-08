@@ -15,6 +15,7 @@ nach dem Restart automatisch wieder lesbar.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -26,6 +27,7 @@ from pb_studio.data.database_core import DatabaseCore
 from pb_studio.rendering import render_queue as rq_module
 from pb_studio.rendering.render_queue import (
     RenderQueue,
+    STATE_CANCELLED,
     STATE_COMPLETED,
     STATE_FAILED,
     STATE_INTERRUPTED,
@@ -128,6 +130,186 @@ def test_running_jobs_are_requeued_on_startup(queue: RenderQueue, tmp_path: Path
     assert pending_ids == {job1.job_id, job2.job_id, job3.job_id}
 
 
+def test_startup_reconstructs_and_schedules_render_payload(
+    queue: RenderQueue,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import importlib
+
+    from backend.app_state import AppState
+    from backend.schemas.render_schemas import RenderRequest
+
+    render_router = importlib.import_module("backend.routers.render_router")
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"audio")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    output = tmp_path / "resume.mp4"
+    timeline = [{
+        "clip_id": "clip_1",
+        "start_time": 0.0,
+        "end_time": 2.0,
+        "metadata": {"file_path": str(video)},
+    }]
+    request = RenderRequest(output_path=str(output), audio_path=str(audio))
+    settings = render_router._request_settings_dict(
+        request,
+        timeline_snapshot=timeline,
+        project_root=tmp_path,
+        project_db_id=1,
+    )
+    job = queue.enqueue("resume-hash", str(output), settings)
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    scheduled = []
+
+    async def fake_run(
+        task_id,
+        restored_request,
+        state,
+        restored_timeline,
+        queue_job_id,
+    ):
+        scheduled.append((
+            task_id,
+            restored_request,
+            state,
+            restored_timeline,
+            queue_job_id,
+        ))
+
+    monkeypatch.setattr(render_router, "_run_render_task", fake_run)
+    media_state = AppState(
+        audio_clips={1: {"path": str(audio)}},
+        video_clips={1: {"path": str(video)}},
+    )
+    monkeypatch.setattr(
+        render_router,
+        "_load_resume_media_state",
+        lambda *_args: (media_state, tmp_path),
+    )
+    state = AppState()
+    resumed = asyncio.run(
+        render_router._resume_render_queue_on_startup(state, queue=queue)
+    )
+
+    assert resumed == [job.job_id]
+    assert len(scheduled) == 1
+    (
+        task_id,
+        restored_request,
+        restored_state,
+        restored_timeline,
+        queue_job_id,
+    ) = scheduled[0]
+    assert restored_state is state
+    assert restored_request.audio_path == str(audio)
+    assert restored_request.output_path == str(output)
+    assert restored_timeline == timeline
+    assert queue_job_id == job.job_id
+    task = state.get_render_task(task_id)
+    assert task is not None
+    assert task["queue_job_id"] == job.job_id
+
+
+def test_startup_marks_legacy_job_without_resume_payload_failed(
+    queue: RenderQueue,
+    tmp_path: Path,
+) -> None:
+    from backend.app_state import AppState
+    from backend.routers.render_router import _resume_render_queue_on_startup
+
+    job = queue.enqueue("legacy-hash", str(tmp_path / "legacy.mp4"), _settings())
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    resumed = asyncio.run(
+        _resume_render_queue_on_startup(AppState(), queue=queue)
+    )
+
+    assert resumed == []
+    restored = queue.get(job.job_id)
+    assert restored is not None
+    assert restored.status == STATE_FAILED
+    assert "Resume-Payload" in (restored["error"] or "")
+
+
+def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
+    queue: RenderQueue,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import importlib
+
+    from backend.app_state import AppState
+    from backend.schemas.render_schemas import RenderRequest
+
+    render_router = importlib.import_module("backend.routers.render_router")
+    output = tmp_path / "resume-shutdown.mp4"
+    audio = tmp_path / "mix.wav"
+    audio.write_bytes(b"audio")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    request = RenderRequest(
+        output_path=str(output),
+        audio_path=str(audio),
+    )
+    timeline = [{
+        "clip_id": "clip_1",
+        "start_time": 0.0,
+        "end_time": 1.0,
+        "metadata": {"file_path": str(video)},
+    }]
+    job = queue.enqueue(
+        "resume-shutdown-hash",
+        str(output),
+        render_router._request_settings_dict(
+            request,
+            timeline_snapshot=timeline,
+            project_root=tmp_path,
+            project_db_id=1,
+        ),
+    )
+    queue.update_status(job.job_id, STATE_RUNNING)
+
+    async def stubborn_render(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(render_router, "_run_render_task", stubborn_render)
+    media_state = AppState(
+        audio_clips={1: {"path": str(audio)}},
+        video_clips={1: {"path": str(video)}},
+    )
+    monkeypatch.setattr(
+        render_router,
+        "_load_resume_media_state",
+        lambda *_args: (media_state, tmp_path),
+    )
+
+    async def run() -> None:
+        render_router._reset_render_runtime_for_startup()
+        state = AppState()
+        resumed = await render_router._resume_render_queue_on_startup(
+            state,
+            queue=queue,
+        )
+        assert resumed == [job.job_id]
+        await render_router._shutdown_active_renders(
+            state,
+            cooperative_timeout=0.0,
+            forced_timeout=0.0,
+        )
+        await asyncio.sleep(0)
+        render_router._reset_render_runtime_for_startup()
+
+    asyncio.run(run())
+
+    restored = queue.get(job.job_id)
+    assert restored is not None
+    assert restored.status == STATE_INTERRUPTED
+    assert "shutdown" in (restored["error"] or "").lower()
+
+
 def test_completed_jobs_remain_completed_after_restart(queue: RenderQueue, tmp_path: Path) -> None:
     """'completed' darf von restore_running_as_interrupted nicht angefasst werden."""
     job = queue.enqueue("hash-done", str(tmp_path / "done.mp4"), _settings())
@@ -159,6 +341,30 @@ def test_failed_jobs_remain_failed(queue: RenderQueue, tmp_path: Path) -> None:
     assert restored["error"] == "encoder timeout"
 
 
+@pytest.mark.parametrize(
+    "terminal_status",
+    [STATE_COMPLETED, STATE_FAILED, STATE_CANCELLED],
+)
+def test_terminal_attempt_is_immutable_and_retry_gets_new_job(
+    queue: RenderQueue,
+    tmp_path: Path,
+    terminal_status: str,
+) -> None:
+    output = str(tmp_path / f"retry-{terminal_status}.mp4")
+    first = queue.enqueue("retry-hash", output, _settings())
+    queue.update_status(first.job_id, STATE_RUNNING)
+    queue.update_status(first.job_id, terminal_status, error=terminal_status)
+    terminal_snapshot = dict(queue.get(first.job_id))
+
+    with pytest.raises(ValueError, match="Terminaler Render-Job"):
+        queue.update_status(first.job_id, STATE_RUNNING)
+
+    assert dict(queue.get(first.job_id)) == terminal_snapshot
+    retry = queue.enqueue("retry-hash", output, _settings())
+    assert retry.job_id != first.job_id
+    assert retry.status == STATE_QUEUED
+
+
 def test_idempotent_enqueue(queue: RenderQueue, tmp_path: Path) -> None:
     """Doppeltes Enqueue desselben (media_hash, output_path, settings) gibt
     denselben Job zurück — keine zweite Zeile in der Tabelle."""
@@ -181,12 +387,13 @@ def test_idempotent_enqueue(queue: RenderQueue, tmp_path: Path) -> None:
     assert fourth.job_id != first.job_id
     assert len(queue.list_jobs()) == 3
 
-    # Gleiche Inputs nach Statuswechsel → trotzdem keine Duplikate
+    # Gleiche Inputs nach Terminalstatus → neuer Retry-Attempt mit eigener ID
+    queue.update_status(first.job_id, STATE_RUNNING)
     queue.update_status(first.job_id, STATE_COMPLETED)
     fifth = queue.enqueue("hash-X", output, settings)
-    assert fifth.job_id == first.job_id
-    assert fifth.status == STATE_COMPLETED   # bestehender Status bleibt
-    assert len(queue.list_jobs()) == 3
+    assert fifth.job_id != first.job_id
+    assert fifth.status == STATE_QUEUED
+    assert len(queue.list_jobs()) == 4
 
 
 def test_concurrent_enqueue_does_not_double(queue: RenderQueue, tmp_path: Path) -> None:

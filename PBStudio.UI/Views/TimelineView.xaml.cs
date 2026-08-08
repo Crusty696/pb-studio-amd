@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PBStudio.UI.ViewModels;
 using PBStudio.UI.Helpers;
 using PBStudio.UI.Models;
+using PBStudio.UI.Services;
 
 namespace PBStudio.UI.Views;
 
@@ -45,6 +46,8 @@ public partial class TimelineView : UserControl
     private double _originalEndTime;
     private double _originalClipStart;
     private const double MinClipDuration = 0.1;
+    private const double FineKeyboardStepSeconds = 0.1;
+    private const double CoarseKeyboardStepSeconds = 1.0;
 
     private IServiceScope? _scope;
 
@@ -290,6 +293,7 @@ public partial class TimelineView : UserControl
     {
         if (sender is FrameworkElement element && element.DataContext is TimelineEntryModel entry)
         {
+            element.Focus();
             _draggedEntry = entry;
             _viewModel!.SelectedEntry = entry;
             _lastMousePosition = e.GetPosition(this);
@@ -311,6 +315,182 @@ public partial class TimelineView : UserControl
             element.CaptureMouse();
             e.Handled = true;
         }
+    }
+
+    private void Clip_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is FrameworkElement element
+            && element.DataContext is TimelineEntryModel entry
+            && _viewModel != null)
+        {
+            _viewModel.SelectedEntry = entry;
+            VisualStateManager.GoToElementState(element, "Selected", true);
+        }
+    }
+
+    private void Clip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+            VisualStateManager.GoToElementState(element, "Normal", true);
+    }
+
+    private void Clip_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space)
+            || sender is not FrameworkElement element
+            || element.DataContext is not TimelineEntryModel entry
+            || _viewModel == null)
+        {
+            return;
+        }
+
+        _viewModel.SelectedEntry = entry;
+        e.Handled = true;
+    }
+
+    private void TimelineView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_viewModel == null
+            || e.OriginalSource is TextBox or Slider
+            || !IsTimelineKeyboardTarget(e.OriginalSource as DependencyObject))
+            return;
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key == Key.Delete)
+        {
+            _viewModel.RejectUnsafeTimelineRemoval();
+            e.Handled = true;
+            return;
+        }
+
+        if (key is Key.Up or Key.Down)
+        {
+            var command = key == Key.Up
+                ? _viewModel.PreviousCutCommand
+                : _viewModel.NextCutCommand;
+            if (command.CanExecute(null))
+            {
+                command.Execute(null);
+                QueueFocusSelectedEntry();
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (key is Key.Home or Key.End)
+        {
+            e.Handled = key == Key.Home
+                ? _viewModel.SelectFirstCut()
+                : _viewModel.SelectLastCut();
+            if (e.Handled)
+                QueueFocusSelectedEntry();
+            return;
+        }
+
+        if (key is not (Key.Left or Key.Right))
+            return;
+
+        var modifiers = Keyboard.Modifiers;
+        var step = modifiers.HasFlag(ModifierKeys.Shift)
+            ? CoarseKeyboardStepSeconds
+            : FineKeyboardStepSeconds;
+        var delta = key == Key.Left ? -step : step;
+        var control = modifiers.HasFlag(ModifierKeys.Control);
+        var alt = modifiers.HasFlag(ModifierKeys.Alt);
+        bool changed;
+
+        if (control && alt)
+        {
+            changed = _viewModel.TrimSelectedCutEndBy(delta);
+        }
+        else if (alt)
+        {
+            changed = _viewModel.TrimSelectedCutStartBy(delta);
+        }
+        else if (control)
+        {
+            changed = _viewModel.NudgeSelectedCutBy(delta);
+        }
+        else
+        {
+            changed = _viewModel.ScrubTimelineBy(delta);
+        }
+
+        if (changed && (control || alt))
+        {
+            _syncTimer.Stop();
+            _syncTimer.Start();
+        }
+        e.Handled = true;
+    }
+
+    private bool IsTimelineKeyboardTarget(DependencyObject? source)
+    {
+        if (ReferenceEquals(source, this))
+            return true;
+
+        var current = source;
+        while (current != null && !ReferenceEquals(current, this))
+        {
+            if (ReferenceEquals(current, TimelineSummaryList)
+                || ReferenceEquals(current, LanesScrollViewer))
+            {
+                return true;
+            }
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return false;
+    }
+
+    private void QueueFocusSelectedEntry()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            var selected = _viewModel?.SelectedEntry;
+            if (selected == null)
+                return;
+
+            if (TimelineSummaryList.IsKeyboardFocusWithin)
+            {
+                TimelineSummaryList.ScrollIntoView(selected);
+                TimelineSummaryList.UpdateLayout();
+                if (TimelineSummaryList.ItemContainerGenerator.ContainerFromItem(selected)
+                    is ListViewItem item)
+                {
+                    item.Focus();
+                }
+                return;
+            }
+
+            if (LanesScrollViewer.IsKeyboardFocusWithin)
+                FocusClipElement(TimelineItemsControl, selected);
+        }));
+    }
+
+    private static bool FocusClipElement(
+        DependencyObject root,
+        TimelineEntryModel selected)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is FrameworkElement
+                {
+                    Name: "ClipBorder",
+                    DataContext: TimelineEntryModel entry
+                } element
+                && ReferenceEquals(entry, selected))
+            {
+                element.BringIntoView();
+                element.Focus();
+                return true;
+            }
+
+            if (FocusClipElement(child, selected))
+                return true;
+        }
+        return false;
     }
 
     private void Clip_MouseMove(object sender, MouseEventArgs e)
@@ -586,6 +766,11 @@ public partial class TimelineView : UserControl
         }
 
         var sourcePath = entry.FilePath;
+        if (!LocalMediaPathPolicy.TryCreateFileUri(sourcePath, out var sourceUri))
+        {
+            ResetPreview("Preview-Pfad ist keine freigegebene lokale Datei");
+            return;
+        }
         var clipStart = Math.Max(0, entry.ClipStart);
         var clipEnd = Math.Max(clipStart, entry.ClipStart + entry.Duration);
         var needsReload = forceReload
@@ -605,7 +790,7 @@ public partial class TimelineView : UserControl
             _pendingSeek = true;
             _playbackTimer.Stop();
             PreviewPlayer.Stop();
-            PreviewPlayer.Source = new Uri(sourcePath, UriKind.Absolute);
+            PreviewPlayer.Source = sourceUri;
             return;
         }
 

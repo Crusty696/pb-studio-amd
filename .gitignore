@@ -6,6 +6,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+[Bb]in/
+[Oo]bj/
 *.egg
 
 # Virtual Environment
@@ -55,7 +57,18 @@ LibreHardwareMonitorLib.dll
 *.db-shm
 
 # Tools / Binaries (nicht auf GitHub)
-tools/
+/tools/
+!/tools/
+/tools/*
+!/tools/mcp-node/
+/tools/mcp-node/*
+!/tools/mcp-node/.npmrc
+!/tools/mcp-node/package-lock.json
+!/tools/mcp-node/package.json
+!/tools/mcp-node/run-caveman-shrink.cmd
+!/tools/mcp-node/run-context7.cmd
+!/tools/mcp-node/verify-lock.mjs
+/src/tools/
 *.exe
 *.dll
 
@@ -72,6 +85,7 @@ assets/
 .pytest_tmp/
 .pytest_tmp_local/
 .pytest_tmp*/
+.pytest_t362_*/
 
 # Claude Code runtime artefacts
 .claude/scheduled_tasks.lock
@@ -84,6 +98,7 @@ project.json
 timeline.json
 .build_verify/
 artifacts/
+release-assets/
 .tmp_*.ps1
 .tmp_*.py
 gui_screenshots/
@@ -291,6 +306,20 @@ test-report/
 # pytest coverage SQLite DB
 .coverage
 
+# Superseded local GUI-QC diagnostics (authoritative T408/T409 receipts remain tracked)
+PBStudio.UI.Tests/TestResults/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-destructive-ui-state.json
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-dpi-matrix/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-final-100-150/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-final-200/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-runtime/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-spec-matrix/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-supported-100-150/
+specs/00013-system-wide-bug-hunting-audit/evidence/T408-gui-supported-200/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast-final/
+specs/00013-system-wide-bug-hunting-audit/evidence/T409-high-contrast-final-layout/
+
 # LM Studio / Ollama debug outputs (post-merge cleanup 2026-05-19)
 .lm_*.json
 .lm_*.txt
@@ -323,5 +352,8 @@ PBStudio.UI/Generated/*.g.cs
 # Antigravity/Codex/Agent-Tool Runtime-Artefakte (2026-07-09)
 scratch/
 scratch_test.ps1
-.codex/
+/.codex/
+!/.codex/
+/.codex/*
+!/.codex/config.toml
 .agent/

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -76,12 +77,33 @@ class BrainStore:
         try:
             migrate(db_path, mig_dir)
         except sqlite3.DatabaseError as e:
-            logger.error("Brain-Store DB %s korrupt: %s — Neuanlage", db_path, e)
+            logger.error("Brain-Store DB %s korrupt: %s", db_path, e)
             corrupt = db_path.with_suffix(db_path.suffix + ".corrupt")
             try:
                 db_path.replace(corrupt)
             except Exception:
                 db_path.unlink(missing_ok=True)
+            backup_root = self.brain_dir.parent / "backups"
+            for backup in sorted(backup_root.glob("brain_backup_*"), reverse=True):
+                candidate = backup / db_path.name
+                if not candidate.is_file():
+                    continue
+                try:
+                    verify = sqlite3.connect(str(candidate))
+                    try:
+                        if verify.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                            continue
+                    finally:
+                        verify.close()
+                    restore_tmp = db_path.with_suffix(db_path.suffix + ".restore.tmp")
+                    shutil.copy2(candidate, restore_tmp)
+                    os.replace(restore_tmp, db_path)
+                    migrate(db_path, mig_dir)
+                    logger.info("Brain-Store DB %s aus %s wiederhergestellt", db_path, backup)
+                    return
+                except (OSError, sqlite3.DatabaseError) as restore_error:
+                    logger.warning("Brain-Backup %s unbrauchbar: %s", candidate, restore_error)
+                    db_path.unlink(missing_ok=True)
             migrate(db_path, mig_dir)
 
     def close(self) -> None:
@@ -102,4 +124,3 @@ class BrainStore:
                 self.patterns_conn = None
 
         self.cache.close()
-

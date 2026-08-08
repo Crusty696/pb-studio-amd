@@ -1,16 +1,17 @@
 [run]
-source = backend, src/pb_studio
+branch = True
+source =
+    backend
+    pb_studio
 omit =
-    */ui_legacy_archived/*
-    */__pycache__/*
-    */migrations/*
-    src/pb_studio/workers/*
     Tests/*
-branch = False
+    */Generated/*
 
 [report]
-exclude_lines =
-    pragma: no cover
-    raise NotImplementedError
-    if __name__ == .__main__.:
-    if TYPE_CHECKING:
+fail_under = 53
+precision = 1
+show_missing = True
+skip_covered = True
+
+[json]
+pretty_print = True

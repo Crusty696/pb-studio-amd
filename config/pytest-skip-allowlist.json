@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "nodeid": "Tests/test_beat_detector_import_hygiene.py::test_missing_pyaudio_stub_does_not_leak_into_sys_modules",
+      "owner": "audio",
+      "expires_on": "2026-09-30",
+      "reason": "Environment-dependent real PyAudio installation."
+    },
+    {
+      "nodeid": "Tests/test_clip_selector_motion_curve.py::*",
+      "owner": "pacing",
+      "expires_on": "2026-08-31",
+      "reason": "Legacy motion-curve helper contract is not active."
+    },
+    {
+      "nodeid": "Tests/test_clap_wrapper.py::TestCLAPIntegration::*",
+      "owner": "audio",
+      "expires_on": "2026-09-30",
+      "reason": "Separate DirectML hardware lane owns real CLAP model and media."
+    },
+    {
+      "nodeid": "Tests/test_ollama_vision_wrapper.py",
+      "owner": "models",
+      "expires_on": "2026-08-31",
+      "reason": "Deprecated compatibility marker pending governed file removal."
+    },
+    {
+      "nodeid": "Tests/test_openapi_snapshot_drift.py::test_generated_dtos_not_stale_relative_to_snapshot",
+      "owner": "ui-services",
+      "expires_on": "2026-09-30",
+      "reason": "Requires the locked Windows .NET/NSwag lane."
+    },
+    {
+      "nodeid": "Tests/test_pacing_progress_events.py::test_engine_emits_progress_callback",
+      "owner": "pacing",
+      "expires_on": "2026-08-31",
+      "reason": "Input-dependent no-cut branch requires a deterministic fixture."
+    },
+    {
+      "nodeid": "Tests/test_trigger_settings_full_wiring.py::*",
+      "owner": "pacing",
+      "expires_on": "2026-08-31",
+      "reason": "Two documented engine-reader decisions remain open for max-cut interval and onset sensitivity."
+    },
+    {
+      "nodeid": "Tests/test_pacing_video_key.py::test_audio_key_detector_with_real_audio",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Requires local soundfile and FFmpeg media generation."
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestSigLIPWrapper::test_encode_text_mock",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Optional SigLIP text model is not a release asset."
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestSigLIPWrapper::test_classify_image_mock",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Separate DirectML hardware lane owns the real model."
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestVideoSpecialist::test_tag_video_mock",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Separate DirectML hardware lane owns the real model."
+    },
+    {
+      "nodeid": "Tests/test_siglip_video.py::TestIntegration::test_full_pipeline_mock",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Separate DirectML hardware lane owns the real model."
+    },
+    {
+      "nodeid": "Tests/test_smart_director_integration.py::TestGenerateFromTimeline::test_generate_from_timeline_renders_all_clips",
+      "owner": "render",
+      "expires_on": "2026-09-30",
+      "reason": "Requires the AMF integration lane."
+    },
+    {
+      "nodeid": "Tests/test_smart_director_integration.py::TestGenerateFromTimeline::test_generate_from_timeline_cancel",
+      "owner": "render",
+      "expires_on": "2026-09-30",
+      "reason": "Requires the AMF integration lane."
+    },
+    {
+      "nodeid": "Tests/test_subtrack_detector.py::test_subtrack_f_measure_realdata",
+      "owner": "audio",
+      "expires_on": "2026-09-30",
+      "reason": "Real-data quality evaluation is maintained as a separate script."
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_physical_directml_and_lhm_identity_is_rx7800xt",
+      "owner": "gpu",
+      "expires_on": "2026-09-30",
+      "reason": "Physical RX 7800 XT and LHM identity belongs to the hardware lane."
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_settings_gui_binds_every_additive_gpu_truth_field",
+      "owner": "ui-services",
+      "expires_on": "2026-09-30",
+      "reason": "Generated ApiTypes.g.cs is verified by the locked Windows .NET/NSwag lane."
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts",
+      "owner": "ui-services",
+      "expires_on": "2026-09-30",
+      "reason": "Generated ApiTypes.g.cs is verified by the locked Windows .NET/NSwag lane."
+    },
+    {
+      "nodeid": "Tests/test_timeline_integrity.py::test_auto_pacing_pipeline_chronological_no_violations",
+      "owner": "pacing",
+      "expires_on": "2026-08-31",
+      "reason": "Legacy empty-cut branch requires a deterministic fixture."
+    },
+    {
+      "nodeid": "Tests/test_visual_curves.py::*",
+      "owner": "video",
+      "expires_on": "2026-09-30",
+      "reason": "Platform codec availability controls MP4 fixture generation."
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_extract_3band_waveform",
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "reason": "Legacy external audio fixture is not present in clean checkout."
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_downsampled_waveform",
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "reason": "Legacy external audio fixture is not present in clean checkout."
+    },
+    {
+      "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_frequency_content_analysis",
+      "owner": "audio",
+      "expires_on": "2026-08-31",
+      "reason": "Legacy external audio fixture is not present in clean checkout."
+    }
+  ]
+}

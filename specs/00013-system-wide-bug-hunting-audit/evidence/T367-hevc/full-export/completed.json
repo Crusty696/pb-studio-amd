@@ -1,0 +1,50 @@
+{
+  "completed_at": "2026-07-30T08:59:34.208698+02:00",
+  "elapsed_seconds": 882.5309999999881,
+  "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t367.mp4",
+  "output_sha256": "9ad896ef336b3a0da72fc936efa19dcadd9931423ba40d6146316b508eb913e7",
+  "output_size": 3687203928,
+  "render_result": {
+    "end_pts_seconds": 6335.0,
+    "exit_code": 0,
+    "expected_duration_seconds": 6335.027,
+    "expected_frames": 190051,
+    "failure_fingerprint": null,
+    "fps": 465.47,
+    "frame": 190051,
+    "job_id": "t367-hevc-full-length",
+    "out_time_us": 6335000000,
+    "progress_end": true,
+    "progress_log_sha256": "f7d9ec30996f14aa04e0823c4c20a2df09d175c1f5c15ee109db71151f154313",
+    "recorded_at_epoch": 1785394307.7699516,
+    "run_id": "ad8710305e93452f8312e4274bc4938d",
+    "schema_version": 1,
+    "speed": "15.5x",
+    "status": "completed",
+    "stderr_log_sha256": "05a0b36f76088bbbeb4e8bc1d80ee50de563e259f20fb6f55a7ff0170816c70b",
+    "total_size": 3687203928
+  },
+  "render_result_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t367-hevc-full-length\\ad8710305e93452f8312e4274bc4938d\\result.json",
+  "result": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t367.mp4",
+  "run_id": "ad8710305e93452f8312e4274bc4938d",
+  "validation": {
+    "error": null,
+    "failure_fingerprint": null,
+    "job_id": "t367-hevc-full-length",
+    "metrics": {
+      "audio_end_pts": 6335.04,
+      "container_duration": 6335.033333,
+      "decoded_frames": 190051,
+      "end_silence_seconds": 58.215083,
+      "expected_end_silence_seconds": 58.222062,
+      "expected_frames": 190051,
+      "true_peak_dbtp": -1.06,
+      "video_end_pts": 6335.033333
+    },
+    "recorded_at_epoch": 1785394774.0376377,
+    "run_id": "ad8710305e93452f8312e4274bc4938d",
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "validation_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\.render_evidence\\t367-hevc-full-length\\ad8710305e93452f8312e4274bc4938d\\validation.json"
+}

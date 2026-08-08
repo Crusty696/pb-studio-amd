@@ -106,6 +106,18 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
             parsed_scripts.append((version, script))
         parsed_scripts.sort(key=lambda x: x[0])
 
+        expected_version = current + 1
+        for version, script in parsed_scripts:
+            if version <= current:
+                continue
+            if version != expected_version:
+                raise ValueError(
+                    "Migrationsluecke: "
+                    f"erwartet Version {expected_version}, gefunden "
+                    f"{version} ({script.name})"
+                )
+            expected_version += 1
+
         applied = current
         for version, script in parsed_scripts:
             if version <= current:

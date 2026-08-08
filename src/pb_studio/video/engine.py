@@ -12,7 +12,7 @@ from .encoder_utils import (
     build_ffmpeg_encode_args,
     check_amf_available,
     get_encoder_info,
-    get_encoder_config,
+    get_amf_device_args,
     _get_ffmpeg_path,
     _get_ffprobe_path,
 )
@@ -29,7 +29,7 @@ class VideoGenerator:
         if encoder_info["amf_available"]:
             logger.info("AMD AMF hardware encoding enabled")
         else:
-            logger.info("Using software encoding (AMF not available)")
+            logger.error("AMD AMF hardware encoding unavailable; rendering will fail")
 
     def generate(self, config: dict, callback=None):
         """
@@ -45,20 +45,24 @@ class VideoGenerator:
             "energy_react": int, # 0-10
             "chaos": int, # 0-10
             "temp_dir": str,
-            "use_hardware_encoding": bool,  # Enable/disable AMF
             "output_codec": str,  # 'h264', 'hevc', or 'av1'
             "output_quality": str  # 'speed', 'balanced', 'quality'
         }
         """
-        self.cancel_flag = False
         master_audio = config["master_audio"]
         source_videos = config["source_videos"]
         output_path = config["output_path"]
+
+        if self.cancel_flag:
+            return {"output_path": output_path, "cancelled": True}
+
         temp_base = Path(config.get("temp_dir", "./data/temp_render"))
         temp_dir = temp_base / f"render_{uuid.uuid4().hex[:8]}"
 
         # Encoding settings
-        self.use_hardware = config.get("use_hardware_encoding", True)
+        if config.get("use_hardware_encoding", True) is False:
+            raise ValueError("Software encoding is prohibited; AMD AMF is required")
+        self.use_hardware = True
         self.output_codec = config.get("output_codec", "h264")
         self.output_quality = config.get("output_quality", "balanced")
 
@@ -75,6 +79,8 @@ class VideoGenerator:
             # 2. Analyze Audio (Beats & Energy)
             if callback: callback("Analyzing Audio...", 0)
             analysis = self.analyzer.analyze_file(master_audio)
+            if self.cancel_flag:
+                return {"output_path": output_path, "cancelled": True}
 
             # Get Energy Profile (Librosa)
             import librosa
@@ -95,10 +101,14 @@ class VideoGenerator:
             if callback: callback("Planning Cuts...", 10)
             cut_list = self._plan_cuts(config, analysis, rms, times, duration)
             logger.info(f"Planned {len(cut_list)} cuts.")
+            if self.cancel_flag:
+                return {"output_path": output_path, "cancelled": True}
 
             # 4. Process Segments (Render)
             if callback: callback("Rendering Segments...", 20)
             processed_segments = self._render_segments(cut_list, source_videos, temp_dir, callback)
+            if self.cancel_flag:
+                return {"output_path": output_path, "cancelled": True}
 
             # 5. Concat
             if callback: callback("Finalizing...", 90)
@@ -239,7 +249,14 @@ class VideoGenerator:
 
             # 3. Render Segment
             out_name = temp_dir / f"seg_{i:04d}.mp4"
-            self._ffmpeg_extract(src, in_point, required_dur, out_name)
+            # BUGFIX H3: only append a segment that actually encoded. A failed
+            # segment must be skipped (with a logged reason), never fed as a
+            # 0-byte file into the concat step.
+            try:
+                self._ffmpeg_extract(src, in_point, required_dur, out_name)
+            except Exception as e:
+                logger.error("Skipping segment %d (%s): %s", i, src, e)
+                continue
             processed.append(out_name)
 
         return processed
@@ -260,18 +277,10 @@ class VideoGenerator:
     def _ffmpeg_extract(self, input_path, start, duration, output_path):
         """
         Extracts and standardizes a clip using AMD AMF hardware encoding.
-        Falls back to software encoding if AMF is not available.
+        Fails explicitly if AMD AMF is unavailable.
         """
         # Get encoder config - preview mode for segment rendering (fast)
         encoder_config = get_preview_encoder()
-
-        # Override if hardware disabled in config
-        if not getattr(self, 'use_hardware', True) and encoder_config.is_hardware:
-            encoder_config = get_encoder_config(
-                codec="h264",
-                quality="speed",
-                force_software=True
-            )
 
         logger.debug(f"Using encoder: {encoder_config.description}")
 
@@ -279,6 +288,7 @@ class VideoGenerator:
         # Standardize: 1080p, 30fps, no audio (we use master track)
         cmd = [
             _get_ffmpeg_path(), "-y",
+            *get_amf_device_args(),
             "-ss", str(start),
             "-i", str(input_path),
             "-t", str(duration),
@@ -295,27 +305,19 @@ class VideoGenerator:
         # Run FFmpeg
         result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
 
-        # If hardware encoding failed, try software fallback
-        if result.returncode != 0 and encoder_config.is_hardware:
-            logger.warning("Hardware encoding failed, trying software fallback")
-            fallback_config = get_encoder_config(
-                codec="h264",
-                quality="speed",
-                force_software=True
+        # BUGFIX H3: the encode result was previously never checked, so a failed
+        # segment (bad -ss past EOF, disk full, unsupported source) produced a
+        # missing/0-byte file that was then appended to the concat list -> opaque
+        # "concat failed" or a corrupt/short video, with the real error lost.
+        # Fail loudly instead: the caller must not append an unverified segment.
+        out = Path(output_path)
+        if result.returncode != 0 or not out.exists() or out.stat().st_size == 0:
+            stderr_tail = (result.stderr or b"").decode("utf-8", "replace")[-1200:]
+            raise RuntimeError(
+                f"FFmpeg segment encode failed for {input_path} "
+                f"(rc={result.returncode}, output_ok={out.exists() and out.stat().st_size > 0}). "
+                f"stderr tail:\n{stderr_tail}"
             )
-
-            cmd = [
-                _get_ffmpeg_path(), "-y",
-                "-ss", str(start),
-                "-i", str(input_path),
-                "-t", str(duration),
-                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1",
-                "-r", "30",
-            ]
-            cmd.extend(build_ffmpeg_encode_args(fallback_config))
-            cmd.extend(["-an", str(output_path)])
-
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
 
     def _concat_segments(self, segments, audio_path, output_path):
         """
@@ -339,19 +341,12 @@ class VideoGenerator:
             quality=getattr(self, 'output_quality', 'balanced')
         )
 
-        # Override if hardware disabled
-        if not getattr(self, 'use_hardware', True) and encoder_config.is_hardware:
-            encoder_config = get_encoder_config(
-                codec=getattr(self, 'output_codec', 'h264'),
-                quality=getattr(self, 'output_quality', 'balanced'),
-                force_software=True
-            )
-
         logger.info(f"Final encoding: {encoder_config.description}")
 
         # Concat with re-encoding for consistent output
         cmd = [
             _get_ffmpeg_path(), "-y",
+            *get_amf_device_args(),
             "-f", "concat",
             "-safe", "0",
             "-i", str(list_path),
@@ -402,11 +397,17 @@ class VideoGenerator:
         """
         master_audio = config["master_audio"]
         output_path = config["output_path"]
+
+        if self.cancel_flag:
+            return {"output_path": output_path, "cancelled": True}
+
         temp_base = Path(config.get("temp_dir", "./data/temp_render"))
         temp_dir = temp_base / f"render_{uuid.uuid4().hex[:8]}"
 
         # Encoding settings
-        self.use_hardware = config.get("use_hardware_encoding", True)
+        if config.get("use_hardware_encoding", True) is False:
+            raise ValueError("Software encoding is prohibited; AMD AMF is required")
+        self.use_hardware = True
         self.output_codec = config.get("output_codec", "h264")
         self.output_quality = config.get("output_quality", "balanced")
 
@@ -432,13 +433,22 @@ class VideoGenerator:
 
                 # Use source_start/source_end from SmartDirector timeline
                 segment_duration = tclip.source_end - tclip.source_start
-                self._ffmpeg_extract(
-                    tclip.source_path,
-                    tclip.source_start,
-                    segment_duration,
-                    out_name,
-                )
+                # BUGFIX H3: skip a segment that fails to encode instead of
+                # appending a missing/0-byte file to the concat list.
+                try:
+                    self._ffmpeg_extract(
+                        tclip.source_path,
+                        tclip.source_start,
+                        segment_duration,
+                        out_name,
+                    )
+                except Exception as e:
+                    logger.error("Skipping timeline clip %d (%s): %s", i, tclip.source_path, e)
+                    continue
                 processed_segments.append(out_name)
+
+            if self.cancel_flag:
+                return {"output_path": output_path, "cancelled": True}
 
             # Concatenate all segments with master audio
             if callback:
@@ -459,6 +469,10 @@ class VideoGenerator:
                     shutil.rmtree(temp_dir)
                 except Exception as e:
                     logger.debug(f"Could not clean temp dir: {e}")
+
+    def reset_cancel(self):
+        """Prepare this reusable generator for a newly accepted job."""
+        self.cancel_flag = False
 
     def cancel(self):
         self.cancel_flag = True

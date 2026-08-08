@@ -1,0 +1,45 @@
+{
+  "av1_unavailable": {
+    "detail": "AV1 AMF ist auf dieser AMD-GPU/FFmpeg-Konfiguration nicht verf\u00fcgbar",
+    "output_exists": false,
+    "probe_functional": false,
+    "status_code": 503
+  },
+  "database_copy": {
+    "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T336-hevc\\control-gates-cycle-2\\pb_studio.control-gates.db",
+    "sha256_initial": "719f552f3806f1d6e57d0eef7046071f0406cbf7bcb8839712601223302ab4f7"
+  },
+  "existing_target": {
+    "partial_files": [],
+    "preserved": true,
+    "sha256_after": "4bf4c2c83dd6db9a047d1e1541b237cbbfe955f7303b445dfb6fe9b3d33cc366",
+    "sha256_before": "4bf4c2c83dd6db9a047d1e1541b237cbbfe955f7303b445dfb6fe9b3d33cc366",
+    "target": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_h264_t335.mp4"
+  },
+  "live_database": {
+    "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db",
+    "sha256_after": "719f552f3806f1d6e57d0eef7046071f0406cbf7bcb8839712601223302ab4f7",
+    "sha256_before": "719f552f3806f1d6e57d0eef7046071f0406cbf7bcb8839712601223302ab4f7",
+    "unchanged": true
+  },
+  "restart_resume_cancel": {
+    "cancel_response": {
+      "cancelled": true,
+      "task_id": "resume-cee031fa"
+    },
+    "job_id": "cee031fa-8dac-472c-b830-2af885b81ca6",
+    "output_exists": false,
+    "queue_error": "cancelled",
+    "queue_status": "failed",
+    "restart_status": "interrupted",
+    "restored_from_running": true,
+    "resumed_job_ids": [
+      "cee031fa-8dac-472c-b830-2af885b81ca6"
+    ],
+    "runtime_progress_end": false,
+    "runtime_status": "cancelled",
+    "runtime_task_id": "resume-cee031fa",
+    "runtime_validation_status": "cancelled"
+  },
+  "status": "pass"
+}

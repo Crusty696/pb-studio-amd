@@ -20,6 +20,7 @@ from pb_studio.ai.clap_wrapper import (
     GENRE_LABELS,
     CLAP_SAMPLE_RATE,
     CLAP_DURATION,
+    CLAP_N_MELS,
     CLAP_EMBEDDING_DIM
 )
 
@@ -49,9 +50,12 @@ class TestCLAPAnalyzer:
         assert analyzer_lazy.text_encoder_session is None
         assert analyzer_lazy.combined_session is None
 
-    def test_session_options(self, analyzer_lazy):
-        """Test DirectML session options configuration"""
-        sess_options = analyzer_lazy._create_session_options()
+    def test_session_options_are_owned_by_model_loader(self, analyzer_lazy):
+        """CLAP uses the central DirectML session-options owner."""
+        from pb_studio.core.model_loader import ModelLoader
+
+        assert not hasattr(analyzer_lazy, "_create_session_options")
+        sess_options = object.__new__(ModelLoader)._create_session_options()
 
         # KRITISCH (IRON RULE §2): enable_mem_pattern UND enable_cpu_mem_arena MUSS False sein
         assert sess_options.enable_mem_pattern is False
@@ -113,20 +117,27 @@ class TestCLAPAnalyzer:
 
     def test_preprocess_audio(self, analyzer_lazy):
         """Test mel spectrogram preprocessing"""
-        # Create dummy audio
         audio = np.random.randn(CLAP_SAMPLE_RATE * 10)
+        analyzer_lazy._processor = Mock(
+            return_value={
+                "input_features": np.zeros(
+                    (1, 1, 1001, CLAP_N_MELS),
+                    dtype=np.float32,
+                )
+            }
+        )
+        analyzer_lazy._preprocess_stats = {
+            "weight": np.ones(CLAP_N_MELS, dtype=np.float32),
+            "bias": np.zeros(CLAP_N_MELS, dtype=np.float32),
+            "running_mean": np.zeros(CLAP_N_MELS, dtype=np.float32),
+            "running_var": np.ones(CLAP_N_MELS, dtype=np.float32),
+            "epsilon": np.array([1e-5], dtype=np.float32),
+        }
 
         mel_spec = analyzer_lazy.preprocess_audio(audio)
 
-        # Check output shape [batch, channels, n_mels, time_frames]
-        assert mel_spec.ndim == 4
-        assert mel_spec.shape[0] == 1  # Batch size
-        assert mel_spec.shape[1] == 1  # Channels
+        assert mel_spec.shape == (1, 1, 1024, CLAP_N_MELS)
         assert mel_spec.dtype == np.float32
-
-        # Check normalization (should be in [0, 1])
-        assert mel_spec.min() >= 0.0
-        assert mel_spec.max() <= 1.0
 
     def test_encode_audio_mock(self, analyzer_lazy):
         """Test audio encoding with mocked model"""
@@ -157,33 +168,33 @@ class TestCLAPAnalyzer:
                 norm = np.linalg.norm(embedding)
                 assert 0.99 <= norm <= 1.01
 
-    def test_classify_audio_mock(self, analyzer_lazy):
-        """Test classification with mocked embeddings"""
-        # Create mock embeddings
-        audio_embedding = np.random.randn(CLAP_EMBEDDING_DIM).astype(np.float32)
-        audio_embedding /= np.linalg.norm(audio_embedding)  # Normalize
-
+    def test_classify_audio_ranks_real_encoder_scores(self, analyzer_lazy):
         test_labels = ["happy", "sad", "energetic"]
-        num_labels = len(test_labels)
+        analyzer_lazy._initialized = True
+        with patch.object(
+            analyzer_lazy,
+            "encode_audio",
+            return_value=np.array([1.0, 0.0], dtype=np.float32),
+        ), patch.object(
+            analyzer_lazy,
+            "encode_text",
+            return_value=np.array(
+                [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0]],
+                dtype=np.float32,
+            ),
+        ):
+            result = analyzer_lazy.classify_audio(
+                "test.mp3",
+                test_labels,
+                top_k=2,
+            )
 
-        # Mock encode methods
-        with patch.object(analyzer_lazy, 'encode_audio') as mock_encode_audio:
-            mock_encode_audio.return_value = audio_embedding
+        assert [label for label, _ in result] == ["happy", "sad"]
+        assert result[0][1] > result[1][1]
 
-            with patch.object(analyzer_lazy, 'encode_text') as mock_encode_text:
-                # Create random text embeddings
-                text_embeddings = np.random.randn(num_labels, CLAP_EMBEDDING_DIM).astype(np.float32)
-                text_embeddings /= np.linalg.norm(text_embeddings, axis=1, keepdims=True)
-                mock_encode_text.return_value = text_embeddings
-
-                analyzer_lazy._initialized = True
-
-                results = analyzer_lazy.classify_audio("test.mp3", test_labels, top_k=2)
-
-                assert len(results) == 2  # top_k=2
-                assert all(isinstance(label, str) for label, score in results)
-                assert all(isinstance(score, float) for label, score in results)
-                assert all(label in test_labels for label, score in results)
+    def test_no_pytorch_fallback_state_exists(self, analyzer_lazy):
+        """C-01: Runtime wrapper cannot hold or activate a PyTorch fallback."""
+        assert not hasattr(analyzer_lazy, "_pytorch_fallback")
 
     def test_get_mood_tags(self, analyzer_lazy):
         """Test mood tag extraction"""
@@ -344,7 +355,7 @@ class TestCLAPIntegration:
     def test_real_model_loading(self, analyzer):
         """Test loading actual ONNX model"""
         assert analyzer.is_ready
-        assert analyzer.active_provider in ['DmlExecutionProvider', 'CPUExecutionProvider']
+        assert analyzer.active_provider == "DmlExecutionProvider"
 
     @pytest.mark.skipif(
         not Path("./test_audio/sample.mp3").exists(),

@@ -42,6 +42,7 @@ class BrainFeedbackResponse(BaseModel):
     status: str
     updated_buckets: int
     total_clicks: int
+    message: Optional[str] = None
 
 
 class BrainLearningSessionResponse(BaseModel):
@@ -74,6 +75,28 @@ class BrainStatsResponse(BaseModel):
         description="Achsen aus BRIDGE_AXES, die noch nicht gelernt sind "
                     "(positive_count + negative_count < 10). UX-Anzeige im "
                     "HIRN-Tab fuers Brain-Coaching.",
+    )
+    # Audit 2026-08-06 (T4.4): Am 2026-07-29 hat die Migration 002 die v1-Gewichte
+    # nach axis_weights_v1_archive verschoben und den Store neutral gestartet.
+    # Das war fachlich richtig — v1 nutzte Kartesische-Produkt-Semantik, v2 sparse
+    # credit, die Zahlen sind nicht ineinander umrechenbar. Aber es blieb fuer den
+    # User voellig unsichtbar: er sah nur "0 Klicks" und konnte nicht
+    # unterscheiden zwischen "nie bewertet" und "Historie wurde archiviert".
+    # IRON RULE 10 verlangt, dass so etwas sichtbar ist.
+    weight_semantics_version: Optional[str] = Field(
+        default=None,
+        description="Version der Gewichtssemantik im WeightStore.",
+    )
+    archived_observations: int = Field(
+        default=0,
+        description="Beobachtungen in der archivierten v1-Tabelle. > 0 bedeutet: "
+                    "es gab bereits gelernte Historie, die bei einem "
+                    "Semantik-Wechsel archiviert wurde.",
+    )
+    migration_reason: Optional[str] = Field(
+        default=None,
+        description="Begruendung des letzten Semantik-Wechsels, falls einer "
+                    "stattgefunden hat.",
     )
 
 

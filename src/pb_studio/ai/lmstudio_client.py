@@ -45,6 +45,46 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 5.0
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
+MODEL_CAPABILITY_CHAT = "chat"
+MODEL_CAPABILITY_VISION = "vision"
+MODEL_CAPABILITY_EMBEDDING = "embedding"
+VALID_MODEL_CAPABILITIES = frozenset({
+    MODEL_CAPABILITY_CHAT,
+    MODEL_CAPABILITY_VISION,
+    MODEL_CAPABILITY_EMBEDDING,
+})
+
+# Audit 2026-08-05 (C-2): LM Studio meldet audio.cpp-basierte GGUFs mit
+# ``type="vlm"``. Das ist ein Upstream-Mislabeling — es sind reine
+# Audio-Generierungsmodelle ohne Chat- und ohne Vision-Faehigkeit. Live belegt:
+#   audio-cpp/audio.cpp-gguf/stable-audio-3-medium-f16.gguf | type=vlm | arch=audiocpp
+#   audio-cpp/audio.cpp-gguf/vevo2-f16.gguf                 | type=vlm | arch=audiocpp
+# Ein Chat-Request darauf endet mit
+#   "Engine protocol runtime llama-server ... exited before becoming healthy".
+_AUDIO_GENERATION_ARCHS = frozenset({"audiocpp", "audio.cpp"})
+_AUDIO_GENERATION_ID_TOKENS = (
+    "audio-cpp/",
+    "audio.cpp",
+    "stable-audio",
+    "vevo",
+)
+
+
+def _is_audio_generation_model(name: str, arch: str = "") -> bool:
+    """
+    True fuer reine Audio-Generierungsmodelle, die faelschlich als ``vlm``
+    ausgeliefert werden.
+
+    Die Architektur ist das verlaessliche Signal; die ID-Token sind der
+    Rueckfall, falls ``arch`` fehlt (z.B. beim OpenAI-kompatiblen
+    ``/v1/models``-Endpoint, der weder ``type`` noch ``arch`` liefert).
+    """
+    arch_normalized = (arch or "").strip().lower()
+    if arch_normalized in _AUDIO_GENERATION_ARCHS:
+        return True
+
+    name_normalized = (name or "").strip().lower()
+    return any(token in name_normalized for token in _AUDIO_GENERATION_ID_TOKENS)
 
 
 class LMStudioError(RuntimeError):
@@ -57,6 +97,27 @@ class LMStudioConnectionError(LMStudioError):
 
 class LMStudioResponseError(LMStudioError):
     """HTTP-Status != 2xx oder ungueltige Antwort."""
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None) -> None:
+        # Audit-Fix 2026-07-10 (Sweep-Finding CHAT-7): vorher ging der HTTP-Status
+        # komplett verloren — chat_agent.py konnte 404 (Modell nicht geladen) von
+        # 400 (z.B. Context-Length-Overflow) oder 500 nur per String-Match auf die
+        # Fehlermeldung unterscheiden, was Context-Overflows faelschlich als
+        # "Modell nicht geladen" behandelte und durch alle Modelle churnte.
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def is_provider_failure(exc: Exception) -> bool:
+    """Return whether a failure warrants one live-inventory refresh."""
+
+    if isinstance(exc, (TimeoutError, LMStudioConnectionError)):
+        return True
+    if isinstance(exc, LMStudioResponseError):
+        return exc.status_code == 429 or bool(
+            exc.status_code is not None and exc.status_code >= 500
+        )
+    return False
 
 
 @dataclass(frozen=True)
@@ -75,6 +136,16 @@ class LMStudioModelInfo:
     family: Optional[str] = None
     parameter_size: Optional[str] = None
     quantization_level: Optional[str] = None
+    # Audit 2026-08-05 (H-3/T3.9): LM Studio liefert diese Felder nachweislich
+    # ueber /api/v0/models (live geprueft), sie wurden aber bereits hier
+    # verworfen — es gab keinen Traeger. Besonders folgenreich beim
+    # Kontextfenster: der Chat-Agent meldet bei zu langem Verlauf "Verlauf
+    # kuerzen oder groesseres Kontextfenster waehlen", und genau diese Zahl war
+    # in der Oberflaeche nirgends ablesbar.
+    context_length: Optional[int] = None
+    architecture: Optional[str] = None
+    publisher: Optional[str] = None
+    state: Optional[str] = None
 
     @property
     def size_mb(self) -> float:
@@ -269,8 +340,15 @@ class LMStudioClient:
         retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
         retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        provider: Optional[str] = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        normalized_provider = str(provider or "").strip().lower()
+        self.provider = (
+            normalized_provider
+            if normalized_provider in {"lmstudio", "ollama"}
+            else None
+        )
         self.timeout_seconds = timeout_seconds
         self.connect_timeout_seconds = connect_timeout_seconds
         self.retry_attempts = max(1, int(retry_attempts))
@@ -367,7 +445,8 @@ class LMStudioClient:
             except Exception:
                 pass
             raise LMStudioResponseError(
-                f"{context}: HTTP {response.status_code} — {body}"
+                f"{context}: HTTP {response.status_code} — {body}",
+                status_code=response.status_code,
             )
 
     # ------------------------------------------------------------------
@@ -380,7 +459,14 @@ class LMStudioClient:
         (geladen ODER on-demand ladbar). Im Gegensatz zu Ollama gibt es kein
         klares "installed but unloaded" — die App entscheidet das selbst.
         """
-        is_ollama = "11434" in self.base_url or "ollama" in self.base_url.lower()
+        is_ollama = (
+            self.provider == "ollama"
+            if self.provider is not None
+            else (
+                "11434" in self.base_url
+                or "ollama" in self.base_url.lower()
+            )
+        )
         if is_ollama:
             base = self.base_url
             if base.endswith("/v1"):
@@ -411,8 +497,12 @@ class LMStudioClient:
                         quantization_level=quantization_level,
                     ))
                 return result
+            except LMStudioError:
+                raise
             except Exception as exc:
-                logger.warning("Fehler bei nativem Ollama-Modell-List (%s): %s. Fallback auf OpenAI API.", url, exc)
+                raise LMStudioConnectionError(
+                    "Ollama-Modellinventar über /api/tags nicht erreichbar"
+                ) from exc
 
         response = await self._request_with_retry("GET", "/models")
         self._raise_for_status(response, "list_models")
@@ -423,19 +513,88 @@ class LMStudioClient:
                 f"list_models: ungueltige JSON-Antwort: {exc}"
             ) from exc
         raw_models = payload.get("data") or []
+        # Audit 2026-08-05 (H-3/T3.9): /v1/models ist OpenAI-kompatibel und
+        # liefert weder arch noch max_context_length. Die native API kennt beide.
+        # Best-effort: schlaegt der Zusatzcall fehl, bleiben die Felder None.
+        details = await self._get_native_model_details()
         result = []
         for raw in raw_models:
             name = str(raw.get("id") or raw.get("name") or "unknown")
+            detail = details.get(name, {})
             # OpenAI-Schema kennt size nicht direkt. LM Studio fuegt manchmal
             # owned_by, object, created — nicht hilfreich. Wir lassen size=0.
+            #
+            # Audit 2026-08-05 (C-2/T2.2): Hier stand frueher
+            # ``family=raw.get("type")``. ``type`` ist bei LM Studio aber die
+            # Modell-KLASSE ("llm"/"vlm"/"embeddings"), nicht die Architektur —
+            # die steht in ``arch`` ("qwen35", "granitehybrid", ...). Dadurch
+            # enthielt ``family`` konstant "llm", und der Family-Prefix-Match in
+            # models_router schlug systematisch fehl. ``/v1/models`` liefert
+            # ohnehin weder ``type`` noch ``arch``; wir nehmen was da ist und
+            # raten nicht.
             result.append(LMStudioModelInfo(
                 name=name,
                 size_bytes=0,
                 modified_at=str(raw.get("created") or ""),
                 digest="",
-                family=raw.get("type"),
+                family=raw.get("arch") or detail.get("arch") or None,
+                quantization_level=detail.get("quantization") or None,
+                context_length=detail.get("max_context_length"),
+                architecture=detail.get("arch") or None,
+                publisher=detail.get("publisher") or None,
+                state=detail.get("state") or None,
             ))
         return result
+
+    async def _get_native_model_details(self) -> dict[str, dict[str, Any]]:
+        """
+        Liest die Zusatzmetadaten aus LM Studios nativer ``/api/v0/models``-API.
+
+        Audit 2026-08-05 (H-3/T3.9): Live verifiziert liefert dieser Endpoint pro
+        Modell ``arch``, ``max_context_length``, ``quantization``, ``publisher``
+        und ``state`` — Felder, die das OpenAI-kompatible ``/v1/models`` nicht
+        kennt und die deshalb bisher gar nicht erst eingesammelt wurden.
+
+        Best-effort: bei jedem Fehler ein leeres Mapping, damit die
+        Modellliste selbst nie an den Zusatzdaten scheitert.
+        """
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        try:
+            client = await self._ensure_client()
+            response = await client.get(f"{base}/api/v0/models")
+            if response.status_code != 200:
+                return {}
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.debug(
+                "Native Modelldetails nicht verfuegbar: %s: %r",
+                type(exc).__name__,
+                exc,
+            )
+            return {}
+
+        details: dict[str, dict[str, Any]] = {}
+        for raw in (payload.get("data") or []):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("id") or raw.get("name") or "").strip()
+            if not name:
+                continue
+            context_length = raw.get("max_context_length")
+            details[name] = {
+                "arch": raw.get("arch"),
+                "publisher": raw.get("publisher"),
+                "quantization": raw.get("quantization"),
+                "state": raw.get("state"),
+                "max_context_length": (
+                    int(context_length)
+                    if isinstance(context_length, (int, float))
+                    else None
+                ),
+            }
+        return details
 
     async def get_vision_model_names(self) -> set[str]:
         """Liefert die Namen aller vision-faehigen Modelle (``type == 'vlm'``).
@@ -470,9 +629,129 @@ class LMStudioClient:
                 continue
             if str(raw.get("type") or "").lower() == "vlm":
                 name = str(raw.get("id") or raw.get("name") or "").strip()
-                if name:
-                    vision.add(name)
+                if not name:
+                    continue
+                # Audit 2026-08-05 (C-2/T2.1): gleiche Fehlklassifikation wie in
+                # get_model_capabilities — audio.cpp-GGUFs tragen upstream
+                # type="vlm". Ohne diesen Filter bleiben sie hier weiterhin
+                # "vision-faehig", auch wenn die Capability-Seite sie ausschliesst.
+                arch = str(raw.get("arch") or "").strip().lower()
+                if _is_audio_generation_model(name, arch):
+                    continue
+                vision.add(name)
         return vision
+
+    async def get_model_capabilities(self) -> dict[str, frozenset[str]]:
+        """Liefert autoritative Chat-/Vision-/Embedding-Capabilities.
+
+        LM Studio nutzt ``/api/v0/models`` mit ``type``. Ollama nutzt
+        ``/api/tags`` mit explizitem ``capabilities``-Array. Fehlt die native
+        API, liefert die Methode ein leeres Mapping.
+        """
+        base = self.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        is_ollama = (
+            self.provider == "ollama"
+            if self.provider is not None
+            else (
+                "11434" in self.base_url
+                or "ollama" in self.base_url.lower()
+            )
+        )
+        url = f"{base}/api/tags" if is_ollama else f"{base}/api/v0/models"
+        try:
+            client = await self._ensure_client()
+            response = await client.get(url)
+            if response.status_code != 200:
+                return {}
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001 - best-effort capability probe
+            logger.debug("get_model_capabilities: nativer Endpoint nicht verfuegbar: %s", exc)
+            return {}
+
+        raw_models = payload.get("models") if is_ollama else payload.get("data")
+        capabilities_by_name: dict[str, frozenset[str]] = {}
+        for raw in (raw_models or []):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("id") or raw.get("name") or raw.get("model") or "").strip()
+            if not name:
+                continue
+            capabilities: set[str] = set()
+            if is_ollama:
+                native = {
+                    str(value).strip().lower()
+                    for value in (raw.get("capabilities") or [])
+                }
+                if "completion" in native:
+                    capabilities.add(MODEL_CAPABILITY_CHAT)
+                if "vision" in native:
+                    capabilities.add(MODEL_CAPABILITY_VISION)
+                if "embedding" in native or "embeddings" in native:
+                    capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+            else:
+                model_type = str(raw.get("type") or "").strip().lower()
+                arch = str(raw.get("arch") or "").strip().lower()
+                if _is_audio_generation_model(name, arch):
+                    # Audit 2026-08-05 (C-2/T2.1): LM Studio labelt audio.cpp-GGUFs
+                    # upstream als type="vlm". Diese Modelle sind reine
+                    # Audio-Generatoren (stable-audio, vevo2) und koennen weder
+                    # chatten noch Bilder lesen. Ungeprueft uebernommen landeten
+                    # sie als "verifiziert vision-faehig" an Position 1 der
+                    # Failover-Kette und haben 467 Tagging-Versuche mit je ~15 s
+                    # Ladeversuch verbrannt (~2 h). Keine Capability vergeben.
+                    logger.debug(
+                        "Audio-Generierungsmodell ignoriert: name=%s arch=%s type=%s",
+                        name,
+                        arch or "-",
+                        model_type or "-",
+                    )
+                elif model_type == "vlm":
+                    capabilities.update({
+                        MODEL_CAPABILITY_CHAT,
+                        MODEL_CAPABILITY_VISION,
+                    })
+                elif model_type == "llm":
+                    capabilities.add(MODEL_CAPABILITY_CHAT)
+                elif model_type in {"embedding", "embeddings"}:
+                    capabilities.add(MODEL_CAPABILITY_EMBEDDING)
+            if capabilities:
+                capabilities_by_name[name] = frozenset(capabilities)
+        return capabilities_by_name
+
+    async def supports_capability(self, capability: str) -> bool:
+        """True wenn mindestens ein aktuell gelistetes Modell Capability besitzt."""
+        required = capability.strip().lower()
+        if required not in VALID_MODEL_CAPABILITIES:
+            raise ValueError(f"Unbekannte Modell-Capability: {capability!r}")
+
+        models, capabilities_by_name = await asyncio.gather(
+            self.list_models(),
+            self.get_model_capabilities(),
+        )
+        installed_names = {model.name for model in models}
+        if capabilities_by_name:
+            return any(
+                name in installed_names and required in model_capabilities
+                for name, model_capabilities in capabilities_by_name.items()
+            )
+
+        lowered_names = [name.lower() for name in installed_names]
+        if required == MODEL_CAPABILITY_VISION:
+            vision_tokens = (
+                "-vl", "vl-", "vl:", "vision", "vlm", "llava", "moondream",
+                "multimodal", "minicpm-v", "internvl", "pixtral", "smolvlm",
+                "gemma-3n", "gemma3n", "e4b", "e2b", "cpm-v",
+                "qwen/qwen3.5-", "qwen/qwen3.6-",
+            )
+            return any(
+                any(token in name for token in vision_tokens)
+                for name in lowered_names
+            )
+        if required == MODEL_CAPABILITY_EMBEDDING:
+            return any("embed" in name for name in lowered_names)
+        return any("embed" not in name for name in lowered_names)
 
     # ------------------------------------------------------------------
     # /v1/chat/completions — Chat (+ Vision via images)

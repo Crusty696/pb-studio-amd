@@ -1,0 +1,10 @@
+{
+  "error": "RuntimeError: Artefakt-Framezahl verletzt: erwartet=190051, ist=189948",
+  "failure_fingerprint": "3faf4b21f02fab52ecfe5c065e317368b5c8b40a18bd977286b542ed0078f1a2",
+  "job_id": "851b5ccf-7f73-4866-8bd9-6e3845d512fd",
+  "metrics": null,
+  "recorded_at_epoch": 1785337407.8895926,
+  "run_id": "94597ffd0b0b469aabf179287560494e",
+  "schema_version": 1,
+  "status": "failed"
+}

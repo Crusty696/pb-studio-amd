@@ -23,7 +23,10 @@ class WaveformAnalyzer:
     multi-band waveform visualization data.
     """
 
-    def __init__(self, sr: int = 22050, filter_order: int = 4):
+    LONG_FILE_THRESHOLD_SECONDS = 1800.0
+    LONG_FILE_CHUNK_SECONDS = 120.0
+
+    def __init__(self, sr: int = 44100, filter_order: int = 4):
         """
         Initialize WaveformAnalyzer.
 
@@ -72,19 +75,18 @@ class WaveformAnalyzer:
             # Load audio (mono, target sample rate)
             use_sr = target_sr if target_sr is not None else self.sr
 
-            # AP4.5 (Audit 2026-06-10): Langdatei-Guard — 90-min-Mix @22050 wäre
-            # ~480MB float32, sosfiltfilt verdreifacht das intern in float64.
-            # Für reine Waveform-VISUALISIERUNG reicht bei sehr langen Files eine
-            # niedrigere Abtastrate (High-Band wird dann bei Nyquist gekappt).
+            probe_duration = 0.0
             if target_sr is None:
                 try:
-                    _probe_dur = float(librosa.get_duration(path=audio_path))
+                    probe_duration = float(librosa.get_duration(path=audio_path))
                 except Exception:
-                    _probe_dur = 0.0
-                if _probe_dur > 1800.0:  # > 30 min
-                    use_sr = 11025
-                    logger.info(
-                        f"Lange Datei ({_probe_dur:.0f}s) — Waveform-SR auf {use_sr}Hz reduziert (RAM-Guard)"
+                    probe_duration = 0.0
+                if probe_duration > self.LONG_FILE_THRESHOLD_SECONDS:
+                    return self._extract_long_waveform(
+                        audio_path,
+                        probe_duration,
+                        use_sr,
+                        hop_length,
                     )
 
             y, sr = librosa.load(audio_path, sr=use_sr, mono=True)
@@ -122,6 +124,60 @@ class WaveformAnalyzer:
             import traceback
             logger.debug(traceback.format_exc())
             return self._empty_waveform()
+
+    def _extract_long_waveform(
+        self,
+        audio_path: str,
+        duration: float,
+        sample_rate: int,
+        hop_length: int,
+    ) -> Dict[str, np.ndarray]:
+        """Bounded 44.1-kHz extraction without clipping the high band."""
+        band_chunks: Dict[str, list[np.ndarray]] = {
+            band_name: [] for band_name in self.bands
+        }
+        offset = 0.0
+        while offset < duration:
+            chunk_duration = min(
+                self.LONG_FILE_CHUNK_SECONDS,
+                duration - offset,
+            )
+            y, sr = librosa.load(
+                audio_path,
+                sr=sample_rate,
+                mono=True,
+                offset=offset,
+                duration=chunk_duration,
+            )
+            if y.size == 0:
+                offset += chunk_duration
+                continue
+            for band_name, (low_freq, high_freq) in self.bands.items():
+                filtered = self._bandpass_filter(
+                    y,
+                    low_freq,
+                    high_freq,
+                    sr,
+                )
+                band_chunks[band_name].append(
+                    librosa.feature.rms(
+                        y=filtered,
+                        frame_length=2048,
+                        hop_length=hop_length,
+                    )[0].astype(np.float32)
+                )
+            offset += chunk_duration
+
+        result: Dict[str, np.ndarray] = {}
+        for band_name, chunks in band_chunks.items():
+            values = (
+                np.concatenate(chunks)
+                if chunks
+                else np.array([], dtype=np.float32)
+            )
+            peak = float(np.max(values)) if values.size else 0.0
+            result[band_name] = values / peak if peak > 0.0 else values
+        return result
 
     def _bandpass_filter(
         self,
@@ -237,16 +293,13 @@ class WaveformAnalyzer:
                 # Already small enough
                 downsampled[band_name] = rms_data
             else:
-                # Compute window size for averaging
-                window_size = len(rms_data) // target_points
-
-                # Reshape and average (handles remainder by truncation)
-                num_complete_windows = (len(rms_data) // window_size) * window_size
-                truncated = rms_data[:num_complete_windows]
-                reshaped = truncated.reshape(-1, window_size)
-
-                # Average each window (preserves peaks better than simple decimation)
-                downsampled[band_name] = np.mean(reshaped, axis=1)
+                downsampled[band_name] = np.asarray(
+                    [
+                        float(np.mean(window))
+                        for window in np.array_split(rms_data, target_points)
+                    ],
+                    dtype=np.float32,
+                )
 
         logger.info(f"Downsampled to {len(downsampled['low'])} points")
         return downsampled

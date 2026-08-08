@@ -12,16 +12,17 @@
         VS Build Tools (optional via -SkipBuildTools)
         Python 3.11 (winget falls fehlt)
         .NET 9.0 SDK (winget falls fehlt)
-        FFmpeg + LibreHardwareMonitor -> tools\
+        Hashverifiziertes FFmpeg -> tools\
+        LibreHardwareMonitor nur aus freigegebenem lokalem Bundle-Manifest
         Venv + pip install -r requirements.txt (Brain-Stack inkl.)
         Pre-commit Hook (Schema-Drift-Check)
-        Optional: CLAP + SigLIP-2 Modelle pre-cachen
+        ONNX-Modellassets ausschließlich über freigegebene Manifeste
         Optional: Woechentliches Brain-Backup Task
 
     PHASE C - Verify
         Smoke imports
         sqlite-vec KNN
-        Optional: CLAP+SigLIP DirectML GPU-Run
+        ONNX Runtime DirectML Provider-Vertrag
         Optional: WPF Build
         Optional: pytest
 
@@ -32,10 +33,12 @@
     Auto-Backup-Task-Frage ueberspringen.
 
 .PARAMETER SkipModelPrecache
-    Auto-Download von CLAP+SigLIP Modellen ueberspringen (~1.8 GB).
+    Veralteter Kompatibilitaetsschalter ohne Skip-Wirkung. Pflichtassets werden
+    weiterhin manifest- und hashverifiziert.
 
 .PARAMETER SkipGpuVerify
-    DirectML-GPU-Verify ueberspringen (CLAP/SigLIP-Inferenz Test).
+    Veralteter Kompatibilitaetsschalter ohne Skip-Wirkung. ONNX Runtime
+    DirectML wird weiterhin verpflichtend verifiziert.
 
 .PARAMETER SkipPytest
     Final pytest-Run ueberspringen.
@@ -77,6 +80,8 @@ $REPO_ROOT = $PSScriptRoot
 $VENV_PATH = Join-Path $REPO_ROOT ".venv"
 $TOOLS_DIR = Join-Path $REPO_ROOT "tools"
 $LOGS_DIR = Join-Path $REPO_ROOT "logs"
+. (Join-Path $REPO_ROOT 'scripts\runtime_contract.ps1')
+$RuntimeContract = Get-PBStudioRuntimeContract -ProjectRoot $REPO_ROOT
 
 $REQUIRED_PYTHON = "3.11"          # exact major.minor; 3.12 bricht BeatNet
 $REQUIRED_DOTNET = "9.0"
@@ -292,39 +297,184 @@ function Test-Internet {
 
 function Install-WingetPackage([string]$id, [string]$pretty) {
     Step "winget install $id ..."
-    & winget install -e --id $id --silent --accept-package-agreements --accept-source-agreements *>&1 | Out-String | Add-Content $LogFile
+    & winget install -e --id $id --source winget --silent --disable-interactivity --accept-package-agreements --accept-source-agreements *>&1 | Out-String | Add-Content $LogFile
     if ($LASTEXITCODE -eq 0) { OK "$pretty installiert" }
     else { FAIL "$pretty install fehlgeschlagen ($LASTEXITCODE)" }
 }
 
-function Install-Tool([string]$url, [string]$name, [string]$destName) {
-    $destDir = Join-Path $TOOLS_DIR $destName
-    if ((Test-Path $destDir) -and -not $Force) {
-        OK "$name bereits in $destDir"
-        return $destDir
-    }
-    Step "Download $name..."
-    $zip = Join-Path $env:TEMP "$destName.zip"
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $zip -UserAgent "PBStudioInstaller/11.0"
-        Unblock-File -Path $zip
-        $extractTmp = Join-Path $env:TEMP $destName
-        if (Test-Path $extractTmp) { Remove-Item $extractTmp -Recurse -Force }
-        Expand-Archive -Path $zip -DestinationPath $extractTmp -Force
-        $items = Get-ChildItem $extractTmp
-        if ($items.Count -eq 1 -and $items[0].PSIsContainer) {
-            Move-Item -Path $items[0].FullName -Destination $destDir -Force
-        } else {
-            Move-Item -Path $extractTmp -Destination $destDir -Force
+function Install-VerifiedFFmpeg {
+    $active = $RuntimeContract.Manifest.active
+    $destDir = Join-Path $TOOLS_DIR "ffmpeg"
+    $ffmpegExe = Join-Path $destDir "bin\ffmpeg.exe"
+    $ffprobeExe = Join-Path $destDir "bin\ffprobe.exe"
+
+    if ((Test-Path $ffmpegExe) -and (Test-Path $ffprobeExe)) {
+        $ffmpegHash = (Get-FileHash -LiteralPath $ffmpegExe -Algorithm SHA256).Hash
+        $ffprobeHash = (Get-FileHash -LiteralPath $ffprobeExe -Algorithm SHA256).Hash
+        if ($ffmpegHash -eq $active.ffmpeg_sha256 -and
+            $ffprobeHash -eq $active.ffprobe_sha256) {
+            OK "FFmpeg $($active.version) verifiziert in $destDir"
+            return $destDir
         }
-        Get-ChildItem -Path $destDir -Recurse | Unblock-File
-        OK "$name installiert nach $destDir"
+        if (-not $Force) {
+            FAIL "FFmpeg-Hash weicht vom freigegebenen Runtime-Manifest ab. --Force nur nach gesichertem Rollback verwenden."
+            return $null
+        }
+    } elseif ((Test-Path $destDir) -and -not $Force) {
+        FAIL "FFmpeg-Bundle ist unvollständig. --Force nur nach gesichertem Rollback verwenden."
+        return $null
+    }
+
+    $workDir = Join-Path $env:TEMP ("PBStudio-FFmpeg-Setup-" + [guid]::NewGuid().ToString("N"))
+    $zip = Join-Path $workDir "ffmpeg.zip"
+    $extractDir = Join-Path $workDir "extract"
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    try {
+        Step "Download verifiziertes FFmpeg $($active.version)..."
+        Invoke-WebRequest -Uri $active.asset_url -OutFile $zip -UserAgent "PBStudioInstaller/11.0"
+        $assetHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+        if ($assetHash -ne $active.asset_sha256) {
+            throw "FFmpeg-Asset-Hash falsch: erwartet $($active.asset_sha256), erhalten $assetHash"
+        }
+
+        Expand-Archive -LiteralPath $zip -DestinationPath $extractDir -Force
+        $candidateFfmpeg = Get-ChildItem -LiteralPath $extractDir -Filter ffmpeg.exe -Recurse |
+            Select-Object -First 1
+        if (-not $candidateFfmpeg) {
+            throw "ffmpeg.exe fehlt im verifizierten Asset"
+        }
+        $candidateRoot = $candidateFfmpeg.Directory.Parent.FullName
+        $candidateFfprobe = Join-Path $candidateRoot "bin\ffprobe.exe"
+        if (-not (Test-Path -LiteralPath $candidateFfprobe)) {
+            throw "ffprobe.exe fehlt im verifizierten Asset"
+        }
+        if ((Get-FileHash -LiteralPath $candidateFfmpeg.FullName -Algorithm SHA256).Hash -ne $active.ffmpeg_sha256 -or
+            (Get-FileHash -LiteralPath $candidateFfprobe -Algorithm SHA256).Hash -ne $active.ffprobe_sha256) {
+            throw "FFmpeg/FFprobe stimmen nicht mit dem aktiven Runtime-Manifest überein"
+        }
+
+        if (Test-Path -LiteralPath $destDir) {
+            $backupRoot = Join-Path $TOOLS_DIR "runtime-backups"
+            New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+            $backupDir = Join-Path $backupRoot ("ffmpeg_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
+            Move-Item -LiteralPath $destDir -Destination $backupDir
+            WARN "Vorheriges FFmpeg-Bundle gesichert: $backupDir"
+        }
+        Move-Item -LiteralPath $candidateRoot -Destination $destDir
+        OK "FFmpeg $($active.version) installiert und hashverifiziert"
         return $destDir
     } catch {
-        FAIL "$name install fehlgeschlagen: $_"
+        FAIL "FFmpeg-Installation fehlgeschlagen: $_"
         return $null
     } finally {
-        if (Test-Path $zip) { Remove-Item $zip -Force }
+        if (Test-Path -LiteralPath $workDir) {
+            Remove-Item -LiteralPath $workDir -Recurse -Force
+        }
+    }
+}
+
+function Test-VerifiedLhmBundle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BundleDirectory,
+        [Parameter(Mandatory = $true)]
+        [string]$MainAssemblyPath
+    )
+
+    try {
+        $manifestPath = Join-Path $BundleDirectory "pb-studio-lhm-manifest.json"
+        $manifestExpectedHash = [string]$env:PBSTUDIO_LHM_MANIFEST_SHA256
+        $mainExpectedHash = [string]$env:PBSTUDIO_LHM_SHA256
+        if ($manifestExpectedHash -notmatch '^[A-Fa-f0-9]{64}$') {
+            throw "PBSTUDIO_LHM_MANIFEST_SHA256 fehlt oder ist ungueltig"
+        }
+        if ($mainExpectedHash -notmatch '^[A-Fa-f0-9]{64}$') {
+            throw "PBSTUDIO_LHM_SHA256 fehlt oder ist ungueltig"
+        }
+        if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            throw "pb-studio-lhm-manifest.json fehlt"
+        }
+
+        $manifestItem = Get-Item -LiteralPath $manifestPath
+        if (($manifestItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "LHM-Manifest darf kein Reparse-Point sein"
+        }
+        $manifestActualHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash
+        if ($manifestActualHash -ne $manifestExpectedHash) {
+            throw "LHM-Manifest-Hash stimmt nicht"
+        }
+
+        $manifest = Get-Content -Raw -LiteralPath $manifestPath |
+            ConvertFrom-Json
+        if ($manifest.schema_version -ne 1) {
+            throw "LHM-Manifest schema_version muss 1 sein"
+        }
+        $entries = @($manifest.assemblies)
+        if ($entries.Count -eq 0) {
+            throw "LHM-Manifest enthaelt keine Assemblies"
+        }
+
+        $bundleRoot = [IO.Path]::GetFullPath($BundleDirectory)
+        $mainFullPath = [IO.Path]::GetFullPath($MainAssemblyPath)
+        $seenNames = @{}
+        $seenFiles = @{}
+        $mainVerified = $false
+        foreach ($entry in $entries) {
+            $assemblyName = [string]$entry.name
+            $fileName = [string]$entry.file
+            $expectedHash = [string]$entry.sha256
+            if ($assemblyName -notmatch '^[A-Za-z0-9_.-]+$') {
+                throw "Ungueltiger Assembly-Name im LHM-Manifest"
+            }
+            if ($seenNames.ContainsKey($assemblyName.ToLowerInvariant())) {
+                throw "Doppelter Assembly-Name im LHM-Manifest: $assemblyName"
+            }
+            $seenNames[$assemblyName.ToLowerInvariant()] = $true
+            if ([IO.Path]::GetFileName($fileName) -ne $fileName -or
+                [IO.Path]::GetExtension($fileName) -ne ".dll") {
+                throw "Ungueltiger DLL-Dateiname im LHM-Manifest: $fileName"
+            }
+            if ($seenFiles.ContainsKey($fileName.ToLowerInvariant())) {
+                throw "Doppelter DLL-Dateiname im LHM-Manifest: $fileName"
+            }
+            $seenFiles[$fileName.ToLowerInvariant()] = $true
+            if ($expectedHash -notmatch '^[A-Fa-f0-9]{64}$') {
+                throw "Ungueltiger SHA-256 fuer $assemblyName"
+            }
+
+            $assemblyPath = [IO.Path]::GetFullPath(
+                (Join-Path $bundleRoot $fileName)
+            )
+            if ([IO.Path]::GetDirectoryName($assemblyPath) -ne $bundleRoot) {
+                throw "LHM-Assembly verlaesst Bundle-Verzeichnis: $fileName"
+            }
+            if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) {
+                throw "LHM-Assembly fehlt: $fileName"
+            }
+            $assemblyItem = Get-Item -LiteralPath $assemblyPath
+            if (($assemblyItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "LHM-Assembly darf kein Reparse-Point sein: $fileName"
+            }
+            $actualHash = (Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) {
+                throw "LHM-Assembly-Hash stimmt nicht: $fileName"
+            }
+            if ($assemblyPath -eq $mainFullPath) {
+                if ($actualHash -ne $mainExpectedHash) {
+                    throw "LibreHardwareMonitorLib.dll stimmt nicht mit PBSTUDIO_LHM_SHA256 ueberein"
+                }
+                $mainVerified = $true
+            }
+        }
+        if (-not $mainVerified) {
+            throw "LHM-Hauptassembly fehlt im freigegebenen Manifest"
+        }
+        return [PSCustomObject]@{ Valid = $true; Reason = "OK" }
+    } catch {
+        return [PSCustomObject]@{
+            Valid = $false
+            Reason = $_.Exception.Message
+        }
     }
 }
 
@@ -376,7 +526,7 @@ if ($gpu) {
     OK "AMD GPU: $($gpu.Name) (Driver $($gpu.Driver))"
     if ($gpu.Vram -gt 0) { Step "VRAM: $($gpu.Vram) MB" }
 } else {
-    WARN "Keine AMD GPU erkannt - Brain laeuft auf CPU (langsam)"
+    WARN "Keine AMD GPU erkannt - DirectML-ML-Funktionen bleiben deaktiviert; kein CPU-Fallback"
 }
 
 # A.6 DirectML (provisorisch; richtiger Test in Phase C)
@@ -397,10 +547,25 @@ if (Test-Internet) { OK "Internet (PyPI erreichbar)" }
 else { FAIL "Kein Internet - pip install nicht moeglich" }
 
 # A.10 FFmpeg+LHM check (existing)
-if (Test-Path (Join-Path $TOOLS_DIR "ffmpeg")) { OK "FFmpeg in tools/ vorhanden" }
-else { Step "FFmpeg fehlt - wird in Phase B geladen" }
-if (Test-Path (Join-Path $TOOLS_DIR "LibreHardwareMonitor")) { OK "LibreHardwareMonitor in tools/ vorhanden" }
-else { Step "LibreHardwareMonitor fehlt - wird in Phase B geladen" }
+$preflightFfmpeg = $RuntimeContract.FfmpegExe
+$preflightFfprobe = $RuntimeContract.FfprobeExe
+if ((Test-Path $preflightFfmpeg) -and (Test-Path $preflightFfprobe) -and
+    (Get-FileHash -LiteralPath $preflightFfmpeg -Algorithm SHA256).Hash -eq $RuntimeContract.Manifest.active.ffmpeg_sha256 -and
+    (Get-FileHash -LiteralPath $preflightFfprobe -Algorithm SHA256).Hash -eq $RuntimeContract.Manifest.active.ffprobe_sha256) {
+    OK "FFmpeg/FFprobe entsprechen dem aktiven Runtime-Manifest"
+} else {
+    Step "FFmpeg/FFprobe fehlen oder weichen vom aktiven Runtime-Manifest ab"
+}
+$lhmDir = Join-Path $TOOLS_DIR "LibreHardwareMonitor"
+$lhmLib = Join-Path $lhmDir "LibreHardwareMonitorLib.dll"
+$lhmContract = Test-VerifiedLhmBundle `
+    -BundleDirectory $lhmDir `
+    -MainAssemblyPath $lhmLib
+if ($lhmContract.Valid) {
+    OK "LibreHardwareMonitor-Bundle und Abhaengigkeiten sind manifestgebunden"
+} else {
+    WARN "LibreHardwareMonitor deaktiviert: $($lhmContract.Reason). Setup installiert kein LHM-Bundle."
+}
 
 # A.11 MSVC C++ Runtime
 if (Test-VCRedist) { OK "Visual C++ Redistributable (x64) vorhanden" }
@@ -443,30 +608,13 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
 
 # B.0.2 Visual C++ Redistributable 2015-2022 x64 (kritisch fuer onnxruntime/cv2 DLLs)
 if (-not (Test-VCRedist)) {
-    $vcInstalled = $false
-    if (Test-Admin -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
         Step "Versuche Visual C++ Redistributable via winget..."
-        & winget install -e --id Microsoft.VCRedist.2015+.x64 --silent --accept-package-agreements --accept-source-agreements *>&1 | Out-String | Add-Content $LogFile
-        if (Test-VCRedist) { $vcInstalled = $true }
+        Install-WingetPackage "Microsoft.VCRedist.2015+.x64" "Visual C++ Redistributable"
     }
-    if (-not $vcInstalled) {
-        Step "Visual C++ Redistributable fehlt. Downloade direkt von Microsoft..."
-        $vcRedistPath = Join-Path $env:TEMP "vc_redist.x64.exe"
-        try {
-            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $vcRedistPath -UserAgent "PBStudioInstaller/11.0"
-            Unblock-File $vcRedistPath
-            Step "Installiere Visual C++ Redistributable stillschweigend..."
-            $proc = Start-Process -FilePath $vcRedistPath -ArgumentList "/quiet /norestart" -Wait -PassThru
-            if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
-                OK "Visual C++ Redistributable erfolgreich installiert"
-            } else {
-                WARN "Visual C++ Redistributable Installer beendet mit ExitCode: $($proc.ExitCode)"
-            }
-        } catch {
-            WARN "Visual C++ Redistributable Download/Install fehlgeschlagen: $_"
-        } finally {
-            if (Test-Path $vcRedistPath) { Remove-Item $vcRedistPath -Force }
-        }
+    if (-not (Test-VCRedist)) {
+        FAIL "Visual C++ Redistributable fehlt. Verifizierte winget-Installation erforderlich; direkter Installer-Fallback ist gesperrt."
+        exit 1
     }
 } else {
     OK "Visual C++ Redistributable (x64) bereits installiert"
@@ -475,26 +623,17 @@ if (-not (Test-VCRedist)) {
 # B.0.3 Git Auto-Check & Installation (sichert pre-commit hooks und checkout ab)
 if (-not $global:HasGit) {
     $gitInstalled = $false
-    if (Test-Admin -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
         Step "Versuche Git via winget..."
         Install-WingetPackage "Git.Git" "Git"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
         if (Get-Command git -ErrorAction SilentlyContinue) { $gitInstalled = $true }
     }
     if (-not $gitInstalled) {
-        Step "Git fehlt oder winget fehlgeschlagen. Installiere portables MinGit..."
-        $gitDir = Install-Tool "https://github.com/git-for-windows/git/releases/download/v2.45.1.windows.1/MinGit-2.45.1-64-bit.zip" "MinGit" "git"
-        if ($gitDir) {
-            $cmdDir = Join-Path $gitDir "cmd"
-            $env:Path = "$cmdDir;$env:Path"
-            $userPath = [Environment]::GetEnvironmentVariable("Path","User")
-            if (-not ($userPath -like "*$cmdDir*")) {
-                [Environment]::SetEnvironmentVariable("Path","$cmdDir;$userPath","User")
-                OK "MinGit in User-PATH ergaenzt"
-            }
-            $global:HasGit = $true
-        }
+        FAIL "Git fehlt. Verifizierte winget-Installation erforderlich; portabler Download-Fallback ist gesperrt."
+        exit 1
     }
+    $global:HasGit = $true
 }
 
 # B.1 VS Build Tools
@@ -508,15 +647,24 @@ if (-not $SkipBuildTools) {
     if ($hasBT) {
         OK "VS Build Tools installiert"
     } else {
-        Step "VS Build Tools install (gross, ~10 min)..."
-        try {
-            $ie = Join-Path $env:TEMP "vs_buildtools.exe"
-            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vs_buildtools.exe" -OutFile $ie -UserAgent "PBStudioInstaller/11.0"
-            $a = "--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-            Start-Process -FilePath $ie -ArgumentList $a -Wait
-            $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            FAIL "VS Build Tools fehlen. Verifizierte winget-Installation erforderlich; direkter Installer-Fallback ist gesperrt. Alternativ -SkipBuildTools verwenden."
+            exit 1
+        }
+        Step "VS Build Tools via winget installieren (gross, ~10 min)..."
+        $vsInstallArgs = "--wait --quiet --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+        & winget install -e --id Microsoft.VisualStudio.2022.BuildTools --source winget --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --override $vsInstallArgs *>&1 |
+            Out-String | Add-Content $LogFile
+        $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+        if (Test-Path $vsWhere) {
+            $check = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+        }
+        if ($LASTEXITCODE -eq 0 -and $check) {
             OK "VS Build Tools installiert"
-        } catch { WARN "VS Build Tools install scheitert (nicht kritisch wenn Wheels verfuegbar): $_" }
+        } else {
+            FAIL "VS Build Tools konnten nicht ueber winget installiert und verifiziert werden. Alternativ -SkipBuildTools verwenden."
+            exit 1
+        }
     }
 } else {
     Step "VS Build Tools uebersprungen (--SkipBuildTools)"
@@ -524,122 +672,57 @@ if (-not $SkipBuildTools) {
 
 # B.2 Python 3.11 falls fehlt
 if (-not $py -or $py.Minor -ne 11) {
-    $pyInstalled = $false
-    if (Test-Admin) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
         Step "Versuche Python 3.11 via winget..."
         Install-WingetPackage "Python.Python.3.11" "Python 3.11"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
         $py = Get-PyExe
-        if ($py -and $py.Minor -eq 11) { $pyInstalled = $true }
     }
-    
-    if (-not $pyInstalled) {
-        Step "Python 3.11 fehlt oder winget fehlgeschlagen. Starte autonomen User-Scope Download..."
-        $pyInstaller = Join-Path $env:TEMP "python-3.11.9-amd64.exe"
-        try {
-            Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" -OutFile $pyInstaller -UserAgent "PBStudioInstaller/11.0"
-            Unblock-File $pyInstaller
-            Step "Installiere Python 3.11.9 stillschweigend im User-Scope (ohne Admin-Rechte)..."
-            $installerArgs = "/quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1"
-            $proc = Start-Process -FilePath $pyInstaller -ArgumentList $installerArgs -Wait -PassThru
-            if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
-                # PATH aktualisieren fuer den aktuellen Prozess
-                $localPy = Join-Path $env:USERPROFILE "AppData\Local\Programs\Python\Python311"
-                $localPyScripts = Join-Path $localPy "Scripts"
-                $env:Path = "$localPy;$localPyScripts;$env:Path"
-                
-                # Permanente Pfadkopplung in der Registry fuer neue Shells + Batchdateien
-                $userPath = [Environment]::GetEnvironmentVariable("Path","User")
-                if (-not ($userPath -like "*$localPy*")) {
-                    [Environment]::SetEnvironmentVariable("Path","$localPy;$localPyScripts;$userPath","User")
-                    OK "Python 3.11 in User-PATH permanent registriert"
-                }
-                
-                OK "Python 3.11.9 autonom im User-Scope installiert"
-                $py = Get-PyExe
-            } else {
-                FAIL "Python 3.11.9 Installer beendet mit ExitCode: $($proc.ExitCode)"
-            }
-        } catch {
-            FAIL "Autonomer Python-Download/Install fehlgeschlagen: $_"
-        } finally {
-            if (Test-Path $pyInstaller) { Remove-Item $pyInstaller -Force }
-        }
-    }
-    
     if (-not $py -or $py.Minor -ne 11) {
-        FAIL "Python 3.11 konnte nicht eingerichtet werden. Abbruch."
+        FAIL "Python 3.11 fehlt. Verifizierte winget-Installation erforderlich; direkter Installer-Fallback ist gesperrt."
         exit 1
     }
 }
 
 # B.3 .NET 9 SDK falls fehlt
 if (-not $dn -or $dn.Major -lt 9) {
-    $dotnetInstalled = $false
-    if (Test-Admin) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
         Step "Versuche .NET 9 SDK via winget..."
         Install-WingetPackage "Microsoft.DotNet.SDK.9" ".NET 9 SDK"
         $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
         $dn = Get-DotnetVer
-        if ($dn -and $dn.Major -ge 9) { $dotnetInstalled = $true }
     }
-    
-    if (-not $dotnetInstalled) {
-        Step ".NET 9 SDK fehlt oder winget fehlgeschlagen. Starte portable Installation..."
-        $dotnetDest = Join-Path $TOOLS_DIR "dotnet"
-        $scriptPath = Join-Path $env:TEMP "dotnet-install.ps1"
-        try {
-            Step "Downloade offizielles Microsoft dotnet-install.ps1 Skript..."
-            Invoke-WebRequest -Uri "https://dot.net/v1/dotnet-install.ps1" -OutFile $scriptPath -UserAgent "PBStudioInstaller/11.0"
-            Unblock-File $scriptPath
-            
-            Step "Installiere .NET 9.0 SDK portabel nach $dotnetDest..."
-            $installArgs = @("-Channel", "9.0", "-InstallDir", $dotnetDest, "-Runtime", "dotnet")
-            $proc = Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -Channel 9.0 -InstallDir `"$dotnetDest`"" -Wait -PassThru
-            if ($proc.ExitCode -eq 0) {
-                $env:Path = "$dotnetDest;$env:Path"
-                OK ".NET 9.0 SDK erfolgreich portabel installiert unter $dotnetDest"
-                $dn = Get-DotnetVer
-                
-                # Permanente Pfadkopplung fuer WPF /dotnet build in nachfolgenden Shells
-                $userPath = [Environment]::GetEnvironmentVariable("Path","User")
-                if (-not ($userPath -like "*$dotnetDest*")) {
-                    [Environment]::SetEnvironmentVariable("Path","$dotnetDest;$userPath","User")
-                    OK ".NET SDK in User-PATH ergaenzt"
-                }
-            } else {
-                FAIL "dotnet-install.ps1 beendet mit ExitCode: $($proc.ExitCode)"
-            }
-        } catch {
-            FAIL "Portable .NET SDK Installation fehlgeschlagen: $_"
-        } finally {
-            if (Test-Path $scriptPath) { Remove-Item $scriptPath -Force }
-        }
-    }
-    
     if (-not $dn -or $dn.Major -lt 9) {
-        WARN ".NET 9.0 SDK fehlt. WPF-Build wird fehlschlagen."
+        FAIL ".NET 9 SDK fehlt. Verifizierte winget-Installation erforderlich; dotnet-install.ps1-Fallback ist gesperrt."
+        exit 1
     }
 }
 
-# B.4 FFmpeg + LHM
-$ffmpegDir = Install-Tool "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" "FFmpeg" "ffmpeg"
-$lhmDir = Install-Tool "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.5/LibreHardwareMonitor.zip" "LibreHardwareMonitor" "LibreHardwareMonitor"
+# B.4 FFmpeg + optionales, lokal freigegebenes LHM-Bundle
+$ffmpegDir = Install-VerifiedFFmpeg
+if ($lhmContract.Valid) {
+    OK "Freigegebenes lokales LibreHardwareMonitor-Bundle wird verwendet"
+} else {
+    WARN "Hardware-Monitoring bleibt deaktiviert; freigegebenes lokales LHM-Bundle plus beide SHA-256-Umgebungswerte erforderlich"
+}
 if ($ffmpegDir) {
-    $bin = Join-Path $ffmpegDir "bin"
-    if (-not ($env:Path -like "*$bin*")) {
-        $env:Path = "$bin;$env:Path"
-        $userPath = [Environment]::GetEnvironmentVariable("Path","User")
-        if (-not ($userPath -like "*$bin*")) {
-            [Environment]::SetEnvironmentVariable("Path","$bin;$userPath","User")
-            OK "FFmpeg in User-PATH ergaenzt"
-        }
-    }
+    $RuntimeContract = Get-PBStudioRuntimeContract -ProjectRoot $REPO_ROOT -RequireFFmpeg -ApplyEnvironment
+    OK "FFmpeg/FFprobe auf kanonischen Projektpfad gebunden"
 }
 
 # B.5 Venv
 if ((Test-Path $VENV_PATH) -and -not $Force) {
-    Step "venv existiert bereits ($VENV_PATH) - wird wiederverwendet (--Force fuer Neuanlage)"
+    $existingVenvPython = Join-Path $VENV_PATH "Scripts\python.exe"
+    $existingVenvVersion = if (Test-Path $existingVenvPython) {
+        & $existingVenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+    } else {
+        ""
+    }
+    if ($existingVenvVersion -ne $REQUIRED_PYTHON) {
+        FAIL "Vorhandene venv ist nicht Python $REQUIRED_PYTHON.x; sichere Neuerstellung mit --Force erforderlich."
+        exit 1
+    }
+    Step "venv Python $existingVenvVersion verifiziert ($VENV_PATH)"
 } else {
     if (Test-Path $VENV_PATH) { Remove-Item $VENV_PATH -Recurse -Force }
     Step "Lege venv an mit Python $($py.Full)..."
@@ -649,17 +732,60 @@ if ((Test-Path $VENV_PATH) -and -not $Force) {
 }
 $venvPython = Join-Path $VENV_PATH "Scripts\python.exe"
 $venvPip = Join-Path $VENV_PATH "Scripts\pip.exe"
+$RuntimeContract = Get-PBStudioRuntimeContract -ProjectRoot $REPO_ROOT -RequirePython -RequireFFmpeg -ApplyEnvironment
 
-# B.6 Pip + numpy lock
-& $venvPython -m pip install --upgrade pip setuptools wheel *>&1 | Out-String | Add-Content $LogFile
-& $venvPip install "numpy==1.26.4" *>&1 | Out-String | Add-Content $LogFile
-
-# B.7 requirements.txt
+# B.6/B.7 hash-locked Python graph + approved local wheel overrides
 $reqFile = Join-Path $REPO_ROOT "requirements.txt"
 if (-not (Test-Path $reqFile)) { FAIL "requirements.txt nicht gefunden"; exit 1 }
-Step "pip install -r requirements.txt (kann mehrere Minuten dauern)..."
-& $venvPip install -r $reqFile *>&1 | Out-String | Add-Content $LogFile
-if ($LASTEXITCODE -ne 0) { FAIL "pip install scheitert (siehe $LogFile)"; exit 1 }
+$wheelManifestPath = Join-Path $REPO_ROOT "config\python-wheel-overrides.json"
+if (-not (Test-Path -LiteralPath $wheelManifestPath -PathType Leaf)) {
+    FAIL "Python-Wheelmanifest fehlt: $wheelManifestPath"
+    exit 1
+}
+try {
+    $wheelManifest = Get-Content -LiteralPath $wheelManifestPath -Raw | ConvertFrom-Json
+    if ($wheelManifest.schema_version -ne 1 -or -not $wheelManifest.packages) {
+        throw "ungueltiges Schema"
+    }
+    $vendorRoot = [IO.Path]::GetFullPath((Join-Path $REPO_ROOT "vendor\wheels"))
+    $requirementsText = Get-Content -LiteralPath $reqFile -Raw
+    $declaredWheels = @{}
+    foreach ($package in $wheelManifest.packages) {
+        $relativeWheel = [string]$package.wheel_path
+        if (-not $relativeWheel.StartsWith("vendor/wheels/", [StringComparison]::Ordinal) -or
+            $relativeWheel.Contains("..")) {
+            throw "unsicherer Wheelpfad: $relativeWheel"
+        }
+        $wheelPath = [IO.Path]::GetFullPath((Join-Path $REPO_ROOT $relativeWheel))
+        if (-not $wheelPath.StartsWith($vendorRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $wheelPath -PathType Leaf)) {
+            throw "Wheel fehlt oder liegt ausserhalb vendor/wheels: $relativeWheel"
+        }
+        $expectedWheelHash = ([string]$package.wheel_sha256).ToLowerInvariant()
+        $actualWheelHash = (Get-FileHash -LiteralPath $wheelPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($expectedWheelHash -notmatch '^[0-9a-f]{64}$' -or $actualWheelHash -ne $expectedWheelHash) {
+            throw "Wheel-Hash ungueltig: $relativeWheel"
+        }
+        if ($requirementsText.IndexOf("--hash=sha256:$expectedWheelHash", [StringComparison]::Ordinal) -lt 0) {
+            throw "Wheel-Hash fehlt im Python-Lock: $relativeWheel"
+        }
+        $declaredWheels[$wheelPath.ToLowerInvariant()] = $true
+    }
+    foreach ($localWheel in Get-ChildItem -LiteralPath $vendorRoot -Filter "*.whl" -File) {
+        if (-not $declaredWheels.ContainsKey($localWheel.FullName.ToLowerInvariant())) {
+            throw "Nicht allowlistetes Wheel in vendor/wheels: $($localWheel.Name)"
+        }
+    }
+} catch {
+    FAIL "Python-Wheelmanifest nicht vertrauenswuerdig: $($_.Exception.Message)"
+    exit 1
+}
+Step "pip install --require-hashes -r requirements.txt (kann mehrere Minuten dauern)..."
+Push-Location $REPO_ROOT
+& $venvPython -m pip install --require-hashes -r $reqFile *>&1 | Out-String | Add-Content $LogFile
+$pipInstallExitCode = $LASTEXITCODE
+Pop-Location
+if ($pipInstallExitCode -ne 0) { FAIL "pip install scheitert (siehe $LogFile)"; exit 1 }
 OK "Brain-Stack + Backend-Deps installiert"
 
 # B.8 Pre-commit Hook
@@ -686,33 +812,32 @@ if ($dn -and $dn.Major -ge 9) {
     }
 }
 
-# B.10 Optional: CLAP + SigLIP-2 Modelle pre-cachen
-if (-not $SkipModelPrecache) {
-    Step "Modelle pre-cachen (CLAP ~1.4 GB + SigLIP-2 ~370 MB) ..."
-    $cacheFile = Join-Path $env:TEMP "pb_model_cache.py"
-    $cacheBody = @(
-        'import sys, os',
-        'try:',
-        '    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")',
-        '    from transformers import ClapModel, ClapProcessor, AutoImageProcessor, AutoModel',
-        '    print("Loading CLAP...")',
-        '    ClapProcessor.from_pretrained("laion/larger_clap_music")',
-        '    ClapModel.from_pretrained("laion/larger_clap_music")',
-        '    print("Loading SigLIP-2 vision tower...")',
-        '    AutoImageProcessor.from_pretrained("google/siglip2-base-patch16-384")',
-        '    AutoModel.from_pretrained("google/siglip2-base-patch16-384", torch_dtype="float16")',
-        '    print("OK models cached")',
-        'except Exception as e:',
-        '    print("Cache fehlgeschlagen: " + str(e), file=sys.stderr)',
-        '    sys.exit(1)'
-    ) -join "`n"
-    [System.IO.File]::WriteAllText($cacheFile, $cacheBody, [System.Text.UTF8Encoding]::new($false))
-    & $venvPython $cacheFile *>&1 | Out-String | Add-Content $LogFile
-    if ($LASTEXITCODE -eq 0) { OK "Modelle gecached" }
-    else { WARN "Modell-Cache scheitert (Brain-Verify in Phase C wird nachladen)" }
-} else {
-    Step "Model-Precache uebersprungen (--SkipModelPrecache)"
+# B.10 DirectML assets: approved manifest + exact hashes + safe atomic promotion.
+$directMlProvisioner = Join-Path $REPO_ROOT "scripts\provision_directml_assets.ps1"
+$directMlBundleManifest = Join-Path $REPO_ROOT "config\directml-asset-bundle.json"
+if ($SkipModelPrecache) {
+    WARN "--SkipModelPrecache ist veraltet und wird ignoriert; Pflichtassets bleiben verpflichtend."
 }
+if (-not (Test-Path -LiteralPath $directMlProvisioner -PathType Leaf)) {
+    FAIL "DirectML-Asset-Provisioner fehlt: $directMlProvisioner"
+    exit 1
+}
+$directMlProvisionArgs = @{
+    ManifestPath = $directMlBundleManifest
+    InstallRoot = $REPO_ROOT
+}
+if (-not [string]::IsNullOrWhiteSpace($env:PBSTUDIO_DIRECTML_ASSET_BUNDLE)) {
+    $directMlProvisionArgs.BundlePath = $env:PBSTUDIO_DIRECTML_ASSET_BUNDLE
+}
+Step "DirectML-Pflichtassets aus freigegebenem Release-Bundle pruefen..."
+$directMlProvisionOutput = & $directMlProvisioner @directMlProvisionArgs 2>&1
+$directMlProvisionExitCode = $LASTEXITCODE
+$directMlProvisionOutput | Out-String | Add-Content $LogFile
+if ($directMlProvisionExitCode -ne 0) {
+    FAIL "DirectML-Pflichtassets fehlen oder sind nicht freigegeben (siehe $LogFile)"
+    exit 1
+}
+OK "DirectML-Pflichtassets manifest- und hashverifiziert"
 
 # B.11 Auto-Backup Task
 # SkipBackupPrompt = true  -> skip
@@ -743,7 +868,7 @@ $smokeFile = Join-Path $env:TEMP "pb_smoke_imports.py"
 $smokeBody = @(
     'import sys',
     'errors = []',
-    'mods = ["numpy","torch","torch_directml","transformers","sqlite_vec",',
+    'mods = ["numpy","torch","transformers","sqlite_vec",',
     '        "librosa","onnxruntime","cv2","fastapi","uvicorn","demucs"]',
     'for m in mods:',
     '    try:',
@@ -756,8 +881,13 @@ $smokeBody = @(
 ) -join "`n"
 [System.IO.File]::WriteAllText($smokeFile, $smokeBody, [System.Text.UTF8Encoding]::new($false))
 & $venvPython $smokeFile *>&1 | Tee-Object -FilePath (Join-Path $LOGS_DIR "smoke.log") | Out-Null
-if ($LASTEXITCODE -eq 0) { OK "Brain-Stack Imports (11/11)" }
+if ($LASTEXITCODE -eq 0) { OK "Brain-Stack Imports (10/10)" }
 else { FAIL "Brain-Stack-Imports unvollstaendig - siehe $LOGS_DIR\smoke.log" }
+
+& $venvPython (Join-Path $REPO_ROOT "scripts\verify_cpu_torch_runtime.py") *>&1 |
+    Tee-Object -FilePath (Join-Path $LOGS_DIR "verify_cpu_torch.log") | Out-Null
+if ($LASTEXITCODE -eq 0) { OK "PyTorch CPU-only Runtime" }
+else { FAIL "PyTorch CPU-only Vertrag verletzt - siehe $LOGS_DIR\verify_cpu_torch.log" }
 
 # C.2 sqlite-vec verify
 $env:PYTHONPATH = Join-Path $REPO_ROOT "src"
@@ -766,30 +896,16 @@ if ($LASTEXITCODE -eq 0) { OK "sqlite-vec KNN" }
 else { FAIL "sqlite-vec verify scheitert" }
 
 # C.3 DirectML verify (auf venv-Python, der gerade installiert wurde)
+if ($SkipGpuVerify) {
+    WARN "--SkipGpuVerify ist veraltet und wird ignoriert; DirectML-Verifikation bleibt verpflichtend."
+}
 $dml = Test-DirectML $venvPython
 if ($dml -eq $true) { OK "ONNX Runtime DirectML Provider" }
-elseif ($dml -eq $false) { WARN "DirectML Provider fehlt - Brain laeuft auf CPU" }
-else { Step "DirectML Test uebersprungen (onnxruntime nicht ladbar)" }
+elseif ($dml -eq $false) { FAIL "DirectML Provider fehlt - ML-Funktionen deaktiviert; kein CPU-Fallback" }
+else { FAIL "DirectML-Vertrag nicht pruefbar (onnxruntime nicht ladbar)" }
 
-# C.4 GPU verify (CLAP + SigLIP)
-if (-not $SkipGpuVerify) {
-    $audio = Join-Path $REPO_ROOT "data\dummy_audio.wav"
-    $video = Join-Path $REPO_ROOT "data\smoke_test_video.mp4"
-    if (Test-Path $audio) {
-        Step "CLAP DirectML run (kann 30-120s dauern)..."
-        & $venvPython (Join-Path $REPO_ROOT "scripts\verify_clap_directml.py") $audio *>&1 | Tee-Object -FilePath (Join-Path $LOGS_DIR "verify_clap.log") | Out-Null
-        if ($LASTEXITCODE -eq 0) { OK "CLAP DirectML inference" }
-        else { WARN "CLAP DirectML inference scheitert (siehe verify_clap.log)" }
-    }
-    if (Test-Path $video) {
-        Step "SigLIP-2 DirectML run..."
-        & $venvPython (Join-Path $REPO_ROOT "scripts\verify_siglip_directml.py") $video *>&1 | Tee-Object -FilePath (Join-Path $LOGS_DIR "verify_siglip.log") | Out-Null
-        if ($LASTEXITCODE -eq 0) { OK "SigLIP-2 DirectML inference" }
-        else { WARN "SigLIP-2 DirectML inference scheitert (siehe verify_siglip.log)" }
-    }
-} else {
-    Step "GPU-Verify uebersprungen (--SkipGpuVerify)"
-}
+# C.4 Legacy Nicht-ONNX-Verifier sind nach ADR0002/IRON R1 gesperrt.
+Step "GPU-Vertrag wird ausschliesslich ueber ONNX Runtime DirectML geprueft"
 
 # C.5 Pytest
 if (-not $SkipPytest) {
@@ -824,7 +940,7 @@ Write-Host ""
 Write-Host "  Log: $LogFile" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Naechste Schritte:" -ForegroundColor Cyan
-Write-Host "    1. Backend:    .\.venv\Scripts\Activate.ps1; `$env:PYTHONPATH='src'; python -m uvicorn backend.main:app --port 8765"
+Write-Host "    1. Backend:    .\.venv\Scripts\Activate.ps1; `$env:PYTHONPATH='src'; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765"
 Write-Host "    2. WPF App:    dotnet run --project PBStudio.UI"
 Write-Host "    3. Brain Verify Guide: docs\HARDWARE_VERIFY_GUIDE.md"
 Write-Host "    4. Brain User Guide:   docs\BRAIN_USER_GUIDE.md"

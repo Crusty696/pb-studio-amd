@@ -188,6 +188,12 @@
                 <TabItem Header="TERMINAL">
                     <views:TerminalView/>
                 </TabItem>
+                <TabItem Header="INGEST">
+                    <views:MediaIngestView/>
+                </TabItem>
+                <TabItem Header="ANCHOR">
+                    <views:AnchorView/>
+                </TabItem>
             </controls:CachedTabControl>
 
             <!-- ── Status Bar ── -->
@@ -209,6 +215,29 @@
                     <TextBlock Text="Verbindung zum Backend verloren — versuche erneut..."
                                Foreground="White" FontSize="12" FontWeight="SemiBold"
                                VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Audit 2026-08-05 (C-A): Persistenzfehler-Banner ──
+                 IRON RULE 10: Ein fehlgeschlagener Speichervorgang darf nicht
+                 wie ein Erfolg aussehen. Das Backend publisht "persist_error"
+                 seit jeher; der Event wurde bis zu diesem Fix im Progress-Filter
+                 UND im SSEClient verworfen. Bindet an MainViewModel.HasPersistError. -->
+            <Border Grid.Row="1" VerticalAlignment="Top"
+                    MinHeight="36"
+                    Background="#FF7A3B00" BorderBrush="#FF4A2400" BorderThickness="0,0,0,1"
+                    Visibility="{Binding HasPersistError, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Panel.ZIndex="1001">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12,6">
+                    <icon:PackIconMaterial Kind="ContentSaveAlert" Width="14" Height="14" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="{Binding PersistErrorText}"
+                               Foreground="White" FontSize="12" FontWeight="SemiBold"
+                               TextWrapping="Wrap" MaxWidth="900"
+                               VerticalAlignment="Center"/>
+                    <Button Content="Verstanden"
+                            Command="{Binding DismissPersistErrorCommand}"
+                            Margin="16,0,0,0" Padding="10,2" FontSize="11"
+                            VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
         </Grid>

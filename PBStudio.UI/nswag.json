@@ -30,7 +30,7 @@
       "generateOptionalPropertiesAsNullable": true,
       "generateNullableReferenceTypes": true,
       "requiredPropertiesMustBeDefined": true,
-      "output": "Generated/ApiTypes.g.cs",
+      "output": "obj/Generated/ApiTypes.g.cs",
       "newLineBehavior": "Auto"
     }
   }

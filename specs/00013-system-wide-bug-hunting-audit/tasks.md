@@ -1,45 +1,50 @@
----
-feature_branch: "00013-system-wide-bug-hunting-audit"
-created: "2026-05-29"
-spec_path: "specs/00013-system-wide-bug-hunting-audit/spec.md"
-plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
----
+# OBJ-72 Canonical Tasks – T370–T415
 
-# Tasks: System-wide Bug Hunting & Codebase Audit
+**Status:** ACTIVE / IMPLEMENTATION OPEN
 
-## Work Item Checklist
-
-- [x] T001 [P] [OBJ-1] Perform static audit of Z-CORE & Z-DATA (VRAM & SQLite safety)
-- [x] T002 [P] [OBJ-2] Perform static audit of Z-AUDIO & Z-VIDEO (Pipeline & Fallback safety)
-- [x] T003 [P] [OBJ-3] Perform static audit of Z-UI-VM & Z-UI-SERVICES (Memory leaks & thread safety)
-- [x] T004 [P] [OBJ-4] Perform static audit of Shared-Zones & Z-INFRA (API Routes & traversal safety)
-- [x] T005 [P] [OBJ-5] Execute E2E automated smoke runs and Visual screenshot audits
-- [x] T006 [P] [OBJ-3] {(FR-101)} Fix SmartDirector VRAM-Thrashing in `src/pb_studio/ai/smart_director.py`
-- [x] T007 [P] [OBJ-2] {(FR-102)} Implement true ONNX Batch Inference in `src/pb_studio/ai/siglip_wrapper.py`
-- [x] T008 [P] [OBJ-4] {(FR-103)} Add physical Index Re-Indexing `clean_tombstones()` in `src/pb_studio/data/vector_store.py`
-- [x] T009 [P] [OBJ-5] {(TR-104)} Execute test verification for AI optimizations
-- [x] T010 [P] [OBJ-6] {(FR-105)} Fix htdemucs model filename in `backend/schemas/audio_schemas.py`
-- [x] T011 [P] [OBJ-7] {(FR-106)} Integrate stems into audio analysis pipeline in `backend/routers/audio_router.py`
-- [x] T012 [P] [OBJ-7] {(TR-107)} Run verification tests for stem separation and integrated audio analysis
-- [x] T013 [P] [OBJ-1] {(FR-108)} Fix VRAM-Eviction ABBA deadlock in `vram_budget_manager.py` / `model_loader.py`
-- [x] T014 [P] [OBJ-1] {(FR-109)} Resolve SQLite project repository deferred transaction contention
-- [x] T015 [P] [OBJ-1] {(FR-110)} Secure atexit shutdown saving logic in `vector_store.py`
-- [x] T016 [P] [OBJ-2] {(FR-111)} Downscale frames in `video_router.py` to prevent RAM OOM
-- [x] T017 [P] [OBJ-2] {(FR-112)} Implement Moondream model caching loop in `video_router.py`
-- [x] T018 [P] [OBJ-2] {(FR-113)} Limit RAM-usage in `subtrack_detector.py` stems activity calculation
-- [x] T019 [P] [OBJ-3] {(FR-114)} Resolve WPF IDisposable ViewModels root container leak
-- [x] T020 [P] [OBJ-3] {(FR-115)} Dispose HttpResponseMessage socket resources in `ApiClient.cs`
-- [x] T021 [P] [OBJ-3] {(FR-116)} Add SSEClient EOF delay to avoid connection hot loops
-- [x] T022 [P] [OBJ-3] {(FR-117)} Implement active tab polling timer check for `VramTelemetryView`
-- [x] T023 [P] [OBJ-3] {(FR-118)} Integrate `WaveformCache` back into `/audio/waveform` route
-- [x] T024 [P] [OBJ-1] {(FR-119)} Implement global synchronous GPU inference lock (F1)
-- [x] T025 [P] [OBJ-1] {(FR-120)} Setup native C++ crash logger faulthandler in `backend/main.py` (F2)
-- [x] T026 [P] [OBJ-2] {(FR-121)} Shrink LM Studio VLM timeout to 15s with asyncio.wait_for (F3)
-- [x] T027 [P] [OBJ-5] {(FR-122)} Fix path bug and run 4h stress test background scripts (F4)
-- [x] T028 [P] [OBJ-4] {(FR-123)} Decouple VectorStore tombstone calls from SQLite transaction scopes (F5)
-
-
-
-
-
-
+- [X] T370 [OBJ-72] {(OR-335)} Hash and archive canonical Spec, Task and QC Git blobs with a manifest under `specs/00013-system-wide-bug-hunting-audit/history/` [Z-DOCS]
+- [X] T371 [OBJ-72] {(OR-335)} Activate a ≤10,240-byte Spec and complete historical requirement registry in `specs/00013-system-wide-bug-hunting-audit/spec.md` [Z-DOCS]
+- [X] T372 [OBJ-72] {(OR-335)} {(OR-337)} {(TR-346)} Implement the generic SDD validator and negative governance fixtures in `scripts/validate_sdd.py` and `Tests/test_validate_sdd.py` [Z-DOCS/Z-TESTS]
+- [X] T373 [OBJ-72] {(OR-336)} Reopen release truth by synchronizing Checklist, QC and marker state under `specs/00013-system-wide-bug-hunting-audit/` [Z-DOCS]
+- [X] T374 [OBJ-72] {(FR-337)} Implement ProjectOperationContext, epoch, lifecycle lock and project task registry in `backend/app_state.py` and `backend/routers/project_router.py` [Z-CORE/SHARED]
+- [X] T375 [P] [OBJ-72] {(FR-337)} Bind audio import, analysis and stems to captured project context and commit guard in `backend/routers/audio_router.py` [Z-AUDIO]
+- [X] T376 [P] [OBJ-72] {(FR-337)} Bind video import and analysis to captured project context and commit guard in `backend/routers/video_router.py` [Z-VIDEO]
+- [X] T377 [P] [OBJ-72] {(FR-337)} Bind pacing generation, Brain call and timeline commit to project context in `backend/routers/pacing_router.py` [Z-PACING]
+- [X] T378 [P] [OBJ-72] {(FR-337)} {(FR-348)} Bind timeline autosave and preview to snapshot, CTS, generation and project context in `PBStudio.UI/ViewModels/TimelineViewModel.cs` and `PBStudio.UI/Services/` [Z-UI-VM/Z-UI-SERVICES]
+- [X] T379 [OBJ-72] {(FR-338)} Implement PersistenceError, DB-first commits and truthful HTTP/SSE results in `backend/app_state.py`, `backend/routers/` and `src/pb_studio/data/` [SHARED/Z-DATA]
+- [X] T380 [OBJ-72] {(FR-339)} Persist complete video analysis state and correlate UI results with target clip and generation in `backend/routers/video_router.py`, `backend/schemas/video_schemas.py` and `PBStudio.UI/ViewModels/VideoLibraryViewModel.cs` [Z-VIDEO/Z-UI-VM]
+- [X] T381 [P] [OBJ-72] {(FR-340)} Implement project/epoch-bound Brain connection leases in `src/pb_studio/brain/`, `backend/_brain_singleton.py` and `backend/routers/brain_router.py` [Z-BRAIN]
+- [X] T382 [P] [OBJ-72] {(FR-340)} Implement staged atomic project creation and owned compensation in `backend/routers/project_router.py` and `src/pb_studio/data/repositories/project_repository.py` [Z-PROJEKT]
+- [X] T383 [P] [OBJ-72] {(FR-340)} Route SSE logging through bounded drop-oldest fanout with drop metric in `backend/dependencies.py` and `backend/routers/events_router.py` [Z-SSE]
+- [X] T384 [P] [OBJ-72] {(FR-341)} Generate and compile NSwag code reproducibly in clean builds via `PBStudio.UI/PBStudio.UI.csproj` [Z-UI-SERVICES/Z-INFRA]
+- [X] T385 [OBJ-72] {(FR-342)} Replace drifting transport DTOs with generated types and UI adapters in `PBStudio.UI/Services/` and `PBStudio.UI/Models/` [Z-UI-SERVICES]
+- [X] T386 [P] [OBJ-72] {(FR-343)} {(RR-237)} Implement active render dedupe, terminal attempts and content-hash identity in `src/pb_studio/rendering/render_queue.py` and `backend/routers/render_router.py` [Z-RENDER/Z-DATA]
+- [X] T387 [OBJ-72] {(FR-344)} Provision pinned DirectML assets through staging, allowlist and SHA-256 in `config/`, `scripts/` and `setup_pb_studio.ps1` [Z-INFRA]
+- [X] T388 [OBJ-72] {(FR-345)} Create the complete Python 3.11 Windows lock graph with pins and hashes in `requirements*.txt` [Z-INFRA]
+- [X] T389 [OBJ-72] {(FR-345)} Enforce .NET SDK and NuGet locked mode in `global.json`, `PBStudio.UI/packages.lock.json` and `PBStudio.UI/PBStudio.UI.csproj` [Z-INFRA/Z-UI]
+- [X] T390 [OBJ-72] {(FR-345)} Publish commit, dirty-state, SDK, lock, SBOM and artifact provenance through `scripts/` and task evidence [Z-INFRA]
+- [X] T391 [OBJ-72] {(FR-346)} Add confirm/cancel contracts for persistent audio/video deletion in `PBStudio.UI/Services/` and library ViewModels [Z-UI-SERVICES/Z-UI-VM]
+- [X] T392 [OBJ-72] {(FR-347)} Make FFmpeg runtime read-only and surface Settings load/save failures in `PBStudio.UI/Views/SettingsView.xaml`, `PBStudio.UI/ViewModels/SettingsViewModel.cs` and Settings service [Z-UI-VIEWS/Z-UI-VM/Z-UI-SERVICES]
+- [X] T393 [OBJ-72] {(FR-348)} Make Chat clear, GPU cleanup and recommendation ordering truthful in affected ViewModels and `PBStudio.UI/Services/ApiClient.cs` [Z-UI-VM/Z-UI-SERVICES]
+- [X] T394 [OBJ-72] {(FR-348)} Replace global exception swallowing with recoverable-local/fatal-shutdown policy in `PBStudio.UI/App.xaml.cs` [Z-UI]
+- [X] T395 [OBJ-72] {(FR-349)} Make the video toolbar responsive at supported resolutions in `PBStudio.UI/Views/VideoLibraryView.xaml` [Z-UI-VIEWS]
+- [X] T396 [OBJ-72] {(FR-349)} Implement P1–P3 UIA names, keyboard navigation, focus and timeline keyboard operations in `PBStudio.UI/Views/` and timeline ViewModel [Z-UI-VIEWS/Z-UI-VM]
+- [X] T397 [P] [OBJ-72] {(FR-349)} Preserve CachedTab presenters across template reapplication in `PBStudio.UI/Controls/CachedTabControl.cs` [Z-UI-CONTROLS]
+- [X] T398 [OBJ-72] {(FR-350)} Add native C# DTO, service, ViewModel and control tests under `PBStudio.UI.Tests/` [Z-TESTS]
+- [X] T399 [OBJ-72] {(FR-350)} Establish Python coverage, skip-expiry and future temp-hygiene gates in `Tests/`, `pytest.ini` and `.gitignore` without deleting historical temp evidence [Z-TESTS/Z-INFRA]
+- [X] T400 [OBJ-72] {(FR-351)} {(TR-353)} Add fail-closed secret, Python/NuGet SCA, dependency review and SBOM workflow with negative fixtures under `.github/workflows/` and `Tests/security/` [Z-INFRA/Z-TESTS]
+- [X] T401 [OBJ-72] {(FR-351)} Run required CI for work branches and pull requests in `.github/workflows/ci.yml` [Z-INFRA]
+- [X] T402 [P] [OBJ-72] {(FR-352)} Correct CLAP, DoD, setup and release documentation links in `CLAUDE.md`, `README.md`, `.github/sddp-config.md` and `docs/` [Z-DOCS]
+- [X] T403 [OBJ-72] {(OR-337)} {(FR-350)} {(FR-351)} {(FR-352)} Independently review the complete diff and create `.completed` only with task, evidence and commit digests under the feature workspace [SHARED/Z-REVIEW]
+- [X] T404 [OBJ-72] {(TR-347)} Run targeted fault injection for project switching, persistence, Settings, QueueFull and render retry and store receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T405 [OBJ-72] {(TR-349)} Run the complete `Tests/` suite with Python 3.11, NumPy 1.26.4 and `PYTHONPATH=src` and store JUnit evidence [QC]
+- [X] T406 [OBJ-72] {(TR-349)} Run locked native C# tests and WPF Release build with zero errors and warnings and store logs/binlog under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T407 [OBJ-72] {(TR-348)} Prove locked restore, generation, build and asset validation from an external clean Windows checkout without local cache advantage under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T408 [OBJ-72] {(TR-350)} Validate all 14 views, destructive/error states, supported resolutions and DPI matrix and store GUI evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T409 [OBJ-72] {(TR-350)} Validate keyboard-only operation, focus, UIA and High Contrast and store accessibility evidence under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T410 [OBJ-72] {(TR-351)} Prove active-job project switches A→B produce zero cross-project writes in backend, database and UI under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T411 [OBJ-72] {(TR-352)} Prove fresh-install DirectML and AMF operation on RX 7800 XT with exact adapter/LUID, both session flags and verified assets under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T412 [OBJ-72] {(FR-343)} {(TR-347)} Validate render active dedupe, retry, restart and content identity contracts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [X] T413 [OBJ-72] {(FR-353)} {(TR-353)} {(TR-355)} {(SC-083)} Remediate validated release-security findings and verify secrets, exact-lock SCA, SBOM, hashes, backend authorization and commit identity for one release SHA under `specs/00013-system-wide-bug-hunting-audit/evidence/` [QC]
+- [ ] T414 [OBJ-72] {(OR-336)} Reconcile QC, Brain and marker digests and create `.qc-passed` only after every gate is PASS under the feature workspace [Z-DOCS/QC]
+- [ ] T415 [OBJ-72] {(FR-351)} {(TR-354)} Publish through PR and required checks, verify protected main/release SHA and store remote receipts under `specs/00013-system-wide-bug-hunting-audit/evidence/` [Git/Remote]

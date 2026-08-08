@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "text": "Verbindung zum Backend verloren",
+  "expected_state": "absent",
+  "matched": true,
+  "matching_values": [],
+  "screenshot": "absent.png"
+}

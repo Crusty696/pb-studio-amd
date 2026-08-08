@@ -1,13 +1,10 @@
 # Run the lmstudio_client smoke test via the venv python, capture output.
 $ErrorActionPreference = "Continue"
-$out = "C:\Users\david\Documents\Pb_studio_AMD_version\.lmstudio_smoke.txt"
-$repo = "C:\Users\david\Documents\Pb_studio_AMD_version"
-
-# Find python — prefer venv if exists
-$python = "$repo\.venv\Scripts\python.exe"
-if (-not (Test-Path $python)) {
-    $python = "python"
-}
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$out = Join-Path $repo '.lmstudio_smoke.txt'
+. (Join-Path $PSScriptRoot 'runtime_contract.ps1')
+$runtime = Get-PBStudioRuntimeContract -ProjectRoot $repo -RequirePython -RequireFFmpeg -ApplyEnvironment
+$python = $runtime.PythonExe
 
 "=== LM Studio Client Smoke ===" | Out-File $out
 "python: $python" | Out-File $out -Append
@@ -22,7 +19,9 @@ $psi.RedirectStandardError = $true
 $psi.UseShellExecute = $false
 $psi.CreateNoWindow = $true
 $psi.WorkingDirectory = $repo
-$psi.EnvironmentVariables["PYTHONPATH"] = "$repo\src"
+$psi.EnvironmentVariables["PYTHONPATH"] = $runtime.PythonPath
+$psi.EnvironmentVariables["PBSTUDIO_FFMPEG_PATH"] = $runtime.FfmpegExe
+$psi.EnvironmentVariables["PBSTUDIO_FFPROBE_PATH"] = $runtime.FfprobeExe
 $proc = [System.Diagnostics.Process]::Start($psi)
 if ($proc.WaitForExit(180000)) {
     "=== STDOUT ===" | Out-File $out -Append

@@ -10,7 +10,13 @@
              mc:Ignorable="d"
              Background="{StaticResource AbletonBg}"
              Loaded="OnLoaded"
-             Unloaded="OnUnloaded">
+             Unloaded="OnUnloaded"
+             AutomationProperties.Name="VRAM-Telemetrie"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}"/>
+    </UserControl.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -37,7 +43,10 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="6,4" Height="28"
-                            ToolTip="Telemetrie aktualisieren&#x0a;• Was es macht: Lädt die aktuellen VRAM-Belegungsdaten und die GPU-Telemetrie sofort neu.&#x0a;• Wozu es dient: Zeigt dir an, ob Modelle im VRAM verblieben sind, wie viel Speicher gerade aktiv genutzt wird und ob Fehler auftraten.&#x0a;• Wann &amp; wie nutzen: Nach Analysevorgängen oder dem Laden neuer Modelle anklicken, um die VRAM-Auslastung live zu kontrollieren.">
+                            ToolTip="Telemetrie aktualisieren&#x0a;• Was es macht: Lädt die aktuellen VRAM-Belegungsdaten und die GPU-Telemetrie sofort neu.&#x0a;• Wozu es dient: Zeigt dir an, ob Modelle im VRAM verblieben sind, wie viel Speicher gerade aktiv genutzt wird und ob Fehler auftraten.&#x0a;• Wann &amp; wie nutzen: Nach Analysevorgängen oder dem Laden neuer Modelle anklicken, um die VRAM-Auslastung live zu kontrollieren."
+                            AutomationProperties.Name="VRAM-Telemetrie aktualisieren"
+                            AutomationProperties.HelpText="Lädt GPU-Budget, Modellbelegung, Laufzeiten und Fehlerstatus neu."
+                            AutomationProperties.AcceleratorKey="F5">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -50,7 +59,9 @@
                     <TextBlock Text="VRAM TELEMETRIE" Style="{StaticResource SectionHeader}"/>
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11" Margin="0,2,0,0"/>
+                               FontSize="11" Margin="0,2,0,0"
+                               AutomationProperties.Name="{Binding StatusText}"
+                               AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -145,7 +156,8 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <ItemsControl ItemsSource="{Binding Models}">
+                <ItemsControl ItemsSource="{Binding Models}"
+                              AutomationProperties.Name="VRAM-Modellbelegung">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>

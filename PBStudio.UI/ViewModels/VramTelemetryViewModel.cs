@@ -102,10 +102,12 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
 
-        // Vorherigen Lauf abbrechen, neuen Token aufsetzen.
-        _loadCts?.Cancel();
-        _loadCts = new CancellationTokenSource();
-        var token = _loadCts.Token;
+        // Vorherigen Lauf abbrechen; jede Ausführung besitzt und disposed ihre CTS.
+        var previous = _loadCts;
+        var current = new CancellationTokenSource();
+        _loadCts = current;
+        previous?.Cancel();
+        var token = current.Token;
 
         IsLoading = true;
         try
@@ -147,7 +149,13 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            if (ReferenceEquals(_loadCts, current))
+            {
+                _loadCts = null;
+                if (!_disposed)
+                    IsLoading = false;
+            }
+            current.Dispose();
         }
     }
 

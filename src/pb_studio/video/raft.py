@@ -23,6 +23,12 @@ from typing import Optional, Tuple, List, Dict, Any
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_adapter,
+    get_directml_provider,
+)
 
 
 # RAFT preprocessing constants
@@ -39,7 +45,7 @@ class MotionAnalyzer:
     RAFT-based optical flow analyzer for motion estimation.
 
     Uses ONNX Runtime with DirectML for AMD GPU acceleration.
-    Falls back to CPU if DirectML is unavailable.
+    Fails closed if DirectML is unavailable.
 
     Key Methods:
     - calculate_flow(): Compute flow between two frames
@@ -100,11 +106,9 @@ class MotionAnalyzer:
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create optimized session options for DirectML compatibility."""
-        sess_options = ort.SessionOptions()
+        sess_options = configure_directml_session_options(ort.SessionOptions())
 
         # KRITISCH fuer DirectML: Memory Pattern MUSS deaktiviert sein
-        sess_options.enable_mem_pattern = False
-
         # R15/STABILITY: Sequentieller Modus ist stabiler mit DirectML/AMD Treibern
         sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
@@ -113,7 +117,6 @@ class MotionAnalyzer:
 
         # R15/M-07: CPU Memory Arena MUSS für DirectML deaktiviert sein —
         # aktiviertes Arena-Management kann mit DmlExecutionProvider-Allokator kollidieren.
-        sess_options.enable_cpu_mem_arena = False
         sess_options.intra_op_num_threads = 0  # Auto
         sess_options.inter_op_num_threads = 0  # Auto
 
@@ -126,15 +129,20 @@ class MotionAnalyzer:
         """Get available execution providers — DirectML only (AMD IRON RULE: no CPU fallback)."""
         available = ort.get_available_providers()
 
-        providers = []
-
         if 'DmlExecutionProvider' in available:
-            device_id = self.config.get("ai", {}).get("dml_device_id", 0)
-            providers.append(('DmlExecutionProvider', {'device_id': device_id}))
-            logger.info(f"DirectML provider available (device_id={device_id}) - using AMD GPU acceleration for RAFT")
+            adapter = get_directml_adapter()
+            logger.info(
+                "DirectML provider available "
+                "(device_id=%d, luid=%s, adapter=%s) - "
+                "using AMD GPU acceleration for RAFT",
+                adapter.device_id,
+                adapter.luid,
+                adapter.name,
+            )
+            return [get_directml_provider()]
 
-        # IRON RULE: AMD DirectML ONLY — kein CPUExecutionProvider Fallback
-        return providers
+        # IRON RULE: AMD DirectML ONLY — kein sekundärer Provider
+        return []
 
     def _init_model(self) -> bool:
         """
@@ -159,6 +167,15 @@ class MotionAnalyzer:
             self._init_failed = True
             return False
 
+        vram_manager = None
+        vram_model_id = (
+            "raft_small"
+            if "raft_small" in str(self.model_path).lower()
+            else "raft_standard"
+        )
+        vram_reserved = False
+        vram_committed = False
+
         try:
             sess_options = self._create_session_options()
             providers = self._get_providers()
@@ -173,37 +190,68 @@ class MotionAnalyzer:
 
             logger.info(f"Loading RAFT model from {self.model_path}...")
 
-            self.session = ort.InferenceSession(
-                str(self.model_path),
-                sess_options,
-                providers=providers
+            from pb_studio.core.vram_budget_manager import get_vram_manager
+
+            vram_manager = get_vram_manager()
+            budget = vram_manager.get_model(vram_model_id)
+            if budget is None:
+                raise RuntimeError(
+                    f"RAFT VRAM budget '{vram_model_id}' is not registered"
+                )
+            if not vram_manager.reserve(vram_model_id, force=False):
+                raise RuntimeError(
+                    f"RAFT VRAM reservation failed for '{vram_model_id}'"
+                )
+            vram_reserved = True
+
+            self.session = enforce_directml_session(
+                ort.InferenceSession(
+                    str(self.model_path),
+                    sess_options,
+                    providers=providers,
+                )
             )
 
             self._active_provider = self.session.get_providers()[0]
+            input_shape = self.session.get_inputs()[0].shape
+            if (
+                len(input_shape) >= 4
+                and isinstance(input_shape[-2], int)
+                and isinstance(input_shape[-1], int)
+            ):
+                self.target_size = (input_shape[-1], input_shape[-2])
+            self._log_model_info()
+
+            if not vram_manager.commit(vram_model_id):
+                raise RuntimeError(
+                    f"RAFT VRAM commit failed for '{vram_model_id}'"
+                )
+            vram_reserved = False
+            vram_committed = True
+            budget.unload_callback = self.unload
             self._initialized = True
 
             logger.info(f"RAFT model loaded. Active Provider: {self._active_provider}")
-            self._log_model_info()
-
-            if self._active_provider == "DmlExecutionProvider":
-                try:
-                    from pb_studio.core.vram_budget_manager import get_vram_manager
-                    mgr = get_vram_manager()
-                    model_id = "raft_small" if "raft_small" in str(self.model_path).lower() else "raft_standard"
-                    budget = mgr.get_model(model_id)
-                    if budget is not None:
-                        budget.unload_callback = self.unload
-                    mgr.reserve(model_id, force=False)
-                    mgr.commit(model_id)
-                    logger.info("RAFT model registered and committed with VRAMBudgetManager")
-                except Exception as ve:
-                    logger.warning("VRAM-Manager-Registrierung fuer RAFT fehlgeschlagen: %s", ve)
+            logger.info("RAFT model registered and committed with VRAMBudgetManager")
 
             return True
 
         except Exception as e:
             logger.error(f"Failed to initialize RAFT model: {e}")
             self.session = None
+            self._initialized = False
+            if vram_manager is not None:
+                try:
+                    if vram_committed:
+                        vram_manager.release(vram_model_id)
+                    elif vram_reserved:
+                        vram_manager.cancel_reservation(vram_model_id)
+                except Exception as rollback_error:
+                    logger.error(
+                        "RAFT VRAM rollback failed for %s: %s",
+                        vram_model_id,
+                        rollback_error,
+                    )
             self._init_failed = True
             return False
 
@@ -278,7 +326,9 @@ class MotionAnalyzer:
             - flow_u: Horizontal flow component (H, W)
             - flow_v: Vertical flow component (H, W)
 
-            Returns (zeros, zeros) on error.
+        Raises:
+            RuntimeError: If DirectML/model initialization or inference fails.
+                A failure must not be represented as a valid static zero-flow.
         """
         # R15/GUARD: Downscale 4K input to maximum 1080p to prevent DirectML TDRs and excessive RAM allocation
         h, w = frame1.shape[:2]
@@ -291,8 +341,9 @@ class MotionAnalyzer:
 
         if not self._initialized:
             if not self._init_model():
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    "RAFT DirectML model initialization failed; motion stage unavailable"
+                )
 
         try:
             # Preprocess both frames
@@ -344,47 +395,38 @@ class MotionAnalyzer:
             elif outputs is not None:
                 flow = outputs
             else:
-                logger.warning("RAFT returned None output")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError("RAFT returned no flow output")
 
             # Output-Shape validieren
             if not isinstance(flow, np.ndarray):
-                logger.warning(f"RAFT returned non-ndarray output: {type(flow)}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    f"RAFT returned non-ndarray output: {type(flow).__name__}"
+                )
 
             if flow.ndim not in (3, 4):
-                logger.warning(f"RAFT output has unexpected ndim={flow.ndim}, shape={flow.shape}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(
+                    f"RAFT output has unexpected ndim={flow.ndim}, shape={flow.shape}"
+                )
 
             # Extrahiere U (horizontal) und V (vertikal) Komponenten
             if flow.ndim == 4:  # [B, 2, H, W]
                 if flow.shape[1] < 2:
-                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
-                    h, w = frame1.shape[:2]
-                    return np.zeros((h, w)), np.zeros((h, w))
+                    raise RuntimeError(f"RAFT output has <2 channels: {flow.shape}")
                 flow_u = flow[0, 0, :, :]
                 flow_v = flow[0, 1, :, :]
             elif flow.ndim == 3:  # [2, H, W]
                 if flow.shape[0] < 2:
-                    logger.warning(f"RAFT output has <2 channels: {flow.shape}")
-                    h, w = frame1.shape[:2]
-                    return np.zeros((h, w)), np.zeros((h, w))
+                    raise RuntimeError(f"RAFT output has <2 channels: {flow.shape}")
                 flow_u = flow[0, :, :]
                 flow_v = flow[1, :, :]
             else:
-                logger.warning(f"Unexpected flow shape: {flow.shape}")
-                h, w = frame1.shape[:2]
-                return np.zeros((h, w)), np.zeros((h, w))
+                raise RuntimeError(f"Unexpected RAFT flow shape: {flow.shape}")
 
             # Skaliere Flow auf Original-Bildgroesse
             orig_h, orig_w = frame1.shape[:2]
             if flow_u.shape != (orig_h, orig_w):
                 if flow_u.shape[0] == 0 or flow_u.shape[1] == 0:
-                    logger.warning(f"RAFT returned zero-size flow: {flow_u.shape}")
-                    return np.zeros((orig_h, orig_w)), np.zeros((orig_h, orig_w))
+                    raise RuntimeError(f"RAFT returned zero-size flow: {flow_u.shape}")
                 scale_x = orig_w / flow_u.shape[1]
                 scale_y = orig_h / flow_u.shape[0]
 
@@ -395,8 +437,7 @@ class MotionAnalyzer:
 
         except Exception as e:
             logger.error(f"Flow calculation failed: {e}")
-            h, w = frame1.shape[:2]
-            return np.zeros((h, w)), np.zeros((h, w))
+            raise RuntimeError(f"RAFT flow calculation failed: {e}") from e
 
     def get_motion_magnitude(
         self,
@@ -449,6 +490,14 @@ class MotionAnalyzer:
             - dominant_direction: Primary motion direction in degrees
         """
         flow_u, flow_v = self.calculate_flow(frame1, frame2)
+        return self._motion_statistics_from_flow(flow_u, flow_v)
+
+    @staticmethod
+    def _motion_statistics_from_flow(
+        flow_u: np.ndarray,
+        flow_v: np.ndarray,
+    ) -> Dict[str, float]:
+        """Leitet alle Motion-Metriken aus einem bereits berechneten Flow ab."""
         magnitude = np.sqrt(flow_u**2 + flow_v**2)
         angle = np.arctan2(flow_v, flow_u) * 180 / np.pi  # In Grad
 
@@ -465,6 +514,31 @@ class MotionAnalyzer:
         }
 
         return stats
+
+    @staticmethod
+    def _scene_change_from_statistics(
+        stats: Dict[str, float],
+        threshold: float,
+    ) -> Tuple[bool, float]:
+        magnitude = stats["p95_magnitude"]
+        variance = stats["std_magnitude"]
+        score = magnitude * (1 + variance / 10.0)
+        return score > threshold, float(min(score / threshold, 2.0))
+
+    def analyze_frame_pair(
+        self,
+        frame1: np.ndarray,
+        frame2: np.ndarray,
+        scene_threshold: float = 50.0,
+    ) -> Tuple[float, bool, float]:
+        """Berechnet Flow einmal und leitet Motion plus Scene-Change daraus ab."""
+        flow_u, flow_v = self.calculate_flow(frame1, frame2)
+        stats = self._motion_statistics_from_flow(flow_u, flow_v)
+        is_change, confidence = self._scene_change_from_statistics(
+            stats,
+            scene_threshold,
+        )
+        return stats["p95_magnitude"], is_change, confidence
 
     def detect_scene_change(
         self,
@@ -489,18 +563,7 @@ class MotionAnalyzer:
         """
         stats = self.get_motion_statistics(frame1, frame2)
 
-        # Hohe Bewegung mit hoher Varianz = wahrscheinlich Szenenwechsel
-        magnitude = stats["p95_magnitude"]
-        variance = stats["std_magnitude"]
-
-        # Szenenwechsel-Score
-        # Kombiniert Magnitude und Varianz
-        score = magnitude * (1 + variance / 10.0)
-
-        is_change = score > threshold
-        confidence = min(score / threshold, 2.0)  # 0-2 range
-
-        return is_change, float(confidence)
+        return self._scene_change_from_statistics(stats, threshold)
 
     def _make_colorwheel(self) -> np.ndarray:
         """
@@ -657,10 +720,12 @@ class MotionAnalyzer:
             frame1 = frames[i]
             frame2 = frames[min(i + stride, len(frames) - 1)]
 
-            magnitude = self.get_motion_magnitude(frame1, frame2)
+            magnitude, is_change, confidence = self.analyze_frame_pair(
+                frame1,
+                frame2,
+            )
             motions.append(magnitude)
 
-            is_change, confidence = self.detect_scene_change(frame1, frame2)
             if is_change:
                 scene_changes.append({
                     "frame_index": i,
@@ -715,68 +780,6 @@ class MotionAnalyzer:
         logger.info("RAFT model unloaded")
 
 
-# CPU Fallback using OpenCV's Farneback method
-class FarnebackFlowAnalyzer:
-    """
-    Fallback optical flow analyzer using OpenCV's Farneback method.
-
-    Use this when RAFT model is not available or GPU resources are limited.
-    Less accurate but works on CPU without additional dependencies.
-    """
-
-    def __init__(self):
-        """Initialize the Farneback flow analyzer."""
-        logger.info("Using Farneback optical flow (CPU fallback)")
-
-    def calculate_flow(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Calculate optical flow using Farneback algorithm.
-
-        Args:
-            frame1: First frame (BGR)
-            frame2: Second frame (BGR)
-
-        Returns:
-            Tuple of (flow_u, flow_v)
-        """
-        # Zu Graustufen konvertieren
-        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-
-        # Farneback Optical Flow
-        flow = cv2.calcOpticalFlowFarneback(
-            gray1, gray2,
-            None,
-            pyr_scale=0.5,
-            levels=3,
-            winsize=15,
-            iterations=3,
-            poly_n=5,
-            poly_sigma=1.2,
-            flags=0
-        )
-
-        flow_u = flow[:, :, 0]
-        flow_v = flow[:, :, 1]
-
-        return flow_u, flow_v
-
-    def get_motion_magnitude(
-        self,
-        frame1: np.ndarray,
-        frame2: np.ndarray,
-        percentile: float = 95.0
-    ) -> float:
-        """Calculate motion magnitude between frames."""
-        flow_u, flow_v = self.calculate_flow(frame1, frame2)
-        magnitude = np.sqrt(flow_u**2 + flow_v**2)
-        return float(np.percentile(magnitude, percentile))
-
-
 def create_motion_analyzer(prefer_gpu: bool = True) -> MotionAnalyzer:
     """
     Factory function to create a DirectML RAFT motion analyzer.
@@ -792,16 +795,6 @@ def create_motion_analyzer(prefer_gpu: bool = True) -> MotionAnalyzer:
     Returns:
         MotionAnalyzer (ggf. nicht initialisiert wenn DirectML fehlt)
     """
-    import os
-    allow_cpu = os.environ.get("ALLOW_CPU_FALLBACK", "0").strip().lower() in ("1", "true", "yes")
-    if allow_cpu:
-        # Nur per explizitem Env-Flag erlaubt (z.B. fuer Unit-Tests)
-        logger.warning("ALLOW_CPU_FALLBACK=1 gesetzt — Farneback CPU-Fallback aktiviert")
-        analyzer = MotionAnalyzer(lazy_load=False)
-        if analyzer.is_ready:
-            return analyzer
-        return FarnebackFlowAnalyzer()  # type: ignore[return-value]
-
     analyzer = MotionAnalyzer(lazy_load=False)
     if not analyzer.is_ready:
         logger.warning(

@@ -1,0 +1,1 @@
+OBJ-71 End-QC PASS 2026-07-30: T340-T369 complete; T360 static gate PASS; final suite 1090 passed/11 skipped/0 failed; WPF Release 0 warnings/0 errors; RAFT, SigLIP, Moondream Vision, CLAP and Audio MDX active on RX 7800 XT LUID 0x00000000_0x0001185b with iGPU 0%; H.264/HEVC full-length gates PASS; security/IRON diff review PASS.

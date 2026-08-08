@@ -115,7 +115,8 @@ BACKGROUND = 5 # Batch-Processing, zuerst evicten
 ### Mitigations
 
 - VRAM-Budgets sind konservativ geschaetzt (inkl. Overhead)
-- Dual-Verification mit LHM-Sensor wenn verfuegbar
+- Dual-Verification mit LHM-Sensor nur bei extern freigegebenem,
+  manifest- und hashgebundenem Assembly-Bundle
 - Logging bei Diskrepanzen zwischen Budget und Sensor
 
 ## Usage Examples
@@ -123,7 +124,7 @@ BACKGROUND = 5 # Batch-Processing, zuerst evicten
 ### Direkter Model Loader
 
 ```python
-from src.pb_studio.core import load_model, unload_model
+from pb_studio.core import load_model, unload_model
 
 # Laden mit automatischem VRAM-Management
 session = load_model("moondream_fp16", force=True)
@@ -139,7 +140,7 @@ unload_model("moondream_fp16")
 ### VRAMContext Manager
 
 ```python
-from src.pb_studio.core import VRAMContext, get_vram_manager
+from pb_studio.core import VRAMContext, get_vram_manager
 
 manager = get_vram_manager()
 
@@ -155,7 +156,7 @@ with VRAMContext(manager, "custom_model", "My Model", 1000) as ctx:
 ### Statistiken
 
 ```python
-from src.pb_studio.core import get_vram_manager
+from pb_studio.core import get_vram_manager
 
 stats = get_vram_manager().get_stats()
 print(f"Available: {stats['available_mb']}MB")
@@ -178,15 +179,19 @@ print(f"Loaded Models: {stats['models']}")
 ```python
 session_options = ort.SessionOptions()
 session_options.enable_mem_pattern = False  # MANDATORY!
+session_options.enable_cpu_mem_arena = False  # MANDATORY!
 session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
+providers = ['DmlExecutionProvider']
 ```
 
-Ohne `enable_mem_pattern = False` produziert DirectML:
+Ohne beide Speicherflags produziert DirectML:
 - Falsche Ergebnisse
 - Crashes
 - Memory Corruption
+
+Ein fehlender `DmlExecutionProvider` ist ein expliziter Fehler. Es gibt keinen
+CPU-Provider-Fallback für ML-Modelle.
 
 ## Future Improvements
 

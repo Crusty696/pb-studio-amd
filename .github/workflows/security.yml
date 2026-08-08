@@ -1,0 +1,423 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Validate expiring security exceptions
+        run: python scripts/security_gate.py exceptions
+
+      - name: Scan tracked text files
+        id: secret_scan
+        run: >-
+          python scripts/security_gate.py secrets
+          --history
+          --allowlist config/secret-scan-allowlist.json
+          --output artifacts/security/secrets.json
+
+      - name: Prove every secret rule with synthetic fixtures
+        run: >-
+          python scripts/security_gate.py secrets
+          --path Tests/security/fixtures/seeded-secret.txt
+          --expect-all-rules
+
+      - name: Bind secret-scan receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate secret-scan
+          --status ${{ steps.secret_scan.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/secret-scan-receipt.json
+
+      - name: Upload secret-scan receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: secret-scan
+          path: artifacts/security/
+          if-no-files-found: error
+
+  python-sca:
+    name: Python SCA
+    runs-on: windows-latest
+    env:
+      PIP_AUDIT_SCANNER_VERSION: "2.10.1"
+      PIP_AUDIT_SCANNER_LOCK: config/pip-audit-2.10.1-win-py311.lock
+      PIP_AUDIT_SCANNER_LOCK_SHA256: 116cff7875527870582ee9c2e182752ae504c3f0887934978ee6e58141518ffe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Create receipt directory
+        shell: bash
+        run: mkdir -p artifacts/security
+
+      - name: Install isolated pip-audit scanner
+        id: scanner_install
+        shell: pwsh
+        run: |
+          $lockHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $env:PIP_AUDIT_SCANNER_LOCK).Hash.ToLowerInvariant()
+          if ($lockHash -ne $env:PIP_AUDIT_SCANNER_LOCK_SHA256) {
+            throw "pip-audit scanner lock hash mismatch: $lockHash"
+          }
+          $scannerVenv = Join-Path $env:RUNNER_TEMP "pb-studio-pip-audit-2.10.1"
+          python -m venv $scannerVenv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scannerPython = Join-Path $scannerVenv "Scripts\python.exe"
+          & $scannerPython -m pip install --disable-pip-version-check `
+            --require-hashes --only-binary=:all: --no-deps `
+            -r $env:PIP_AUDIT_SCANNER_LOCK
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scannerVersion = (& $scannerPython -m pip_audit --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or
+              $scannerVersion -ne "pip-audit $env:PIP_AUDIT_SCANNER_VERSION") {
+            throw "Unexpected scanner identity: $scannerVersion"
+          }
+          "SCANNER_PYTHON=$scannerPython" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Output "PIP_AUDIT_SCANNER_PASS version=$scannerVersion lock=$lockHash"
+
+      - name: Audit production lock
+        id: production_audit
+        shell: pwsh
+        run: |
+          & $env:SCANNER_PYTHON -m pip_audit `
+            --vulnerability-service osv `
+            --disable-pip `
+            --require-hashes `
+            --no-deps `
+            --strict `
+            --aliases=on `
+            --desc=off `
+            --progress-spinner=off `
+            --format=json `
+            --output=artifacts/security/python-sca-production.json `
+            --requirement requirements.txt
+          $auditExit = $LASTEXITCODE
+          @{
+            schema_version = 1
+            exit_code = $auditExit
+            accepted_for_exception_validation = $auditExit -in @(0, 1)
+          } | ConvertTo-Json | Set-Content `
+            -LiteralPath artifacts/security/python-sca-production-exit.json `
+            -Encoding utf8
+          if ($auditExit -notin @(0, 1)) {
+            throw "pip-audit collection failed with exit $auditExit"
+          }
+          exit 0
+
+      - name: Validate production Python report
+        id: production_validation
+        run: >-
+          python scripts/security_gate.py pip-audit-report
+          --report artifacts/security/python-sca-production.json
+          --lock requirements.txt
+          --provider osv
+          --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
+          --scanner-version-status verified
+          --invocation-kind local
+          --local-source config/pip-audit-2.10.1-win-py311.lock@sha256:${{ env.PIP_AUDIT_SCANNER_LOCK_SHA256 }}
+          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-production.json --requirement requirements.txt'
+          --exceptions config/python-sca-exceptions.json
+          --receipt artifacts/security/python-sca-production-validation.json
+          --expect-clean
+          --minimum-dependencies 100
+
+      - name: Verify production Python lock hashes
+        id: production_hash_validation
+        shell: pwsh
+        run: >-
+          python -m pip download --require-hashes --only-binary=:all: --no-deps
+          --dest artifacts/security/python-sca-production-hashes
+          -r requirements.txt
+
+      - name: Audit vulnerable fixture
+        id: vulnerable_fixture
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "requirements-vulnerable.txt"
+          Copy-Item `
+            Tests/security/fixtures/python-vulnerable.fixture `
+            $fixture
+          & $env:SCANNER_PYTHON -m pip_audit `
+            --vulnerability-service osv `
+            --disable-pip `
+            --require-hashes `
+            --no-deps `
+            --strict `
+            --aliases=on `
+            --desc=off `
+            --progress-spinner=off `
+            --format=json `
+            --output=artifacts/security/python-sca-fixture.json `
+            --requirement $fixture
+          if ($LASTEXITCODE -ne 1 -or
+              -not (Test-Path -LiteralPath artifacts/security/python-sca-fixture.json)) {
+            throw "Vulnerable Python fixture was not rejected with a report."
+          }
+          exit 0
+
+      - name: Validate vulnerable Python report
+        id: fixture_validation
+        run: >-
+          python scripts/security_gate.py pip-audit-report
+          --report artifacts/security/python-sca-fixture.json
+          --lock ${{ runner.temp }}\requirements-vulnerable.txt
+          --provider osv
+          --scanner-version ${{ env.PIP_AUDIT_SCANNER_VERSION }}
+          --scanner-version-status verified
+          --invocation-kind local
+          --local-source config/pip-audit-2.10.1-win-py311.lock@sha256:${{ env.PIP_AUDIT_SCANNER_LOCK_SHA256 }}
+          --local-command '& $env:SCANNER_PYTHON -m pip_audit --vulnerability-service osv --disable-pip --require-hashes --no-deps --strict --aliases=on --desc=off --progress-spinner=off --format=json --output=artifacts/security/python-sca-fixture.json --requirement $env:RUNNER_TEMP\requirements-vulnerable.txt'
+          --receipt artifacts/security/python-sca-fixture-validation.json
+          --expect-package urllib3
+          --expect-version 1.26.5
+
+      - name: Verify wrong Python package hash is rejected
+        id: wrong_hash_validation
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "requirements-wrong-hash.txt"
+          Copy-Item `
+            Tests/security/fixtures/python-wrong-hash.fixture `
+            $fixture
+          $output = & $env:SCANNER_PYTHON -m pip download `
+            --require-hashes --only-binary=:all: --no-deps `
+            --dest artifacts/security/python-sca-wrong-hash `
+            -r $fixture 2>&1
+          $exitCode = $LASTEXITCODE
+          $text = $output | Out-String
+          $expectedHash = "0000000000000000000000000000000000000000000000000000000000000000"
+          $actualHash = "753a0374df26658f99d826cfe40394a686d05985786d946fbe4165b5148f5a7c"
+          if ($exitCode -eq 0 -or
+              $text -notmatch "THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE" -or
+              $text -notmatch "Expected sha256 $expectedHash" -or
+              $text -notmatch "Got\s+$actualHash") {
+            Write-Error "Wrong-hash fixture did not fail with the expected pip hash-mismatch signature."
+            Write-Output $text
+            exit 1
+          }
+          Write-Output "PYTHON_PACKAGE_HASH_NEGATIVE_FIXTURE_PASS"
+          exit 0
+
+      - name: Bind Python SCA receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate python-sca
+          --status
+          ${{ steps.scanner_install.outcome }}:${{ steps.production_audit.outcome }}:${{ steps.production_validation.outcome }}:${{ steps.production_hash_validation.outcome }}:${{ steps.vulnerable_fixture.outcome }}:${{ steps.fixture_validation.outcome }}:${{ steps.wrong_hash_validation.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/python-sca-receipt.json
+
+      - name: Upload Python SCA receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-sca
+          path: artifacts/security/python-sca-*.json
+          if-no-files-found: error
+
+  nuget-sca:
+    name: NuGet SCA
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "9.0.316"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Restore audited NuGet graphs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/security | Out-Null
+          dotnet restore PBStudio.UI/PBStudio.UI.csproj --locked-mode `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore PBStudio.UI.Tests/PBStudio.UI.Tests.csproj --locked-mode `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Export production NuGet audit reports
+        shell: pwsh
+        run: |
+          dotnet list PBStudio.UI/PBStudio.UI.csproj package --vulnerable `
+            --include-transitive --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-ui.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet list PBStudio.UI.Tests/PBStudio.UI.Tests.csproj package --vulnerable `
+            --include-transitive --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-tests.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate production NuGet reports
+        id: production_validation
+        run: >-
+          python scripts/security_gate.py nuget-audit-report
+          --report artifacts/security/nuget-sca-ui.json
+          --expect-project PBStudio.UI/PBStudio.UI.csproj
+          --report artifacts/security/nuget-sca-tests.json
+          --expect-project PBStudio.UI.Tests/PBStudio.UI.Tests.csproj
+          --expect-clean
+
+      - name: Export vulnerable NuGet fixture report
+        shell: pwsh
+        run: |
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP "pb-studio-vulnerable-nuget"
+          New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+          $fixtureProject = Join-Path $fixtureRoot "VulnerableNuGet.csproj"
+          Copy-Item `
+            Tests/security/fixtures/VulnerableNuGet/VulnerableNuGet.csproj.txt `
+            $fixtureProject
+          dotnet restore $fixtureProject `
+            -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low `
+            /warnaserror:NU1900
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet list $fixtureProject `
+            package --vulnerable --include-transitive `
+            --format json --output-version 1 |
+            Set-Content -LiteralPath artifacts/security/nuget-sca-fixture.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate vulnerable NuGet report
+        id: fixture_validation
+        run: >-
+          python scripts/security_gate.py nuget-audit-report
+          --report artifacts/security/nuget-sca-fixture.json
+          --expect-project VulnerableNuGet.csproj
+          --expect-package Newtonsoft.Json
+          --expect-version 12.0.1
+
+      - name: Bind NuGet SCA receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate nuget-sca
+          --status
+          ${{ steps.production_validation.outcome }}:${{ steps.fixture_validation.outcome }}
+          --commit ${{ github.sha }}
+          --output artifacts/security/nuget-sca-receipt.json
+
+      - name: Upload NuGet SCA receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nuget-sca
+          path: artifacts/security/nuget-sca-*.json
+          if-no-files-found: error
+
+  dependency-review:
+    name: Dependency review
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' &&
+      (github.ref_name == 'main' || startsWith(github.ref_name, 'release/')))
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Review dependency changes
+        id: dependency_review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          base-ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          head-ref: ${{ github.sha }}
+          fail-on-severity: low
+          allow-ghsas: GHSA-h35f-9h28-mq5c, GHSA-rrmf-rvhw-rf47
+          comment-summary-in-pr: never
+
+      - name: Bind dependency review receipt to commit
+        if: always()
+        run: >-
+          python scripts/security_gate.py workflow-receipt
+          --gate dependency-review
+          --status ${{ steps.dependency_review.outcome }}
+          --commit ${{ github.sha }}
+          --base ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          --head ${{ github.sha }}
+          --output dependency-review-receipt.json
+
+      - name: Upload dependency review receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-review
+          path: dependency-review-receipt.json
+          if-no-files-found: error
+
+  sbom:
+    name: SBOM and provenance
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "9.0.316"
+
+      - name: Generate SBOM and provenance
+        run: python scripts/generate_release_provenance.py --allow-unmaterialized-runtime
+
+      - name: Upload SBOM and provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-provenance
+          path: artifacts/release-provenance/
+          if-no-files-found: error

@@ -35,6 +35,60 @@ FREQUENCY_BANDS = {
 
 BAND_NAMES = list(FREQUENCY_BANDS.keys())
 
+# ---------------------------------------------------------------------------
+# Audit 2026-08-05 (CRIT-AUDIO-1 / T2.4): Producer-Consumer-Namensdrift.
+#
+# Der Analyzer liefert acht Baender (sub_bass ... air). Die Pacing-Engine liest
+# ueber PacingService aber ``bands["low"]``, ``bands["mid"]`` und
+# ``bands["high"]`` — ein Drei-Band-Modell aus einer frueheren Version. Zwei der
+# drei Namen existierten nie: empirisch hatten 0 von 19 analysierten Rows einen
+# Key ``low`` oder ``high``. Folge: ``_pre_cached_bass_curve`` und
+# ``_pre_cached_high_curve`` blieben leer, und ``_bass_weight_at_time`` /
+# ``_high_weight_at_time`` gaben konstant den Neutralwert 1.0 zurueck —
+# bass- und hoehengewichtetes Pacing hat nie einen echten Datenpunkt gesehen.
+#
+# Der Fix ist bewusst ADDITIV: die acht Baender bleiben unveraendert erhalten,
+# die drei Aggregate kommen daneben. Dadurch bricht kein bestehender Konsument.
+# ---------------------------------------------------------------------------
+AGGREGATE_BANDS: Dict[str, tuple[str, ...]] = {
+    "low": ("sub_bass", "bass"),
+    "mid": ("low_mid", "mid", "upper_mid"),
+    "high": ("presence", "brilliance", "air"),
+}
+
+
+def add_aggregate_bands(bands: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ergaenzt ein 8-Band-Dict um die Aggregate ``low``/``mid``/``high``.
+
+    Arbeitet elementweise auf den Zeitreihen und akzeptiert sowohl Listen als
+    auch numpy-Arrays. Bereits vorhandene Aggregat-Keys werden nicht ueberschrieben.
+    """
+    if not isinstance(bands, dict) or not bands:
+        return bands
+
+    for aggregate_name, sources in AGGREGATE_BANDS.items():
+        if aggregate_name in bands:
+            continue
+
+        series = [
+            np.asarray(bands[source], dtype=np.float64)
+            for source in sources
+            if isinstance(bands.get(source), (list, tuple, np.ndarray))
+            and len(bands[source]) > 0
+        ]
+        if not series:
+            continue
+
+        length = min(len(item) for item in series)
+        if length <= 0:
+            continue
+
+        summed = np.sum([item[:length] for item in series], axis=0)
+        bands[aggregate_name] = summed.tolist()
+
+    return bands
+
 
 class SpectralAnalyzer:
     """8-Band Spektral-Analyse für Audio-Dateien.
@@ -43,7 +97,9 @@ class SpectralAnalyzer:
     musikalische Events (Drops, Buildups, Breakdowns).
     """
 
-    def __init__(self, sr: int = 22050, hop_length: int = 512, n_fft: int = 2048):
+    def __init__(self, sr: int = 44100, hop_length: int = 512, n_fft: int = 2048):
+        # AUDIT-FIX #5: sr=22050 (Nyquist 11025) machte die Baender 'air' (12-20 kHz) und den
+        # oberen Teil von 'brilliance' permanent zu Null. 44100 Hz deckt das volle 8-Band-Modell ab.
         self.sr = sr
         self.hop_length = hop_length
         self.n_fft = n_fft

@@ -8,7 +8,10 @@ Tests:
 - Persistence (save/load)
 """
 
+import json
+import pickle
 import threading
+from contextlib import contextmanager
 
 import pytest
 import numpy as np
@@ -36,6 +39,7 @@ class TestVectorStoreEmbeddings:
             store.index = mock_index
             store.metadata = {}
             store._lock = threading.Lock()
+            store._request_save = MagicMock()
 
             embedding = np.random.rand(768).astype(np.float32)
             meta = {"media_id": 1, "description": "Test"}
@@ -44,6 +48,7 @@ class TestVectorStoreEmbeddings:
 
             # After adding, ntotal would be 5, so ID should be 4
             assert result_id == 4
+            store._request_save.assert_called_once_with()
 
     def test_add_embedding_rejects_wrong_dimension(self, reset_config_singleton):
         """Verify add_embedding rejects embeddings with wrong dimension."""
@@ -62,6 +67,59 @@ class TestVectorStoreEmbeddings:
 
         with pytest.raises(ValueError, match="dimension"):
             store.add_embedding(embedding, meta)
+
+    def test_linked_add_rejects_missing_media_before_index_write(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.dimension = 4
+        store.index = faiss.IndexFlatIP(4)
+        store.metadata = {}
+        store._lock = threading.Lock()
+        store._request_save = MagicMock()
+
+        with pytest.raises(ValueError, match="media_id"):
+            store.add_embedding_with_media_link(
+                np.ones(4, dtype=np.float32),
+                {"name": "unlinked"},
+                media_id=None,
+            )
+
+        assert store.index.ntotal == 0
+        assert store.metadata == {}
+        store._request_save.assert_not_called()
+
+    def test_failed_vector_map_insert_leaves_no_active_orphan(self, monkeypatch):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.dimension = 4
+        store.index = faiss.IndexFlatIP(4)
+        store.metadata = {}
+        store._tombstoned_ids = set()
+        store._lock = threading.Lock()
+        store._request_save = MagicMock()
+
+        class FailingDatabase:
+            @contextmanager
+            def transaction(self, immediate=False):
+                raise RuntimeError("forced vector_map insert failure")
+                yield
+
+        monkeypatch.setattr(
+            "pb_studio.data.database_core.DatabaseCore",
+            FailingDatabase,
+        )
+
+        with pytest.raises(RuntimeError, match="forced vector_map insert failure"):
+            store.add_embedding_with_media_link(
+                np.ones(4, dtype=np.float32),
+                {"name": "must-not-be-active"},
+                media_id=42,
+            )
+
+        assert store.search(np.ones(4, dtype=np.float32), k=1) == []
+        assert store.index.ntotal == 0 or store._tombstoned_ids == {0}
 
 
 class TestVectorStoreSearch:
@@ -113,6 +171,31 @@ class TestVectorStoreSearch:
             assert results[0][0]["id"] == "A"
             assert results[0][1] == 0.95
 
+    def test_search_expands_past_tombstoned_top_hits(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store.dimension = 2
+        store._lock = threading.Lock()
+        store._closed = False
+        store.index = faiss.IndexFlatIP(2)
+        store.index.add(
+            np.asarray(
+                [[1.0, 0.0], [0.99, 0.01], [0.8, 0.2]],
+                dtype=np.float32,
+            )
+        )
+        store.metadata = {
+            0: {"id": "deleted"},
+            1: {"id": "valid-1"},
+            2: {"id": "valid-2"},
+        }
+        store._tombstoned_ids = {0}
+
+        results = store.search(np.asarray([1.0, 0.0], dtype=np.float32), k=2)
+
+        assert [metadata["id"] for metadata, _score in results] == ["valid-1", "valid-2"]
+
 
 class TestVectorStoreTombstones:
     """Tests for tombstones and re-indexing."""
@@ -163,3 +246,351 @@ class TestVectorStoreTombstones:
         assert store.metadata[0]["name"] == "zero"
         assert store.metadata[1]["name"] == "two"
 
+    def test_failed_vector_map_remap_keeps_active_index_and_tombstones(
+        self,
+        monkeypatch,
+    ):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.dimension = 4
+        store._lock = threading.Lock()
+        store.index = faiss.IndexFlatIP(4)
+        vectors = np.eye(4, dtype=np.float32)[:3]
+        store.index.add(vectors)
+        store.metadata = {
+            0: {"name": "zero"},
+            1: {"name": "one"},
+            2: {"name": "two"},
+        }
+        store._tombstoned_ids = {0}
+        store._request_save = MagicMock()
+        original_index = store.index
+        original_metadata = store.metadata.copy()
+
+        class FailingDatabase:
+            @contextmanager
+            def transaction(self, immediate=False):
+                raise RuntimeError("forced vector_map remap failure")
+                yield
+
+        monkeypatch.setattr(
+            "pb_studio.data.database_core.DatabaseCore",
+            FailingDatabase,
+        )
+
+        store.clean_tombstones()
+
+        assert store.index is original_index
+        assert store.metadata == original_metadata
+        assert store._tombstoned_ids == {0}
+        store._request_save.assert_not_called()
+
+
+class TestVectorStoreSnapshotTransaction:
+    @staticmethod
+    def _make_store(tmp_path):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.index_path = tmp_path / "index.faiss"
+        store.meta_path = tmp_path / "index_meta.json"
+        store.tombstone_path = tmp_path / "index_tombstones.json"
+        return store
+
+    def test_failed_live_replace_restores_complete_previous_generation(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        store = self._make_store(tmp_path)
+        targets = [
+            store.index_path,
+            store.meta_path,
+            store.tombstone_path,
+        ]
+        old_values = [b"old-index", b"old-meta", b"old-tombstones"]
+        new_values = [b"new-index", b"new-meta", b"new-tombstones"]
+        temp_paths = []
+        for target, old_value, new_value in zip(
+            targets,
+            old_values,
+            new_values,
+        ):
+            target.write_bytes(old_value)
+            temp_path = Path(str(target) + ".tmp")
+            temp_path.write_bytes(new_value)
+            temp_paths.append(temp_path)
+
+        real_replace = __import__("os").replace
+        live_replaces = {"count": 0}
+
+        def fail_second_live_replace(source, destination):
+            source_path = Path(source)
+            if source_path in temp_paths:
+                live_replaces["count"] += 1
+                if live_replaces["count"] == 2:
+                    raise OSError("forced mid-generation crash")
+            return real_replace(source, destination)
+
+        monkeypatch.setattr(
+            "pb_studio.data.vector_store.os.replace",
+            fail_second_live_replace,
+        )
+
+        with pytest.raises(OSError, match="forced mid-generation crash"):
+            store._commit_snapshot_files(temp_paths)
+
+        assert [path.read_bytes() for path in targets] == old_values
+        assert not store._snapshot_journal_path().exists()
+
+    def test_startup_recovery_restores_backups_before_load(self, tmp_path):
+        store = self._make_store(tmp_path)
+        store.dimension = 2
+        store.index = None
+        store.metadata = {}
+        store._tombstoned_ids = set()
+
+        old_index = faiss.IndexFlatIP(2)
+        old_index.add(np.eye(2, dtype=np.float32))
+        faiss.write_index(old_index, str(store.index_path) + ".bak")
+        Path(str(store.meta_path) + ".bak").write_text(
+            json.dumps({"0": {"name": "zero"}, "1": {"name": "one"}}),
+            encoding="utf-8",
+        )
+        Path(str(store.tombstone_path) + ".bak").write_text(
+            json.dumps([1]),
+            encoding="utf-8",
+        )
+        for target in store._snapshot_targets():
+            target.write_bytes(b"partial-new")
+
+        store._snapshot_journal_path().write_text(
+            json.dumps({"version": 1}),
+            encoding="utf-8",
+        )
+
+        store._load_index()
+
+        assert store.index.ntotal == 2
+        assert store.metadata == {
+            0: {"name": "zero"},
+            1: {"name": "one"},
+        }
+        assert store._tombstoned_ids == {1}
+        assert not store._snapshot_journal_path().exists()
+
+    def test_synchronous_save_commits_complete_generation(self, tmp_path):
+        store = self._make_store(tmp_path)
+        store.dimension = 2
+        store._lock = threading.Lock()
+        store._write_lock = threading.Lock()
+        store.index = faiss.IndexFlatIP(2)
+        store.index.add(np.eye(2, dtype=np.float32))
+        store.metadata = {
+            0: {"name": "zero"},
+            1: {"name": "one"},
+        }
+        store._tombstoned_ids = {1}
+
+        store.save()
+
+        assert faiss.read_index(str(store.index_path)).ntotal == 2
+        assert json.loads(store.meta_path.read_text(encoding="utf-8")) == {
+            "0": {"name": "zero"},
+            "1": {"name": "one"},
+        }
+        assert json.loads(
+            store.tombstone_path.read_text(encoding="utf-8")
+        ) == [1]
+        assert not store._snapshot_journal_path().exists()
+        assert not any(
+            Path(str(target) + ".bak").exists()
+            for target in store._snapshot_targets()
+        )
+
+
+class TestLegacyMetadataMigration:
+    @staticmethod
+    def _make_store(tmp_path):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store.index_path = tmp_path / "video_index.faiss"
+        store.meta_path = tmp_path / "video_index_meta.json"
+        store.tombstone_path = tmp_path / "video_index_tombstones.json"
+        store.dimension = 2
+        store.index = faiss.IndexFlatIP(2)
+        store.index.add(np.eye(2, dtype=np.float32))
+        store.metadata = {}
+        store._tombstoned_ids = set()
+        store._lock = threading.Lock()
+        store._write_lock = threading.Lock()
+        store._closed = False
+        return store
+
+    def test_primitive_legacy_metadata_migrates_via_atomic_snapshot(self, tmp_path):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        expected = {
+            0: {
+                "name": "clip",
+                "nested": {"items": [True, None, 1.25]},
+            }
+        }
+        legacy_path.write_bytes(pickle.dumps(expected))
+
+        store._migrate_legacy_metadata(legacy_path)
+
+        assert store.metadata == expected
+        assert json.loads(store.meta_path.read_text(encoding="utf-8")) == {
+            "0": expected[0]
+        }
+        assert faiss.read_index(str(store.index_path)).ntotal == 2
+        assert not legacy_path.exists()
+        assert legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_legacy_metadata_never_executes_pickle_reducer(self, tmp_path):
+        store = self._make_store(tmp_path)
+        marker_path = tmp_path / "pickle-reducer-ran.txt"
+
+        class MaliciousMetadata:
+            def __reduce__(self):
+                return (Path.write_text, (marker_path, "executed"))
+
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: MaliciousMetadata()}))
+
+        with pytest.raises(pickle.UnpicklingError, match="may not load global"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert not marker_path.exists()
+        assert not store.meta_path.exists()
+        assert legacy_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_legacy_backup_is_not_renamed_when_atomic_publish_fails(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: {"name": "clip"}}))
+        monkeypatch.setattr(store, "_write_snapshot", lambda *unused: False)
+
+        with pytest.raises(OSError, match="snapshot"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert legacy_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    @pytest.mark.parametrize("invalid_number", [float("nan"), float("inf"), float("-inf")])
+    def test_legacy_metadata_rejects_non_finite_json_numbers(
+        self,
+        tmp_path,
+        invalid_number,
+    ):
+        store = self._make_store(tmp_path)
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_path.write_bytes(pickle.dumps({0: {"score": invalid_number}}))
+
+        with pytest.raises(ValueError, match="endliche Zahlen"):
+            store._migrate_legacy_metadata(legacy_path)
+
+        assert legacy_path.exists()
+        assert not store.meta_path.exists()
+        assert not legacy_path.with_suffix(".pkl.bak").exists()
+
+    def test_existing_json_skips_legacy_pickle_without_mutating_it(self, tmp_path):
+        store = self._make_store(tmp_path)
+        expected = {"0": {"name": "existing"}}
+        store.meta_path.write_text(json.dumps(expected), encoding="utf-8")
+        legacy_path = store.meta_path.with_suffix(".pkl")
+        legacy_bytes = pickle.dumps({0: {"name": "legacy"}})
+        legacy_path.write_bytes(legacy_bytes)
+        faiss.write_index(store.index, str(store.index_path))
+
+        store._load_index()
+
+        assert store.metadata == {0: {"name": "existing"}}
+        assert store.meta_path.read_text(encoding="utf-8") == json.dumps(expected)
+        assert legacy_path.read_bytes() == legacy_bytes
+
+    def test_synchronous_save_does_not_publish_non_finite_json(self, tmp_path):
+        store = self._make_store(tmp_path)
+        store.metadata = {0: {"score": 1.0}}
+        store._save_unlocked(force=True)
+        committed = store.meta_path.read_bytes()
+
+        store.metadata = {0: {"score": float("nan")}}
+        store._save_unlocked(force=True)
+
+        assert store.meta_path.read_bytes() == committed
+        assert not store.meta_path.with_suffix(".json.tmp").exists()
+
+
+class TestVectorStoreLifecycle:
+    def test_writer_retries_failed_snapshot_without_clearing_dirty(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = object.__new__(VectorStore)
+        store._save_cv = threading.Condition()
+        store._save_dirty = False
+        store._save_generation = 0
+        store._writer_stop = False
+        store._save_debounce_sec = 0.0
+        store._lock = threading.Lock()
+        store.index = faiss.IndexFlatIP(2)
+        store.metadata = {}
+        store._tombstoned_ids = set()
+        second_attempt = threading.Event()
+        release_second_attempt = threading.Event()
+        attempts = {"count": 0}
+
+        def persist(_index, _metadata, _tombstones):
+            attempts["count"] += 1
+            if attempts["count"] == 2:
+                second_attempt.set()
+                release_second_attempt.wait(timeout=10.0)
+                return True
+            return False
+
+        store._write_snapshot = persist
+        writer = threading.Thread(target=store._writer_loop, daemon=True)
+        writer.start()
+        store._request_save()
+        assert second_attempt.wait(timeout=10.0)
+        with store._save_cv:
+            store._writer_stop = True
+            store._save_cv.notify_all()
+        release_second_attempt.set()
+        writer.join(timeout=2.0)
+
+        assert not writer.is_alive()
+        assert attempts["count"] == 2
+        assert store._save_dirty is False
+
+    def test_index_switch_closes_old_writer_and_close_allows_reopen(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        first = VectorStore(index_name="lifecycle_a", dimension=4)
+        first_writer = first._writer_thread
+        assert first_writer.is_alive()
+
+        second = VectorStore(index_name="lifecycle_b", dimension=4)
+
+        assert first._closed is True
+        assert not first_writer.is_alive()
+        assert second is not first
+        assert second._writer_thread.is_alive()
+
+        second.close()
+        assert not second._writer_thread.is_alive()
+
+        reopened = VectorStore(index_name="lifecycle_b", dimension=4)
+        try:
+            assert reopened is not second
+            assert reopened._writer_thread.is_alive()
+        finally:
+            reopened.close()

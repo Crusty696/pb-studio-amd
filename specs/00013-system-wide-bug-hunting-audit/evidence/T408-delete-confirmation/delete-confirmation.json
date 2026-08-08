@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "harness": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\scripts\\PBStudio.ConfirmationHarness\\bin\\Release\\net9.0-windows\\PBStudio.ConfirmationHarness.exe",
+  "title": "Alle Audio-Clips löschen",
+  "message": "ALLE 3 Audio-Clips dauerhaft löschen?",
+  "buttons": [
+    "Ja",
+    "Nein",
+    "Schließen"
+  ],
+  "default_focused_control": "Nein",
+  "selected": "No",
+  "dialog_closed": true,
+  "data_mutation_path_invoked": false,
+  "screenshot": "delete-confirmation-default-no.png",
+  "failures": [],
+  "passed": true
+}

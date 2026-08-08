@@ -3,13 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Hirn und Lernen"
+             KeyboardNavigation.TabNavigation="Continue">
 
     <UserControl.InputBindings>
-        <KeyBinding Key="D1" Command="{Binding RatePerfectCommand}"/>
-        <KeyBinding Key="D2" Command="{Binding RateFitsCommand}"/>
-        <KeyBinding Key="D3" Command="{Binding RateNotQuiteCommand}"/>
-        <KeyBinding Key="D4" Command="{Binding RateNoMatchCommand}"/>
+        <KeyBinding Key="D1" Modifiers="Control" Command="{Binding RatePerfectCommand}"/>
+        <KeyBinding Key="D2" Modifiers="Control" Command="{Binding RateFitsCommand}"/>
+        <KeyBinding Key="D3" Modifiers="Control" Command="{Binding RateNotQuiteCommand}"/>
+        <KeyBinding Key="D4" Modifiers="Control" Command="{Binding RateNoMatchCommand}"/>
+        <KeyBinding Key="F5" Command="{Binding RefreshStatsCommand}"/>
     </UserControl.InputBindings>
 
     <Grid Margin="12">
@@ -55,7 +58,9 @@
                 <Button Grid.Column="1"
                         Content="↻ Aktualisieren"
                         Command="{Binding RefreshStatsCommand}"
-                        Padding="12,4"/>
+                        Padding="12,4"
+                        AutomationProperties.Name="Hirn-Statistik aktualisieren"
+                        AutomationProperties.AcceleratorKey="F5"/>
             </Grid>
         </md:Card>
 
@@ -70,25 +75,35 @@
                              Text="{Binding SelectedCutId, UpdateSourceTrigger=PropertyChanged}"
                              Background="{StaticResource AbletonSurface}"
                              Foreground="{StaticResource AbletonText}"
-                             BorderBrush="{StaticResource AbletonBorder}"/>
+                             BorderBrush="{StaticResource AbletonBorder}"
+                             AutomationProperties.Name="Zu bewertende Cut-ID"
+                             AutomationProperties.HelpText="ID des Timeline-Schnitts, der bewertet werden soll."/>
                     <Button Content="1 Passt perfekt"
                             Command="{Binding RatePerfectCommand}"
                             Background="#2A8C40" Foreground="White"
-                            Padding="14,6" Margin="0,0,8,0"/>
+                            Padding="14,6" Margin="0,0,8,0"
+                            AutomationProperties.Name="Bewertung: passt perfekt"
+                            AutomationProperties.AcceleratorKey="Strg+1"/>
                     <Button Content="2 Passt"
                             Command="{Binding RateFitsCommand}"
                             Background="#2A6080" Foreground="White"
-                            Padding="14,6" Margin="0,0,8,0"/>
+                            Padding="14,6" Margin="0,0,8,0"
+                            AutomationProperties.Name="Bewertung: passt"
+                            AutomationProperties.AcceleratorKey="Strg+2"/>
                     <Button Content="3 Passt nicht ganz"
                             Command="{Binding RateNotQuiteCommand}"
                             Background="#A06820" Foreground="White"
-                            Padding="14,6" Margin="0,0,8,0"/>
+                            Padding="14,6" Margin="0,0,8,0"
+                            AutomationProperties.Name="Bewertung: passt nicht ganz"
+                            AutomationProperties.AcceleratorKey="Strg+3"/>
                     <Button Content="4 Passt gar nicht"
                             Command="{Binding RateNoMatchCommand}"
                             Background="#A03030" Foreground="White"
-                            Padding="14,6"/>
+                            Padding="14,6"
+                            AutomationProperties.Name="Bewertung: passt gar nicht"
+                            AutomationProperties.AcceleratorKey="Strg+4"/>
                 </StackPanel>
-                <TextBlock Text="Hotkeys: 1-4" Margin="0,4,0,0"
+                <TextBlock Text="Hotkeys: Strg+1 bis Strg+4" Margin="0,4,0,0"
                            Foreground="{StaticResource AbletonTextDim}" FontSize="11"/>
             </StackPanel>
         </md:Card>
@@ -145,7 +160,8 @@
                                Margin="0,0,0,8"/>
                     <ListBox ItemsSource="{Binding TopPositive}"
                              Background="Transparent"
-                             BorderThickness="0">
+                             BorderThickness="0"
+                             AutomationProperties.Name="Stärkste positiv gelernte Achsen">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
@@ -175,7 +191,8 @@
                                Margin="0,0,0,8"/>
                     <ListBox ItemsSource="{Binding TopNegative}"
                              Background="Transparent"
-                             BorderThickness="0">
+                             BorderThickness="0"
+                             AutomationProperties.Name="Stärkste negativ gelernte Achsen">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
@@ -205,15 +222,21 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button Content="Liste"
                                     Command="{Binding LoadLearningSessionCommand}"
-                                    Padding="10,2" Margin="0,0,4,0"/>
+                                    Padding="10,2" Margin="0,0,4,0"
+                                    AutomationProperties.Name="Lern-Session-Liste laden"
+                                    AutomationProperties.HelpText="Lädt die unsichersten Schnitte als bewertbare Liste."/>
                             <Button Content="▶ Walkthrough"
                                     Command="{Binding OpenLearningSessionDialogCommand}"
-                                    Padding="10,2"/>
+                                    Padding="10,2"
+                                    AutomationProperties.Name="Lern-Session-Walkthrough öffnen"
+                                    AutomationProperties.HelpText="Öffnet den geführten Bewertungsdialog mit Audio- und Video-Vorschau."/>
                         </StackPanel>
                     </DockPanel>
                     <ListBox ItemsSource="{Binding LearningSessionCuts}"
+                             SelectedItem="{Binding SelectedLearningSessionCut, Mode=TwoWay}"
                              Background="Transparent"
-                             BorderThickness="0">
+                             BorderThickness="0"
+                             AutomationProperties.Name="Schnitte der Lern-Session">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
@@ -242,21 +265,31 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           Text="{Binding Status}"
-                           VerticalAlignment="Center"
-                           Foreground="{StaticResource AbletonTextDim}"/>
+                <TextBox Grid.Column="0"
+                         Text="{Binding Status, Mode=OneWay}"
+                         IsReadOnly="True"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource AbletonTextDim}"
+                         AutomationProperties.Name="Hirn-Status"
+                         AutomationProperties.LiveSetting="Polite"/>
                 <Button Grid.Column="1"
                         Content="Reset anfordern"
                         Command="{Binding ResetRequestCommand}"
                         Margin="0,0,8,0"
                         Padding="12,4"
+                        AutomationProperties.Name="Hirn-Reset anfordern"
+                        AutomationProperties.HelpText="Startet die zweistufige Bestätigung; noch werden keine Lerndaten gelöscht."
                         IsEnabled="{Binding IsResetPending, Converter={StaticResource InverseBooleanConverter}}"/>
                 <Button Grid.Column="2"
                         Content="Reset bestätigen"
                         Command="{Binding ResetConfirmCommand}"
                         Background="#A03030" Foreground="White"
                         Padding="12,4"
+                        AutomationProperties.Name="Hirn-Reset bestätigen"
+                        AutomationProperties.HelpText="Löscht nach vorheriger Anforderung die gelernten Gewichte des aktiven Projekts. Dieser Vorgang kann nicht rückgängig gemacht werden."
                         IsEnabled="{Binding IsResetPending}"/>
             </Grid>
         </md:Card>

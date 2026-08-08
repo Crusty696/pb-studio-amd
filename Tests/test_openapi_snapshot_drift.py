@@ -86,14 +86,26 @@ def test_snapshot_schemas_consistent():
 def test_generated_dtos_not_stale_relative_to_snapshot():
     """If Generated/ApiTypes.g.cs is older than the snapshot, NSwag
     didn't run since the last snapshot refresh. Caller should rebuild."""
-    snapshot = Path(__file__).parent.parent / "PBStudio.UI" / "openapi.snapshot.json"
-    generated = (
-        Path(__file__).parent.parent
-        / "PBStudio.UI" / "Generated" / "ApiTypes.g.cs"
-    )
-    if not generated.exists():
+    repo_root = Path(__file__).parent.parent
+    snapshot = repo_root / "PBStudio.UI" / "openapi.snapshot.json"
+
+    # Audit 2026-08-05: Der Test zeigte auf PBStudio.UI/Generated/ApiTypes.g.cs.
+    # Dieses Verzeichnis ist aber eine Altlast — in git liegt dort nur .gitkeep,
+    # und nswag.json schreibt ausdruecklich nach obj/Generated/ApiTypes.g.cs
+    # (siehe auch PBStudio.UI.csproj: "Compile Remove=Generated\*.g.cs" plus
+    # "Compile Include=obj/Generated/ApiTypes.g.cs"). Der Test hat also die
+    # Frische einer Datei geprueft, die gar nicht mehr kompiliert wird — und
+    # bestand nur, solange die Altlast zufaellig neuer war als der Snapshot.
+    # Jetzt wird der echte NSwag-Output geprueft, der Legacy-Pfad bleibt als
+    # Rueckfall fuer aeltere Arbeitskopien.
+    candidates = [
+        repo_root / "PBStudio.UI" / "obj" / "Generated" / "ApiTypes.g.cs",
+        repo_root / "PBStudio.UI" / "Generated" / "ApiTypes.g.cs",
+    ]
+    generated = next((path for path in candidates if path.exists()), None)
+    if generated is None:
         pytest.skip(
-            "Generated/ApiTypes.g.cs not built yet — "
+            "ApiTypes.g.cs not built yet — "
             "run `dotnet build PBStudio.UI/PBStudio.UI.csproj` first"
         )
     assert generated.stat().st_mtime >= snapshot.stat().st_mtime - 1.0, (

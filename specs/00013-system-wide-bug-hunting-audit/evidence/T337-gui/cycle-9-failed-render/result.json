@@ -1,0 +1,20 @@
+{
+  "end_pts_seconds": 6331.566667,
+  "exit_code": 0,
+  "expected_duration_seconds": 6335.027,
+  "expected_frames": 190051,
+  "failure_fingerprint": null,
+  "fps": 453.7,
+  "frame": 189948,
+  "job_id": "851b5ccf-7f73-4866-8bd9-6e3845d512fd",
+  "out_time_us": 6331566667,
+  "progress_end": true,
+  "progress_log_sha256": "740404097b1266bbdab01d2ffff2aef1100aba74a2172117af1e55c3a3a85fbb",
+  "recorded_at_epoch": 1785337336.9760308,
+  "run_id": "94597ffd0b0b469aabf179287560494e",
+  "schema_version": 1,
+  "speed": "15.1x",
+  "status": "completed",
+  "stderr_log_sha256": "b6555774ec9d8c3417725b390d856d9164237baa9ae0281aedea201f88720e8a",
+  "total_size": 3774582033
+}

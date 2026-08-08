@@ -1,6 +1,8 @@
 """Test: PacingService nutzt cached energy_curve statt RMS-Neuberechnung (Audit A2)."""
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 import numpy as np
 
 
@@ -148,3 +150,52 @@ def test_pacing_simple_path_skips_librosa_rms_when_cached(tmp_path, monkeypatch)
         f"librosa.feature.rms wurde {rms_call_count['n']}x aufgerufen "
         "trotz cached energy_curve (Audit A2 Follow-up Regression)"
     )
+
+
+def test_cached_metadata_does_not_mark_audio_payload_loaded(monkeypatch):
+    """Unvollständiger Trigger-Cache lädt Audio genau einmal ohne Cache-State-Crash."""
+    import librosa
+    from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
+    from pb_studio.services.pacing_service import PacingService
+
+    audio_path = r"C:\pacing-test\song.wav"
+    engine = AdvancedPacingEngine(trigger_settings={
+        "beat_weight": 1.0,
+        "onset_weight": 0.5,
+        "kick_weight": 0.0,
+        "snare_weight": 0.0,
+        "hihat_weight": 0.0,
+        "energy_weight": 0.0,
+    })
+    engine._clip_selector = SimpleNamespace()
+    service = PacingService()
+
+    service._inject_cached_into_engine(
+        engine,
+        audio_path,
+        {
+            "beats": [{"time": 0.0}, {"time": 0.5}],
+            "bpm": 120.0,
+            "duration_seconds": 1.0,
+        },
+    )
+
+    assert engine._cached_audio_path is None
+    assert engine._cached_y is None
+    assert engine._cached_sr == 22050
+
+    loaded_y = np.zeros(22050, dtype=np.float32)
+    load_mock = Mock(return_value=(loaded_y, 22050))
+    monkeypatch.setattr(librosa, "load", load_mock)
+    monkeypatch.setattr(engine, "_extract_other_triggers", lambda *_args: [])
+
+    cuts = engine._generate_cut_list_from_audio(
+        audio_path,
+        expected_bpm=120.0,
+    )
+
+    assert cuts
+    load_mock.assert_called_once_with(audio_path, sr=22050)
+    assert engine._cached_audio_path == audio_path
+    assert engine._cached_y is loaded_y
+    assert engine._cached_sr == 22050

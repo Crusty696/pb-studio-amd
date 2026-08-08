@@ -1,0 +1,36 @@
+[AVHWDeviceContext @ 00000217342b0b00] Using device 1002:747e (AMD Radeon RX 7800 XT).
+[Parsed_testsrc2_0 @ 00000217342fdc40] size:1920x1080 rate:60/1 duration:12.000000 sar:1/1
+Input #0, lavfi, from 'testsrc2=size=1920x1080:rate=60:duration=12':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, 1 reference frame, yuv420p, 1920x1080 [SAR 1:1 DAR 16:9], 60 fps, 60 tbr, 60 tbn
+[out#0/mp4 @ 000002173437ee40] No explicit maps, mapping streams automatically...
+[vost#0:0/h264_amf @ 0000021743d61000] Created video stream from input stream 0:0
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_amf))
+Press [q] to stop, [?] for help
+[graph 0 input from stream 0:0 @ 0000021743eae780] w:1920 h:1080 pixfmt:yuv420p tb:1/60 fr:60/1 sar:1/1
+[h264_amf @ 0000021743d61400] Using device pb_amf (type d3d11va) with h264_amf encoder.
+Output #0, mp4, to 'C:\Users\david\AppData\Local\Temp\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\captures\h264_amf-6051276f301044c0aa49c7858927a860\output.mp4':
+  Metadata:
+    encoder         : Lavf60.16.100
+  Stream #0:0: Video: h264, 1 reference frame (avc1 / 0x31637661), yuv420p(progressive), 1920x1080 (0x0) [SAR 1:1 DAR 16:9], q=2-31, 12000 kb/s, 60 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc60.31.102 h264_amf
+frame=    0 fps=0.0 q=0.0 size=       0kB time=N/A bitrate=N/A speed=N/A    frame=   52 fps=0.0 q=-0.0 size=    1280kB time=00:00:00.86 bitrate=12099.4kbits/s speed= 1.7x    frame=   83 fps= 81 q=-0.0 size=    2048kB time=00:00:01.38 bitrate=12128.4kbits/s speed=1.35x    frame=  114 fps= 74 q=-0.0 size=    2816kB time=00:00:01.90 bitrate=12141.6kbits/s speed=1.24x    frame=  144 fps= 70 q=-0.0 size=    3584kB time=00:00:02.40 bitrate=12233.5kbits/s speed=1.17x    frame=  175 fps= 68 q=-0.0 size=    4352kB time=00:00:02.91 bitrate=12223.5kbits/s speed=1.14x    frame=  206 fps= 67 q=-0.0 size=    5120kB time=00:00:03.43 bitrate=12216.5kbits/s speed=1.12x    frame=  237 fps= 66 q=-0.0 size=    5888kB time=00:00:03.95 bitrate=12211.4kbits/s speed= 1.1x    frame=  267 fps= 65 q=-0.0 size=    6656kB time=00:00:04.45 bitrate=12253.1kbits/s speed=1.09x    frame=  298 fps= 65 q=-0.0 size=    7424kB time=00:00:04.96 bitrate=12245.2kbits/s speed=1.08x    frame=  329 fps= 64 q=-0.0 size=    8192kB time=00:00:05.48 bitrate=12238.8kbits/s speed=1.07x    frame=  360 fps= 64 q=-0.0 size=    8960kB time=00:00:06.00 bitrate=12233.5kbits/s speed=1.06x    frame=  390 fps= 63 q=-0.0 size=    9472kB time=00:00:06.50 bitrate=11937.7kbits/s speed=1.06x    frame=  421 fps= 63 q=-0.0 size=   10240kB time=00:00:07.01 bitrate=11955.3kbits/s speed=1.05x    frame=  452 fps= 63 q=-0.0 size=   11008kB time=00:00:07.53 bitrate=11970.5kbits/s speed=1.05x    frame=  483 fps= 63 q=-0.0 size=   11776kB time=00:00:08.05 bitrate=11983.8kbits/s speed=1.05x    frame=  513 fps= 63 q=-0.0 size=   12544kB time=00:00:08.55 bitrate=12018.8kbits/s speed=1.04x    frame=  544 fps= 62 q=-0.0 size=   13312kB time=00:00:09.06 bitrate=12027.8kbits/s speed=1.04x    frame=  575 fps= 62 q=-0.0 size=   14080kB time=00:00:09.58 bitrate=12035.9kbits/s speed=1.04x    frame=  606 fps= 62 q=-0.0 size=   14848kB time=00:00:10.10 bitrate=12043.1kbits/s speed=1.04x    frame=  637 fps= 62 q=-0.0 size=   15616kB time=00:00:10.61 bitrate=12049.6kbits/s speed=1.03x    frame=  667 fps= 62 q=-0.0 size=   16384kB time=00:00:11.11 bitrate=12073.6kbits/s speed=1.03x    frame=  699 fps= 62 q=-0.0 size=   17152kB time=00:00:11.65 bitrate=12060.9kbits/s speed=1.03x    [in#0/lavfi @ 00000217342f2c80] EOF while reading input
+[in#0/lavfi @ 00000217342f2c80] Terminating demuxer thread
+[vist#0:0/wrapped_avframe @ 000002173437ec40] Decoder thread received EOF packet
+[vist#0:0/wrapped_avframe @ 000002173437ec40] Decoder returned EOF, finishing
+[vist#0:0/wrapped_avframe @ 000002173437ec40] Terminating decoder thread
+No more output streams to write to, finishing.
+[out#0/mp4 @ 000002173437ee40] All streams finished
+[out#0/mp4 @ 000002173437ee40] Terminating muxer thread
+[AVIOContext @ 0000021743d65500] Statistics: 18186094 bytes written, 2 seeks, 73 writeouts
+[out#0/mp4 @ 000002173437ee40] Output file #0 (C:\Users\david\AppData\Local\Temp\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\captures\h264_amf-6051276f301044c0aa49c7858927a860\output.mp4):
+[out#0/mp4 @ 000002173437ee40]   Output stream #0:0 (video): 720 frames encoded; 720 packets muxed (18182195 bytes); 
+[out#0/mp4 @ 000002173437ee40]   Total: 720 packets (18182195 bytes) muxed
+[out#0/mp4 @ 000002173437ee40] video:17756kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.021422%
+frame=  720 fps= 63 q=-0.0 Lsize=   17760kB time=00:00:11.98 bitrate=12140.9kbits/s speed=1.04x    
+[AVIOContext @ 00000217342f2a40] Statistics: 4816 bytes written, 0 seeks, 24 writeouts
+[in#0/lavfi @ 00000217342f2c80] Input file #0 (testsrc2=size=1920x1080:rate=60:duration=12):
+[in#0/lavfi @ 00000217342f2c80]   Input stream #0:0 (video): 720 packets read (345600 bytes); 720 frames decoded; 0 decode errors; 
+[in#0/lavfi @ 00000217342f2c80]   Total: 720 packets (345600 bytes) demuxed

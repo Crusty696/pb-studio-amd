@@ -15,9 +15,13 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly AudioLibraryStateService _audioLibraryState;
+    private readonly ProjectService _projectService;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly SemaphoreSlim _anchorIoGate = new(1, 1);
     private readonly CancellationTokenSource _shutdownCts = new();
     private bool _disposed;
+    private bool _isAnchorIoBusy;
+    private int _anchorIoOperations;
     private readonly HashSet<int> _beatsUnavailableClipIds = [];
     private int _loadSequence;
     private volatile bool _reloadQueued;
@@ -40,22 +44,32 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
     public ObservableCollection<WaveformBar> WaveformBars { get; } = [];
     public ObservableCollection<BeatMarker> BeatMarkers { get; } = [];
 
-    public AnchorViewModel(IApiClient api, AudioLibraryStateService audioLibraryState)
+    public AnchorViewModel(
+        IApiClient api,
+        AudioLibraryStateService audioLibraryState,
+        ProjectService projectService)
     {
         _api = api;
         _audioLibraryState = audioLibraryState;
+        _projectService = projectService;
 
         WeakReferenceMessenger.Default.Register<AudioLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<AudioImportedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
         WeakReferenceMessenger.Default.Register<MediaLibraryRefreshMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
-        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RequestAudioReloadAsync());
+        WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
+        {
+            _ = RequestAudioReloadAsync();
+            // Audit 2026-08-06 (T4.3): gespeicherte Anker beim Projektwechsel laden.
+            _ = LoadAnchorsAsync();
+        });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
+            RunOnUiThread(ResetProjectState));
 
         // Root-Cause-Fix (2026-07-09): Scoped-VM (seit T019/3752db1) entsteht
         // erst beim Tab-Load und verpasst die ProjectOpenedMessage vom
         // App-Start -> Audio-Quellen blieben leer. Initial-Load holt nach.
         _ = RequestAudioReloadAsync();
+        _ = LoadAnchorsAsync();
     }
 
     partial void OnSelectedAudioClipChanged(AudioClipModel? value)
@@ -81,9 +95,11 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         UpdatePositionMarker();
     }
 
-    [RelayCommand]
     private async Task LoadAudioSourcesAsync()
     {
+        if (_disposed)
+            return;
+
         _reloadQueued = false;
 
         if (!await _loadGate.WaitAsync(0))
@@ -95,6 +111,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         try
         {
             var clips = await _audioLibraryState.RefreshAsync();
+            if (_disposed)
+                return;
+
             if (clips == null)
             {
                 StatusText = "Audio-Quellen laden fehlgeschlagen";
@@ -105,6 +124,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
 
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
+                if (_disposed)
+                    return;
+
                 AvailableAudioClips.Clear();
                 foreach (var clip in clips)
                 {
@@ -124,6 +146,9 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
                     });
                 }
             });
+
+            if (_disposed)
+                return;
 
             var nextSelection = selectedClipId.HasValue
                 ? AvailableAudioClips.FirstOrDefault(c => c.Id == selectedClipId.Value)
@@ -145,7 +170,7 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
             _loadGate.Release();
         }
 
-        if (_reloadQueued)
+        if (_reloadQueued && !_disposed)
             await LoadAudioSourcesAsync();
     }
 
@@ -158,9 +183,12 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         await LoadWaveformAndBeatsAsync(forceBeatReload: true);
     }
 
-    [RelayCommand]
-    private void AddAnchor()
+    [RelayCommand(CanExecute = nameof(CanEditAnchors))]
+    private async Task AddAnchorAsync()
     {
+        if (!TryCaptureAnchorContext(out var context, reportFailure: true))
+            return;
+
         var anchor = new AnchorPoint
         {
             Time = CurrentPosition,
@@ -170,20 +198,188 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         Anchors.Add(anchor);
         SelectedAnchor = anchor;
         StatusText = $"Anchor bei {CurrentPosition:F2}s hinzugefügt";
+        await PersistAnchorsAsync(context);
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveAnchor))]
-    private void RemoveAnchor()
+    private async Task RemoveAnchorAsync()
     {
         if (SelectedAnchor == null)
+            return;
+        if (!TryCaptureAnchorContext(out var context, reportFailure: true))
             return;
 
         Anchors.Remove(SelectedAnchor);
         SelectedAnchor = null;
         StatusText = "Anchor entfernt";
+        await PersistAnchorsAsync(context);
     }
 
-    private bool CanRemoveAnchor() => SelectedAnchor != null;
+    private bool CanEditAnchors() =>
+        !_disposed && !_isAnchorIoBusy && _projectService.HasProject;
+
+    private bool CanRemoveAnchor() => SelectedAnchor != null && CanEditAnchors();
+
+    /// <summary>
+    /// Speichert die Anker im Projekt.
+    ///
+    /// Audit 2026-08-06 (T4.3): Vorher mutierten AddAnchor/RemoveAnchor nur die
+    /// ObservableCollection. Es gab keine Route, kein Schema, keine Persistenz —
+    /// und beim Projektwechsel wurde die Liste geleert. Was der User hier anlegte,
+    /// beeinflusste weder Schnitte noch Render und ueberlebte keinen Tab-Wechsel.
+    /// Jetzt liegen die Anker als anchors.json im Projekt und werden von der
+    /// Pacing-Engine als manuelle Anker konsumiert.
+    /// </summary>
+    private async Task PersistAnchorsAsync(ProjectOperationContext context)
+    {
+        var gateAcquired = false;
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            context.CancellationToken,
+            _shutdownCts.Token);
+        BeginAnchorIo();
+        try
+        {
+            await _anchorIoGate.WaitAsync(linkedCts.Token).ConfigureAwait(true);
+            gateAcquired = true;
+            if (!_projectService.IsCurrent(context))
+                return;
+
+            var payload = Anchors
+                .Select(a => new AnchorEntry(a.Time, a.Label, a.VideoClipId))
+                .ToList();
+            var result = await _api.SetProjectAnchorsAsync(payload, linkedCts.Token).ConfigureAwait(true);
+            if (result is null)
+            {
+                var reason = _api.LastErrorDetail;
+                _projectService.TryCommit(context, () =>
+                    StatusText = string.IsNullOrWhiteSpace(reason)
+                        ? "Anker konnten nicht gespeichert werden"
+                        : $"Anker nicht gespeichert: {reason}");
+            }
+        }
+        catch (OperationCanceledException) when (linkedCts.IsCancellationRequested)
+        {
+            // Projektwechsel/Dispose: Ergebnis darf nicht mehr publiziert werden.
+        }
+        catch (Exception ex)
+        {
+            _projectService.TryCommit(context, () =>
+                StatusText = $"Anker nicht gespeichert: {ex.Message}");
+        }
+        finally
+        {
+            if (gateAcquired)
+                _anchorIoGate.Release();
+            EndAnchorIo();
+        }
+    }
+
+    /// <summary>Laedt die im Projekt gespeicherten Anker.</summary>
+    private async Task LoadAnchorsAsync()
+    {
+        if (!TryCaptureAnchorContext(out var context, reportFailure: false))
+            return;
+
+        var gateAcquired = false;
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            context.CancellationToken,
+            _shutdownCts.Token);
+        BeginAnchorIo();
+        try
+        {
+            await _anchorIoGate.WaitAsync(linkedCts.Token).ConfigureAwait(true);
+            gateAcquired = true;
+            if (!_projectService.IsCurrent(context))
+                return;
+
+            var result = await _api.GetProjectAnchorsAsync(linkedCts.Token).ConfigureAwait(true);
+            if (result?.Anchors is null)
+                return;
+
+            _projectService.TryCommit(context, () =>
+            {
+                Anchors.Clear();
+                foreach (var entry in result.Anchors)
+                {
+                    Anchors.Add(new AnchorPoint
+                    {
+                        Time = entry.Time,
+                        Label = entry.Label ?? "",
+                        VideoClipId = entry.VideoClipId,
+                    });
+                }
+                StatusText = Anchors.Count > 0
+                    ? $"{Anchors.Count} Anker geladen"
+                    : "Keine Anker im Projekt";
+            });
+        }
+        catch (OperationCanceledException) when (linkedCts.IsCancellationRequested)
+        {
+            // Projektwechsel/Dispose: Ergebnis darf nicht mehr publiziert werden.
+        }
+        catch (Exception ex)
+        {
+            _projectService.TryCommit(context, () =>
+                StatusText = $"Anker nicht geladen: {ex.Message}");
+        }
+        finally
+        {
+            if (gateAcquired)
+                _anchorIoGate.Release();
+            EndAnchorIo();
+        }
+    }
+
+    private bool TryCaptureAnchorContext(
+        out ProjectOperationContext context,
+        bool reportFailure)
+    {
+        try
+        {
+            context = _projectService.CaptureOperationContext();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            context = default;
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            context = default;
+            if (reportFailure)
+                StatusText = "Kein stabiles Projekt geoeffnet";
+            return false;
+        }
+    }
+
+    private void SetAnchorIoBusy(bool value)
+    {
+        _isAnchorIoBusy = value;
+        AddAnchorCommand.NotifyCanExecuteChanged();
+        RemoveAnchorCommand.NotifyCanExecuteChanged();
+    }
+
+    private void BeginAnchorIo()
+    {
+        if (Interlocked.Increment(ref _anchorIoOperations) == 1)
+            SetAnchorIoBusy(true);
+    }
+
+    private void EndAnchorIo()
+    {
+        if (Interlocked.Decrement(ref _anchorIoOperations) == 0)
+            SetAnchorIoBusy(false);
+    }
+
+    private static void RunOnUiThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+            action();
+        else
+            dispatcher.Invoke(action);
+    }
 
     private async Task LoadWaveformAndBeatsAsync(bool forceBeatReload)
     {
@@ -405,16 +601,18 @@ public partial class AnchorViewModel : ObservableObject, IDisposable
         TimelineDuration = 300;
         IsLoadingWaveform = false;
         StatusText = "Kein Projekt geöffnet";
+        AddAnchorCommand.NotifyCanExecuteChanged();
+        RemoveAnchorCommand.NotifyCanExecuteChanged();
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _loadSequence);
+        _reloadQueued = false;
         WeakReferenceMessenger.Default.UnregisterAll(this);
         _shutdownCts.Cancel();
-        _shutdownCts.Dispose();
-        _loadGate.Dispose();
     }
 }
 

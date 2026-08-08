@@ -9,7 +9,16 @@
              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="1200"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="KI-Regie"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="G" Modifiers="Control" Command="{Binding GenerateCutListCommand}"/>
+        <KeyBinding Key="F5" Command="{Binding LoadBrainSuggestionsCommand}"/>
+        <KeyBinding Key="A" Modifiers="Alt" Command="{Binding SelectAllVideoClipsCommand}"/>
+        <KeyBinding Key="N" Modifiers="Alt" Command="{Binding DeselectAllVideoClipsCommand}"/>
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <!-- Compact slider style -->
@@ -111,6 +120,8 @@
                                   BorderBrush="{StaticResource AbletonBorder}"
                                   FontSize="12"
                                   Height="30"
+                                  AutomationProperties.Name="Audio-Quelle"
+                                  AutomationProperties.HelpText="Wählt den analysierten Audio-Clip als zeitliche und rhythmische Grundlage."
                                   ToolTip="Musik-Auswahl&#x0a;• Was es macht: Wählt den geladenen Song aus der Bibliothek aus.&#x0a;• Wozu es dient: Bildet die zeitliche und rhythmische Grundlage für das gesamte Video.&#x0a;• Wann nutzen: Immer als allerersten Schritt vor dem Pacing festlegen."/>
                     </StackPanel>
                 </md:Card>
@@ -125,9 +136,13 @@
                         <DockPanel Margin="0,0,0,6">
                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                                 <Button Content="ALLE" Style="{StaticResource TinyFlatButton}"
-                                        Command="{Binding SelectAllVideoClipsCommand}" Margin="0,0,4,0"/>
+                                        Command="{Binding SelectAllVideoClipsCommand}" Margin="0,0,4,0"
+                                        AutomationProperties.Name="Alle Video-Clips auswählen"
+                                        AutomationProperties.AccessKey="Alt+A"/>
                                 <Button Content="KEINE" Style="{StaticResource TinyFlatButton}"
-                                        Command="{Binding DeselectAllVideoClipsCommand}"/>
+                                        Command="{Binding DeselectAllVideoClipsCommand}"
+                                        AutomationProperties.Name="Video-Auswahl aufheben"
+                                        AutomationProperties.AccessKey="Alt+N"/>
                             </StackPanel>
                             <TextBlock DockPanel.Dock="Right"
                                        HorizontalAlignment="Right"
@@ -150,7 +165,9 @@
                                  BorderThickness="1"
                                  MaxHeight="150"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 Padding="2">
+                                 Padding="2"
+                                 AutomationProperties.Name="Video-Clips für Cut-Liste"
+                                 AutomationProperties.HelpText="Mit Leertaste einzelne Video-Clips für die Cut-Generierung aktivieren oder deaktivieren.">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
@@ -192,6 +209,7 @@
                         </DockPanel>
                         <TextBox Text="{Binding ExpectedBpm, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Erwartete BPM"
                                  ToolTip="Beats pro Minute (BPM)&#x0a;• Was es macht: Zeigt das gefundene Musiktempo an oder lässt Sie es manuell anpassen.&#x0a;• Wozu es dient: Bestimmt das rhythmische Raster für die Schnittplatzierung.&#x0a;• Wann nutzen: Wird automatisch erkannt. Manuell anpassen, falls das Tempo halbiert/verdoppelt wurde."
                                  Margin="0,0,0,8"/>
 
@@ -206,6 +224,7 @@
                         </DockPanel>
                         <Slider Value="{Binding BeatWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Beat-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Beat-Gewichtung&#x0a;• Was es macht: Bestimmt, wie stark Schnitte exakt auf den Musiktakt (Beats) gezogen werden.&#x0a;• Wozu es dient: Sorgt für ein perfektes Rhythmusgefühl (Tanzbarkeit des Videos).&#x0a;• Wann nutzen: Wert 1.0 (Standard) ist meist ideal. Höhere Werte für ein extrem rhythmisches Video."/>
 
@@ -220,6 +239,7 @@
                         </DockPanel>
                         <Slider Value="{Binding KickWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Kick-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Kick-Gewichtung&#x0a;• Was es macht: Bevorzugt Schnitte auf den lautesten Bass-Schlägen (Kick-Drums).&#x0a;• Wozu es dient: Synchronisiert Bildwechsel mit dem stärksten rhythmischen Element des Songs.&#x0a;• Wann nutzen: Hochdrehen bei elektronischer Musik (Techno/House) oder Hip-Hop mit klaren Kicks."/>
 
@@ -234,6 +254,7 @@
                         </DockPanel>
                         <Slider Value="{Binding EnergyWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Energie-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Energie-Gewichtung&#x0a;• Was es macht: Bevorzugt Schnitte an Stellen mit sprunghaftem Anstieg der Lautstärke/Energie.&#x0a;• Wozu es dient: Passt die Schnittfrequenz dynamisch an ruhige Passagen (weniger Cuts) und Höhepunkte (schnelle Cuts) an.&#x0a;• Wann nutzen: Standardmäßig auf 1.0 lassen, um eine lebendige Spannungskurve zu erzeugen."/>
 
@@ -248,6 +269,7 @@
                         </DockPanel>
                         <Slider Value="{Binding EnergyThreshold}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Energie-Schwelle"
                                 ToolTip="Energie-Schwelle&#x0a;• Was es macht: Setzt die Hürde fest, wie laut/energiereich ein Peak sein muss, um einen Schnitt auszulösen.&#x0a;• Wozu es dient: Filtert unbedeutende Ton-Ereignisse heraus, um zu viele nervöse Schnitte zu vermeiden.&#x0a;• Wann nutzen: Bei hektischen Songs anheben, um nur die stärksten Drops/Übergänge zu betonen."/>
 
                         <!-- Onset-Gewichtung -->
@@ -261,8 +283,137 @@
                         </DockPanel>
                         <Slider Value="{Binding OnsetWeight}"
                                 Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Onset-Gewichtung"
                                 Minimum="0" Maximum="2"
                                 ToolTip="Onset-Gewichtung&#x0a;• Was es macht: Gewichtung von schnellen Anschlägen (Onsets, z. B. Snare, Hi-Hat, Klaviertöne).&#x0a;• Wozu es dient: Ermöglicht das Reagieren auf melodische Akzente abseits des reinen Bass-Beats.&#x0a;• Wann nutzen: Nützlich bei jazzigen, melodiereichen oder akustischen Tracks ohne stetige Kick-Drum."/>
+
+                        <!-- ── Audit 2026-08-05 (H-3/C-3, T3.1+T3.2) ──
+                             Die folgenden Regler existierten im ViewModel und wurden
+                             von der Engine gelesen, hatten aber KEIN XAML-Element.
+                             Der User konnte sie strukturell nicht bedienen; es galt
+                             immer der Default. Snare/HiHat erklaeren zusaetzlich,
+                             warum "an den Drum-Reglern drehen" wirkungslos wirkte —
+                             nur Kick war ueberhaupt vorhanden.
+                             Grenzen entsprechen pacing_schemas.TriggerSettingsSchema. -->
+
+                        <!-- Snare-Gewichtung -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Snare-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding SnareWeight, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding SnareWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Snare-Gewichtung"
+                                Minimum="0" Maximum="2"
+                                ToolTip="Snare-Gewichtung&#x0a;• Was es macht: Gewichtung der Snare-Schläge als Schnitt-Auslöser.&#x0a;• Wozu es dient: Snares liegen meist auf 2 und 4 — betont den Backbeat.&#x0a;• Wann nutzen: Anheben für treibende Rock-/Breakbeat-Schnitte."/>
+
+                        <!-- HiHat-Gewichtung -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="HiHat-Gewichtung:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding HihatWeight, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding HihatWeight}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="HiHat-Gewichtung"
+                                Minimum="0" Maximum="2"
+                                ToolTip="HiHat-Gewichtung&#x0a;• Was es macht: Gewichtung der HiHat-Anschläge (meist 8tel/16tel).&#x0a;• Wozu es dient: Erzeugt sehr dichte, schnelle Schnittfolgen.&#x0a;• Wann nutzen: Sparsam — hohe Werte führen zu hektischem Schnitt."/>
+
+                        <!-- Onset-Empfindlichkeit -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Onset-Empfindlichkeit:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding OnsetSensitivity, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding OnsetSensitivity}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Onset-Empfindlichkeit"
+                                Minimum="0" Maximum="1"
+                                ToolTip="Onset-Empfindlichkeit&#x0a;• Was es macht: Wie empfindlich die Onset-Erkennung auf leise Anschläge reagiert.&#x0a;• Wozu es dient: Steuert, wie viele Trigger-Kandidaten überhaupt gefunden werden.&#x0a;• Wann nutzen: Anheben bei leisen/akustischen Tracks."/>
+
+                        <!-- Separator inside pacing -->
+                        <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,4,0,6"/>
+
+                        <!-- Clip-Länge min/max -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Min. Clip-Länge:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding MinClipLength, StringFormat={}{0:F1}s}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding MinClipLength}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Minimale Clip-Länge"
+                                Minimum="0.1" Maximum="10"
+                                ToolTip="Minimale Clip-Länge&#x0a;• Was es macht: Untergrenze, wie kurz ein einzelner Clip sein darf.&#x0a;• Wozu es dient: Begrenzt die Gesamtzahl der Schnitte — bei sehr kleinen Werten sättigt die Cut-Liste.&#x0a;• Wann nutzen: Erhöhen für ruhigere Schnittfolgen."/>
+
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Max. Clip-Länge:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding MaxClipLength, StringFormat={}{0:F1}s}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding MaxClipLength}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Maximale Clip-Länge"
+                                Minimum="0.5" Maximum="30"
+                                ToolTip="Maximale Clip-Länge&#x0a;• Was es macht: Obergrenze, wie lange ein Clip ohne Schnitt stehen bleibt.&#x0a;• Wozu es dient: Erzwingt Schnitte auch in ereignisarmen Passagen.&#x0a;• Wann nutzen: Senken, wenn lange Standbilder entstehen."/>
+
+                        <!-- Clip-Längen-Variation -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Clip-Längen-Variation:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding ClipLengthVariation, StringFormat={}{0:F2}}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding ClipLengthVariation}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Clip-Längen-Variation"
+                                Minimum="0" Maximum="1"
+                                ToolTip="Clip-Längen-Variation&#x0a;• Was es macht: Streuung der Clip-Längen bei automatischen Splits (Jitter).&#x0a;• Wozu es dient: Verhindert mechanisch gleichmäßige Schnittabstände.&#x0a;• Wann nutzen: 0 = streng gleichmäßig, höhere Werte wirken organischer."/>
+
+                        <!-- Max. Schnittabstand -->
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Max. Schnittabstand:"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ParamValue}" DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       Text="{Binding MaxCutInterval, StringFormat={}{0:F1}s}"/>
+                        </DockPanel>
+                        <Slider Value="{Binding MaxCutInterval}"
+                                Style="{StaticResource CompactSlider}"
+                                AutomationProperties.Name="Maximaler Schnittabstand"
+                                Minimum="1" Maximum="30"
+                                ToolTip="Maximaler Schnittabstand&#x0a;• Was es macht: Obergrenze für den Abstand zwischen zwei Schnitten.&#x0a;• Wozu es dient: Vermeidet zu lange Pausen ohne Bildwechsel."/>
+
+                        <!-- Beat-Trigger-Modus -->
+                        <DockPanel Margin="0,2,0,0">
+                            <TextBlock Style="{StaticResource ParamLabel}" DockPanel.Dock="Left">
+                                <Run Text="Beat-Trigger-Modus:"/>
+                            </TextBlock>
+                        </DockPanel>
+                        <ComboBox ItemsSource="{Binding BeatTriggerModes}"
+                                  SelectedItem="{Binding BeatTriggerMode}"
+                                  Margin="0,2,0,6"
+                                  AutomationProperties.Name="Beat-Trigger-Modus"
+                                  ToolTip="Beat-Trigger-Modus&#x0a;• all: jeder erkannte Beat kann einen Schnitt auslösen.&#x0a;• downbeat_only: nur Taktanfänge (benötigt Downbeat-Erkennung).&#x0a;• strong_only: nur Beats mit hoher Onset-Stärke."/>
 
                         <!-- Separator inside pacing -->
                         <Rectangle Height="1" Fill="{StaticResource AbletonBorder}" Margin="0,4,0,6"/>
@@ -278,6 +429,7 @@
                         </DockPanel>
                         <Slider Value="{Binding MinCutInterval}"
                                 Minimum="0.1" Maximum="5.0"
+                                AutomationProperties.Name="Minimaler Schnittabstand"
                                 TickFrequency="0.1"
                                 IsSnapToTickEnabled="True"
                                 Height="20" Margin="0,2,0,6"
@@ -291,7 +443,15 @@
                         </DockPanel>
                         <TextBox Text="{Binding DurationLimit, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                  Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Dauer-Limit in Sekunden"
                                  ToolTip="Dauer-Limit&#x0a;• Was es macht: Begrenzt die Gesamtlänge des generierten Videos auf eine feste Sekundenanzahl.&#x0a;• Wozu es dient: Ideal, um kurze Preview-Clips (z. B. 30 Sekunden für Social Media) aus langen Songs zu schneiden.&#x0a;• Wann nutzen: Leer lassen für den vollen Song, sonst Wunschdauer eintragen."
+                                 Margin="0,0,0,4"/>
+
+                        <TextBlock Text="Storyboard Canvas (.canvas)" Style="{StaticResource ParamLabel}"/>
+                        <TextBox Text="{Binding CanvasPath, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                 Style="{StaticResource ParamTextBox}"
+                                 AutomationProperties.Name="Storyboard-Canvas-Pfad"
+                                 ToolTip="Optionaler vollständiger Pfad zu einer Obsidian-.canvas-Datei mit Zeitankern und manuellen Clip-Zuweisungen."
                                  Margin="0,0,0,4"/>
                     </StackPanel>
                 </md:Card>
@@ -362,6 +522,7 @@
                             </DockPanel>
                             <Slider Value="{Binding BrainMinConfidence}"
                                     Style="{StaticResource CompactSlider}"
+                                    AutomationProperties.Name="Minimale Hirn-Konfidenz"
                                     Minimum="0" Maximum="1"
                                     ToolTip="Brain Mindest-Vertrauen&#x0a;• Was es macht: Filtert Vorschläge heraus, bei denen sich die Regie-KI unsicher ist.&#x0a;• Wozu es dient: Setzt einen Qualitätsfilter: Höhere Werte erzwingen ausschließlich exzellent passende Schnitte.&#x0a;• Wann nutzen: Bei 0.0 (alles erlauben) beginnen. Bei anspruchsvollen Projekten auf 0.4 - 0.6 anheben."/>
                         </StackPanel>
@@ -376,7 +537,10 @@
                         IsEnabled="{Binding IsGenerating, Converter={StaticResource InverseBooleanConverter}}"
                         Cursor="Hand"
                         Height="40"
-                        Margin="0,4,0,4">
+                        Margin="0,4,0,4"
+                        AutomationProperties.Name="Cut-Liste generieren"
+                        AutomationProperties.HelpText="Erzeugt aus Audio, ausgewählten Video-Clips und Pacing-Parametern eine neue Cut-Liste."
+                        AutomationProperties.AcceleratorKey="Strg+G">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="border"
@@ -463,6 +627,8 @@
                       Foreground="{StaticResource AbletonText}"
                       BorderThickness="0"
                       FontSize="12"
+                      AutomationProperties.Name="Generierte Cut-Liste"
+                      AutomationProperties.HelpText="Ergebnisliste mit Clip, Zeitraum, Dauer und Trigger jedes Schnitts."
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListView.View>
                     <GridView>
@@ -524,11 +690,15 @@
                                  Text="{Binding BrainSuggestTopN, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ParamTextBox}"
                                  Margin="0,0,8,0"
+                                 AutomationProperties.Name="Anzahl KI-Vorschläge"
                                  ToolTip="Anzahl der zu ladenden Vorschläge (1..200)"/>
                         <Button Content="↻ Vorschläge laden"
                                 Command="{Binding LoadBrainSuggestionsCommand}"
                                 IsEnabled="{Binding IsLoadingSuggestions, Converter={StaticResource InverseBooleanConverter}}"
                                 Padding="10,4"
+                                AutomationProperties.Name="KI-Vorschläge laden"
+                                AutomationProperties.HelpText="Lädt bewertete Timeline-Schnitte aus dem Brain des aktiven Projekts."
+                                AutomationProperties.AcceleratorKey="F5"
                                 ToolTip="POST /brain/suggest — liest cuts mit brain_scores aus timeline_cuts"/>
                     </StackPanel>
                 </DockPanel>
@@ -541,6 +711,8 @@
                       Foreground="{StaticResource AbletonText}"
                       BorderThickness="0"
                       FontSize="12"
+                      AutomationProperties.Name="KI-Vorschläge"
+                      AutomationProperties.HelpText="Liste der bestbewerteten Brain-Vorschläge mit Zeitbereich und Score."
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListView.View>
                     <GridView>
@@ -594,7 +766,9 @@
                     <TextBlock DockPanel.Dock="Left"
                                Text="{Binding StatusText}"
                                Foreground="{StaticResource AbletonTextDim}"
-                               FontSize="11"/>
+                               FontSize="11"
+                               AutomationProperties.Name="{Binding StatusText}"
+                               AutomationProperties.LiveSetting="Polite"/>
                     <TextBlock DockPanel.Dock="Right"
                                HorizontalAlignment="Right"
                                Text="{Binding SuggestionsStatus}"

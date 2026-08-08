@@ -25,15 +25,17 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend._brain_singleton import set_project_state
+from backend.app_state import AppState, get_app_state
 from backend.routers.brain_router import router as brain_router
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.brain.bridge_dimensions import BRIDGE_AXES
 
 
-def _make_app() -> FastAPI:
+def _make_app(state: AppState) -> FastAPI:
     """Test-lokale App: nur der brain_router gemountet."""
     app = FastAPI()
     app.include_router(brain_router)
+    app.dependency_overrides[get_app_state] = lambda: state
     return app
 
 
@@ -43,7 +45,16 @@ def brain_client(tmp_path: Path, monkeypatch):
     BrainService.reset_singleton()
 
     state_db = tmp_path / "state.db"
-    set_project_state(state_db)
+    state = AppState(current_project={
+        "name": "BrainTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
+    set_project_state(
+        state_db,
+        project_epoch=state.project_epoch,
+        project_id=1,
+    )
 
     conn = sqlite3.connect(str(state_db), isolation_level=None)
     conn.execute(
@@ -78,7 +89,7 @@ def brain_client(tmp_path: Path, monkeypatch):
     )
     conn.close()
 
-    yield TestClient(_make_app())
+    yield TestClient(_make_app(state))
     BrainService.reset_singleton()
 
 

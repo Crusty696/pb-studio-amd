@@ -4,6 +4,12 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Any
 
 
+# Product scope permits 4-hour DJ mixes; UI editing permits 0.1-second clips.
+# 4 * 60 * 60 / 0.1 = 144,000 entries, so this cap preserves the documented
+# maximum timeline while making one manual update request finite.
+TIMELINE_UPDATE_MAX_ENTRIES = 144_000
+
+
 class PreviewRequest(BaseModel):
     """Request: Timeline-Preview generieren."""
     # BUG-062 FIX: ge=0.0 validation
@@ -57,6 +63,7 @@ class PacingConfigSchema(BaseModel):
     use_stem_pacing: bool = False
     # S-H2 (Audit V2): duration_limit cap muss positiv sein, sonst Render-Pfad NoOp.
     duration_limit: Optional[float] = Field(None, gt=0.0)
+    canvas_path: Optional[str] = Field(None, max_length=32767)
     min_cut_interval: float = Field(0.5, ge=0.0)
     # Plan Phase 4: brain integration toggles
     use_brain: bool = False
@@ -97,6 +104,12 @@ class TimelineEntrySchema(BaseModel):
     # Plan Phase 5: brain confidence + DB cut id (when use_brain=true)
     brain_confidence: float = 0.0
     cut_id: Optional[int] = None
+    feature_confidence: float = 0.0
+    semantic_status: str = "unavailable"
+    semantic_reason: Optional[str] = None
+    trigger_provenance: dict[str, Any] = Field(default_factory=dict)
+    brain_axis_status: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class TimelineResponse(BaseModel):
@@ -108,7 +121,7 @@ class TimelineResponse(BaseModel):
 
 class TimelineUpdateRequest(BaseModel):
     """Request: Timeline manuell aktualisieren."""
-    entries: list[TimelineEntrySchema]
+    entries: list[TimelineEntrySchema] = Field(max_length=TIMELINE_UPDATE_MAX_ENTRIES)
 
 
 class PreviewResponse(BaseModel):

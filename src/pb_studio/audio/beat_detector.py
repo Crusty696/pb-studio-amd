@@ -50,7 +50,40 @@ try:
     if not hasattr(np, 'bool'):
         np.bool = bool
 
+    # Patch 4: pkg_resources-Shim (Audit 2026-08-06)
+    # setuptools >= 81 hat pkg_resources entfernt; Production pinnt 81.0.0. madmom
+    # importiert es in seiner __init__ und nutzt es fuer GENAU eine Sache:
+    # `pkg_resources.get_distribution("madmom").version`. Ein Downgrade von
+    # setuptools waere ein Eingriff in die gepinnte Umgebung fuer eine
+    # Versionsnummer — deshalb ein minimaler Shim auf importlib.metadata
+    # (stdlib), analog zum bereits vorhandenen PyAudio-Stub darunter.
+    import sys as _sys
+    from types import ModuleType as _ModuleType
+    if "pkg_resources" not in _sys.modules:
+        try:
+            import pkg_resources  # noqa: F401
+        except ModuleNotFoundError:
+            from importlib.metadata import (
+                PackageNotFoundError as _PkgNotFound,
+                version as _dist_version,
+            )
+
+            def _get_distribution(name: str):
+                """Minimaler Ersatz: liefert ein Objekt mit .version."""
+                try:
+                    resolved = _dist_version(name)
+                except _PkgNotFound:
+                    resolved = "0.0.0"
+                stub = _ModuleType("_distribution")
+                stub.version = resolved
+                return stub
+
+            _pkg_stub = _ModuleType("pkg_resources")
+            _pkg_stub.get_distribution = _get_distribution
+            _sys.modules["pkg_resources"] = _pkg_stub
+
     # Patch 3: PyAudio Mock (BeatNet importiert pyaudio global)
+    _pyaudio_stub = None
     try:
         import pyaudio
     except ImportError:
@@ -58,13 +91,18 @@ try:
         from types import ModuleType
         m_pa = ModuleType("pyaudio")
         sys.modules["pyaudio"] = m_pa
+        _pyaudio_stub = m_pa
         class MockPyAudio:
             """Mock-Klasse für PyAudio (nur für BeatNet Import benötigt)."""
             def open(self, *args, **kwargs): return None
         m_pa.PyAudio = MockPyAudio
         m_pa.paFloat32 = 1
 
-    from BeatNet.BeatNet import BeatNet
+    try:
+        from BeatNet.BeatNet import BeatNet
+    finally:
+        if _pyaudio_stub is not None and sys.modules.get("pyaudio") is _pyaudio_stub:
+            sys.modules.pop("pyaudio", None)
     BEATNET_AVAILABLE = True
     logger.info("BeatNet verfügbar")
 except ImportError as e:

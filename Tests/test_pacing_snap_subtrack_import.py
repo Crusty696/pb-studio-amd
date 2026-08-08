@@ -85,6 +85,9 @@ def test_snap_anchor_close_to_existing_cut_snaps_instead_of_inserting():
     ]
     snapped = engine._snap_cuts_to_subtrack_boundaries(existing, window=0.5)
     # Snap: time auf 100.0 gesetzt, kein neuer subtrack-Cut für 100.0
-    assert any(abs(c.time - 100.0) < 1e-6 and c.trigger_type == "beat" for c in snapped)
+    snapped_cut = next(c for c in snapped if abs(c.time - 100.0) < 1e-6)
+    assert snapped_cut.trigger_type == "subtrack"
+    assert snapped_cut.provenance["operation"] == "endpoint_snap"
+    assert snapped_cut.provenance["source_trigger_type"] == "beat"
     # Aber 200.0 hat keinen Cut in Nähe → wird inserted
     assert any(abs(c.time - 200.0) < 1e-6 and c.trigger_type == "subtrack" for c in snapped)

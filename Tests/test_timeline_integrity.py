@@ -246,7 +246,7 @@ def test_auto_pacing_pipeline_chronological_no_violations(tmp_path, monkeypatch)
             },
         )
     except Exception as e:
-        pytest.skip(f"PacingService pipeline error (synthetic test-data): {e}")
+        pytest.fail(f"PacingService pipeline error (synthetic test-data): {e}")
 
     if not cut_list or len(cut_list) < 2:
         pytest.skip(
@@ -279,7 +279,7 @@ def test_auto_pacing_pipeline_chronological_no_violations(tmp_path, monkeypatch)
 
 # --- Integration: Manuelle Updates produzieren valide Timeline --------------
 
-def test_manual_update_full_flow_caps_and_validates(monkeypatch):
+def test_manual_update_full_flow_caps_and_validates(monkeypatch, tmp_path):
     """End-to-end: POST /pacing/timeline cappt + validiert in einem Flow.
 
     User sendet manuell editierte Timeline mit overflow-Eintrag. Backend:
@@ -293,7 +293,7 @@ def test_manual_update_full_flow_caps_and_validates(monkeypatch):
 
     monkeypatch.setattr(
         "pb_studio.rendering.render_service.RenderService._get_audio_duration",
-        lambda self, p: 30.0,
+        lambda self, p, cancel_callback=None: 30.0,
         raising=False,
     )
 
@@ -302,13 +302,31 @@ def test_manual_update_full_flow_caps_and_validates(monkeypatch):
 
     state = get_app_state()
     state.reset()
-    state.current_audio_path = "/tmp/audio.wav"
+    state.current_project = {
+        "name": "TimelineTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
+    audio_path = tmp_path / "audio.wav"
+    video_path = tmp_path / "v50.mp4"
+    audio_path.write_bytes(b"audio")
+    video_path.write_bytes(b"video")
+    state.current_audio_path = str(audio_path)
+    state.set_audio_clip(
+        1,
+        {
+            "id": 1,
+            "name": "audio",
+            "path": str(audio_path),
+            "duration_seconds": 30.0,
+        },
+    )
     state.set_video_clip(
         50,
         {
             "id": 50,
             "name": "v50",
-            "path": "/tmp/v50.mp4",
+            "path": str(video_path),
             "duration_seconds": 10.0,  # source nur 10s
         },
     )
@@ -319,7 +337,7 @@ def test_manual_update_full_flow_caps_and_validates(monkeypatch):
             {
                 "clip_id": "clip_50",
                 "clip_name": "v50",
-                "file_path": "/tmp/v50.mp4",
+                "file_path": str(video_path),
                 "start_time": 0.0,
                 "end_time": 20.0,  # > source 10s
                 "clip_start": 0.0,

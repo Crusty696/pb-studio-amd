@@ -16,6 +16,7 @@ Usage:
 import csv
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from core import search, DATA_DIR
@@ -23,6 +24,7 @@ from core import search, DATA_DIR
 
 # ============ CONFIGURATION ============
 REASONING_FILE = "ui-reasoning.csv"
+SIMPLE_LABEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,79}\Z")
 
 SEARCH_CONFIG = {
     "product": {"max_results": 1},
@@ -31,6 +33,29 @@ SEARCH_CONFIG = {
     "landing": {"max_results": 2},
     "typography": {"max_results": 2}
 }
+
+
+def slugify_label(label: str, field_name: str) -> str:
+    """Validate a filesystem label and return its existing slug form."""
+    if (
+        not isinstance(label, str)
+        or label != label.strip()
+        or not SIMPLE_LABEL_PATTERN.fullmatch(label)
+    ):
+        raise ValueError(
+            f"{field_name} must be a 1-80 character simple label using only "
+            "letters, numbers, spaces, underscores, or hyphens"
+        )
+    return label.lower().replace(" ", "-")
+
+
+def _resolved_direct_child(root: Path, child_name: str, description: str) -> Path:
+    """Resolve one child and reject any escape from its resolved parent."""
+    resolved_root = root.resolve()
+    candidate = (resolved_root / child_name).resolve()
+    if candidate.parent != resolved_root:
+        raise ValueError(f"{description} must remain a direct child of {resolved_root}")
+    return candidate
 
 
 # ============ DESIGN SYSTEM GENERATOR ============
@@ -440,7 +465,8 @@ def format_markdown(design_system: dict) -> str:
     # Anti-patterns section
     if anti_patterns:
         lines.append("### Avoid (Anti-patterns)")
-        lines.append(f"- {anti_patterns.replace(' + ', '\n- ')}")
+        formatted_anti_patterns = anti_patterns.replace(" + ", "\n- ")
+        lines.append(f"- {formatted_anti_patterns}")
         lines.append("")
 
     # Pre-Delivery Checklist section
@@ -474,6 +500,11 @@ def generate_design_system(query: str, project_name: str = None, output_format: 
     Returns:
         Formatted design system string
     """
+    if persist:
+        slugify_label(project_name or query.upper(), "project_name")
+        if page is not None:
+            slugify_label(page, "page")
+
     generator = DesignSystemGenerator()
     design_system = generator.generate(query, project_name)
     
@@ -500,33 +531,66 @@ def persist_design_system(design_system: dict, page: str = None, output_dir: str
     Returns:
         dict with created file paths and status
     """
-    base_dir = Path(output_dir) if output_dir else Path.cwd()
+    base_dir = (Path(output_dir) if output_dir else Path.cwd()).resolve()
     
     # Use project name for project-specific folder
     project_name = design_system.get("project_name", "default")
-    project_slug = project_name.lower().replace(' ', '-')
+    project_slug = slugify_label(project_name, "project_name")
+    page_slug = slugify_label(page, "page") if page is not None else None
     
-    design_system_dir = base_dir / "design-system" / project_slug
-    pages_dir = design_system_dir / "pages"
+    design_system_root = _resolved_direct_child(
+        base_dir, "design-system", "design-system directory"
+    )
+    design_system_dir = _resolved_direct_child(
+        design_system_root, project_slug, "project directory"
+    )
+    pages_dir = _resolved_direct_child(design_system_dir, "pages", "pages directory")
+    master_file = _resolved_direct_child(
+        design_system_dir, "MASTER.md", "master file"
+    )
+    page_file = (
+        _resolved_direct_child(pages_dir, f"{page_slug}.md", "page override file")
+        if page_slug is not None
+        else None
+    )
     
     created_files = []
     
     # Create directories
+    design_system_dir = _resolved_direct_child(
+        design_system_root, project_slug, "project directory"
+    )
     design_system_dir.mkdir(parents=True, exist_ok=True)
+    design_system_dir = _resolved_direct_child(
+        design_system_root, project_slug, "project directory"
+    )
+    pages_dir = _resolved_direct_child(design_system_dir, "pages", "pages directory")
     pages_dir.mkdir(parents=True, exist_ok=True)
-    
-    master_file = design_system_dir / "MASTER.md"
     
     # Generate and write MASTER.md
     master_content = format_master_md(design_system)
+    design_system_dir = _resolved_direct_child(
+        design_system_root, project_slug, "project directory"
+    )
+    master_file = _resolved_direct_child(
+        design_system_dir, "MASTER.md", "master file"
+    )
     with open(master_file, 'w', encoding='utf-8') as f:
         f.write(master_content)
     created_files.append(str(master_file))
     
     # If page is specified, create page override file with intelligent content
-    if page:
-        page_file = pages_dir / f"{page.lower().replace(' ', '-')}.md"
+    if page_file is not None:
         page_content = format_page_override_md(design_system, page, page_query)
+        design_system_dir = _resolved_direct_child(
+            design_system_root, project_slug, "project directory"
+        )
+        pages_dir = _resolved_direct_child(
+            design_system_dir, "pages", "pages directory"
+        )
+        page_file = _resolved_direct_child(
+            pages_dir, f"{page_slug}.md", "page override file"
+        )
         with open(page_file, 'w', encoding='utf-8') as f:
             f.write(page_content)
         created_files.append(str(page_file))

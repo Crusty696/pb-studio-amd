@@ -16,7 +16,7 @@ Moderne WPF-basierte Desktop-Anwendung für PB Studio AMD.
 
 | Service | Aufgabe |
 |---------|---------|
-| **PythonBridgeService** | Startet/Stoppt Python Backend (server.py) |
+| **PythonBridgeService** | Startet/stoppt Python 3.11 + `uvicorn backend.main:app` auf `127.0.0.1:8765` mit Owner-Capability |
 | **ApiClient** | REST-Kommunikation mit Python Backend (Port 8765) |
 | **SSEClient** | Server-Sent Events für Echtzeit-Updates |
 | **NavigationService** | Tab-Navigation und Dialog-Steuerung |
@@ -24,15 +24,10 @@ Moderne WPF-basierte Desktop-Anwendung für PB Studio AMD.
 
 ### ViewModels
 
-- **MainViewModel**: Zentrale Koordination, Backend-Status, GPU-Monitoring
-- **MediaIngestViewModel**: Audio/Video-Import
-- **AudioLibraryViewModel**: Audio-Analyse und -Verwaltung
-- **VideoLibraryViewModel**: Video-Analyse und -Verwaltung
-- **AnchorViewModel**: Synchronisationspunkte
-- **DirectorViewModel**: KI-gesteuerte Automatisierung
-- **TimelineViewModel**: Timeline-Editor
-- **ProductionViewModel**: Rendering und Export
-- **SettingsViewModel**: Anwendungseinstellungen
+- **MainViewModel** koordiniert Navigation und globalen Status.
+- Die zwölf Produktbereiche werden durch Projekt, Import, Audio, Video,
+  Anker, Director, Timeline, Produktion, Modelle, Brain, Chat und Terminal
+  abgedeckt; Settings und VRAM-Telemetrie ergänzen die Laufzeitsteuerung.
 
 ## Requirements
 
@@ -57,16 +52,15 @@ dotnet run
 ## Kommunikation mit Backend
 
 ### HTTP/REST
-```csharp
-// Services/ApiClient.cs
-var result = await _apiClient.PostAsync<ImportResult>("/api/media/import", payload);
-```
+
+`Services/ApiClient.cs` kapselt die typisierten Backend-Aufrufe. Destruktive
+Loopback-Aufrufe wie Brain-Reset und Shutdown tragen zusätzlich die private
+Owner-Capability.
 
 ### Server-Sent Events (SSE)
-```csharp
-// Echtzeit-Updates (GPU-Status, Progress, Errors)
-await _sseClient.StartStreamingAsync("/api/events");
-```
+
+`SSEClient` konsumiert `/events/progress`, `/events/log` und `/events/gpu`
+parallel und verteilt die typisierten Ereignisse an die ViewModels.
 
 ## Styling
 

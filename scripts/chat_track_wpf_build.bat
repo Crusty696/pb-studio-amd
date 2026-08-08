@@ -5,7 +5,7 @@ REM Iron Rule 10: C#-Aenderung -> Release-Build erforderlich
 REM Output: chat_track_wpf_build.log
 REM ============================================================
 setlocal EnableDelayedExpansion
-set "REPO=C:\Users\david\Documents\Pb_studio_AMD_version"
+for %%I in ("%~dp0..") do set "REPO=%%~fI"
 set "LOG=%REPO%\chat_track_wpf_build.log"
 cd /d "%REPO%" || (echo cd failed > "%LOG%" & exit /b 1)
 

@@ -1,0 +1,2 @@
+# Intentionally dependency-free. The wrong-hash fixture is materialized from
+# python-wrong-hash.fixture into the runner temp directory by security.yml.

@@ -73,6 +73,76 @@ def extract_dominant_colors(frame_rgb: Optional[np.ndarray], k: int = 5) -> list
     ]
 
 
+def compute_color_features(hex_colors: list[str]) -> dict:
+    """Berechnet Brightness/Saturation/Color-Temp/Mood-Tags aus dominanten Farben.
+
+    Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): die Brain-Bridge-Achsen
+    ``mood_match_weight``/``color_temp_match_weight`` (bridge_dimensions.py)
+    waren strukturell tot, weil kein Producer ``avg_saturation``/
+    ``avg_color_temp``/``mood_tags`` in der Video-Pipeline je befuellte.
+    LM-Studio-Vision-Tags sind freies Deutsch und koennen nicht direkt gegen
+    das feste englische Audio-Mood-Vokabular (``_audio_mood_score``:
+    dark/cold/cool/moody/uplifting/warm/happy/energetic) matchen — daher
+    deterministische Ableitung aus den bereits vorhandenen dominanten Farben,
+    im selben Vokabular wie die Audio-Seite.
+
+    Args:
+        hex_colors: Liste von Hex-Farbstrings ("#RRGGBB"), z.B. aus
+            ``extract_dominant_colors``.
+
+    Returns:
+        Dict mit ``avg_brightness``/``avg_saturation`` (0..1) und
+        ``avg_color_temp`` (-1 kuehl .. +1 warm, passend zu
+        ``_audio_mood_score``) und ``mood_tags`` (Liste aus dem Audio-
+        Mood-Vokabular).
+    """
+    import colorsys
+
+    default = {"avg_brightness": 0.5, "avg_saturation": 0.5, "avg_color_temp": 0.0, "mood_tags": []}
+    if not hex_colors:
+        return default
+
+    brightness_vals: list[float] = []
+    saturation_vals: list[float] = []
+    warmth_vals: list[float] = []  # -1 (kuehl/blau) .. +1 (warm/rot)
+    for hex_str in hex_colors:
+        h = (hex_str or "").lstrip("#")
+        if len(h) != 6:
+            continue
+        try:
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except ValueError:
+            continue
+        _hue, sat, val = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        brightness_vals.append(val)
+        saturation_vals.append(sat)
+        warmth_vals.append((r - b) / 255.0)
+
+    if not brightness_vals:
+        return default
+
+    avg_brightness = sum(brightness_vals) / len(brightness_vals)
+    avg_saturation = sum(saturation_vals) / len(saturation_vals)
+    avg_color_temp = sum(warmth_vals) / len(warmth_vals)
+
+    mood_tags: list[str] = []
+    if avg_color_temp > 0.15:
+        mood_tags.append("warm")
+    elif avg_color_temp < -0.15:
+        mood_tags.append("cool")
+    if avg_brightness < 0.3:
+        mood_tags.append("dark")
+    if avg_brightness > 0.35 and avg_saturation > 0.4 and avg_color_temp > 0.0:
+        mood_tags.append("happy")
+
+    return {
+        "avg_brightness": avg_brightness,
+        "avg_saturation": avg_saturation,
+        "avg_color_temp": avg_color_temp,
+        "mood_tags": mood_tags,
+    }
+
+
 # Stopwords fuer Tag-Extraktion aus Captions (Englisch — Moondream2 spricht EN).
 _STOPWORDS = frozenset({
     "a", "an", "the", "is", "of", "in", "on", "at", "to", "with", "and", "or",

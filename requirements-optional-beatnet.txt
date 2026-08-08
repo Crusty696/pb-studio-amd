@@ -1,0 +1,53 @@
+# =============================================================================
+# OPTIONAL: madmom — schaltet BeatNet und damit die Downbeat-Erkennung ein
+# =============================================================================
+#
+# Audit 2026-08-06
+# ----------------
+# BeatNet==1.1.1 steht seit immer in requirements.txt, madmom in KEINER
+# Requirements-Datei. Ursache ist ein Packaging-Bug upstream: BeatNet importiert
+# madmom zur Laufzeit, deklariert es aber nicht als Dependency. pip meldete also
+# Erfolg, und zur Laufzeit lief ALLES ueber den librosa-Fallback:
+#
+#   "BeatNet nicht verfuegbar: No module named 'madmom'. Verwende librosa Fallback."
+#
+# Die Folge war nicht nur ungenauere BPM (-2,1 % gemessen), sondern:
+# `BeatDetector.get_downbeats()` gab bei fehlendem BeatNet hart `[]` zurueck —
+# ohne librosa-Fallback. Downbeats existierten im gesamten Produkt nicht, und
+# damit konnten Schnitte nie auf Takt-1 oder Phrasengrenzen (8/16/32 Bar) fallen.
+#
+# Die verbreitete Annahme "madmom ist auf Python 3.11 nicht installierbar" ist
+# WIDERLEGT: madmom 0.16.1 baut auf 3.11.9 / win_amd64 erfolgreich. NumPy bleibt
+# dabei auf 1.26.4, IRON RULE 3 ist nicht betroffen.
+#
+# Warum diese Datei getrennt ist
+# ------------------------------
+# madmom liegt auf PyPI nur als sdist vor — es gibt kein Wheel. Die Installation
+# braucht deshalb:
+#   1. einen C-Compiler (MSVC Build Tools),
+#   2. Cython im Ziel-Environment,
+#   3. `--no-build-isolation`, weil madmoms setup.py Cython importiert BEVOR die
+#      Build-Dependencies aufgeloest sind (PEP-517-Verstoss).
+#
+# In der Pflicht-requirements.txt wuerde das jeden Clean-Install auf einer
+# Maschine ohne Compiler zum Scheitern bringen. Deshalb optional.
+#
+# Installation
+# ------------
+#   .\.venv\Scripts\python.exe -m pip install cython
+#   .\.venv\Scripts\python.exe -m pip install --no-build-isolation -r requirements-optional-beatnet.txt
+#
+# Verifikation (muss True liefern):
+#   $env:PYTHONPATH = (Join-Path (Get-Location) "src")
+#   .\.venv\Scripts\python.exe -c "from pb_studio.audio.beat_detector import BEATNET_AVAILABLE; print(BEATNET_AVAILABLE)"
+#
+# Zusaetzlicher Stolperstein, bereits im Code geloest
+# --------------------------------------------------
+# madmom importiert `pkg_resources`, das setuptools >= 81 entfernt hat (hier
+# laeuft 82.0.1). Statt setuptools zu downgraden — ein Eingriff in die gepinnte
+# Umgebung fuer eine reine Versionsnummer — liegt in
+# `src/pb_studio/audio/beat_detector.py` ein minimaler Shim auf
+# importlib.metadata (Patch 4), analog zum dort schon vorhandenen PyAudio-Stub.
+# =============================================================================
+
+madmom==0.16.1 --hash=sha256:64a86a29106e7c4e0c5f4ec96801c2d1a8492db710e4fe27e097da5517d68cb2

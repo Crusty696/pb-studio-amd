@@ -1,0 +1,188 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b5348542-3510-404f-b8a4-f35a30511c40" name="david@CYBER-TOWER 2026-08-01 21:26:30" runUser="CYBER-TOWER\david" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-01T21:26:30.0238293+02:00" queuing="2026-08-01T21:26:30.0238295+02:00" start="2026-08-01T21:26:29.1419205+02:00" finish="2026-08-01T21:26:30.3663819+02:00" />
+  <TestSettings name="default" id="e985613b-8907-4c5c-b9de-12b45797dd75">
+    <Deployment runDeploymentRoot="david_CYBER-TOWER_2026-08-01_21_26_30" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="66f9656f-237f-4623-ab6e-b91cdd08cacb" testId="10faa58a-2ebe-8edb-8fd6-40e718b73675" testName="UnsafeKeyboardRemoval_DoesNotMutateTimeline" computerName="CYBER-TOWER" duration="00:00:00.0003606" startTime="2026-08-01T21:26:30.0207222+02:00" endTime="2026-08-01T21:26:30.0210999+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="66f9656f-237f-4623-ab6e-b91cdd08cacb" />
+    <UnitTestResult executionId="5f0ebb0d-a80b-4597-91cc-6b36a6c7b9bd" testId="1699e4fb-0790-80a8-a7f0-237d51f0ec22" testName="ChatClear_BackendTrueReplacesHistoryWithFreshWelcome" computerName="CYBER-TOWER" duration="00:00:00.0005033" startTime="2026-08-01T21:26:30.0356790+02:00" endTime="2026-08-01T21:26:30.0361984+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5f0ebb0d-a80b-4597-91cc-6b36a6c7b9bd" />
+    <UnitTestResult executionId="957745e8-b97a-4a63-ad32-3a062f572414" testId="1bf592ee-a015-81d6-aa92-c566798b88cd" testName="SortEntriesByTime_PreservesSelectedEntryIdentity" computerName="CYBER-TOWER" duration="00:00:00.0009073" startTime="2026-08-01T21:26:30.0211156+02:00" endTime="2026-08-01T21:26:30.0220474+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="957745e8-b97a-4a63-ad32-3a062f572414" />
+    <UnitTestResult executionId="5e951f59-e1da-4fe3-b2a0-1c73f568ab78" testId="1e0b4879-8097-8fd8-90ab-1b65cf703528" testName="ResultDtos_DeserializeNegativeBackendTruth" computerName="CYBER-TOWER" duration="00:00:00.0012911" startTime="2026-08-01T21:26:30.0326438+02:00" endTime="2026-08-01T21:26:30.0339587+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5e951f59-e1da-4fe3-b2a0-1c73f568ab78" />
+    <UnitTestResult executionId="d54af099-b818-4520-a06f-eefe9b8fe164" testId="1df6034f-075e-87e6-a427-99dbc9c7e266" testName="RepeatedTemplateReapply_PreservesContentIdentity" computerName="CYBER-TOWER" duration="00:00:00.0229954" startTime="2026-08-01T21:26:29.9405496+02:00" endTime="2026-08-01T21:26:29.9636063+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d54af099-b818-4520-a06f-eefe9b8fe164" />
+    <UnitTestResult executionId="ec73e59f-0ac5-41fd-a3ec-5ee387a958e1" testId="1c07e79d-2f02-82ef-83d6-964f11b01e05" testName="TemplateReapply_ReparentsExistingPresentersExactlyOnce" computerName="CYBER-TOWER" duration="00:00:00.2148964" startTime="2026-08-01T21:26:29.7255616+02:00" endTime="2026-08-01T21:26:29.9405133+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec73e59f-0ac5-41fd-a3ec-5ee387a958e1" />
+    <UnitTestResult executionId="86a0c0a3-439e-421f-bfa4-f914022adc19" testId="16f21dcd-f38b-852e-a24d-29dc52e3b8ce" testName="Load_MissingFileIsSuccessfulFirstStart" computerName="CYBER-TOWER" duration="00:00:00.0016585" startTime="2026-08-01T21:26:29.9636331+02:00" endTime="2026-08-01T21:26:29.9653649+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="86a0c0a3-439e-421f-bfa4-f914022adc19" />
+    <UnitTestResult executionId="275031a3-1552-430c-a35f-6f435227e1b8" testId="19bcc3d4-434a-8ee4-9137-309bb2490b0f" testName="KeyboardNudge_ClampsAtAdjacentCutsAndPreservesDuration" computerName="CYBER-TOWER" duration="00:00:00.0048157" startTime="2026-08-01T21:26:30.0153988+02:00" endTime="2026-08-01T21:26:30.0202410+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="275031a3-1552-430c-a35f-6f435227e1b8" />
+    <UnitTestResult executionId="593f1672-57c9-416f-968b-7467a60eb695" testId="1e9b7ca6-40ab-8bc5-9ca0-a99118e22657" testName="KeyboardSelectionAndScrub_UseTimelineOrderAndClampBounds" computerName="CYBER-TOWER" duration="00:00:00.0221279" startTime="2026-08-01T21:26:29.9931908+02:00" endTime="2026-08-01T21:26:30.0153814+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="593f1672-57c9-416f-968b-7467a60eb695" />
+    <UnitTestResult executionId="7b2786a5-adc3-47c9-9a81-735f3a8c99ec" testId="1a78dc13-c09d-8a33-9498-a24acd37f9ee" testName="SettingsSaveFailure_NeverReportsSuccess" computerName="CYBER-TOWER" duration="00:00:00.0018896" startTime="2026-08-01T21:26:30.0412785+02:00" endTime="2026-08-01T21:26:30.0431846+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7b2786a5-adc3-47c9-9a81-735f3a8c99ec" />
+    <UnitTestResult executionId="1ad37c47-cf65-4566-92ba-b9fe84a03664" testId="10702632-f2dd-8da0-adcc-7ec6f6e64520" testName="ChatClear_BackendFalsePreservesLocalMessages" computerName="CYBER-TOWER" duration="00:00:00.0016486" startTime="2026-08-01T21:26:30.0339697+02:00" endTime="2026-08-01T21:26:30.0356672+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1ad37c47-cf65-4566-92ba-b9fe84a03664" />
+    <UnitTestResult executionId="1eea03d5-46e2-492c-a9db-72b00de420c2" testId="171fc1bd-d16c-8f04-9423-ba3219dda602" testName="KeyboardTrim_RespectsSourcePreviousNextAndMinimumDuration" computerName="CYBER-TOWER" duration="00:00:00.0004346" startTime="2026-08-01T21:26:30.0202551+02:00" endTime="2026-08-01T21:26:30.0207104+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1eea03d5-46e2-492c-a9db-72b00de420c2" />
+    <UnitTestResult executionId="860ff3cc-2d29-4f99-88b1-1ff588233a52" testId="1c3c9f84-45ce-89ee-8692-412a1b8047b9" testName="Recommendation_ProjectSwitchRejectsOldProjectResult" computerName="CYBER-TOWER" duration="00:00:00.0931506" startTime="2026-08-01T21:26:30.1320444+02:00" endTime="2026-08-01T21:26:30.2252612+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="860ff3cc-2d29-4f99-88b1-1ff588233a52" />
+    <UnitTestResult executionId="38d26186-3461-4bd6-99ea-ea06b680546e" testId="137ffbe6-67d1-8855-adf6-db28164fc61c" testName="SingleVramAdapter_ProducesOneModelSnapshotWithoutShapeDrift" computerName="CYBER-TOWER" duration="00:00:00.0005701" startTime="2026-08-01T21:26:30.0317504+02:00" endTime="2026-08-01T21:26:30.0323366+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="38d26186-3461-4bd6-99ea-ea06b680546e" />
+    <UnitTestResult executionId="952dd2ff-e19f-413c-b0e5-ff74ababb656" testId="1092c592-39b4-82f8-a9fb-f180cc3abafa" testName="TimelinePreview_ForwardsCancellationToHttpRequest" computerName="CYBER-TOWER" duration="00:00:00.0038054" startTime="2026-08-01T21:26:29.7201019+02:00" endTime="2026-08-01T21:26:29.7255415+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="952dd2ff-e19f-413c-b0e5-ff74ababb656" />
+    <UnitTestResult executionId="736ea565-ae0f-4ea0-915a-5d86bd927163" testId="176f4b55-57bd-8c80-b546-52e355a2f3c3" testName="Save_WhenParentIsAFileReturnsWriteFailureWithoutFalseSuccess" computerName="CYBER-TOWER" duration="00:00:00.0013377" startTime="2026-08-01T21:26:29.9917938+02:00" endTime="2026-08-01T21:26:29.9931716+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="736ea565-ae0f-4ea0-915a-5d86bd927163" />
+    <UnitTestResult executionId="a3ebaac0-90a9-4002-b237-17518a7b5033" testId="159b432a-ce9d-8194-ade1-a156b5c8b926" testName="GpuCleanup_BackendFailureNeverReportsCompletion" computerName="CYBER-TOWER" duration="00:00:00.0012534" startTime="2026-08-01T21:26:30.0432078+02:00" endTime="2026-08-01T21:26:30.0444833+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a3ebaac0-90a9-4002-b237-17518a7b5033" />
+    <UnitTestResult executionId="4f378c50-1046-481c-ac66-f850f419fc9f" testId="161fa28a-9149-8f48-8d0e-034dd26869ba" testName="Recommendation_LateOlderModeCannotReplaceCurrentMode" computerName="CYBER-TOWER" duration="00:00:00.0873564" startTime="2026-08-01T21:26:30.0445233+02:00" endTime="2026-08-01T21:26:30.1319835+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4f378c50-1046-481c-ac66-f850f419fc9f" />
+    <UnitTestResult executionId="9aa2849c-a642-4ea5-b77d-9fa7ddf5be64" testId="13131d9b-ab8b-8c9a-a71c-e3322737c720" testName="SpectralAdapter_PreservesEveryGeneratedField" computerName="CYBER-TOWER" duration="00:00:00.0058797" startTime="2026-08-01T21:26:30.0258420+02:00" endTime="2026-08-01T21:26:30.0317385+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9aa2849c-a642-4ea5-b77d-9fa7ddf5be64" />
+    <UnitTestResult executionId="2998bf57-658c-4a67-ad85-840abbfc0f40" testId="1ada28c6-f1e8-84c0-a31d-99f279d33662" testName="Save_AtomicallyPersistsAndVerifiesCurrentSettings" computerName="CYBER-TOWER" duration="00:00:00.0139962" startTime="2026-08-01T21:26:29.9709330+02:00" endTime="2026-08-01T21:26:29.9849559+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2998bf57-658c-4a67-ad85-840abbfc0f40" />
+    <UnitTestResult executionId="5cea977f-5c33-4d6b-9d9e-5b25865b46e5" testId="11b6c3b2-a8d9-8eca-87d6-da6c3a9ba6fa" testName="CleanupGpu_DeserializesTypedNegativeResult" computerName="CYBER-TOWER" duration="00:00:00.0077198" startTime="2026-08-01T21:26:29.7123486+02:00" endTime="2026-08-01T21:26:29.7200882+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5cea977f-5c33-4d6b-9d9e-5b25865b46e5" />
+    <UnitTestResult executionId="4475f64d-8871-4581-a22e-f9e56689bec4" testId="1e7b904e-1df8-8ef5-accb-8734c6ceb696" testName="AudioAdapter_PreservesGeneratedPartialResultAndEvidence" computerName="CYBER-TOWER" duration="00:00:00.0037122" startTime="2026-08-01T21:26:30.0220598+02:00" endTime="2026-08-01T21:26:30.0258221+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4475f64d-8871-4581-a22e-f9e56689bec4" />
+    <UnitTestResult executionId="7cf23511-42ce-4457-bf7e-2c74c6aa6fe8" testId="16cce8db-499b-8ad9-8877-1fef604aa4a8" testName="ProjectSaveAndClose_NegativeResultsPreserveProject" computerName="CYBER-TOWER" duration="00:00:00.0017515" startTime="2026-08-01T21:26:30.2253397+02:00" endTime="2026-08-01T21:26:30.2271400+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7cf23511-42ce-4457-bf7e-2c74c6aa6fe8" />
+    <UnitTestResult executionId="efbd0a81-0610-4b94-9a96-112dbd38ca08" testId="1e7225f8-8d08-841a-9b1e-a7e584982326" testName="ProjectSwitch_InvalidatesCapturedOperationContext" computerName="CYBER-TOWER" duration="00:00:00.0004780" startTime="2026-08-01T21:26:30.2274454+02:00" endTime="2026-08-01T21:26:30.2288954+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="efbd0a81-0610-4b94-9a96-112dbd38ca08" />
+    <UnitTestResult executionId="d6aa9d84-ea3b-49c9-a3ac-c03e816e8067" testId="146b3c6a-d74b-8add-b2a1-51070661d9f2" testName="SettingsLoadFailure_IsImmediatelyVisibleToViewModel" computerName="CYBER-TOWER" duration="00:00:00.0050221" startTime="2026-08-01T21:26:30.0362104+02:00" endTime="2026-08-01T21:26:30.0412510+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d6aa9d84-ea3b-49c9-a3ac-c03e816e8067" />
+    <UnitTestResult executionId="e4c80621-0642-4eae-80ab-6b5ec991b3fc" testId="1889a283-8b09-8259-baa6-75b788ebec51" testName="ClearChatHistory_SuccessStatusReturnsTrue" computerName="CYBER-TOWER" duration="00:00:00.0004873" startTime="2026-08-01T21:26:29.7113873+02:00" endTime="2026-08-01T21:26:29.7121963+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e4c80621-0642-4eae-80ab-6b5ec991b3fc" />
+    <UnitTestResult executionId="94487220-a850-41e0-a876-4dc35e25e154" testId="18443503-bf65-8539-8c27-73cbd912230e" testName="Load_MalformedJsonReturnsTypedFailureAndDefaults" computerName="CYBER-TOWER" duration="00:00:00.0055076" startTime="2026-08-01T21:26:29.9653820+02:00" endTime="2026-08-01T21:26:29.9709168+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="94487220-a850-41e0-a876-4dc35e25e154" />
+    <UnitTestResult executionId="cfd6f00a-1d5e-4c1b-9797-6b358182c683" testId="1ca307a7-cbd5-866d-a5f0-a1eff7e24943" testName="ClearChatHistory_NonSuccessStatusReturnsFalse" computerName="CYBER-TOWER" duration="00:00:00.0067542" startTime="2026-08-01T21:26:29.6922944+02:00" endTime="2026-08-01T21:26:29.7089468+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cfd6f00a-1d5e-4c1b-9797-6b358182c683" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="ChatClear_BackendFalsePreservesLocalMessages" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="10702632-f2dd-8da0-adcc-7ec6f6e64520">
+      <Execution id="1ad37c47-cf65-4566-92ba-b9fe84a03664" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="ChatClear_BackendFalsePreservesLocalMessages" />
+    </UnitTest>
+    <UnitTest name="ChatClear_BackendTrueReplacesHistoryWithFreshWelcome" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1699e4fb-0790-80a8-a7f0-237d51f0ec22">
+      <Execution id="5f0ebb0d-a80b-4597-91cc-6b36a6c7b9bd" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="ChatClear_BackendTrueReplacesHistoryWithFreshWelcome" />
+    </UnitTest>
+    <UnitTest name="SettingsSaveFailure_NeverReportsSuccess" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1a78dc13-c09d-8a33-9498-a24acd37f9ee">
+      <Execution id="7b2786a5-adc3-47c9-9a81-735f3a8c99ec" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="SettingsSaveFailure_NeverReportsSuccess" />
+    </UnitTest>
+    <UnitTest name="SettingsLoadFailure_IsImmediatelyVisibleToViewModel" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="146b3c6a-d74b-8add-b2a1-51070661d9f2">
+      <Execution id="d6aa9d84-ea3b-49c9-a3ac-c03e816e8067" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="SettingsLoadFailure_IsImmediatelyVisibleToViewModel" />
+    </UnitTest>
+    <UnitTest name="Recommendation_ProjectSwitchRejectsOldProjectResult" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1c3c9f84-45ce-89ee-8692-412a1b8047b9">
+      <Execution id="860ff3cc-2d29-4f99-88b1-1ff588233a52" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="Recommendation_ProjectSwitchRejectsOldProjectResult" />
+    </UnitTest>
+    <UnitTest name="Save_WhenParentIsAFileReturnsWriteFailureWithoutFalseSuccess" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="176f4b55-57bd-8c80-b546-52e355a2f3c3">
+      <Execution id="736ea565-ae0f-4ea0-915a-5d86bd927163" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.SettingsServiceTests" name="Save_WhenParentIsAFileReturnsWriteFailureWithoutFalseSuccess" />
+    </UnitTest>
+    <UnitTest name="CleanupGpu_DeserializesTypedNegativeResult" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="11b6c3b2-a8d9-8eca-87d6-da6c3a9ba6fa">
+      <Execution id="5cea977f-5c33-4d6b-9d9e-5b25865b46e5" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ApiClientContractTests" name="CleanupGpu_DeserializesTypedNegativeResult" />
+    </UnitTest>
+    <UnitTest name="ResultDtos_DeserializeNegativeBackendTruth" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1e0b4879-8097-8fd8-90ab-1b65cf703528">
+      <Execution id="5e951f59-e1da-4fe3-b2a0-1c73f568ab78" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TransportContractTests" name="ResultDtos_DeserializeNegativeBackendTruth" />
+    </UnitTest>
+    <UnitTest name="TimelinePreview_ForwardsCancellationToHttpRequest" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1092c592-39b4-82f8-a9fb-f180cc3abafa">
+      <Execution id="952dd2ff-e19f-413c-b0e5-ff74ababb656" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ApiClientContractTests" name="TimelinePreview_ForwardsCancellationToHttpRequest" />
+    </UnitTest>
+    <UnitTest name="RepeatedTemplateReapply_PreservesContentIdentity" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1df6034f-075e-87e6-a427-99dbc9c7e266">
+      <Execution id="d54af099-b818-4520-a06f-eefe9b8fe164" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.CachedTabControlTests" name="RepeatedTemplateReapply_PreservesContentIdentity" />
+    </UnitTest>
+    <UnitTest name="Load_MissingFileIsSuccessfulFirstStart" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="16f21dcd-f38b-852e-a24d-29dc52e3b8ce">
+      <Execution id="86a0c0a3-439e-421f-bfa4-f914022adc19" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.SettingsServiceTests" name="Load_MissingFileIsSuccessfulFirstStart" />
+    </UnitTest>
+    <UnitTest name="AudioAdapter_PreservesGeneratedPartialResultAndEvidence" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1e7b904e-1df8-8ef5-accb-8734c6ceb696">
+      <Execution id="4475f64d-8871-4581-a22e-f9e56689bec4" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TransportContractTests" name="AudioAdapter_PreservesGeneratedPartialResultAndEvidence" />
+    </UnitTest>
+    <UnitTest name="TemplateReapply_ReparentsExistingPresentersExactlyOnce" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1c07e79d-2f02-82ef-83d6-964f11b01e05">
+      <Execution id="ec73e59f-0ac5-41fd-a3ec-5ee387a958e1" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.CachedTabControlTests" name="TemplateReapply_ReparentsExistingPresentersExactlyOnce" />
+    </UnitTest>
+    <UnitTest name="Load_MalformedJsonReturnsTypedFailureAndDefaults" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="18443503-bf65-8539-8c27-73cbd912230e">
+      <Execution id="94487220-a850-41e0-a876-4dc35e25e154" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.SettingsServiceTests" name="Load_MalformedJsonReturnsTypedFailureAndDefaults" />
+    </UnitTest>
+    <UnitTest name="ProjectSwitch_InvalidatesCapturedOperationContext" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1e7225f8-8d08-841a-9b1e-a7e584982326">
+      <Execution id="efbd0a81-0610-4b94-9a96-112dbd38ca08" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="ProjectSwitch_InvalidatesCapturedOperationContext" />
+    </UnitTest>
+    <UnitTest name="UnsafeKeyboardRemoval_DoesNotMutateTimeline" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="10faa58a-2ebe-8edb-8fd6-40e718b73675">
+      <Execution id="66f9656f-237f-4623-ab6e-b91cdd08cacb" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TimelineViewModelTests" name="UnsafeKeyboardRemoval_DoesNotMutateTimeline" />
+    </UnitTest>
+    <UnitTest name="KeyboardSelectionAndScrub_UseTimelineOrderAndClampBounds" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1e9b7ca6-40ab-8bc5-9ca0-a99118e22657">
+      <Execution id="593f1672-57c9-416f-968b-7467a60eb695" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TimelineViewModelTests" name="KeyboardSelectionAndScrub_UseTimelineOrderAndClampBounds" />
+    </UnitTest>
+    <UnitTest name="Recommendation_LateOlderModeCannotReplaceCurrentMode" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="161fa28a-9149-8f48-8d0e-034dd26869ba">
+      <Execution id="4f378c50-1046-481c-ac66-f850f419fc9f" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="Recommendation_LateOlderModeCannotReplaceCurrentMode" />
+    </UnitTest>
+    <UnitTest name="SpectralAdapter_PreservesEveryGeneratedField" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="13131d9b-ab8b-8c9a-a71c-e3322737c720">
+      <Execution id="9aa2849c-a642-4ea5-b77d-9fa7ddf5be64" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TransportContractTests" name="SpectralAdapter_PreservesEveryGeneratedField" />
+    </UnitTest>
+    <UnitTest name="Save_AtomicallyPersistsAndVerifiesCurrentSettings" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1ada28c6-f1e8-84c0-a31d-99f279d33662">
+      <Execution id="2998bf57-658c-4a67-ad85-840abbfc0f40" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.SettingsServiceTests" name="Save_AtomicallyPersistsAndVerifiesCurrentSettings" />
+    </UnitTest>
+    <UnitTest name="ProjectSaveAndClose_NegativeResultsPreserveProject" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="16cce8db-499b-8ad9-8877-1fef604aa4a8">
+      <Execution id="7cf23511-42ce-4457-bf7e-2c74c6aa6fe8" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="ProjectSaveAndClose_NegativeResultsPreserveProject" />
+    </UnitTest>
+    <UnitTest name="ClearChatHistory_SuccessStatusReturnsTrue" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1889a283-8b09-8259-baa6-75b788ebec51">
+      <Execution id="e4c80621-0642-4eae-80ab-6b5ec991b3fc" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ApiClientContractTests" name="ClearChatHistory_SuccessStatusReturnsTrue" />
+    </UnitTest>
+    <UnitTest name="ClearChatHistory_NonSuccessStatusReturnsFalse" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1ca307a7-cbd5-866d-a5f0-a1eff7e24943">
+      <Execution id="cfd6f00a-1d5e-4c1b-9797-6b358182c683" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ApiClientContractTests" name="ClearChatHistory_NonSuccessStatusReturnsFalse" />
+    </UnitTest>
+    <UnitTest name="SortEntriesByTime_PreservesSelectedEntryIdentity" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1bf592ee-a015-81d6-aa92-c566798b88cd">
+      <Execution id="957745e8-b97a-4a63-ad32-3a062f572414" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TimelineViewModelTests" name="SortEntriesByTime_PreservesSelectedEntryIdentity" />
+    </UnitTest>
+    <UnitTest name="SingleVramAdapter_ProducesOneModelSnapshotWithoutShapeDrift" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="137ffbe6-67d1-8855-adf6-db28164fc61c">
+      <Execution id="38d26186-3461-4bd6-99ea-ea06b680546e" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TransportContractTests" name="SingleVramAdapter_ProducesOneModelSnapshotWithoutShapeDrift" />
+    </UnitTest>
+    <UnitTest name="GpuCleanup_BackendFailureNeverReportsCompletion" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="159b432a-ce9d-8194-ade1-a156b5c8b926">
+      <Execution id="a3ebaac0-90a9-4002-b237-17518a7b5033" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ViewModelAndProjectServiceTests" name="GpuCleanup_BackendFailureNeverReportsCompletion" />
+    </UnitTest>
+    <UnitTest name="KeyboardNudge_ClampsAtAdjacentCutsAndPreservesDuration" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="19bcc3d4-434a-8ee4-9137-309bb2490b0f">
+      <Execution id="275031a3-1552-430c-a35f-6f435227e1b8" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TimelineViewModelTests" name="KeyboardNudge_ClampsAtAdjacentCutsAndPreservesDuration" />
+    </UnitTest>
+    <UnitTest name="KeyboardTrim_RespectsSourcePreviousNextAndMinimumDuration" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="171fc1bd-d16c-8f04-9423-ba3219dda602">
+      <Execution id="1eea03d5-46e2-492c-a9db-72b00de420c2" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.TimelineViewModelTests" name="KeyboardTrim_RespectsSourcePreviousNextAndMinimumDuration" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="10faa58a-2ebe-8edb-8fd6-40e718b73675" executionId="66f9656f-237f-4623-ab6e-b91cdd08cacb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1699e4fb-0790-80a8-a7f0-237d51f0ec22" executionId="5f0ebb0d-a80b-4597-91cc-6b36a6c7b9bd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1bf592ee-a015-81d6-aa92-c566798b88cd" executionId="957745e8-b97a-4a63-ad32-3a062f572414" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e0b4879-8097-8fd8-90ab-1b65cf703528" executionId="5e951f59-e1da-4fe3-b2a0-1c73f568ab78" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1df6034f-075e-87e6-a427-99dbc9c7e266" executionId="d54af099-b818-4520-a06f-eefe9b8fe164" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1c07e79d-2f02-82ef-83d6-964f11b01e05" executionId="ec73e59f-0ac5-41fd-a3ec-5ee387a958e1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="16f21dcd-f38b-852e-a24d-29dc52e3b8ce" executionId="86a0c0a3-439e-421f-bfa4-f914022adc19" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="19bcc3d4-434a-8ee4-9137-309bb2490b0f" executionId="275031a3-1552-430c-a35f-6f435227e1b8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e9b7ca6-40ab-8bc5-9ca0-a99118e22657" executionId="593f1672-57c9-416f-968b-7467a60eb695" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1a78dc13-c09d-8a33-9498-a24acd37f9ee" executionId="7b2786a5-adc3-47c9-9a81-735f3a8c99ec" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="10702632-f2dd-8da0-adcc-7ec6f6e64520" executionId="1ad37c47-cf65-4566-92ba-b9fe84a03664" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="171fc1bd-d16c-8f04-9423-ba3219dda602" executionId="1eea03d5-46e2-492c-a9db-72b00de420c2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1c3c9f84-45ce-89ee-8692-412a1b8047b9" executionId="860ff3cc-2d29-4f99-88b1-1ff588233a52" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="137ffbe6-67d1-8855-adf6-db28164fc61c" executionId="38d26186-3461-4bd6-99ea-ea06b680546e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1092c592-39b4-82f8-a9fb-f180cc3abafa" executionId="952dd2ff-e19f-413c-b0e5-ff74ababb656" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="176f4b55-57bd-8c80-b546-52e355a2f3c3" executionId="736ea565-ae0f-4ea0-915a-5d86bd927163" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="159b432a-ce9d-8194-ade1-a156b5c8b926" executionId="a3ebaac0-90a9-4002-b237-17518a7b5033" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="161fa28a-9149-8f48-8d0e-034dd26869ba" executionId="4f378c50-1046-481c-ac66-f850f419fc9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="13131d9b-ab8b-8c9a-a71c-e3322737c720" executionId="9aa2849c-a642-4ea5-b77d-9fa7ddf5be64" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1ada28c6-f1e8-84c0-a31d-99f279d33662" executionId="2998bf57-658c-4a67-ad85-840abbfc0f40" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="11b6c3b2-a8d9-8eca-87d6-da6c3a9ba6fa" executionId="5cea977f-5c33-4d6b-9d9e-5b25865b46e5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e7b904e-1df8-8ef5-accb-8734c6ceb696" executionId="4475f64d-8871-4581-a22e-f9e56689bec4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="16cce8db-499b-8ad9-8877-1fef604aa4a8" executionId="7cf23511-42ce-4457-bf7e-2c74c6aa6fe8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e7225f8-8d08-841a-9b1e-a7e584982326" executionId="efbd0a81-0610-4b94-9a96-112dbd38ca08" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="146b3c6a-d74b-8add-b2a1-51070661d9f2" executionId="d6aa9d84-ea3b-49c9-a3ac-c03e816e8067" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1889a283-8b09-8259-baa6-75b788ebec51" executionId="e4c80621-0642-4eae-80ab-6b5ec991b3fc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="18443503-bf65-8539-8c27-73cbd912230e" executionId="94487220-a850-41e0-a876-4dc35e25e154" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1ca307a7-cbd5-866d-a5f0-a1eff7e24943" executionId="cfd6f00a-1d5e-4c1b-9797-6b358182c683" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Ergebnisse nicht in einer Liste" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="Alle geladenen Ergebnisse" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="28" executed="28" passed="28" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,8 +17,10 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
     private readonly IApiClient _api;
     private readonly ProjectService _projectService;
     private readonly AudioLibraryStateService _audioState;
-    private readonly VideoLibraryStateService _videoState;
     private bool _disposed;
+    private int _refreshVersion;
+    private int _refreshActive;
+    private int _refreshQueued;
 
     [ObservableProperty] private string _projectName = "Kein Projekt";
     [ObservableProperty] private string _projectPath = "–";
@@ -28,13 +31,35 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _statusText = "Bereit";
     [ObservableProperty] private bool _isBusy;
 
-    public ProjectOverviewViewModel(IApiClient api, ProjectService projectService,
-                                   AudioLibraryStateService audioState, VideoLibraryStateService videoState)
+    public string TimelineStatusText =>
+        ProjectName == "Kein Projekt"
+            ? "Kein Projekt geöffnet"
+            : HasTimeline
+                ? "Video Timeline generiert"
+                : "Noch keine Video-Timeline";
+
+    public bool CanGenerateTimeline => ProjectName != "Kein Projekt" && !HasTimeline;
+
+    partial void OnProjectNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(TimelineStatusText));
+        OnPropertyChanged(nameof(CanGenerateTimeline));
+    }
+
+    partial void OnHasTimelineChanged(bool value)
+    {
+        OnPropertyChanged(nameof(TimelineStatusText));
+        OnPropertyChanged(nameof(CanGenerateTimeline));
+    }
+
+    public ProjectOverviewViewModel(
+        IApiClient api,
+        ProjectService projectService,
+        AudioLibraryStateService audioState)
     {
         _api = api;
         _projectService = projectService;
         _audioState = audioState;
-        _videoState = videoState;
 
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) => _ = RefreshAsync());
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) => _ = RefreshAsync());
@@ -48,29 +73,43 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        if (IsBusy) return;
+        if (_disposed)
+            return;
+
+        var version = Interlocked.Increment(ref _refreshVersion);
+        if (Interlocked.CompareExchange(ref _refreshActive, 1, 0) != 0)
+        {
+            Interlocked.Exchange(ref _refreshQueued, 1);
+            return;
+        }
+
         IsBusy = true;
 
         try
         {
             var info = await _api.GetProjectInfoAsync();
+            if (_disposed || version != Volatile.Read(ref _refreshVersion))
+                return;
+
             if (info != null)
             {
+                var audioClips = await _audioState.RefreshAsync();
+                if (_disposed || version != Volatile.Read(ref _refreshVersion))
+                    return;
+
+                double duration = 0;
+                if (audioClips != null)
+                {
+                    foreach (var c in audioClips)
+                        duration = Math.Max(duration, c.DurationSeconds);
+                }
+
                 ProjectName = info.Name;
                 ProjectPath = info.Path;
                 AudioCount = info.AudioCount;
                 VideoCount = info.VideoCount;
                 HasTimeline = info.HasTimeline;
-
-                // Weitere Stats laden
-                var audioClips = await _audioState.RefreshAsync();
-                if (audioClips != null)
-                {
-                    double dur = 0;
-                    foreach (var c in audioClips) dur = Math.Max(dur, c.DurationSeconds);
-                    TotalDuration = dur;
-                }
-
+                TotalDuration = duration;
                 StatusText = "Projekt-Status aktuell";
             }
             else
@@ -80,11 +119,20 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = "Fehler beim Laden der Stats: " + ex.Message;
+            if (!_disposed && version == Volatile.Read(ref _refreshVersion))
+                StatusText = "Fehler beim Laden der Stats: " + ex.Message;
         }
         finally
         {
-            IsBusy = false;
+            if (!_disposed)
+            {
+                IsBusy = false;
+                NotifyProjectCommandState();
+            }
+
+            Interlocked.Exchange(ref _refreshActive, 0);
+            if (!_disposed && Interlocked.Exchange(ref _refreshQueued, 0) == 1)
+                await RefreshAsync();
         }
     }
 
@@ -135,6 +183,44 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanManageProject))]
+    private async Task SaveProjectAsync()
+    {
+        StatusText = "Speichere Projekt...";
+        var success = await _projectService.SaveProjectAsync();
+        if (!success)
+        {
+            StatusText = "Fehler: Projekt konnte nicht gespeichert werden.";
+            return;
+        }
+
+        await RefreshAsync();
+        StatusText = "Projekt gespeichert.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageProject))]
+    private async Task CloseProjectAsync()
+    {
+        var success = await _projectService.CloseProjectAsync();
+        if (!success)
+        {
+            StatusText = "Fehler: Projekt konnte nicht geschlossen werden.";
+            return;
+        }
+
+        ResetState();
+        StatusText = "Projekt geschlossen.";
+        NotifyProjectCommandState();
+    }
+
+    private bool CanManageProject() => _projectService.HasProject;
+
+    private void NotifyProjectCommandState()
+    {
+        SaveProjectCommand.NotifyCanExecuteChanged();
+        CloseProjectCommand.NotifyCanExecuteChanged();
+    }
+
     private void ResetState()
     {
         ProjectName = "Kein Projekt";
@@ -144,6 +230,7 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
         TotalDuration = 0;
         HasTimeline = false;
         StatusText = "Bereit für ein neues Projekt";
+        NotifyProjectCommandState();
     }
 
     [RelayCommand]
@@ -156,6 +243,8 @@ public partial class ProjectOverviewViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _refreshVersion);
+        Interlocked.Exchange(ref _refreshQueued, 0);
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

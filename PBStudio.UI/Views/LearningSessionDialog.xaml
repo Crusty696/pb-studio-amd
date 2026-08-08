@@ -5,7 +5,9 @@
         Title="Lern-Session — 15 unsicherste Cuts"
         Height="540" Width="780"
         Background="{StaticResource AbletonBg}"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        AutomationProperties.Name="Lern-Session"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <Window.InputBindings>
         <KeyBinding Key="D1" Command="{Binding RatePerfectCommand}"/>
@@ -58,6 +60,8 @@
                                   UnloadedBehavior="Stop"
                                   Volume="0.0"
                                   ScrubbingEnabled="True"
+                                  MediaOpened="OnMediaOpened"
+                                  MediaEnded="OnMediaEnded"
                                   Stretch="Uniform"/>
                 </Border>
 
@@ -69,6 +73,8 @@
                                   LoadedBehavior="Manual"
                                   UnloadedBehavior="Stop"
                                   Volume="0.7"
+                                  MediaOpened="OnMediaOpened"
+                                  MediaEnded="OnMediaEnded"
                                   Visibility="Collapsed"/>
 
                     <TextBlock Margin="0,8,0,4" Foreground="{StaticResource AbletonTextDim}">
@@ -85,12 +91,16 @@
 
                     <Separator Margin="0,12,0,8"/>
 
-                    <Button Content="▶ Play / Pause"
+                    <Button Content="{Binding PlayPauseLabel}"
                             Command="{Binding PlayPauseCommand}"
-                            Padding="12,4" Margin="0,0,0,4"/>
+                            Padding="12,4" Margin="0,0,0,4"
+                            AutomationProperties.Name="{Binding PlayPauseLabel}"
+                            AutomationProperties.HelpText="Startet oder pausiert die synchronisierte Vorschau."/>
                     <Button Content="↻ Restart"
                             Command="{Binding RestartCommand}"
-                            Padding="12,4"/>
+                            Padding="12,4"
+                            AutomationProperties.Name="Vorschau neu starten"
+                            AutomationProperties.HelpText="Startet die aktuelle Audio- und Video-Vorschau am Anfang neu."/>
                 </StackPanel>
             </Grid>
         </md:Card>
@@ -101,19 +111,31 @@
                 <Button Content="1 Passt perfekt"
                         Command="{Binding RatePerfectCommand}"
                         Background="#2A8C40" Foreground="White"
-                        Padding="14,8" Margin="0,0,8,0"/>
+                        Padding="14,8" Margin="0,0,8,0"
+                        AutomationProperties.Name="Bewertung: passt perfekt"
+                        AutomationProperties.HelpText="Bewertet den aktuellen Schnitt als perfekte Zuordnung und wechselt zum nächsten Schnitt."
+                        AutomationProperties.AcceleratorKey="1"/>
                 <Button Content="2 Passt"
                         Command="{Binding RateFitsCommand}"
                         Background="#2A6080" Foreground="White"
-                        Padding="14,8" Margin="0,0,8,0"/>
+                        Padding="14,8" Margin="0,0,8,0"
+                        AutomationProperties.Name="Bewertung: passt"
+                        AutomationProperties.HelpText="Bewertet den aktuellen Schnitt als passende Zuordnung und wechselt zum nächsten Schnitt."
+                        AutomationProperties.AcceleratorKey="2"/>
                 <Button Content="3 Passt nicht ganz"
                         Command="{Binding RateNotQuiteCommand}"
                         Background="#A06820" Foreground="White"
-                        Padding="14,8" Margin="0,0,8,0"/>
+                        Padding="14,8" Margin="0,0,8,0"
+                        AutomationProperties.Name="Bewertung: passt nicht ganz"
+                        AutomationProperties.HelpText="Bewertet den aktuellen Schnitt als eher unpassend und wechselt zum nächsten Schnitt."
+                        AutomationProperties.AcceleratorKey="3"/>
                 <Button Content="4 Passt gar nicht"
                         Command="{Binding RateNoMatchCommand}"
                         Background="#A03030" Foreground="White"
-                        Padding="14,8"/>
+                        Padding="14,8"
+                        AutomationProperties.Name="Bewertung: passt gar nicht"
+                        AutomationProperties.HelpText="Bewertet den aktuellen Schnitt als unpassend und wechselt zum nächsten Schnitt."
+                        AutomationProperties.AcceleratorKey="4"/>
             </StackPanel>
         </md:Card>
 
@@ -128,10 +150,22 @@
             <TextBlock Grid.Column="0"
                        VerticalAlignment="Center"
                        Foreground="{StaticResource AbletonTextDim}"
-                       Text="{Binding Status}"/>
-            <Button Grid.Column="1" Content="◀ Prev" Command="{Binding PrevCommand}" Padding="10,4" Margin="0,0,4,0"/>
-            <Button Grid.Column="2" Content="Next ▶" Command="{Binding NextCommand}" Padding="10,4" Margin="0,0,4,0"/>
-            <Button Grid.Column="3" Content="Schließen" Command="{Binding CloseCommand}" Padding="10,4"/>
+                       Text="{Binding Status}"
+                       AutomationProperties.Name="{Binding Status}"
+                       AutomationProperties.LiveSetting="Polite"/>
+            <Button Grid.Column="1" Content="◀ _Zurück" Command="{Binding PrevCommand}" Padding="10,4" Margin="0,0,4,0"
+                    AutomationProperties.Name="Vorheriger Schnitt"
+                    AutomationProperties.HelpText="Zeigt den vorherigen Schnitt zur Bewertung."
+                    AutomationProperties.AcceleratorKey="Pfeil links"/>
+            <Button Grid.Column="2" Content="_Weiter ▶" Command="{Binding NextCommand}" Padding="10,4" Margin="0,0,4,0"
+                    AutomationProperties.Name="Nächster Schnitt"
+                    AutomationProperties.HelpText="Zeigt den nächsten Schnitt zur Bewertung."
+                    AutomationProperties.AcceleratorKey="Pfeil rechts"/>
+            <Button Grid.Column="3" Content="_Schließen" Command="{Binding CloseCommand}" Padding="10,4"
+                    IsCancel="True"
+                    AutomationProperties.Name="Lern-Session schließen"
+                    AutomationProperties.HelpText="Beendet die Lern-Session."
+                    AutomationProperties.AcceleratorKey="Escape"/>
         </Grid>
     </Grid>
 </Window>

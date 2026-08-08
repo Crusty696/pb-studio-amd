@@ -93,6 +93,9 @@ EMBEDDING_CACHE_SIZE = 150       # Max gecachte Mood-Embeddings
 # =============================================================================
 BLACKLIST_PERCENTAGE = 0.8       # NEU: Bis zu 80% der Clips können geblockt sein
 MAX_BLACKLIST_SIZE = 20          # NEU: Maximale Blacklist-Größe (absolute Obergrenze)
+SMALL_LIBRARY_THRESHOLD = 8
+SMALL_LIBRARY_MAX_BLACKLIST_PERCENTAGE = 0.5
+MIN_SELECTABLE_CLIPS = 3
 
 # =============================================================================
 # Motion Analysis

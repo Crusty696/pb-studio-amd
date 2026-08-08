@@ -24,7 +24,14 @@ from enum import IntEnum
 from typing import Dict, Optional, Callable, List, Any
 from collections import OrderedDict
 
+from pb_studio.core.directml_adapter import get_directml_adapter
+
 logger = logging.getLogger(__name__)
+
+# Ab dieser Abweichung zwischen Eigenbuchhaltung und LHM-Sensor wird gemeldet.
+_SENSOR_DISCREPANCY_TOLERANCE_MB = 500
+# Hoechstens alle 60 s melden — reserve() laeuft mehrfach pro Clip.
+_SENSOR_DISCREPANCY_LOG_INTERVAL = 60.0
 
 
 class ModelPriority(IntEnum):
@@ -72,11 +79,6 @@ KNOWN_MODEL_BUDGETS = {
 
     # Embeddings
     "siglip_so400m": 2500,       # SigLIP SO400M: ~2.3-2.5 GB
-
-    # Z1 / GPU-F3: Brain-Embedder (torch-directml) — vorher unsichtbar fuer
-    # VRAMBudgetManager. CLAP ~600MB, SigLIP-2 (HuggingFace) ~1GB.
-    "brain_clap": 600,           # CLAP (laion/larger_clap_music) torch-directml fp32
-    "brain_siglip2": 1100,       # SigLIP-2 Vision-Tower torch-directml fp16
 
     # Combined budgets (mehrere Modelle gleichzeitig aktiv)
     "video_analysis_full": 2900, # RAFT Small + SigLIP SO400M kombiniert
@@ -209,17 +211,20 @@ class VRAMBudgetManager:
             if self._initialized:
                 # Monitor nachtraeglich setzen wenn noch keiner vorhanden
                 if monitor is not None and self.monitor is None:
-                    self.monitor = monitor
-                    logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
+                    self.monitor = self._coherent_monitor(monitor)
+                    if self.monitor is not None:
+                        logger.info("VRAMBudgetManager: Monitor nachtraeglich gesetzt")
                 return
 
             from pb_studio.config_manager import ConfigManager
 
             self.config = ConfigManager()
-            self.monitor = monitor
+            self.adapter = get_directml_adapter()
+            self._physical_vram_mb = self.adapter.dedicated_vram_mb
+            self.monitor = self._coherent_monitor(monitor)
 
             # VRAM limits
-            self._max_vram_mb = max_vram_mb or self._detect_vram_limit()
+            self._max_vram_mb = self._detect_vram_limit(max_vram_mb)
             self._safety_buffer_mb = 500  # Reserve for OS/Desktop
             self._usable_vram_mb = self._max_vram_mb - self._safety_buffer_mb
 
@@ -236,6 +241,10 @@ class VRAMBudgetManager:
             # Telemetry --- pro model_id eine TelemetryEntry, separater Lock
             self._telemetry: Dict[str, TelemetryEntry] = {}
             self._telemetry_lock = threading.RLock()
+
+            # Drossel fuer die Sensor-Diskrepanz-Meldung: reserve() laeuft
+            # mehrfach pro Clip, die Meldung soll das Log nicht fluten.
+            self._last_discrepancy_log = 0.0
 
             self._initialized = True
             logger.info(
@@ -266,116 +275,144 @@ class VRAMBudgetManager:
         with cls._lock:
             cls._instance = None
 
-    def _detect_vram_limit(self) -> int:
-        """
-        Detect total VRAM using multiple methods.
+    def _coherent_monitor(self, monitor):
+        if monitor is None:
+            return None
+        monitor_luid = getattr(monitor, "selected_adapter_luid", None)
+        if monitor_luid != self.adapter.luid:
+            logger.error(
+                "VRAM monitor rejected: selected LUID %s does not match "
+                "DirectML LUID %s",
+                monitor_luid,
+                self.adapter.luid,
+            )
+            return None
+        return monitor
 
-        Priority:
-        1. Config (if explicitly set > 0)
-        2. SystemMonitor (LibreHardwareMonitor)
-        3. WMI Win32_VideoController query
-        4. Fallback: 8192MB
-        """
-        # 1. Config (nur wenn explizit gesetzt oder per Env-Var injiziert)
+    def _detect_vram_limit(self, requested_limit: Optional[int] = None) -> int:
+        """Clamp a configured limit to the selected adapter's physical VRAM."""
         import os
-        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get("PB_STUDIO_FORCED_VRAM")
-        config_limit = int(env_limit) if env_limit and env_limit.isdigit() else self.config.get("hardware", {}).get("vram_limit_mb", 0)
-        if config_limit > 0:
-            logger.info(f"Using configured VRAM limit: {config_limit}MB")
-            return config_limit
 
-        # 2. SystemMonitor (LibreHardwareMonitor)
-        if self.monitor:
-            try:
-                stats = self.monitor.get_stats()
-                total = stats.get("gpu_memory_total", 0)
-                if total > 0:
-                    logger.info(f"Detected VRAM from monitor: {total}MB")
-                    return int(total)
-            except Exception as e:
-                logger.debug(f"Monitor VRAM detection failed: {e}")
-
-        # 3. WMI Query (Windows-native GPU-Erkennung)
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 "Get-CimInstance Win32_VideoController | "
-                 "Where-Object { $_.AdapterRAM -gt 0 } | "
-                 "Select-Object -First 1 -ExpandProperty AdapterRAM"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                adapter_ram = int(result.stdout.strip())
-                # AdapterRAM ist in Bytes, konvertiere zu MB
-                vram_mb = adapter_ram // (1024 * 1024)
-                # WMI meldet bei >4GB GPUs manchmal nur 4GB (32-bit Limit)
-                # In dem Fall ignorieren wir den Wert
-                if vram_mb > 4096:
-                    logger.info(f"Detected VRAM via WMI: {vram_mb}MB")
-                    return vram_mb
-                elif vram_mb > 0:
-                    logger.debug(f"WMI reports {vram_mb}MB (possibly capped at 4GB)")
-        except Exception as e:
-            logger.debug(f"WMI VRAM detection failed: {e}")
-
-        # 4. DirectX Adapter Query via dxdiag-artige Methode
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 "(Get-CimInstance Win32_VideoController | "
-                 "Where-Object { $_.Name -match 'AMD|Radeon' } | "
-                 "Select-Object -First 1).AdapterRAM"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                adapter_ram = int(result.stdout.strip())
-                vram_mb = adapter_ram // (1024 * 1024)
-                if vram_mb > 0:
-                    # Wenn 4GB gemeldet wird bei einer GPU die mehr hat,
-                    # versuche den Namen zu matchen
-                    logger.info(f"Detected AMD GPU VRAM via WMI: {vram_mb}MB")
-                    if vram_mb <= 4096:
-                        # WMI 32-bit Limit - schaetze anhand des GPU-Namens
-                        name_result = subprocess.run(
-                            ["powershell", "-Command",
-                             "(Get-CimInstance Win32_VideoController | "
-                             "Where-Object { $_.Name -match 'AMD|Radeon' } | "
-                             "Select-Object -First 1).Name"],
-                            capture_output=True, text=True, timeout=10
-                        )
-                        if name_result.returncode == 0:
-                            gpu_name = name_result.stdout.strip().lower()
-                            # Bekannte AMD GPU VRAM-Groessen
-                            vram_by_name = {
-                                "7900 xtx": 24576, "7900 xt": 20480,
-                                "7900 gre": 16384, "7800 xt": 16384,
-                                "7700 xt": 12288, "7600": 8192,
-                                "6950 xt": 16384, "6900 xt": 16384,
-                                "6800 xt": 16384, "6800": 16384,
-                                "6700 xt": 12288, "6600 xt": 8192,
-                            }
-                            for model, vram in vram_by_name.items():
-                                if model in gpu_name:
-                                    logger.info(f"Matched GPU '{gpu_name}' -> {vram}MB VRAM")
-                                    return vram
-        except Exception as e:
-            logger.debug(f"AMD GPU detection failed: {e}")
-
-        # 5. Fallback
-        logger.warning(
-            "VRAM-Erkennung fehlgeschlagen! Alle Methoden (Config, Monitor, WMI, GPU-Name) "
-            "konnten VRAM-Größe nicht bestimmen. Verwende konservativen Fallback von 8192MB. "
-            "Empfehlung: Setze 'vram_limit_mb' in config.yaml unter 'hardware' für korrekte Werte."
+        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get(
+            "PB_STUDIO_FORCED_VRAM"
         )
-        return 8192
+        if requested_limit is None:
+            if env_limit:
+                if not env_limit.isdigit():
+                    raise ValueError(
+                        "PBSTUDIO_VRAM_LIMIT_MB must be a non-negative integer"
+                    )
+                requested_limit = int(env_limit)
+            else:
+                requested_limit = self.config.get("hardware", {}).get(
+                    "vram_limit_mb",
+                    0,
+                )
+        if isinstance(requested_limit, bool) or not isinstance(requested_limit, int):
+            raise ValueError("VRAM limit must be an integer number of MB")
+        if requested_limit < 0:
+            raise ValueError("VRAM limit cannot be negative")
+
+        effective = (
+            min(requested_limit, self._physical_vram_mb)
+            if requested_limit > 0
+            else self._physical_vram_mb
+        )
+        if requested_limit > self._physical_vram_mb:
+            logger.warning(
+                "Configured VRAM limit %dMB exceeds selected adapter physical "
+                "VRAM %dMB; clamped",
+                requested_limit,
+                self._physical_vram_mb,
+            )
+        logger.info(
+            "VRAM ceiling bound to DirectML adapter index=%d luid=%s: "
+            "physical=%dMB effective=%dMB",
+            self.adapter.device_id,
+            self.adapter.luid,
+            self._physical_vram_mb,
+            effective,
+        )
+        return effective
 
     @property
     def available_vram_mb(self) -> int:
-        """Get available VRAM (usable - reserved - committed)."""
+        """Get available VRAM (usable - reserved - committed).
+
+        Achtung: reine Eigenbuchhaltung. Fremdprozesse auf derselben Karte
+        (LM Studio haelt z.B. dauerhaft ~6,8 GB) tauchen hier NICHT auf.
+        Der Abgleich mit der Realitaet passiert in ``sensor_free_vram_mb``.
+        """
         with self._registry_lock:
             return max(0, self._usable_vram_mb - self._reserved_mb - self._committed_mb)
+
+    def sensor_free_vram_mb(self) -> Optional[int]:
+        """Real freier VRAM laut LibreHardwareMonitor, oder None ohne Sensor.
+
+        Audit 2026-08-07: ``self.monitor`` wurde gesetzt und danach in KEINER
+        Allokationsentscheidung gelesen — der einzige Gegencheck lebte in
+        ``VRAMArbiter.can_allocate()``, das repo-weit keinen Aufrufer hat.
+        Ergebnis: in 56.746 Logzeilen kein einziges "VRAM tracking discrepancy",
+        obwohl die Eigenbuchhaltung um ~7,5 GB danebenlag.
+        """
+        monitor = self.monitor
+        if monitor is None:
+            return None
+        try:
+            stats = monitor.get_stats()
+        except Exception as exc:  # noqa: BLE001 — Telemetrie darf nie werfen
+            logger.debug("VRAM-Sensor nicht lesbar: %s", exc)
+            return None
+        if stats.get("monitoring_status") != "ready":
+            return None
+        adapter_luid = getattr(self.adapter, "luid", None)
+        sensor_luid = stats.get("adapter_luid")
+        if adapter_luid and sensor_luid and sensor_luid != adapter_luid:
+            # Sensor misst eine andere Karte (iGPU) — Wert waere irrefuehrend.
+            return None
+        total = int(stats.get("gpu_memory_total") or 0)
+        used = int(stats.get("gpu_memory_used") or 0)
+        if total <= 0:
+            return None
+        return max(0, total - used - self._safety_buffer_mb)
+
+    def _log_sensor_discrepancy(self, model_id: str, needed_mb: int) -> None:
+        """Meldet, wenn Eigenbuchhaltung und Sensor auseinanderlaufen.
+
+        Bewusst nur Meldung, keine Ablehnung: DirectML kann bei knappem
+        dedizierten VRAM auf Shared Memory ausweichen. Eine Sperre wuerde aus
+        "langsam" ein "fehlgeschlagen" machen — ein neuer Fehlermodus, den es
+        heute nicht gibt. Sichtbarkeit ist das, was fehlte.
+        """
+        real_free = self.sensor_free_vram_mb()
+        if real_free is None:
+            return
+        buchhaltung = self.available_vram_mb
+        now = time.monotonic()
+        if abs(real_free - buchhaltung) <= _SENSOR_DISCREPANCY_TOLERANCE_MB:
+            return
+        if now - self._last_discrepancy_log < _SENSOR_DISCREPANCY_LOG_INTERVAL:
+            return
+        self._last_discrepancy_log = now
+        logger.warning(
+            "VRAM tracking discrepancy: Buchhaltung=%dMB, Sensor=%dMB "
+            "(Differenz=%dMB) — Fremdprozesse auf der Karte werden nicht "
+            "mitgezaehlt. Anforderung: %dMB fuer %s.",
+            buchhaltung,
+            real_free,
+            abs(real_free - buchhaltung),
+            needed_mb,
+            model_id,
+        )
+        if real_free < needed_mb:
+            logger.warning(
+                "VRAM real knapp: %dMB frei laut Sensor, %dMB angefordert fuer "
+                "%s. Reservierung laeuft trotzdem — DirectML kann auf Shared "
+                "Memory ausweichen.",
+                real_free,
+                needed_mb,
+                model_id,
+            )
 
     def update_max_vram(self, limit_mb: int) -> None:
         """Dynamically update maximum VRAM limit with safety protection.
@@ -386,36 +423,39 @@ class VRAMBudgetManager:
         Raises:
             ValueError: If new usable VRAM is less than currently committed VRAM.
         """
-        callbacks_to_invoke = []
+        if isinstance(limit_mb, bool) or not isinstance(limit_mb, int):
+            raise ValueError("VRAM limit must be an integer number of MB")
+        if limit_mb <= 0:
+            limit_mb = self._physical_vram_mb
+        effective_limit = min(limit_mb, self._physical_vram_mb)
+        if effective_limit < limit_mb:
+            logger.warning(
+                "Requested VRAM limit %dMB exceeds physical ceiling %dMB; clamped",
+                limit_mb,
+                self._physical_vram_mb,
+            )
+        new_usable = effective_limit - self._safety_buffer_mb
+        if new_usable < 0:
+            raise ValueError("Das VRAM-Limit ist zu niedrig (Sicherheits-Buffer fuer OS nicht gedeckt).")
+
         with self._registry_lock:
-            new_usable = limit_mb - self._safety_buffer_mb
-            if new_usable < 0:
-                raise ValueError("Das VRAM-Limit ist zu niedrig (Sicherheits-Buffer fuer OS nicht gedeckt).")
-                
+            shortfall = max(0, self._committed_mb - new_usable)
+
+        if shortfall:
+            self._evict_for_space(shortfall)
+
+        with self._registry_lock:
             if new_usable < self._committed_mb:
-                shortfall = self._committed_mb - new_usable
-                freed, callbacks_to_invoke = self._evict_for_space(shortfall)
-                
-                if new_usable < self._committed_mb:
-                    raise ValueError(
-                        f"Limit kann nicht auf {limit_mb}MB gesenkt werden. "
-                        f"Aktuell sind {self._committed_mb + self._safety_buffer_mb}MB durch aktive Prozesse belegt."
-                    )
-            
-            self._max_vram_mb = limit_mb
+                raise ValueError(
+                    f"Limit kann nicht auf {effective_limit}MB gesenkt werden. "
+                    f"Aktuell sind {self._committed_mb + self._safety_buffer_mb}MB durch aktive Prozesse belegt."
+                )
+            self._max_vram_mb = effective_limit
             self._usable_vram_mb = new_usable
             logger.info(
                 f"VRAMBudgetManager: Dynamically updated limits. "
                 f"Max={self._max_vram_mb}MB, Usable={self._usable_vram_mb}MB"
             )
-
-        # Callbacks ausserhalb von self._registry_lock ausfuehren, um zirkulaere Deadlocks zu vermeiden
-        for name, callback, budget in callbacks_to_invoke:
-            try:
-                callback()
-            except Exception as e:
-                logger.error(f"Unload callback failed for {name}: {e}")
-                budget.metadata["eviction_error"] = True
 
 
     @property
@@ -438,6 +478,10 @@ class VRAMBudgetManager:
 
             return {
                 "max_vram_mb": self._max_vram_mb,
+                "physical_vram_mb": self._physical_vram_mb,
+                "adapter_index": self.adapter.device_id,
+                "adapter_luid": self.adapter.luid,
+                "adapter_name": self.adapter.name,
                 "usable_vram_mb": self._usable_vram_mb,
                 "reserved_mb": self._reserved_mb,
                 "committed_mb": self._committed_mb,
@@ -582,8 +626,6 @@ class VRAMBudgetManager:
         Returns:
             True if reservation successful
         """
-        callbacks_to_invoke = []
-        success = False
         with self._registry_lock:
             if model_id not in self._models:
                 logger.error(f"Cannot reserve: Model {model_id} not registered")
@@ -596,53 +638,42 @@ class VRAMBudgetManager:
                 budget.touch()
                 return True
 
-            # Check space
-            if budget.estimated_vram_mb > self.available_vram_mb:
-                if force:
-                    shortfall = budget.estimated_vram_mb - self.available_vram_mb
-                    # Try eviction
-                    freed, callbacks_to_invoke = self._evict_for_space(shortfall, exclude=[model_id])
-                    if freed < shortfall:
-                        logger.error(
-                            f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB (Shortfall: {shortfall}MB), "
-                            f"could only free {freed}MB"
-                        )
-                        success = False
-                    else:
-                        success = True
-                else:
-                    logger.warning(
-                        f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB, "
-                        f"Available {self.available_vram_mb}MB"
-                    )
-                    success = False
-            else:
-                success = True
+            shortfall = max(0, budget.estimated_vram_mb - self.available_vram_mb)
 
-            if success:
-                # Reserve
-                budget.is_reserved = True
+        if shortfall:
+            if not force:
+                logger.warning(
+                    f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB, "
+                    f"Available {self.available_vram_mb}MB"
+                )
+                return False
+            self._evict_for_space(shortfall, exclude=[model_id])
+
+        with self._registry_lock:
+            budget = self._models.get(model_id)
+            if budget is None:
+                return False
+            if budget.is_reserved or budget.is_loaded:
                 budget.touch()
-                self._reserved_mb += budget.estimated_vram_mb
+                return True
+            if budget.estimated_vram_mb > self.available_vram_mb:
+                logger.error(
+                    f"Cannot reserve {budget.name}: Need {budget.estimated_vram_mb}MB, "
+                    f"Available {self.available_vram_mb}MB after eviction"
+                )
+                return False
 
-                # Move to end of OrderedDict (LRU tracking)
-                self._models.move_to_end(model_id)
+            budget.is_reserved = True
+            budget.touch()
+            self._reserved_mb += budget.estimated_vram_mb
+            self._models.move_to_end(model_id)
+            benoetigt = budget.estimated_vram_mb
 
-                logger.info(f"Reserved {budget.estimated_vram_mb}MB for {budget.name}")
+            logger.info(f"Reserved {budget.estimated_vram_mb}MB for {budget.name}")
 
-        # Callbacks ausserhalb von self._registry_lock ausfuehren, um zirkulaere Deadlocks zu vermeiden
-        for name, callback, budget in callbacks_to_invoke:
-            try:
-                callback()
-            except Exception as e:
-                logger.error(f"Unload callback failed for {name}: {e}")
-                budget.metadata["eviction_error"] = True
-                with self._registry_lock:
-                    if not budget.is_loaded:
-                        budget.is_loaded = True
-                        self._committed_mb += budget.estimated_vram_mb
-
-        return success
+        # Ausserhalb des Registry-Locks: der Sensorabruf kann I/O kosten.
+        self._log_sensor_discrepancy(model_id, benoetigt)
+        return True
 
 
     def commit(self, model_id: str) -> bool:
@@ -765,9 +796,8 @@ class VRAMBudgetManager:
         Returns:
             Tuple (freed_mb, callbacks_to_invoke)
         """
-        callbacks_to_invoke = []
-        freed = 0
-        
+        candidates_to_evict: list[tuple[str, str, Callable, ModelBudget]] = []
+        potential_mb = 0
         with self._registry_lock:
             exclude = set(exclude or [])
 
@@ -776,27 +806,61 @@ class VRAMBudgetManager:
             candidates = [
                 (m.priority, m.last_used, mid, m)
                 for mid, m in self._models.items()
-                if m.is_loaded and mid not in exclude and m.priority != ModelPriority.CRITICAL
+                if (
+                    m.is_loaded
+                    and mid not in exclude
+                    and m.priority != ModelPriority.CRITICAL
+                    and m.unload_callback is not None
+                    and not m.metadata.get("eviction_pending")
+                )
             ]
             candidates.sort(key=lambda x: (-x[0], x[1]))  # Evict high number (low priority) first
 
             for _, _, model_id, budget in candidates:
-                if freed >= needed_mb:
+                if potential_mb >= needed_mb:
                     break
 
                 logger.info(f"Evicting {budget.name} ({budget.priority.name}) to free {budget.estimated_vram_mb}MB")
+                budget.metadata["eviction_pending"] = True
+                candidates_to_evict.append(
+                    (model_id, budget.name, budget.unload_callback, budget)
+                )
+                potential_mb += budget.estimated_vram_mb
 
-                # Callbacks sammeln
-                if budget.unload_callback:
-                    callbacks_to_invoke.append((budget.name, budget.unload_callback, budget))
+        return self._invoke_eviction_callbacks(candidates_to_evict), []
 
-                # IMMER VRAM freigeben
-                self._committed_mb -= budget.estimated_vram_mb
-                self._committed_mb = max(0, self._committed_mb)  # Clamp — konsistent mit evict_all
-                budget.is_loaded = False
+    def _invoke_eviction_callbacks(
+        self,
+        candidates: List[tuple[str, str, Callable, ModelBudget]],
+    ) -> int:
+        """Run unload callbacks and account only confirmed successful unloads."""
+        freed = 0
+        for model_id, name, callback, budget in candidates:
+            callback_ok = False
+            try:
+                callback_ok = callback() is not False
+            except Exception as exc:
+                logger.error(f"Unload callback failed for {name}: {exc}")
+                budget.metadata["eviction_error"] = str(exc)
+
+            with self._registry_lock:
+                budget.metadata.pop("eviction_pending", None)
+                if not callback_ok:
+                    continue
+                budget.metadata.pop("eviction_error", None)
+                if budget.is_loaded:
+                    self._committed_mb = max(
+                        0,
+                        self._committed_mb - budget.estimated_vram_mb,
+                    )
+                    budget.is_loaded = False
                 freed += budget.estimated_vram_mb
-
-        return freed, callbacks_to_invoke
+                logger.info(
+                    "Evicted %s after successful unload callback (%dMB)",
+                    model_id,
+                    budget.estimated_vram_mb,
+                )
+        return freed
 
 
     def evict_all(self, min_priority: ModelPriority = ModelPriority.LOW) -> int:
@@ -809,37 +873,22 @@ class VRAMBudgetManager:
         Returns:
             Amount of VRAM freed
         """
-        callbacks_to_invoke = []
-        freed = 0
-        
+        callbacks_to_invoke: list[tuple[str, str, Callable, ModelBudget]] = []
         with self._registry_lock:
             for model_id, budget in list(self._models.items()):
-                if budget.is_loaded and budget.priority >= min_priority:
+                if (
+                    budget.is_loaded
+                    and budget.priority >= min_priority
+                    and budget.unload_callback is not None
+                    and not budget.metadata.get("eviction_pending")
+                ):
                     logger.info(f"Evicting {budget.name} ({budget.priority.name})")
+                    budget.metadata["eviction_pending"] = True
+                    callbacks_to_invoke.append(
+                        (model_id, budget.name, budget.unload_callback, budget)
+                    )
 
-                    if budget.unload_callback:
-                        callbacks_to_invoke.append((model_id, budget.name, budget.unload_callback, budget))
-
-                    # Immer Accounting aktualisieren
-                    self._committed_mb -= budget.estimated_vram_mb
-                    self._committed_mb = max(0, self._committed_mb)  # nie negativ
-                    budget.is_loaded = False
-                    budget.metadata.setdefault("evicted", True)
-                    freed += budget.estimated_vram_mb
-
-        # Callbacks ausserhalb des Locks ausfuehren (B-3 Fix)
-        for model_id, name, callback, budget in callbacks_to_invoke:
-            try:
-                callback()
-            except Exception as e:
-                logger.error(f"Unload callback failed für {model_id}: {e}")
-                budget.metadata["eviction_error"] = str(e)
-                with self._registry_lock:
-                    if not budget.is_loaded:
-                        budget.is_loaded = True
-                        self._committed_mb += budget.estimated_vram_mb
-
-        return freed
+        return self._invoke_eviction_callbacks(callbacks_to_invoke)
 
     # =========================================================================
     # Convenience Methods

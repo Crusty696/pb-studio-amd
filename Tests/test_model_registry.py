@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import httpx
 import pytest
@@ -194,6 +195,53 @@ def test_no_suitable_model_raises():
         _run(go())
 
 
+def test_embedding_only_native_metadata_cannot_preempt_chat_or_vision():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/v0/models"):
+            return httpx.Response(
+                200,
+                json={"data": [
+                    {"id": "text-embedding-nomic", "type": "embeddings"},
+                ]},
+            )
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "text-embedding-nomic", "object": "model"}]},
+        )
+
+    async def go():
+        async with LMStudioClient(transport=httpx.MockTransport(handler)) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            with pytest.raises(NoSuitableModelError):
+                reg.select_best_for_task("chat_general", "balance")
+            with pytest.raises(NoSuitableModelError):
+                reg.select_best_for_task("video_captioning", "balance")
+
+    _run(go())
+
+
+def test_native_ollama_vision_capability_allows_tokenless_model_name():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/api/tags"):
+            return httpx.Response(200, json={"models": [{
+                "name": "camera-reader:latest",
+                "capabilities": ["completion", "vision"],
+            }]})
+        return httpx.Response(404)
+
+    async def go():
+        async with LMStudioClient(
+            base_url="http://localhost:11434/v1",
+            transport=httpx.MockTransport(handler),
+        ) as client:
+            reg = ModelRegistry(client=client)
+            await reg.refresh()
+            return reg.select_best_for_task("video_captioning", "balance")
+
+    assert _run(go()) == "camera-reader:latest"
+
+
 
 def test_vision_task_skips_text_qwen_model():
     """Regression: 'qwen' im Namen eines TEXT-Modells (deepseek-r1-qwen3) darf
@@ -282,17 +330,17 @@ def test_recommendation_reports_top_preference():
 
 def test_recommendation_reports_fallback_index():
     async def go():
-        # chat_general speed: ["google/gemma-4-e4b", "gemma-3-1b-..."]
+        # chat_general speed: ["google/gemma-4-e4b", "qwen/qwen3.5-9b"]
         # nur das zweite installiert — fallback #1
         async with _client_with_models(
-            ["gemma-3-1b-it-glm-4.7-flash-heretic-uncensored-thinking_gguf"]
+            ["qwen/qwen3.5-9b"]
         ) as client:
             reg = ModelRegistry(client=client)
             await reg.refresh()
             return reg.recommendation_with_reason("chat_general", "speed")
 
     out = _run(go())
-    assert "gemma-3-1b" in out["model"]
+    assert "qwen/qwen3.5-9b" in out["model"]
     assert "fallback" in out["reason"]
 
 
@@ -320,3 +368,40 @@ def test_recommendation_when_none_installed():
     out = _run(go())
     assert out["model"] is None
     assert out["installed"] == []
+
+
+# ======================================================================
+# Sessionsperre nicht ladbarer Modelle (Audit 2026-08-07)
+#
+# Die Sperre war unbefristet. Live reproduziert: ein grosses Modell mit
+# JIT-TTL im VRAM laesst den Ladeversuch mit "Failed to load model ...
+# Engine protocol startup was aborted" scheitern — nach dem Entladen laedt
+# dasselbe Modell wieder. Unbefristet haette das Vision-Tagging fuer den
+# Rest der Backend-Laufzeit ausgesetzt.
+# ======================================================================
+def test_unloadable_sperre_laeuft_ab():
+    import pb_studio.ai.model_registry as mr
+
+    mr.reset_unloadable_models()
+    key = ("lmstudio", "irgendein-modell")
+    try:
+        mr._UNLOADABLE_MODELS[key] = time.monotonic() + 900.0
+        assert key in mr.get_unloadable_models()
+
+        # Ablaufzeitpunkt in die Vergangenheit setzen -> Sperre faellt weg.
+        mr._UNLOADABLE_MODELS[key] = time.monotonic() - 1.0
+        assert key not in mr.get_unloadable_models()
+        assert key not in mr._UNLOADABLE_MODELS, "abgelaufener Eintrag muss entfernt werden"
+    finally:
+        mr.reset_unloadable_models()
+
+
+def test_is_unloadable_error_erkennt_engine_abbruch():
+    import pb_studio.ai.model_registry as mr
+
+    exc = RuntimeError(
+        'Failed to load model "qwen3.5-9b". '
+        "Error: Engine protocol startup was aborted."
+    )
+    assert mr._is_unloadable_error(exc) is True
+    assert mr._is_unloadable_error(TimeoutError()) is False

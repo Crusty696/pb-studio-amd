@@ -4,13 +4,19 @@
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             xmlns:models="clr-namespace:PBStudio.UI.Models"
-             xmlns:converters="clr-namespace:PBStudio.UI.Converters"
-             xmlns:controls="clr-namespace:PBStudio.UI.Controls"
-             Background="{StaticResource AbletonBg}">
+              xmlns:models="clr-namespace:PBStudio.UI.Models"
+              xmlns:converters="clr-namespace:PBStudio.UI.Converters"
+              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
+              Background="{StaticResource AbletonBg}"
+              Focusable="True"
+              PreviewKeyDown="TimelineView_PreviewKeyDown"
+              KeyboardNavigation.TabNavigation="Continue"
+              AutomationProperties.Name="Timeline"
+              AutomationProperties.HelpText="Pfeile wählen und scrubben; Steuerung oder Alt verändert den ausgewählten Cut.">
 
     <UserControl.Resources>
         <converters:TimeToPixelConverter x:Key="TimeToPixelConverter"/>
+        <converters:StatusTextToBrushConverter x:Key="StatusTextToBrushConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         
         <Style x:Key="AbletonCheckBox" TargetType="CheckBox">
@@ -31,19 +37,48 @@
                     <Button Command="{Binding RefreshTimelineCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
+                            AutomationProperties.Name="Timeline laden"
+                            AutomationProperties.HelpText="Lädt die aktuelle Cut-Liste erneut."
                             ToolTip="Timeline laden&#x0a;• Was es macht: Lädt die aktuelle Cut-Liste des Smart Directors neu auf die Zeitachse.&#x0a;• Wozu es dient: Aktualisiert die visuelle Darstellung, falls der Smart Director ein neues Video generiert hat oder externe Änderungen vorliegen.&#x0a;• Wann &amp; wie nutzen: Nach jeder neuen Generierung oder manuellen Anpassung anklicken, um den aktuellsten Stand anzuzeigen."
                             Padding="8,4" Height="30">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Timeline laden" VerticalAlignment="Center" FontSize="12"/>
+                            <AccessText Text="Timeline _laden" VerticalAlignment="Center" FontSize="12"/>
                         </StackPanel>
                     </Button>
-                    
+
+                    <Button Command="{Binding PreviousCutCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonText}"
+                            AutomationProperties.Name="Vorherigen Cut auswählen"
+                            AutomationProperties.HelpText="Wählt den vorherigen Cut. Tastatur: Pfeil nach oben."
+                            ToolTip="Vorherigen Cut auswählen"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <icon:PackIconMaterial Kind="ChevronLeft" Width="14" Height="14" VerticalAlignment="Center"/>
+                            <AccessText Text="_Zurück" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding NextCutCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{StaticResource AbletonText}"
+                            AutomationProperties.Name="Nächsten Cut auswählen"
+                            AutomationProperties.HelpText="Wählt den nächsten Cut. Tastatur: Pfeil nach unten."
+                            ToolTip="Nächsten Cut auswählen"
+                            Padding="8,4" Height="30">
+                        <StackPanel Orientation="Horizontal">
+                            <AccessText Text="_Weiter" VerticalAlignment="Center" FontSize="12"/>
+                            <icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
                     
                     <!-- Zoom Controls -->
                     <icon:PackIconMaterial Kind="MagnifyMinus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <Slider Width="120" Minimum="10" Maximum="500" Value="{Binding PixelsPerSecond}"
+                            AutomationProperties.Name="Horizontaler Timeline-Zoom"
+                            AutomationProperties.HelpText="Ändert die horizontale Zeitauflösung zwischen 10 und 500 Pixel pro Sekunde."
                             VerticalAlignment="Center" ToolTip="Horizontaler Zoom&#x0a;• Was es macht: Vergrößert oder verkleinert die zeitliche Darstellung der Timeline.&#x0a;• Wozu es dient: Ermöglicht das präzise Trimmen und Betrachten einzelner Takte und Videoschnitte.&#x0a;• Wann &amp; wie nutzen: Nach links schieben für eine Gesamtübersicht, nach rechts schieben für detailgenaues Arbeiten an Taktgrenzen."/>
                     <icon:PackIconMaterial Kind="MagnifyPlus" Width="14" Height="14" Foreground="{StaticResource AbletonTextDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
 
@@ -52,13 +87,17 @@
                     <!-- Show Waveform/Beatgrid Toggles -->
                     <CheckBox IsChecked="{Binding ShowWaveform}"
                               Style="{StaticResource AbletonCheckBox}"
+                              AutomationProperties.Name="Wellenform anzeigen"
+                              AutomationProperties.HelpText="Blendet die Audio-Wellenform ein oder aus."
                               ToolTip="Wellenform anzeigen&#x0a;• Was es macht: Blendet die visuelle Lautstärkekurve (Wellenform) der geladenen Musikspur ein oder aus.&#x0a;• Wozu es dient: Hilft dabei, Breaks, Drops und rhythmische Wechsel in der Musik visuell zu lokalisieren.&#x0a;• Wann &amp; wie nutzen: Aktiviert lassen, um Schnitte präzise auf Audio-Ereignisse abzustimmen."
-                              Content="Wellenform"/>
+                              Content="Wellen_form"/>
                               
                     <CheckBox IsChecked="{Binding ShowBeatgrid}"
                               Style="{StaticResource AbletonCheckBox}"
+                              AutomationProperties.Name="Beatgrid anzeigen"
+                              AutomationProperties.HelpText="Blendet das Beatgrid ein oder aus."
                               ToolTip="Beatgrid anzeigen&#x0a;• Was es macht: Zeigt ein regelmäßiges Liniennetz auf Takt-Basis über der Audiospur an.&#x0a;• Wozu es dient: Macht die einzelnen Musik-Beats sichtbar, um Schnitte perfekt synchron zur Musik auszurichten.&#x0a;• Wann &amp; wie nutzen: Einschalten für rhythmisch exakte Videomontagen und taktsynchrones Cutten."
-                              Content="Beatgrid"
+                              Content="_Beatgrid"
                               Margin="10,0,6,0"/>
 
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" Background="{StaticResource AbletonBorder}"/>
@@ -67,6 +106,8 @@
                     <TextBlock Text="ab" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBox Width="44" Height="22" Padding="4,2"
                              Text="{Binding PreviewStartSec, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:F1}}"
+                             AutomationProperties.Name="Vorschau-Startsekunde"
+                             AutomationProperties.HelpText="Startposition der gerenderten Vorschau in Sekunden."
                              Background="{StaticResource AbletonSurface}"
                              Foreground="{StaticResource AbletonText}"
                              BorderBrush="{StaticResource AbletonBorder}"
@@ -76,6 +117,8 @@
                     <TextBlock Text="Dauer" Foreground="{StaticResource AbletonTextDim}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBox Width="44" Height="22" Padding="4,2"
                              Text="{Binding PreviewDurationSec, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:F0}}"
+                             AutomationProperties.Name="Vorschau-Dauer"
+                             AutomationProperties.HelpText="Dauer der gerenderten Vorschau in Sekunden."
                              Background="{StaticResource AbletonSurface}"
                              Foreground="{StaticResource AbletonText}"
                              BorderBrush="{StaticResource AbletonBorder}"
@@ -86,11 +129,13 @@
                             IsEnabled="{Binding IsGeneratingPreview, Converter={StaticResource InverseBooleanConverter}}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
+                            AutomationProperties.Name="Vorschau rendern"
+                            AutomationProperties.HelpText="Rendert den eingestellten Timeline-Ausschnitt als Vorschau."
                             ToolTip="Vorschau-Video rendern&#x0a;• Was es macht: Erstellt ein temporäres Vorschau-Video in kleiner Auflösung (640×360) für den gewählten Zeitbereich.&#x0a;• Wozu es dient: Ermöglicht eine flüssige Echtzeit-Vorschau der generierten Videomontage inklusive Musik.&#x0a;• Wann &amp; wie nutzen: Klicken nach dem Ändern von Pacing-Gewichten oder Schnitten, um das Endergebnis visuell zu bewerten."
                             Padding="8,4" Height="30">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="MovieOpenPlay" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Preview rendern" VerticalAlignment="Center" FontSize="12"/>
+                            <AccessText Text="_Vorschau rendern" VerticalAlignment="Center" FontSize="12"/>
                         </StackPanel>
                     </Button>
                     <ProgressBar Width="40" Height="4" Margin="6,0,0,0" VerticalAlignment="Center"
@@ -102,6 +147,19 @@
 
                 <!-- Stats -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Audit-Fix 2026-07-10 (Sweep-Finding HIGH-12): StatusText war vorher
+                         an kein UI-Element gebunden - Refresh-Fehler blieben unsichtbar. -->
+                    <TextBox Text="{Binding StatusText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             AutomationProperties.Name="Timeline-Status"
+                             AutomationProperties.LiveSetting="Polite"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{Binding StatusText, Converter={StaticResource StatusTextToBrushConverter}}"
+                             FontSize="10"
+                             FontWeight="SemiBold"
+                             VerticalAlignment="Center"
+                             Margin="0,0,14,0"/>
                     <TextBlock Text="{Binding PreviewStatus}"
                                Foreground="{StaticResource AbletonAccent}"
                                FontSize="10" VerticalAlignment="Center" Margin="0,0,14,0"/>
@@ -184,14 +242,29 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Button Grid.Column="0" Click="PlayPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0">
-                            <icon:PackIconMaterial Kind="Play" Width="14" Height="14"/>
+                        <Button Grid.Column="0" Click="PlayPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0"
+                                AutomationProperties.Name="Clip-Vorschau starten"
+                                AutomationProperties.HelpText="Startet die Vorschau des ausgewählten Cuts.">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Play" Width="14" Height="14" Margin="0,0,4,0"/>
+                                <AccessText Text="_Start"/>
+                            </StackPanel>
                         </Button>
-                        <Button Grid.Column="1" Click="PausePreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0">
-                            <icon:PackIconMaterial Kind="Pause" Width="14" Height="14"/>
+                        <Button Grid.Column="1" Click="PausePreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" Margin="0,0,4,0"
+                                AutomationProperties.Name="Clip-Vorschau pausieren"
+                                AutomationProperties.HelpText="Pausiert die laufende Vorschau.">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Pause" Width="14" Height="14" Margin="0,0,4,0"/>
+                                <AccessText Text="_Pause"/>
+                            </StackPanel>
                         </Button>
-                        <Button Grid.Column="2" Click="StopPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4">
-                            <icon:PackIconMaterial Kind="Stop" Width="14" Height="14"/>
+                        <Button Grid.Column="2" Click="StopPreview_Click" IsEnabled="{Binding CanPreviewSelectedClip}" Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4"
+                                AutomationProperties.Name="Clip-Vorschau stoppen"
+                                AutomationProperties.HelpText="Stoppt die laufende Vorschau.">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconMaterial Kind="Stop" Width="14" Height="14" Margin="0,0,4,0"/>
+                                <AccessText Text="St_oppen"/>
+                            </StackPanel>
                         </Button>
 
                         <StackPanel Grid.Column="4" VerticalAlignment="Center">
@@ -225,9 +298,25 @@
                                 </StackPanel>
                                 <StackPanel Margin="0,8,0,0">
                                     <TextBlock Text="DATEI" FontSize="9" Foreground="{StaticResource AbletonTextDim}"/>
-                                    <TextBlock Text="{Binding SelectedFilePath, Mode=OneWay}" Foreground="{StaticResource AbletonTextDim}" FontSize="10" TextWrapping="Wrap"/>
+                                    <TextBox Text="{Binding SelectedFilePath, Mode=OneWay}"
+                                             AutomationProperties.Name="Ausgewählter Clip-Dateipfad"
+                                             IsReadOnly="True"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Foreground="{StaticResource AbletonTextDim}"
+                                             FontSize="10"
+                                             TextWrapping="Wrap"/>
                                 </StackPanel>
                             </UniformGrid>
+                            <TextBox Text="{Binding SelectedEvidence, Mode=OneWay}"
+                                     AutomationProperties.Name="Ausgewählte Timeline-Evidenz"
+                                     IsReadOnly="True"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{StaticResource AbletonTextDim}"
+                                     TextWrapping="Wrap"
+                                     FontSize="10"
+                                     Margin="0,8,0,0"/>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -244,14 +333,18 @@
 
             <!-- Summary ListView (unchanged) -->
             <md:Card Grid.Row="0" Style="{StaticResource AbletonCard}" Padding="0">
-                <ListView ItemsSource="{Binding TimelineEntries}" SelectedItem="{Binding SelectedEntry}"
-                          Background="Transparent" BorderThickness="0" Foreground="{StaticResource AbletonText}">
+                <ListView x:Name="TimelineSummaryList"
+                          ItemsSource="{Binding TimelineEntries}" SelectedItem="{Binding SelectedEntry}"
+                          Background="Transparent" BorderThickness="0" Foreground="{StaticResource AbletonText}"
+                          AutomationProperties.Name="Timeline-Cut-Liste"
+                          AutomationProperties.HelpText="Pfeil hoch und runter wählt Cuts; Pos1 und Ende springen zum ersten oder letzten Cut."
+                          KeyboardNavigation.DirectionalNavigation="Contained">
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Header="Clip" Width="180" DisplayMemberBinding="{Binding ClipName}"/>
                             <GridViewColumn Header="Zeitraum" Width="130" DisplayMemberBinding="{Binding TimeRangeText}"/>
-                            <GridViewColumn Header="Trigger" Width="100" DisplayMemberBinding="{Binding TriggerType}"/>
-                            <GridViewColumn Header="Dauer" Width="70" DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
+                            <GridViewColumn Header="Trigger" Width="120" DisplayMemberBinding="{Binding TriggerType}"/>
+                            <GridViewColumn Header="Dauer" Width="130" DisplayMemberBinding="{Binding Duration, StringFormat={}{0:F2}s}"/>
                         </GridView>
                     </ListView.View>
                 </ListView>
@@ -296,6 +389,10 @@
                     <!-- Single horizontal ScrollViewer spanning both lanes -->
                     <ScrollViewer Grid.Column="1" Grid.Row="1" Grid.RowSpan="2"
                                   x:Name="LanesScrollViewer"
+                                  Focusable="True"
+                                  IsTabStop="True"
+                                  AutomationProperties.Name="Interaktive Timeline-Spuren"
+                                  AutomationProperties.HelpText="Pfeile scrubben; Steuerung plus Pfeile verschiebt, Alt trimmt links, Steuerung plus Alt trimmt rechts. Umschalt nutzt Ein-Sekunden-Schritte."
                                   HorizontalScrollBarVisibility="Visible"
                                   VerticalScrollBarVisibility="Disabled"
                                   CanContentScroll="True"
@@ -405,6 +502,11 @@
                                     <DataTemplate DataType="{x:Type models:TimelineEntryModel}">
                                         <Border x:Name="ClipBorder"
                                                 Height="100" Margin="0,5"
+                                                Focusable="True"
+                                                KeyboardNavigation.IsTabStop="True"
+                                                AutomationProperties.Name="{Binding ClipName}"
+                                                AutomationProperties.HelpText="Timeline-Cut. Eingabe oder Leertaste wählt; Pfeiltasten bearbeiten gemäß Timeline-Hilfe."
+                                                AutomationProperties.ItemStatus="{Binding TimeRangeText}"
                                                 CornerRadius="3"
                                                 BorderThickness="1"
                                                 BorderBrush="{StaticResource AbletonAccent}"
@@ -414,7 +516,10 @@
                                                 Cursor="Hand"
                                                 PreviewMouseDown="Clip_MouseDown"
                                                 PreviewMouseMove="Clip_MouseMove"
-                                                PreviewMouseUp="Clip_MouseUp">
+                                                PreviewMouseUp="Clip_MouseUp"
+                                                GotKeyboardFocus="Clip_GotKeyboardFocus"
+                                                LostKeyboardFocus="Clip_LostKeyboardFocus"
+                                                KeyDown="Clip_KeyDown">
                                             <!-- #15 (2026-05-20): VisualStateManager re-added — MouseOver Opacity-Fade,
                                                  Selected Yellow-Border, Snapped White-Border (Drag-Feedback).
                                                  States werden von TimelineView.xaml.cs gesetzt (VisualStateManager.GoToElementState). -->

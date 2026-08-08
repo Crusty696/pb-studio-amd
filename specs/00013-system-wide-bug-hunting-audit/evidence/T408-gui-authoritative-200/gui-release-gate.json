@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "tabs": [
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR"
+  ],
+  "sizes": [
+    "1280x720"
+  ],
+  "dpis": [
+    192
+  ],
+  "runs": [
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "PROJEKT",
+      "screenshot": "screenshots/dpi192-1280x720-projekt.png",
+      "visible_uia_elements": 74,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 624,
+      "unique_sampled_colors": 56
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "AUDIO",
+      "screenshot": "screenshots/dpi192-1280x720-audio.png",
+      "visible_uia_elements": 78,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 509,
+      "unique_sampled_colors": 46
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "VIDEO",
+      "screenshot": "screenshots/dpi192-1280x720-video.png",
+      "visible_uia_elements": 78,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 461,
+      "unique_sampled_colors": 14
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "KI-REGIE",
+      "screenshot": "screenshots/dpi192-1280x720-ki-regie.png",
+      "visible_uia_elements": 161,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 735,
+      "unique_sampled_colors": 70
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "TIMELINE",
+      "screenshot": "screenshots/dpi192-1280x720-timeline.png",
+      "visible_uia_elements": 125,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 638,
+      "unique_sampled_colors": 32
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "EXPORT",
+      "screenshot": "screenshots/dpi192-1280x720-export.png",
+      "visible_uia_elements": 85,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 578,
+      "unique_sampled_colors": 84
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "HIRN",
+      "screenshot": "screenshots/dpi192-1280x720-hirn.png",
+      "visible_uia_elements": 121,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 765,
+      "unique_sampled_colors": 130
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "SETTINGS",
+      "screenshot": "screenshots/dpi192-1280x720-settings.png",
+      "visible_uia_elements": 133,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 683,
+      "unique_sampled_colors": 98
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "PERFORMANCE",
+      "screenshot": "screenshots/dpi192-1280x720-performance.png",
+      "visible_uia_elements": 69,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 522,
+      "unique_sampled_colors": 56
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "MODELLE",
+      "screenshot": "screenshots/dpi192-1280x720-modelle.png",
+      "visible_uia_elements": 340,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 683,
+      "unique_sampled_colors": 174
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "CHAT",
+      "screenshot": "screenshots/dpi192-1280x720-chat.png",
+      "visible_uia_elements": 63,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 593,
+      "unique_sampled_colors": 54
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "TERMINAL",
+      "screenshot": "screenshots/dpi192-1280x720-terminal.png",
+      "visible_uia_elements": 52,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 414,
+      "unique_sampled_colors": 79
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "INGEST",
+      "screenshot": "screenshots/dpi192-1280x720-ingest.png",
+      "visible_uia_elements": 81,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 455,
+      "unique_sampled_colors": 19
+    },
+    {
+      "dpi": 192,
+      "effective_size": "1280x720",
+      "physical_size": "2560x1440",
+      "tab": "ANCHOR",
+      "screenshot": "screenshots/dpi192-1280x720-anchor.png",
+      "visible_uia_elements": 72,
+      "missing_interactive_names": [],
+      "clipped_interactive_controls": [],
+      "variance": 607,
+      "unique_sampled_colors": 21
+    }
+  ],
+  "keyboard": {
+    "right_arrow": [
+      "AUDIO",
+      "VIDEO",
+      "KI-REGIE",
+      "TIMELINE",
+      "EXPORT",
+      "HIRN",
+      "SETTINGS",
+      "PERFORMANCE",
+      "MODELLE",
+      "CHAT",
+      "TERMINAL",
+      "INGEST",
+      "ANCHOR"
+    ],
+    "expected_right_arrow": [
+      "AUDIO",
+      "VIDEO",
+      "KI-REGIE",
+      "TIMELINE",
+      "EXPORT",
+      "HIRN",
+      "SETTINGS",
+      "PERFORMANCE",
+      "MODELLE",
+      "CHAT",
+      "TERMINAL",
+      "INGEST",
+      "ANCHOR"
+    ],
+    "ki_regie_tab_focus": [
+      {
+        "name": "PB Studio AMD",
+        "control_type_id": 50032
+      },
+      {
+        "name": "Audio-Quelle",
+        "control_type_id": 50003
+      },
+      {
+        "name": "Alle Video-Clips auswählen",
+        "control_type_id": 50000
+      },
+      {
+        "name": "Video-Auswahl aufheben",
+        "control_type_id": 50000
+      },
+      {
+        "name": "PB Studio AMD",
+        "control_type_id": 50032
+      },
+      {
+        "name": "Erwartete BPM",
+        "control_type_id": 50004
+      },
+      {
+        "name": "Beat-Gewichtung",
+        "control_type_id": 50015
+      },
+      {
+        "name": "Kick-Gewichtung",
+        "control_type_id": 50015
+      }
+    ]
+  },
+  "failures": [],
+  "passed": true
+}

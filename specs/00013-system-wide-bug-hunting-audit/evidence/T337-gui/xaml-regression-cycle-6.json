@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-07-29T16:01:34.576997+02:00",
+  "export": {
+    "copyable_edit_count": 12,
+    "render_log_visible": true,
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-6-xaml\\export-render-log.png"
+  },
+  "models": {
+    "installed_state": [
+      "Keine Modelle installiert. Waehle eines aus der Verfuegbaren-Liste."
+    ],
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-6-xaml\\modelle-after-refresh.png"
+  },
+  "status": "pass",
+  "terminal": {
+    "screenshot": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T337-gui\\screenshots-cycle-6-xaml\\terminal-after-model-refresh.png",
+    "visible": true
+  },
+  "window_handle": 657768,
+  "wpf_log": {
+    "bytes": 531,
+    "error_counts": {
+      "path_xpath_failure": 0,
+      "unhandled_ui_exception": 0,
+      "unobserved_task_exception": 0,
+      "xaml_parse_exception": 0
+    },
+    "path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\logs\\wpf_app.log"
+  }
+}

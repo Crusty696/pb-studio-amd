@@ -35,6 +35,10 @@ def test_import_audio_persists_subtracks_to_cache(tmp_path, monkeypatch):
 
     audio = _make_long_audio(tmp_path, 120)
     state = AppState()
+    state.current_project = {
+        "db_project_id": 1,
+        "path": str(tmp_path),
+    }
     request = AudioImportRequest(path=str(audio.absolute()))
 
     asyncio.run(import_audio(request, state))

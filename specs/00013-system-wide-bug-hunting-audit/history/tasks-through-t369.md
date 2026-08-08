@@ -1,0 +1,389 @@
+---
+feature_branch: "00013-system-wide-bug-hunting-audit"
+created: "2026-05-29"
+spec_path: "specs/00013-system-wide-bug-hunting-audit/spec.md"
+plan_path: "specs/00013-system-wide-bug-hunting-audit/plan.md"
+---
+
+# Tasks: System-wide Bug Hunting & Codebase Audit
+
+## Work Item Checklist
+
+- [X] T001 [P] [OBJ-1] Perform static audit of Z-CORE & Z-DATA (VRAM & SQLite safety)
+- [X] T002 [P] [OBJ-2] Perform static audit of Z-AUDIO & Z-VIDEO (Pipeline & Fallback safety)
+- [X] T003 [P] [OBJ-3] Perform static audit of Z-UI-VM & Z-UI-SERVICES (Memory leaks & thread safety)
+- [X] T004 [P] [OBJ-4] Perform static audit of Shared-Zones & Z-INFRA (API Routes & traversal safety)
+- [X] T005 [P] [OBJ-5] Execute E2E automated smoke runs and Visual screenshot audits
+- [X] T006 [P] [OBJ-3] {(FR-101)} Fix SmartDirector VRAM-Thrashing in `src/pb_studio/ai/smart_director.py`
+- [X] T007 [P] [OBJ-2] {(FR-102)} Implement true ONNX Batch Inference in `src/pb_studio/ai/siglip_wrapper.py`
+- [X] T008 [P] [OBJ-4] {(FR-103)} Add physical Index Re-Indexing `clean_tombstones()` in `src/pb_studio/data/vector_store.py`
+- [X] T009 [P] [OBJ-5] {(TR-104)} Execute test verification for AI optimizations
+- [X] T010 [P] [OBJ-6] {(FR-105)} Fix htdemucs model filename in `backend/schemas/audio_schemas.py`
+- [X] T011 [P] [OBJ-7] {(FR-106)} Integrate stems into audio analysis pipeline in `backend/routers/audio_router.py`
+- [X] T012 [P] [OBJ-7] {(TR-107)} Run verification tests for stem separation and integrated audio analysis
+- [X] T013 [P] [OBJ-1] {(FR-108)} Fix VRAM-Eviction ABBA deadlock in `vram_budget_manager.py` / `model_loader.py`
+- [X] T014 [P] [OBJ-1] {(FR-109)} Resolve SQLite project repository deferred transaction contention
+- [X] T015 [P] [OBJ-1] {(FR-110)} Secure atexit shutdown saving logic in `vector_store.py`
+- [X] T016 [P] [OBJ-2] {(FR-111)} Downscale frames in `video_router.py` to prevent RAM OOM
+- [X] T017 [P] [OBJ-2] {(FR-112)} Implement Moondream model caching loop in `video_router.py`
+- [X] T018 [P] [OBJ-2] {(FR-113)} Limit RAM-usage in `subtrack_detector.py` stems activity calculation
+- [X] T019 [P] [OBJ-3] {(FR-114)} Resolve WPF IDisposable ViewModels root container leak
+- [X] T020 [P] [OBJ-3] {(FR-115)} Dispose HttpResponseMessage socket resources in `ApiClient.cs`
+- [X] T021 [P] [OBJ-3] {(FR-116)} Add SSEClient EOF delay to avoid connection hot loops
+- [X] T022 [P] [OBJ-3] {(FR-117)} Implement active tab polling timer check for `VramTelemetryView`
+- [X] T023 [P] [OBJ-3] {(FR-118)} Integrate `WaveformCache` back into `/audio/waveform` route
+- [X] T024 [P] [OBJ-1] {(FR-119)} Implement global synchronous GPU inference lock (F1)
+- [X] T025 [P] [OBJ-1] {(FR-120)} Setup native C++ crash logger faulthandler in `backend/main.py` (F2)
+- [X] T026 [P] [OBJ-2] {(FR-121)} Shrink LM Studio VLM timeout to 15s with asyncio.wait_for (F3)
+- [X] T027 [P] [OBJ-5] {(FR-122)} Fix path bug and run 4h stress test background scripts (F4)
+- [X] T028 [P] [OBJ-4] {(FR-123)} Decouple VectorStore tombstone calls from SQLite transaction scopes (F5)
+- [X] T029 [OBJ-8] {(FR-124)} Add non-swallowing cache-contract regression test in `Tests/test_pacing_cached_energy.py`
+- [X] T030 [OBJ-8] {(FR-124)} Fix atomic waveform-cache initialization and metadata injection in `src/pb_studio/pacing/advanced_pacing_engine.py` and `src/pb_studio/services/pacing_service.py`
+- [X] T031 [OBJ-8] {(TR-125)} Verify Pacing subset, compile sweep, full Pytest suite, Release build, and real release smoke
+- [X] T032 [OBJ-9] {(FR-126)} Add AMF-only schema, utility, and RenderService regression coverage in `Tests/`
+- [X] T033 [OBJ-9] {(FR-126)} Remove software/non-AMF encoder paths from `backend/`, `src/pb_studio/rendering/`, `src/pb_studio/video/`, and `src/pb_studio/ai/tool_registry.py`
+- [X] T034 [OBJ-9] {(FR-126)} Remove software encoders from `PBStudio.UI/ViewModels/ProductionViewModel.cs`, `PBStudio.UI/Views/ProductionView.xaml`, and OpenAPI snapshot
+- [X] T035 [OBJ-9] {(TR-127)} Verify encoder/render/OpenAPI tests, compile sweep, Release build, full suite, and release smoke
+- [X] T036 [OBJ-10] {(FR-128)} Add DirectML-only provider and motion regression coverage in `Tests/`
+- [X] T037 [OBJ-10] {(FR-128)} Remove `CPUExecutionProvider` fallback from `src/pb_studio/core/model_loader.py`
+- [X] T038 [OBJ-10] {(FR-128)} Remove Farneback and `ALLOW_CPU_FALLBACK` from `src/pb_studio/video/raft.py`, `src/pb_studio/video/__init__.py`, and `src/pb_studio/ai/smart_director.py`
+- [X] T039 [OBJ-10] {(FR-128)} Harden locked `src/pb_studio/audio/separator.py` after explicit user approval
+- [X] T040 [OBJ-10] {(TR-129)} Verify DirectML target tests, compile sweep, and full Pytest suite
+- [X] T041 [OBJ-11] {(TR-130)} Add SDD/QC gate regression coverage in `Tests/test_audit_sdd_gate.py`
+- [X] T042 [OBJ-11] {(FR-131)} Normalize task checkboxes and invalidate the historical QC pass
+- [X] T043 [OBJ-11] {(FR-131)} Remove false `.completed` and `.qc-passed` markers after explicit delete approval
+- [X] T044 [OBJ-11] {(TR-130)} Verify the corrected SDD/QC gate
+- [X] T045 [OBJ-12] {(FR-132)} Add non-destructive missing-media restore regression in `Tests/test_app_state.py`
+- [X] T046 [OBJ-12] {(FR-132)} Preserve unavailable media rows and their clip IDs in `backend/app_state.py`
+- [X] T047 [OBJ-12] {(TR-133)} Verify AppState and project-persistence restore clusters
+- [X] T048 [OBJ-13] {(FR-134)} Add atomic Brain rebind regressions in `Tests/test_project_brain_binding.py`
+- [X] T049 [OBJ-13] {(FR-134)} Make `BrainService` connection swap and singleton path update atomic
+- [X] T050 [OBJ-13] {(FR-134)} Fail project create/open before resetting runtime state when Brain binding fails
+- [X] T051 [OBJ-13] {(TR-135)} Verify project-lifecycle and Brain-binding clusters
+- [X] T052 [OBJ-14] {(FR-136)} Add failed-remap compaction regression in `Tests/test_vector_store.py`
+- [X] T053 [OBJ-14] {(FR-136)} Abort FAISS compaction before publishing state when `vector_map` remap fails
+- [X] T054 [OBJ-14] {(TR-137)} Verify VectorStore tombstone and persistence regressions
+- [X] T055 [OBJ-15] {(TR-138)} Repair the `VectorStore.__new__` unit fixture and verify save notification
+- [X] T056 [OBJ-15] {(TR-138)} Verify the complete VectorStore test cluster
+- [X] T057 [OBJ-16] {(FR-139)} Add job-acceptance cancel-reset regressions in `Tests/test_smart_director_integration.py`
+- [X] T058 [OBJ-16] {(FR-139)} Preserve in-flight cancel through basic and SmartDirector render entry
+- [X] T059 [OBJ-16] {(TR-140)} Verify SmartDirector, GenerationService and VideoGenerator clusters
+- [X] T060 [OBJ-17] {(FR-141)} Add interrupted three-file snapshot and startup-recovery regressions
+- [X] T061 [OBJ-17] {(FR-141)} Add shared journaled snapshot commit/recovery to `VectorStore`
+- [X] T062 [OBJ-17] {(TR-142)} Verify snapshot, VectorStore and persistence clusters
+- [X] T063 [OBJ-18] {(FR-143)} Add composite GPU-task budget-ownership regression
+- [X] T064 [OBJ-18] {(FR-143)} Keep video-analysis lock and telemetry without reserving `video_analysis_full`
+- [X] T065 [OBJ-18] {(TR-144)} Verify VRAM telemetry, video routing, DirectML contract and compile sweep
+- [X] T066 [OBJ-19] {(FR-145)} Add long-mix streaming trigger-coverage regressions
+- [X] T067 [OBJ-19] {(FR-145)} Aggregate onset and drum triggers across streaming chunks
+- [X] T068 [OBJ-19] {(FR-145)} Forward full-length streaming triggers into audio-analysis cache
+- [X] T069 [OBJ-19] {(TR-146)} Verify streaming audio, cached pacing and compile sweep
+- [X] T070 [OBJ-20] {(FR-147)} Add startup render-resume and legacy-payload regressions
+- [X] T071 [OBJ-20] {(FR-147)} Persist versioned render request, timeline and project-root snapshot
+- [X] T072 [OBJ-20] {(FR-147)} Reconstruct and schedule pending render jobs during lifespan startup
+- [X] T073 [OBJ-20] {(TR-148)} Verify render persistence, routing, AMF and compile sweep
+- [X] T074 [OBJ-21] {(FR-149)} Add WPF project-switch cache-contract regressions
+- [X] T075 [OBJ-21] {(FR-149)} Publish full lifecycle on direct project switch
+- [X] T076 [OBJ-21] {(FR-149)} Invalidate audio/video refresh generations and thumbnail caches
+- [X] T077 [OBJ-21] {(TR-150)} Verify WPF cache contracts and Release build
+- [X] T078 [OBJ-22] {(FR-151)} Add ProjectService dispatcher-delivery regression
+- [X] T079 [OBJ-22] {(FR-151)} Marshal project lifecycle messages to WPF dispatcher
+- [X] T080 [OBJ-22] {(TR-152)} Verify lifecycle contract and WPF Release build
+- [X] T081 [OBJ-23] {(FR-153)} Add failed audio DB-delete and video tombstone regressions
+- [X] T082 [OBJ-23] {(FR-153)} Reorder AppState deletion and propagate persistence failures
+- [X] T083 [OBJ-23] {(TR-154)} Verify AppState, media-delete routers, persistence and compile sweep
+- [X] T084 [OBJ-24] {(FR-155)} Add audio/video import-without-project regressions
+- [X] T085 [OBJ-24] {(FR-155)} Guard import registration and persistence with active project ID
+- [X] T086 [OBJ-24] {(TR-156)} Verify router, AppState and persistence clusters plus compile sweep
+- [X] T087 [OBJ-25] {(FR-157)} Add missing/failed vector-map link regressions
+- [X] T088 [OBJ-25] {(FR-157)} Roll back or tombstone failed linked FAISS additions
+- [X] T089 [OBJ-25] {(TR-158)} Verify VectorStore/data clusters and compile sweep
+- [X] T090 [OBJ-26] {(FR-159)} Add Brain stats connection-lock regression
+- [X] T091 [OBJ-26] {(FR-159)} Guard direct stats queries with BrainStore weights lock
+- [X] T092 [OBJ-26] {(TR-160)} Verify Brain router/recovery/core clusters and compile sweep
+- [X] T093 [OBJ-27] {(FR-161)} Add persisted schema-version and WMV-classification regression
+- [X] T094 [OBJ-27] {(FR-161)} Version normal media JSON writes and centralize media classification
+- [X] T095 [OBJ-27] {(TR-162)} Verify repository/schema clusters and compile sweep without live migration
+- [X] T096 [OBJ-28] {(FR-163)} Add failed-middle-chunk energy timeline regression
+- [X] T097 [OBJ-28] {(FR-163)} Preserve streaming energy duration with zero-gap frames
+- [X] T098 [OBJ-28] {(TR-164)} Verify streaming/audio/pacing clusters and compile sweep
+- [X] T099 [OBJ-29] {(FR-165)} Add single-flow-per-frame-pair regression
+- [X] T100 [OBJ-29] {(FR-165)} Reuse RAFT flow for motion and scene-change metrics
+- [X] T101 [OBJ-29] {(TR-166)} Verify RAFT/video/DirectML clusters and compile sweep
+- [X] T102 [OBJ-30] {(FR-167)} Add LearningSession play/pause wiring contract
+- [X] T103 [OBJ-30] {(FR-167)} Implement playback toggle state and dynamic label
+- [X] T104 [OBJ-30] {(TR-168)} Verify WPF contract and Release build
+- [X] T105 [OBJ-31] {(FR-169)} Add SSE progress-correlation contract
+- [X] T106 [OBJ-31] {(FR-169)} Correlate backend video-import and pacing events
+- [X] T107 [OBJ-31] {(FR-169)} Filter VideoLibrary and Director progress by active request
+- [X] T108 [OBJ-31] {(TR-170)} Verify router/contracts and WPF Release build
+- [X] T109 [OBJ-32] {(FR-171)} Add active analysis DTO completeness regression
+- [X] T110 [OBJ-32] {(FR-171)} Synchronize handwritten audio/video analysis records
+- [X] T111 [OBJ-32] {(TR-172)} Verify DTO contract and WPF Release build
+- [X] T112 [OBJ-33] {(FR-173)} Add non-blocking WPF file-logging contract regression
+- [X] T113 [OBJ-33] {(FR-173)} Remove production click auditing and queue file writes off the UI thread
+- [X] T114 [OBJ-33] {(TR-174)} Verify WPF logging contract and Release build
+- [X] T115 [OBJ-34] {(FR-175)} Add VectorStore index-switch and close lifecycle regressions
+- [X] T116 [OBJ-34] {(FR-175)} Stop, drain and persist replaced VectorStore writer instances
+- [X] T117 [OBJ-34] {(TR-176)} Verify VectorStore/data clusters and compile sweep
+- [X] T118 [OBJ-35] {(FR-177)} Add Canvas request-flow and clip-ID normalization regressions
+- [X] T119 [OBJ-35] {(FR-177)} Wire canvas_path through backend schema, router and OpenAPI snapshot
+- [X] T120 [OBJ-35] {(FR-177)} Expose CanvasPath in active WPF request, Director view model and view
+- [X] T121 [OBJ-35] {(TR-178)} Verify Pacing/OpenAPI/WPF contracts, compile sweep and Release build
+- [X] T122 [OBJ-36] {(FR-179)} Add ProjectOverview timeline-status contract
+- [X] T123 [OBJ-36] {(FR-179)} Bind truthful timeline text and generation visibility
+- [X] T124 [OBJ-36] {(TR-180)} Verify WPF contract and Release build
+- [X] T125 [OBJ-37] {(FR-181)} Add Terminal history and replay contract
+- [X] T126 [OBJ-37] {(FR-181)} Implement bounded shared TerminalLogBuffer
+- [X] T127 [OBJ-37] {(FR-181)} Route WPF and SSE logs through history and replay in TerminalViewModel
+- [X] T128 [OBJ-37] {(TR-182)} Verify Terminal/WPF contracts and Release build
+- [X] T129 [OBJ-38] {(FR-183)} Add AI-config fallback and alias compatibility regressions
+- [X] T130 [OBJ-38] {(FR-183)} Extract shared ConfigManager-first AI config helper
+- [X] T131 [OBJ-38] {(FR-183)} Replace duplicate Brain/Vision bodies while preserving private aliases
+- [X] T132 [OBJ-38] {(TR-184)} Verify Brain/Vision/provider clusters and compile sweep
+- [X] T133 [OBJ-39] {(FR-185)} Add project lifecycle command-wiring contract
+- [X] T134 [OBJ-39] {(FR-185)} Bind Save/Close in ProjectOverview and remove MainViewModel duplicates
+- [X] T135 [OBJ-39] {(FR-185)} Keep Anchor audio reload internal without generating a dead command
+- [X] T136 [OBJ-39] {(TR-186)} Verify WPF contracts and Release build
+- [X] T137 [OBJ-40] {(FR-187)} Add dead model-helper contract
+- [X] T138 [OBJ-40] {(FR-187)} Remove unreferenced SigLIP and Moondream convenience helpers
+- [X] T139 [OBJ-40] {(TR-188)} Verify model contracts, target tests and compile sweep
+- [X] T140 [OBJ-41] {(FR-189)} Add backend lifespan watcher-shutdown contract
+- [X] T141 [OBJ-41] {(FR-189)} Cancel and await the zombie watcher before resource cleanup
+- [X] T142 [OBJ-41] {(TR-190)} Verify backend lifespan contract and compile sweep
+- [X] T143 [OBJ-42] {(FR-191)} Add failed project-close state contract
+- [X] T144 [OBJ-42] {(FR-191)} Gate local lifecycle messages and reset on successful API close
+- [X] T145 [OBJ-42] {(FR-191)} Surface failed close in ProjectOverview
+- [X] T146 [OBJ-42] {(TR-192)} Verify WPF project contracts and Release build
+- [X] T147 [OBJ-43] {(FR-193)} Add project refresh lifecycle contract
+- [X] T148 [OBJ-43] {(FR-193)} Route project info refresh through SwitchToProject
+- [X] T149 [OBJ-43] {(FR-193)} Remove duplicate MainViewModel ProjectOpened message
+- [X] T150 [OBJ-43] {(TR-194)} Verify WPF project contracts and Release build
+- [X] T151 [OBJ-44] {(FR-195)} Add project save dispatcher contract
+- [X] T152 [OBJ-44] {(FR-195)} Marshal saved project state and ProjectChanged to UI thread
+- [X] T153 [OBJ-44] {(TR-196)} Verify WPF project contracts and Release build
+- [X] T154 [OBJ-45] {(FR-197)} Add Settings VRAM debounce threading contract
+- [X] T155 [OBJ-45] {(FR-197)} Keep VRAM debounce on UI context and dispose replaced CTS
+- [X] T156 [OBJ-45] {(TR-198)} Verify Settings contract and WPF Release build
+- [X] T157 [OBJ-46] {(FR-199)} Add VRAM telemetry load ownership contract
+- [X] T158 [OBJ-46] {(FR-199)} Dispose per-load CTS and guard current loading state
+- [X] T159 [OBJ-46] {(TR-200)} Verify telemetry contract and WPF Release build
+- [X] T160 [OBJ-47] {(FR-201)} Add ChatViewModel stream lifecycle contract
+- [X] T161 [OBJ-47] {(FR-201)} Cancel scoped chat stream and guard updates by generation
+- [X] T162 [OBJ-47] {(TR-202)} Verify Chat contracts, backend cluster and WPF Release build
+- [X] T163 [OBJ-48] {(FR-203)} Add ModelManager load lifecycle contract
+- [X] T164 [OBJ-48] {(FR-203)} Own per-load CTS and guard current loading state
+- [X] T165 [OBJ-48] {(TR-204)} Verify model contracts, registry/router tests and WPF Release build
+- [X] T166 [OBJ-49] {(FR-205)} Add Settings FFmpeg probe lifecycle contract
+- [X] T167 [OBJ-49] {(FR-205)} Cancel probes on path change and own per-probe CTS
+- [X] T168 [OBJ-49] {(TR-206)} Verify Settings/config contracts and WPF Release build
+- [X] T169 [OBJ-50] {(FR-207)} Add video scene selection race contract
+- [X] T170 [OBJ-50] {(FR-207)} Guard scene application and loading state by sequence and clip ID
+- [X] T171 [OBJ-50] {(TR-208)} Verify video/WPF contracts and Release build
+- [X] T172 [OBJ-51] {(FR-209)} Add Timeline reset async-race contract
+- [X] T173 [OBJ-51] {(FR-209)} Invalidate Timeline/Waveform/Motion generations and recheck dispatcher callbacks
+- [X] T174 [OBJ-51] {(FR-209)} Keep load gate valid until in-flight refresh completes
+- [X] T175 [OBJ-51] {(TR-210)} Verify Timeline/WPF contracts and Release build
+- [X] T176 [OBJ-52] {(FR-211)} Add WPF async load-gate lifecycle contract
+- [X] T177 [OBJ-52] {(FR-211)} Keep Anchor, VideoLibrary and Director load gates valid for in-flight tasks
+- [X] T178 [OBJ-52] {(FR-211)} Invalidate Anchor and Director loads and suppress post-shutdown reloads
+- [X] T179 [OBJ-52] {(TR-212)} Verify WPF lifecycle contracts and Release build
+- [X] T180 [OBJ-53] {(FR-213)} Add PythonBridge OnExit gate lifecycle contract
+- [X] T181 [OBJ-53] {(FR-213)} Keep bridge lifecycle gate valid after synchronous provider disposal
+- [X] T182 [OBJ-53] {(TR-214)} Verify bridge/app lifecycle contracts and Release build
+- [X] T183 [OBJ-54] {(FR-215)} Add SSE listener token-generation contract
+- [X] T184 [OBJ-54] {(FR-215)} Capture local CTS for each SSE listener generation
+- [X] T185 [OBJ-54] {(TR-216)} Verify SSE lifecycle contracts and Release build
+- [X] T186 [OBJ-55] {(FR-217)} Add SSE reconnect throttle concurrency contract
+- [X] T187 [OBJ-55] {(FR-217)} Serialize reconnect throttle dictionary access
+- [X] T188 [OBJ-55] {(TR-218)} Verify SSE threading contracts and Release build
+- [X] T189 [OBJ-56] {(FR-219)} Add SSE multi-stream connection-state contract
+- [X] T190 [OBJ-56] {(FR-219)} Aggregate connected stream kinds per listener generation
+- [X] T191 [OBJ-56] {(FR-219)} Remove stream state on EOF, cancellation and failure
+- [X] T192 [OBJ-56] {(TR-220)} Verify SSE status contracts and Release build
+- [X] T193 [OBJ-57] {(FR-221)} Add ProjectOverview refresh coalescing contract
+- [X] T194 [OBJ-57] {(FR-221)} Coalesce overlapping refreshes and invalidate stale generations
+- [X] T195 [OBJ-57] {(FR-221)} Invalidate dashboard refresh on dispose
+- [X] T196 [OBJ-57] {(TR-222)} Verify project dashboard contracts and Release build
+- [X] T197 [OBJ-58] {(FR-223)} Add ProjectOverview dead-DI contract
+- [X] T198 [OBJ-58] {(FR-223)} Remove unused VideoLibraryStateService dependency
+- [X] T199 [OBJ-58] {(TR-224)} Verify dashboard contract and Release build
+- [X] T200 [OBJ-59] {(FR-225)} Add Brain UI async-generation contract
+- [X] T201 [OBJ-59] {(FR-225)} Guard stats and learning-session collection updates by generation
+- [X] T202 [OBJ-59] {(FR-225)} Invalidate Brain UI loads on project close and dispose
+- [X] T203 [OBJ-59] {(TR-226)} Verify Brain/WPF contracts and Release build
+- [X] T204 [OBJ-61] {(OR-227)} Create and verify timestamped live SQLite/FAISS backups
+- [X] T205 [OBJ-61] {(RR-228)} Tombstone ambiguous live FAISS orphan 897 without inventing a media link
+- [X] T206 [OBJ-62] {(OR-229)} Batch-migrate valid live media JSON blobs with central migrators in one transaction
+- [X] T207 [OBJ-61] [OBJ-62] {(TR-230)} Verify live DB/index integrity, tombstones, schema versions and key preservation
+- [X] T208 [OBJ-60] {(TR-231)} Add ONNX DirectML-only separator regressions
+- [X] T209 [OBJ-60] {(FR-232)} Remove ONNX CPU provider and explicit no-DML fallback while preserving Demucs CPU design
+- [X] T210 [OBJ-63] {(RR-233)} Remove approved unreferenced dead files and worker backup tree
+- [X] T211 [OBJ-63] {(TR-234)} Verify active reference absence, compile and affected tests/build
+- [X] T212 [OBJ-64] {(RR-235)} Remove false SDD success markers
+- [X] T213 [OBJ-64] {(TR-236)} Verify audit gate and update QC truthfully
+- [X] T214 [OBJ-60] [OBJ-61] [OBJ-62] [OBJ-63] [OBJ-64] {(TR-237)} Run full regression suite and WPF Release build
+- [X] T215 [OBJ-65] {(TR-238)} Add concurrent DirectML SessionOptions patch lifecycle regression
+- [X] T216 [OBJ-65] {(FR-239)} Serialize global SessionOptions patch and restore across separator instances
+- [X] T217 [OBJ-65] {(TR-240)} Verify separator target, compile and full regression suite
+- [X] T218 [OBJ-66] {(TR-241)} Add failed project catalog preload rollback regression
+- [X] T219 [OBJ-66] {(FR-242)} Return explicit AppState DB-load success status
+- [X] T220 [OBJ-66] {(FR-243)} Preload project catalog before Brain/live-state switch
+- [X] T221 [OBJ-66] {(TR-244)} Verify project persistence, Brain binding and full regression suite
+- [X] T222 [OBJ-67] {(TR-245)} Add missing-PyAudio BeatNet import hygiene regression
+- [X] T223 [OBJ-67] {(FR-246)} Remove temporary PyAudio stub after BeatNet import attempt
+- [X] T224 [OBJ-67] {(TR-247)} Verify beat/audio target, compile and full regression suite
+- [X] T225 [OBJ-68] {(TR-248)} Add WPF Python 3.11 launcher contract
+- [X] T226 [OBJ-68] {(FR-249)} Remove incompatible launcher fallbacks and verify interpreter version
+- [X] T227 [OBJ-68] {(TR-250)} Verify WPF contracts, Release build and full regression suite
+
+## Release-Readiness 2026-07-28
+
+- [X] T228 [OBJ-69] {(OR-251)} Freeze the audit evidence and register FR-251–FR-310 in `FULLSTACK_STATUS_AUDIT_PB_STUDIO_2026-07-28.md` and `specs/00013-system-wide-bug-hunting-audit/spec.md`
+- [X] T229 [OBJ-69] {(OR-252)} Supersede CPU-SigLIP and torch-directml decisions with the ONNX-DirectML-only ADR in `specs/adrs/` and the PB Studio Brain
+- [X] T230 [OBJ-69] {(OR-253)} Register minimal cluster gates, final QC and the release checklist in `specs/00013-system-wide-bug-hunting-audit/plan.md`
+- [X] T231 [P] [OBJ-69] {(FR-251)} Fix C-01 Semantic Audio to fail closed without CLAP ONNX and remove CPU fallback in `src/pb_studio/ai/clap_wrapper.py`, `src/pb_studio/ai/smart_director.py`, and pacing entry points
+- [X] T232 [P] [OBJ-69] {(FR-252)} Fix C-02 with server-enforced one-time chat tool confirmation in `src/pb_studio/ai/`, `backend/routers/chat_router.py`, and the additive WPF chat contract
+- [X] T233 [P] [OBJ-69] {(FR-253)} Fix H-01 bounded long-mix subtrack detection in `backend/routers/audio_router.py` and `src/pb_studio/audio/subtrack_detector.py`
+- [X] T234 [OBJ-69] {(FR-254)} Fix H-02 streaming probe failures without full-load fallback in `backend/routers/audio_router.py`
+- [X] T235 [OBJ-69] {(FR-255)} Fix H-03 full-duration structure, key, and spectral representation in `backend/routers/audio_router.py` and `src/pb_studio/audio/`
+- [X] T236 [OBJ-69] {(FR-256)} Fix H-04 truthful partial/failed audio stage status in `backend/routers/audio_router.py` and audio schemas
+- [X] T237 [OBJ-69] {(FR-257)} Fix H-05 single VRAM-budget ownership for stems in `backend/routers/audio_router.py` and `src/pb_studio/audio/separator.py`
+- [X] T238 [OBJ-69] {(FR-258)} Fix H-06 separator fail-stop on reservation failure in `src/pb_studio/audio/separator.py`
+- [X] T239 [P] [OBJ-69] {(FR-259)} Fix H-07 deadline and late-result lock lifetime in `backend/dependencies.py`
+- [X] T240 [OBJ-69] {(FR-260)} Fix H-08 eviction accounting after callback success in `src/pb_studio/core/vram_budget_manager.py`
+- [X] T241 [OBJ-69] {(FR-261)} Fix H-09 fresh sensor reads before allocation in `src/pb_studio/core/system_monitor.py` and `src/pb_studio/core/vram_arbiter.py`
+- [X] T242 [P] [OBJ-69] {(FR-262)} Fix H-10 explicit RAFT/SigLIP stage failures in `src/pb_studio/video/` and `backend/routers/video_router.py`
+- [X] T243 [OBJ-69] {(FR-263)} Fix H-11 registry-confirmed Vision capability in `src/pb_studio/video/`, model registry, and video routing
+- [X] T244 [P] [OBJ-69] {(FR-264)} Fix H-12 `use_brain` activation of Advanced Pacing and ClipSelector in `src/pb_studio/services/pacing_service.py`
+- [X] T245 [OBJ-69] {(FR-265)} Fix H-13 real Brain features and threshold propagation in `src/pb_studio/services/pacing_service.py` and `src/pb_studio/pacing/clip_selector.py`
+- [X] T246 [OBJ-69] {(FR-266)} Fix H-14 Brain-required video analysis loading in `backend/routers/pacing_router.py`
+- [X] T247 [OBJ-69] {(FR-267)} Fix H-15 durable idempotent learning outbox across `src/pb_studio/brain/` persistence boundaries
+- [X] T248 [OBJ-69] {(FR-268)} Fix H-16 exact projector model/dimension enforcement in `src/pb_studio/brain/`
+- [X] T249 [P] [OBJ-69] {(FR-269)} Fix H-17 `pacing.generate` long-running chat behavior in `src/pb_studio/ai/tool_registry.py` and `chat_agent.py`
+- [X] T250 [P] [OBJ-69] {(FR-270)} Fix H-18 runtime environment ordering before backend startup in `PBStudio.UI/`
+- [X] T251 [OBJ-69] {(FR-271)} Fix H-19 project generation and CTS for audio, stems, and pacing in `PBStudio.UI/ViewModels/`
+- [X] T252 [P] [OBJ-69] {(FR-272)} Fix H-20 project-create conflict handling in `backend/routers/project_router.py`
+- [X] T253 [P] [OBJ-69] {(FR-273)} Fix H-21 idempotent pending media delete operations in project/data persistence
+- [X] T254 [P] [OBJ-69] {(FR-274)} Fix H-22 functional `include_audio` and `quality` rendering in render schemas/router/service
+- [X] T255 [OBJ-69] {(FR-275)} Fix H-23 atomic render output publication in `src/pb_studio/rendering/render_service.py` and `backend/routers/render_router.py`
+- [X] T256 [OBJ-69] {(FR-276)} Fix H-24 queue dedupe scheduling in `backend/routers/render_router.py` and render queue
+- [X] T257 [OBJ-69] {(FR-277)} Fix H-25 missing-clip render preflight in `src/pb_studio/rendering/render_service.py`
+- [X] T258 [P] [OBJ-69] {(FR-278)} Fix H-26 parallel deadline-bound provider probes in `backend/routers/models_router.py` and provider clients
+- [X] T259 [OBJ-69] {(FR-279)} Fix M-01 44.1-kHz spectral path in `backend/routers/audio_router.py` and `src/pb_studio/audio/spectral_analyzer.py`
+- [X] T260 [OBJ-69] {(FR-280)} Fix M-02 persisted onset responses in `backend/routers/audio_router.py`
+- [X] T261 [OBJ-69] {(FR-281)} Fix M-03 guaranteed streaming temp cleanup in `src/pb_studio/audio/streaming_analyzer.py`
+- [X] T262 [OBJ-69] {(FR-282)} Fix M-04 checked model commit/unload completion in `src/pb_studio/core/model_loader.py`
+- [X] T263 [OBJ-69] {(FR-283)} Fix M-05 adapter-bound GPU telemetry in `src/pb_studio/core/system_monitor.py`
+- [X] T264 [OBJ-69] {(FR-284)} Fix M-06 color analysis independent from captions in video schema/router
+- [X] T265 [OBJ-69] {(FR-285)} Fix M-07 hash-based embedding reuse in `backend/routers/video_router.py`
+- [X] T266 [OBJ-69] {(FR-286)} Fix M-08 bounded representative long-video sampling in `backend/routers/video_router.py`
+- [X] T267 [OBJ-69] {(FR-287)} Fix M-09 true motion peak frames in video analysis
+- [X] T268 [OBJ-69] {(FR-288)} Fix M-10 active `beat_trigger_mode` wiring in pacing models and engine
+- [X] T269 [OBJ-69] {(FR-289)} Fix M-11 synchronous Brain reads blocking the event loop in `backend/routers/brain_router.py`
+- [X] T270 [OBJ-69] {(FR-290)} Fix M-12 empty chat pacing clip-ID validation in `src/pb_studio/ai/tool_registry.py`
+- [X] T271 [OBJ-69] {(FR-291)} Fix M-13 capability-aware model provider selection in model registry/provider code
+- [X] T272 [OBJ-69] {(FR-292)} Fix M-14 real embedding status in WPF DTO/model/view
+- [X] T273 [OBJ-69] {(FR-293)} Fix M-15 single cancellable Timeline asset load in `PBStudio.UI/ViewModels/TimelineViewModel.cs`
+- [X] T274 [OBJ-69] {(FR-294)} Fix M-16 Brain learning selection binding in `PBStudio.UI/Views/BrainView.xaml`
+- [X] T275 [OBJ-69] {(FR-295)} Fix M-17 project save failure propagation in `backend/app_state.py` and `backend/routers/project_router.py`
+- [X] T276 [OBJ-69] {(FR-296)} Fix M-18 crash-consistent vector dedupe in video/data persistence
+- [X] T277 [OBJ-69] {(FR-297)} Fix M-19 VectorStore dirty-state retry in `src/pb_studio/data/vector_store.py`
+- [X] T278 [OBJ-69] {(FR-298)} Fix M-20 adaptive tombstone overfetch in `src/pb_studio/data/vector_store.py`
+- [X] T279 [OBJ-69] {(FR-299)} Fix M-21 atomic Brain backup and valid-backup recovery in `src/pb_studio/brain/`
+- [X] T280 [OBJ-69] {(FR-300)} Fix M-22 atomic locked embedding cache publication in `src/pb_studio/brain/embedding_cache.py`
+- [X] T281 [OBJ-69] {(FR-301)} Fix M-23 preview resolution contract in pacing preview router/renderer
+- [X] T282 [OBJ-69] {(FR-302)} Fix M-24 cancellation before and during render lock wait in `backend/routers/render_router.py`
+- [X] T283 [OBJ-69] {(FR-303)} Fix M-25 encoder override capability probe and early AV1 unavailable response
+- [X] T284 [OBJ-69] {(FR-304)} Fix L-01 stable bounded waveform points in `src/pb_studio/audio/waveform_analyzer.py`
+- [X] T285 [OBJ-69] {(FR-305)} Fix L-02 collision-safe locked waveform cache in `src/pb_studio/audio/waveform_cache.py`
+- [X] T286 [OBJ-69] {(FR-306)} Fix L-03 computed or nullable scene confidence in video analysis
+- [X] T287 [OBJ-69] {(FR-307)} Fix L-04 input-position video import progress in `backend/routers/video_router.py`
+- [X] T288 [OBJ-69] {(FR-308)} Fix L-05 reachable MediaIngest, Anchor, and Timeline navigation in `PBStudio.UI/`
+- [X] T289 [OBJ-69] {(FR-309)} Fix L-06 terminal secret/path redaction in `PBStudio.UI/Logging/TerminalLoggerProvider.cs`
+- [X] T290 [OBJ-69] {(FR-310)} Fix L-07 migration gap rejection in migration runner
+- [X] T291 [OBJ-69] {(TR-311)} Verify W0 SDD matrix, ADR precedence, baseline evidence, and absent release markers
+- [X] T292 [OBJ-69] {(TR-312)} Run the single W1 P0/security/project/render micro-gate
+- [X] T293 [OBJ-69] {(TR-313)} Run the single W2 audio/long-mix/stems micro-gate
+- [X] T294 [OBJ-69] {(TR-314)} Run the single W3 GPU/Core micro-gate
+- [X] T295 [OBJ-69] {(TR-315)} Run the single W4 video/Vision micro-gate
+- [X] T296 [OBJ-69] {(TR-316)} Run the single W5 Pacing/Brain micro-gate
+- [X] T297 [OBJ-69] {(TR-317)} Run the single W6 Chat/Models/Terminal micro-gate
+- [X] T298 [OBJ-69] {(TR-318)} Run the single W7 project/data fault-injection micro-gate on copies
+- [X] T299 [OBJ-69] {(TR-319)} Run the single W8 render/export micro-gate
+- [X] T300 [OBJ-69] {(TR-320)} Run the single W9 WPF/lifecycle contract micro-gate
+- [X] T301 [OBJ-69] {(TR-321)} Prove 60/60 implementation completion and create `.completed`
+- [X] T302 [OBJ-69] {(TR-322)} Execute the complete bundled static, regression, security, data, hardware, GUI, model, and export QC
+- [X] T303 [OBJ-69] {(TR-323)} Record per-finding evidence in `qc-report.md` and create `.qc-passed` only on 60/60 PASS
+- [X] T304 [OBJ-69] {(OR-324)} Update PB Studio Brain log/learnings and produce the final clean QC commit
+
+## Release-Video-Reparatur 2026-07-29
+
+- [X] T305 [OBJ-70] {(OR-325)} Freeze video/report/log/Git evidence, remove invalid release markers, and reopen `specs/00013-system-wide-bug-hunting-audit/qc-report.md`
+- [X] T306 [OBJ-70] {(OR-326)} Deduplicate requirements and register T305–T339 plus `specs/00013-system-wide-bug-hunting-audit/repair-progress.md`
+- [X] T307 [OBJ-70] {(OR-327)} Record D01–D08 with impact, reversibility, and abort criteria in the decision register
+- [X] T308 [OBJ-70] {(TR-324)} Run the production-identical 4,816-entry render reproducer and save the complete FFmpeg log
+- [X] T309 [OBJ-70] {(TR-325)} Isolate EOF failure stage and bisect prefixes only with identical failure signature
+- [X] T310 [OBJ-70] {(TR-326)} Independently falsify root cause and freeze the cause-specific fix design
+- [X] T311 [OBJ-70] {(FR-311)} Fix only the confirmed deterministic EOF cause in the render pipeline
+- [X] T312 [OBJ-70] {(FR-312)} Implement fail-closed render artifact validation
+- [X] T313 [OBJ-70] {(FR-313)} Isolate temp, resume, publication, and process state per render job
+- [X] T314 [OBJ-70] {(FR-314)} Persist machine-readable FFmpeg progress, exit, End-PTS, log, and failure fingerprint
+- [X] T315 [OBJ-70] {(FR-315)} Enforce the export-audio true-peak, no-over, and source-end-silence contract
+- [X] T316 [OBJ-70] {(FR-316)} Persist truthful evidence for all 254 long-mix analysis chunks
+- [X] T317 [OBJ-70] {(FR-317)} Separate measured downbeat provenance from synthetic assumptions
+- [X] T318 [OBJ-70] {(FR-318)} Normalize timeline start and end boundaries to 0 and 6,335.027 seconds
+- [X] T319 [OBJ-70] {(FR-319)} Recompute snap provenance after endpoint snapping
+- [X] T320 [OBJ-70] {(FR-320)} Make clip diversity and blacklist behavior adaptive to available clip count
+- [X] T321 [OBJ-70] {(FR-321)} Add a canonical real-data Brain feature adapter
+- [X] T322 [OBJ-70] {(FR-322)} Expose semantic embedding availability without synthetic similarity
+- [X] T323 [OBJ-70] {(FR-323)} Make Brain credit assignment axis- and context-relevant
+- [X] T324 [OBJ-70] {(RR-236)} Back up, rehearse, replay-check, and restore-probe Brain weight migration
+- [X] T325 [OBJ-70] {(OR-328)} Compare FFmpeg 8.0.1 with a sourced, hashed, rollback-safe 6.x AMF bundle
+- [X] T326 [OBJ-70] {(FR-324)} Synchronize all start, setup, test, release-QC, config, and settings runtime references
+- [X] T327 [OBJ-70] {(FR-325)} Synchronize DTO, OpenAPI, C# model, and visible UI status contracts
+- [X] T328 [OBJ-70] {(TR-327)} Implement regression, fault, security, and full-length tests without executing them
+- [X] T329 [OBJ-70] {(TR-328)} Complete independent cross-zone code and security review
+- [X] T330 [OBJ-70] {(OR-329)} Scan all scripts, DTOs, docs, ADRs, examples, and configs for stale references
+- [X] T331 [OBJ-70] {(TR-329)} Create `.completed` only after the implementation and review gate
+- [X] T332 [OBJ-70] {(TR-330)} Run static gates and all new targeted regressions
+- [X] T333 [OBJ-70] {(TR-331)} Run the full suite, skip audit, coverage, and WPF Release build
+- [X] T334 [OBJ-70] {(TR-332)} Run security, data, fault, restore, migration, and atomic-publication QC on copies
+- [X] T335 [OBJ-70] {(TR-333)} Complete and validate the fresh full-length H.264 AMF E2E export
+- [X] T336 [OBJ-70] {(TR-334)} Complete HEVC, resume, cancel, existing-target, and AV1-unavailable QC
+- [X] T337 [OBJ-70] {(TR-335)} Validate Release GUI, all twelve areas, models, project switching, and visible failure states
+- [X] T338 [OBJ-70] {(OR-330)} Reconcile QC, requirements, changelog, ADRs, scripts, CLAUDE status, and Brain truth
+- [X] T339 [OBJ-70] {(OR-331)} Commit by zone, scan secrets, verify remote diff, push scoped repos, and verify remote SHAs
+
+## GPU-, Provider-, Modellinventar- und Analyse-Reparatur 2026-07-30
+
+- [X] T340 [OBJ-71] {(OR-332)} Freeze manual runtime evidence, Git/runtime/config inventory, and invalidate prior release markers
+- [X] T341 [OBJ-71] {(OR-332)} Register OBJ-71, FR-326–FR-336, TR-336–TR-345, OR-332–OR-334, and T340–T369
+- [X] T342 [OBJ-71] {(TR-336)} Independently reproduce and falsify GPU mapping, LHM trust, provider inventory, and DTO nullability causes
+- [X] T343 [OBJ-71] {(TR-337)} Freeze adapter, provider, selection, DTO, error, and restore contracts
+- [X] T344 [OBJ-71] {(FR-326)} Implement the central DXGI/LUID DirectML adapter resolver and configuration precedence
+- [X] T345 [OBJ-71] {(FR-327)} Bind ModelLoader, RAFT, Moondream, SigLIP, CLAP, and ONNX audio separation to the central provider contract
+- [X] T346 [OBJ-71] {(FR-328)} Bind VRAM arbitration, budgeting, and monitoring to the selected adapter and physical ceiling
+- [X] T347 [OBJ-71] {(FR-329)} Build the official LibreHardwareMonitor 0.9.6 trust, manifest, launcher, and restore chain
+- [X] T348 [OBJ-71] {(FR-330)} Expose truthful additive GPU adapter and monitoring status in API and WPF
+- [X] T349 [OBJ-71] {(FR-331)} Back up, hash, enable, restart, and restore-probe supported LM Studio JIT configuration
+- [X] T350 [OBJ-71] {(FR-332)} Implement central provider and model inventory with truthful availability states
+- [X] T351 [OBJ-71] {(FR-333)} Implement startup refresh, cache invalidation, and bounded bundled provider queries
+- [X] T352 [OBJ-71] {(FR-334)} Implement capability-aware Selection Receipts and bounded failover
+- [X] T353 [OBJ-71] {(FR-334)} Implement backward-compatible persistent provider/model selection per task
+- [X] T354 [OBJ-71] {(FR-335)} Render truthful installed, loaded, downloadable, unavailable, and provider states without ghost models
+- [X] T355 [OBJ-71] {(FR-336)} Make handwritten C# SceneInfo confidence nullable and stop repeated video-analysis batch failures
+- [X] T356 [OBJ-71] {(FR-336)} Synchronize configuration, DTOs, OpenAPI artifacts, generated clients, and nullability parity
+- [X] T357 [OBJ-71] {(TR-338)} Implement unit, contract, integration, hardware, and GUI checks without executing them
+- [X] T358 [OBJ-71] {(TR-339)} Review T340–T357 diffs for path, process, download, hash, provider, and configuration risks
+- [X] T359 [OBJ-71] {(TR-340)} Statically enumerate all DirectML sessions, provider calls, DTO copies, and affected UI bindings
+- [X] T360 [OBJ-71] {(TR-341)} Prove implementation and review completion and recreate `.completed`
+- [X] T361 [OBJ-71] {(TR-342)} Run targeted adapter, inventory, selection, nullability, configuration, and restore regressions
+- [X] T362 [OBJ-71] {(TR-343)} Run the full Python suite, WPF Release build, security, failure, and restart checks
+- [X] T363 [OBJ-71] {(TR-344)} Prove RAFT, SigLIP, Moondream, CLAP, and audio DirectML load on the RX 7800 XT
+- [X] T364 [OBJ-71] {(TR-345)} Run LM Studio and Ollama inventory, startup refresh, capability, persistence, offline, and failover E2E
+- [X] T365 [OBJ-71] {(TR-345)} Run Release GUI, GPU-status, model-label, and nullable video-analysis E2E
+- [X] T366 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length H.264 AMF export over 6,335.027 seconds
+- [X] T367 [OBJ-71] {(TR-345)} Complete and validate a fresh full-length HEVC AMF export over 6,335.027 seconds
+- [X] T368 [OBJ-71] {(OR-333)} Reconcile QC, CHANGELOG, ADRs, CLAUDE status, tasks, ledger, and Brain; create `.qc-passed` only on 100% PASS
+- [X] T369 [OBJ-71] {(OR-334)} Commit by zone, scan secrets, verify remote diff, push scoped repositories, and verify remote SHAs

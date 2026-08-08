@@ -1,0 +1,2 @@
+# Intentionally dependency-free. The vulnerable SCA fixture is materialized
+# from python-vulnerable.fixture into the runner temp directory by security.yml.

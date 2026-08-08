@@ -1,0 +1,70 @@
+{
+  "captured_at": "2026-07-30T06:02:42.570838+00:00",
+  "status": "PASS",
+  "baseline_states": {
+    "lmstudio": "ready",
+    "ollama": "ready"
+  },
+  "counters": {
+    "refresh": 2,
+    "invalidate": 1,
+    "operation": 2
+  },
+  "attempts": [
+    {
+      "provider": "lmstudio",
+      "model_id": "hermes-ha-qwen35",
+      "task": "chat_general",
+      "mode": "balance",
+      "required_capabilities": [
+        "chat"
+      ],
+      "verified_capabilities": [
+        "chat",
+        "vision"
+      ],
+      "source": "explicit_override",
+      "reason": "Nutzbarer expliziter Provider-/Modell-Override.",
+      "selected_at": "2026-07-30T06:02:27.325419+00:00"
+    },
+    {
+      "provider": "ollama",
+      "model_id": "moondream:latest",
+      "task": "chat_general",
+      "mode": "balance",
+      "required_capabilities": [
+        "chat"
+      ],
+      "verified_capabilities": [
+        "chat",
+        "vision"
+      ],
+      "source": "persisted_task_preference",
+      "reason": "Persistierte Aufgabenpräferenz ist live nutzbar.",
+      "selected_at": "2026-07-30T06:02:38.431869+00:00"
+    }
+  ],
+  "selected": {
+    "provider": "ollama",
+    "model_id": "moondream:latest",
+    "task": "chat_general",
+    "mode": "balance",
+    "required_capabilities": [
+      "chat"
+    ],
+    "verified_capabilities": [
+      "chat",
+      "vision"
+    ],
+    "source": "persisted_task_preference",
+    "reason": "Persistierte Aufgabenpräferenz ist live nutzbar.",
+    "selected_at": "2026-07-30T06:02:38.431869+00:00"
+  },
+  "http_result": {
+    "provider": "ollama",
+    "model": "moondream:latest",
+    "response_model": "moondream:latest",
+    "done": true,
+    "content": "\n"
+  }
+}

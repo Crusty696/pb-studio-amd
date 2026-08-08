@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "T413-TORCH-CVE-2025-3000",
+      "package": "torch",
+      "version": "2.11.0+cpu",
+      "alias": "GHSA-RRMF-RVHW-RF47",
+      "owner": "PB Studio Release Owner",
+      "expires_on": "2026-09-01",
+      "reason": "Affected torch.jit.script is absent in the shipped repository; fresh-target compatibility and runtime tests remain required."
+    },
+    {
+      "id": "T413-SETUPTOOLS-CVE-2026-59890",
+      "package": "setuptools",
+      "version": "81.0.0",
+      "alias": "GHSA-H35F-9H28-MQ5C",
+      "owner": "PB Studio Release Owner",
+      "expires_on": "2026-09-01",
+      "reason": "The release target is Windows x64 with wheel-only installation, which defeats the macOS sdist precondition."
+    }
+  ]
+}

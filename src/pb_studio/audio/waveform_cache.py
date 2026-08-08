@@ -79,10 +79,13 @@ class WaveformCache:
                 # File changed - invalidate cache
                 logger.info(f"Cache INVALID (file changed): {Path(audio_path).name}")
                 with self._lock:
-                    if abs_path in self.cache:
+                    if self.cache.get(abs_path) is entry:
                         del self.cache[abs_path]
-                self.misses += 1
-                return None
+                        self.misses += 1
+                        return None
+                # A concurrent put replaced the inspected entry. Validate the
+                # new generation instead of deleting or returning it unchecked.
+                return self.get(audio_path)
 
         with self._lock:
             # Cache HIT - move to end (most recently used)
@@ -135,9 +138,7 @@ class WaveformCache:
 
     def _compute_hash(self, file_path: str) -> str:
         """
-        Compute SHA-256 hash of first 1MB of file + file size.
-
-        Fast hash that detects file changes without reading entire file.
+        Compute a collision-resistant SHA-256 fingerprint of the full file.
 
         Args:
             file_path: Path to file
@@ -146,19 +147,8 @@ class WaveformCache:
             Hex string of SHA-256 hash
         """
         try:
-            hasher = hashlib.sha256()
-
-            # Dateigroesse als Praeambel einbeziehen (verhindert Kollisionen
-            # bei Dateien mit gleichem Anfang aber verschiedenem Ende)
-            file_size = Path(file_path).stat().st_size
-            hasher.update(str(file_size).encode())
-
             with open(file_path, 'rb') as f:
-                # Read first 1MB (sufficient for change detection)
-                chunk = f.read(1024 * 1024)
-                hasher.update(chunk)
-
-            return hasher.hexdigest()
+                return hashlib.file_digest(f, "sha256").hexdigest()
 
         except Exception as e:
             logger.warning(f"Hash computation failed: {e}")
@@ -215,20 +205,24 @@ class WaveformCache:
         Returns:
             Dictionary with hit rate, size, evictions, etc.
         """
-        total_requests = self.hits + self.misses
-        hit_rate = (self.hits / total_requests * 100) if total_requests > 0 else 0.0
-
-        total_size = sum(entry['size'] for entry in self.cache.values())
-
-        return {
-            'hits': self.hits,
-            'misses': self.misses,
-            'evictions': self.evictions,
-            'hit_rate': hit_rate,
-            'size': len(self.cache),
-            'max_size': self.max_size,
-            'total_bytes': total_size
-        }
+        with self._lock:
+            total_requests = self.hits + self.misses
+            hit_rate = (
+                self.hits / total_requests * 100
+                if total_requests > 0 else 0.0
+            )
+            total_size = sum(
+                entry['size'] for entry in self.cache.values()
+            )
+            return {
+                'hits': self.hits,
+                'misses': self.misses,
+                'evictions': self.evictions,
+                'hit_rate': hit_rate,
+                'size': len(self.cache),
+                'max_size': self.max_size,
+                'total_bytes': total_size
+            }
 
     def print_stats(self):
         """Print cache statistics to logger."""
@@ -251,22 +245,24 @@ class WaveformCache:
         """
         abs_path = str(Path(audio_path).resolve())
 
-        if abs_path not in self.cache:
-            return None
-
-        entry = self.cache[abs_path]
-        return {
-            'timestamp': entry['timestamp'],
-            'size_bytes': entry['size'],
-            'hash': entry['hash'],
-            'age_seconds': time.time() - entry['timestamp']
-        }
+        with self._lock:
+            if abs_path not in self.cache:
+                return None
+            entry = self.cache[abs_path]
+            return {
+                'timestamp': entry['timestamp'],
+                'size_bytes': entry['size'],
+                'hash': entry['hash'],
+                'age_seconds': time.time() - entry['timestamp']
+            }
 
     def __len__(self) -> int:
         """Return number of cached entries."""
-        return len(self.cache)
+        with self._lock:
+            return len(self.cache)
 
     def __contains__(self, audio_path: str) -> bool:
         """Check if path is in cache."""
         abs_path = str(Path(audio_path).resolve())
-        return abs_path in self.cache
+        with self._lock:
+            return abs_path in self.cache

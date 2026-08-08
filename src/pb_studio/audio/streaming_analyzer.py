@@ -41,6 +41,16 @@ class StreamingAnalysisResult:
     bpm: float = 0.0
     beats: list[float] = field(default_factory=list)
     energy_curve: list[float] = field(default_factory=list)
+    onset_times: list[float] = field(default_factory=list)
+    kick_times: list[float] = field(default_factory=list)
+    snare_times: list[float] = field(default_factory=list)
+    hihat_times: list[float] = field(default_factory=list)
+    chroma_mean: list[float] = field(default_factory=list)
+    spectral_times: list[float] = field(default_factory=list)
+    spectral_bands: dict[str, list[float]] = field(default_factory=dict)
+    spectral_centroids: list[float] = field(default_factory=list)
+    stage_errors: dict[str, list[str]] = field(default_factory=dict)
+    chunk_evidence: list[dict] = field(default_factory=list)
     window_count: int = 0
 
 
@@ -101,6 +111,10 @@ class _BeatAccumulator:
             deduped.append(sum(current_group) / len(current_group))
         return deduped
 
+    @property
+    def count(self) -> int:
+        return len(self._beats)
+
 
 class _EnergyAggregator:
     """Streaming-Energy-Kurve mit Overlap-Handling und Downsampling.
@@ -145,12 +159,36 @@ class _EnergyAggregator:
         else:
             self._frames.extend(rms.tolist())
 
+    def add_gap(
+        self,
+        duration_seconds: float,
+        is_first_chunk: bool,
+        overlap_frames: int,
+        sample_rate: int,
+        hop_length: int,
+    ) -> None:
+        """Reserviert die Zeit eines fehlgeschlagenen Chunks als Stille."""
+        rms_frames = 1 + int(duration_seconds * sample_rate) // hop_length
+        if not is_first_chunk and overlap_frames > 0:
+            rms_frames = max(0, rms_frames - overlap_frames)
+        downsample_factor = 4
+        output_frames = (
+            rms_frames // downsample_factor
+            if rms_frames > downsample_factor
+            else rms_frames
+        )
+        self._frames.extend([0.0] * output_frames)
+
     def get_normalized(self) -> list[float]:
         """Global normalisierte Energy-Kurve [0..1]."""
         if not self._frames or self._global_max <= 0:
             return self._frames
         inv = 1.0 / self._global_max
         return [v * inv for v in self._frames]
+
+    @property
+    def count(self) -> int:
+        return len(self._frames)
 
 
 # ---------------------------------------------------------------------------
@@ -168,9 +206,11 @@ class StreamingAudioAnalyzer:
     BEAT_DEDUP_THRESHOLD_SEC = 0.15  # 150ms Deduplizierung
 
     # STFT-Parameter
-    SR = 22050
+    # Full-duration spectral summaries include the 12–20 kHz "air" band.
+    SR = 44100
     N_FFT = 2048
     HOP_LENGTH = 512
+    MAX_REPRESENTATIVE_POINTS = 7200
 
     def __init__(
         self,
@@ -233,9 +273,11 @@ class StreamingAudioAnalyzer:
 
         if energy_only:
             tempo, beats = 0.0, []
+            trigger_times = ([], [], [], [])
         else:
             tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
             beats = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+            trigger_times = self._detect_triggers(y)
 
         if on_progress:
             on_progress(70.0)
@@ -256,6 +298,35 @@ class StreamingAudioAnalyzer:
             bpm=bpm_val,
             beats=beats,
             energy_curve=energy,
+            onset_times=trigger_times[0],
+            kick_times=trigger_times[1],
+            snare_times=trigger_times[2],
+            hihat_times=trigger_times[3],
+            chunk_evidence=[{
+                "chunk_index": 0,
+                "start_seconds": 0.0,
+                "duration_seconds": duration,
+                "status": "completed",
+                "stages": {
+                    "load": {"status": "completed"},
+                    "beats": {
+                        "status": "skipped" if energy_only else "completed",
+                        "beat_count": len(beats),
+                    },
+                    "triggers": {
+                        "status": "skipped" if energy_only else "completed",
+                        "onset_count": len(trigger_times[0]),
+                        "kick_count": len(trigger_times[1]),
+                        "snare_count": len(trigger_times[2]),
+                        "hihat_count": len(trigger_times[3]),
+                    },
+                    "features": {"status": "not_requested"},
+                    "energy": {
+                        "status": "completed",
+                        "point_count": len(energy),
+                    },
+                },
+            }],
             window_count=1,
         )
 
@@ -269,27 +340,75 @@ class StreamingAudioAnalyzer:
         on_progress: Optional[Callable[[float], None]],
         energy_only: bool = False,
     ) -> StreamingAnalysisResult:
+        """Prepare an O(1)-seek source and always remove its temp transcode."""
+        import soundfile as sf
+
+        temp_wav_path: Optional[str] = None
+        try:
+            try:
+                native_sr = sf.info(str(path)).samplerate
+            except Exception:
+                native_sr = None
+            if native_sr is None:
+                temp_wav_path = self._transcode_to_wav(path)
+                if temp_wav_path is None:
+                    raise RuntimeError(
+                        "Streaming-Transcode fehlgeschlagen; "
+                        "langsames Offset-Decoding ist deaktiviert"
+                    )
+                path = Path(temp_wav_path)
+                native_sr = sf.info(str(path)).samplerate
+            return self._analyze_streaming_prepared(
+                path,
+                duration,
+                on_progress,
+                energy_only,
+                native_sr,
+            )
+        finally:
+            if temp_wav_path is not None:
+                try:
+                    Path(temp_wav_path).unlink(missing_ok=True)
+                except Exception as exc:
+                    logger.warning(
+                        "Streaming-Tempdatei konnte nicht entfernt werden: %s",
+                        exc,
+                    )
+
+    def _analyze_streaming_prepared(
+        self,
+        path: Path,
+        duration: float,
+        on_progress: Optional[Callable[[float], None]],
+        energy_only: bool,
+        native_sr: int,
+    ) -> StreamingAnalysisResult:
         """Echtes Chunk-Streaming mit soundfile block-I/O.
 
         Nur der aktuelle Chunk + Overlap lebt im RAM.
         """
         import librosa
-        import soundfile as sf
 
         step = self.window_sec - self.overlap_sec
         if step <= 0:
             step = self.window_sec  # Safety: overlap darf nicht >= window sein
         n_windows = max(1, math.ceil((duration - self.overlap_sec) / step))
 
-        try:
-            native_sr = sf.info(str(path)).samplerate
-        except Exception:
-            native_sr = self.SR
-
         # Aggregations-Objekte
         bpm_est = _RunningBPMEstimator()
         beat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        onset_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        kick_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        snare_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        hihat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
         energy_agg = _EnergyAggregator()
+        chroma_sum = np.zeros(12, dtype=np.float64)
+        chroma_weight = 0
+        spectral_times: list[float] = []
+        spectral_bands: dict[str, list[float]] = {}
+        spectral_centroids: list[float] = []
+        stage_errors: dict[str, list[str]] = {}
+        chunk_evidence: list[dict] = []
 
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
 
@@ -299,26 +418,173 @@ class StreamingAudioAnalyzer:
             chunk_start = start_sample / native_sr
             chunk_dur = min(self.window_sec, duration - chunk_start)
             if chunk_dur < 2.0:
+                chunk_evidence.append({
+                    "chunk_index": i,
+                    "start_seconds": chunk_start,
+                    "duration_seconds": max(chunk_dur, 0.0),
+                    "status": "skipped",
+                    "error": "terminal chunk shorter than 2.0 seconds",
+                    "stages": {},
+                })
                 continue
 
             try:
                 chunk = self._load_chunk(path, chunk_start, chunk_dur)
             except Exception as e:
                 logger.warning(f"Chunk {i} load fehlgeschlagen: {e}")
+                stage_errors.setdefault("load", []).append(f"chunk {i}: {e}")
+                energy_agg.add_gap(
+                    chunk_dur,
+                    is_first_chunk=(i == 0),
+                    overlap_frames=overlap_frames,
+                    sample_rate=self.SR,
+                    hop_length=self.HOP_LENGTH,
+                )
+                if on_progress:
+                    on_progress((i + 1) * 100.0 / n_windows)
+                chunk_evidence.append({
+                    "chunk_index": i,
+                    "start_seconds": chunk_start,
+                    "duration_seconds": chunk_dur,
+                    "status": "failed",
+                    "stages": {
+                        "load": {"status": "failed", "error": str(e)},
+                        "beats": {"status": "blocked"},
+                        "triggers": {"status": "blocked"},
+                        "features": {"status": "blocked"},
+                        "energy": {"status": "failed", "error": "load failed"},
+                    },
+                })
                 continue
 
+            stages: dict[str, dict] = {"load": {"status": "completed"}}
             # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
             if not energy_only:
-                self._process_beats(
+                beat_count_before = beat_acc.count
+                beats_error = self._process_beats(
                     chunk, chunk_start, bpm_est, beat_acc
                 )
+                if beats_error is not None:
+                    stage_errors.setdefault("beats", []).append(
+                        f"chunk {i}: {beats_error}"
+                    )
+                    stages["beats"] = {
+                        "status": "failed",
+                        "error": beats_error,
+                        "beat_count": 0,
+                    }
+                else:
+                    stages["beats"] = {
+                        "status": "completed",
+                        "beat_count": beat_acc.count - beat_count_before,
+                    }
+                trigger_counts_before = (
+                    onset_acc.count,
+                    kick_acc.count,
+                    snare_acc.count,
+                    hihat_acc.count,
+                )
+                triggers_error = self._process_triggers(
+                    chunk,
+                    chunk_start,
+                    onset_acc,
+                    kick_acc,
+                    snare_acc,
+                    hihat_acc,
+                )
+                if triggers_error is not None:
+                    stage_errors.setdefault("beats", []).append(
+                        f"chunk {i}: {triggers_error}"
+                    )
+                    stages["triggers"] = {
+                        "status": "failed",
+                        "error": triggers_error,
+                    }
+                else:
+                    stages["triggers"] = {
+                        "status": "completed",
+                        "onset_count": onset_acc.count - trigger_counts_before[0],
+                        "kick_count": kick_acc.count - trigger_counts_before[1],
+                        "snare_count": snare_acc.count - trigger_counts_before[2],
+                        "hihat_count": hihat_acc.count - trigger_counts_before[3],
+                    }
+            else:
+                stages["beats"] = {"status": "skipped"}
+                stages["triggers"] = {"status": "skipped"}
+
+            try:
+                representative = self._extract_representative_features(
+                    chunk,
+                    chunk_start,
+                    skip_seconds=0.0 if i == 0 else self.overlap_sec,
+                )
+                feature_weight = int(representative["chroma_weight"])
+                chroma_sum += (
+                    np.asarray(representative["chroma_mean"], dtype=np.float64)
+                    * feature_weight
+                )
+                chroma_weight += feature_weight
+                spectral_times.extend(representative["times"])
+                spectral_centroids.extend(representative["centroids"])
+                for band_name, values in representative["bands"].items():
+                    spectral_bands.setdefault(band_name, []).extend(values)
+                stages["features"] = {
+                    "status": "completed",
+                    "representative_point_count": len(representative["times"]),
+                    "chroma_weight": feature_weight,
+                }
+            except Exception as e:
+                logger.warning(
+                    f"Full-duration Features bei {chunk_start:.1f}s fehlgeschlagen: {e}"
+                )
+                stage_errors.setdefault("features", []).append(
+                    f"chunk {i}: {e}"
+                )
+                stages["features"] = {"status": "failed", "error": str(e)}
 
             # --- RMS-Energy pro Chunk ---
-            self._process_energy(
+            energy_count_before = energy_agg.count
+            energy_error = self._process_energy(
                 chunk, is_first=(i == 0),
                 overlap_frames=overlap_frames,
                 energy_agg=energy_agg,
             )
+            if energy_error is not None:
+                stage_errors.setdefault("energy", []).append(
+                    f"chunk {i}: {energy_error}"
+                )
+                energy_agg.add_gap(
+                    chunk_dur,
+                    is_first_chunk=(i == 0),
+                    overlap_frames=overlap_frames,
+                    sample_rate=self.SR,
+                    hop_length=self.HOP_LENGTH,
+                )
+                stages["energy"] = {
+                    "status": "failed",
+                    "error": energy_error,
+                    "point_count": energy_agg.count - energy_count_before,
+                }
+            else:
+                stages["energy"] = {
+                    "status": "completed",
+                    "point_count": energy_agg.count - energy_count_before,
+                }
+
+            chunk_evidence.append({
+                "chunk_index": i,
+                "start_seconds": chunk_start,
+                "duration_seconds": chunk_dur,
+                "status": (
+                    "partial"
+                    if any(
+                        stage.get("status") == "failed"
+                        for stage in stages.values()
+                    )
+                    else "completed"
+                ),
+                "stages": stages,
+            })
 
             # Chunk-Buffer freigeben
             del chunk
@@ -327,13 +593,157 @@ class StreamingAudioAnalyzer:
             if on_progress:
                 on_progress((i + 1) * 100.0 / n_windows)
 
+        (
+            spectral_times,
+            spectral_bands,
+            spectral_centroids,
+        ) = self._cap_representative_points(
+            spectral_times,
+            spectral_bands,
+            spectral_centroids,
+        )
         return StreamingAnalysisResult(
             duration_seconds=duration,
             bpm=bpm_est.median_bpm,
             beats=beat_acc.get_deduplicated(),
             energy_curve=energy_agg.get_normalized(),
+            onset_times=onset_acc.get_deduplicated(),
+            kick_times=kick_acc.get_deduplicated(),
+            snare_times=snare_acc.get_deduplicated(),
+            hihat_times=hihat_acc.get_deduplicated(),
+            chroma_mean=(
+                (chroma_sum / chroma_weight).tolist()
+                if chroma_weight > 0
+                else []
+            ),
+            spectral_times=spectral_times,
+            spectral_bands=spectral_bands,
+            spectral_centroids=spectral_centroids,
+            stage_errors=stage_errors,
+            chunk_evidence=chunk_evidence,
             window_count=n_windows,
         )
+
+    def _extract_representative_features(
+        self,
+        chunk: np.ndarray,
+        chunk_start: float,
+        skip_seconds: float,
+    ) -> dict:
+        """One-second spectral/chroma summaries for full-duration consumers."""
+        import librosa
+
+        from .spectral_analyzer import FREQUENCY_BANDS
+
+        stft = np.abs(
+            librosa.stft(
+                chunk,
+                n_fft=self.N_FFT,
+                hop_length=self.HOP_LENGTH,
+            )
+        )
+        frequencies = librosa.fft_frequencies(sr=self.SR, n_fft=self.N_FFT)
+        centroids = librosa.feature.spectral_centroid(
+            S=stft,
+            sr=self.SR,
+        )[0]
+        chroma = librosa.feature.chroma_stft(
+            S=stft,
+            sr=self.SR,
+            n_fft=self.N_FFT,
+        )
+        local_times = librosa.frames_to_time(
+            np.arange(stft.shape[1]),
+            sr=self.SR,
+            hop_length=self.HOP_LENGTH,
+        )
+        frames_per_second = max(1, int(round(self.SR / self.HOP_LENGTH)))
+        start_frame = int(skip_seconds * self.SR / self.HOP_LENGTH)
+        indices = range(start_frame, stft.shape[1], frames_per_second)
+        times: list[float] = []
+        centroid_points: list[float] = []
+        band_points = {name: [] for name in FREQUENCY_BANDS}
+        for start in indices:
+            end = min(start + frames_per_second, stft.shape[1])
+            if end <= start:
+                continue
+            times.append(float(chunk_start + np.mean(local_times[start:end])))
+            centroid_points.append(float(np.mean(centroids[start:end])))
+            for band_name, (low, high) in FREQUENCY_BANDS.items():
+                mask = (frequencies >= low) & (frequencies < high)
+                value = float(np.mean(np.sum(stft[mask, start:end], axis=0)))
+                band_points[band_name].append(value)
+        # Audit 2026-08-05 (CRIT-AUDIO-1/T2.4): auch der Streaming-Pfad muss die
+        # Aggregate low/mid/high liefern — sonst haetten ausgerechnet lange
+        # DJ-Mixe (>10 min) kein bass-/hoehengewichtetes Pacing.
+        from .spectral_analyzer import add_aggregate_bands
+
+        return {
+            "times": times,
+            "bands": add_aggregate_bands(band_points),
+            "centroids": centroid_points,
+            "chroma_mean": np.mean(chroma, axis=1).tolist(),
+            "chroma_weight": chroma.shape[1],
+        }
+
+    def _cap_representative_points(
+        self,
+        times: list[float],
+        bands: dict[str, list[float]],
+        centroids: list[float],
+    ) -> tuple[list[float], dict[str, list[float]], list[float]]:
+        if len(times) <= self.MAX_REPRESENTATIVE_POINTS:
+            return times, bands, centroids
+        edges = np.linspace(
+            0,
+            len(times),
+            self.MAX_REPRESENTATIVE_POINTS + 1,
+            dtype=int,
+        )
+
+        def reduce(values: list[float]) -> list[float]:
+            return [
+                float(np.mean(values[edges[i] : edges[i + 1]]))
+                for i in range(self.MAX_REPRESENTATIVE_POINTS)
+            ]
+
+        return (
+            reduce(times),
+            {name: reduce(values) for name, values in bands.items()},
+            reduce(centroids),
+        )
+
+    def _transcode_to_wav(self, path: Path) -> Optional[str]:
+        """BUGFIX H5 helper: transcode any audio file to a temp mono WAV at
+        self.SR via ffmpeg, once, so streaming chunk-loads can use fast
+        soundfile block-I/O instead of O(n^2) librosa offset re-seeks.
+
+        Returns the temp WAV path, or None on failure (caller keeps original).
+        """
+        import subprocess
+        import tempfile
+        import uuid
+        try:
+            try:
+                from pb_studio.video.encoder_utils import _get_ffmpeg_path
+                ffmpeg = _get_ffmpeg_path()
+            except Exception:
+                ffmpeg = "ffmpeg"
+            temp_wav = str(Path(tempfile.gettempdir()) / f"pb_studio_stream_{uuid.uuid4().hex}.wav")
+            cmd = [
+                ffmpeg, "-y", "-i", str(path),
+                "-vn", "-acodec", "pcm_s16le", "-ar", str(self.SR), "-ac", "1",
+                temp_wav,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode == 0 and Path(temp_wav).exists() and Path(temp_wav).stat().st_size > 0:
+                logger.info("Streaming: transcoded to temp WAV for fast block-I/O: %s", temp_wav)
+                return temp_wav
+            logger.warning("Streaming transcode failed (rc=%s); using slow per-chunk fallback.", result.returncode)
+            return None
+        except Exception as e:
+            logger.warning("Streaming transcode error (%s); using slow per-chunk fallback.", e)
+            return None
 
     # ------------------------------------------------------------------
     # Chunk-Loading
@@ -405,7 +815,7 @@ class StreamingAudioAnalyzer:
         chunk_start: float,
         bpm_est: _RunningBPMEstimator,
         beat_acc: _BeatAccumulator,
-    ) -> None:
+    ) -> Optional[str]:
         """Beat-Detection auf einem Chunk mit librosa.beat.beat_track."""
         import librosa
 
@@ -424,9 +834,81 @@ class StreamingAudioAnalyzer:
             # BPM extrahieren
             bpm_val = float(tempo) if np.ndim(tempo) == 0 else float(tempo[0])
             bpm_est.add(bpm_val)
+            return None
 
         except Exception as e:
             logger.warning(f"Beat-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}")
+            return str(e)
+
+    def _detect_triggers(
+        self,
+        chunk: np.ndarray,
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
+        """Detect onset and drum candidates relative to one in-memory chunk."""
+        import librosa
+
+        hop = self.HOP_LENGTH
+        onset_times = librosa.frames_to_time(
+            librosa.onset.onset_detect(y=chunk, sr=self.SR, units="frames"),
+            sr=self.SR,
+        ).tolist()
+
+        def _band_times(*, signal: np.ndarray, fmin=None, fmax=None) -> list[float]:
+            kwargs = {
+                "y": signal,
+                "sr": self.SR,
+                "hop_length": hop,
+                "n_mels": 64,
+            }
+            if fmin is not None:
+                kwargs["fmin"] = fmin
+            if fmax is not None:
+                kwargs["fmax"] = fmax
+            envelope = librosa.onset.onset_strength(**kwargs)
+            frames = librosa.onset.onset_detect(
+                onset_envelope=envelope,
+                sr=self.SR,
+                hop_length=hop,
+            )
+            return librosa.frames_to_time(
+                frames,
+                sr=self.SR,
+                hop_length=hop,
+            ).tolist()
+
+        kick_times = _band_times(
+            signal=librosa.effects.preemphasis(chunk),
+            fmax=150,
+        )
+        snare_times = _band_times(signal=chunk, fmin=200, fmax=400)
+        hihat_times = _band_times(signal=chunk, fmin=5000)
+        return onset_times, kick_times, snare_times, hihat_times
+
+    def _process_triggers(
+        self,
+        chunk: np.ndarray,
+        chunk_start: float,
+        onset_acc: _BeatAccumulator,
+        kick_acc: _BeatAccumulator,
+        snare_acc: _BeatAccumulator,
+        hihat_acc: _BeatAccumulator,
+    ) -> Optional[str]:
+        """Collect absolute trigger times and deduplicate overlap at result time."""
+        try:
+            relative_groups = self._detect_triggers(chunk)
+            for relative, accumulator in zip(
+                relative_groups,
+                (onset_acc, kick_acc, snare_acc, hihat_acc),
+            ):
+                accumulator.add_chunk_beats(
+                    [float(value) + chunk_start for value in relative]
+                )
+            return None
+        except Exception as e:
+            logger.warning(
+                f"Trigger-Detection bei {chunk_start:.1f}s fehlgeschlagen: {e}"
+            )
+            return str(e)
 
     # ------------------------------------------------------------------
     # Energy-Processing pro Chunk
@@ -437,7 +919,7 @@ class StreamingAudioAnalyzer:
         is_first: bool,
         overlap_frames: int,
         energy_agg: _EnergyAggregator,
-    ) -> None:
+    ) -> Optional[str]:
         """RMS-Energy auf einem Chunk berechnen."""
         import librosa
 
@@ -453,8 +935,10 @@ class StreamingAudioAnalyzer:
                 is_first_chunk=is_first,
                 overlap_frames=overlap_frames,
             )
+            return None
         except Exception as e:
             logger.warning(f"Energy-Berechnung fehlgeschlagen: {e}")
+            return str(e)
 
     # ------------------------------------------------------------------
     # STFT-Streaming (fuer erweiterte Spektral-Analyse)

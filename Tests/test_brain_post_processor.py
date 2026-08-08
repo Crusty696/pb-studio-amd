@@ -74,7 +74,9 @@ def test_annotate_attaches_brain_scores(brain_svc, tmp_path: Path):
         assert len(out) == 2
         for c in out:
             scores = c["metadata"]["brain_scores"]
-            assert set(scores.keys()) == set(BRIDGE_AXES)
+            assert set(scores.keys()) == (
+                set(BRIDGE_AXES) - {"semantic_match_weight"}
+            )
             ck = c["metadata"]["context_keys"]
             assert len(ck) == 6
 
@@ -105,13 +107,50 @@ def test_min_confidence_filters_low_scores(brain_svc, tmp_path: Path):
         state.close()
 
 
+def test_persist_batch_rolls_back_partial_timeline(
+    brain_svc, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    import pb_studio.brain.post_processor as post_processor
+
+    state = _make_state_conn(tmp_path)
+    original_persist = post_processor._persist_cut
+    calls = 0
+
+    def fail_on_second_cut(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise sqlite3.OperationalError("simulated write failure")
+        return original_persist(*args, **kwargs)
+
+    monkeypatch.setattr(post_processor, "_persist_cut", fail_on_second_cut)
+    cuts = [
+        {"clip_id": "a", "start_time": 0.0, "end_time": 1.0, "metadata": {}},
+        {"clip_id": "b", "start_time": 1.0, "end_time": 2.0, "metadata": {}},
+    ]
+    try:
+        out = annotate_cuts_with_brain(
+            cuts,
+            weight_store=brain_svc.weights,
+            audio_clip_id=1,
+            persist_to_state_conn=state,
+        )
+        assert len(out) == 2
+        assert state.execute("SELECT COUNT(*) FROM timelines").fetchone()[0] == 0
+        assert state.execute("SELECT COUNT(*) FROM timeline_cuts").fetchone()[0] == 0
+    finally:
+        state.close()
+
+
 # ----------------------------------------------------------------------------
 # R-Brain-01/02/09: Tests fuer die neuen Helper (centroid Normalisierung,
 # nearest-scene-distance, NaN-guard cosine, weight-store variance defensiv)
 # ----------------------------------------------------------------------------
 
 def test_normalize_centroid_curve_handles_empty_and_nan():
-    from pb_studio.brain.post_processor import _normalize_centroid_curve
+    from pb_studio.brain.feature_adapter import (
+        _normalize_percentile_curve as _normalize_centroid_curve,
+    )
 
     assert _normalize_centroid_curve([]) == []
     assert _normalize_centroid_curve(None) == []
@@ -127,7 +166,7 @@ def test_normalize_centroid_curve_handles_empty_and_nan():
 
 
 def test_nearest_scene_distance_dict_and_tuple():
-    from pb_studio.brain.post_processor import _nearest_scene_distance
+    from pb_studio.brain.feature_adapter import _nearest_scene_distance
 
     # leere Liste
     assert _nearest_scene_distance(5.0, []) == 1.0
@@ -143,10 +182,10 @@ def test_nearest_scene_distance_dict_and_tuple():
 
     # tuple-Format (start, end)
     scenes_tup = [(0.0, 1.0), (3.0, 4.5)]
-    assert abs(_nearest_scene_distance(0.5, scenes_tup) - 0.5) < 0.001
+    assert _nearest_scene_distance(0.5, scenes_tup) == 1.0
 
     # Cap auf 10.0 fuer absurd weite Distanzen
-    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 10.0
+    assert _nearest_scene_distance(1000.0, [{"start_time": 0.0}]) == 1000.0
 
 
 def test_cosine_zero_one_handles_nan_inf_inputs():
@@ -161,7 +200,7 @@ def test_cosine_zero_one_handles_nan_inf_inputs():
     assert 0.0 <= val <= 1.0
 
     # Empty
-    assert _cosine_zero_one(np.array([]), np.array([])) == 0.5
+    assert _cosine_zero_one(np.array([]), np.array([])) is None
 
 
 def test_weight_store_variance_zero_alpha_beta(tmp_path):

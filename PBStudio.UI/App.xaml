@@ -17,6 +17,11 @@
             <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <conv:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <!-- Audit 2026-08-05: Die Converter-Klasse existierte seit laengerem,
+                 war aber nie als Ressource registriert und damit aus XAML nicht
+                 nutzbar. Gebraucht fuer "zeige A waehrend inaktiv, B waehrend aktiv"
+                 (z.B. GPU-Cleanup-Spinner). -->
+            <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
             <conv:ConfidenceToBrushConverter x:Key="ConfidenceToBrushConverter"/>
             <conv:MotionToHeightConverter x:Key="MotionToHeightConverter"/>
             <conv:PeaksToWaveformGeometryConverter x:Key="PeaksToWaveformGeometryConverter"/>

@@ -1,7 +1,8 @@
 # LM Studio Live-Verify Script - PB Studio AMD - 2026-05-17
-# Output: C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_check.json
+# Output: repository root, .lm_studio_check.json
 $ErrorActionPreference = 'Continue'
-$outFile = 'C:\Users\david\Documents\Pb_studio_AMD_version\.lm_studio_check.json'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$outFile = Join-Path $repoRoot '.lm_studio_check.json'
 
 $result = [ordered]@{
     timestamp     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')

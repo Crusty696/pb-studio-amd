@@ -5,7 +5,16 @@
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:controls="clr-namespace:PBStudio.UI.Controls"
              xmlns:vm="clr-namespace:PBStudio.UI.ViewModels"
-             Background="{StaticResource AbletonBg}">
+             Background="{StaticResource AbletonBg}"
+             AutomationProperties.Name="Produktion und Export"
+             KeyboardNavigation.TabNavigation="Continue">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding BrowseOutputCommand}"/>
+        <KeyBinding Key="R" Modifiers="Control" Command="{Binding StartRenderCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelRenderCommand}"/>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding ClearRenderLogCommand}"/>
+    </UserControl.InputBindings>
 
     <DockPanel Margin="12">
 
@@ -21,7 +30,10 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonAccent}"
                             Padding="8,4" Height="30" Margin="6,0,0,0"
-                            ToolTip="Pfad für die fertige Video-Datei">
+                            ToolTip="Pfad für die fertige Video-Datei"
+                            AutomationProperties.Name="Ausgabe-Datei wählen"
+                            AutomationProperties.HelpText="Wählt Zielordner und Dateinamen für das gerenderte Video."
+                            AutomationProperties.AcceleratorKey="Strg+O">
                         <icon:PackIconMaterial Kind="FolderOpen" Width="16" Height="16"/>
                     </Button>
                     <TextBox Text="{Binding OutputPath, UpdateSourceTrigger=PropertyChanged}"
@@ -29,6 +41,8 @@
                              Foreground="{StaticResource AbletonText}"
                              BorderBrush="{StaticResource AbletonBorder}"
                              FontSize="12" Padding="6,4"
+                             AutomationProperties.Name="Ausgabe-Pfad"
+                             AutomationProperties.HelpText="Vollständiger Pfad der zu erzeugenden Video-Datei."
                              ToolTip="Pfad für die fertige Video-Datei"
                              VerticalContentAlignment="Center"/>
                 </DockPanel>
@@ -49,6 +63,7 @@
                                   Foreground="{StaticResource AbletonText}"
                                   BorderBrush="{StaticResource AbletonBorder}"
                                   MinWidth="120" FontSize="12" Margin="0,2,0,0"
+                                  AutomationProperties.Name="Render-Qualität"
                                   ToolTip="Encoding-Qualität (höher = bessere Qualität, größere Datei)"/>
                     </StackPanel>
 
@@ -62,6 +77,7 @@
                                      Foreground="{StaticResource AbletonText}"
                                      BorderBrush="{StaticResource AbletonBorder}"
                                      Width="65" FontSize="12" Padding="4,4"
+                                     AutomationProperties.Name="Ausgabe-Breite"
                                      HorizontalContentAlignment="Center"
                                      VerticalContentAlignment="Center"/>
                             <TextBlock Text="x" Foreground="{StaticResource AbletonTextDim}"
@@ -71,6 +87,7 @@
                                      Foreground="{StaticResource AbletonText}"
                                      BorderBrush="{StaticResource AbletonBorder}"
                                      Width="65" FontSize="12" Padding="4,4"
+                                     AutomationProperties.Name="Ausgabe-Höhe"
                                      HorizontalContentAlignment="Center"
                                      VerticalContentAlignment="Center"/>
                             <TextBlock Text="@" Foreground="{StaticResource AbletonTextDim}"
@@ -80,6 +97,7 @@
                                      Foreground="{StaticResource AbletonText}"
                                      BorderBrush="{StaticResource AbletonBorder}"
                                      Width="50" FontSize="12" Padding="4,4"
+                                     AutomationProperties.Name="Bilder pro Sekunde"
                                      HorizontalContentAlignment="Center"
                                      VerticalContentAlignment="Center"/>
                             <TextBlock Text="fps" Foreground="{StaticResource AbletonTextDim}"
@@ -88,7 +106,7 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- L-N6: Encoder-Auswahl (auto, h264_amf, hevc_amf, av1_amf, libx264) -->
+                <!-- L-N6: Encoder-Auswahl (AMD AMF only) -->
                 <StackPanel Margin="0,12,0,0">
                     <DockPanel Margin="0,0,0,2">
                         <TextBlock Text="Encoder" Style="{StaticResource ParamLabel}" DockPanel.Dock="Left"/>
@@ -103,7 +121,9 @@
                               Foreground="{StaticResource AbletonText}"
                               BorderBrush="{StaticResource AbletonBorder}"
                               FontSize="12" Margin="0,2,0,0"
-                              ToolTip="Video-Encoder. auto = Backend waehlt (h264_amf bevorzugt fuer AMD). hevc_amf/av1_amf bessere Kompression, libx264 = CPU-Fallback."/>
+                              AutomationProperties.Name="AMD-AMF-Encoder"
+                              AutomationProperties.HelpText="Wählt ausschließlich einen verfügbaren AMD-AMF-Hardware-Encoder."
+                              ToolTip="AMD-AMF-Hardware-Encoder. auto = Backend waehlt den besten verfuegbaren AMF-Encoder. Kein CPU-Fallback."/>
                 </StackPanel>
 
                 <!-- L-N5: Bitrate Slider (4-50 Mbps, default 12) -->
@@ -118,6 +138,8 @@
                     <Slider Minimum="4" Maximum="50"
                             Value="{Binding BitrateMbps}"
                             TickFrequency="1" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Video-Bitrate"
+                            AutomationProperties.HelpText="Bitrate in Megabit pro Sekunde; Pfeiltasten ändern den Wert in Einerschritten."
                             ToolTip="Video-Bitrate in Mbps (höher = bessere Qualität, größere Datei). Default 12 Mbps für 1080p."/>
                 </StackPanel>
             </StackPanel>
@@ -137,7 +159,10 @@
                                 Background="{StaticResource AbletonAccent}"
                                 Foreground="White"
                                 Padding="12,6" Height="34"
-                                ToolTip="Finales Video rendern (FFmpeg + AMF Encoding)">
+                                ToolTip="Finales Video rendern (FFmpeg + AMF Encoding)"
+                                AutomationProperties.Name="Render starten"
+                                AutomationProperties.HelpText="Startet den finalen Videoexport mit dem gewählten AMD-AMF-Encoder."
+                                AutomationProperties.AcceleratorKey="Strg+R">
                             <StackPanel Orientation="Horizontal">
                                 <icon:PackIconMaterial Kind="Play" Width="14" Height="14"
                                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -149,6 +174,9 @@
                                 Foreground="{StaticResource AbletonRed}"
                                 Padding="12,6" Height="34" Margin="8,0,0,0"
                                 ToolTip="Laufendes Rendering abbrechen"
+                                AutomationProperties.Name="Render abbrechen"
+                                AutomationProperties.HelpText="Fordert den kontrollierten Abbruch des laufenden Renderjobs an."
+                                AutomationProperties.AcceleratorKey="Escape"
                                 Visibility="{Binding IsRendering, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <StackPanel Orientation="Horizontal">
                                 <icon:PackIconMaterial Kind="Stop" Width="14" Height="14"
@@ -163,7 +191,10 @@
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{StaticResource AbletonTextDim}"
                             Padding="8,4" Height="30"
-                            ToolTip="Render-Log leeren">
+                            ToolTip="Render-Log leeren"
+                            AutomationProperties.Name="Render-Log leeren"
+                            AutomationProperties.HelpText="Entfernt alle aktuell angezeigten Render-Logeinträge."
+                            AutomationProperties.AcceleratorKey="Strg+L">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Broom" Width="14" Height="14"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -181,9 +212,15 @@
                     <TextBlock DockPanel.Dock="Right" Text="{Binding EtaText}"
                                Foreground="{StaticResource AbletonYellow}" FontSize="11"
                                FontFamily="Consolas"/>
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="{StaticResource AbletonTextDim}" FontSize="11"
-                               TextTrimming="CharacterEllipsis"/>
+                    <TextBox Text="{Binding StatusText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{StaticResource AbletonTextDim}"
+                             FontSize="11"
+                             TextWrapping="Wrap"
+                             AutomationProperties.Name="Render-Status"
+                             AutomationProperties.LiveSetting="Polite"/>
                 </DockPanel>
             </StackPanel>
         </md:Card>
@@ -191,8 +228,8 @@
         <!-- ══ Render Log ══ -->
         <md:Card Style="{StaticResource AbletonCard}" Padding="0">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="10,10,10,6">
-                    <TextBlock Text="RENDER LOG" Style="{StaticResource SectionHeader}"/>
+                <DockPanel DockPanel.Dock="Top" Margin="10,10,10,6" LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Text="RENDER LOG" Style="{StaticResource SectionHeader}"/>
                     <TextBlock DockPanel.Dock="Right"
                                Text="{Binding RenderLogEntries.Count, StringFormat={}{0} Einträge}"
                                Foreground="{StaticResource AbletonTextDim}"
@@ -207,6 +244,8 @@
                              Foreground="{StaticResource AbletonTextDim}"
                              FontFamily="Consolas"
                              FontSize="11"
+                             AutomationProperties.Name="Render-Protokoll"
+                             AutomationProperties.HelpText="Liste kopierbarer Meldungen des aktuellen und letzten Renderlaufs."
                              ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
@@ -220,6 +259,18 @@
                                 </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Path=., Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Foreground="{StaticResource AbletonTextDim}"
+                                         FontFamily="Consolas"
+                                         FontSize="11"
+                                         TextWrapping="Wrap"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
                     </ListBox>
                 </Border>
             </DockPanel>

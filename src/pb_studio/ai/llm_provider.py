@@ -26,6 +26,7 @@ hybrid Modus default-on.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -93,10 +94,19 @@ def get_llm_client(
         timeout_seconds: HTTP-Timeout fuer Requests.
         **client_kwargs: Zusaetzliche Args fuer LMStudioClient (z.B. max_retries).
     """
-    base_url = get_base_url(provider)
+    configured_provider = (
+        str(provider or get_provider()).strip().lower()
+    )
+    resolved_provider = (
+        configured_provider
+        if configured_provider in {"lmstudio", "ollama"}
+        else "lmstudio"
+    )
+    base_url = get_base_url(resolved_provider)
     return LMStudioClient(
         base_url=base_url,
         timeout_seconds=timeout_seconds,
+        provider=resolved_provider,
         **client_kwargs,
     )
 
@@ -105,6 +115,7 @@ async def get_alive_client(
     timeout_seconds: float = 5.0,
     *,
     client_timeout_seconds: float = DEFAULT_GENERATION_TIMEOUT,
+    required_capability: str = "chat",
 ) -> Optional[LMStudioClient]:
     """Auto-Mode mit Fallback: LM Studio first, Ollama wenn LM Studio down.
 
@@ -124,19 +135,43 @@ async def get_alive_client(
     else:
         candidates = [provider]
 
-    for candidate in candidates:
-        probe = get_llm_client(provider=candidate, timeout_seconds=timeout_seconds)
+    async def _probe(candidate: str) -> tuple[str, bool]:
+        probe = get_llm_client(
+            provider=candidate,
+            timeout_seconds=timeout_seconds,
+            retry_attempts=1,
+        )
         try:
-            alive = await probe.is_alive()
-        except LMStudioConnectionError:
-            alive = False
-            logger.debug("Provider %s nicht erreichbar — naechster Kandidat", candidate)
+            suitable = await asyncio.wait_for(
+                probe.supports_capability(required_capability),
+                timeout=timeout_seconds,
+            )
+            return candidate, suitable
+        except (LMStudioConnectionError, asyncio.TimeoutError):
+            logger.debug(
+                "Provider %s nicht erreichbar oder Probe-Deadline erreicht",
+                candidate,
+            )
+            return candidate, False
+        except Exception as exc:  # noqa: BLE001 - Probe darf Fallback nicht abbrechen
+            logger.debug("Provider-Probe %s fehlgeschlagen: %s", candidate, exc)
+            return candidate, False
         finally:
             await probe.aclose()
 
-        if alive:
-            logger.info("LLM-Provider aktiv: %s", candidate)
+    probe_results = dict(await asyncio.gather(*(_probe(name) for name in candidates)))
+    for candidate in candidates:
+        if probe_results.get(candidate, False):
+            logger.info(
+                "LLM-Provider aktiv: %s (Capability: %s)",
+                candidate,
+                required_capability,
+            )
             # Frischer Client mit Generierungs-Timeout (Probe war nur kurz).
             return get_llm_client(provider=candidate, timeout_seconds=client_timeout_seconds)
-    logger.warning("Kein LLM-Provider erreichbar (geprueft: %s)", ", ".join(candidates))
+    logger.warning(
+        "Kein LLM-Provider mit Capability %s (geprueft: %s)",
+        required_capability,
+        ", ".join(candidates),
+    )
     return None

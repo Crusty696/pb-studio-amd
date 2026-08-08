@@ -8,33 +8,26 @@ import importlib.util
 import logging
 import os
 import sys
+import threading
 import types
 from pathlib import Path
 
-try:
-    import onnxruntime as ort
-except ImportError:  # pragma: no cover - optional dependency in test envs
-    class _FallbackSessionOptions:
-        def __init__(self):
-            self.enable_mem_pattern = False
-
-    class _FallbackOrt:
-        SessionOptions = _FallbackSessionOptions
-
-        @staticmethod
-        def get_available_providers():
-            return ["CPUExecutionProvider"]
-
-    ort = _FallbackOrt()
+import onnxruntime as ort
 
 import torch
 
 from pb_studio.config_manager import ConfigManager
+from pb_studio.core.directml_adapter import (
+    configure_directml_session_options,
+    enforce_directml_session,
+    get_directml_provider,
+)
 
 logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
 
+_directml_session_options_patch_lock = threading.RLock()
 
 
 def _box_iou(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -154,17 +147,32 @@ class StemSeparator:
             # Override the ONNX execution provider AFTER init
             # This forces DirectML usage for ONNX-based models (MDX, MDXC)
             available_providers = ort.get_available_providers()
+            self._has_directml = False
+            self._directml_error = None
 
             if "DmlExecutionProvider" in available_providers:
-                logger.info("AMD DirectML detected. Patching audio-separator for GPU acceleration.")
-                self.separator.onnx_execution_provider = ["DmlExecutionProvider", "CPUExecutionProvider"]
-                logger.info(f"ONNX Provider set to: {self.separator.onnx_execution_provider}")
-
+                try:
+                    provider = get_directml_provider()
+                    self.separator.onnx_execution_provider = [provider]
+                    logger.info(
+                        "AMD DirectML provider bound for audio separation: %s",
+                        self.separator.onnx_execution_provider,
+                    )
+                    self._has_directml = True
+                except Exception as exc:
+                    self._directml_error = str(exc)
+                    logger.error(
+                        "DirectML adapter selection failed; ONNX stem models "
+                        "remain disabled: %s",
+                        exc,
+                    )
                 # SessionOptions Patch wird nur während separate() aktiv gehalten
                 # (siehe _apply_directml_patch / _restore_directml_patch)
-                self._has_directml = True
             else:
-                logger.warning("DirectML not available. Running in CPU mode.")
+                logger.warning(
+                    "DirectML not available. ONNX stem models are disabled; "
+                    "the intentional PyTorch CPU path for Demucs remains available."
+                )
                 self._has_directml = False
             # === END PATCH ===
             
@@ -181,21 +189,57 @@ class StemSeparator:
         """Apply SessionOptions monkey-patch for DirectML (scoped)."""
         if not getattr(self, '_has_directml', False):
             return
-        self._original_session_options_init = ort.SessionOptions.__init__
-        def _patched_init(self_opts, *args, **kwargs):
-            self._original_session_options_init(self_opts, *args, **kwargs)
-            self_opts.enable_mem_pattern = False
-            self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
-        ort.SessionOptions.__init__ = _patched_init
-        logger.debug("SessionOptions patch applied for DirectML separation")
+        _directml_session_options_patch_lock.acquire()
+        try:
+            original = ort.SessionOptions.__init__
+            original_inference_session = ort.InferenceSession
+            self._original_session_options_init = original
+            self._original_inference_session = original_inference_session
+            self._directml_session_created = False
+
+            def _patched_init(self_opts, *args, **kwargs):
+                original(self_opts, *args, **kwargs)
+                configure_directml_session_options(self_opts)
+                self_opts.enable_cpu_mem_arena = False  # IRON RULE §2 – beide Flags pflicht
+
+            def _patched_inference_session(*args, **kwargs):
+                session = enforce_directml_session(
+                    original_inference_session(*args, **kwargs)
+                )
+                self._directml_session_created = True
+                return session
+
+            ort.SessionOptions.__init__ = _patched_init
+            ort.InferenceSession = _patched_inference_session
+            self._directml_patch_lock_held = True
+            logger.debug("SessionOptions patch applied for DirectML separation")
+        except Exception:
+            self._original_session_options_init = None
+            self._original_inference_session = None
+            _directml_session_options_patch_lock.release()
+            raise
 
     def _restore_directml_patch(self):
         """Restore original SessionOptions.__init__ after separation."""
         original = getattr(self, '_original_session_options_init', None)
-        if original is not None:
-            ort.SessionOptions.__init__ = original
+        original_inference_session = getattr(
+            self,
+            '_original_inference_session',
+            None,
+        )
+        lock_held = getattr(self, '_directml_patch_lock_held', False)
+        try:
+            if original is not None:
+                ort.SessionOptions.__init__ = original
+            if original_inference_session is not None:
+                ort.InferenceSession = original_inference_session
+                logger.debug("SessionOptions patch restored")
+        finally:
             self._original_session_options_init = None
-            logger.debug("SessionOptions patch restored")
+            self._original_inference_session = None
+            self._directml_patch_lock_held = False
+            if lock_held:
+                _directml_session_options_patch_lock.release()
 
     def unload(self):
         """Release VRAM and reset separator."""
@@ -252,49 +296,62 @@ class StemSeparator:
 
         _emit(0.0, "init")
 
-        # Scoped DirectML patch
+        if not self.separator:
+            return {"error": "Separator not initialized"}
+
+        if not Path(file_path).exists():
+            return {"error": f"File not found: {file_path}"}
+
+        is_onnx_model = Path(model_name).suffix.lower() == ".onnx"
+        if is_onnx_model and not getattr(self, "_has_directml", False):
+            return {
+                "error": "DirectML is required for ONNX stem separation; "
+                         "CPU fallback is disabled."
+            }
+
+        # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
+        config = getattr(self, "config", None) or ConfigManager()
+        model_dir = config.get("paths", {}).get("models_dir", "./models")
+        model_path = Path(model_dir) / model_name
+        if not model_path.exists():
+            return {
+                "error": f"Model file '{model_name}' not found in '{model_dir}'. "
+                         "Please run the setup scripts to download models before using PB Studio offline."
+            }
+
         self._apply_directml_patch()
-        
-        # VRAM Budget Manager integration
         vram_reserved = False
         model_id = None
+        vram_mgr = None
         try:
-            from pb_studio.core.vram_budget_manager import get_vram_manager
-            vram_mgr = get_vram_manager()
-            model_id = _get_vram_model_id(model_name)
-            logger.info(f"Reserving VRAM budget for audio separation: {model_id}")
-            vram_reserved = vram_mgr.reserve(model_id, force=True)
-            if not vram_reserved:
-                logger.warning(f"VRAM reserve failed or returned False for {model_id}")
-        except Exception as ve:
-            logger.warning(f"Failed to integrate with VRAMBudgetManager reserve (proceeding): {ve}")
-
-        try:
-            if not self.separator:
-                return {"error": "Separator not initialized"}
-
-            if not Path(file_path).exists():
-                return {"error": f"File not found: {file_path}"}
-
-            # Offline-Existenzpruefung fuer das Modell, um Hänger/Timeouts ohne Internet zu vermeiden
-            config = getattr(self, "config", None) or ConfigManager()
-            model_dir = config.get("paths", {}).get("models_dir", "./models")
-            model_path = Path(model_dir) / model_name
-            if not model_path.exists():
-                return {
-                    "error": f"Model file '{model_name}' not found in '{model_dir}'. "
-                             "Please run the setup scripts to download models before using PB Studio offline."
-                }
+            # Demucs is the documented PyTorch-CPU exception. Only ONNX stem
+            # inference owns a GPU budget in this direct separator path.
+            if is_onnx_model:
+                from pb_studio.core.vram_budget_manager import get_vram_manager
+                vram_mgr = get_vram_manager()
+                model_id = _get_vram_model_id(model_name)
+                logger.info(f"Reserving VRAM budget for audio separation: {model_id}")
+                vram_reserved = vram_mgr.reserve(model_id, force=True)
+                if not vram_reserved:
+                    raise RuntimeError(
+                        f"VRAM reservation failed for audio separation model {model_id}"
+                    )
 
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
             self.separator.load_model(model_name)
+            if is_onnx_model and not self._directml_session_created:
+                raise RuntimeError(
+                    "ONNX stem model did not create a DirectML-only "
+                    "ONNX Runtime session; PyTorch CPU conversion is disabled."
+                )
+            self._restore_directml_patch()
             
-            if vram_reserved and model_id:
-                try:
-                    vram_mgr.commit(model_id)
-                except Exception as ve:
-                    logger.warning(f"Failed to commit VRAM for {model_id}: {ve}")
+            if vram_reserved and model_id and vram_mgr is not None:
+                if not vram_mgr.commit(model_id):
+                    raise RuntimeError(
+                        f"VRAM commit failed for audio separation model {model_id}"
+                    )
 
             logger.info(f"Starting separation for: {file_path}")
             _emit(30.0, "running_inference")
@@ -315,7 +372,7 @@ class StemSeparator:
             return {"error": str(e)}
         finally:
             self._restore_directml_patch()
-            if vram_reserved and model_id:
+            if vram_reserved and model_id and vram_mgr is not None:
                 try:
                     vram_mgr.release(model_id)
                 except Exception as ve:

@@ -50,6 +50,9 @@
         <member name="P:LibreHardwareMonitor.Hardware.Computer.IsGpuEnabled">
             <inheritdoc />
         </member>
+        <member name="P:LibreHardwareMonitor.Hardware.Computer.IsPowerMonitorEnabled">
+            <inheritdoc />
+        </member>
         <member name="P:LibreHardwareMonitor.Hardware.Computer.IsMemoryEnabled">
             <inheritdoc />
         </member>
@@ -101,6 +104,21 @@
         <member name="T:LibreHardwareMonitor.Hardware.Computer.Settings">
             <summary>
             <see cref="T:LibreHardwareMonitor.Hardware.Computer" /> specific additional settings passed to its <see cref="T:LibreHardwareMonitor.Hardware.IHardware" />.
+            </summary>
+        </member>
+        <member name="P:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFan.Speed">
+            <summary>
+            Speed of Fan in RPM.
+            </summary>
+        </member>
+        <member name="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFan.ConfigureDuty">
+            <summary>
+            Speed of Fan in percentage 0-100. This can e.g. be used to set fan curve when <see cref="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFanConfigure.Mode"/> is <see cref="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFanMode.Custom"/>.
+            </summary>
+        </member>
+        <member name="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFan.ConfigureTemp">
+            <summary>
+            Temperature of Fan in degrees Celsius. This can e.g. be used to set fan curve when <see cref="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFanConfigure.Mode"/> is <see cref="F:LibreHardwareMonitor.Hardware.Controller.MSI.MsiFanMode.Custom"/>.
             </summary>
         </member>
         <member name="T:LibreHardwareMonitor.Hardware.Controller.Nzxt.GridV3">
@@ -407,6 +425,12 @@
         <member name="P:LibreHardwareMonitor.Hardware.IComputer.IsGpuEnabled">
             <summary>
             Gets or sets a value indicating whether collecting information about <see cref="F:LibreHardwareMonitor.Hardware.HardwareType.GpuAmd" /> or <see cref="F:LibreHardwareMonitor.Hardware.HardwareType.GpuNvidia" /> devices should be enabled and updated.
+            </summary>
+            <returns><see langword="true" /> if a given category of devices is already enabled.</returns>
+        </member>
+        <member name="P:LibreHardwareMonitor.Hardware.IComputer.IsPowerMonitorEnabled">
+            <summary>
+            Gets or sets a value indicating whether collecting information about <see cref="F:LibreHardwareMonitor.Hardware.HardwareType.PowerMonitor"/> devices should be enabled and updated.
             </summary>
             <returns><see langword="true" /> if a given category of devices is already enabled.</returns>
         </member>
@@ -1031,6 +1055,27 @@
         <member name="P:LibreHardwareMonitor.Hardware.ParameterDescription.DefaultValue">
             <summary>
             Gets a default value of the parent <see cref="T:LibreHardwareMonitor.Hardware.ISensor"/>.
+            </summary>
+        </member>
+        <member name="T:LibreHardwareMonitor.Hardware.PowerMonitor.WireViewPro2">
+            <summary>
+            Thermal Grizzly WireView Pro II power monitor.
+            </summary>
+        </member>
+        <member name="F:LibreHardwareMonitor.Hardware.PowerMonitor.WireViewPro2.MaxFanRPM">
+            <summary>
+            Max RPM according to the8auer. This is a custom made fan.
+            </summary>
+        </member>
+        <member name="F:LibreHardwareMonitor.Hardware.PowerMonitor.WireViewPro2.FanRampupTime">
+            <summary>
+            Time the fan needs to ramp up by 10%.
+            </summary>
+        </member>
+        <member name="M:LibreHardwareMonitor.Hardware.PowerMonitor.WireViewPro2.CalculateFanSpeed(LibreHardwareMonitor.Interop.PowerMonitor.DeviceData)">
+            <summary>
+            Fan speed for this device is an approximation based on the curve configuration and current temperatures.<br/>
+            The device itself does not report actual fan speed.
             </summary>
         </member>
         <member name="T:LibreHardwareMonitor.Hardware.Psu.ProtocolError">
@@ -1801,6 +1846,12 @@
         <member name="F:LibreHardwareMonitor.Interop.AtiAdlxx.ADLMemoryInfoX4.iMemoryBitRateX2">
             Memory Bit Rate that is calculated and finalized on the driver side, grab and go.
         </member>
+        <member name="T:LibreHardwareMonitor.Interop.IntelGcl.ctl_adapter_properties_flag_t">
+            <summary>
+            Adapter properties flags from ctl_adapter_properties_flags_t.
+            The graphics_adapter_properties field is a bitmask of these values.
+            </summary>
+        </member>
         <member name="F:LibreHardwareMonitor.Interop.NvidiaML.NvmlReturn.Success">
             <summary>
             The operation was successful
@@ -1900,6 +1951,36 @@
             <summary>
             An public driver error occurred
             </summary>
+        </member>
+        <member name="T:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder">
+            <summary>
+            Helper class to find STM32 COM ports based on VID and PID.
+            </summary>
+        </member>
+        <member name="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.UInt32,System.UInt32)">
+            <summary>
+            Finds the names of all available COM ports that match the specified USB vendor ID (VID) and product ID (PID).
+            </summary>
+            <param name="vid">The USB vendor ID to match.</param>
+            <param name="pid">The USB product ID to match.</param>
+            <returns>
+            A list of strings containing the names of matching COM ports.<br />
+            The list is empty if no matching ports are found.
+            </returns>
+        </member>
+        <member name="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.String,System.String)">
+            <summary>
+                <inheritdoc cref="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.UInt32,System.UInt32)" />
+            </summary>
+            <param name="vid">
+                <inheritdoc cref="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.UInt32,System.UInt32)" />
+            </param>
+            <param name="pid">
+                <inheritdoc cref="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.UInt32,System.UInt32)" />
+            </param>
+            <returns>
+                <inheritdoc cref="M:LibreHardwareMonitor.Interop.PowerMonitor.Stm32PortFinder.FindMatchingComPorts(System.UInt32,System.UInt32)" />
+            </returns>
         </member>
         <member name="M:LibreHardwareMonitor.PawnIo.IsaBridgeEc.Log(System.String)">
             <summary>
@@ -3829,6 +3910,41 @@
             <returns>The function returns <b>TRUE</b> if it is successful. Otherwise, it returns <b>FALSE</b> and the logged error can be retrieved with a call to <a href="https://docs.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror">GetLastError</a>.</returns>
             <remarks>
             <para><see href="https://learn.microsoft.com/windows/win32/api/setupapi/nf-setupapi-setupdidestroydeviceinfolist">Learn more about this API from learn.microsoft.com</see>.</para>
+            </remarks>
+        </member>
+        <member name="M:Windows.Win32.PInvoke.SetupDiEnumDeviceInfo(System.Runtime.InteropServices.SafeHandle,System.UInt32,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA@)">
+            <inheritdoc cref="M:Windows.Win32.PInvoke.SetupDiEnumDeviceInfo(Windows.Win32.Devices.DeviceAndDriverInstallation.HDEVINFO,System.UInt32,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA*)"/>
+        </member>
+        <member name="M:Windows.Win32.PInvoke.SetupDiEnumDeviceInfo(Windows.Win32.Devices.DeviceAndDriverInstallation.HDEVINFO,System.UInt32,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA*)">
+            <summary>The SetupDiEnumDeviceInfo function returns a SP_DEVINFO_DATA structure that specifies a device information element in a device information set.</summary>
+            <param name="DeviceInfoSet">A handle to the <a href="https://docs.microsoft.com/windows-hardware/drivers/install/device-information-sets">device information set</a> for which to return an <a href="https://docs.microsoft.com/windows/desktop/api/setupapi/ns-setupapi-sp_devinfo_data">SP_DEVINFO_DATA</a> structure that represents a device information element.</param>
+            <param name="MemberIndex">A zero-based index of the device information element to retrieve.</param>
+            <param name="DeviceInfoData">A pointer to an <a href="https://docs.microsoft.com/windows/desktop/api/setupapi/ns-setupapi-sp_devinfo_data">SP_DEVINFO_DATA</a> structure to receive information about an enumerated device information element. The caller must set <i>DeviceInfoData</i>.<b>cbSize</b> to <c>sizeof(SP_DEVINFO_DATA)</c>.</param>
+            <returns>The function returns <b>TRUE</b> if it is successful. Otherwise, it returns <b>FALSE</b> and the logged error can be retrieved with a call to <a href="https://docs.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror">GetLastError</a>.</returns>
+            <remarks>
+            <para>Repeated calls to this function return a device information element for a different device. This function can be called repeatedly to get information about all devices in the device information set. To enumerate device information elements, an installer should initially call <b>SetupDiEnumDeviceInfo</b> with the <i>MemberIndex</i> parameter set to 0. The installer should then increment <i>MemberIndex</i> and call <b>SetupDiEnumDeviceInfo</b> until there are no more values (the function fails and a call to <a href="https://docs.microsoft.com/windows/desktop/api/errhandlingapi/nf-errhandlingapi-getlasterror">GetLastError</a> returns <b>ERROR_NO_MORE_ITEMS</b>). Call <a href="https://docs.microsoft.com/windows/desktop/api/setupapi/nf-setupapi-setupdienumdeviceinterfaces">SetupDiEnumDeviceInterfaces</a> to get a context structure for a device <i>interface</i> element (versus a device <i>information</i> element).</para>
+            <para><see href="https://learn.microsoft.com/windows/win32/api/setupapi/nf-setupapi-setupdienumdeviceinfo#">Read more on learn.microsoft.com</see>.</para>
+            </remarks>
+        </member>
+        <member name="M:Windows.Win32.PInvoke.SetupDiGetDeviceRegistryProperty(System.Runtime.InteropServices.SafeHandle,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA@,Windows.Win32.Devices.DeviceAndDriverInstallation.SETUP_DI_REGISTRY_PROPERTY,System.UInt32@,System.Span{System.Byte},System.UInt32@)">
+            <inheritdoc cref="M:Windows.Win32.PInvoke.SetupDiGetDeviceRegistryProperty(Windows.Win32.Devices.DeviceAndDriverInstallation.HDEVINFO,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA*,Windows.Win32.Devices.DeviceAndDriverInstallation.SETUP_DI_REGISTRY_PROPERTY,System.UInt32*,System.Byte*,System.UInt32,System.UInt32*)"/>
+        </member>
+        <member name="M:Windows.Win32.PInvoke.SetupDiGetDeviceRegistryProperty(System.Runtime.InteropServices.SafeHandle,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA@,Windows.Win32.Devices.DeviceAndDriverInstallation.SETUP_DI_REGISTRY_PROPERTY,System.Span{System.Byte})">
+            <inheritdoc cref="M:Windows.Win32.PInvoke.SetupDiGetDeviceRegistryProperty(Windows.Win32.Devices.DeviceAndDriverInstallation.HDEVINFO,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA*,Windows.Win32.Devices.DeviceAndDriverInstallation.SETUP_DI_REGISTRY_PROPERTY,System.UInt32*,System.Byte*,System.UInt32,System.UInt32*)"/>
+        </member>
+        <member name="M:Windows.Win32.PInvoke.SetupDiGetDeviceRegistryProperty(Windows.Win32.Devices.DeviceAndDriverInstallation.HDEVINFO,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA*,Windows.Win32.Devices.DeviceAndDriverInstallation.SETUP_DI_REGISTRY_PROPERTY,System.UInt32*,System.Byte*,System.UInt32,System.UInt32*)">
+            <summary>The SetupDiGetDeviceRegistryProperty function retrieves a specified Plug and Play device property. (Unicode)</summary>
+            <param name="DeviceInfoSet">A handle to a <a href="https://docs.microsoft.com/windows-hardware/drivers/install/device-information-sets">device information set</a> that contains a device information element that represents the device for which to retrieve a Plug and Play property.</param>
+            <param name="DeviceInfoData">A pointer to an <a href="https://docs.microsoft.com/windows/desktop/api/setupapi/ns-setupapi-sp_devinfo_data">SP_DEVINFO_DATA</a> structure that specifies the device information element in <i>DeviceInfoSet</i>.</param>
+            <param name="Property"></param>
+            <param name="PropertyRegDataType">A pointer to a variable that receives the data type of the property that is being retrieved. This is one of the standard registry data types. This parameter is optional and can be <b>NULL</b>.</param>
+            <param name="PropertyBuffer">A pointer to a buffer that receives the property that is being retrieved. If this parameter is set to <b>NULL</b>, and <i>PropertyBufferSize</i> is also set to zero, the function returns the required size for the buffer in <i>RequiredSize</i>.</param>
+            <param name="PropertyBufferSize">The size, in bytes, of the <i>PropertyBuffer </i> buffer.</param>
+            <param name="RequiredSize">A pointer to a variable of type DWORD that receives the required size, in bytes, of the <i>PropertyBuffer</i> buffer that is required to hold the data for the requested property. This parameter is optional and can be <b>NULL</b>.</param>
+            <returns><b>SetupDiGetDeviceRegistryProperty</b> returns <b>TRUE</b> if the call was successful. Otherwise, it returns <b>FALSE</b> and the logged error can be retrieved by making a call to <a href="https://docs.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror">GetLastError</a>. <b>SetupDiGetDeviceRegistryProperty</b> returns the ERROR_INVALID_DATA error code if the requested property does not exist for a device or if the property data is not valid.</returns>
+            <remarks>
+            <para>> [!NOTE] > The setupapi.h header defines SetupDiGetDeviceRegistryProperty as an alias which automatically selects the ANSI or Unicode version of this function based on the definition of the UNICODE preprocessor constant. Mixing usage of the encoding-neutral alias with code that not encoding-neutral can lead to mismatches that result in compilation or runtime errors. For more information, see [Conventions for Function Prototypes](/windows/win32/intl/conventions-for-function-prototypes).</para>
+            <para><see href="https://learn.microsoft.com/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceregistrypropertyw#">Read more on learn.microsoft.com</see>.</para>
             </remarks>
         </member>
         <member name="M:Windows.Win32.PInvoke.SetupDiGetDeviceInterfaceDetail(System.Runtime.InteropServices.SafeHandle,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVICE_INTERFACE_DATA@,System.Span{System.Byte},System.UInt32@,Windows.Win32.Devices.DeviceAndDriverInstallation.SP_DEVINFO_DATA@)">

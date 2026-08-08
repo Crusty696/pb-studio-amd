@@ -1,5 +1,20 @@
 # CLAP Audio Specialist - Quick Start Guide
 
+> **Status: SUPERSEDED prototype guide (2026-07-29).** Preserve this document
+> as historical API reference only. Do not execute its package, download,
+> export, demo, or test commands. Active PB Studio semantic audio uses a
+> registered CLAP ONNX model with `DmlExecutionProvider` only and reports
+> `unavailable` when the model/provider is absent. Python 3.11.x and NumPy
+> 1.26.4 are fixed by the project runtime.
+>
+> Approved Audio/Text source:
+> `ConceptualMachines/magda-sample-tagger@f24970352f239768aaad48cc8734fb298441a763`.
+> Approved processor source:
+> `laion/clap-htsat-unfused@8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a`.
+> License chain: `BSD-3-Clause AND Apache-2.0`. Exact hashes:
+> [`config/directml-model-assets.json`](../config/directml-model-assets.json)
+> and [`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).
+
 ## 5-Minute Setup
 
 ### 1. Install Dependencies
@@ -9,22 +24,22 @@ pip install -r requirements.txt
 ```
 
 Benötigte Packages:
-- `onnxruntime-directml>=1.16.0` (AMD GPU support)
-- `librosa>=0.10.1` (Audio processing)
+- `onnxruntime-directml==1.19.2` (AMD GPU support)
+- `librosa>=0.11.0` (Audio processing)
 - `soundfile>=0.12.1` (Audio I/O)
-- `transformers>=4.48.0` (Model loading)
+- `transformers==4.49.0` (Model loading)
 
 ### 2. Download CLAP Model
 ```bash
-# Automatic download and ONNX export
-python scripts/download_clap_model.py
+# RETIRED: no in-repository model download or ONNX export command
 ```
 
 Output Files:
 - `models/clap_audio_encoder.onnx` (Audio Encoder)
 - `models/clap_text_encoder.onnx` (Text Encoder)
 
-**Note:** Download benötigt ~2GB und dauert ca. 5-10 Minuten beim ersten Mal.
+**Note:** Setup provisions only the approved hash-bound release archive. This
+guide provides no download or export path.
 
 ### 3. Test Installation
 ```python
@@ -327,21 +342,17 @@ analyzer.unload()
 
 ### Issue: Model not found
 ```bash
-python scripts/download_clap_model.py
+# Provision only an externally approved CLAP ONNX release artifact.
 ```
 
 ### Issue: DirectML not working
 ```bash
-pip uninstall onnxruntime onnxruntime-gpu -y
-pip install onnxruntime-directml>=1.16.0
-
-# Verify
-python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+# Restore the locked project environment; do not replace ONNX Runtime packages.
 ```
 
 ### Issue: Audio loading fails
 ```bash
-pip install librosa soundfile --upgrade
+# Restore the locked project environment from requirements.txt.
 ```
 
 ### Issue: Out of memory
@@ -355,10 +366,10 @@ analyzer.unload()
 
 ## Next Steps
 
-1. **Read Full Documentation:** `docs/CLAP_INTEGRATION.md`
-2. **Run Demo:** `python examples/clap_demo.py song.mp3`
-3. **Write Tests:** `pytest tests/test_clap_wrapper.py -v`
-4. **Integrate into App:** See integration patterns above
+1. **Release contract:** [`specs/dod.md`](../specs/dod.md)
+2. **Full historical API documentation:** [`CLAP_INTEGRATION.md`](CLAP_INTEGRATION.md)
+3. **Hardware gate:** [`HARDWARE_VERIFY_GUIDE.md`](HARDWARE_VERIFY_GUIDE.md)
+4. **Current test entry point:** [`test.bat`](../test.bat)
 
 ## Common Use Cases
 
@@ -406,10 +417,14 @@ playlist = sorted(candidates, key=lambda x: x[1], reverse=True)
 
 - **Documentation:** `docs/CLAP_INTEGRATION.md`
 - **Examples:** `examples/clap_demo.py`
-- **Tests:** `tests/test_clap_wrapper.py`
+- **Tests:** `Tests/test_clap_wrapper.py`
 - **Issues:** GitHub Issues
 
 ## License
 
-Code: MIT License
-Model: Creative ML Open RAIL-M License
+Code: siehe Repository-Lizenz.
+
+Freigegebene CLAP-Modellkette:
+`BSD-3-Clause AND Apache-2.0`; vollständiger Text und Hash stehen als
+`licenses/CLAP-license-chain.txt` in
+[`config/directml-asset-bundle.json`](../config/directml-asset-bundle.json).

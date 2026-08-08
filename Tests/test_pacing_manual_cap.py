@@ -171,14 +171,14 @@ def test_cap_entries_handles_zero_source_duration():
     assert capped[0]["end_time"] == 100.0
 
 
-def test_cap_entries_via_fastapi_update_timeline(monkeypatch):
+def test_cap_entries_via_fastapi_update_timeline(monkeypatch, tmp_path):
     """End-to-end: POST /pacing/timeline cappt overflow entries."""
     from fastapi.testclient import TestClient
 
     # Audio-Duration probe stubben (ohne ffprobe)
     monkeypatch.setattr(
         "pb_studio.rendering.render_service.RenderService._get_audio_duration",
-        lambda self, p: 30.0,
+        lambda self, p, cancel_callback=None: 30.0,
         raising=False,
     )
 
@@ -187,13 +187,31 @@ def test_cap_entries_via_fastapi_update_timeline(monkeypatch):
 
     state = get_app_state()
     state.reset()
-    state.current_audio_path = "/tmp/audio.wav"
+    state.current_project = {
+        "name": "PacingTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    }
+    audio_path = tmp_path / "audio.wav"
+    video_path = tmp_path / "v20.mp4"
+    audio_path.write_bytes(b"audio")
+    video_path.write_bytes(b"video")
+    state.current_audio_path = str(audio_path)
+    state.set_audio_clip(
+        1,
+        {
+            "id": 1,
+            "name": "audio",
+            "path": str(audio_path),
+            "duration_seconds": 30.0,
+        },
+    )
     state.set_video_clip(
         20,
         {
             "id": 20,
             "name": "v20",
-            "path": "/tmp/v20.mp4",
+            "path": str(video_path),
             "duration_seconds": 15.0,
         },
     )
@@ -204,7 +222,7 @@ def test_cap_entries_via_fastapi_update_timeline(monkeypatch):
             {
                 "clip_id": "clip_20",
                 "clip_name": "v20",
-                "file_path": "/tmp/v20.mp4",
+                "file_path": str(video_path),
                 "start_time": 0.0,
                 "end_time": 25.0,  # 25s > source 15s
                 "clip_start": 0.0,

@@ -1,0 +1,7 @@
+{
+  "elapsed_seconds": 543.5779999999941,
+  "error": "RuntimeError: Artefakt-Audio-Endstille verletzt: erwartet=58.222062s, ist=58.334958s",
+  "failed_at": "2026-07-29T11:35:14.902684+02:00",
+  "run_id": "b495be69e38f4a5ca06c8104e6edf09f",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00013-system-wide-bug-hunting-audit\\evidence\\T335-h264\\run_t335_h264.py\", line 217, in main\n    result = service.render_timeline(\n             ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\src\\pb_studio\\rendering\\render_service.py\", line 363, in render_timeline\n    artifact_metrics = self._validate_render_artifact(\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\src\\pb_studio\\rendering\\render_service.py\", line 983, in _validate_render_artifact\n    raise RuntimeError(\nRuntimeError: Artefakt-Audio-Endstille verletzt: erwartet=58.222062s, ist=58.334958s\n"
+}

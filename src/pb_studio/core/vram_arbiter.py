@@ -11,6 +11,7 @@ This class is kept for compatibility with existing code.
 import logging
 from typing import Optional
 from pb_studio.core.system_monitor import SystemMonitor
+from pb_studio.core.directml_adapter import get_directml_adapter
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -28,25 +29,14 @@ class VRAMArbiter:
     def __init__(self, monitor: SystemMonitor):
         self.monitor = monitor
         self.config = ConfigManager()
-
-        # C1/RESILIENCE: Forced VRAM limit via environment variable (for testing)
-        import os
-        env_limit = os.environ.get("PB_STUDIO_FORCED_VRAM") or os.environ.get("PBSTUDIO_VRAM_LIMIT_MB")
-        self.forced_limit = int(env_limit) if env_limit and env_limit.isdigit() else 0
+        self.adapter = get_directml_adapter()
 
         # Safety buffer: Don't let apps use 100% of VRAM. Leave 500MB for OS/Desktop.
-        config_limit = self.config.get("hardware", {}).get("vram_limit_mb", 0)
-        self.max_vram = self.forced_limit or config_limit or 8192
         self.safety_buffer = 500
 
         # Connect to Budget Manager (lazy init to avoid circular imports)
         self._budget_manager = None
-
-        if self.forced_limit > 0:
-            logger.info(f"VRAM Arbiter: FORCED LIMIT ACTIVE: {self.forced_limit}MB")
-            # C1/FIX: Ensure BudgetManager knows about this limit
-            self.budget_manager._max_vram_mb = self.forced_limit
-            self.budget_manager._usable_vram_mb = max(0, self.forced_limit - self.safety_buffer)
+        self.max_vram = self.budget_manager.get_stats()["max_vram_mb"]
 
     @property
     def budget_manager(self):
@@ -83,11 +73,15 @@ class VRAMArbiter:
             budget_ok = self.budget_manager.available_vram_mb >= required_mb
 
         # Method 2: LHM Sensor Check (reactive, if reliable)
-        current_stats = self.monitor.get_stats()
+        current_stats = self.monitor.get_stats(force_refresh=True)
         used_real = current_stats.get("gpu_memory_used", 0)
         total_phys = current_stats.get("gpu_memory_total", 0)
 
-        if total_phys > 0:
+        sensor_matches = (
+            current_stats.get("adapter_luid") == self.adapter.luid
+            and current_stats.get("monitoring_status") == "ready"
+        )
+        if total_phys > 0 and sensor_matches:
             # LHM is reporting - use real data as additional check
             # BUG-082 FIX: available_real is already total - used. 
             # We check if (free_vram - buffer) is enough for the request.
@@ -190,6 +184,9 @@ class VRAMArbiter:
         sensor_stats = self.monitor.get_stats()
 
         return {
+            "adapter_index": self.adapter.device_id,
+            "adapter_luid": self.adapter.luid,
+            "adapter_name": self.adapter.name,
             # Budget Manager data
             "budget_max_mb": budget_stats["max_vram_mb"],
             "budget_usable_mb": budget_stats["usable_vram_mb"],

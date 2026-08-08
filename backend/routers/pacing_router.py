@@ -11,10 +11,24 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.routing import APIRoute
+from starlette.responses import JSONResponse, Response
 
-from ..app_state import AppState, get_app_state
-from ..dependencies import publish_event, publish_log
+from ..app_state import (
+    AppState,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
+    get_app_state,
+)
+from ..dependencies import gpu_lock, publish_event, publish_log
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    validate_registered_media_path,
+    validate_timeline_media_paths,
+    validate_owned_media_file,
+)
 from ..schemas.common import validate_timeline, StatusResponse
 from ..schemas.pacing_schemas import (
     PacingConfigSchema, TriggerSettingsSchema, CutListResponse, CutListEntrySchema,
@@ -23,7 +37,113 @@ from ..schemas.pacing_schemas import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/pacing", tags=["Pacing"])
+
+# Full 4-hour timelines can contain 144,000 legal 0.1-second entries. 128 MiB
+# retains that documented product scope with complete entry metadata while
+# placing a finite bound before FastAPI constructs Pydantic models.
+TIMELINE_UPDATE_MAX_BODY_BYTES = 128 * 1024 * 1024
+
+
+class TimelineUpdateBodyLimitRoute(APIRoute):
+    """Cap only manual timeline bodies before FastAPI parses their JSON."""
+
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+
+        async def limited_handler(request: Request) -> Response:
+            if request.method != "POST" or request.url.path != "/pacing/timeline":
+                return await original_handler(request)
+
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > TIMELINE_UPDATE_MAX_BODY_BYTES:
+                        return JSONResponse(
+                            status_code=413,
+                            content={"detail": "Timeline-Request ist zu gross"},
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Content-Length ist ungueltig"},
+                    )
+
+            original_receive = request.receive
+            body_parts: list[bytes] = []
+            received_bytes = 0
+            more_body = True
+            while more_body:
+                message = await original_receive()
+                if message["type"] == "http.disconnect":
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Timeline-Request wurde abgebrochen"},
+                    )
+                if message["type"] != "http.request":
+                    continue
+
+                chunk = message.get("body", b"")
+                received_bytes += len(chunk)
+                if received_bytes > TIMELINE_UPDATE_MAX_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Timeline-Request ist zu gross"},
+                    )
+                body_parts.append(chunk)
+                more_body = message.get("more_body", False)
+
+            body = b"".join(body_parts)
+            delivered = False
+
+            async def replay_body():
+                nonlocal delivered
+                if delivered:
+                    return {"type": "http.disconnect"}
+                delivered = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request._receive = replay_body
+            return await original_handler(request)
+
+        return limited_handler
+
+
+router = APIRouter(
+    prefix="/pacing",
+    tags=["Pacing"],
+    route_class=TimelineUpdateBodyLimitRoute,
+)
+
+
+def _load_ui_anchors(state) -> list[dict]:
+    """
+    Laedt die im Projekt gespeicherten manuellen Anker.
+
+    Audit 2026-08-06 (T4.3): Der ANCHOR-Tab hatte kein Backend-Gegenstueck.
+    Jetzt liegen die Anker als ``anchors.json`` im Projektordner; die
+    Pacing-Engine konsumiert sie ueber ``PacingService._merge_ui_anchors``.
+    Best-effort: ein Fehler hier darf die Cut-Generierung nicht verhindern.
+    """
+    project = getattr(state, "current_project", None)
+    if not isinstance(project, dict):
+        return []
+    root = project.get("path")
+    if not root:
+        return []
+    try:
+        from .project_router import load_project_anchors
+
+        return load_project_anchors(root)
+    except Exception as exc:  # noqa: BLE001 - Anker sind optional
+        logger.warning(
+            "Manuelle Anker nicht ladbar (%s) — fahre ohne fort",
+            type(exc).__name__,
+        )
+        return []
+
+
+def _requires_video_analysis(config: PacingConfigSchema) -> bool:
+    return bool(config.use_motion_matching or config.use_brain)
 
 
 @router.post(
@@ -40,6 +160,23 @@ router = APIRouter(prefix="/pacing", tags=["Pacing"])
 async def generate_cut_list(
     config: PacingConfigSchema,
     state: AppState = Depends(get_app_state),
+) -> CutListResponse:
+    """Generiert eine Cut-Liste im unveraenderlichen Projektkontext."""
+    try:
+        async with state.project_operation() as context:
+            return await _generate_cut_list_for_project(config, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _generate_cut_list_for_project(
+    config: PacingConfigSchema,
+    state: AppState,
+    context: ProjectOperationContext,
 ) -> CutListResponse:
     """Generiert eine Cut-Liste basierend auf Pacing-Konfiguration."""
     logger.info(
@@ -70,17 +207,26 @@ async def generate_cut_list(
     # Gecachte Audio-Analyse-Daten extrahieren (Beats, BPM, Energie)
     cached_analysis = state.get_audio_analysis(config.audio_clip_id) or {}
 
-    # Video-Analyse-Cache Snapshot für Motion Matching
-    video_analysis_snapshot = state.get_video_analysis_snapshot() if config.use_motion_matching else {}
+    # Motion matching and Brain reranking both consume the persisted video analysis.
+    video_analysis_snapshot = (
+        state.get_video_analysis_snapshot()
+        if _requires_video_analysis(config)
+        else {}
+    )
 
     try:
         import time as _time
         _t_pacing_start = _time.perf_counter()
         # Audit L-M7: event-loop fuer SSE progress events aus Worker-Thread reichen.
         _loop = asyncio.get_running_loop()
+        # Audit 2026-08-06 (T4.3): Anker hier laden, nicht in
+        # _run_pacing_generation. Diese Funktion arbeitet absichtlich nur mit
+        # Snapshots und laeuft im Worker-Thread — AppState dort hineinzuziehen
+        # waere ein Bruch dieses Vertrags (und war mein erster Fehlversuch).
+        _ui_anchors = _load_ui_anchors(state)
         cuts = await asyncio.to_thread(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
-            cached_analysis, video_analysis_snapshot, _loop,
+            cached_analysis, video_analysis_snapshot, _loop, _ui_anchors,
         )
         _t_pacing_elapsed_ms = (_time.perf_counter() - _t_pacing_start) * 1000.0
         _t_brain_elapsed_ms = 0.0
@@ -88,6 +234,8 @@ async def generate_cut_list(
         # Plan Phase 4: brain post-processor — annotates and persists cuts
         if getattr(config, "use_brain", False):
             try:
+                from .._brain_singleton import acquire_project_state_lease
+                from ..dependencies import db_write_lock
                 from pb_studio.brain.brain_service import BrainService
                 from pb_studio.brain.post_processor import annotate_cuts_with_brain
 
@@ -110,20 +258,34 @@ async def generate_cut_list(
                         video_hashes_by_clip[f"clip_{vid_id}"] = h
 
                 _t_brain_start = _time.perf_counter()
-                cuts = await asyncio.to_thread(
-                    annotate_cuts_with_brain,
-                    cuts,
-                    weight_store=svc.weights,
-                    audio_analysis=cached_analysis,
-                    video_analysis_by_clip=vab,
-                    audio_clip_id=config.audio_clip_id,
-                    audio_path=audio_clip_meta.get("path"),
-                    persist_to_state_conn=svc.state_conn,
-                    min_confidence=float(getattr(config, "brain_min_confidence", 0.0)),
-                    embedding_cache=svc.brain.cache,
-                    audio_hash=audio_hash_value,
-                    video_hashes_by_clip=video_hashes_by_clip,
-                )
+                state.require_project_context_current(context)
+
+                def _annotate_with_project_lease() -> list[dict[str, Any]]:
+                    with acquire_project_state_lease(
+                        path=context.project_root / "state.db",
+                        project_epoch=context.epoch,
+                        project_id=context.project_id,
+                    ) as lease:
+                        return lease.run_write(
+                            lambda connection: annotate_cuts_with_brain(
+                                cuts,
+                                weight_store=svc.weights,
+                                audio_analysis=cached_analysis,
+                                video_analysis_by_clip=vab,
+                                audio_clip_id=config.audio_clip_id,
+                                audio_path=audio_clip_meta.get("path"),
+                                persist_to_state_conn=connection,
+                                min_confidence=float(
+                                    getattr(config, "brain_min_confidence", 0.0)
+                                ),
+                                embedding_cache=svc.brain.cache,
+                                audio_hash=audio_hash_value,
+                                video_hashes_by_clip=video_hashes_by_clip,
+                            )
+                        )
+
+                async with db_write_lock:
+                    cuts = await asyncio.to_thread(_annotate_with_project_lease)
                 _t_brain_elapsed_ms = (_time.perf_counter() - _t_brain_start) * 1000.0
                 logger.info(
                     "Pacing performance: pacing=%.1fms brain=%.1fms cuts=%d",
@@ -133,23 +295,41 @@ async def generate_cut_list(
                     logger.warning(
                         "Brain overhead %.1fms > 500ms target", _t_brain_elapsed_ms
                     )
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as brain_e:
                 logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
         else:
             # R-Brain: use_brain ist False. Alte Timelines deaktivieren, um Geister-Daten
             # bei /brain/suggest und /brain/learning_session zu verhindern
             try:
-                from pb_studio.brain.brain_service import BrainService
+                from .._brain_singleton import acquire_project_state_lease
                 from ..dependencies import db_write_lock
-                svc = BrainService.get()
-                if svc.state_conn is not None:
-                    # AP1.3 (Audit 2026-06-10): Write auf state_conn einheitlich hinter
-                    # db_write_lock + to_thread (Pattern aus brain_router)
-                    async with db_write_lock:
-                        await asyncio.to_thread(
-                            svc.state_conn.execute, "UPDATE timelines SET is_current = 0"
-                        )
-                    logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
+
+                # AP1.3 (Audit 2026-06-10): Write auf state_conn einheitlich hinter
+                # db_write_lock + to_thread (Pattern aus brain_router).
+                def _deactivate_old_timelines() -> None:
+                    with acquire_project_state_lease(
+                        path=context.project_root / "state.db",
+                        project_epoch=context.epoch,
+                        project_id=context.project_id,
+                    ) as lease:
+                        with state.project_commit(context):
+                            lease.run_write(
+                                lambda connection: connection.execute(
+                                    "UPDATE timelines SET is_current = 0"
+                                )
+                            )
+
+                async with db_write_lock:
+                    await asyncio.to_thread(_deactivate_old_timelines)
+                logger.info("Timeline ohne Brain generiert: Alte Timelines in state.db deaktiviert (is_current=0).")
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as e:
                 logger.warning("Alte Timelines in state.db konnten nicht deaktiviert werden: %s", e)
 
@@ -162,17 +342,20 @@ async def generate_cut_list(
             logger.warning(f"Timeline-Validierung: {w}")
 
         # Timeline im State speichern (thread-safe)
-        state.current_audio_path = (
-            audio_clips_snapshot[config.audio_clip_id]["path"]
-            if config.audio_clip_id in audio_clips_snapshot
-            else None
-        )
-        state.set_timeline(cuts)
+        with state.project_commit(context):
+            state.current_audio_path = (
+                audio_clips_snapshot[config.audio_clip_id]["path"]
+                if config.audio_clip_id in audio_clips_snapshot
+                else None
+            )
+            state.set_timeline(cuts)
 
         total_dur = cuts[-1]["end_time"] if cuts else 0.0
         avg_dur = sum(c["end_time"] - c["start_time"] for c in cuts) / len(cuts) if cuts else 0.0
 
-        await publish_event("analysis_progress", {
+        await publish_event("pacing_progress", {
+            "task_id": f"pacing:{config.audio_clip_id}",
+            "clip_id": config.audio_clip_id,
             "step": "pacing",
             "percent": 100.0,
             "message": f"{len(cuts)} Cuts generiert",
@@ -190,6 +373,10 @@ async def generate_cut_list(
             cut_count=len(cuts),
             average_cut_duration=round(avg_dur, 2),
         )
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except HTTPException:
         # AP1.1 (Audit 2026-06-10): Validierungs-Fehler (400) nicht in 500 umwandeln
         raise
@@ -231,6 +418,12 @@ async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResp
             segment_type=meta.get("segment_type"),
             brain_confidence=float(meta.get("brain_final_score", 0.0) or 0.0),
             cut_id=meta.get("cut_id"),
+            feature_confidence=float(meta.get("feature_confidence", 0.0) or 0.0),
+            semantic_status=str(meta.get("semantic_status", "unavailable")),
+            semantic_reason=meta.get("semantic_reason"),
+            trigger_provenance=dict(meta.get("trigger_provenance") or {}),
+            brain_axis_status=dict(meta.get("brain_axis_status") or {}),
+            metadata=dict(meta),
         ))
 
     total = entries[-1].end_time if entries else 0.0
@@ -251,24 +444,66 @@ async def update_timeline(
     request: TimelineUpdateRequest,
     state: AppState = Depends(get_app_state)
 ) -> StatusResponse:
+    """Aktualisiert die Timeline im unveraenderlichen Projektkontext."""
+    try:
+        async with state.project_operation() as context:
+            return await _update_timeline_for_project(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _update_timeline_for_project(
+    request: TimelineUpdateRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> StatusResponse:
     """Aktualisiert die Timeline im State."""
+    current_audio_path = state.current_audio_path
     internal_cuts = []
     for entry in request.entries:
+        metadata = dict(entry.metadata)
+        metadata.update({
+            "clip_name": entry.clip_name,
+            "file_path": entry.file_path,
+            "clip_start": entry.clip_start,
+            "trigger_type": entry.trigger_type,
+            "trigger_strength": entry.trigger_strength,
+            "segment_type": entry.segment_type,
+            "brain_final_score": entry.brain_confidence,
+            "cut_id": entry.cut_id,
+            "feature_confidence": entry.feature_confidence,
+            "semantic_status": entry.semantic_status,
+            "semantic_reason": entry.semantic_reason,
+            "trigger_provenance": dict(entry.trigger_provenance),
+            "brain_axis_status": dict(entry.brain_axis_status),
+        })
         internal_cuts.append({
             "clip_id": entry.clip_id,
             "start_time": entry.start_time,
             "end_time": entry.end_time,
-            "metadata": {
-                "clip_name": entry.clip_name,
-                "file_path": entry.file_path,
-                "clip_start": entry.clip_start,
-                "trigger_type": entry.trigger_type,
-                "trigger_strength": entry.trigger_strength,
-                "segment_type": entry.segment_type,
-                "brain_final_score": entry.brain_confidence,
-                "cut_id": entry.cut_id,
-            }
+            "metadata": metadata,
         })
+
+    try:
+        internal_cuts = validate_timeline_media_paths(
+            internal_cuts,
+            state.get_video_clips_snapshot(),
+        )
+        if current_audio_path:
+            current_audio_path = validate_registered_media_path(
+                current_audio_path,
+                (
+                    clip.get("path", "")
+                    for clip in state.get_audio_clips_snapshot().values()
+                ),
+                label="Timeline audio_path",
+            )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # L-TI-3: clip_start + duration gegen Source-Video-Laenge cappen.
     # Auto-Pfad hat diesen Cap in pacing_service._process_pacing_cuts_to_cutlist
@@ -278,19 +513,21 @@ async def update_timeline(
     internal_cuts = _cap_entries_against_source(internal_cuts, state)
 
     audio_dur = 0.0
-    if state.current_audio_path:
+    if current_audio_path:
         from pb_studio.rendering.render_service import RenderService
         # AP1.2 (Audit 2026-06-10): ffprobe-Subprocess blockierte den Event-Loop
         # (SSE-Keepalives/parallele Requests froren ein) -> to_thread
         audio_dur = await asyncio.to_thread(
-            RenderService()._get_audio_duration, state.current_audio_path
+            RenderService()._get_audio_duration, current_audio_path
         ) or 0.0
 
     warnings, errors = validate_timeline(internal_cuts, audio_duration=audio_dur)
     if errors:
         raise HTTPException(status_code=400, detail=f"Ungültige Timeline: {'; '.join(errors)}")
 
-    state.set_timeline(internal_cuts)
+    with state.project_commit(context):
+        state.current_audio_path = current_audio_path
+        state.set_timeline(internal_cuts)
     logger.info(f"Timeline manuell aktualisiert: {len(internal_cuts)} Schnitte")
 
     return StatusResponse(
@@ -316,12 +553,21 @@ async def generate_preview(
     if not state.current_timeline:
         raise HTTPException(status_code=400, detail="Keine Timeline vorhanden")
 
-    timeline_snapshot = list(state.current_timeline)
+    try:
+        timeline_snapshot = validate_timeline_media_paths(
+            state.get_timeline_snapshot(),
+            state.get_video_clips_snapshot(),
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        preview_path = await asyncio.to_thread(
-            _render_preview, timeline_snapshot, request.start_sec, request.duration
-        )
+        async with gpu_lock:
+            preview_path = await asyncio.to_thread(
+                _render_preview, timeline_snapshot, request.start_sec, request.duration
+            )
+        if not preview_path:
+            raise RuntimeError("Preview-Rendering lieferte keine Ausgabedatei")
         return PreviewResponse(
             preview_path=preview_path,
             duration=request.duration,
@@ -416,7 +662,7 @@ def _cap_entries_against_source(
     return entries
 
 
-def _emit_pacing_progress(loop, pct: float) -> None:
+def _emit_pacing_progress(loop, pct: float, audio_clip_id: int) -> None:
     """Audit L-M7: Sendet ein pacing_progress SSE-Event aus dem Worker-Thread
     (fire-and-forget). loop ist der asyncio-Event-Loop des Request-Handlers.
     """
@@ -425,6 +671,8 @@ def _emit_pacing_progress(loop, pct: float) -> None:
     try:
         asyncio.run_coroutine_threadsafe(
             publish_event("pacing_progress", {
+                "task_id": f"pacing:{audio_clip_id}",
+                "clip_id": audio_clip_id,
                 "percent": float(pct),
                 "message": f"Pacing {pct:.1f}%",
             }),
@@ -441,6 +689,7 @@ def _run_pacing_generation(
     cached_analysis: dict[str, Any] | None = None,
     video_analysis_cache: dict[int, dict[str, Any]] | None = None,
     loop: Any | None = None,
+    ui_anchors: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Generiert Cut-Liste via PacingService (blockierend).
 
@@ -455,7 +704,7 @@ def _run_pacing_generation(
 
     # Audit L-M7: on_progress callback fuer Engine -> Router -> SSE.
     def _on_pacing_progress(pct: float) -> None:
-        _emit_pacing_progress(loop, pct)
+        _emit_pacing_progress(loop, pct, config.audio_clip_id)
 
     audio_path = ""
     audio_dur = 0.0
@@ -490,6 +739,17 @@ def _run_pacing_generation(
                 clip_data["tags"] = va.get("tags", [])  # A4
                 clip_data["has_embedding"] = bool(va.get("has_embedding", False))  # A4
                 clip_data["audio_key"] = va.get("audio_key")  # L-K4
+                clip_data["scenes"] = va.get("scenes", [])
+                clip_data["avg_brightness"] = va.get("avg_brightness", 0.5)
+                clip_data["avg_saturation"] = va.get("avg_saturation", 0.5)
+                clip_data["avg_color_temp"] = va.get("avg_color_temp", 0.0)
+                clip_data["mood_tags"] = va.get("mood_tags", [])
+                clip_data["motion_category"] = va.get("motion_category", "medium")
+                clip_data["pace_class_score"] = va.get("pace_class_score")
+                clip_data["video_embedding"] = va.get("video_embedding")
+                clip_data["is_analyzed"] = bool(va.get("is_analyzed", False))
+                clip_data["analysis_status"] = va.get("analysis_status")
+                clip_data["analysis_confidence"] = va.get("analysis_confidence")
             clips.append(clip_data)
 
     pacing_config = {
@@ -500,6 +760,11 @@ def _run_pacing_generation(
         "use_structure_awareness": config.use_structure_awareness,
         # Audit E1: Forward Tonart-Matching flag to PacingService → AdvancedPacingEngine.
         "use_key_matching": getattr(config, "use_key_matching", False),
+        "canvas_path": config.canvas_path,
+        # Audit 2026-08-06 (T4.3): Anker aus dem ANCHOR-Tab. Bewusst vom
+        # Aufrufer geladen und hier nur durchgereicht — diese Funktion bleibt
+        # snapshot-basiert und ohne AppState-Zugriff.
+        "ui_anchors": ui_anchors or [],
         "min_cut_interval": config.min_cut_interval,
         # Plan Phase 4 deep-hook: forward brain flags to PacingService
         "use_brain": getattr(config, "use_brain", False),
@@ -523,7 +788,29 @@ def _run_pacing_generation(
                 logger.warning("L-K5 stems_paths JSON ungueltig fuer clip %s", config.audio_clip_id)
                 raw_stems = {}
         if isinstance(raw_stems, dict):
-            stems = {str(k): str(v) for k, v in raw_stems.items() if v}
+            from pb_studio.config_manager import ConfigManager
+
+            config_manager = ConfigManager()
+            stem_root = config_manager.resolve_path(
+                config_manager.get("paths", {}).get("temp_dir", "./temp")
+            )
+            try:
+                stems = {
+                    str(role): validate_owned_media_file(
+                        str(stem_path),
+                        stem_root,
+                        label=f"Stem-Pacing {role}",
+                    )
+                    for role, stem_path in raw_stems.items()
+                    if stem_path
+                }
+            except MediaPathPolicyError as exc:
+                logger.warning(
+                    "L-K5 unsichere stems_paths fuer clip %s verworfen: %s",
+                    config.audio_clip_id,
+                    exc,
+                )
+                stems = {}
 
     if use_stem_pacing and stems:
         logger.info("L-K5 Stem-Pacing aktiviert, stems=%s", list(stems.keys()))
@@ -583,6 +870,8 @@ def _render_preview(timeline: list[dict[str, Any]], start_sec: float, duration: 
             ))
         generator = PreviewGenerator()
         result = generator.generate_preview(entries, start_sec, duration)
-        return str(result) if result else ""
+        if result is None:
+            raise RuntimeError("Preview-Rendering fehlgeschlagen")
+        return str(result)
     except ImportError:
         raise RuntimeError("PreviewGenerator nicht verfügbar")

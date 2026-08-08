@@ -100,6 +100,42 @@ def test_add_media_is_idempotent_per_project_and_path(tmp_path, monkeypatch):
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
 
 
+def test_wmv_writes_persist_video_schema_versions(tmp_path, monkeypatch):
+    db_path = tmp_path / "media_schema_version.db"
+    monkeypatch.setattr(ConfigManager, "_instance", _TempConfig(db_path), raising=False)
+    _reset_db_singletons()
+
+    repo = MediaRepository()
+    media_file = tmp_path / "legacy-video.wmv"
+    media_file.write_bytes(b"video")
+
+    media_id = repo.add_media(
+        1,
+        str(media_file),
+        "hash-video",
+        2.0,
+        {"clip_type": "video"},
+    )
+    repo.update_status(media_id, "ready", ai_data={"scene_count": 2})
+
+    row = DatabaseCore().get_connection().execute(
+        "SELECT metadata_json, ai_data_json FROM media WHERE id = ?",
+        (media_id,),
+    ).fetchone()
+    metadata = __import__("json").loads(row["metadata_json"])
+    ai_data = __import__("json").loads(row["ai_data_json"])
+
+    assert metadata["__schema_version"] == 1
+    assert metadata["video_hash"] == ""
+    assert "audio_hash" not in metadata
+    assert ai_data["__schema_version"] == 1
+    assert ai_data["has_embedding"] is False
+    assert "subtrack_segments" not in ai_data
+
+    DatabaseCore().shutdown()
+    monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
+
+
 def test_existing_db_is_migrated_and_guard_backfilled(tmp_path, monkeypatch):
     db_path = tmp_path / "legacy_media.db"
     legacy_path = tmp_path / "legacy_clip.wav"
@@ -136,7 +172,7 @@ def test_existing_db_is_migrated_and_guard_backfilled(tmp_path, monkeypatch):
         row["version"]
         for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
     ]
-    assert versions == [1, 2]
+    assert versions == [1, 2, 3]
 
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
@@ -535,4 +571,3 @@ def test_bulk_update_status_empty(tmp_path, monkeypatch):
     
     DatabaseCore().shutdown()
     monkeypatch.setattr(ConfigManager, "_instance", None, raising=False)
-

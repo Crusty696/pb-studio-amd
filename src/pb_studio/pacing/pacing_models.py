@@ -24,6 +24,7 @@ class PacingCut:
     trigger_type: str = "beat"      # beat, onset, energy, kick, snare, hihat, downbeat
     strength: float = 0.5           # 0.0 (weich) bis 1.0 (hart)
     segment_type: Optional[str] = None  # normal, drop, buildup, breakdown, intro, verse, etc.
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         # Stärke auf gültigen Bereich begrenzen

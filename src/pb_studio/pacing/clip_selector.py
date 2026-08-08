@@ -27,6 +27,9 @@ from .constants import (
     MOTION_TOLERANCE,
     BLACKLIST_PERCENTAGE,
     MAX_BLACKLIST_SIZE,
+    SMALL_LIBRARY_THRESHOLD,
+    SMALL_LIBRARY_MAX_BLACKLIST_PERCENTAGE,
+    MIN_SELECTABLE_CLIPS,
     CONTINUITY_WEIGHT,
 )
 
@@ -203,7 +206,7 @@ class ClipSelector:
         # Blacklist für kürzlich verwendete Clips (NV-Roter-Faden)
         # R18/MEDIUM-018-3: Use deque so popleft() is O(1) instead of list.pop(0) O(N).
         self._recently_used: deque = deque()
-        self._blacklist_size = 10
+        self._blacklist_size = 0
 
         # Roter Faden - Visueller Zusammenhang zwischen Clips
         self._last_clip_motion_score: float = 0.5
@@ -226,6 +229,8 @@ class ClipSelector:
         self.brain_context_keys: Optional[list[str]] = None
         self.brain_audio_features: dict = {}
         self.brain_video_features_by_clip: dict = {}
+        self.brain_min_confidence: float = 0.0
+        self.brain_feature_adapter = None
 
         # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
         # use_key_matching: Master-Switch (vom PacingService gesetzt).
@@ -294,6 +299,30 @@ class ClipSelector:
     # NV-KOMPATIBLE API: select_clip(), analyze_all_clips(), reset()
     # =========================================================================
 
+    def _adaptive_blacklist_size(self, available_count: int) -> int:
+        if available_count <= 1:
+            return 0
+        percentage = self.blacklist_percentage
+        if available_count <= SMALL_LIBRARY_THRESHOLD:
+            percentage = min(
+                percentage,
+                SMALL_LIBRARY_MAX_BLACKLIST_PERCENTAGE,
+            )
+        requested = int(available_count * percentage)
+        selectable_floor = (
+            1
+            if available_count < MIN_SELECTABLE_CLIPS
+            else MIN_SELECTABLE_CLIPS
+        )
+        return max(
+            0,
+            min(
+                MAX_BLACKLIST_SIZE,
+                requested,
+                available_count - selectable_floor,
+            ),
+        )
+
     def select_clip(
         self,
         available_clips: List[dict],
@@ -342,8 +371,22 @@ class ClipSelector:
             self._current_prompt_override = None
 
         # Dynamische Blacklist-Größe
-        calculated_size = int(len(available_clips) * self.blacklist_percentage)
-        self._blacklist_size = max(3, min(MAX_BLACKLIST_SIZE, calculated_size))
+        available_ids = {
+            str(clip.get("id", ""))
+            for clip in available_clips
+        }
+        self._blacklist_size = self._adaptive_blacklist_size(
+            len(available_ids)
+        )
+        recent_unique: list[str] = []
+        seen_recent: set[str] = set()
+        for clip_id in reversed(self._recently_used):
+            if clip_id in available_ids and clip_id not in seen_recent:
+                seen_recent.add(clip_id)
+                recent_unique.append(clip_id)
+        self._recently_used = deque(reversed(recent_unique))
+        while len(self._recently_used) > self._blacklist_size:
+            self._recently_used.popleft()
 
         # Blacklist anwenden
         candidates = [
@@ -364,7 +407,11 @@ class ClipSelector:
         if self.brain_reranker is not None and self.brain_context_keys:
             try:
                 selected = self._select_via_brain(
-                    candidates, trigger_strength, trigger_type
+                    candidates,
+                    trigger_strength,
+                    trigger_type,
+                    current_time=current_time,
+                    cut_duration_sec=float(_unused.get("cut_duration_sec", 1.0)),
                 )
                 # Blacklist + Roter Faden updates passieren am Funktions-Ende.
             except Exception as e:
@@ -378,6 +425,10 @@ class ClipSelector:
             )
 
         # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
+        try:
+            self._recently_used.remove(selected.clip_id)
+        except ValueError:
+            pass
         self._recently_used.append(selected.clip_id)
         if len(self._recently_used) > self._blacklist_size:
             self._recently_used.popleft()
@@ -413,37 +464,41 @@ class ClipSelector:
         candidates: List[dict],
         trigger_strength: float,
         trigger_type: str,
+        *,
+        current_time: Optional[float] = None,
+        cut_duration_sec: float = 1.0,
     ) -> "SelectedClip":
         """Brain reranker scores every candidate, returns highest. Plan Phase 4 deep hook."""
-        from pb_studio.brain.bridge_dimensions import CandidateFeatures
+        from pb_studio.brain.feature_adapter import CanonicalFeatureAdapter
 
         af = self.brain_audio_features or {}
         vf_by_id = self.brain_video_features_by_clip or {}
+        adapter = self.brain_feature_adapter or CanonicalFeatureAdapter(
+            audio_analysis=af,
+            video_analysis_by_clip=vf_by_id,
+            fallback_duration=self.duration_seconds,
+        )
 
         rerank_inputs = []
         for clip in candidates:
             cid = str(clip.get("id", ""))
             vf = vf_by_id.get(cid) or vf_by_id.get(f"clip_{cid}") or {}
-            feats = CandidateFeatures(
+            feats = adapter.candidate_features(
+                clip_id=cid,
                 trigger_type=trigger_type,
-                trigger_strength=float(trigger_strength),
-                audio_energy=float(af.get("audio_energy", 0.5)),
-                audio_centroid=float(af.get("audio_centroid", 0.5)),
-                motion_score=float(vf.get("avg_motion") or 0.0),
-                scene_distance_sec=float(vf.get("scene_distance_sec", 0.5)),
-                brightness=float(vf.get("avg_brightness") or 0.5),
-                saturation=float(vf.get("avg_saturation") or 0.5),
-                color_temp=float(vf.get("avg_color_temp") or 0.0),
-                pace_class_score=float(vf.get("pace_class_score", 0.5)),
-                mood_tags=list(vf.get("mood_tags") or []),
-                audio_mood_tags=list(af.get("mood_tags") or []),
-                cut_duration_sec=float(af.get("cut_duration_sec", 1.0)),
+                trigger_strength=trigger_strength,
+                cut_time_sec=float(current_time or 0.0),
+                cut_duration_sec=cut_duration_sec,
+                audio_embedding=af.get("audio_embedding"),
+                video_embedding=vf.get("video_embedding"),
             )
             from pb_studio.brain.reranker import RerankInput
             rerank_inputs.append(RerankInput(candidate=clip, features=feats))
 
         scored = self.brain_reranker.rerank(
-            rerank_inputs, context_keys=self.brain_context_keys,
+            rerank_inputs,
+            context_keys=self.brain_context_keys,
+            min_confidence=self.brain_min_confidence,
         )
         if not scored:
             return self._fallback_select(candidates, trigger_strength, trigger_type)
@@ -457,8 +512,22 @@ class ClipSelector:
             clip_id=clip_id,
             clip_path=clip_path,
             score=float(top.final_score),
-            motion_score=float((vf_by_id.get(clip_id) or {}).get("avg_motion") or 0.0),
-            metadata={"brain_scores": top.brain_scores},
+            motion_score=float(top.features.motion_score),
+            metadata={
+                "brain_scores": top.brain_scores,
+                "brain_final_score": float(top.final_score),
+                "feature_confidence": float(top.features.confidence),
+                "feature_provenance": dict(top.features.feature_provenance),
+                "segment_type": top.features.segment_type,
+                "semantic_status": top.features.semantic_status,
+                "semantic_reason": top.features.semantic_reason,
+                "brain_axis_status": {
+                    "semantic_match_weight": {
+                        "status": top.features.semantic_status,
+                        "reason": top.features.semantic_reason,
+                    }
+                },
+            },
         )
 
     def reset(self) -> None:
@@ -566,22 +635,83 @@ class ClipSelector:
         diff = abs(motion_norm - intensity)
         return 1.0 - diff
 
+    def _embedding_from_vector_store(self, target_absolute: str):
+        """
+        Holt den Vektor eines Clips direkt aus dem VectorStore.
+
+        Audit 2026-08-05 (H-4): Ersetzt die Abhaengigkeit von ``clip_cache``,
+        der produktiv nie befuellt wird. Die FAISS-Metadaten tragen den Pfad
+        bereits; der Vektor selbst laesst sich per ``reconstruct`` zurueckholen.
+
+        Returns:
+            Den Vektor oder ``None``, wenn der Clip nicht im Index liegt.
+        """
+        store = self.vector_store
+        metadata = getattr(store, "metadata", None)
+        index = getattr(store, "index", None)
+        if not metadata or index is None:
+            return None
+
+        tombstoned = set(getattr(store, "tombstoned_ids", set()) or set())
+        for faiss_id, meta in list(metadata.items()):
+            if not isinstance(meta, dict):
+                continue
+            raw_path = meta.get("path") or meta.get("file_path")
+            if not raw_path:
+                continue
+            try:
+                if str(Path(raw_path).absolute()) != target_absolute:
+                    continue
+            except (OSError, ValueError):
+                continue
+            try:
+                numeric_id = int(faiss_id)
+            except (TypeError, ValueError):
+                continue
+            if numeric_id in tombstoned:
+                continue
+            try:
+                return index.reconstruct(numeric_id)
+            except Exception as exc:  # noqa: BLE001 - defekte ID ueberspringen
+                logger.debug(
+                    "Vektor-Rekonstruktion fuer faiss_id=%s fehlgeschlagen: %r",
+                    numeric_id,
+                    exc,
+                )
+                continue
+        return None
+
     def _get_clip_neighbors(self, target_path: str) -> List[str]:
         """Findet die 10 ähnlichsten Clips für einen bestimmten Clip im Vektorraum (Stufe 4)."""
         if not self.vector_store or not target_path:
             return []
         
+        target_absolute = str(Path(target_path).absolute())
+
         # Finde das Embedding des Target-Clips in unserem cache/index
         target_emb = None
         for metadata in self.clip_cache.values():
-            if str(Path(metadata.file_path).absolute()) == str(Path(target_path).absolute()):
+            if str(Path(metadata.file_path).absolute()) == target_absolute:
                 target_emb = metadata.embedding
                 break
-        
+
         if target_emb is None:
-            # Falls kein direktes Metadatenobjekt, suche über textuelle oder strukturelle Übereinstimmung
+            # Audit 2026-08-05 (H-4): Hier wurde bisher aufgegeben. Der
+            # clip_cache wird produktiv nie befuellt — `ClipSelector.add_clip`
+            # hat repo-weit keinen Aufrufer (nur Tests und Docs). Damit war
+            # target_emb ausnahmslos None, `_get_clip_neighbors` gab immer eine
+            # leere Liste zurueck, und die Bridging-Bonusse von +400 in
+            # `_select_by_motion` konnten nie feuern: das Anker-Bridging existierte
+            # im UI-Konzept, war aber strukturell unerreichbar.
+            #
+            # Der Vektor liegt bereits im VectorStore und ist dort ueber den
+            # Pfad in den Metadaten auffindbar — kein Sekundaercache noetig.
+            target_emb = self._embedding_from_vector_store(target_absolute)
+
+        if target_emb is None:
             return []
-            
+
+
         try:
             results = self.vector_store.search(target_emb, k=10)
             neighbors = []

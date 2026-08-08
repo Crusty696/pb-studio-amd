@@ -9,6 +9,7 @@ States:
     running      — wird gerade gerendert
     completed    — erfolgreich abgeschlossen
     failed       — abgebrochen mit Fehler
+    cancelled    — vom Benutzer abgebrochen
     interrupted  — war beim Backend-Restart "running" und wurde re-queued
 
 Resume on startup:
@@ -18,9 +19,9 @@ Resume on startup:
     blockiert aber den automatischen Retry nicht.
 
 Idempotency:
-    Über `job_hash = sha256(media_hash | output_path | settings_hash)` und einen
-    UNIQUE-Constraint. Doppeltes enqueue (auch concurrent) liefert die bestehende
-    job_id zurück — niemals zwei Zeilen mit demselben Hash.
+    Aktive Attempts werden über `(media_hash, output_path, settings_hash)`
+    dedupliziert. Nach `completed`/`failed`/`cancelled` erzeugt ein Retry eine
+    neue job_id und einen neuen, weiterhin UNIQUE `job_hash`.
 
 Iron Rules respected:
     R1 AMD only — kein GPU-spezifischer Code hier.
@@ -33,7 +34,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import sqlite3
 import threading
 import time
 import uuid
@@ -51,6 +51,7 @@ STATE_QUEUED = "queued"
 STATE_RUNNING = "running"
 STATE_COMPLETED = "completed"
 STATE_FAILED = "failed"
+STATE_CANCELLED = "cancelled"
 STATE_INTERRUPTED = "interrupted"
 
 VALID_STATES: frozenset[str] = frozenset({
@@ -58,13 +59,49 @@ VALID_STATES: frozenset[str] = frozenset({
     STATE_RUNNING,
     STATE_COMPLETED,
     STATE_FAILED,
+    STATE_CANCELLED,
     STATE_INTERRUPTED,
 })
 
 # "queued" und "interrupted" sind beide laufbereit — interrupted ist ein
 # automatisch wiederbelebter Job nach Backend-Restart.
 RESTARTABLE_STATES: frozenset[str] = frozenset({STATE_QUEUED, STATE_INTERRUPTED})
-TERMINAL_STATES: frozenset[str] = frozenset({STATE_COMPLETED, STATE_FAILED})
+ACTIVE_STATES: frozenset[str] = frozenset({
+    STATE_QUEUED,
+    STATE_RUNNING,
+    STATE_INTERRUPTED,
+})
+TERMINAL_STATES: frozenset[str] = frozenset({
+    STATE_COMPLETED,
+    STATE_FAILED,
+    STATE_CANCELLED,
+})
+
+_ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
+    STATE_QUEUED: frozenset({
+        STATE_QUEUED,
+        STATE_RUNNING,
+        STATE_FAILED,
+        STATE_CANCELLED,
+        STATE_INTERRUPTED,
+    }),
+    STATE_RUNNING: frozenset({
+        STATE_RUNNING,
+        STATE_COMPLETED,
+        STATE_FAILED,
+        STATE_CANCELLED,
+        STATE_INTERRUPTED,
+    }),
+    STATE_INTERRUPTED: frozenset({
+        STATE_INTERRUPTED,
+        STATE_RUNNING,
+        STATE_FAILED,
+        STATE_CANCELLED,
+    }),
+    STATE_COMPLETED: frozenset({STATE_COMPLETED}),
+    STATE_FAILED: frozenset({STATE_FAILED}),
+    STATE_CANCELLED: frozenset({STATE_CANCELLED}),
+}
 
 
 _SCHEMA_SQL = """
@@ -110,7 +147,7 @@ def compute_settings_hash(settings: dict[str, Any]) -> str:
 
 def compute_job_hash(media_hash: str, output_path: str, settings_hash: str) -> str:
     """sha256 über (media_hash | output_path | settings_hash) — Idempotenz-Key."""
-    output_norm = str(Path(output_path)).replace("\\", "/")
+    output_norm = str(Path(output_path)).replace("\\", "/").casefold()
     payload = f"{media_hash}|{output_norm}|{settings_hash}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
@@ -193,9 +230,9 @@ class RenderQueue:
     ) -> RenderJob:
         """Reiht einen Job ein.
 
-        Idempotent: existiert ein Job mit gleichem (media_hash, output_path,
-        settings_hash), wird der vorhandene Eintrag zurückgegeben — egal in
-        welchem Status. Keine Doppel-Zeile, kein Statuswechsel.
+        Idempotent nur für aktive Attempts: queued, interrupted oder running
+        mit gleichem (media_hash, output_path, settings_hash) wird
+        zurückgegeben. Nach einem terminalen Attempt entsteht eine neue job_id.
 
         Args:
             media_hash:   Hash des Quell-Audios/Timelines (Eindeutigkeit pro Input).
@@ -212,52 +249,50 @@ class RenderQueue:
             raise ValueError("output_path darf nicht leer sein")
 
         settings_hash = compute_settings_hash(settings or {})
-        job_hash = compute_job_hash(media_hash, output_path, settings_hash)
+        request_hash = compute_job_hash(media_hash, output_path, settings_hash)
         settings_json = _normalize_settings(settings or {})
 
         with self._lock:
-            # Fast path: existiert bereits?
-            existing = self._find_by_hash(job_hash)
-            if existing is not None:
-                logger.debug(
-                    "RenderQueue.enqueue: bestehender Job %s mit Hash %s..., status=%s",
-                    existing.job_id, job_hash[:12], existing.status,
-                )
-                return existing
-
             new_job_id = job_id or str(uuid.uuid4())
+            job_hash = hashlib.sha256(
+                f"{request_hash}|attempt|{new_job_id}".encode("utf-8")
+            ).hexdigest()
             now = time.time()
 
-            try:
-                with self._db.transaction(immediate=True) as conn:
-                    conn.execute(
-                        """
-                        INSERT INTO render_queue (
-                            job_id, job_hash, media_hash,
-                            output_path, settings_hash, settings_json,
-                            status, progress_percent,
-                            created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            new_job_id, job_hash, media_hash,
-                            str(output_path), settings_hash, settings_json,
-                            STATE_QUEUED, 0.0,
-                            now, now,
-                        ),
-                    )
-            except sqlite3.IntegrityError:
-                # Cross-Process-Race: ein anderer Worker hat denselben Hash schon
-                # geschrieben. UNIQUE(job_hash) hat zugeschlagen — wir lesen den
-                # Sieger und geben ihn zurück.
-                existing = self._find_by_hash(job_hash)
-                if existing is None:
-                    raise
-                logger.debug(
-                    "RenderQueue.enqueue: Race vermieden, gebe bestehende ID %s zurück",
-                    existing.job_id,
+            # BEGIN IMMEDIATE serialisiert Active-Check und INSERT auch
+            # prozessübergreifend, ohne Schemaänderung oder Partial-Index.
+            with self._db.transaction(immediate=True) as conn:
+                existing = self._find_active_by_identity(
+                    conn,
+                    media_hash,
+                    output_path,
+                    settings_hash,
                 )
-                return existing
+                if existing is not None:
+                    logger.debug(
+                        "RenderQueue.enqueue: active job %s for request %s..., "
+                        "status=%s",
+                        existing.job_id,
+                        request_hash[:12],
+                        existing.status,
+                    )
+                    return existing
+                conn.execute(
+                    """
+                    INSERT INTO render_queue (
+                        job_id, job_hash, media_hash,
+                        output_path, settings_hash, settings_json,
+                        status, progress_percent,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_job_id, job_hash, media_hash,
+                        str(output_path), settings_hash, settings_json,
+                        STATE_QUEUED, 0.0,
+                        now, now,
+                    ),
+                )
 
             logger.info(
                 "RenderQueue.enqueue: %s queued (hash=%s..., output=%s)",
@@ -306,10 +341,41 @@ class RenderQueue:
         sql = f"UPDATE render_queue SET {', '.join(sets)} WHERE job_id = ?"
 
         with self._db.transaction(immediate=True) as conn:
-            cur = conn.execute(sql, params)
-            if cur.rowcount == 0:
-                logger.warning("RenderQueue.update_status: job_id %s nicht gefunden", job_id)
+            current = conn.execute(
+                "SELECT status FROM render_queue WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if current is None:
+                logger.warning(
+                    "RenderQueue.update_status: job_id %s nicht gefunden",
+                    job_id,
+                )
                 return None
+            current_status = str(current["status"])
+            if current_status in TERMINAL_STATES:
+                if status == current_status:
+                    row = conn.execute(
+                        "SELECT * FROM render_queue WHERE job_id = ?",
+                        (job_id,),
+                    ).fetchone()
+                    return self._row_to_job(row)
+                raise ValueError(
+                    "Terminaler Render-Job darf nicht erneut aktiviert werden: "
+                    f"{current_status!r} -> {status!r}"
+                )
+            if status not in _ALLOWED_TRANSITIONS[current_status]:
+                raise ValueError(
+                    f"Ungültiger Render-Statusübergang: "
+                    f"{current_status!r} -> {status!r}"
+                )
+            cur = conn.execute(
+                f"{sql} AND status = ?",
+                [*params, current_status],
+            )
+            if cur.rowcount == 0:
+                raise RuntimeError(
+                    f"Render-Status wurde parallel geändert: {job_id}"
+                )
 
         return self.get(job_id)
 
@@ -412,10 +478,69 @@ class RenderQueue:
     ) -> Optional[RenderJob]:
         """Lookup über die Idempotenz-Komponenten."""
         settings_hash = compute_settings_hash(settings or {})
-        job_hash = compute_job_hash(media_hash, output_path, settings_hash)
-        return self._find_by_hash(job_hash)
+        conn = self._db.get_connection()
+        active = self._find_active_by_identity(
+            conn,
+            media_hash,
+            output_path,
+            settings_hash,
+        )
+        if active is not None:
+            return active
+        request_hash = compute_job_hash(media_hash, output_path, settings_hash)
+        rows = conn.execute(
+            """
+            SELECT * FROM render_queue
+            WHERE media_hash = ? AND settings_hash = ?
+            ORDER BY created_at DESC
+            """,
+            (media_hash, settings_hash),
+        ).fetchall()
+        for row in rows:
+            row_request_hash = compute_job_hash(
+                row["media_hash"],
+                row["output_path"],
+                row["settings_hash"],
+            )
+            if row_request_hash == request_hash:
+                return self._row_to_job(row)
+        return None
 
     # -- Internals ------------------------------------------------------------
+
+    def _find_active_by_identity(
+        self,
+        conn: Any,
+        media_hash: str,
+        output_path: str,
+        settings_hash: str,
+    ) -> Optional[RenderJob]:
+        request_hash = compute_job_hash(media_hash, output_path, settings_hash)
+        rows = conn.execute(
+            """
+            SELECT * FROM render_queue
+            WHERE media_hash = ?
+              AND settings_hash = ?
+              AND status IN (?, ?, ?)
+            ORDER BY created_at ASC
+            """,
+            (
+                media_hash,
+                settings_hash,
+                STATE_QUEUED,
+                STATE_RUNNING,
+                STATE_INTERRUPTED,
+            ),
+        ).fetchall()
+        for row in rows:
+            row_request_hash = compute_job_hash(
+                row["media_hash"],
+                row["output_path"],
+                row["settings_hash"],
+            )
+            if row_request_hash == request_hash:
+                return self._row_to_job(row)
+        return None
 
     def _find_by_hash(self, job_hash: str) -> Optional[RenderJob]:
         conn = self._db.get_connection()

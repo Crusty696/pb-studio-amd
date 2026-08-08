@@ -1,0 +1,1 @@
+Implementation gate revalidated 2026-07-30 after T363 model-asset and CLAP lock remediation: static gate PASS (348 Python, 74 JSON, 22 XML/XAML, 16 changed non-empty files); focused DirectML/model/lock contracts PASS. T363 hardware, final full-suite, WPF Release, truth-sync, and publication gates are complete.

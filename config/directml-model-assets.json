@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-01T22:59:00+02:00",
+  "runtime": {
+    "onnxruntime_directml": "1.19.2",
+    "device_id": 1,
+    "adapter_luid": "0x00000000_0x00012a2a",
+    "adapter_name": "AMD Radeon RX 7800 XT",
+    "cpu_ep_fallback": false
+  },
+  "release_provenance": {
+    "status": "approved",
+    "bundle_manifest": "config/directml-asset-bundle.json",
+    "reason": "Every bundled target is bound to an immutable upstream revision or release-asset identity, exact source hash, license artifact and the SHA-256-verified 2026.08.01 release archive."
+  },
+  "assets": [
+    {
+      "id": "raft-small-static",
+      "target": "models/raft_small.onnx",
+      "source": {
+        "repository": "pytorch/vision",
+        "revision": "61943691d3390bd3148a7003b4a501f0e2b7ac6e",
+        "file": "raft_small_C_T_V2-01064c6d.pth",
+        "sha256": "01064c6dba73b0fc9fc8edf772248560a00a3acfd62ac6677e9eeebad9680e27"
+      },
+      "source_sha256": "47ab11420632443ef610b5e9112ae7ef0d2af45a0422e59c4de63ab352a456ec",
+      "target_sha256": "2357ac663fade8717165504f150cfb32a81e94d9d4528190508ed4cd525e5358",
+      "transform": "Freeze batch=1, height=360, width=480 with onnxruntime.tools.make_dynamic_shape_fixed",
+      "source_verification": "All 106 ONNX initializers match the pinned torchvision RAFT Small C_T_V2 state dict exactly.",
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "bundle_path": "licenses/TorchVision-BSD-3-Clause.txt"
+      }
+    },
+    {
+      "id": "siglip-so400m-vision-static",
+      "target": "models/siglip_vision.onnx",
+      "source": {
+        "repository": "google/siglip-so400m-patch14-384",
+        "revision": "9fdffc58afc957d1a03a25b10dba0329ab15c2a3",
+        "file": "model.safetensors",
+        "sha256": "ea2abad2b7f8a9c1aa5e49a244d5d57ffa71c56f720c94bc5d240ef4d6e1d94a"
+      },
+      "source_sha256": "2bb26630ad5a6c73ea8f183b0fc66daabb931c92bc47292189bcf5c0d52f7ce7",
+      "target_sha256": "863380e4e628cca0d61d4170bdb1401a66ce030080d7a956f90ebe42e040969e",
+      "transform": "Freeze batch_size=1 with onnxruntime.tools.make_dynamic_shape_fixed",
+      "source_verification": "All 448 ONNX initializers match the pinned SigLIP vision tensors exactly; 164 linear weights match their deterministic transposes.",
+      "license": {
+        "spdx": "Apache-2.0",
+        "bundle_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "id": "clap-audio-directml",
+      "target": "models/clap_audio_encoder.onnx",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_audio.onnx",
+        "sha256": "3f42f71e555b62709910b6efa66fa5879f00d9571874b12b0fa674f82dbfe332"
+      },
+      "target_sha256": "01ead7ae27ddaf293d79d2fa69f63e66d645f3338e193f34aee87a528087ebb7",
+      "transform": "Freeze batch=1; externalize unsupported cubic Resize and preceding fixed BatchNorm as deterministic preprocessing; neural encoder input is [1,1,1024,64]",
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "bundle_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "id": "clap-text-directml",
+      "target": "models/clap_text_encoder.onnx",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_text.onnx",
+        "sha256": "c07b27204836877d5b615c103685b66ea8f21bc6b5b70a572be356125423a8bf"
+      },
+      "target_sha256": "075b3c40edd0c3cf7d28fe7db3126ad6ea2978d303cffd7605eeb49499580180",
+      "transform": "Freeze batch=1 and sequence length=77",
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "bundle_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "id": "clap-audio-preprocess",
+      "target": "models/clap_audio_preprocess.npz",
+      "source": {
+        "repository": "ConceptualMachines/magda-sample-tagger",
+        "revision": "f24970352f239768aaad48cc8734fb298441a763",
+        "file": "clap_audio.onnx",
+        "sha256": "3f42f71e555b62709910b6efa66fa5879f00d9571874b12b0fa674f82dbfe332"
+      },
+      "target_sha256": "9139def979cba61ef93eb2dbccecc02db37b23592e0ee38bce6d776faa6be546",
+      "transform": "Extract the source model's fixed BatchNorm parameters; numpy archive uses allow_pickle=false",
+      "license": {
+        "spdx": "BSD-3-Clause AND Apache-2.0",
+        "bundle_path": "licenses/CLAP-license-chain.txt"
+      }
+    },
+    {
+      "id": "clap-processor",
+      "target": "models/clap_processor",
+      "source": {
+        "repository": "laion/clap-htsat-unfused",
+        "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a"
+      },
+      "files": {
+        "config.json": "9efb9557bc804f2ca6e394486af2e45dfed0b18554909735a99c6220b84e4288",
+        "merges.txt": "fe36cab26d4f4421ed725e10a2e9ddb7f799449c603a96e7f29b5a3c82a95862",
+        "preprocessor_config.json": "9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753",
+        "tokenizer.json": "77ef92283d67f0d97e1454909a964afcbfa2019f0fb9f18f8e88d5c25c3ba729",
+        "tokenizer_config.json": "377f91458f7729a4574a84c77bdce67dbc3c58c1a345a29bbf8c4eb1307948a3",
+        "vocab.json": "ed19656ea1707df69134c4af35c8ceda2cc9860bf2c3495026153a133670ab5e"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "bundle_path": "licenses/Apache-2.0.txt"
+      }
+    },
+    {
+      "id": "uvr-mdx-net-inst-hq-3",
+      "target": "models/UVR-MDX-NET-Inst_HQ_3.onnx",
+      "source": {
+        "repository": "TRvlvr/model_repo",
+        "revision": "356bbd334a0ebb8449c602503ac204a3c06df4f6",
+        "release_tag": "all_public_uvr_models",
+        "release_asset_id": 112310332,
+        "file": "UVR-MDX-NET-Inst_HQ_3.onnx",
+        "size": 66759214,
+        "md5": "81452e3891782d67b1ce7fd05d6ac757",
+        "sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc"
+      },
+      "target_sha256": "317554b07fe1ea5279a77f2b1520a41ea4b93432560c4ffd08792c30fddf9adc",
+      "transform": "None; release asset is provisioned byte-for-byte after GitHub Blob-MD5, size and SHA-256 verification.",
+      "license": {
+        "spdx": "MIT",
+        "bundle_path": "licenses/UVR-MDX-MIT.txt"
+      }
+    },
+    {
+      "id": "moondream2-vision-directml",
+      "target": "models/moondream_encoder.onnx",
+      "source": {
+        "repository": "Heliosoph/moondream2-onnx",
+        "revision": "e48d8acc253b09d8f201206aa126388742298452",
+        "file": "vision_encoder_fp16.onnx",
+        "sha256": "aa79c8ca1b7bc127be6cbcc4776908f7fc499080c52aeaab35e2c3c5ccc00f07"
+      },
+      "target_sha256": "ab72b9c627cc33312095cba48448f37e80f4ffea69aadd3ed7d7392b494438f9",
+      "transform": "Freeze batch_size=1",
+      "license": {
+        "spdx": "Apache-2.0",
+        "bundle_path": "licenses/Moondream-Apache-2.0.md"
+      },
+      "vision_ready": true,
+      "caption_ready": false,
+      "caption_limitation": "The available merged decoder requires CPU-assigned graph nodes under ONNX Runtime DirectML 1.19.2 and is intentionally not installed."
+    }
+  ]
+}

@@ -96,6 +96,31 @@ class KeyDetector:
             logger.warning(f"Key-Detection fehlgeschlagen: {e}")
             return "Unknown"
 
+    def detect_key_from_chroma(self, chroma_mean: np.ndarray | list[float]) -> str:
+        """Erkennt Tonart aus einem aggregierten 12-Bin-Chroma-Vektor."""
+        chroma_vector = np.asarray(chroma_mean, dtype=np.float64).reshape(-1)
+        if chroma_vector.size != 12 or not np.any(np.isfinite(chroma_vector)):
+            return "Unknown"
+
+        best_key = "C major"
+        best_corr = -np.inf
+        for i in range(12):
+            major_corr = float(
+                np.corrcoef(chroma_vector, np.roll(_MAJOR_PROFILE, i))[0, 1]
+            )
+            if not np.isnan(major_corr) and major_corr > best_corr:
+                best_corr = major_corr
+                best_key = f"{_NOTE_NAMES[i]} major"
+
+            minor_corr = float(
+                np.corrcoef(chroma_vector, np.roll(_MINOR_PROFILE, i))[0, 1]
+            )
+            if not np.isnan(minor_corr) and minor_corr > best_corr:
+                best_corr = minor_corr
+                best_key = f"{_NOTE_NAMES[i]} minor"
+
+        return best_key if best_corr > -np.inf else "Unknown"
+
     def detect_key_from_file(
         self,
         audio_path: str,

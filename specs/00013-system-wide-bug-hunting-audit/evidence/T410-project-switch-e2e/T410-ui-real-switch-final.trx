@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c93234e1-4f68-4393-a1e2-82e2311236b4" name="david@CYBER-TOWER 2026-08-01 22:53:07" runUser="CYBER-TOWER\david" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-01T22:53:07.9820068+02:00" queuing="2026-08-01T22:53:07.9820069+02:00" start="2026-08-01T22:53:07.2411215+02:00" finish="2026-08-01T22:53:07.9855455+02:00" />
+  <TestSettings name="default" id="7c9e1e6f-58e0-4153-87ac-e4627be1f65f">
+    <Deployment runDeploymentRoot="david_CYBER-TOWER_2026-08-01_22_53_07" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5b3435ae-ac6d-4214-8a46-9af8bf044751" testId="19ab4099-d163-8c50-92c9-0619ffa46d6f" testName="PacingGeneration_ProjectTransitionRejectsLateError" computerName="CYBER-TOWER" duration="00:00:00.0088338" startTime="2026-08-01T22:53:07.8875385+02:00" endTime="2026-08-01T22:53:07.8968396+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5b3435ae-ac6d-4214-8a46-9af8bf044751" />
+    <UnitTestResult executionId="6372c03c-b201-427b-812d-35f7ffc3960b" testId="144c1203-7f4c-812c-8221-c24240cd374d" testName="AudioAnalysis_ProjectTransitionRejectsLateError" computerName="CYBER-TOWER" duration="00:00:00.0399615" startTime="2026-08-01T22:53:07.8315935+02:00" endTime="2026-08-01T22:53:07.8842241+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6372c03c-b201-427b-812d-35f7ffc3960b" />
+    <UnitTestResult executionId="391d507f-2f5e-4357-9903-818875fa2285" testId="13ed44d5-0b1e-8979-896b-ec6342ee2db1" testName="VideoAnalysis_ProjectTransitionRejectsLateError" computerName="CYBER-TOWER" duration="00:00:00.0058685" startTime="2026-08-01T22:53:07.8970849+02:00" endTime="2026-08-01T22:53:07.9029844+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="391d507f-2f5e-4357-9903-818875fa2285" />
+    <UnitTestResult executionId="1f7dc88f-bf9a-426d-b117-7063c3200fd3" testId="1db0fb98-c85e-8c77-8809-f1b1a39bea7a" testName="TimelineSync_ProjectTransitionRejectsLateError" computerName="CYBER-TOWER" duration="00:00:00.0041271" startTime="2026-08-01T22:53:07.9030018+02:00" endTime="2026-08-01T22:53:07.9071542+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1f7dc88f-bf9a-426d-b117-7063c3200fd3" />
+    <UnitTestResult executionId="7ead8406-36ae-419d-bcc3-0bc14f7ea4c9" testId="16dfb3b3-5cd7-8a8f-bb12-d8f1efe2e958" testName="BrainFeedback_ProjectResetRejectsLateResponse" computerName="CYBER-TOWER" duration="00:00:00.0032648" startTime="2026-08-01T22:53:07.9071739+02:00" endTime="2026-08-01T22:53:07.9118707+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ead8406-36ae-419d-bcc3-0bc14f7ea4c9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="PacingGeneration_ProjectTransitionRejectsLateError" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="19ab4099-d163-8c50-92c9-0619ffa46d6f">
+      <Execution id="5b3435ae-ac6d-4214-8a46-9af8bf044751" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ProjectSwitchUiPublicationTests" name="PacingGeneration_ProjectTransitionRejectsLateError" />
+    </UnitTest>
+    <UnitTest name="TimelineSync_ProjectTransitionRejectsLateError" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="1db0fb98-c85e-8c77-8809-f1b1a39bea7a">
+      <Execution id="1f7dc88f-bf9a-426d-b117-7063c3200fd3" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ProjectSwitchUiPublicationTests" name="TimelineSync_ProjectTransitionRejectsLateError" />
+    </UnitTest>
+    <UnitTest name="AudioAnalysis_ProjectTransitionRejectsLateError" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="144c1203-7f4c-812c-8221-c24240cd374d">
+      <Execution id="6372c03c-b201-427b-812d-35f7ffc3960b" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ProjectSwitchUiPublicationTests" name="AudioAnalysis_ProjectTransitionRejectsLateError" />
+    </UnitTest>
+    <UnitTest name="BrainFeedback_ProjectResetRejectsLateResponse" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="16dfb3b3-5cd7-8a8f-bb12-d8f1efe2e958">
+      <Execution id="7ead8406-36ae-419d-bcc3-0bc14f7ea4c9" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ProjectSwitchUiPublicationTests" name="BrainFeedback_ProjectResetRejectsLateResponse" />
+    </UnitTest>
+    <UnitTest name="VideoAnalysis_ProjectTransitionRejectsLateError" storage="c:\users\david\documents\pb_studio_amd_version\pbstudio.ui.tests\bin\release\net9.0-windows\pbstudio.ui.tests.dll" id="13ed44d5-0b1e-8979-896b-ec6342ee2db1">
+      <Execution id="391d507f-2f5e-4357-9903-818875fa2285" />
+      <TestMethod codeBase="C:\Users\david\Documents\Pb_studio_AMD_version\PBStudio.UI.Tests\bin\Release\net9.0-windows\PBStudio.UI.Tests.dll" adapterTypeName="executor://mstestadapter/v4" className="PBStudio.UI.Tests.ProjectSwitchUiPublicationTests" name="VideoAnalysis_ProjectTransitionRejectsLateError" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="19ab4099-d163-8c50-92c9-0619ffa46d6f" executionId="5b3435ae-ac6d-4214-8a46-9af8bf044751" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="144c1203-7f4c-812c-8221-c24240cd374d" executionId="6372c03c-b201-427b-812d-35f7ffc3960b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="13ed44d5-0b1e-8979-896b-ec6342ee2db1" executionId="391d507f-2f5e-4357-9903-818875fa2285" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1db0fb98-c85e-8c77-8809-f1b1a39bea7a" executionId="1f7dc88f-bf9a-426d-b117-7063c3200fd3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="16dfb3b3-5cd7-8a8f-bb12-d8f1efe2e958" executionId="7ead8406-36ae-419d-bcc3-0bc14f7ea4c9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Ergebnisse nicht in einer Liste" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="Alle geladenen Ergebnisse" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="5" executed="5" passed="5" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

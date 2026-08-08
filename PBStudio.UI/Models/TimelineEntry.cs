@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PBStudio.UI.Models;
@@ -23,6 +24,12 @@ public partial class TimelineEntryModel : ObservableObject
 
     /// <summary>Optionaler DB-Cut-ID (gesetzt wenn use_brain=true persistiert hat).</summary>
     [ObservableProperty] private int _cutId;
+    [ObservableProperty] private double _featureConfidence;
+    [ObservableProperty] private string _semanticStatus = "unavailable";
+    [ObservableProperty] private string? _semanticReason;
+    [ObservableProperty] private Dictionary<string, JsonElement>? _triggerProvenance;
+    [ObservableProperty] private Dictionary<string, JsonElement>? _brainAxisStatus;
+    [ObservableProperty] private Dictionary<string, JsonElement>? _metadata;
 
     /// <summary>R-Brain-09: lazy-geladener Tooltip-Text fuer den Confidence-Balken.
     /// null = noch nicht geladen, "" = wird geladen / Platzhalter, sonst formatierter Inhalt.</summary>

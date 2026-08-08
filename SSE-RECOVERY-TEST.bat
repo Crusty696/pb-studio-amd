@@ -1,6 +1,11 @@
 @echo off
 REM SSE-Recovery + Visual Review Test — full autonomous run
+setlocal
 cd /d "%~dp0"
+call "%~dp0scripts\runtime_contract.bat"
+if errorlevel 1 exit /b %ERRORLEVEL%
+for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owner_capability.ps1"') do set "PBSTUDIO_OWNER_CAPABILITY=%%I"
+if not defined PBSTUDIO_OWNER_CAPABILITY exit /b 1
 
 REM Pruefe ob portables .NET SDK vorhanden ist und konfiguriere Umgebung
 if exist "%~dp0tools\dotnet\dotnet.exe" (
@@ -11,9 +16,6 @@ if exist "%~dp0tools\dotnet\dotnet.exe" (
 
 echo === SSE-Recovery-Test Start: %date% %time% ===  > sse_test.log
 
-REM Kill any leftover python
-taskkill /F /IM python.exe /T  >nul 2>&1
-taskkill /F /IM PBStudio.UI.exe /T >nul 2>&1
 ping -n 3 127.0.0.1 >nul
 
 REM === Phase 1: Build ===
@@ -28,7 +30,8 @@ echo Build OK >> sse_test.log
 
 REM === Phase 2: Launch Backend in background ===
 echo --- Phase 2: Backend launch --- >> sse_test.log
-start "PB-Backend" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Start -Kind Backend -StateName sse_recovery_backend -WindowStyle Minimized -LogName sse_recovery_backend >> sse_test.log 2>&1
+if errorlevel 1 exit /b %ERRORLEVEL%
 echo Waiting 30s for backend ready... >> sse_test.log
 ping -n 31 127.0.0.1 >nul
 
@@ -39,14 +42,16 @@ echo Backend health probed >> sse_test.log
 
 REM === Phase 3: Launch WPF App in background ===
 echo --- Phase 3: WPF launch --- >> sse_test.log
-start "PB-UI" /MIN "PBStudio.UI\bin\Release\net9.0-windows\PBStudio.UI.exe"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Start -Kind Ui -StateName sse_recovery_ui -WindowStyle Minimized >> sse_test.log 2>&1
+if errorlevel 1 exit /b %ERRORLEVEL%
 echo Waiting 15s for app ready... >> sse_test.log
 ping -n 16 127.0.0.1 >nul
 
 REM === Phase 4: Kill backend, wait for overlay (5 attempts × 3-30s) ===
 echo --- Phase 4: Kill backend --- >> sse_test.log
-echo Killing python.exe at %time% >> sse_test.log
-taskkill /F /IM python.exe /T  >>sse_test.log 2>&1
+echo Crashing owned backend at %time% >> sse_test.log
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Stop -Kind Backend -StateName sse_recovery_backend -StopMode Crash >> sse_test.log 2>&1
+if errorlevel 1 exit /b %ERRORLEVEL%
 echo Waiting 25s for overlay to trigger (5 attempts at 3s/6s/12s/24s)... >> sse_test.log
 ping -n 26 127.0.0.1 >nul
 
@@ -56,7 +61,8 @@ powershell -Command "Add-Type -AssemblyName System.Windows.Forms; Add-Type -Asse
 
 REM === Phase 6: Restart backend, wait, screenshot 2 (overlay gone) ===
 echo --- Phase 6: Restart backend --- >> sse_test.log
-start "PB-Backend2" /MIN cmd /c "call .venv\Scripts\activate.bat && set PYTHONPATH=src && .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8765"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Start -Kind Backend -StateName sse_recovery_backend -WindowStyle Minimized -LogName sse_recovery_backend_restart >> sse_test.log 2>&1
+if errorlevel 1 exit /b %ERRORLEVEL%
 echo Waiting 30s for backend ready + reconnect... >> sse_test.log
 ping -n 31 127.0.0.1 >nul
 
@@ -65,8 +71,8 @@ powershell -Command "Add-Type -AssemblyName System.Windows.Forms; Add-Type -Asse
 
 REM === Phase 8: Cleanup ===
 echo --- Phase 8: Cleanup --- >> sse_test.log
-taskkill /F /IM PBStudio.UI.exe /T >nul 2>&1
-taskkill /F /IM python.exe /T >nul 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Stop -Kind Ui -StateName sse_recovery_ui -StopMode Crash >> sse_test.log 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owned_runtime_process.ps1" -Operation Stop -Kind Backend -StateName sse_recovery_backend -StopMode Graceful >> sse_test.log 2>&1
 
 echo === DONE at %date% %time% === >> sse_test.log
 echo OK > sse_test_done.flag

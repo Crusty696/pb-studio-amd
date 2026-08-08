@@ -1,0 +1,56 @@
+{
+  "amf_probe": true,
+  "audio_duration": 6335.027,
+  "audio_path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\temp\\qc_longmix_20260728_1245.wav",
+  "audio_sha256": "7a45a833213c4198c1c96c69d7c3890019c66e8cfc19ff151026fadbcce2c0d3",
+  "bitrate": "4M",
+  "encoder": "hevc_amf",
+  "finalized_first_start": 0.0,
+  "finalized_last_end": 6335.027,
+  "finalized_timeline_count": 4816,
+  "finalized_timeline_sha256": "076e6d681d7362db9bab12318addfb0415df26c39a5bfabd5733e2afffdf9a46",
+  "fps": 30.0,
+  "frozen_first_start": 1.9272562358276644,
+  "frozen_queue_job_id": "0f81362b-084f-414a-bc41-d8fae85a749e",
+  "frozen_timeline_count": 4816,
+  "frozen_timeline_sha256": "dd548d82ec6650b4eb915f2904e910eb6d16dd5f2e229cc665ce534f83c994b2",
+  "job_id": "t337-postfix-hevc-full-length",
+  "output_path": "C:\\Users\\david\\Documents\\PBStudio\\ReleaseQC_20260728_1245\\output\\release_qc_longmix_hevc_t337_postfix.mp4",
+  "pid": 10368,
+  "resolution": "640x360",
+  "router_finalizer": true,
+  "settings_sha256": "cbe3da460b924dd16868939030327f804e7439633e09fdb4cc45b96248e9772f",
+  "source_files": [
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\2025-06-25T22.19.31_1.mp4",
+      "sha256": "be0c935780bc435db655093a8a942700b358212df6ca2e5a948cbb9d50339f82",
+      "size": 6761883
+    },
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\2025-06-25T22.30.14_1.mp4",
+      "sha256": "4e6041c89a0a2cd19b3ed59bf1b7fe6a6218ae9bdd8db0919cb5ccd51d7a2917",
+      "size": 3338299
+    },
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\2025-06-25T22.50.35_1.mp4",
+      "sha256": "f646f456543173653827099e4955216480e32d72ac2b4e943fa8ef47480ece0d",
+      "size": 3825587
+    },
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\2025-06-25T22.51.35_1.mp4",
+      "sha256": "a6a47dc25df5323388701fc171f40729711f33a7e077ea64b599ef12cae19d52",
+      "size": 4758278
+    },
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\20250620_2118_Mystical_Forest_Dance_gen_01jy7k924fejxar1ce8rbnmzme.mp4",
+      "sha256": "4d738edada7b30afbedd6a502a5be5a5f7920e4b95c78eaa6006bc250a1e797f",
+      "size": 12955148
+    },
+    {
+      "path": "E:\\music-video_clips\\video\\clips\\sora_20250622_0307_100_generations\\20250620_2118_Mystical_Forest_Dance_gen_01jy7k924jewcrwra3b878ztsd.mp4",
+      "sha256": "e34ed01a4488d9a4eb54d3601c62def5cea7f92d9a1fcbcc9abd47f587d862ec",
+      "size": 9505687
+    }
+  ],
+  "started_at": "2026-07-29T19:53:51.648593+02:00"
+}

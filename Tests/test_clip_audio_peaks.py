@@ -7,6 +7,9 @@ import pytest
 from pb_studio.video.clip_audio_peaks import extract_peaks
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.fixture
 def sample_video_with_audio(tmp_path: Path) -> Path:
     """3s video with a 440 Hz tone audio track."""

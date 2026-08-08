@@ -4,14 +4,18 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-def test_video_analysis_populates_dominant_colors():
+def test_video_analysis_populates_dominant_colors(tmp_path):
     """Phase 4: result["dominant_colors"] + result["tags"] sind nach Analyse gesetzt."""
     import sys
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "MoondreamTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -55,11 +59,13 @@ def test_video_analysis_populates_dominant_colors():
             }
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[1] = {
+    clip = {
         "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
 
     from pathlib import Path as _Path
     try:
@@ -85,14 +91,18 @@ def test_video_analysis_populates_dominant_colors():
     assert body["tags"] == ["red", "static"]
 
 
-def test_video_analysis_skips_phase4_when_captions_disabled():
+def test_video_analysis_skips_phase4_when_captions_disabled(tmp_path):
     """generate_captions=False -> dominant_colors + tags sind leere Listen."""
     import sys
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.app_state import get_app_state, AppState
     
-    state = AppState()
+    state = AppState(current_project={
+        "name": "MoondreamTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
     app.dependency_overrides[get_app_state] = lambda: state
     client = TestClient(app)
 
@@ -136,11 +146,13 @@ def test_video_analysis_skips_phase4_when_captions_disabled():
             }
     video_mod._run_color_and_caption_analysis = fake_color
 
-    state.video_clips[2] = {
+    clip = {
         "id": 2, "name": "clip_2", "path": "C:/clip.mp4",
         "duration_seconds": 10.0, "width": 1920, "height": 1080,
         "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
     }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(2, clip)
 
     from pathlib import Path as _Path
     try:
@@ -202,3 +214,30 @@ def test_extract_tags_empty_input_returns_empty():
 
     assert extract_tags_via_moondream(None) == []
     assert extract_tags_via_moondream(np.array([])) == []
+
+
+# ======================================================================
+# onnx_models_available — Decoder-Pflicht (Audit 2026-08-07)
+#
+# Frueher genuegte der Encoder. Tag-Generierung braucht aber den Decoder:
+# mit reinem Encoder reservierte jeder Clip 1800 MB und den GPU-Lock fuer
+# einen Load, der garantiert null Tags liefert (logs/backend.log 2026-08-07).
+# ======================================================================
+def test_onnx_models_available_verlangt_decoder(tmp_path):
+    from pb_studio.video.moondream import onnx_models_available
+
+    (tmp_path / "moondream_encoder.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is False, (
+        "Encoder allein darf keinen GPU-Task rechtfertigen"
+    )
+
+    (tmp_path / "moondream_decoder.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is True
+
+
+def test_onnx_models_available_akzeptiert_kombiniertes_modell(tmp_path):
+    from pb_studio.video.moondream import onnx_models_available
+
+    assert onnx_models_available(str(tmp_path)) is False
+    (tmp_path / "moondream.onnx").write_bytes(b"x")
+    assert onnx_models_available(str(tmp_path)) is True

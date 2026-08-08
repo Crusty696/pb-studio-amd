@@ -40,6 +40,72 @@ public class ApiClient : IApiClient
         _shutdownCts.Cancel();
     }
 
+    /// <summary>
+    /// Grund des zuletzt fehlgeschlagenen Requests, wie ihn das Backend im
+    /// <c>detail</c>-Feld gemeldet hat. Vor dem Fix wurde dieser Body verworfen,
+    /// wodurch jedes 4xx für User und Log grundlos blieb (Audit 2026-08-05, C-1/T0.1).
+    /// </summary>
+    public string? LastErrorDetail { get; private set; }
+
+    /// <summary>Liest das <c>detail</c>-Feld einer Fehlerantwort und merkt es sich.</summary>
+    private async Task<string?> CaptureErrorDetailAsync(
+        HttpResponseMessage response,
+        CancellationToken token)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            LastErrorDetail = ExtractDetail(raw);
+        }
+        catch (Exception ex) when (!IsExpectedCancellation(ex, token))
+        {
+            LastErrorDetail = null;
+        }
+        return LastErrorDetail;
+    }
+
+    /// <summary>
+    /// Zieht den lesbaren Fehlergrund aus einem FastAPI-Body. <c>detail</c> ist
+    /// entweder ein String (HTTPException) oder eine Liste (Validierungsfehler).
+    /// </summary>
+    private static string? ExtractDetail(string? rawBody)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawBody);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("detail", out var detail))
+            {
+                if (detail.ValueKind == JsonValueKind.String)
+                    return detail.GetString();
+
+                if (detail.ValueKind == JsonValueKind.Array)
+                {
+                    var parts = detail.EnumerateArray()
+                        .Select(item => item.ValueKind == JsonValueKind.Object
+                            && item.TryGetProperty("msg", out var msg)
+                                ? msg.GetString()
+                                : item.ToString())
+                        .Where(part => !string.IsNullOrWhiteSpace(part));
+                    var joined = string.Join("; ", parts);
+                    return string.IsNullOrWhiteSpace(joined) ? null : joined;
+                }
+
+                return detail.ToString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Kein JSON-Body — der Rohtext ist immer noch besser als gar nichts.
+        }
+
+        var trimmed = rawBody.Trim();
+        return trimmed.Length > 500 ? trimmed[..500] : trimmed;
+    }
+
     // --- Health ---
 
     public async Task<HealthStatus?> GetHealthAsync()
@@ -58,8 +124,8 @@ public class ApiClient : IApiClient
     public async Task<GpuStatus?> GetGpuStatusAsync()
         => await GetAsync<GpuStatus>("/gpu/status").ConfigureAwait(false);
 
-    public async Task CleanupGpuAsync()
-        => await PostAsync<object>("/gpu/cleanup", null).ConfigureAwait(false);
+    public Task<GpuCleanupResponse?> CleanupGpuAsync(CancellationToken ct = default)
+        => PostAsync<GpuCleanupResponse>("/gpu/cleanup", null, ct);
 
     // --- Project ---
 
@@ -74,6 +140,19 @@ public class ApiClient : IApiClient
 
     public async Task<StatusResponse?> CloseProjectAsync()
         => await PostAsync<StatusResponse>("/project/close", null).ConfigureAwait(false);
+
+    /// <summary>
+    /// Laedt die manuellen Anker des aktiven Projekts.
+    /// Audit 2026-08-06 (T4.3): neu, der ANCHOR-Tab hatte kein Backend.
+    /// </summary>
+    public Task<AnchorListResponse?> GetProjectAnchorsAsync(CancellationToken ct = default)
+        => GetAsync<AnchorListResponse>("/project/anchors", ct);
+
+    /// <summary>Ersetzt die manuellen Anker des aktiven Projekts.</summary>
+    public Task<AnchorListResponse?> SetProjectAnchorsAsync(
+        List<AnchorEntry> anchors,
+        CancellationToken ct = default)
+        => PostAsync<AnchorListResponse>("/project/anchors", anchors, ct);
 
     public async Task<ProjectInfo?> GetProjectInfoAsync()
     {
@@ -114,8 +193,16 @@ public class ApiClient : IApiClient
     public async Task<List<AudioClipInfo>?> GetAudioClipsAsync(int page = 1, int limit = 200)
         => await GetAsync<List<AudioClipInfo>>($"/audio/clips?page={page}&limit={limit}").ConfigureAwait(false);
 
-    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(int clipId)
-        => await PostAsync<AudioAnalysisResult>("/audio/analyze", new { clip_id = clipId }).ConfigureAwait(false);
+    public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(
+        int clipId,
+        CancellationToken cancellationToken = default)
+    {
+        var transport = await PostAsync<PBStudio.UI.Generated.AudioAnalysisResult>(
+            "/audio/analyze",
+            new { clip_id = clipId },
+            cancellationToken).ConfigureAwait(false);
+        return transport is null ? null : AudioAnalysisResult.FromTransport(transport);
+    }
 
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
         => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
@@ -123,8 +210,8 @@ public class ApiClient : IApiClient
     public async Task<List<double>?> GetOnsetsAsync(int clipId)
         => await GetAsync<List<double>>($"/audio/onsets/{clipId}").ConfigureAwait(false);
 
-    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml")
-        => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }).ConfigureAwait(false);
+    public async Task<StemResult?> SeparateStemsAsync(int clipId, string model = "htdemucs.yaml", CancellationToken cancellationToken = default)
+        => await PostAsync<StemResult>("/audio/stems/separate", new { clip_id = clipId, model }, cancellationToken).ConfigureAwait(false);
 
 
     // --- Audio (Erweitert) ---
@@ -135,8 +222,8 @@ public class ApiClient : IApiClient
     public async Task<List<StructureSegment>?> GetStructureAsync(int clipId)
         => await GetAsync<List<StructureSegment>>($"/audio/structure/{clipId}").ConfigureAwait(false);
 
-    public async Task<SpectralData?> GetSpectralAsync(int clipId)
-        => await GetAsync<SpectralData>($"/audio/spectral/{clipId}").ConfigureAwait(false);
+    public async Task<PBStudio.UI.Generated.SpectralData?> GetSpectralAsync(int clipId)
+        => await GetAsync<PBStudio.UI.Generated.SpectralData>($"/audio/spectral/{clipId}").ConfigureAwait(false);
 
     // --- Video ---
 
@@ -146,17 +233,17 @@ public class ApiClient : IApiClient
     public async Task<List<VideoClipInfo>?> GetVideoClipsAsync(int page = 1, int limit = 200, CancellationToken cancellationToken = default)
         => await GetAsync<List<VideoClipInfo>>($"/video/clips?page={page}&limit={limit}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteVideoClipAsync(int clipId)
-        => await DeleteAsync<DeleteResponse>($"/video/clips/{clipId}").ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteVideoClipAsync(int clipId, CancellationToken cancellationToken = default)
+        => await DeleteAsync<DeleteResponse>($"/video/clips/{clipId}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds)
-        => await DeleteWithBodyAsync<DeleteResponse>("/video/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteVideoClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default)
+        => await DeleteWithBodyAsync<DeleteResponse>("/video/clips", new { clip_ids = clipIds }, cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteAudioClipAsync(int clipId)
-        => await DeleteAsync<DeleteResponse>($"/audio/clips/{clipId}").ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteAudioClipAsync(int clipId, CancellationToken cancellationToken = default)
+        => await DeleteAsync<DeleteResponse>($"/audio/clips/{clipId}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds)
-        => await DeleteWithBodyAsync<DeleteResponse>("/audio/clips", new { clip_ids = clipIds }).ConfigureAwait(false);
+    public async Task<DeleteResponse?> DeleteAudioClipsBatchAsync(List<int> clipIds, CancellationToken cancellationToken = default)
+        => await DeleteWithBodyAsync<DeleteResponse>("/audio/clips", new { clip_ids = clipIds }, cancellationToken).ConfigureAwait(false);
 
     public async Task<byte[]?> GetThumbnailAsync(int clipId, CancellationToken cancellationToken = default)
     {
@@ -184,14 +271,14 @@ public class ApiClient : IApiClient
         }
     }
 
-    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true)
+    public async Task<VideoAnalysisResult?> AnalyzeVideoAsync(int clipId, bool detectScenes = true, bool analyzeMotion = true, bool generateEmbeddings = true, bool generateCaptions = true, CancellationToken cancellationToken = default)
         => await PostAsync<VideoAnalysisResult>("/video/analyze", new { 
             clip_id = clipId,
             detect_scenes = detectScenes,
             analyze_motion = analyzeMotion,
             generate_embeddings = generateEmbeddings,
             generate_captions = generateCaptions
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
     public async Task<List<SceneInfo>?> GetScenesAsync(int clipId)
         => await GetAsync<List<SceneInfo>>($"/video/scenes/{clipId}").ConfigureAwait(false);
@@ -203,21 +290,23 @@ public class ApiClient : IApiClient
     // Backend: backend/routers/video_router.py
     //   GET /video/thumbstrip/{clip_id}?n=8   -> Base64 JPEGs
     //   GET /video/clipwave/{clip_id}?n=256   -> Downsampled Mono-Peaks (0..1)
-    public async Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8)
-        => await GetAsync<ThumbstripResponse>($"/video/thumbstrip/{clipId}?n={n}").ConfigureAwait(false);
+    public async Task<ThumbstripResponse?> GetThumbStripAsync(int clipId, int n = 8, CancellationToken cancellationToken = default)
+        => await GetAsync<ThumbstripResponse>($"/video/thumbstrip/{clipId}?n={n}", cancellationToken).ConfigureAwait(false);
 
-    public async Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256)
-        => await GetAsync<ClipwaveResponse>($"/video/clipwave/{clipId}?n={n}").ConfigureAwait(false);
+    public async Task<ClipwaveResponse?> GetClipWaveAsync(int clipId, int n = 256, CancellationToken cancellationToken = default)
+        => await GetAsync<ClipwaveResponse>($"/video/clipwave/{clipId}?n={n}", cancellationToken).ConfigureAwait(false);
 
     // --- Pacing ---
 
-    public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config)
-        => await PostAsync<CutListResponse>("/pacing/generate", config).ConfigureAwait(false);
+    public async Task<CutListResponse?> GenerateCutListAsync(PacingConfig config, CancellationToken cancellationToken = default)
+        => await PostAsync<CutListResponse>("/pacing/generate", config, cancellationToken).ConfigureAwait(false);
 
-    public async Task<TimelineResponse?> GetTimelineAsync()
-        => await GetAsync<TimelineResponse>("/pacing/timeline").ConfigureAwait(false);
+    public async Task<TimelineResponse?> GetTimelineAsync(CancellationToken cancellationToken = default)
+        => await GetAsync<TimelineResponse>("/pacing/timeline", cancellationToken).ConfigureAwait(false);
 
-    public async Task<StatusResponse?> UpdateTimelineAsync(List<TimelineEntryModel> entries)
+    public async Task<StatusResponse?> UpdateTimelineAsync(
+        List<TimelineEntryModel> entries,
+        CancellationToken cancellationToken = default)
     {
         var payload = new
         {
@@ -232,10 +321,19 @@ public class ApiClient : IApiClient
                 e.TriggerStrength,
                 e.SegmentType,
                 e.BrainConfidence,
-                e.CutId
+                e.CutId,
+                e.FeatureConfidence,
+                e.SemanticStatus,
+                e.SemanticReason,
+                e.TriggerProvenance,
+                e.BrainAxisStatus,
+                e.Metadata
             )).ToList()
         };
-        return await PostAsync<StatusResponse>("/pacing/timeline", payload).ConfigureAwait(false);
+        return await PostAsync<StatusResponse>(
+            "/pacing/timeline",
+            payload,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PacingPreviewResponse?> GenerateTimelinePreviewAsync(double startSec, double duration, CancellationToken ct = default)
@@ -243,7 +341,7 @@ public class ApiClient : IApiClient
         {
             start_sec = startSec,
             duration,
-        }).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
 
     // --- Render ---
 
@@ -261,7 +359,11 @@ public class ApiClient : IApiClient
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var response = await _http.PostAsJsonAsync("/shutdown", (object?)null, JsonOptions, cts.Token).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/shutdown")
+            {
+                Content = JsonContent.Create((object?)null, options: JsonOptions),
+            };
+            using var response = await _http.SendAsync(request, cts.Token).ConfigureAwait(false);
             _logger.LogInformation("Backend graceful shutdown angefordert: {StatusCode}", response.StatusCode);
         }
         catch (Exception ex)
@@ -280,12 +382,59 @@ public class ApiClient : IApiClient
             top_n = topN,
         });
 
-    public Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
-        => PostAsync<BrainFeedbackResponse>("/brain/feedback", new
+    public async Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
+    {
+        try
         {
-            cut_id = cutId,
-            rating,
-        });
+            using var response = await _http.PostAsJsonAsync(
+                "/brain/feedback",
+                new { cut_id = cutId, rating },
+                JsonOptions,
+                _shutdownCts.Token).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<BrainFeedbackResponse>(
+                    JsonOptions,
+                    _shutdownCts.Token).ConfigureAwait(false);
+            }
+
+            var raw = await response.Content.ReadAsStringAsync(
+                _shutdownCts.Token).ConfigureAwait(false);
+            var detail = TryReadErrorDetail(raw)
+                ?? $"Feedback abgelehnt (HTTP {(int)response.StatusCode}).";
+            _logger.LogWarning(
+                "POST /brain/feedback abgelehnt: {Status} {Detail}",
+                (int)response.StatusCode,
+                detail);
+            return new BrainFeedbackResponse("rejected", 0, 0, detail);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "POST /brain/feedback fehlgeschlagen");
+            return new BrainFeedbackResponse("failed", 0, 0, ex.Message);
+        }
+    }
+
+    private static string? TryReadErrorDetail(string raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            if (!document.RootElement.TryGetProperty("detail", out var detail))
+                return null;
+            return detail.ValueKind == JsonValueKind.String
+                ? detail.GetString()
+                : detail.GetRawText();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     public Task<BrainLearningSessionResponse?> BrainLearningSessionAsync()
         => PostAsync<BrainLearningSessionResponse>("/brain/learning_session", null);
@@ -294,10 +443,12 @@ public class ApiClient : IApiClient
         => GetAsync<BrainStatsResponse>("/brain/stats");
 
     public Task<BrainResetResponse?> BrainResetRequestAsync()
-        => PostAsync<BrainResetResponse>("/brain/reset", null);
+        => PostOwnerAuthorizedAsync<BrainResetResponse>("/brain/reset", null);
 
     public Task<BrainResetResponse?> BrainResetConfirmAsync(string confirmationToken)
-        => PostAsync<BrainResetResponse>("/brain/reset", new { confirmation_token = confirmationToken });
+        => PostOwnerAuthorizedAsync<BrainResetResponse>(
+            "/brain/reset",
+            new { confirmation_token = confirmationToken });
 
     // R-Brain-09: Erklaerung fuer Confidence-Balken in der Timeline.
     // narrative=true (Default): Backend versucht LLM-Erklaerung via Ollama;
@@ -309,17 +460,30 @@ public class ApiClient : IApiClient
             ct);
 
     #region VRAM Telemetry
-    // GET /health/vram[?model_id=...] — Histogramm-basierte Performance-Telemetrie pro model_id.
-    // Bei modelId=null: Multi-Model-Snapshot (Telemetry.Summary + Telemetry.Models).
-    // Bei modelId gesetzt: Single-Entry-Shape (Telemetry.ModelId/Count/DurationMs/...).
-    public Task<VramHealthResponse?> GetVramTelemetryAsync(string? modelId = null, CancellationToken ct = default)
+    // Kompatibilitätsmethode für die bestehende Multi-Modell-UI-Shape.
+    // Die shape-spezifischen Methoden darunter bilden den Transportvertrag ab.
+    public async Task<VramHealthResponse?> GetVramTelemetryAsync(
+        string? modelId = null,
+        CancellationToken ct = default)
     {
-        var url = string.IsNullOrWhiteSpace(modelId)
-            ? "/health/vram"
-            : $"/health/vram?model_id={Uri.EscapeDataString(modelId)}";
-        // T5c (S-H1b Audit V2): API surface still typed as multi-model VramHealthResponse.
-        // Single-model variant (Telemetry direkt = Entry) wird vom VM aktuell nicht genutzt.
-        return GetAsync<VramHealthResponse>(url, ct);
+        if (string.IsNullOrWhiteSpace(modelId))
+            return await GetVramTelemetrySnapshotAsync(ct).ConfigureAwait(false);
+
+        var single = await GetVramModelTelemetryAsync(modelId, ct).ConfigureAwait(false);
+        return single?.ToMultiModelSnapshot();
+    }
+
+    public Task<VramHealthResponse?> GetVramTelemetrySnapshotAsync(CancellationToken ct = default)
+        => GetAsync<VramHealthResponse>("/health/vram", ct);
+
+    public Task<VramHealthSingleResponse?> GetVramModelTelemetryAsync(
+        string modelId,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+        return GetAsync<VramHealthSingleResponse>(
+            $"/health/vram?model_id={Uri.EscapeDataString(modelId)}",
+            ct);
     }
 
     public async Task<VramLimitResponse?> UpdateVramLimitAsync(int limitMb, CancellationToken ct = default)
@@ -344,7 +508,7 @@ public class ApiClient : IApiClient
     // ----------------------------------------------------------------------
 
     public Task<ModelListResponse?> GetInstalledModelsAsync(CancellationToken ct = default)
-        => GetAsync<ModelListResponse>("/models/list", ct);
+        => GetAsync<ModelListResponse>("/models/list?refresh=true", ct);
 
     public Task<AvailableModelsResponse?> GetAvailableModelsAsync(CancellationToken ct = default)
         => GetAsync<AvailableModelsResponse>("/models/available", ct);
@@ -358,11 +522,14 @@ public class ApiClient : IApiClient
         return GetAsync<ModelRecommendationResponse>(url, ct);
     }
 
-    public async Task<bool> ActivateModelAsync(string name, CancellationToken ct = default)
+    public async Task<bool> ActivateModelAsync(string name, string provider, CancellationToken ct = default)
     {
         try
         {
-            var result = await PostAsync<object>("/models/activate", new { name }).ConfigureAwait(false);
+            var result = await PostOwnerAuthorizedAsync<object>(
+                "/models/activate",
+                new { name, provider },
+                ct).ConfigureAwait(false);
             return result != null;
         }
         catch (Exception ex)
@@ -376,7 +543,10 @@ public class ApiClient : IApiClient
     {
         try
         {
-            var result = await PostAsync<object>("/models/mode", new { mode }).ConfigureAwait(false);
+            var result = await PostOwnerAuthorizedAsync<object>(
+                "/models/mode",
+                new { mode },
+                ct).ConfigureAwait(false);
             return result != null;
         }
         catch (Exception ex)
@@ -386,11 +556,14 @@ public class ApiClient : IApiClient
         }
     }
 
-    public async Task<ModelTestResponse?> TestModelAsync(string name, CancellationToken ct = default)
+    public async Task<ModelTestResponse?> TestModelAsync(string name, string provider, CancellationToken ct = default)
     {
         try
         {
-            return await PostAsync<ModelTestResponse>("/models/test", new { name }).ConfigureAwait(false);
+            return await PostOwnerAuthorizedAsync<ModelTestResponse>(
+                "/models/test",
+                new { name, provider },
+                ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -400,10 +573,8 @@ public class ApiClient : IApiClient
     }
 
     /// <summary>
-    /// LM Studio Refactor 2026-05-17: Modell-Loeschung wird vom Backend
-    /// nicht mehr unterstuetzt — LM Studio managed Modelle ueber die Desktop-App.
-    /// Der Endpoint liefert HTTP 501. Wir werfen <see cref="NotSupportedException"/>
-    /// mit einer User-tauglichen Message damit das UI das anzeigen kann.
+    /// Loescht eine exakt live verifizierte Ollama-Modell-ID.
+    /// LM-Studio-Modelle bleiben in der Desktop-App verwaltet.
     /// </summary>
     public async Task<bool> DeleteModelAsync(string name, CancellationToken ct = default)
     {
@@ -415,7 +586,9 @@ public class ApiClient : IApiClient
         try
         {
             var url = $"/models/{Uri.EscapeDataString(name)}";
-            using var response = await _http.DeleteAsync(url, token).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            using var response = await _http.SendAsync(request, token)
+                .ConfigureAwait(false);
 
             if ((int)response.StatusCode == 501)
             {
@@ -520,9 +693,7 @@ public class ApiClient : IApiClient
         }
     }
 
-    /// <summary>Setup-Helfer: liefert offenen Response-Stream oder null bei Fehler/Cancel.
-    /// LM Studio Refactor 2026-05-17: Wenn Backend mit HTTP 501 antwortet,
-    /// werfen wir <see cref="NotSupportedException"/> mit User-tauglicher Message.</summary>
+    /// <summary>Setup-Helfer fuer einen live verifizierten Ollama-Pull.</summary>
     private async Task<System.IO.Stream?> OpenPullStreamAsync(string name, CancellationToken token, CancellationToken originalCt)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/models/pull")
@@ -652,15 +823,21 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> DeleteAsync<T>(string url) where T : class
+    private async Task<T?> DeleteAsync<T>(
+        string url,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.DeleteAsync(url, _shutdownCts.Token).ConfigureAwait(false);
+            using var response = await _http.DeleteAsync(url, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }
@@ -671,8 +848,15 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> DeleteWithBodyAsync<T>(string url, object body) where T : class
+    private async Task<T?> DeleteWithBodyAsync<T>(
+        string url,
+        object body,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
             // HttpClient.DeleteAsync supports no body; need explicit HttpRequestMessage
@@ -680,11 +864,11 @@ public class ApiClient : IApiClient
             {
                 Content = JsonContent.Create(body, options: JsonOptions),
             };
-            using var response = await _http.SendAsync(request, _shutdownCts.Token).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }
@@ -695,20 +879,39 @@ public class ApiClient : IApiClient
         }
     }
 
-    private async Task<T?> PostAsync<T>(string url, object? body) where T : class
+    private async Task<T?> PostAsync<T>(
+        string url,
+        object? body,
+        CancellationToken cancellationToken = default) where T : class
     {
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
         try
         {
-            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, _shutdownCts.Token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions).ConfigureAwait(false);
+            using var response = await _http.PostAsJsonAsync(url, body, JsonOptions, token).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
+                _logger.LogWarning(
+                    "POST {Url} fehlgeschlagen: {Status} — {Detail}",
+                    url,
+                    (int)response.StatusCode,
+                    detail ?? "(kein Detail im Body)");
+                return null;
+            }
+
+            LastErrorDetail = null;
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsExpectedCancellation(ex))
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
         {
             return null;
         }
         catch (Exception ex)
         {
+            LastErrorDetail = ex.Message;
             _logger.LogWarning(ex, "POST {Url} fehlgeschlagen", url);
             return null;
         }
@@ -877,6 +1080,7 @@ public class ApiClient : IApiClient
             "model" => ChatEventType.Model,
             "text" => ChatEventType.Text,
             "tool_call" => ChatEventType.ToolCall,
+            "tool_confirmation_required" => ChatEventType.ToolConfirmationRequired,
             "tool_result" => ChatEventType.ToolResult,
             "error" => ChatEventType.Error,
             "done" => ChatEventType.Done,
@@ -891,11 +1095,102 @@ public class ApiClient : IApiClient
             ChatEventType.Model => new ChatStreamEvent(type, eventName!, ModelName: Str("model"), ModelReason: Str("reason")),
             ChatEventType.Text => new ChatStreamEvent(type, eventName!, Text: Str("content")),
             ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments")),
+            ChatEventType.ToolConfirmationRequired => new ChatStreamEvent(
+                type,
+                eventName!,
+                ToolName: Str("name"),
+                ToolArgumentsJson: RawJson("arguments"),
+                ConfirmationId: Str("confirmation_id"),
+                ConfirmationExpiresInSeconds: root.TryGetProperty("expires_in_seconds", out var expires)
+                    && expires.TryGetDouble(out var seconds) ? seconds : null),
             ChatEventType.ToolResult => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolResultJson: RawJson("result")),
             ChatEventType.Error => new ChatStreamEvent(type, eventName!, ErrorMessage: Str("message"), ErrorStage: Str("stage")),
             ChatEventType.Done => new ChatStreamEvent(type, eventName!, Text: Str("final_text"), DoneReason: Str("reason")),
             _ => new ChatStreamEvent(type, eventName ?? "unknown"),
         };
+    }
+
+    private async Task<T?> PostOwnerAuthorizedAsync<T>(
+        string url,
+        object? body,
+        CancellationToken cancellationToken = default) where T : class
+    {
+        // Bewusst KEINE Capability-Vorabpruefung mehr an dieser Stelle:
+        // Der Getter liefert null, solange der 10-Sekunden-Watchdog revalidiert
+        // (siehe BackendOwnerCapability, _isVerified wird dabei kurz false).
+        // Die alte Pruefung lief ausserhalb des RevalidationGate und brach Requests
+        // hart ab, die in dieses Fenster fielen — sichtbar als "Button reagiert nicht".
+        // Der OwnerCapabilityRequestHandler wartet am Gate und prueft dort
+        // fail-closed; der Sicherheitsgewinn der Vorabpruefung war also null.
+        // Audit 2026-08-05, H-1/T1.2.
+        using var requestCts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(body, options: JsonOptions),
+            };
+            using var response = await _http.SendAsync(request, token)
+                .ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
+                _logger.LogWarning(
+                    "Owner-authorized POST {Url} fehlgeschlagen: {Status} — {Detail}",
+                    url,
+                    (int)response.StatusCode,
+                    detail ?? "(kein Detail im Body)");
+                return null;
+            }
+
+            LastErrorDetail = null;
+            return await response.Content.ReadFromJsonAsync<T>(
+                JsonOptions,
+                token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, cancellationToken))
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LastErrorDetail = ex.Message;
+            _logger.LogWarning(ex, "Owner-authorized POST {Url} fehlgeschlagen", url);
+            return null;
+        }
+    }
+
+    public async Task<bool> DecideChatToolConfirmationAsync(
+        string confirmationId, bool approve, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(confirmationId)) return false;
+        using var requestCts = ct.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token)
+            : null;
+        var token = requestCts?.Token ?? _shutdownCts.Token;
+        var decision = approve ? "approve" : "reject";
+        try
+        {
+            using var response = await _http.PostAsync(
+                $"/chat/confirm/{Uri.EscapeDataString(confirmationId)}/{decision}",
+                content: null,
+                token).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (IsExpectedCancellation(ex, ct))
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Chat tool confirmation failed");
+            return false;
+        }
     }
 
     public async Task<bool> ClearChatHistoryAsync(CancellationToken ct = default)
@@ -920,7 +1215,24 @@ public class ApiClient : IApiClient
 // --- API Response Models ---
 
 public record HealthStatus(string Status, double UptimeSeconds, bool GpuAvailable);
-public record GpuStatus(string Name, double VramTotalMb, double VramUsedMb, double TemperatureC, string DriverVersion);
+public record GpuStatus(
+    string Name,
+    double VramTotalMb,
+    double VramUsedMb,
+    double TemperatureC,
+    string DriverVersion,
+    int? AdapterIndex = null,
+    string? AdapterLuid = null,
+    string? AdapterName = null,
+    string? SelectionPolicy = null,
+    double DedicatedVramTotalMb = 0,
+    bool DirectmlActive = false,
+    string MonitoringStatus = "error",
+    string? MonitoringError = null);
+public record GpuCleanupResponse(
+    bool Success,
+    int FreedMb,
+    string? Error = null);
 public record StatusResponse(bool Success, string Message);
 public record ProjectInfo(string Name, string Path, int AudioCount, int VideoCount, bool HasTimeline, string? CreatedAt = null, string? ModifiedAt = null, int? DbProjectId = null);
 public record AudioClipInfo(
@@ -939,13 +1251,103 @@ public record AudioClipInfo(
     // Persisted im Backend nach Streaming-Hash beim Import; signalisiert
     // dass Embedding/Analyse aus Cache wiederverwendbar sind.
     string? AudioHash = null,
+    bool HasAudioEmbedding = false,
     // L-N4: Stem-Separation Outputs — Dict {vocals|instrumental|drums|bass|other -> path}.
     // Gesetzt nach POST /audio/stems/separate. UI rendert STEMS-Badge und
     // "Stems-Ordner oeffnen"-Button wenn nicht null und nicht-leer.
-    Dictionary<string, string>? StemsPaths = null);
+    Dictionary<string, string>? StemsPaths = null,
+    string AnalysisStatus = "unavailable",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
-public record SpectralData(int ClipId, List<double> Times, Dictionary<string, List<float>> Bands, List<double> Centroids, Dictionary<string, double[]>? FrequencyRanges = null);
-public record AudioAnalysisResult(int ClipId, double DurationSeconds, double Bpm, int BeatCount, List<BeatData> Beats, string? Key = null, List<float>? EnergyCurve = null, List<StructureSegment>? StructureSegments = null, SpectralData? SpectralData = null);
+public record SubtrackSegment(double StartTime, double EndTime, double Confidence = 0.0, double? SubBpm = null, string? SubKey = null);
+public record AudioAnalysisResult(
+    int ClipId,
+    double DurationSeconds,
+    double Bpm,
+    int BeatCount,
+    List<BeatData> Beats,
+    string? Key = null,
+    List<double>? EnergyCurve = null,
+    List<StructureSegment>? StructureSegments = null,
+    PBStudio.UI.Generated.SpectralData? SpectralData = null,
+    List<SubtrackSegment>? SubtrackSegments = null,
+    List<double>? TempoCurve = null,
+    List<double>? OnsetTimes = null,
+    List<double>? KickTimes = null,
+    List<double>? SnareTimes = null,
+    List<double>? HihatTimes = null,
+    string AnalysisStatus = "completed",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null,
+    Dictionary<string, JsonElement>? ChunkEvidence = null,
+    List<double>? Downbeats = null,
+    Dictionary<string, JsonElement>? DownbeatProvenance = null)
+{
+    public static AudioAnalysisResult FromTransport(
+        PBStudio.UI.Generated.AudioAnalysisResult value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var beats = value.Beats?.Select(beat => new BeatData(
+            beat.Time,
+            beat.Strength ?? 0.0,
+            beat.Beat_type ?? string.Empty)).ToList() ?? new List<BeatData>();
+
+        return new AudioAnalysisResult(
+            value.Clip_id,
+            value.Duration_seconds,
+            value.Bpm ?? 0.0,
+            value.Beat_count ?? beats.Count,
+            beats,
+            value.Key,
+            value.Energy_curve?.ToList(),
+            value.Structure_segments?.Select(segment => new StructureSegment(
+                segment.Start_time,
+                segment.End_time,
+                segment.Label,
+                segment.Confidence ?? 0.0,
+                segment.Energy_score ?? 0.0)).ToList(),
+            value.Spectral_data,
+            value.Subtrack_segments?.Select(segment => new SubtrackSegment(
+                segment.Start_time,
+                segment.End_time,
+                segment.Confidence ?? 0.0,
+                segment.Sub_bpm,
+                segment.Sub_key)).ToList(),
+            value.Tempo_curve?.ToList(),
+            value.Onset_times?.ToList(),
+            value.Kick_times?.ToList(),
+            value.Snare_times?.ToList(),
+            value.Hihat_times?.ToList(),
+            value.Analysis_status ?? "unavailable",
+            value.Stage_status is null
+                ? null
+                : new Dictionary<string, string>(value.Stage_status),
+            value.Stage_errors is null
+                ? null
+                : new Dictionary<string, string>(value.Stage_errors),
+            ToJsonDictionary(value.Chunk_evidence),
+            value.Downbeats?.ToList(),
+            ToJsonDictionary(value.Downbeat_provenance));
+    }
+
+    private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)
+    {
+        if (value is null)
+            return null;
+
+        var element = value is JsonElement json
+            ? json
+            : JsonSerializer.SerializeToElement(value);
+        if (element.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return element.EnumerateObject().ToDictionary(
+            property => property.Name,
+            property => property.Value.Clone());
+    }
+}
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(
@@ -964,20 +1366,64 @@ public record VideoClipInfo(
     double? PeakMotion = null,
     string? MotionCategory = null,
     string? VideoHash = null,
-    string? TagSource = null);
+    string? TagSource = null,
+    bool HasVideoEmbedding = false,
+    int? EmbeddingDim = null,
+    int? EmbeddingSamples = null,
+    bool HasEmbedding = false);
 public record DeleteResponse(int DeletedCount, List<int> NotFoundIds);
-public record VideoAnalysisResult(int ClipId, int SceneCount, double AvgMotion, List<string> DominantColors, List<string> Tags, bool HasEmbedding, int EmbeddingDim = 1152, List<SceneInfo>? Scenes = null, MotionData? Motion = null);
+public record VideoAnalysisResult(
+    int ClipId,
+    int SceneCount,
+    double AvgMotion,
+    List<string> DominantColors,
+    List<string> Tags,
+    bool HasEmbedding,
+    // Audit 2026-08-05 (H-4): Default war 1152 und damit semantisch invertiert.
+    // Das Backend definiert ausdruecklich "0 = kein Embedding vorhanden"
+    // (video_schemas.py:79). Fehlte das Feld im Response, meldete die WPF-Seite
+    // also "Embedding vorhanden" statt "keins".
+    int EmbeddingDim = 0,
+    List<SceneInfo>? Scenes = null,
+    MotionData? Motion = null,
+    int EmbeddingSamples = 0,
+    string? AudioKey = null,
+    string? TagSource = null,
+    List<string>? MoodTags = null,
+    double AvgBrightness = 0.5,
+    double AvgSaturation = 0.5,
+    double AvgColorTemp = 0.0,
+    string Status = "completed",
+    Dictionary<string, string>? StageStatus = null,
+    Dictionary<string, string>? StageErrors = null);
 public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
-public record TimelineEntry(string ClipId, string ClipName, string FilePath, double StartTime, double EndTime, double ClipStart, string TriggerType, double TriggerStrength, string? SegmentType = null, double BrainConfidence = 0.0, int? CutId = null);
-public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false);
+public record TimelineEntry(
+    string ClipId,
+    string ClipName,
+    string FilePath,
+    double StartTime,
+    double EndTime,
+    double ClipStart,
+    string TriggerType,
+    double TriggerStrength,
+    string? SegmentType = null,
+    double BrainConfidence = 0.0,
+    int? CutId = null,
+    double FeatureConfidence = 0.0,
+    string SemanticStatus = "unavailable",
+    string? SemanticReason = null,
+    Dictionary<string, JsonElement>? TriggerProvenance = null,
+    Dictionary<string, JsonElement>? BrainAxisStatus = null,
+    Dictionary<string, JsonElement>? Metadata = null);
+public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false, string? CanvasPath = null);
 public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5, double ClipLengthVariation = 0.0, double MaxCutInterval = 10.0, string BeatTriggerMode = "all");
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
 public record BrainSuggestResponse(List<BrainSuggestion> Suggestions);
 public record PacingPreviewResponse(string PreviewPath, double Duration, string Resolution);
-public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks);
+public record BrainFeedbackResponse(string Status, int UpdatedBuckets, int TotalClicks, string? Message = null);
 public record BrainLearningSessionResponse(List<BrainSuggestion> Cuts);
 public record BrainStatsBucket(
     string Axis,
@@ -999,7 +1445,7 @@ public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 // AP3.3 (Audit 2026-06-10): SceneIndex client-seitig (Backend sendet keinen Index;
 // JSON-Deserialisierung lässt das Feld auf 0, VideoLibraryViewModel setzt es nach Load).
-public record SceneInfo(double StartTime, double EndTime, string SceneType, double Confidence)
+public record SceneInfo(double StartTime, double EndTime, string SceneType, double? Confidence)
 {
     public int SceneIndex { get; set; }
 }
@@ -1008,4 +1454,21 @@ public record SceneInfo(double StartTime, double EndTime, string SceneType, doub
 // Pydantic-Schema silent gedropped.
 public record MotionData(int ClipId, double AvgMotion, List<float> MotionCurve, List<Dictionary<string, object>> PeakFrames, string MotionCategory, double PeakMotion = 0.0);
 public record RenderRequest(string OutputPath, string AudioPath, string Quality, int ResolutionWidth, int ResolutionHeight, double Fps, double BitrateMbps = 12.0, bool IncludeAudio = true, string? Encoder = null);
-public record RenderProgress(string TaskId, string Status, double Percent, int CurrentFrame, int TotalFrames, double Fps, double ElapsedSeconds, double EtaSeconds, string? OutputPath, string? Error);
+public record RenderProgress(
+    string TaskId,
+    string Status,
+    double Percent,
+    int CurrentFrame,
+    int TotalFrames,
+    double Fps,
+    double ElapsedSeconds,
+    double EtaSeconds,
+    string? OutputPath,
+    string? Error,
+    string? Message = null,
+    string? QueueJobId = null,
+    string? RunId = null,
+    string? EvidencePath = null,
+    string? ValidationPath = null,
+    bool ProgressEnd = false,
+    string? ValidationStatus = null);

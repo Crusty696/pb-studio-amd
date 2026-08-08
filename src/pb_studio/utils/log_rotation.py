@@ -46,7 +46,11 @@ DEFAULT_RETENTION_DAYS: int = 7             # Tage bis rotierte Logs gelöscht w
 DEFAULT_LOG_FORMAT: str = (
     "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-DEFAULT_DATE_FORMAT: str = "%H:%M:%S"
+# Audit 2026-08-05 (Querschnittsbefund): Der Zeitstempel enthielt nur "%H:%M:%S".
+# backend.log wird ueber Wochen angehaengt (50.658 Zeilen zum Auditzeitpunkt), und
+# ohne Datum sahen laengst behobene Fehler aus wie aktuelle -- zwei Befunde wurden
+# dadurch zunaechst falsch als offen bewertet. Datum ist Pflicht.
+DEFAULT_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
 
 
 # ---------------------------------------------------------------------------

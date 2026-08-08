@@ -1,0 +1,52 @@
+﻿{
+    "workload":  "moondream",
+    "capture_root":  "C:\\Users\\david\\AppData\\Local\\Temp\\pb-studio-t411-02ebac8ad6d343c299470a4adfb27867\\captures\\moondream-53284f3c5f024a65a471b52a37614fcd",
+    "launcher_pid":  21460,
+    "pid":  23252,
+    "result_pid":  23252,
+    "ready":  true,
+    "iterations":  329,
+    "adapter":  {
+                    "dedicated_vram_bytes":  16963137536,
+                    "device_id":  1,
+                    "device_id_pci":  29822,
+                    "high_performance_preferred":  false,
+                    "is_discrete":  true,
+                    "is_software":  false,
+                    "luid":  "0x00000000_0x00012a2a",
+                    "name":  "AMD Radeon RX 7800 XT",
+                    "selection_policy":  "highest_vram_amd",
+                    "selection_reason":  "AMD hardware adapter with highest dedicated VRAM",
+                    "shared_system_memory_bytes":  33459044352,
+                    "vendor_id":  4098
+                },
+    "provider":  [
+                     "DmlExecutionProvider",
+                     {
+                         "device_id":  1
+                     }
+                 ],
+    "session_contracts":  [
+                              {
+                                  "disable_cpu_ep_fallback":  "1",
+                                  "enable_cpu_mem_arena":  false,
+                                  "enable_mem_pattern":  false,
+                                  "provider_options":  {
+                                                           "CPUExecutionProvider":  {
+
+                                                                                    },
+                                                           "DmlExecutionProvider":  {
+
+                                                                                    }
+                                                       },
+                                  "providers":  [
+                                                    "DmlExecutionProvider",
+                                                    "CPUExecutionProvider"
+                                                ]
+                              }
+                          ],
+    "all_engine_samples":  5104,
+    "pid_engine_samples":  128,
+    "rx_engine_max":  91.545538692210258,
+    "other_engine_max":  null
+}

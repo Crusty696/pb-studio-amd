@@ -26,4 +26,9 @@ public interface IDialogService
     /// Öffnet einen Dialog zum Speichern einer Datei.
     /// </summary>
     string? SaveFile(string title, string filter, string defaultFileName, string? initialDirectory = null);
+
+    /// <summary>
+    /// Fordert vor einer irreversiblen Aktion eine ausdrückliche Bestätigung an.
+    /// </summary>
+    bool ConfirmDestructiveAction(string title, string message);
 }

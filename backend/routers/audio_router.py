@@ -18,9 +18,21 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..app_state import AppState, get_app_state
+from ..app_state import (
+    AppState,
+    PersistenceError,
+    ProjectContextChangedError,
+    ProjectContextUnavailableError,
+    ProjectOperationContext,
+    get_app_state,
+)
 from ..config import config
 from ..dependencies import with_gpu_task, publish_event, publish_log
+from ..media_path_policy import (
+    MediaPathPolicyError,
+    canonical_local_media_file,
+    canonical_local_media_reference,
+)
 from ..schemas.audio_schemas import (
     AudioImportRequest, AudioClipInfo,
     AudioAnalyzeRequest, AudioAnalysisResult,
@@ -36,6 +48,201 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
+_LONG_STEM_TIMEOUT_RATIO = 0.75
+def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
+    """Allow long mixes enough wall time while retaining the configured floor."""
+    duration = max(0.0, float(duration_seconds))
+    return max(float(configured_timeout), duration * _LONG_STEM_TIMEOUT_RATIO)
+
+
+def _find_reusable_stem_files(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+) -> list[str]:
+    """Return stems only when an exact successful-run marker still validates."""
+    import json
+    import soundfile as sf
+
+    source = Path(audio_path)
+    required_roles = _required_stem_roles(model_name)
+    if not required_roles:
+        return []
+
+    marker_path = _stem_cache_marker_path(source, model_name, output_dir)
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+
+    if (
+        marker.get("schema_version") != 1
+        or marker.get("source") != _stem_source_identity(source)
+        or marker.get("model") != Path(model_name).name.casefold()
+    ):
+        return []
+
+    outputs = marker.get("outputs")
+    if not isinstance(outputs, dict) or set(outputs) != required_roles:
+        return []
+
+    output_root = output_dir.resolve()
+    complete: list[str] = []
+    for role in sorted(required_roles):
+        record = outputs.get(role)
+        if not isinstance(record, dict):
+            return []
+        try:
+            path = Path(record["path"]).resolve()
+            if not path.is_relative_to(output_root):
+                return []
+            if _exact_stem_role(path) != role:
+                return []
+            stat = path.stat()
+            info = sf.info(str(path))
+            if (
+                stat.st_size <= 0
+                or stat.st_size != record.get("size")
+                or int(stat.st_mtime_ns) != record.get("mtime_ns")
+                or int(info.frames) <= 0
+                or int(info.frames) != record.get("frames")
+                or int(info.samplerate) != record.get("sample_rate")
+                or int(info.channels) != record.get("channels")
+            ):
+                return []
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return []
+        complete.append(str(path.resolve()))
+    return sorted(complete)
+
+
+def _required_stem_roles(model_name: str) -> set[str]:
+    model_token = Path(model_name).stem.casefold()
+    if "htdemucs" in model_token:
+        return {"vocals", "drums", "bass", "other"}
+    if "mdx" in model_token or "inst" in model_token:
+        return {"vocals", "instrumental"}
+    return set()
+
+
+def _exact_stem_role(path: Path) -> str | None:
+    import re
+
+    matches = re.findall(
+        r"\((vocals|instrumental|drums|bass|other)\)",
+        path.stem,
+        flags=re.IGNORECASE,
+    )
+    return matches[0].casefold() if len(matches) == 1 else None
+
+
+def _stem_source_identity(source: Path) -> dict[str, int | str]:
+    import os
+
+    resolved = source.resolve(strict=True)
+    stat = resolved.stat()
+    return {
+        "path": os.path.normcase(str(resolved)),
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+    }
+
+
+def _stem_cache_marker_path(
+    source: Path,
+    model_name: str,
+    output_dir: Path,
+) -> Path:
+    import hashlib
+    import json
+
+    identity = {
+        "source": _stem_source_identity(source),
+        "model": Path(model_name).name.casefold(),
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return output_dir.resolve() / f".{source.stem}.{digest}.stems-complete.json"
+
+
+def _write_stem_cache_marker(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+    stem_files: list[str],
+    *,
+    state: AppState | None = None,
+    context: ProjectOperationContext | None = None,
+) -> None:
+    """Atomically publish validated output metadata after separator success."""
+    import json
+    import os
+    import soundfile as sf
+    import uuid
+
+    source = Path(audio_path)
+    required_roles = _required_stem_roles(model_name)
+    if not required_roles:
+        raise ValueError(f"Unbekanntes Stem-Modell: {model_name}")
+
+    source_duration = float(sf.info(str(source)).duration)
+    duration_tolerance = 0.25
+    output_root = output_dir.resolve()
+    outputs: dict[str, dict[str, int | str]] = {}
+    for file_name in stem_files:
+        path = Path(file_name).resolve()
+        role = _exact_stem_role(path)
+        if role is None:
+            raise ValueError(f"Stem-Datei hat keine eindeutige exakte Rolle: {path.name}")
+        if role not in required_roles or role in outputs:
+            raise ValueError(f"Stem-Rolle ist unerwartet oder doppelt: {role}")
+        if not path.is_relative_to(output_root):
+            raise ValueError(f"Stem-Datei liegt ausserhalb des Output-Ordners: {path}")
+        stat = path.stat()
+        info = sf.info(str(path))
+        if (
+            stat.st_size <= 0
+            or int(info.frames) <= 0
+            or abs(float(info.duration) - source_duration) > duration_tolerance
+        ):
+            raise ValueError(f"Stem-Datei ist unvollstaendig: {path.name}")
+        outputs[role] = {
+            "path": str(path),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+            "frames": int(info.frames),
+            "sample_rate": int(info.samplerate),
+            "channels": int(info.channels),
+        }
+
+    if set(outputs) != required_roles:
+        missing = ", ".join(sorted(required_roles - set(outputs)))
+        raise ValueError(f"Stem-Rollen fehlen: {missing}")
+
+    marker_path = _stem_cache_marker_path(source, model_name, output_dir)
+    marker = {
+        "schema_version": 1,
+        "source": _stem_source_identity(source),
+        "model": Path(model_name).name.casefold(),
+        "outputs": outputs,
+    }
+    temp_path = marker_path.with_name(f"{marker_path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            json.dump(marker, handle, sort_keys=True, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        if state is not None and context is not None:
+            with state.project_commit(context):
+                os.replace(temp_path, marker_path)
+        else:
+            os.replace(temp_path, marker_path)
+    finally:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _get_beat_detector() -> "Any":
@@ -64,18 +271,47 @@ async def import_audio(
     request: AudioImportRequest,
     state: AppState = Depends(get_app_state),
 ) -> AudioClipInfo:
-    """Importiert eine Audio-Datei."""
-    audio_path = Path(request.path)
+    try:
+        async with state.project_operation() as context:
+            return await _import_audio_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    # SEC-001: Nur absolute Pfade erlauben (Path-Traversal-Schutz)
-    if not audio_path.is_absolute():
-        raise HTTPException(status_code=400, detail="Nur absolute Pfade erlaubt")
+
+async def _import_audio_in_context(
+    request: AudioImportRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> AudioClipInfo:
+    """Importiert eine Audio-Datei."""
+    try:
+        state.require_current_project_db_id()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     try:
-        if not audio_path.exists():
-            raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {request.path}")
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert")
+        audio_reference = canonical_local_media_reference(
+            request.path,
+            label="Audio-Importpfad",
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not audio_reference.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Audio-Datei nicht gefunden: {audio_reference}",
+        )
+    try:
+        audio_path = canonical_local_media_file(
+            str(audio_reference),
+            label="Audio-Importpfad",
+        )
+    except MediaPathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if audio_path.suffix.lower() not in {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".aiff", ".aif"}:
         raise HTTPException(status_code=400, detail=f"Nicht unterstütztes Format: {audio_path.suffix}")
@@ -95,6 +331,7 @@ async def import_audio(
         try:
             asyncio.run_coroutine_threadsafe(
                 publish_event("import_progress", {
+                    "task_id": "audio_import",
                     "step": "hash",
                     "percent": pct,
                     "message": f"Hashing {_file_name}: {pct:.2f}%",
@@ -112,20 +349,21 @@ async def import_audio(
         logger.warning(f"media_hash fehlgeschlagen für {audio_path}: {e}")
         audio_hash_value = None
 
-    clip = state.register_audio_clip({
-        "name": audio_path.stem,
-        "path": str(audio_path.absolute()),
-        "duration_seconds": probe_info["duration"],
-        "sample_rate": probe_info["sample_rate"],
-        "channels": probe_info["channels"],
-        "format": audio_path.suffix.lstrip("."),
-        "bpm": 0.0,
-        "key": None,
-        "beat_count": 0,
-        "is_analyzed": False,
-        "audio_hash": audio_hash_value,
-        "has_audio_embedding": False,
-    })
+    with state.project_commit(context):
+        clip = dict(state.register_audio_clip({
+            "name": audio_path.stem,
+            "path": str(audio_path.absolute()),
+            "duration_seconds": probe_info["duration"],
+            "sample_rate": probe_info["sample_rate"],
+            "channels": probe_info["channels"],
+            "format": audio_path.suffix.lstrip("."),
+            "bpm": 0.0,
+            "key": None,
+            "beat_count": 0,
+            "is_analyzed": False,
+            "audio_hash": audio_hash_value,
+            "has_audio_embedding": False,
+        }))
 
     # Plan Phase 1 #6: synchronous sub-track-detection during mix-import.
     # Skip for short clips (< 60s) — sub-tracks meaningless there.
@@ -154,11 +392,12 @@ async def import_audio(
     # Vorher landeten subtrack_segments + tempo_curve nur im in-memory clip-dict
     # und nie im audio_analysis_cache — _pre_cached_subtracks (Audit E3) wurde
     # nie sinnvoll aufgerufen.
-    state.update_audio_analysis(
-        clip_id=clip["id"],
-        subtrack_segments=clip["subtrack_segments"],
-        tempo_curve=clip["tempo_curve"],
-    )
+    with state.project_commit(context):
+        state.update_audio_analysis(
+            clip_id=clip["id"],
+            subtrack_segments=clip["subtrack_segments"],
+            tempo_curve=clip["tempo_curve"],
+        )
 
     logger.info(f"Audio importiert: {audio_path.name} (ID={clip['id']}, {probe_info['duration']:.1f}s)")
     await publish_log(
@@ -167,7 +406,12 @@ async def import_audio(
         source="audio.import",
         detail=f"clip_id={clip['id']} duration={probe_info['duration']:.2f}s",
     )
-    await publish_event("import_progress", {"clip_id": clip['id'], "percent": 100.0, "message": "Import abgeschlossen"})
+    await publish_event("import_progress", {
+        "task_id": "audio_import",
+        "clip_id": clip["id"],
+        "percent": 100.0,
+        "message": "Import abgeschlossen",
+    })
     return AudioClipInfo(**clip)
 
 
@@ -197,7 +441,21 @@ async def list_clips(
         merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
-        merged["is_analyzed"] = analysis is not None or bool(clip.get("is_analyzed", False))
+        cached_status = analysis.get("_analysis_status") if analysis else None
+        merged["analysis_status"] = cached_status or (
+            "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
+        )
+        merged["stage_status"] = (
+            dict(analysis.get("_stage_status") or {}) if analysis else {}
+        )
+        merged["stage_errors"] = (
+            dict(analysis.get("_stage_errors") or {}) if analysis else {}
+        )
+        merged["is_analyzed"] = (
+            cached_status == "completed"
+            if cached_status is not None
+            else bool(clip.get("is_analyzed", False))
+        )
         # L-N4: stems_paths kann JSON-String oder dict sein (pacing_router-Logik analog).
         # Pydantic-Schema erwartet Dict[str,str] -> normalisieren.
         raw_stems = merged.get("stems_paths")
@@ -256,6 +514,106 @@ async def delete_clips_batch(
     return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
 
 
+def _band_stft_params(
+    sr: int,
+    fmin: float,
+    fmax: float | None,
+    max_mels: int = 64,
+) -> tuple[int, int]:
+    """
+    Waehlt ``n_fft`` und ``n_mels`` passend zur Bandbreite.
+
+    Audit 2026-08-05 (M-2): Eine feste Filterzahl ueber ein schmales Band
+    erzeugt leere Mel-Filter — das Band liefert dann keine oder eine
+    unbrauchbare Onset-Envelope. Regel: erst die FFT-Auflousung so waehlen,
+    dass genug Bins im Band liegen, dann hoechstens halb so viele Filter wie
+    Bins vergeben.
+
+    Returns:
+        ``(n_fft, n_mels)`` — ``n_fft`` als Zweierpotenz, ``n_mels`` mindestens 4.
+    """
+    upper = float(fmax) if fmax else float(sr) / 2.0
+    span = max(1.0, upper - float(fmin))
+
+    n_fft = 2048
+    # Mindestens 24 Bins im Band anstreben, aber nicht ueber 8192 gehen.
+    while n_fft < 8192 and (span / (sr / n_fft)) < 24.0:
+        n_fft *= 2
+
+    bins_in_band = max(1, int(span / (sr / n_fft)))
+    n_mels = max(4, min(max_mels, bins_in_band // 2))
+    return n_fft, n_mels
+
+
+async def _store_audio_embedding_in_brain_cache(
+    *,
+    audio_path: str,
+    audio_hash: str | None,
+) -> None:
+    """
+    Erzeugt das CLAP-Audio-Embedding und legt es im Brain-EmbeddingCache ab.
+
+    Audit 2026-08-05 (C-3/H-5): Der Lesepfad existierte laengst
+    (``post_processor._load_audio_embedding``), der Schreibpfad nie. Ohne
+    Audio-Embedding meldet ``feature_adapter._semantic_availability`` bestenfalls
+    ``partial`` und die Bruecke ``semantic_match_weight`` faellt komplett aus dem
+    Score — sie fehlte empirisch in allen 2576 persistierten Cuts.
+
+    Bewusst best-effort: schlaegt die Berechnung fehl (Asset fehlt, GPU belegt),
+    bleibt die Audio-Analyse gueltig. Kein CPU-Fallback (IRON RULE 1) — CLAP
+    laeuft ueber DirectML oder gar nicht.
+    """
+    if not audio_hash:
+        logger.debug("CLAP-Cache-Write uebersprungen: kein audio_hash")
+        return
+
+    try:
+        from pb_studio.audio import audio_embedder
+        from pb_studio.brain.brain_service import BrainService
+
+        cache = getattr(BrainService.get().brain, "cache", None)
+        if cache is None:
+            return
+
+        existing = cache.lookup(
+            str(audio_hash),
+            audio_embedder.CURRENT_MODEL_NAME,
+            audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        if existing is not None:
+            return
+
+        from pb_studio.ai.clap_wrapper import CLAPAnalyzer
+
+        analyzer = CLAPAnalyzer()
+        embedding = await asyncio.to_thread(analyzer.encode_audio, audio_path)
+        if embedding is None:
+            logger.info(
+                "CLAP-Audio-Embedding nicht verfuegbar fuer %s — "
+                "Semantik-Achse bleibt fuer diesen Clip unavailable",
+                Path(audio_path).name,
+            )
+            return
+
+        cache.store(
+            media_hash=str(audio_hash),
+            media_type="audio",
+            embedding=embedding,
+            model_name=audio_embedder.CURRENT_MODEL_NAME,
+            model_version=audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        logger.info(
+            "CLAP-Audio-Embedding im Brain-Cache abgelegt (dim=%d)",
+            int(getattr(embedding, "size", 0)),
+        )
+    except Exception as exc:  # noqa: BLE001 - darf die Analyse nie abbrechen
+        logger.warning(
+            "CLAP-Cache-Write fehlgeschlagen (Analyse bleibt gueltig): %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
+
 @router.post(
     "/analyze",
     response_model=AudioAnalysisResult,
@@ -268,6 +626,22 @@ async def delete_clips_batch(
 async def analyze_audio(
     request: AudioAnalyzeRequest,
     state: AppState = Depends(get_app_state),
+) -> AudioAnalysisResult:
+    try:
+        async with state.project_operation() as context:
+            return await _analyze_audio_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _analyze_audio_in_context(
+    request: AudioAnalyzeRequest,
+    state: AppState,
+    context: ProjectOperationContext,
 ) -> AudioAnalysisResult:
     """Analysiert einen Audio-Clip (Beats, Struktur, Spektral)."""
     clip = state.get_audio_clip(request.clip_id)
@@ -327,49 +701,86 @@ async def analyze_audio(
             result["subtrack_segments"] = _pre_subtracks
         if not result.get("tempo_curve"):
             result["tempo_curve"] = _pre_tempo_curve
-        state.set_audio_analysis(request.clip_id, result)
         clip["bpm"] = float(result.get("bpm", 0.0) or 0.0)
         clip["key"] = result.get("key")
         clip["beat_count"] = int(result.get("beat_count", 0) or 0)
-        clip["is_analyzed"] = True
+        analysis_status = result.get("_analysis_status", "completed")
+        clip["is_analyzed"] = analysis_status == "completed"
         # R4-HOCH-9: Update duration from librosa when ffprobe returned 0.0
         analysis_dur = float(result.get("duration_seconds", 0.0) or 0.0)
         if analysis_dur > 0.0 and float(clip.get("duration_seconds", 0.0) or 0.0) <= 0.0:
             clip["duration_seconds"] = analysis_dur
-        state.set_audio_clip(request.clip_id, clip)
+
+        # Audit 2026-08-05 (C-3/H-5, T3.4): CLAP-Audio-Embedding erzeugen und in
+        # den Brain-Cache schreiben. Bis hierher existierte KEIN Producer fuer
+        # Audio-Embeddings — `EmbeddingCache.store(media_type="audio", ...)` kam
+        # ausschliesslich in Tests vor. Zusammen mit der fehlenden Video-Seite
+        # war das der Grund, warum `semantic_match_weight` in 0 von 2576 Cuts
+        # auftauchte und der Cross-Modal-Projektor nie Trainingspaare bekam.
+        await _store_audio_embedding_in_brain_cache(
+            audio_path=audio_path,
+            audio_hash=clip.get("audio_hash"),
+        )
 
         # P-1: Analyse-Ergebnisse in SQLite persistieren
         import json as _json
         beats_json = _json.dumps(result.get("beats", []))
-        state.update_audio_analysis(
-            clip_id=request.clip_id,
-            bpm=clip["bpm"],
-            key=clip["key"],
-            beat_count=clip["beat_count"],
-            beats_json=beats_json,
-            is_analyzed=True,
-            energy_curve=result.get("energy_curve"),
-            structure_segments=result.get("structure_segments"),
-            spectral_data=result.get("spectral_data"),
-            # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
-            subtrack_segments=result.get("subtrack_segments"),
-            tempo_curve=result.get("tempo_curve"),
-        )
+        with state.project_commit(context):
+            state.update_audio_analysis(
+                clip_id=request.clip_id,
+                bpm=clip["bpm"],
+                key=clip["key"],
+                beat_count=clip["beat_count"],
+                beats_json=beats_json,
+                is_analyzed=clip["is_analyzed"],
+                energy_curve=result.get("energy_curve"),
+                structure_segments=result.get("structure_segments"),
+                spectral_data=result.get("spectral_data"),
+                # L-AUDIO-5 / Z5: Subtracks + Tempo-Curve mit-persistieren in DB.
+                subtrack_segments=result.get("subtrack_segments"),
+                tempo_curve=result.get("tempo_curve"),
+                # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten mit-persistieren.
+                onset_times=result.get("onset_times"),
+                kick_times=result.get("kick_times"),
+                snare_times=result.get("snare_times"),
+                hihat_times=result.get("hihat_times"),
+                chunk_evidence=result.get("_chunk_evidence"),
+                analysis_status=analysis_status,
+                stage_status=result.get("_stage_status", {}),
+                stage_errors=result.get("_stage_errors", {}),
+                downbeats=result.get("downbeats", []),
+                downbeat_provenance=result.get("downbeat_provenance"),
+            )
 
         await publish_log(
-            f"Audio-Analyse abgeschlossen: {clip['name']}",
-            level="info",
+            f"Audio-Analyse {analysis_status}: {clip['name']}",
+            level="warning" if analysis_status == "partial" else "info",
             source="audio.analyze",
             detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
         )
         await publish_event("analysis_progress", {
             "event": "analysis_progress",
             "task_id": str(request.clip_id),
-            "status": "completed",
+            "status": analysis_status,
             "percent": 100,
-            "message": f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}",
+            "message": (
+                f"Analyse teilweise abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}"
+                if analysis_status == "partial"
+                else f"Analyse abgeschlossen: BPM={float(result.get('bpm', 0.0) or 0.0):.1f}"
+            ),
+            "stage_status": result.get("_stage_status", {}),
+            "stage_errors": result.get("_stage_errors", {}),
         })
-        return AudioAnalysisResult(**result)
+        public_result = dict(result)
+        public_result["analysis_status"] = analysis_status
+        public_result["stage_status"] = result.get("_stage_status", {})
+        public_result["stage_errors"] = result.get("_stage_errors", {})
+        public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
+        return AudioAnalysisResult(**public_result)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except Exception as e:
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
         await publish_log(
@@ -421,31 +832,7 @@ async def get_onsets(
     analysis = state.get_audio_analysis(clip_id)
     if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    
-    # Onsets werden aus der Energy-Curve extrahiert
-    energy = analysis.get("energy_curve", [])
-    if not energy:
-        return []
-    
-    duration = float(analysis.get("duration_seconds", 0.0))
-    if duration <= 0.0:
-        clip = state.get_audio_clip(clip_id)
-        duration = float(clip.get("duration_seconds", 0.0)) if clip else 0.0
-    if duration <= 0.0:
-        duration = len(energy) / ((22050 / 512) / 4.0)
-
-    # C1/FIX: Offload heavy math to threadpool
-    from fastapi.concurrency import run_in_threadpool
-    return await run_in_threadpool(_calculate_onsets_sync, energy, duration)
-
-
-def _calculate_onsets_sync(energy: list[float], duration: float) -> list[float]:
-    """Synchronous math for onset detection."""
-    from scipy.signal import find_peaks
-    
-    fps = len(energy) / duration if duration > 0 else ((22050 / 512) / 4.0)
-    peaks, _ = find_peaks(energy, height=0.3, distance=int(0.1 * fps))
-    return (peaks / fps).tolist()
+    return [float(value) for value in analysis.get("onset_times", [])]
 
 
 @router.get(
@@ -470,7 +857,7 @@ async def get_waveform(
         waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
         return WaveformData(
             clip_id=clip_id,
-            sample_rate=22050,  # WaveformAnalyzer analysiert bei 22050 Hz
+            sample_rate=44100,
             bands=waveform,
             duration_seconds=clip["duration_seconds"],
         )
@@ -492,6 +879,22 @@ async def separate_stems(
     request: StemSeparateRequest,
     state: AppState = Depends(get_app_state),
 ) -> StemResult:
+    try:
+        async with state.project_operation() as context:
+            return await _separate_stems_in_context(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _separate_stems_in_context(
+    request: StemSeparateRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> StemResult:
     """Führt Stem-Separation durch (GPU-Lock via Middleware)."""
     clip = state.get_audio_clip(request.clip_id)
     if clip is None:
@@ -503,6 +906,7 @@ async def separate_stems(
     _clip_id = request.clip_id
 
     def _stem_progress(pct: float) -> None:
+        state.require_project_context_current(context)
         if _loop is None:
             return
         try:
@@ -522,10 +926,51 @@ async def separate_stems(
         # statt gpu_timeout_seconds 300s) — Demucs auf 90min Mixe brauchte
         # in der Vergangenheit >300s und brach mit GPU-Task-Timeout ab.
         from backend.config import config as _server_config
+        # Audit 2026-08-06 (T4.2): Das dauerabhaengige Budget existierte laengst,
+        # aber es griff nicht. Im Log vom 2026-07-28 feuerte der Timeout nach
+        # 900 s, obwohl die Datei 6335 s lang war — 0.75 * 6335 = 4751 s haetten
+        # gereicht (die Separation brauchte real 2710 s). Ursache: `clip
+        # ["duration_seconds"]` war 0, weil ffprobe beim Import 0 geliefert hatte
+        # und die Korrektur erst in /audio/analyze passiert. Wer Stems ohne
+        # vorherige Analyse trennt, landete damit auf dem Minimum-Budget.
+        # Folge fuer den User: HTTP 500, waehrend der Worker 30 Minuten
+        # weiterlief und am Ende doch korrekt schrieb — beim Retry dann
+        # "magischer" Erfolg aus dem Cache.
+        _stem_duration = float(clip.get("duration_seconds", 0.0) or 0.0)
+        if _stem_duration <= 0.0:
+            try:
+                import librosa as _librosa
+
+                _stem_duration = float(
+                    await asyncio.to_thread(_librosa.get_duration, path=clip["path"])
+                )
+                logger.info(
+                    "Stem-Timeout: Dauer war unbekannt, nachgemessen: %.1fs",
+                    _stem_duration,
+                )
+            except Exception as exc:  # noqa: BLE001 - Floor bleibt als Rueckfall
+                logger.warning(
+                    "Dauer fuer Stem-Timeout nicht messbar (%s) — nutze Minimum-Budget",
+                    type(exc).__name__,
+                )
+                _stem_duration = 0.0
+        stem_timeout = _stem_timeout_for_duration(
+            _stem_duration,
+            _server_config.stem_timeout,
+        )
+        logger.info(
+            "Stem-Separation Budget: %.0fs (Dauer %.1fs, Minimum %.0fs)",
+            stem_timeout,
+            _stem_duration,
+            float(_server_config.stem_timeout),
+        )
         result = await with_gpu_task(
             _run_stem_separation, clip["path"], request.model.value, _stem_progress,
-            model_id="mdx_net_inst",  # VRAM-Budget-Check via VRAMBudgetManager
-            timeout_seconds=_server_config.stem_timeout,
+            model_id="stem_separation_full",
+            manage_vram=False,  # StemSeparator owns ONNX model budgets; Demucs is CPU.
+            timeout_seconds=stem_timeout,
+            state=state,
+            context=context,
         )
 
         # L-N4: stems_paths in audio_clip persistieren — pacing_router liest das
@@ -539,14 +984,20 @@ async def separate_stems(
                 stems_paths[stem_name] = p
         if stems_paths:
             clip["stems_paths"] = stems_paths
-            state.set_audio_clip(request.clip_id, clip)
             # L-AUDIO-8 (CD-1): meta sofort in DB upserten damit Reload nach
             # Backend-Restart die Stem-Pfade kennt - Demucs ist ~10min GPU,
             # darf nicht silent verloren gehen.
             try:
-                state.persist_audio_clip(clip)
+                with state.project_commit(context):
+                    state.persist_audio_clip(clip, project_id=context.project_id)
+                    state.set_audio_clip(request.clip_id, clip)
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
             except Exception as e:
-                logger.warning(f"stems_paths-DB-Persistierung fehlgeschlagen (unkritisch): {e}")
+                logger.error("stems_paths-DB-Persistierung fehlgeschlagen: %s", e)
+                raise
 
             # Lücke schliessen: Re-run der Sub-Track-Detection mit echten Stems für hochpräzise Boundaries!
             try:
@@ -567,17 +1018,28 @@ async def separate_stems(
                 clip["tempo_curve"] = subtrack_res.tempo_curve
                 
                 # State und Analyse-Cache mit den neuen Werten aktualisieren
-                state.update_audio_analysis(
-                    clip_id=clip["id"],
-                    subtrack_segments=clip["subtrack_segments"],
-                    tempo_curve=clip["tempo_curve"],
-                )
+                with state.project_commit(context):
+                    state.update_audio_analysis(
+                        clip_id=clip["id"],
+                        subtrack_segments=clip["subtrack_segments"],
+                        tempo_curve=clip["tempo_curve"],
+                    )
                 
                 logger.info(f"Sub-Track-Detection mit Stems erfolgreich aktualisiert und im Cache/DB persistiert für Clip {request.clip_id}.")
+            except asyncio.CancelledError:
+                raise
+            except ProjectContextChangedError:
+                raise
+            except PersistenceError:
+                raise
             except Exception as sub_err:
                 logger.error(f"Re-Run der Sub-Track-Detection mit Stems fehlgeschlagen: {sub_err}", exc_info=True)
 
         return StemResult(clip_id=request.clip_id, **result)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except Exception as e:
         logger.error(f"Stem-Separation fehlgeschlagen: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Stem-Separation fehlgeschlagen: {e}")
@@ -705,13 +1167,39 @@ def _run_audio_analysis(
     except Exception:
         try:
             _probe_dur = float(librosa.get_duration(filename=audio_path))
-        except Exception:
-            _probe_dur = 0.0
+        except Exception as exc:
+            raise RuntimeError(
+                f"Audio-Dauer konnte nicht sicher ermittelt werden: {audio_path}"
+            ) from exc
+    if _probe_dur <= 0.0:
+        raise RuntimeError(
+            f"Audio-Dauer konnte nicht sicher ermittelt werden: {audio_path}"
+        )
 
     _use_streaming = _probe_dur > 600.0  # 10min
     _stream_beats = None
     _stream_bpm = None
     _stream_energy = None
+    _stream_triggers = None
+    _stream_features = None
+    _stream_stage_errors: dict[str, list[str]] = {}
+    _stream_chunk_evidence: dict = {}
+    _stage_status: dict[str, str] = {}
+    _stage_errors: dict[str, str] = {}
+
+    def _mark_stage_completed(stage: str, stream_error_keys: tuple[str, ...]) -> None:
+        errors = [
+            error
+            for key in stream_error_keys
+            for error in _stream_stage_errors.get(key, [])
+        ]
+        if _use_streaming and errors:
+            _stage_status[stage] = "partial"
+            _stage_errors[stage] = "; ".join(errors)
+        else:
+            _stage_status[stage] = "completed"
+
+    analysis_sr = 44100 if request.spectral_analysis else 22050
 
     if _use_streaming:
         try:
@@ -739,6 +1227,26 @@ def _run_audio_analysis(
             _stream_beats = list(_stream_res.beats)
             _stream_bpm = float(_stream_res.bpm)
             _stream_energy = list(_stream_res.energy_curve)
+            _stream_triggers = {
+                "onset_times": list(_stream_res.onset_times),
+                "kick_times": list(_stream_res.kick_times),
+                "snare_times": list(_stream_res.snare_times),
+                "hihat_times": list(_stream_res.hihat_times),
+            }
+            _stream_features = _stream_res
+            _stream_stage_errors = dict(_stream_res.stage_errors)
+            _stream_chunk_evidence = {
+                "schema_version": 1,
+                "primary": {
+                    "source_role": (
+                        "original_mix"
+                        if analysis_path == audio_path
+                        else "beat_source"
+                    ),
+                    "window_count": _stream_res.window_count,
+                    "chunks": list(_stream_res.chunk_evidence),
+                },
+            }
 
             # AP4.1 (Audit 2026-06-10): Kamen die Beats vom Drums-/Instrumental-Stem,
             # repraesentierte die Energy-Curve nur Stem-RMS statt Mix-Energie —
@@ -749,35 +1257,52 @@ def _run_audio_analysis(
                     _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
                     _energy_res = StreamingAudioAnalyzer().analyze(audio_path, energy_only=True)
                     _stream_energy = list(_energy_res.energy_curve)
+                    _stream_features = _energy_res
+                    _stream_chunk_evidence["mix_energy"] = {
+                        "source_role": "original_mix_energy",
+                        "window_count": _energy_res.window_count,
+                        "chunks": list(_energy_res.chunk_evidence),
+                    }
+                    for stage_name, errors in _energy_res.stage_errors.items():
+                        _stream_stage_errors.setdefault(stage_name, []).extend(errors)
                 except Exception as energy_e:
                     logger.warning(
                         f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
                     )
 
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
-            y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=600.0)
-        except Exception as e:
-            logger.warning(
-                f"StreamingAudioAnalyzer-Pfad fehlgeschlagen ({e}) - fallback auf Full-Load"
+            y, sr = librosa.load(
+                audio_path,
+                sr=analysis_sr,
+                mono=True,
+                duration=600.0,
             )
-            _use_streaming = False
-            _stream_beats = None
-            _stream_bpm = None
-            _stream_energy = None
+        except Exception as e:
+            raise RuntimeError(
+                f"Streaming-Audioanalyse fehlgeschlagen; Full-Load ist gesperrt: {e}"
+            ) from e
 
     if not _use_streaming:
         # Audio einmalig laden — wird von StructureAnalyzer und KeyDetector benötigt
         try:
-            y, sr = librosa.load(audio_path, sr=22050, mono=True)
+            y, sr = librosa.load(audio_path, sr=analysis_sr, mono=True)
         except Exception as e:
             logger.error(f"Audio-Load fehlgeschlagen: {audio_path}: {e}")
             raise RuntimeError(f"Audio-Datei konnte nicht geladen werden: {audio_path}: {e}")
         duration = float(len(y)) / sr if sr > 0 else 0.0
 
     _emit_analysis_progress(_loop, "load", 15.0, "Audio geladen — starte Beat-Erkennung…")
+    _stage_status["load"] = "completed"
 
     # 1. BeatNet Beat-Detection
     beats: list[dict] = []
+    downbeats: list[float] = []
+    downbeat_provenance: dict = {
+        "status": "unavailable",
+        "method": "not_requested",
+        "synthetic": False,
+        "measured_count": 0,
+    }
     bpm: float = 0.0
     energy_curve: list[float] = []
 
@@ -810,6 +1335,12 @@ def _run_audio_analysis(
                     })
                 bpm = float(_stream_bpm or 0.0)
                 energy_curve = list(_stream_energy or [])
+                downbeat_provenance = {
+                    "status": "unavailable",
+                    "method": "streaming_librosa_beat_track",
+                    "synthetic": False,
+                    "measured_count": 0,
+                }
             else:
                 # Use module-level singleton to avoid re-initializing on every call
                 detector = _get_beat_detector()
@@ -852,13 +1383,97 @@ def _run_audio_analysis(
                         intervals = np.diff(arr)
                         avg_interval = float(np.median(intervals))
                         bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
+                downbeat_provenance = {
+                    "status": "unavailable",
+                    "method": "beat_time_only_detector",
+                    "synthetic": False,
+                    "measured_count": 0,
+                }
 
                 # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
                 rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
                 rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
                 energy_curve = (rms / rms_max).tolist() if rms_max > 0 else rms.tolist()
+            _mark_stage_completed("beats", ("load", "beats", "energy"))
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
+            _stage_status["beats"] = "failed"
+            _stage_errors["beats"] = str(e)
+    else:
+        _stage_status["beats"] = "skipped"
+        downbeat_provenance = {
+            "status": "unavailable",
+            "method": "beat_detection_disabled",
+            "synthetic": False,
+            "measured_count": 0,
+        }
+
+    # 1b. Onset/Drum-Trigger-Kandidaten (Audit-Fix 2026-07-10, Sweep-Finding HIGH-1):
+    # advanced_pacing_engine.py erwartete diese Daten von einem toten
+    # `core.session_manager`-Import (Modul existierte nie) — Onset/Kick/Snare/HiHat-
+    # Trigger waren im normalen (pre-cached) Pacing-Pfad dadurch wirkungslos, weil
+    # das Audio dort bewusst nicht neu geladen wird (RAM-Optimierung fuer lange
+    # DJ-Mixe). Hier werden dieselben librosa-Parameter wie im Live-Fallback
+    # (`AdvancedPacingEngine._extract_other_triggers`) einmalig auf dem bereits
+    # geladenen y/sr berechnet und mit-persistiert, damit der Cache-Pfad echte
+    # Trigger-Kandidaten hat statt sie stillschweigend zu verlieren.
+    onset_times: list[float] = []
+    kick_times: list[float] = []
+    snare_times: list[float] = []
+    hihat_times: list[float] = []
+    if request.detect_beats and _use_streaming and _stream_triggers is not None:
+        onset_times = _stream_triggers["onset_times"]
+        kick_times = _stream_triggers["kick_times"]
+        snare_times = _stream_triggers["snare_times"]
+        hihat_times = _stream_triggers["hihat_times"]
+    elif request.detect_beats:
+        try:
+            onset_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(y=y, sr=sr, units="frames"), sr=sr
+            ).tolist()
+        except Exception as e:
+            logger.warning(f"Onset-Detection fehlgeschlagen: {e}")
+        try:
+            _hop = 512
+            # Audit 2026-08-05 (M-2/HIGH-AUDIO-1): Hier standen fuer alle drei
+            # Baender fest 64 Mel-Filter. Bei sr=22050 und n_fft=2048 ist ein
+            # FFT-Bin ~10,8 Hz breit — fuer das Kick-Band (20-150 Hz) stehen
+            # damit nur ~12 Bins zur Verfuegung. 64 Filter darauf ergeben eine
+            # degenerierte Filterbank; librosa warnt mit "Empty filters detected
+            # in mel frequency basis". Empirisch: kick_times war in 4 von 6
+            # Rows leer, und onset/snare/hihat kollabierten auf identische
+            # Trefferzahlen (15/15/15) — die Bandtrennung fand faktisch nicht
+            # statt. Filterzahl und FFT-Groesse haengen jetzt an der Bandbreite.
+            _kick_fft, _kick_mels = _band_stft_params(sr, 20.0, 150.0)
+            kick_env = librosa.onset.onset_strength(
+                y=librosa.effects.preemphasis(y), sr=sr, hop_length=_hop,
+                aggregate=np.median, fmax=150,
+                n_fft=_kick_fft, n_mels=_kick_mels,
+            )
+            kick_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=kick_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+            _snare_fft, _snare_mels = _band_stft_params(sr, 200.0, 400.0)
+            snare_env = librosa.onset.onset_strength(
+                y=y, sr=sr, hop_length=_hop, fmin=200, fmax=400,
+                n_fft=_snare_fft, n_mels=_snare_mels,
+            )
+            snare_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=snare_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+            _hihat_fft, _hihat_mels = _band_stft_params(sr, 5000.0, None)
+            hihat_env = librosa.onset.onset_strength(
+                y=y, sr=sr, hop_length=_hop, fmin=5000,
+                n_fft=_hihat_fft, n_mels=_hihat_mels,
+            )
+            hihat_times = librosa.frames_to_time(
+                librosa.onset.onset_detect(onset_envelope=hihat_env, sr=sr, hop_length=_hop),
+                sr=sr, hop_length=_hop,
+            ).tolist()
+        except Exception as e:
+            logger.warning(f"Drum-Onset-Detection fehlgeschlagen: {e}")
 
     _emit_analysis_progress(_loop, "beats", 45.0, "Beats erkannt — starte Struktur-Analyse…")
 
@@ -870,12 +1485,26 @@ def _run_audio_analysis(
             # AP4.3 (Audit 2026-06-10): echte Datei-Dauer uebergeben — y ist im
             # Streaming-Pfad nur der 600s-Snapshot, wodurch der DJ-Mix-Branch
             # (600.0 > 600 = False) nie erreichbar war.
-            struct_result = StructureAnalyzer().analyze_song_structure(
-                y, sr, total_duration=_probe_dur if _probe_dur > 0 else None
-            )
+            structure_analyzer = StructureAnalyzer()
+            if _use_streaming:
+                struct_result = structure_analyzer.analyze_streaming_energy(
+                    list(_stream_energy or []),
+                    duration,
+                )
+            else:
+                struct_result = structure_analyzer.analyze_song_structure(
+                    y, sr, total_duration=_probe_dur
+                )
             structure_segments = struct_result.get("segments", [])
+            if not structure_segments:
+                raise RuntimeError("Struktur-Analyse lieferte keine Segmente")
+            _mark_stage_completed("structure", ("load", "energy"))
         except Exception as e:
             logger.warning(f"Struktur-Analyse fehlgeschlagen: {e}")
+            _stage_status["structure"] = "failed"
+            _stage_errors["structure"] = str(e)
+    else:
+        _stage_status["structure"] = "skipped"
 
     _emit_analysis_progress(_loop, "structure", 70.0, "Struktur analysiert — starte Spektral-Analyse…")
 
@@ -883,12 +1512,47 @@ def _run_audio_analysis(
     spectral_data = None
     if request.spectral_analysis:
         try:
-            from pb_studio.audio.spectral_analyzer import SpectralAnalyzer, FREQUENCY_BANDS
-            spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
+            from pb_studio.audio.spectral_analyzer import (
+                SpectralAnalyzer,
+                FREQUENCY_BANDS,
+                add_aggregate_bands,
+            )
+            if _use_streaming:
+                if _stream_features is None or not _stream_features.spectral_times:
+                    raise RuntimeError("Streaming-Spektralrepräsentation ist leer")
+                band_arrays = {
+                    name: np.asarray(values, dtype=np.float64)
+                    for name, values in _stream_features.spectral_bands.items()
+                }
+                spec_result = {
+                    "times": list(_stream_features.spectral_times),
+                    "band_energies": {
+                        name: values.tolist()
+                        for name, values in band_arrays.items()
+                    },
+                    "centroids": list(_stream_features.spectral_centroids),
+                    "band_means": {
+                        name: float(np.mean(values)) if values.size else 0.0
+                        for name, values in band_arrays.items()
+                    },
+                    "band_variances": {
+                        name: float(np.var(values)) if values.size else 0.0
+                        for name, values in band_arrays.items()
+                    },
+                    "events": [],
+                }
+            else:
+                spec_result = SpectralAnalyzer(sr=sr).analyze_from_array(y, sr)
+            # Audit 2026-08-05 (CRIT-AUDIO-1/T2.4): Aggregate low/mid/high
+            # ergaenzen — die Pacing-Engine liest genau diese drei Namen, der
+            # Analyzer lieferte nur die acht Einzelbaender.
+            _spec_bands = add_aggregate_bands(
+                dict(spec_result.get("band_energies", {}) or {})
+            )
             spectral_data = {
                 "clip_id": clip_id,
                 "times": spec_result.get("times", []),
-                "bands": spec_result.get("band_energies", {}),
+                "bands": _spec_bands,
                 "centroids": spec_result.get("centroids", []),
                 "frequency_ranges": {k: list(v) for k, v in FREQUENCY_BANDS.items()},
                 # L-AUDIO-4 / Z4: Drop/Buildup/Breakdown-Events + Band-Statistik
@@ -897,8 +1561,15 @@ def _run_audio_analysis(
                 "band_variances": spec_result.get("band_variances", {}),
                 "events": spec_result.get("events", []),
             }
+            if not spectral_data["times"]:
+                raise RuntimeError("Spektral-Analyse lieferte keine Zeitachse")
+            _mark_stage_completed("spectral", ("load", "features"))
         except Exception as e:
             logger.warning(f"Spektral-Analyse fehlgeschlagen: {e}")
+            _stage_status["spectral"] = "failed"
+            _stage_errors["spectral"] = str(e)
+    else:
+        _stage_status["spectral"] = "skipped"
 
     _emit_analysis_progress(_loop, "spectral", 85.0, "Spektrum analysiert — starte Tonart-Erkennung…")
 
@@ -906,17 +1577,53 @@ def _run_audio_analysis(
     key = None
     try:
         from pb_studio.audio.key_detector import KeyDetector
-        if instrumental_path and Path(instrumental_path).exists():
+        if _use_streaming:
+            if _stream_features is None or not _stream_features.chroma_mean:
+                raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+            key = KeyDetector().detect_key_from_chroma(
+                _stream_features.chroma_mean
+            )
+        elif instrumental_path and Path(instrumental_path).exists():
             logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
             y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
             key = KeyDetector().detect_key(y_inst, sr_inst)
         else:
             key = KeyDetector().detect_key(y, sr)
+        if not key or key == "Unknown":
+            raise RuntimeError("Tonart konnte nicht ermittelt werden")
+        _mark_stage_completed("key", ("load", "features"))
     except Exception as e:
         logger.warning(f"Key-Detection fehlgeschlagen: {e}")
+        _stage_status["key"] = "failed"
+        _stage_errors["key"] = str(e)
 
 
     _emit_analysis_progress(_loop, "key", 95.0, "Tonart erkannt — Analyse abgeschlossen")
+
+    requested_stages = [
+        name
+        for name, enabled in (
+            ("beats", request.detect_beats),
+            ("structure", request.detect_structure),
+            ("spectral", request.spectral_analysis),
+            ("key", True),
+        )
+        if enabled
+    ]
+    degraded_stages = [
+        name
+        for name in requested_stages
+        if _stage_status.get(name) in {"partial", "failed"}
+    ]
+    failed_stages = [
+        name for name in requested_stages if _stage_status.get(name) == "failed"
+    ]
+    if failed_stages and len(failed_stages) == len(requested_stages):
+        raise RuntimeError(
+            "Alle angeforderten Audio-Stages fehlgeschlagen: "
+            + ", ".join(failed_stages)
+        )
+    analysis_status = "partial" if degraded_stages else "completed"
 
     return {
         "clip_id": clip_id,
@@ -924,10 +1631,20 @@ def _run_audio_analysis(
         "bpm": bpm,
         "beat_count": len(beats),
         "beats": beats,
+        "downbeats": downbeats,
+        "downbeat_provenance": downbeat_provenance,
         "key": key,
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
         "spectral_data": spectral_data,
+        "onset_times": onset_times,
+        "kick_times": kick_times,
+        "snare_times": snare_times,
+        "hihat_times": hihat_times,
+        "_analysis_status": analysis_status,
+        "_stage_status": _stage_status,
+        "_stage_errors": _stage_errors,
+        "_chunk_evidence": _stream_chunk_evidence,
     }
 
 
@@ -979,12 +1696,33 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
         return []
 
 
-def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> dict[str, Any]:
+def _run_stem_separation(
+    audio_path: str,
+    model_name: str,
+    on_progress=None,
+    *,
+    state: AppState | None = None,
+    context: ProjectOperationContext | None = None,
+) -> dict[str, Any]:
     """Führt Stem-Separation durch (blockierend, GPU)."""
+    from pb_studio.config_manager import ConfigManager
     from pb_studio.audio.separator import StemSeparator
 
-    separator = StemSeparator()
-    result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
+    config_manager = ConfigManager()
+    output_dir_raw = config_manager.get("paths", {}).get("temp_dir", "./temp")
+    output_dir = config_manager.resolve_path(output_dir_raw)
+    reusable = _find_reusable_stem_files(audio_path, model_name, output_dir)
+    used_reusable_cache = bool(reusable)
+    if reusable:
+        logger.info("Verwende %d vollständig validierte Stem-Dateien erneut", len(reusable))
+        if on_progress is not None:
+            on_progress(100.0)
+        result = {"stems": reusable}
+    else:
+        separator = StemSeparator()
+        if state is not None and context is not None:
+            state.require_project_context_current(context)
+        result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
 
     # Fehler vom Separator prüfen
     if "error" in result:
@@ -992,9 +1730,6 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
 
     # StemSeparator.separate() kann relative Dateinamen zurückgeben.
     # Diese auf den konfigurierten Output-/Temp-Ordner normalisieren.
-    output_dir_raw = separator.config.get("paths", {}).get("temp_dir", "./temp")
-    output_dir = separator.config.resolve_path(output_dir_raw)
-
     # StemSeparator.separate() gibt {"stems": [path1, path2, ...]} zurück.
     # audio-separator benennt Output-Dateien mit (Vocals), (Instrumental), etc.
     stem_files = result.get("stems", [])
@@ -1053,11 +1788,33 @@ def _run_stem_separation(audio_path: str, model_name: str, on_progress=None) -> 
             # Amplitudenbegrenzung gegen Clipping
             data_inst = np.clip(data_inst, -1.0, 1.0)
             
-            sf.write(str(inst_p), data_inst, sr)
+            if state is not None and context is not None:
+                with state.project_commit(context):
+                    sf.write(str(inst_p), data_inst, sr)
+            else:
+                sf.write(str(inst_p), data_inst, sr)
             mapped["instrumental_path"] = str(inst_p)
             logger.info(f"Instrumental-Stem erfolgreich synthetisiert unter: {inst_p}")
         except Exception as synth_err:
             logger.error(f"Fehler bei der Synthese des Instrumental-Stems: {synth_err}", exc_info=True)
 
     logger.info(f"Stem-Mapping: {len(normalized_stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
+    if not used_reusable_cache:
+        try:
+            _write_stem_cache_marker(
+                audio_path,
+                model_name,
+                output_dir,
+                normalized_stem_files,
+                state=state,
+                context=context,
+            )
+        except ProjectContextChangedError:
+            raise
+        except (OSError, RuntimeError, ValueError) as marker_error:
+            logger.warning(
+                "Stem-Erfolgsmarker konnte nicht publiziert werden; Reuse deaktiviert: %s",
+                marker_error,
+            )
+
     return mapped
