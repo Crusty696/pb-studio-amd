@@ -248,7 +248,7 @@
 
         <!-- ── Thumbnail Grid (Multi-Select) ── -->
         <ListBox x:Name="VideoClipList"
-                 Grid.Row="1" Grid.Column="0" ItemsSource="{Binding VideoClips}"
+                 Grid.Row="1" Grid.Column="0" ItemsSource="{Binding VideoClipsView}"
                  SelectedItem="{Binding SelectedClip}"
                  SelectionMode="Extended"
                  SelectionChanged="VideoClipList_SelectionChanged"

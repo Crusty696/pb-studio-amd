@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -71,6 +73,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _selectedSortOption = "Neueste zuerst";
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
+    public ICollectionView VideoClipsView { get; }
     public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
     public ObservableCollection<VideoClipModel> SelectedClips { get; } = [];
     public IReadOnlyList<string> SortOptions { get; } =
@@ -93,6 +96,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         _projectService = projectService;
         _sseClient = sseClient;
         _dialogService = dialogService;
+        VideoClipsView = CollectionViewSource.GetDefaultView(VideoClips);
+        ApplyCurrentSort();
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
 
@@ -308,30 +313,43 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
     private void ApplyCurrentSort()
     {
-        if (VideoClips.Count < 2)
-            return;
-
-        IEnumerable<VideoClipModel> ordered = SelectedSortOption switch
+        using var deferRefresh = VideoClipsView.DeferRefresh();
+        VideoClipsView.SortDescriptions.Clear();
+        switch (SelectedSortOption)
         {
-            "Name A-Z" => VideoClips
-                .OrderBy(clip => clip.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ThenBy(clip => clip.Id),
-            "Status: offen zuerst" => VideoClips
-                .OrderBy(clip => clip.IsAnalyzed)
-                .ThenBy(clip => clip.AnalysisStatus, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(clip => clip.Name, StringComparer.CurrentCultureIgnoreCase),
-            "Dauer: lang zuerst" => VideoClips
-                .OrderByDescending(clip => clip.DurationSeconds)
-                .ThenBy(clip => clip.Name, StringComparer.CurrentCultureIgnoreCase),
-            _ => VideoClips.OrderByDescending(clip => clip.Id),
-        };
+            case "Name A-Z":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Id), ListSortDirection.Ascending));
+                break;
+            case "Status: offen zuerst":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.IsAnalyzed), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.AnalysisStatus), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                break;
+            case "Dauer: lang zuerst":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.DurationSeconds), ListSortDirection.Descending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                break;
+            default:
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Id), ListSortDirection.Descending));
+                break;
+        }
 
-        var sorted = ordered.ToList();
-        for (var targetIndex = 0; targetIndex < sorted.Count; targetIndex++)
+        if (VideoClipsView is ICollectionViewLiveShaping liveSorting)
         {
-            var currentIndex = VideoClips.IndexOf(sorted[targetIndex]);
-            if (currentIndex != targetIndex)
-                VideoClips.Move(currentIndex, targetIndex);
+            liveSorting.LiveSortingProperties.Clear();
+            foreach (var sort in VideoClipsView.SortDescriptions)
+                liveSorting.LiveSortingProperties.Add(sort.PropertyName);
+            if (liveSorting.CanChangeLiveSorting)
+                liveSorting.IsLiveSorting = true;
         }
     }
 
@@ -639,6 +657,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         clip.StageStatus = result.StageStatus;
         clip.StageErrors = result.StageErrors;
         ApplyMotionResult(clip, result);
+        if (SelectedSortOption == "Status: offen zuerst"
+            && VideoClipsView is not ICollectionViewLiveShaping { IsLiveSorting: true })
+        {
+            VideoClipsView.Refresh();
+        }
         return true;
     }
 
@@ -676,15 +699,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             var done = 0;
             var succeeded = 0;
             var failed = 0;
-            var skipped = 0;
             var failures = new List<string>();
+            AnalyzeAllProgress = 0.0;
             foreach (var target in markedClips)
             {
                 scope.Cancellation.Token.ThrowIfCancellationRequested();
-                var currentClip = ResolveAnalysisTarget(scope, target);
-                if (currentClip == null)
+                if (ResolveAnalysisTarget(scope, target) == null)
                     return;
-                if (currentClip.IsAnalyzed) { skipped++; done++; continue; }
                 if (!SetActiveAnalysisClip(scope, target.Id))
                     return;
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {target.Name}...";
@@ -750,7 +771,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100.0;
-            StatusText = $"Markierte fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+            StatusText = $"Markierte fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
                 + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             UpdateAnalyzedCounts();
         });
@@ -1079,16 +1100,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             var done = 0;
             var succeeded = 0;
             var failed = 0;
-            var skipped = 0;
             var failures = new List<string>();
+            AnalyzeAllProgress = 0.0;
 
             foreach (var target in targets)
             {
                 scope.Cancellation.Token.ThrowIfCancellationRequested();
-                var currentClip = ResolveAnalysisTarget(scope, target);
-                if (currentClip == null)
+                if (ResolveAnalysisTarget(scope, target) == null)
                     return;
-                if (currentClip.IsAnalyzed) { skipped++; done++; continue; }
                 if (!SetActiveAnalysisClip(scope, target.Id))
                     return;
 
@@ -1157,7 +1176,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100;
-            StatusText = $"Batch fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+            StatusText = $"Batch fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
                 + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             UpdateAnalyzedCounts();
         });
