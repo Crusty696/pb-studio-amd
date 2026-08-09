@@ -59,6 +59,45 @@ def test_gpu_deadline_returns_while_worker_keeps_lock() -> None:
     asyncio.run(scenario())
 
 
+def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend import dependencies
+
+    manager = MagicMock()
+    manager.reserve.return_value = True
+    manager.cancel_reservation.return_value = True
+    monkeypatch.setattr(
+        "pb_studio.core.vram_budget_manager.get_vram_manager",
+        lambda monitor=None: manager,
+    )
+
+    async def scenario() -> None:
+        lock = asyncio.Lock()
+        monkeypatch.setattr(dependencies, "gpu_lock", lock)
+        await lock.acquire()
+        worker_started = asyncio.Event()
+        task = asyncio.create_task(
+            dependencies.with_gpu_task(
+                lambda: None,
+                model_id="moondream_fp16",
+                timeout_seconds=1,
+                worker_started_event=worker_started,
+            )
+        )
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert not worker_started.is_set()
+        assert lock.locked()
+        manager.cancel_reservation.assert_called_once_with("moondream_fp16")
+        lock.release()
+
+    asyncio.run(scenario())
+
+
 def test_failed_eviction_callback_keeps_committed_accounting() -> None:
     VRAMBudgetManager.reset_for_testing()
     manager = VRAMBudgetManager(max_vram_mb=2500)

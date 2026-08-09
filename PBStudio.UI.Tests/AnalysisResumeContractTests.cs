@@ -14,6 +14,86 @@ namespace PBStudio.UI.Tests;
 public sealed class AnalysisResumeContractTests
 {
     [TestMethod]
+    public async Task VideoBatch_CompletedClipStillReachesPlannerAndSortPreservesIdentity()
+    {
+        var project = new ProjectInfo(
+            "Video Resume",
+            @"C:\Projects\VideoResume",
+            0,
+            2,
+            false);
+        var analyzedIds = new List<int>();
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(project))
+            .Handle(nameof(IApiClient.AnalyzeVideoAsync), arguments =>
+            {
+                var clipId = Assert.IsInstanceOfType<int>(arguments![0]);
+                analyzedIds.Add(clipId);
+                return Task.FromResult<VideoAnalysisResult?>(new VideoAnalysisResult(
+                    clipId,
+                    1,
+                    0.0,
+                    [],
+                    [],
+                    false,
+                    Status: "completed",
+                    StageStatus: new Dictionary<string, string>
+                    {
+                        ["scenes"] = "completed",
+                    }));
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(project.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new VideoLibraryViewModel(
+            api.Client,
+            new VideoLibraryStateService(
+                api.Client,
+                NullLogger<VideoLibraryStateService>.Instance),
+            projects,
+            sse,
+            new DialogServiceStub());
+        WeakReferenceMessenger.Default.UnregisterAll(viewModel);
+        var completed = new VideoClipModel
+        {
+            Id = 9,
+            Name = "Zulu",
+            Path = @"C:\Projects\VideoResume\zulu.mp4",
+            IsAnalyzed = true,
+            AnalysisStatus = "completed",
+        };
+        var pending = new VideoClipModel
+        {
+            Id = 10,
+            Name = "Alpha",
+            Path = @"C:\Projects\VideoResume\alpha.mp4",
+            AnalysisStatus = "partial",
+        };
+        viewModel.VideoClips.Add(completed);
+        viewModel.VideoClips.Add(pending);
+        viewModel.SelectedClip = completed;
+        viewModel.SelectedSortOption = "Name A-Z";
+
+        var sorted = viewModel.VideoClipsView.Cast<VideoClipModel>().ToList();
+        Assert.AreSame(pending, sorted[0]);
+        Assert.AreSame(completed, sorted[1]);
+        Assert.AreSame(completed, viewModel.SelectedClip);
+        Assert.AreSame(completed, viewModel.VideoClips[0]);
+
+        await viewModel.AnalyzeAllCommand.ExecuteAsync(null);
+
+        CollectionAssert.AreEqual(new[] { 9, 10 }, analyzedIds);
+        Assert.AreEqual(100.0, viewModel.AnalyzeAllProgress);
+        StringAssert.Contains(viewModel.StatusText, "2 verarbeitet");
+    }
+
+    [TestMethod]
     public async Task AudioBatch_RestartSkipsCompletedAndContinuesAfterFailure()
     {
         var project = new ProjectInfo(
