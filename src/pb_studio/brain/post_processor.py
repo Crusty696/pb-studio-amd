@@ -216,12 +216,8 @@ def _annotate_and_maybe_persist_cut(
     meta["segment_type"] = feats.segment_type
     meta["semantic_status"] = feats.semantic_status
     meta["semantic_reason"] = feats.semantic_reason
-    meta["brain_axis_status"] = {
-        "semantic_match_weight": {
-            "status": feats.semantic_status,
-            "reason": feats.semantic_reason,
-        }
-    }
+    meta["brain_axis_status"] = dict(feats.axis_status)
+    meta["brain_axis_status_version"] = 1
     new_cut["metadata"] = meta
 
     if conn is not None and timeline_id is not None:

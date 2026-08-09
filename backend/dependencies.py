@@ -327,6 +327,7 @@ EVENT_JOURNAL_MAXLEN = 500
 
 _event_journal: deque[tuple[int, dict[str, Any]]] = deque(maxlen=EVENT_JOURNAL_MAXLEN)
 _event_sequence = 0
+_event_evicted_through_by_type: dict[str, int] = {}
 
 
 def _next_event_sequence() -> int:
@@ -358,10 +359,28 @@ def get_journaled_events_since(
     return result
 
 
+def get_event_journal_gap(
+    last_event_id: int,
+    event_filter: Optional[set[str]] = None,
+) -> Optional[tuple[int, int]]:
+    """Return a gap only when a requested event type was actually evicted."""
+    if last_event_id <= 0:
+        return None
+    relevant_types = event_filter or set(_event_evicted_through_by_type)
+    evicted_through = max(
+        (_event_evicted_through_by_type.get(name, 0) for name in relevant_types),
+        default=0,
+    )
+    if evicted_through <= last_event_id:
+        return None
+    return last_event_id + 1, evicted_through
+
+
 def reset_event_journal() -> None:
     """Setzt Journal und Sequenz zurueck (Tests, Prozessneustart-Simulation)."""
     global _event_sequence
     _event_journal.clear()
+    _event_evicted_through_by_type.clear()
     _event_sequence = 0
 
 
@@ -373,6 +392,13 @@ def _fanout_event(event: dict[str, Any]) -> None:
     # passender Client verbunden war.
     if "_seq" not in event:
         event["_seq"] = _next_event_sequence()
+    if len(_event_journal) == EVENT_JOURNAL_MAXLEN:
+        evicted_sequence, evicted_event = _event_journal[0]
+        evicted_type = str(evicted_event.get("event", "message"))
+        _event_evicted_through_by_type[evicted_type] = max(
+            int(evicted_sequence),
+            _event_evicted_through_by_type.get(evicted_type, 0),
+        )
     _event_journal.append((int(event["_seq"]), event))
 
     for client_id, queue in list(_event_queues.items()):

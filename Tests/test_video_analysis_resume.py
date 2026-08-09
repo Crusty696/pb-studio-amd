@@ -242,9 +242,78 @@ def test_force_recomputes_requested_completed_stage(monkeypatch, tmp_path):
     )
 
     assert calls["scenes"] == 1
-    assert result.scenes[0].end_time == 9.0
+    assert result.scenes[0].end_time == 4.0
     assert result.motion.model_dump() == existing["motion"]
     assert result.has_embedding is True
+
+
+def test_force_caption_retry_persists_new_partial_tags(monkeypatch, tmp_path):
+    video_router = importlib.import_module("backend.routers.video_router")
+
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"video")
+    state = _State(media, _existing_analysis())
+    captured = {"persisted": None}
+
+    async def partial_caption_stage(*_args, **_kwargs):
+        return {
+            "dominant_colors": [],
+            "tags": ["new", "partial"],
+            "tag_source": "lmstudio:new-model",
+            "stage_status": {"colors": "skipped", "captions": "partial"},
+            "stage_errors": {"captions": "remaining frames timed out"},
+        }
+
+    def persist(_state, _context, _clip, result):
+        captured["persisted"] = deepcopy(result)
+
+    monkeypatch.setattr(
+        video_router,
+        "_run_scene_detection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("scene stage must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        video_router,
+        "with_gpu_task",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("GPU stage must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        video_router,
+        "_run_color_and_caption_analysis",
+        partial_caption_stage,
+    )
+    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", persist)
+    monkeypatch.setattr(video_router, "_commit_pending_video_embedding", lambda _result: None)
+    monkeypatch.setattr(video_router, "_dedupe_old_video_embeddings", lambda _result: None)
+    monkeypatch.setattr(video_router, "publish_event", _noop)
+    monkeypatch.setattr(video_router, "publish_log", _noop)
+
+    result = asyncio.run(
+        video_router._analyze_video_in_project(
+            VideoAnalyzeRequest(
+                clip_id=7,
+                detect_scenes=False,
+                generate_embeddings=False,
+                analyze_motion=False,
+                generate_captions=True,
+                analyze_colors=False,
+                analyze_audio_key=False,
+                force=True,
+            ),
+            state,
+            SimpleNamespace(project_id=1),
+        )
+    )
+
+    assert result.tags == ["new", "partial"]
+    assert result.tag_source == "lmstudio:new-model"
+    assert result.stage_status["captions"] == "partial"
+    assert captured["persisted"]["tags"] == ["new", "partial"]
+    assert captured["persisted"]["tag_source"] == "lmstudio:new-model"
 
 
 def test_missing_file_does_not_persist_defaults(monkeypatch, tmp_path):
@@ -347,7 +416,7 @@ def test_cancellation_persists_completed_stages_and_interrupts_active_stage(
         )
 
     persisted = captured["persisted"]
-    assert persisted["scenes"][0]["end_time"] == 6.0
+    assert persisted["scenes"][0]["end_time"] == 4.0
     assert persisted["motion"] == _existing_analysis()["motion"]
     assert persisted["dominant_colors"] == ["#112233"]
     assert persisted["tags"] == ["concert", "stage"]

@@ -57,7 +57,10 @@ def _uses_advanced_pacing(pacing_config: dict, semantic_enabled: bool) -> bool:
         pacing_config.get("use_motion_matching", False)
         or semantic_enabled
         or pacing_config.get("use_structure_awareness", False)
+        or pacing_config.get("use_key_matching", False)
         or pacing_config.get("use_brain", False)
+        or pacing_config.get("ui_anchors")
+        or pacing_config.get("canvas_path")
     )
 
 
@@ -88,7 +91,11 @@ class PacingService:
         audio_path: str,
         requested: bool,
     ) -> tuple[bool, Optional[str]]:
-        """Resolve Semantic Audio once and fail closed when CLAP is unavailable."""
+        """Resolve an optional Semantic-Audio mood prompt.
+
+        Semantic clip matching itself remains enabled when CLAP mood extraction
+        is unavailable; ClipSelector then uses its trigger-specific text prompt.
+        """
         if not requested:
             return False, None
 
@@ -100,10 +107,10 @@ class PacingService:
             return True, prompt
         except Exception as exc:
             logger.warning(
-                "Semantic Audio unavailable; semantic matching disabled: %s",
+                "Semantic Audio unavailable; using generic semantic prompts: %s",
                 exc,
             )
-            return False, None
+            return True, None
 
     def prime_duration_cache(self, clips: Optional[List[Dict[str, Any]]]) -> int:
         """
@@ -637,8 +644,8 @@ class PacingService:
         mutierte nur eine ObservableCollection, ohne Route, Schema oder
         Persistenz. Die Engine konnte manuelle Anker aber laengst, nur eben
         ausschliesslich aus einem Obsidian-.canvas-File. Hier ist die fehlende
-        Bruecke: UI-Anker werden ins gleiche Format uebersetzt
-        (``{id, file_path, mix_start, mix_end}``).
+        Bruecke: UI-Anker werden ins gleiche Format uebersetzt. ``id`` bleibt
+        die Anker-Identitaet; ``clip_id`` traegt getrennt die echte Video-ID.
 
         Canvas-Anker haben Vorrang: ueberlappt ein UI-Anker einen bestehenden,
         wird er verworfen statt die Storyboard-Absicht zu ueberschreiben.
@@ -698,6 +705,7 @@ class PacingService:
 
             merged.append({
                 "id": f"ui_anchor_{clip_id}_{start:.2f}",
+                "clip_id": str(clip.get("id", clip_id)),
                 "file_path": file_path,
                 "mix_start": start,
                 "mix_end": end,
@@ -983,7 +991,8 @@ class PacingService:
                         
                 if active_anchor:
                     # Verwende den manuellen Storyboard-Clip
-                    cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{active_anchor['id']}"))
+                    anchor_clip_id = active_anchor.get("clip_id", active_anchor["id"])
+                    cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{anchor_clip_id}"))
                     last_manual_end = active_anchor["mix_end"]
                     last_manual_clip = active_anchor
                     continue
@@ -1040,11 +1049,8 @@ class PacingService:
 
             if not cut_with_clips:
                 logger.warning("L-K5 Stem-generation lieferte 0 Cuts -> fallback round-robin.")
-                cut_list = self._generate_simple_round_robin(
-                    pacing_engine, audio_path, clips,
-                    expected_bpm, target_duration,
-                    min_cut_interval=min_cut_interval,
-                    on_progress=on_progress,
+                cut_list = self._generate_time_grid_fallback(
+                    clips, pacing_config, target_duration,
                 )
                 return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
@@ -1053,11 +1059,8 @@ class PacingService:
         except Exception as e:
             logger.error(f"L-K5 Stem-Cut-Generierung fehlgeschlagen: {e}", exc_info=True)
             try:
-                cut_list = self._generate_simple_round_robin(
-                    pacing_engine, audio_path, clips,
-                    expected_bpm, target_duration,
-                    min_cut_interval=min_cut_interval,
-                    on_progress=on_progress,
+                cut_list = self._generate_time_grid_fallback(
+                    clips, pacing_config, target_duration,
                 )
                 return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
@@ -1329,7 +1332,8 @@ class PacingService:
                             
                     if active_anchor:
                         # Verwende den manuellen Storyboard-Clip
-                        cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{active_anchor['id']}"))
+                        anchor_clip_id = active_anchor.get("clip_id", active_anchor["id"])
+                        cut_with_clips.append((cut, active_anchor["file_path"], f"clip_{anchor_clip_id}"))
                         last_manual_end = active_anchor["mix_end"]
                         last_manual_clip = active_anchor
                         continue
@@ -1387,11 +1391,8 @@ class PacingService:
                 
                 if not cut_with_clips:
                     logger.warning("Advanced generation delivered 0 cuts, falling back to simple mode.")
-                    cut_list = self._generate_simple_round_robin(
-                        pacing_engine, audio_path, clips,
-                        pacing_config.get("expected_bpm", 120), target_duration,
-                        min_cut_interval=min_cut_interval,
-                        on_progress=on_progress,
+                    cut_list = self._generate_time_grid_fallback(
+                        clips, pacing_config, target_duration,
                     )
                     return self._finalize_cut_list(cut_list, duration_limit or total_duration)
 
@@ -1407,13 +1408,10 @@ class PacingService:
                 return self._finalize_cut_list(cut_list, duration_limit or total_duration)
         except Exception as e:
             logger.error(f"Cut-List-Generierung fehlgeschlagen: {e}", exc_info=True)
-            # Letzter Rettungsanker: Einfaches Round-Robin statt Absturz
+            # Letzter Rettungsanker: generator-unabhaengiges Zeitraster.
             try:
-                cut_list = self._generate_simple_round_robin(
-                    pacing_engine, audio_path, clips,
-                    pacing_config.get("expected_bpm", 120), target_duration,
-                    min_cut_interval=min_cut_interval,
-                    on_progress=on_progress,
+                cut_list = self._generate_time_grid_fallback(
+                    clips, pacing_config, target_duration,
                 )
                 return self._finalize_cut_list(cut_list, duration_limit or total_duration)
             except Exception as final_e:
@@ -1478,4 +1476,65 @@ class PacingService:
             idx += 1
 
         logger.info(f"Cut-Liste: {len(cut_list)} Cuts generiert.")
+        return cut_list
+
+    def _generate_time_grid_fallback(
+        self,
+        clips: list,
+        pacing_config: dict,
+        target_duration: float,
+    ) -> List[CutListEntry]:
+        """Build a deterministic cut grid without invoking the pacing engine."""
+        if not clips:
+            raise ValueError("Mindestens ein Clip erforderlich.")
+        if target_duration <= 0:
+            raise ValueError("Positive Zieldauer erforderlich.")
+
+        settings = pacing_config.get("trigger_settings") or {}
+        min_length = float(settings.get("min_clip_length", 1.0))
+        max_length = float(settings.get("max_clip_length", 8.0))
+        max_interval = float(settings.get("max_cut_interval", 10.0))
+        configured_interval = max(min_length, min(max_length, max_interval))
+
+        candidates = []
+        for clip in clips:
+            raw_path = clip.get("file_path") or clip.get("path")
+            if not raw_path:
+                continue
+            file_path = str(Path(raw_path).absolute())
+            try:
+                duration = self._get_clip_duration(file_path)
+            except ValueError:
+                continue
+            if duration > 0:
+                candidates.append((clip, file_path, duration))
+        if not candidates:
+            raise ValueError("Kein Clip mit gueltiger Dauer fuer Zeitraster-Fallback.")
+
+        usable = [item for item in candidates if item[2] >= min_length] or candidates
+        grid_interval = min(configured_interval, min(item[2] for item in usable))
+        slot_count = max(1, int(np.ceil(float(target_duration) / grid_interval)))
+        slot_duration = float(target_duration) / slot_count
+
+        cut_list: List[CutListEntry] = []
+        for index in range(slot_count):
+            clip, file_path, _ = usable[index % len(usable)]
+            start_time = index * slot_duration
+            clip_id = str(clip.get("id", index))
+            if not clip_id.startswith("clip_"):
+                clip_id = f"clip_{clip_id}"
+            cut_list.append(CutListEntry(
+                clip_id=clip_id,
+                start_time=start_time,
+                end_time=min(float(target_duration), start_time + slot_duration),
+                metadata={
+                    "file_path": file_path,
+                    "clip_name": clip.get("name", Path(file_path).stem),
+                    "clip_start": 0.0,
+                    "trigger_type": "time_grid_fallback",
+                    "trigger_strength": 0.0,
+                },
+            ))
+
+        logger.warning("Generator-unabhaengiger Zeitraster-Fallback: %d Cuts", len(cut_list))
         return cut_list

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -45,6 +46,7 @@ public partial class TimelineView : UserControl
     private double _originalStartTime;
     private double _originalEndTime;
     private double _originalClipStart;
+    private bool _wasTimelineContiguousAtDragStart;
     private const double MinClipDuration = 0.1;
     private const double FineKeyboardStepSeconds = 0.1;
     private const double CoarseKeyboardStepSeconds = 1.0;
@@ -119,7 +121,7 @@ public partial class TimelineView : UserControl
         _viewModel?.SyncTimelineCommand.Execute(null);
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_scope == null)
         {
@@ -131,12 +133,19 @@ public partial class TimelineView : UserControl
         DataContextChanged += OnDataContextChanged;
         SyncPreviewToSelection(forceReload: true);
         DrawRuler();
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(UpdateViewportWindow));
 
         // C1/POWER: High-frequency render loop for smooth playhead tracking (OnLoaded registrieren)
         CompositionTarget.Rendering += OnCompositionTargetRendering;
+
+        if (_viewModel != null)
+        {
+            UpdateViewportWindow();
+            await _viewModel.ActivateAsync();
+        }
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
+    private async void OnUnloaded(object sender, RoutedEventArgs e)
     {
         // L-FE-15 (HIGH): 60Hz CompositionTarget.Rendering ist ein STATISCHES
         // WPF-Event - jeder Tab-Wechsel erzeugt eine neue TimelineView-Instanz,
@@ -145,10 +154,18 @@ public partial class TimelineView : UserControl
         // Memory-Leak (User-Symptom: App-CPU steigt nach Tab-Wechsel).
         CompositionTarget.Rendering -= OnCompositionTargetRendering;
         DataContextChanged -= OnDataContextChanged;
+        var unloadingViewModel = _viewModel;
         AttachViewModel(null);
+        _syncTimer.Stop();
         _playbackTimer.Stop();
         PreviewPlayer.Stop();
         PreviewPlayer.Source = null;
+
+        if (unloadingViewModel != null)
+            await unloadingViewModel.SyncTimelineAsync();
+
+        if (IsLoaded)
+            return;
 
         DataContext = null;
         _scope?.Dispose();
@@ -160,6 +177,7 @@ public partial class TimelineView : UserControl
         AttachViewModel(e.NewValue as TimelineViewModel);
         SyncPreviewToSelection(forceReload: true);
         DrawRuler();
+        UpdateViewportWindow();
     }
 
     private void AttachViewModel(TimelineViewModel? next)
@@ -296,6 +314,7 @@ public partial class TimelineView : UserControl
             element.Focus();
             _draggedEntry = entry;
             _viewModel!.SelectedEntry = entry;
+            _wasTimelineContiguousAtDragStart = IsTimelineContiguous();
             _lastMousePosition = e.GetPosition(this);
 
             var hitPosition = e.GetPosition(element).X;
@@ -419,6 +438,7 @@ public partial class TimelineView : UserControl
 
         if (changed && (control || alt))
         {
+            _viewModel?.MarkTimelineDirty();
             _syncTimer.Stop();
             _syncTimer.Start();
         }
@@ -506,6 +526,7 @@ public partial class TimelineView : UserControl
 
             // Initialize SnapEngine on demand
             _snapEngine ??= new SnapEngine(8.0, _viewModel.PixelsPerSecond);
+            _snapEngine.PixelsPerSecond = _viewModel.PixelsPerSecond;
 
             if (_isDragging)
             {
@@ -647,6 +668,7 @@ public partial class TimelineView : UserControl
             }
 
             _draggedEntry.NotifyPositionChanged();
+            _viewModel?.MarkTimelineDirty();
             _lastMousePosition = currentPos;
             _syncTimer.Stop();
             _syncTimer.Start();
@@ -728,6 +750,18 @@ public partial class TimelineView : UserControl
         }
     }
 
+    private bool IsTimelineContiguous()
+    {
+        if (_viewModel == null || _viewModel.TimelineEntries.Count < 2)
+            return false;
+        var ordered = _viewModel.TimelineEntries
+            .OrderBy(entry => entry.StartTime)
+            .ToList();
+        return ordered.Zip(ordered.Skip(1), (previous, current) =>
+                Math.Abs(current.StartTime - previous.EndTime) <= 0.001)
+            .All(value => value);
+    }
+
     private void Clip_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_draggedEntry != null)
@@ -750,10 +784,26 @@ public partial class TimelineView : UserControl
                 if (wasDragging)
                 {
                     _viewModel.SortEntriesByTime();
-                    CloseGapsInContiguousMode();
+                    if (_wasTimelineContiguousAtDragStart)
+                        CloseGapsInContiguousMode();
                 }
             }
         }
+    }
+
+    private void LanesScrollViewer_OnScrollChanged(object sender, ScrollChangedEventArgs e) =>
+        UpdateViewportWindow();
+
+    private void LanesScrollViewer_OnSizeChanged(object sender, SizeChangedEventArgs e) =>
+        UpdateViewportWindow();
+
+    private void UpdateViewportWindow()
+    {
+        if (_viewModel == null)
+            return;
+        _viewModel.UpdateViewport(
+            LanesScrollViewer.HorizontalOffset,
+            LanesScrollViewer.ViewportWidth);
     }
 
     private void SyncPreviewToSelection(bool forceReload)

@@ -108,8 +108,8 @@ def test_color_analysis_runs_when_captions_are_disabled(monkeypatch):
 
     monkeypatch.setattr("cv2.VideoCapture", lambda _: FakeCapture())
     monkeypatch.setattr(
-        "pb_studio.video.moondream_wrapper.extract_dominant_colors",
-        lambda frame, k=5: ["#112233"],
+        "pb_studio.video.moondream_wrapper.extract_dominant_colors_with_weights",
+        lambda frame, k=5: (["#112233"], [1.0]),
     )
 
     result = asyncio.run(

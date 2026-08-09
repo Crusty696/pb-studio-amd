@@ -60,21 +60,63 @@ def _probe_result(
 
 
 @pytest.mark.parametrize("encoder", ["h264_amf", "hevc_amf", "av1_amf"])
-def test_normalization_profiles_are_all_intra(encoder: str) -> None:
+def test_normalization_profiles_are_all_intra(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    encoder: str,
+) -> None:
     args = RenderService._encoder_args(encoder)
 
     assert args[args.index("-g") + 1] == "1"
 
-    normalization = inspect.getsource(RenderService._normalize_clips)
-    precondition = normalization.index(
-        "needs_norm = not self._is_frame_addressable"
+    service = RenderService(
+        output_dir=str(tmp_path),
+        encoder_override=encoder,
     )
-    transcode = normalization.index("self._transcode_clip")
-    postcondition = normalization.index(
-        "if not self._is_frame_addressable",
-        transcode,
+    service.temp_dir = tmp_path / ".temp_render" / "normalization-contract"
+    service.temp_dir.mkdir(parents=True)
+    source = tmp_path / "source.mp4"
+    source.touch()
+    calls: list[tuple[str, Path]] = []
+
+    monkeypatch.setattr(
+        service,
+        "_check_needs_normalization",
+        lambda *_args, **_kwargs: False,
     )
-    assert precondition < transcode < postcondition
+
+    def frame_addressable(path: str | Path, *_args: Any) -> bool:
+        candidate = Path(path)
+        calls.append(("addressable", candidate))
+        return False
+
+    def transcode(
+        _input_path: str,
+        output_path: Path,
+        *_args: Any,
+    ) -> None:
+        calls.append(("transcode", output_path))
+        output_path.touch()
+
+    monkeypatch.setattr(service, "_is_frame_addressable", frame_addressable)
+    monkeypatch.setattr(service, "_transcode_clip", transcode)
+
+    with pytest.raises(RuntimeError, match="nicht frame-adressierbar"):
+        service._normalize_clips(
+            [{"file_path": str(source)}],
+            1920,
+            1080,
+            30.0,
+            None,
+        )
+
+    normalized_path = service.temp_dir / "norm_0.mp4"
+    assert calls == [
+        ("addressable", source),
+        ("transcode", normalized_path),
+        ("addressable", normalized_path),
+    ]
+    assert not normalized_path.exists()
 
 
 @pytest.mark.parametrize(

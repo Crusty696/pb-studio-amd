@@ -16,10 +16,27 @@ public class TimelineStateService
     private Task<TimelineResponse?>? _inFlightRefresh;
     private ProjectOperationContext? _inFlightContext;
     private long _refreshGeneration;
+    private string? _selectedClipId;
+    private double _selectedStartTime;
 
     public TimelineResponse? CurrentTimeline { get; private set; }
 
     public event EventHandler<TimelineResponse?>? TimelineChanged;
+
+    public void RememberSelection(string? clipId, double startTime)
+    {
+        lock (_sync)
+        {
+            _selectedClipId = clipId;
+            _selectedStartTime = startTime;
+        }
+    }
+
+    public (string? ClipId, double StartTime) GetRememberedSelection()
+    {
+        lock (_sync)
+            return (_selectedClipId, _selectedStartTime);
+    }
 
     public TimelineStateService(
         IApiClient api,
@@ -63,6 +80,8 @@ public class TimelineStateService
             _inFlightRefresh = null;
             _inFlightContext = null;
             CurrentTimeline = null;
+            _selectedClipId = null;
+            _selectedStartTime = 0;
         }
         TimelineChanged?.Invoke(this, null);
     }

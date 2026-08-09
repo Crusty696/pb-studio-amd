@@ -1,8 +1,11 @@
 """Tests fuer publish_event_threadsafe (Review-Fix HIGH-1 2026-07-09)."""
 import asyncio
+import importlib
 import threading
 
 from backend import dependencies as deps
+
+events_router = importlib.import_module("backend.routers.events_router")
 
 
 def test_threadsafe_publish_from_worker_thread_wakes_main_loop():
@@ -80,3 +83,66 @@ def test_filtered_event_never_consumes_queue_capacity_or_drop_budget():
         assert deps.get_event_queue_drop_metrics()["total"] == before
     finally:
         assert deps.unregister_event_queue(client_id) == 0
+
+
+def test_log_reconnect_emits_marker_when_journal_has_a_gap():
+    class Request:
+        headers = {"last-event-id": "1"}
+
+        async def is_disconnected(self):
+            return False
+
+    async def scenario() -> None:
+        deps.reset_event_journal()
+        for index in range(deps.EVENT_JOURNAL_MAXLEN + 2):
+            await deps.publish_event("log", {"message": f"log-{index}"})
+
+        assert deps.get_event_journal_gap(1) == (2, 2)
+        stream = events_router._event_stream(
+            Request(),
+            client_id="gap-test",
+            event_filter={"log"},
+        )
+        try:
+            marker = await anext(stream)
+        finally:
+            await stream.aclose()
+            deps.reset_event_journal()
+
+        assert "event: log" in marker
+        assert "Events 2–2" in marker
+        assert "nicht mehr verfügbar" in marker
+
+    asyncio.run(scenario())
+
+
+def test_log_reconnect_ignores_progress_only_evictions():
+    class Request:
+        headers = {"last-event-id": "1"}
+
+        async def is_disconnected(self):
+            return False
+
+    async def scenario() -> None:
+        deps.reset_event_journal()
+        for index in range(deps.EVENT_JOURNAL_MAXLEN + 1):
+            await deps.publish_event("analysis_progress", {"percent": index})
+        await deps.publish_event("log", {"message": "retained"})
+
+        assert deps.get_event_journal_gap(1, {"log"}) is None
+        stream = events_router._event_stream(
+            Request(),
+            client_id="filtered-gap-test",
+            event_filter={"log"},
+        )
+        try:
+            replay = await anext(stream)
+        finally:
+            await stream.aclose()
+            deps.reset_event_journal()
+
+        assert "event: log" in replay
+        assert "retained" in replay
+        assert "nicht mehr" not in replay
+
+    asyncio.run(scenario())

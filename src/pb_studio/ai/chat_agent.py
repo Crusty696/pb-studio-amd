@@ -26,8 +26,18 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 
 from .model_registry import ModelRegistry, ModelRegistryError, NoSuitableModelError
-from .lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError
-from .tool_registry import ToolRegistry, build_default_registry, _get_backend_base_url
+from .lmstudio_client import (
+    LMStudioClient,
+    LMStudioConnectionError,
+    LMStudioError,
+    is_provider_failure,
+)
+from .tool_registry import (
+    ToolRegistry,
+    _get_backend_base_url,
+    build_default_registry,
+    project_capability_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +215,7 @@ class ChatAgent:
         max_tool_turns: int = 6,
         backend_base_url: Optional[str] = None,
         confirmation_timeout_seconds: float = 60.0,
+        project_capability: Optional[str] = None,
     ) -> None:
         self._registry = registry or build_default_registry()
         injected_client = lmstudio_client if lmstudio_client is not None else ollama_client
@@ -219,6 +230,7 @@ class ChatAgent:
         self._backend_base_url = backend_base_url or _get_backend_base_url()
         self._confirmation_timeout_seconds = max(0.01, float(confirmation_timeout_seconds))
         self._confirmation_stream_id = secrets.token_urlsafe(24)
+        self._project_capability = project_capability
         self._active_selection_receipt = None
         self._active_client_provider: Optional[str] = (
             "lmstudio"
@@ -336,6 +348,37 @@ class ChatAgent:
             "Kein chat-fähiges Modell mit verifizierter Provider-Capability verfügbar."
         )
 
+    def _selection_event_payload(
+        self,
+        model: str,
+        reason: str,
+        mode: str,
+    ) -> dict[str, Any]:
+        receipt = self._active_selection_receipt
+        return {
+            "model": model,
+            "provider": getattr(receipt, "provider", None),
+            "reason": reason,
+            "mode": mode,
+            "selection_receipt": (
+                receipt.to_dict() if receipt is not None else None
+            ),
+        }
+
+    def _current_provider(self) -> str:
+        return (
+            getattr(self._active_selection_receipt, "provider", None)
+            or self._active_client_provider
+            or "unknown"
+        )
+
+    @staticmethod
+    def _provider_label(provider: str) -> str:
+        return {
+            "lmstudio": "LM Studio",
+            "ollama": "Ollama",
+        }.get(provider, provider)
+
     def _parse_tool_call(
         self, tool_call: dict[str, Any]
     ) -> tuple[str, dict[str, Any], Any]:
@@ -384,32 +427,36 @@ class ChatAgent:
             }
         await self._ensure_resources()
         assert self._http is not None
+        return await self._invoke_tool_handler(tool, name, args)
+
+    async def _invoke_tool_handler(self, tool: Any, name: str, args: dict[str, Any]):
         # P-H2 (Audit V2): long-running Tools (Render, Stems) brauchen
         # erweiterten Timeout — default 60s killt sonst aktive GPU-Tasks
         # unter dem ChatAgent. 600s = 10min Headroom.
-        if getattr(tool, "long_running", False):
-            extended_http = httpx.AsyncClient(
-                base_url=self._backend_base_url,
-                timeout=httpx.Timeout(600.0, connect=5.0),
-            )
+        with project_capability_scope(self._project_capability):
+            if getattr(tool, "long_running", False):
+                extended_http = httpx.AsyncClient(
+                    base_url=self._backend_base_url,
+                    timeout=httpx.Timeout(600.0, connect=5.0),
+                )
+                try:
+                    result = await tool.handler(args, http_client=extended_http)
+                except Exception as exc:
+                    logger.exception("Tool-Handler %s failed: %s", name, exc)
+                    return {"error": f"Tool-Handler-Exception: {exc}", "tool": name}
+                finally:
+                    await extended_http.aclose()
+                return result
+
             try:
-                result = await tool.handler(args, http_client=extended_http)
+                result = await tool.handler(args, http_client=self._http)
             except Exception as exc:
                 logger.exception("Tool-Handler %s failed: %s", name, exc)
-                return {"error": f"Tool-Handler-Exception: {exc}", "tool": name}
-            finally:
-                await extended_http.aclose()
+                return {
+                    "error": f"Tool-Handler-Exception: {exc}",
+                    "tool": name,
+                }
             return result
-
-        try:
-            result = await tool.handler(args, http_client=self._http)
-        except Exception as exc:
-            logger.exception("Tool-Handler %s failed: %s", name, exc)
-            return {
-                "error": f"Tool-Handler-Exception: {exc}",
-                "tool": name,
-            }
-        return result
 
     @staticmethod
     def _truncate_tool_result(result, *, max_chars: int = 4000) -> str:
@@ -444,18 +491,9 @@ class ChatAgent:
             return
         assert self._llm is not None
 
-        receipt = self._active_selection_receipt
-        # Audit 2026-08-05 (H-4): Provider aus dem Receipt statt hartkodiert.
-        active_provider = getattr(receipt, "provider", None) or ""
-        yield ChatEvent("model", {
-            "model": model,
-            "provider": getattr(receipt, "provider", None),
-            "reason": reason,
-            "mode": mode,
-            "selection_receipt": (
-                receipt.to_dict() if receipt is not None else None
-            ),
-        })
+        model_payload = self._selection_event_payload(model, reason, mode)
+        active_provider = model_payload["provider"] or ""
+        yield ChatEvent("model", model_payload)
         _publish_status(model, "loading", 50.0, provider=active_provider)
 
         messages = [{"role": "system", "content": self._system_prompt}]
@@ -496,9 +534,14 @@ class ChatAgent:
                     )
                 except LMStudioError as exc:
                     msg_lower = str(exc).lower()
+                    status_code = getattr(exc, "status_code", None)
+                    tools_retry_succeeded = False
 
                     # Fall 1: Modell unterstuetzt keine Tools → Retry ohne Tools
-                    if "tools" in msg_lower or "function" in msg_lower:
+                    if (
+                        ("tools" in msg_lower or "function" in msg_lower)
+                        and status_code in {None, 400, 422}
+                    ):
                         logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
                         try:
                             response = await self._llm.chat(
@@ -507,14 +550,22 @@ class ChatAgent:
                                 options={"temperature": 0.2},
                             )
                         except LMStudioError as exc2:
-                            yield ChatEvent("error", {"message": f"LM-Studio-Fehler: {exc2}", "stage": "chat"})
-                            yield ChatEvent("done", {"reason": "llm_error"})
-                            return
+                            # Der Retry ohne Tool-Schema ist ein normaler
+                            # Provider-Call. Sein Fehler muss durch dieselbe
+                            # statusbasierte Kette wie der erste Call laufen.
+                            exc = exc2
+                            msg_lower = str(exc2).lower()
+                            status_code = getattr(exc2, "status_code", None)
+                        else:
+                            tools_retry_succeeded = True
 
                     # Fall 1b: Read-Timeout → Modell ist zu langsam, NICHT "nicht geladen".
                     # Auf andere (evtl. ungeladene) Modelle zu wechseln macht es schlimmer,
                     # daher ehrlich melden und abbrechen statt durch alle Modelle zu churnen.
+                    if tools_retry_succeeded:
+                        pass
                     elif ("timeout" in msg_lower) and not isinstance(exc, LMStudioConnectionError):
+                        provider = self._current_provider()
                         logger.warning("Read-Timeout bei Modell %r (Turn %s): %s", model, turn, exc)
                         yield ChatEvent("error", {
                             "message": (
@@ -523,56 +574,61 @@ class ChatAgent:
                                 f"evtl. ein langsames Reasoning-Modell oder gerade beim Laden. "
                                 f"Bitte erneut versuchen oder ein schnelleres Modell waehlen."
                             ),
-                            "stage": "chat"
+                            "stage": "chat",
+                            "provider": provider,
+                            "model": model,
                         })
                         yield ChatEvent("done", {"reason": "timeout"})
                         return
 
-                    # Fall 1c (Audit-Fix 2026-07-10, CHAT-7): HTTP 400 = Server hat
-                    # den Request selbst abgelehnt (z.B. Context-Length-Overflow,
-                    # ungueltige Parameter) — NICHT "Modell nicht geladen". Vorher
-                    # fiel das in Fall 3 und churnte durch alle Modelle, obwohl das
-                    # Problem am Request lag und bei jedem Modell wiederkehren wuerde.
-                    elif getattr(exc, "status_code", None) == 400:
-                        logger.warning("Request von LM Studio abgelehnt (HTTP 400) bei Modell %r: %s", model, exc)
+                    # Fall 1c: Request-/Auth-4xx sind weder Provider-Ausfall noch
+                    # "Modell nicht geladen" und duerfen keine Modellkaskade starten.
+                    elif status_code in {400, 401, 403, 422}:
+                        provider = self._current_provider()
+                        provider_label = self._provider_label(provider)
+                        logger.warning(
+                            "Request von %s abgelehnt (HTTP %s) bei Modell %r: %s",
+                            provider_label,
+                            status_code,
+                            model,
+                            exc,
+                        )
+                        if status_code in {401, 403}:
+                            detail = (
+                                f"{provider_label} hat die Anfrage wegen fehlender "
+                                "oder ungueltiger Authentifizierung abgelehnt."
+                            )
+                            reason_code = "provider_auth"
+                        else:
+                            detail = (
+                                f"{provider_label} hat die Anfrage abgelehnt "
+                                f"(HTTP {status_code}).\n\n"
+                                f"Moegliche Ursache: Der Chat-Verlauf passt nicht in "
+                                f"das Kontextfenster von '{model}' oder der Request "
+                                "enthaelt ungueltige Parameter."
+                            )
+                            reason_code = "request_rejected"
                         yield ChatEvent("error", {
-                            "message": (
-                                "Der LLM-Provider hat die Anfrage abgelehnt "
-                                "(HTTP 400).\n\n"
-                                f"Haeufigste Ursache: Chat-Verlauf ist zu lang fuer das Kontext-"
-                                f"fenster von '{model}'. Bitte Verlauf kuerzen oder ein Modell mit "
-                                f"groesserem Kontext waehlen."
-                            ),
-                            "stage": "chat"
+                            "message": detail,
+                            "stage": "chat",
+                            "provider": provider,
+                            "model": model,
+                            "status_code": status_code,
                         })
-                        yield ChatEvent("done", {"reason": "request_rejected"})
+                        yield ChatEvent("done", {"reason": reason_code})
                         return
 
-                    # Fall 2: Connection-Error → Provider-Fallback
-                    elif isinstance(exc, LMStudioConnectionError):
-                        logger.warning("Connection-Fehler im Chat-Turn %s: %s. Versuche Provider-Fallback...", turn, exc)
-                        failed_provider = (
-                            getattr(
-                                self._active_selection_receipt,
-                                "provider",
-                                None,
-                            )
-                            or self._active_client_provider
-                            or "unknown"
+                    # Fall 2: Provider-Fehler (Connection, 429, 5xx) →
+                    # genau ein Live-Inventar-Refresh, danach Receipt-Wahrheit.
+                    elif is_provider_failure(exc):
+                        logger.warning(
+                            "Provider-Fehler im Chat-Turn %s: %s. "
+                            "Versuche Live-Inventar-Refresh...",
+                            turn,
+                            exc,
                         )
+                        failed_provider = self._current_provider()
                         _failed_models.add((failed_provider, model))
-                        other_prov = (
-                            "ollama"
-                            if failed_provider == "lmstudio"
-                            else "lmstudio"
-                        )
-                        yield ChatEvent("error", {
-                            "message": (
-                                f"Verbindung zu Provider {failed_provider} verloren. "
-                                f"Wechsle automatisch auf {other_prov}..."
-                            ),
-                            "stage": "fallback"
-                        })
 
                         if await self._attempt_fallback():
                             try:
@@ -582,7 +638,39 @@ class ChatAgent:
                                     exclude=_failed_models,
                                 )
 
-                                yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+                                model_payload = self._selection_event_payload(
+                                    model,
+                                    reason,
+                                    mode,
+                                )
+                                active_provider = model_payload["provider"] or ""
+                                selected_provider = active_provider or "unknown"
+                                if selected_provider == failed_provider:
+                                    fallback_message = (
+                                        f"{self._provider_label(failed_provider)} ist "
+                                        f"weiter erreichbar; versuche den naechsten "
+                                        f"verwendbaren Kandidaten '{model}'."
+                                    )
+                                else:
+                                    fallback_message = (
+                                        f"{self._provider_label(failed_provider)} ist "
+                                        f"fehlgeschlagen. Wechsle automatisch auf "
+                                        f"{selected_provider}."
+                                    )
+                                yield ChatEvent("error", {
+                                    "message": fallback_message,
+                                    "stage": "fallback",
+                                    "provider": failed_provider,
+                                    "fallback_provider": selected_provider,
+                                    "model": model,
+                                })
+                                yield ChatEvent("model", model_payload)
+                                _publish_status(
+                                    model,
+                                    "loading",
+                                    50.0,
+                                    provider=active_provider,
+                                )
 
                                 response = await self._llm.chat(
                                     model=model,
@@ -591,36 +679,39 @@ class ChatAgent:
                                     options={"temperature": 0.2},
                                 )
                             except Exception as exc_fallback:
+                                fallback_provider = self._current_provider()
                                 yield ChatEvent("error", {
-                                    "message": f"Fehler bei Chat nach Fallback auf {other_prov}: {exc_fallback}",
-                                    "stage": "chat_fallback"
+                                    "message": (
+                                        "Chat nach Live-Inventar-Refresh mit "
+                                        f"{self._provider_label(fallback_provider)} "
+                                        f"fehlgeschlagen: {exc_fallback}"
+                                    ),
+                                    "stage": "chat_fallback",
+                                    "provider": fallback_provider,
+                                    "model": model,
                                 })
                                 yield ChatEvent("done", {"reason": "llm_error"})
                                 return
                         else:
+                            provider_label = self._provider_label(failed_provider)
                             error_msg = (
-                                f"Verbindung zum lokalen KI-Dienst (LM Studio / Ollama) verloren.\n\n"
-                                f"Mögliche Ursachen & Lösungen:\n"
-                                f"1. LM Studio oder Ollama läuft nicht. Bitte starten Sie Ihre lokale KI-Anwendung.\n"
-                                f"2. In LM Studio ist kein Modell geladen. Bitte laden Sie ein Chat-Modell (z. B. 'gemma-4-e4b' oder 'moondream').\n"
-                                f"3. Falls Sie Ollama nutzen, stellen Sie sicher, dass mindestens ein Modell installiert ist (z. B. via 'ollama run gemma:2b').\n\n"
+                                f"{provider_label} ist fuer diesen Chat nicht mehr "
+                                "verwendbar; das aktualisierte Live-Inventar enthaelt "
+                                "keinen weiteren Chat-Kandidaten.\n\n"
                                 f"Fehlerklasse: {type(exc).__name__}"
                             )
-                            yield ChatEvent("error", {"message": error_msg, "stage": "chat"})
+                            yield ChatEvent("error", {
+                                "message": error_msg,
+                                "stage": "chat",
+                                "provider": failed_provider,
+                                "model": model,
+                            })
                             yield ChatEvent("done", {"reason": "llm_error"})
                             return
 
                     # Fall 3: Model-Fehler (z.B. nicht geladen) → naechstes Modell versuchen
                     else:
-                        failed_provider = (
-                            getattr(
-                                self._active_selection_receipt,
-                                "provider",
-                                None,
-                            )
-                            or self._active_client_provider
-                            or "unknown"
-                        )
+                        failed_provider = self._current_provider()
                         _failed_models.add((failed_provider, model))
                         logger.warning(
                             "Modell %r fehlgeschlagen (Turn %s): %s. Versuche naechstes Modell... (fehlgeschlagen: %s)",
@@ -633,19 +724,26 @@ class ChatAgent:
                                 "%d Modelle fehlgeschlagen auf diesem Provider. Versuche Provider-Fallback...",
                                 len(_failed_models)
                             )
-                            other_prov_f = (
-                                "ollama"
-                                if failed_provider == "lmstudio"
-                                else "lmstudio"
-                            )
-
                             if await self._attempt_fallback():
                                 try:
                                     model, reason = await self._pick_chat_model(
                                         mode,
                                         exclude=_failed_models,
                                     )
-                                    yield ChatEvent("model", {"model": model, "reason": f"{reason} (provider-fallback)", "mode": mode})
+                                    reason = f"{reason} (nach Live-Inventar-Refresh)"
+                                    model_payload = self._selection_event_payload(
+                                        model,
+                                        reason,
+                                        mode,
+                                    )
+                                    active_provider = model_payload["provider"] or ""
+                                    yield ChatEvent("model", model_payload)
+                                    _publish_status(
+                                        model,
+                                        "loading",
+                                        50.0,
+                                        provider=active_provider,
+                                    )
                                     continue  # Retry den Turn mit neuem Modell+Provider
                                 except NoSuitableModelError as exc_no_model:
                                     yield ChatEvent("error", {"message": str(exc_no_model), "stage": "model_selection"})
@@ -653,7 +751,12 @@ class ChatAgent:
                                     return
                             else:
                                 yield ChatEvent("error", {
-                                    "message": f"Kein Modell konnte den Chat ausfuehren. {len(_failed_models)} Modelle fehlgeschlagen: {_failed_models}. Alternativer Provider ({other_prov_f}) ebenfalls offline.",
+                                    "message": (
+                                        "Kein Modell konnte den Chat ausfuehren. "
+                                        f"{len(_failed_models)} Kandidaten fehlgeschlagen: "
+                                        f"{_failed_models}. Das Live-Inventar enthaelt "
+                                        "keinen weiteren verwendbaren Chat-Kandidaten."
+                                    ),
                                     "stage": "chat"
                                 })
                                 yield ChatEvent("done", {"reason": "llm_error"})
@@ -669,7 +772,19 @@ class ChatAgent:
                                 })
                                 model = new_model
                                 reason = new_reason
-                                yield ChatEvent("model", {"model": model, "reason": reason, "mode": mode})
+                                model_payload = self._selection_event_payload(
+                                    model,
+                                    reason,
+                                    mode,
+                                )
+                                active_provider = model_payload["provider"] or ""
+                                yield ChatEvent("model", model_payload)
+                                _publish_status(
+                                    model,
+                                    "loading",
+                                    50.0,
+                                    provider=active_provider,
+                                )
                                 continue  # Retry den Turn mit neuem Modell
                             else:
                                 # Bei model_override kein Retry mit anderem Modell
@@ -789,32 +904,55 @@ class ChatAgent:
                     final_text = (response.get("message") or {}).get("content") or ""
                     yield ChatEvent("text", {"content": final_text})
                 except LMStudioError as exc:
-                    logger.warning("LMStudioError bei finaler Zusammenfassung: %s. Versuche Fallback...", exc)
-                    failed_provider = (
-                        getattr(
-                            self._active_selection_receipt,
-                            "provider",
-                            None,
-                        )
-                        or self._active_client_provider
-                        or "unknown"
+                    logger.warning(
+                        "LMStudioError bei finaler Zusammenfassung: %s",
+                        exc,
                     )
+                    failed_provider = self._current_provider()
                     _failed_models.add((failed_provider, model))
-                    other_prov = (
-                        "ollama"
-                        if failed_provider == "lmstudio"
-                        else "lmstudio"
-                    )
-                    yield ChatEvent("error", {
-                        "message": f"Verbindung verloren beim Zusammenfassen. Wechsle automatisch auf {other_prov}...",
-                        "stage": "fallback"
-                    })
-                    if await self._attempt_fallback():
+                    if not is_provider_failure(exc):
+                        yield ChatEvent("error", {
+                            "message": (
+                                "Zusammenfassung von "
+                                f"{self._provider_label(failed_provider)} "
+                                f"abgelehnt ({type(exc).__name__}: {exc})."
+                            ),
+                            "stage": "summary",
+                            "provider": failed_provider,
+                            "model": model,
+                            "status_code": getattr(exc, "status_code", None),
+                        })
+                    elif await self._attempt_fallback():
                         try:
-                            model, _ = await self._pick_chat_model(
+                            model, reason = await self._pick_chat_model(
                                 mode,
                                 explicit_model=model_override,
                                 exclude=_failed_models,
+                            )
+                            model_payload = self._selection_event_payload(
+                                model,
+                                reason,
+                                mode,
+                            )
+                            active_provider = model_payload["provider"] or ""
+                            selected_provider = active_provider or "unknown"
+                            yield ChatEvent("error", {
+                                "message": (
+                                    f"{self._provider_label(failed_provider)} ist "
+                                    "beim Zusammenfassen fehlgeschlagen. "
+                                    f"Versuche {selected_provider} mit '{model}'."
+                                ),
+                                "stage": "fallback",
+                                "provider": failed_provider,
+                                "fallback_provider": selected_provider,
+                                "model": model,
+                            })
+                            yield ChatEvent("model", model_payload)
+                            _publish_status(
+                                model,
+                                "loading",
+                                50.0,
+                                provider=active_provider,
                             )
 
                             response = await self._llm.chat(
@@ -831,20 +969,27 @@ class ChatAgent:
                             final_text = (response.get("message") or {}).get("content") or ""
                             yield ChatEvent("text", {"content": final_text})
                         except Exception as exc_fallback:
+                            fallback_provider = self._current_provider()
                             yield ChatEvent("error", {
                                 "message": (
-                                    "Summary-Fallback fehlgeschlagen "
-                                    f"({type(exc_fallback).__name__})."
+                                    "Zusammenfassung nach Live-Inventar-Refresh mit "
+                                    f"{self._provider_label(fallback_provider)} "
+                                    f"fehlgeschlagen ({type(exc_fallback).__name__})."
                                 ),
                                 "stage": "summary_fallback",
+                                "provider": fallback_provider,
+                                "model": model,
                             })
                     else:
                         yield ChatEvent("error", {
                             "message": (
-                                "Provider-Fehler beim Summary "
-                                f"({type(exc).__name__})."
+                                f"{self._provider_label(failed_provider)} ist beim "
+                                "Zusammenfassen fehlgeschlagen; das aktualisierte "
+                                "Live-Inventar enthaelt keinen weiteren Kandidaten."
                             ),
                             "stage": "summary",
+                            "provider": failed_provider,
+                            "model": model,
                         })
 
             # Audit 2026-08-05 (M-5): Bei Erfolg wurde "active" gesendet und nie

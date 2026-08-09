@@ -7,7 +7,7 @@ class SceneDetector:
     def __init__(self, threshold=8.0):
         self.threshold = threshold
 
-    def detect_scenes(self, video_path: str):
+    def detect_scenes(self, video_path: str, duration_seconds: float | None = None):
         """
         Detects scenes in a video.
         Returns list of (start_sec, end_sec) tuples.
@@ -35,33 +35,42 @@ class SceneDetector:
             # Convert FrameTimecodes to seconds
             for scene in scenes:
                 start, end = scene
-                scene_list.append((start.get_seconds(), end.get_seconds()))
+                start_seconds = max(0.0, start.get_seconds())
+                end_seconds = end.get_seconds()
+                if duration_seconds is not None and duration_seconds > 0:
+                    start_seconds = min(start_seconds, duration_seconds)
+                    end_seconds = min(end_seconds, duration_seconds)
+                if end_seconds > start_seconds:
+                    scene_list.append((start_seconds, end_seconds))
 
             if not scene_list:
                 logger.warning(f"No scenes detected for {video_path}, adding full clip as single scene.")
-                # Get total duration as fallback
-                import cv2
-                cap = None
-                try:
-                    cap = cv2.VideoCapture(video_path)
-                    fps = cap.get(cv2.CAP_PROP_FPS)
-                    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                    duration = frame_count / fps if fps > 0 else 0.0
-                    if duration > 0:
-                        scene_list.append((0.0, duration))
-                finally:
-                    if cap is not None:
-                        cap.release()
+                duration = duration_seconds or 0.0
+                if duration <= 0:
+                    # OpenCV duration is only a fallback when no authoritative
+                    # ffprobe duration was supplied by the caller.
+                    import cv2
+                    cap = None
+                    try:
+                        cap = cv2.VideoCapture(video_path)
+                        fps = cap.get(cv2.CAP_PROP_FPS)
+                        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                        duration = frame_count / fps if fps > 0 else 0.0
+                    finally:
+                        if cap is not None:
+                            cap.release()
+                if duration > 0:
+                    scene_list.append((0.0, duration))
 
             logger.info(f"Found {len(scene_list)} scenes.")
             return scene_list
 
         except FileNotFoundError:
             logger.error(f"Video file not found: {video_path}")
-            return []
+            raise
         except Exception as e:
             logger.error(f"Scene detection failed: {e}")
-            return []
+            raise
         finally:
             # Video-Handle schliessen um File-Locks zu vermeiden
             if video is not None:

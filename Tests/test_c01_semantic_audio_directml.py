@@ -109,21 +109,25 @@ def test_smart_director_does_not_reacquire_clap_gpu_lock():
     analyzer.classify_audio.assert_called_once()
 
 
-def test_pacing_disables_semantic_matching_when_clap_is_unavailable():
+def test_pacing_uses_generic_semantic_prompts_when_clap_is_unavailable(caplog):
     service = PacingService()
     director = MagicMock()
     director.get_dominant_mood.side_effect = SemanticAudioUnavailableError(
         "CLAP ONNX unavailable"
     )
 
-    with patch(
-        "pb_studio.ai.smart_director.SmartDirector.get_instance",
-        return_value=director,
+    with (
+        caplog.at_level("WARNING", logger="pb_studio.services.pacing_service"),
+        patch(
+            "pb_studio.ai.smart_director.SmartDirector.get_instance",
+            return_value=director,
+        ),
     ):
         enabled, prompt = service._resolve_semantic_audio("track.wav", True)
 
-    assert enabled is False
+    assert enabled is True
     assert prompt is None
+    assert "using generic semantic prompts" in caplog.text
 
 
 def test_pacing_uses_semantic_prompt_only_when_clap_classification_works():

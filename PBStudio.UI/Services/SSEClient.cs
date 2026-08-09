@@ -414,6 +414,15 @@ public class SSEClient : IDisposable
                     }
                     break;
 
+                case StreamKind.Progress when eventType == "replay_gap":
+                    ProgressReceived?.Invoke(this, new ProgressEventArgs
+                    {
+                        EventType = eventType,
+                        Status = "interrupted",
+                        Message = "Fortschrittsereignisse gingen während der Unterbrechung verloren; Status wird neu geladen.",
+                    });
+                    break;
+
                 case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "pacing_progress" or "gpu_error":
                     {
                         var pct = TryGetDouble(root, "percent");
@@ -424,7 +433,7 @@ public class SSEClient : IDisposable
                             TryGetString(root, "error"),
                             TryGetString(root, "detail"));
 
-                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
                         bool shouldEmit = true;
 
                         if (!isFinal && !string.IsNullOrEmpty(taskId))

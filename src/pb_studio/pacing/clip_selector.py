@@ -90,6 +90,14 @@ TRIGGER_PROMPTS: Dict[str, str] = {
 
 DEFAULT_PROMPT = "dynamic movement action visual interest"
 
+# Existing hybrid-ranking contract, shared by select_hybrid() and the live
+# semantic path so similarity cannot be discarded after candidate retrieval.
+HYBRID_SELECTION_WEIGHTS = {
+    "similarity": 0.5,
+    "energy": 0.3,
+    "motion": 0.2,
+}
+
 
 # =============================================================================
 # THEMATISCHE NARRATIVE CLUSTER & KEYWORDS (Stufe 3)
@@ -860,6 +868,7 @@ class ClipSelector:
         trigger_type: str,
         current_time: Optional[float] = None,
         audio_state: str = "normal",
+        semantic_scores: Optional[Dict[str, float]] = None,
     ) -> SelectedClip:
         """
         Motion-basierte Auswahl mit Roter-Faden-Continuity.
@@ -933,6 +942,22 @@ class ClipSelector:
                     total_score += 0.40
                     audio_state_adjustment += 0.40
 
+            semantic_score = None
+            semantic_contribution = None
+            motion_contribution = None
+            if semantic_scores is not None:
+                path_key = self._normalized_path_key(self._metadata_path(clip))
+                raw_semantic_score = semantic_scores.get(path_key)
+                if raw_semantic_score is not None:
+                    semantic_score = float(raw_semantic_score)
+                    semantic_contribution = (
+                        semantic_score * HYBRID_SELECTION_WEIGHTS["similarity"]
+                    )
+                    motion_contribution = (
+                        total_score * HYBRID_SELECTION_WEIGHTS["motion"]
+                    )
+                    total_score = semantic_contribution + motion_contribution
+
             # Stufe 3: Style-Persistenz / Narrative Kapitel-Themen
             theme_bonus = 0.0
             if self.active_theme and belongs_to_theme(clip, self.active_theme):
@@ -985,6 +1010,9 @@ class ClipSelector:
                     "continuity_bonus": continuity_bonus,
                     "audio_state": audio_state,
                     "audio_state_adjustment": audio_state_adjustment,
+                    "semantic_similarity_score": semantic_score,
+                    "semantic_similarity_contribution": semantic_contribution,
+                    "motion_contribution": motion_contribution,
                     "theme_bonus": theme_bonus,
                     "anchor_in_bonus": anchor_in_bonus,
                     "anchor_out_bonus": anchor_out_bonus,
@@ -1094,6 +1122,7 @@ class ClipSelector:
                         trigger_type,
                         current_time=current_time,
                         audio_state=audio_state,
+                        semantic_scores=faiss_scores,
                     )
                     ranking_details = dict(self._selection_details)
                     selected_path_key = self._normalized_path_key(
@@ -1149,12 +1178,17 @@ class ClipSelector:
             semantic_candidates = [
                 clip for clip, _score in scored_candidates[:10]
             ]
+            direct_scores = {
+                self._normalized_path_key(self._metadata_path(clip)): float(score)
+                for clip, score in scored_candidates[:10]
+            }
             selected = self._select_by_motion(
                 semantic_candidates,
                 trigger_strength,
                 trigger_type,
                 current_time=current_time,
                 audio_state=audio_state,
+                semantic_scores=direct_scores,
             )
             ranking_details = dict(self._selection_details)
             selected_path_key = self._normalized_path_key(selected.clip_path)
@@ -1457,7 +1491,7 @@ class ClipSelector:
     ) -> List[Tuple[ClipMetadata, float]]:
         """Hybrid-Auswahl mit gewichteten Kriterien (FAISS-Architektur)."""
         if weights is None:
-            weights = {"similarity": 0.5, "energy": 0.3, "motion": 0.2}
+            weights = dict(HYBRID_SELECTION_WEIGHTS)
 
         candidates = list(self.clip_cache.values())
 

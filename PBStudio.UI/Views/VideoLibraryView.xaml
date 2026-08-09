@@ -116,14 +116,14 @@
                     </Button>
 
                     <Button Command="{Binding AnalyzeMarkedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Markierte Clips analysieren&#x0a;• Was es macht: Analysiert ausschließlich die in der Übersicht selektierten Clips.&#x0a;• Wozu es dient: Ermöglicht eine gezielte Aufbereitung bestimmter Videos ohne Wartezeit für den Rest.&#x0a;• Wann nutzen: Nützlich, wenn Sie nur eine handverlesene Auswahl neu hinzugefügter Clips analysieren wollen."
-                            AutomationProperties.Name="Markierte Video-Clips analysieren"
-                            AutomationProperties.HelpText="Analysiert nur die als markiert gekennzeichneten Clips."
+                            ToolTip="Ausgewählte Clips analysieren&#x0a;• Was es macht: Analysiert die mit Strg/Umschalt ausgewählten oder per Checkbox markierten Clips.&#x0a;• Wozu es dient: Ermöglicht eine gezielte Aufbereitung bestimmter Videos ohne Wartezeit für den Rest.&#x0a;• Wann nutzen: Nützlich, wenn Sie nur eine handverlesene Auswahl neu hinzugefügter Clips analysieren wollen."
+                            AutomationProperties.Name="Ausgewählte Video-Clips analysieren"
+                            AutomationProperties.HelpText="Analysiert die per Mehrfachauswahl oder Checkbox ausgewählten Clips."
                             AutomationProperties.AccessKey="Alt+M">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="Magnify" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Markierte analysieren" VerticalAlignment="Center"/>
+                            <TextBlock Text="Auswahl analysieren" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
@@ -182,14 +182,14 @@
                     </StackPanel>
 
                     <Button Command="{Binding DeleteSelectedCommand}" Style="{StaticResource ToolbarBtn}"
-                            ToolTip="Markierte Clips löschen&#x0a;• Was es macht: Entfernt die ausgewählten Videos vollständig aus der Datenbank und dem Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt."
-                            AutomationProperties.Name="Markierte Video-Clips löschen"
-                            AutomationProperties.HelpText="Entfernt markierte Clips aus Projekt und Cache; Originaldateien bleiben erhalten."
+                            ToolTip="Ausgewählte Clips löschen&#x0a;• Was es macht: Entfernt die mit Strg/Umschalt ausgewählten oder per Checkbox markierten Videos aus Datenbank und Zwischenspeicher.&#x0a;• Wozu es dient: Bereinigt die Bibliothek von unerwünschtem Material. Die Originaldateien auf der Festplatte werden nicht gelöscht.&#x0a;• Wann nutzen: Zum Aussortieren unpassender Videos aus Ihrem PB Studio Projekt."
+                            AutomationProperties.Name="Ausgewählte Video-Clips löschen"
+                            AutomationProperties.HelpText="Entfernt per Mehrfachauswahl oder Checkbox ausgewählte Clips; Originaldateien bleiben erhalten."
                             AutomationProperties.AcceleratorKey="Entfernen">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"
                                                    Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Markierte loeschen" VerticalAlignment="Center"/>
+                            <TextBlock Text="Auswahl loeschen" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
@@ -213,6 +213,14 @@
 
                 <!-- Status and progress wrap independently below the action controls. -->
                 <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="6,6,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                        <TextBlock Text="Sortierung:" VerticalAlignment="Center"
+                                   Foreground="{StaticResource AbletonTextDim}" FontSize="11" Margin="0,0,6,0"/>
+                        <ComboBox ItemsSource="{Binding SortOptions}"
+                                  SelectedItem="{Binding SelectedSortOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  MinWidth="145" Height="26"
+                                  AutomationProperties.Name="Video-Clips sortieren"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
                                    Foreground="{StaticResource AbletonGreen}" FontSize="11">
@@ -251,7 +259,39 @@
                  VirtualizingPanel.VirtualizationMode="Recycling"
                  Margin="0,0,12,0"
                  AutomationProperties.Name="Video-Clip-Liste"
-                 AutomationProperties.HelpText="Mehrfachauswahl mit Umschalt- oder Strg-Taste; Entfernen löscht markierte Clips aus dem Projekt.">
+                 AutomationProperties.HelpText="Mehrfachauswahl mit Umschalt- oder Strg-Taste; Analyse und Entfernen berücksichtigen Auswahl und Checkbox-Markierungen.">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="{x:Type ListBoxItem}">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="2"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}"
+                                        CornerRadius="4">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
+                                        <Setter Property="Background" Value="#3323B5D3"/>
+                                    </Trigger>
+                                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AbletonAccent}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
                     <WrapPanel/>

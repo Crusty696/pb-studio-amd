@@ -2,12 +2,25 @@ import logging
 import os
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
 from pb_studio.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
+
+PROJECT_UUID_NAMESPACE = uuid.UUID("f81d8514-f593-4b7d-9cb9-551ae763b017")
+
+
+def legacy_project_uuid(project_id: int, created_at: object) -> str:
+    """Return the stable UUID used when upgrading a legacy catalog row."""
+    return str(
+        uuid.uuid5(
+            PROJECT_UUID_NAMESPACE,
+            f"legacy-project:{int(project_id)}:{str(created_at or '')}",
+        )
+    )
 
 
 def _iter_sql_statements(sql: str):
@@ -145,6 +158,17 @@ SCHEMA_MIGRATIONS = (
         ON vector_operation_outbox(project_id, stage, created_at);
         """,
     ),
+    (
+        4,
+        "stable_project_uuid",
+        """
+        ALTER TABLE projects ADD COLUMN project_uuid TEXT;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_project_uuid
+        ON projects(project_uuid)
+        WHERE project_uuid IS NOT NULL;
+        """,
+    ),
 )
 
 
@@ -220,7 +244,10 @@ class DatabaseCore:
         cursor = conn.cursor()
         res = cursor.execute("SELECT count(*) FROM projects").fetchone()
         if res[0] == 0:
-            cursor.execute("INSERT INTO projects (name) VALUES ('Default Project')")
+            cursor.execute(
+                "INSERT INTO projects (name, project_uuid) VALUES (?, ?)",
+                ("Default Project", str(uuid.uuid4())),
+            )
             conn.commit()
             logger.info("Created 'Default Project' (ID: 1)")
 
@@ -272,6 +299,8 @@ class DatabaseCore:
                     conn.execute(stmt)
                 if version == 2:
                     self._backfill_media_import_guard(conn)
+                elif version == 4:
+                    self._backfill_project_uuids(conn)
                 conn.execute(
                     "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                     (version, name),
@@ -303,6 +332,40 @@ class DatabaseCore:
         if inserted:
             logger.info("Backfilled %s canonical media import guard rows", inserted)
 
+    def _backfill_project_uuids(self, conn):
+        """Backfill stable identities without using mutable names or paths."""
+        rows = conn.execute(
+            "SELECT id, created_at, project_uuid FROM projects ORDER BY id"
+        ).fetchall()
+        for row in rows:
+            current = row["project_uuid"]
+            if current:
+                try:
+                    normalized = str(uuid.UUID(str(current)))
+                except (TypeError, ValueError, AttributeError) as exc:
+                    raise RuntimeError(
+                        f"Project {row['id']} has invalid project_uuid"
+                    ) from exc
+            else:
+                normalized = legacy_project_uuid(row["id"], row["created_at"])
+            conn.execute(
+                "UPDATE projects SET project_uuid=? WHERE id=?",
+                (normalized, int(row["id"])),
+            )
+
+        invalid = conn.execute(
+            "SELECT COUNT(*) FROM projects WHERE project_uuid IS NULL "
+            "OR trim(project_uuid)=''"
+        ).fetchone()[0]
+        duplicates = conn.execute(
+            "SELECT COUNT(*) FROM (SELECT project_uuid FROM projects "
+            "GROUP BY project_uuid HAVING COUNT(*) > 1)"
+        ).fetchone()[0]
+        if invalid or duplicates:
+            raise RuntimeError(
+                "Project UUID backfill did not produce a complete unique catalog"
+            )
+
     def get_connection(self):
         """
         Returns a thread-local database connection.
@@ -332,16 +395,19 @@ class DatabaseCore:
                 cursor.execute("UPDATE ...")
                 # Automatic commit on success, rollback on error
         """
-        conn = self.get_connection()
-        try:
-            if immediate and not conn.in_transaction:
-                conn.execute("BEGIN IMMEDIATE")
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Transaction failed, rolled back: {e}")
-            raise
+        from pb_studio.storage.recovery_barrier import get_recovery_write_barrier
+
+        with get_recovery_write_barrier().write_lease("catalog"):
+            conn = self.get_connection()
+            try:
+                if immediate and not conn.in_transaction:
+                    conn.execute("BEGIN IMMEDIATE")
+                yield conn
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Transaction failed, rolled back: {e}")
+                raise
 
     def close(self):
         """Close the thread-local connection."""

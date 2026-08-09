@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import time
 import functools
+import uuid
 from typing import List, Optional, Dict, Callable
 from pb_studio.data.database_core import DatabaseCore
 
@@ -10,6 +11,14 @@ logger = logging.getLogger(__name__)
 
 # Exponential backoff schedule for transient SQLite lock contention.
 _LOCK_RETRY_DELAYS = (0.05, 0.10, 0.20, 0.40, 0.80)
+
+
+def _project_payload_with_uuid(data: Optional[Dict] = None) -> tuple[Dict, str]:
+    payload = dict(data or {})
+    raw_uuid = payload.get("project_uuid")
+    project_uuid = str(uuid.UUID(str(raw_uuid))) if raw_uuid else str(uuid.uuid4())
+    payload["project_uuid"] = project_uuid
+    return payload, project_uuid
 
 
 def _is_retryable_lock_error(exc: Exception) -> bool:
@@ -57,14 +66,16 @@ class ProjectRepository:
     @_retry_on_database_lock
     def create_project(self, name: str, data: Dict = None) -> int:
         """Create a new project with proper transaction handling."""
-        json_str = json.dumps(data) if data else "{}"
+        payload, project_uuid = _project_payload_with_uuid(data)
+        json_str = json.dumps(payload)
         
         try:
             with self.db.transaction(immediate=True) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO projects (name, json_data) VALUES (?, ?)", 
-                    (name, json_str)
+                    "INSERT INTO projects (name, json_data, project_uuid) "
+                    "VALUES (?, ?, ?)",
+                    (name, json_str, project_uuid),
                 )
                 project_id = cursor.lastrowid
                 logger.info(f"Created Project: {name} (ID: {project_id})")
@@ -85,12 +96,13 @@ class ProjectRepository:
         if not owner_token:
             raise ValueError("owner_token must not be empty")
 
-        payload = dict(data or {})
+        payload, project_uuid = _project_payload_with_uuid(data)
         payload["_creation_owner"] = owner_token
         with self.db.transaction(immediate=True) as conn:
             cursor = conn.execute(
-                "INSERT INTO projects (name, json_data) VALUES (?, ?)",
-                (name, json.dumps(payload)),
+                "INSERT INTO projects (name, json_data, project_uuid) "
+                "VALUES (?, ?, ?)",
+                (name, json.dumps(payload), project_uuid),
             )
             project_id = int(cursor.lastrowid)
             payload["db_project_id"] = project_id
@@ -150,6 +162,10 @@ class ProjectRepository:
                     project["data"] = {}
             else:
                 project["data"] = {}
+            project["data"].setdefault(
+                "project_uuid",
+                project.get("project_uuid"),
+            )
             result.append(project)
         
         return result
@@ -174,6 +190,10 @@ class ProjectRepository:
                 project["data"] = {}
         else:
             project["data"] = {}
+        project["data"].setdefault(
+            "project_uuid",
+            project.get("project_uuid"),
+        )
             
         return project
 
@@ -192,6 +212,18 @@ class ProjectRepository:
             params.append(name)
 
         if data is not None:
+            row = self.db.get_connection().execute(
+                "SELECT project_uuid FROM projects WHERE id=?",
+                (int(project_id),),
+            ).fetchone()
+            if row is None:
+                raise LookupError(f"Projekt {project_id} existiert nicht mehr")
+            stored_uuid = str(uuid.UUID(str(row["project_uuid"])))
+            supplied_uuid = data.get("project_uuid")
+            if supplied_uuid and str(uuid.UUID(str(supplied_uuid))) != stored_uuid:
+                raise ValueError("project_uuid is immutable")
+            data = dict(data)
+            data["project_uuid"] = stored_uuid
             updates.append("json_data = ?")
             params.append(json.dumps(data))
             

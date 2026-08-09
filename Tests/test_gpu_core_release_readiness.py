@@ -194,6 +194,32 @@ def test_model_loader_unload_requires_release_confirmation(
     loader.vram_manager.release.assert_called_once_with("test")
 
 
+def test_model_loader_clears_external_session_owner_before_release() -> None:
+    class Owner:
+        def __init__(self, session) -> None:
+            self.session = session
+            self.release_order: list[str] = []
+
+        def release(self, model_id: str) -> None:
+            self.release_order.append(model_id)
+            self.session = None
+
+    session = object()
+    owner = Owner(session)
+    loader = object.__new__(ModelLoader)
+    loader._sessions = {"test": session}
+    loader._session_owner_callbacks = {}
+    loader._session_lock = threading.RLock()
+    loader.vram_manager = MagicMock()
+    loader.vram_manager.release.side_effect = lambda _model_id: owner.session is None
+    loader.register_session_owner("test", owner.release)
+
+    assert loader._do_unload("test") is True
+    assert owner.session is None
+    assert owner.release_order == ["test"]
+    loader.vram_manager.release.assert_called_once_with("test")
+
+
 def test_multi_gpu_fallbacks_do_not_mix_adapters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

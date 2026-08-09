@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,7 +13,10 @@ public partial class TerminalViewModel : ObservableObject, IDisposable
 {
     private readonly TerminalLogBuffer _buffer;
     private readonly StringBuilder _logBuilder = new();
+    private readonly ConcurrentQueue<TerminalLogEntry> _pendingEntries = new();
     private const int MaxLogLength = 100_000;
+    private int _flushScheduled;
+    private int _disposed;
 
     [ObservableProperty]
     private string _logContent = "";
@@ -31,9 +36,37 @@ public partial class TerminalViewModel : ObservableObject, IDisposable
 
     private void OnEntryAdded(TerminalLogEntry entry)
     {
+        if (Volatile.Read(ref _disposed) != 0)
+            return;
+        _pendingEntries.Enqueue(entry);
+        ScheduleFlush();
+    }
+
+    private void ScheduleFlush()
+    {
+        if (Volatile.Read(ref _disposed) != 0
+            || Interlocked.Exchange(ref _flushScheduled, 1) != 0)
+            return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
-            _ = dispatcher.InvokeAsync(() => AppendEntry(entry));
+            _ = dispatcher.InvokeAsync(FlushPendingEntries);
+        else
+            FlushPendingEntries();
+    }
+
+    private void FlushPendingEntries()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            while (_pendingEntries.TryDequeue(out _)) { }
+            Interlocked.Exchange(ref _flushScheduled, 0);
+            return;
+        }
+        while (_pendingEntries.TryDequeue(out var entry))
+            AppendEntry(entry);
+        Interlocked.Exchange(ref _flushScheduled, 0);
+        if (!_pendingEntries.IsEmpty)
+            ScheduleFlush();
     }
 
     private void AppendEntry(TerminalLogEntry entry)
@@ -60,6 +93,9 @@ public partial class TerminalViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         _buffer.Unsubscribe(OnEntryAdded);
+        while (_pendingEntries.TryDequeue(out _)) { }
     }
 }

@@ -313,6 +313,23 @@ def test_sparse_credit_updates_only_relevant_axes_and_contexts(tmp_path: Path):
         store.close()
 
 
+def test_versioned_axis_status_excludes_missing_axes():
+    assignments = build_credit_assignments(
+        metadata={
+            "bridge_values": {"beat_weight": 1.0},
+            "brain_axis_status": {},
+            "brain_axis_status_version": 1,
+        },
+        brain_scores={},
+        context_keys=[
+            "", "section=drop", "mood=dark", "motion=high",
+            "subtrack=main", "pace=fast",
+        ],
+    )
+
+    assert assignments == []
+
+
 def test_unknown_feedback_cut_fails_closed_before_weight_mutation(
     tmp_path: Path,
     monkeypatch,

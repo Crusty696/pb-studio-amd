@@ -17,8 +17,10 @@ Einschränkungen (akzeptabel für Single-User Desktop-App):
 import asyncio
 import json
 import logging
+import secrets
 import threading
 from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterator, Optional
@@ -28,6 +30,7 @@ from pb_studio.data.repositories.project_repository import ProjectRepository
 
 logger = logging.getLogger(__name__)
 PROJECT_TASK_DRAIN_TIMEOUT_SECONDS = 5.0
+PROJECT_CAPABILITY_HEADER = "X-PBStudio-Project-Capability"
 
 
 class PersistenceError(RuntimeError):
@@ -147,6 +150,12 @@ class ProjectContextUnavailableError(RuntimeError):
     """Es existiert kein vollständig auflösbarer aktiver Projektkontext."""
 
 
+_required_project_context: ContextVar[ProjectOperationContext | None] = ContextVar(
+    "pb_studio_required_project_context",
+    default=None,
+)
+
+
 @dataclass
 class AppState:
     """Thread-sicherer In-Memory State für alle FastAPI Router."""
@@ -184,6 +193,10 @@ class AppState:
         asyncio.Task[Any],
         tuple[ProjectOperationContext, int],
     ] = field(default_factory=dict, repr=False)
+    _project_capabilities: dict[str, ProjectOperationContext] = field(
+        default_factory=dict,
+        repr=False,
+    )
 
     @property
     def project_epoch(self) -> int:
@@ -250,6 +263,41 @@ class AppState:
                 "Projekt wurde während der Operation gewechselt"
             )
 
+    def issue_project_capability(self, context: ProjectOperationContext) -> str:
+        """Stellt einen widerrufbaren Token für exakt einen Projektkontext aus."""
+        with self._state_lock:
+            if not self._is_project_context_current_locked(context):
+                raise ProjectContextChangedError(
+                    "Projekt wurde vor Ausstellung der Capability gewechselt"
+                )
+            capability = secrets.token_urlsafe(32)
+            self._project_capabilities[capability] = context
+            return capability
+
+    def resolve_project_capability(
+        self,
+        capability: str,
+    ) -> ProjectOperationContext:
+        """Löst einen Token auf und lehnt widerrufene/stale Kontexte ab."""
+        with self._state_lock:
+            context = self._project_capabilities.get(capability)
+            if context is None:
+                raise ProjectContextChangedError(
+                    "Projekt-Capability ist ungültig oder abgelaufen"
+                )
+            if not self._is_project_context_current_locked(context):
+                self._project_capabilities.pop(capability, None)
+                raise ProjectContextChangedError(
+                    "Projekt-Capability gehört nicht mehr zum aktiven Projekt"
+                )
+            return context
+
+    def revoke_project_capability(self, capability: str | None) -> None:
+        if not capability:
+            return
+        with self._state_lock:
+            self._project_capabilities.pop(capability, None)
+
     @contextmanager
     def project_commit(
         self,
@@ -267,6 +315,7 @@ class AppState:
         """Invalidiert alle bisher erfassten Kontexte vor einem State-Wechsel."""
         with self._state_lock:
             self._project_epoch += 1
+            self._project_capabilities.clear()
             return self._project_epoch
 
     @asynccontextmanager
@@ -277,6 +326,11 @@ class AppState:
             raise RuntimeError("Projektoperation benötigt eine asyncio.Task")
         async with self._project_lifecycle_lock:
             context = self.capture_project_context()
+            required_context = _required_project_context.get()
+            if required_context is not None and context != required_context:
+                raise ProjectContextChangedError(
+                    "Projekt-Capability stimmt nicht mit dem aktiven Projekt überein"
+                )
             with self._state_lock:
                 registered = self._project_tasks.get(task)
                 if registered is None:
@@ -287,9 +341,11 @@ class AppState:
                     raise RuntimeError(
                         "Task ist bereits an einen anderen Projektkontext gebunden"
                     )
+        context_token = _required_project_context.set(context)
         try:
             yield context
         finally:
+            _required_project_context.reset(context_token)
             with self._state_lock:
                 registered = self._project_tasks.get(task)
                 if registered is not None and registered[1] <= 1:
@@ -299,6 +355,20 @@ class AppState:
                         registered[0],
                         registered[1] - 1,
                     )
+
+    @asynccontextmanager
+    async def project_capability_operation(
+        self,
+        capability: str,
+    ) -> AsyncIterator[ProjectOperationContext]:
+        """Bindet einen HTTP-Loopback-Request an seine Turn-Capability."""
+        required_context = self.resolve_project_capability(capability)
+        context_token = _required_project_context.set(required_context)
+        try:
+            async with self.project_operation() as context:
+                yield context
+        finally:
+            _required_project_context.reset(context_token)
 
     async def cancel_and_drain_project_tasks(
         self,
@@ -614,6 +684,7 @@ class AppState:
             with self._lock:
                 if invalidate_context:
                     self._project_epoch += 1
+                    self._project_capabilities.clear()
                 self.current_project = None
                 self.audio_clips.clear()
                 self.audio_analysis_cache.clear()

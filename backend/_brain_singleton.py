@@ -27,6 +27,7 @@ def set_project_state(
     *,
     project_epoch: Optional[int] = None,
     project_id: Optional[int] = None,
+    project_uuid: Optional[str] = None,
 ) -> BrainProjectIdentity:
     global _PROJECT_STATE_PATH
     new_path = Path(path).resolve()
@@ -35,6 +36,8 @@ def set_project_state(
         identity_kwargs["project_epoch"] = project_epoch
     if project_id is not None:
         identity_kwargs["project_id"] = project_id
+    if project_uuid is not None:
+        identity_kwargs["project_uuid"] = project_uuid
     identity = BrainService.get().bind_project_state(new_path, **identity_kwargs)
     _PROJECT_STATE_PATH = new_path
     return identity

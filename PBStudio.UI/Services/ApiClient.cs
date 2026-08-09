@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -15,6 +16,8 @@ public class ApiClient : IApiClient
     private readonly HttpClient _http;
     private readonly ILogger<ApiClient> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly ConcurrentDictionary<(int CutId, string Rating), Guid>
+        _pendingBrainFeedbackOperations = new();
     private volatile bool _isShuttingDown;
     private bool _disposed;
 
@@ -384,18 +387,30 @@ public class ApiClient : IApiClient
 
     public async Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
     {
+        var operationKey = (cutId, rating);
+        var operationId = _pendingBrainFeedbackOperations.GetOrAdd(
+            operationKey,
+            static _ => Guid.NewGuid());
         try
         {
             using var response = await _http.PostAsJsonAsync(
                 "/brain/feedback",
-                new { cut_id = cutId, rating },
+                new
+                {
+                    cut_id = cutId,
+                    rating,
+                    operation_id = operationId,
+                },
                 JsonOptions,
                 _shutdownCts.Token).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<BrainFeedbackResponse>(
+                var result = await response.Content.ReadFromJsonAsync<BrainFeedbackResponse>(
                     JsonOptions,
                     _shutdownCts.Token).ConfigureAwait(false);
+                if (result is not null)
+                    _pendingBrainFeedbackOperations.TryRemove(operationKey, out _);
+                return result;
             }
 
             var raw = await response.Content.ReadAsStringAsync(
@@ -406,6 +421,8 @@ public class ApiClient : IApiClient
                 "POST /brain/feedback abgelehnt: {Status} {Detail}",
                 (int)response.StatusCode,
                 detail);
+            if ((int)response.StatusCode < 500)
+                _pendingBrainFeedbackOperations.TryRemove(operationKey, out _);
             return new BrainFeedbackResponse("rejected", 0, 0, detail);
         }
         catch (Exception ex) when (IsExpectedCancellation(ex))
@@ -935,6 +952,7 @@ public class ApiClient : IApiClient
             _shutdownCts.Cancel();
         }
         _shutdownCts.Dispose();
+        _pendingBrainFeedbackOperations.Clear();
     }
 
     // =====================================================================
@@ -1057,7 +1075,7 @@ public class ApiClient : IApiClient
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "SendChatMessageAsync: Failed to open stream");
-            return null;
+            throw;
         }
     }
 

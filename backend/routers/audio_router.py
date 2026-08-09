@@ -42,6 +42,7 @@ from ..schemas.audio_schemas import (
     StructureSegment, SpectralData,
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
@@ -49,6 +50,7 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 # Module-level BeatDetector singleton — avoids re-initializing (model load) on every call
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
+_stem_partial_marker_lock = threading.RLock()
 _LONG_STEM_TIMEOUT_RATIO = 0.75
 def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
     """Allow long mixes enough wall time while retaining the configured floor."""
@@ -76,10 +78,18 @@ def _find_reusable_stem_files(
     except (OSError, ValueError, TypeError):
         return []
 
+    schema_version = marker.get("schema_version")
+    try:
+        model_artifact_matches = (
+            marker.get("model_artifact") == _stem_model_identity(model_name)
+        )
+    except (OSError, TypeError, ValueError):
+        return []
     if (
-        marker.get("schema_version") != 1
+        schema_version != 2
         or marker.get("source") != _stem_source_identity(source)
         or marker.get("model") != Path(model_name).name.casefold()
+        or not model_artifact_matches
     ):
         return []
 
@@ -149,6 +159,70 @@ def _stem_source_identity(source: Path) -> dict[str, int | str]:
     }
 
 
+def _stem_artifact_file_identity(path: Path) -> dict[str, int | str]:
+    import hashlib
+    import os
+
+    resolved = path.resolve(strict=True)
+    with resolved.open("rb") as handle:
+        stat_before = os.fstat(handle.fileno())
+        hasher = hashlib.sha256()
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+        stat_after = os.fstat(handle.fileno())
+    path_stat = resolved.stat()
+    stable_before = (int(stat_before.st_size), int(stat_before.st_mtime_ns))
+    stable_after = (int(stat_after.st_size), int(stat_after.st_mtime_ns))
+    stable_path = (int(path_stat.st_size), int(path_stat.st_mtime_ns))
+    if stable_before != stable_after or stable_after != stable_path:
+        raise RuntimeError(f"Stem-Modellartefakt änderte sich während des Hashings: {resolved}")
+    return {
+        "path": os.path.normcase(str(resolved)),
+        "size": int(path_stat.st_size),
+        "mtime_ns": int(path_stat.st_mtime_ns),
+        "sha256": hasher.hexdigest(),
+    }
+
+
+def _stem_model_identity(model_name: str) -> dict[str, Any]:
+    from pb_studio.config_manager import ConfigManager
+
+    config_manager = ConfigManager()
+    model_dir_raw = config_manager.get("paths", {}).get("models_dir", "./models")
+    model_dir = Path(config_manager.resolve_path(model_dir_raw))
+    model_path = (model_dir / Path(model_name).name).resolve(strict=True)
+    artifact_paths = [model_path]
+    if model_path.suffix.casefold() in {".yaml", ".yml"}:
+        import yaml
+
+        try:
+            document = yaml.safe_load(model_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ValueError(f"Demucs-Modellliste ist nicht lesbar: {model_path.name}") from exc
+        signatures = document.get("models") if isinstance(document, dict) else None
+        if not isinstance(signatures, list) or not signatures:
+            raise ValueError(f"Demucs-Modellliste fehlt in {model_path.name}")
+        for raw_signature in signatures:
+            signature = str(raw_signature).strip()
+            matches = [
+                candidate
+                for candidate in model_dir.glob("*.th")
+                if candidate.stem == signature
+                or candidate.stem.startswith(f"{signature}-")
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Demucs-Gewicht {signature!r} ist nicht eindeutig vorhanden"
+                )
+            artifact_paths.append(matches[0])
+    return {
+        "files": [
+            _stem_artifact_file_identity(path)
+            for path in artifact_paths
+        ],
+    }
+
+
 def _stem_cache_marker_path(
     source: Path,
     model_name: str,
@@ -160,11 +234,195 @@ def _stem_cache_marker_path(
     identity = {
         "source": _stem_source_identity(source),
         "model": Path(model_name).name.casefold(),
+        "model_artifact": _stem_model_identity(model_name),
     }
     digest = hashlib.sha256(
         json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     return output_dir.resolve() / f".{source.stem}.{digest}.stems-complete.json"
+
+
+def _stem_partial_marker_path(
+    source: Path,
+    model_name: str,
+    output_dir: Path,
+) -> Path:
+    complete_path = _stem_cache_marker_path(source, model_name, output_dir)
+    return complete_path.with_name(
+        complete_path.name.replace(".stems-complete.json", ".stems-partial.json")
+    )
+
+
+def _stem_run_output_dir(
+    source: Path,
+    model_name: str,
+    base_output_dir: Path,
+) -> Path:
+    """Return a deterministic source/model-isolated output directory."""
+    import hashlib
+    import json
+
+    identity = {
+        "source": _stem_source_identity(source),
+        "model": Path(model_name).name.casefold(),
+        "model_artifact": _stem_model_identity(model_name),
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return base_output_dir.resolve() / "stem-runs" / digest
+
+
+def _validated_stem_output_record(
+    source: Path,
+    output_dir: Path,
+    file_name: str,
+    *,
+    expected_role: str | None = None,
+) -> tuple[str, dict[str, int | str]]:
+    """Validate one fully closed stem and return its stable marker record."""
+    import soundfile as sf
+
+    path = Path(file_name).resolve()
+    role = _exact_stem_role(path)
+    if role is None or (expected_role is not None and role != expected_role):
+        raise ValueError(f"Stem-Datei hat keine eindeutige exakte Rolle: {path.name}")
+    if not path.is_relative_to(output_dir.resolve()):
+        raise ValueError(f"Stem-Datei liegt ausserhalb des Output-Ordners: {path}")
+
+    source_duration = float(sf.info(str(source)).duration)
+    stat = path.stat()
+    info = sf.info(str(path))
+    if (
+        stat.st_size <= 0
+        or int(info.frames) <= 0
+        or abs(float(info.duration) - source_duration) > 0.25
+    ):
+        raise ValueError(f"Stem-Datei ist unvollstaendig: {path.name}")
+    try:
+        with sf.SoundFile(str(path), mode="r") as audio_file:
+            audio_file.seek(max(int(info.frames) - 1, 0))
+            if len(audio_file.read(1, always_2d=True)) != 1:
+                raise ValueError(f"Stem-Datei hat keinen lesbaren letzten Frame: {path.name}")
+    except RuntimeError as exc:
+        raise ValueError(f"Stem-Datei ist nicht vollstaendig lesbar: {path.name}") from exc
+    return role, {
+        "path": str(path),
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "frames": int(info.frames),
+        "sample_rate": int(info.samplerate),
+        "channels": int(info.channels),
+    }
+
+
+def _load_partial_stem_outputs(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+) -> dict[str, str]:
+    """Return only source/model-bound partial stems that still validate."""
+    import json
+
+    source = Path(audio_path)
+    required_roles = _required_stem_roles(model_name)
+    marker_path = _stem_partial_marker_path(source, model_name, output_dir)
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    try:
+        model_artifact_matches = (
+            marker.get("model_artifact") == _stem_model_identity(model_name)
+        )
+    except (OSError, TypeError, ValueError):
+        return {}
+    if (
+        marker.get("schema_version") != 2
+        or marker.get("source") != _stem_source_identity(source)
+        or marker.get("model") != Path(model_name).name.casefold()
+        or not model_artifact_matches
+    ):
+        return {}
+
+    records = marker.get("outputs")
+    if not isinstance(records, dict):
+        return {}
+    valid: dict[str, str] = {}
+    for role, stored_record in records.items():
+        if role not in required_roles or not isinstance(stored_record, dict):
+            continue
+        try:
+            validated_role, current_record = _validated_stem_output_record(
+                source,
+                output_dir,
+                str(stored_record["path"]),
+                expected_role=role,
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            continue
+        if current_record == stored_record:
+            valid[validated_role] = str(current_record["path"])
+    return valid
+
+
+def _checkpoint_partial_stem(
+    audio_path: str,
+    model_name: str,
+    output_dir: Path,
+    role: str,
+    file_name: str,
+    *,
+    state: AppState | None = None,
+    context: ProjectOperationContext | None = None,
+) -> None:
+    """Atomically merge one validated stem into the partial-run manifest."""
+    import json
+    import os
+    import uuid
+
+    source = Path(audio_path)
+    required_roles = _required_stem_roles(model_name)
+    canonical_role = str(role).strip().casefold()
+    if canonical_role not in required_roles:
+        raise ValueError(f"Unerwartete Stem-Rolle: {role}")
+
+    with _stem_partial_marker_lock:
+        existing = _load_partial_stem_outputs(audio_path, model_name, output_dir)
+        existing[canonical_role] = file_name
+        output_records: dict[str, dict[str, int | str]] = {}
+        for existing_role, existing_path in sorted(existing.items()):
+            validated_role, record = _validated_stem_output_record(
+                source,
+                output_dir,
+                existing_path,
+                expected_role=existing_role,
+            )
+            output_records[validated_role] = record
+
+        marker_path = _stem_partial_marker_path(source, model_name, output_dir)
+        marker = {
+            "schema_version": 2,
+            "source": _stem_source_identity(source),
+            "model": Path(model_name).name.casefold(),
+            "model_artifact": _stem_model_identity(model_name),
+            "outputs": output_records,
+        }
+        temp_path = marker_path.with_name(
+            f"{marker_path.name}.{uuid.uuid4().hex}.tmp"
+        )
+        try:
+            with temp_path.open("w", encoding="utf-8") as handle:
+                json.dump(marker, handle, sort_keys=True, separators=(",", ":"))
+                handle.flush()
+                os.fsync(handle.fileno())
+            if state is not None and context is not None:
+                with state.project_commit(context):
+                    os.replace(temp_path, marker_path)
+            else:
+                os.replace(temp_path, marker_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
 
 def _write_stem_cache_marker(
@@ -179,7 +437,6 @@ def _write_stem_cache_marker(
     """Atomically publish validated output metadata after separator success."""
     import json
     import os
-    import soundfile as sf
     import uuid
 
     source = Path(audio_path)
@@ -187,45 +444,28 @@ def _write_stem_cache_marker(
     if not required_roles:
         raise ValueError(f"Unbekanntes Stem-Modell: {model_name}")
 
-    source_duration = float(sf.info(str(source)).duration)
-    duration_tolerance = 0.25
-    output_root = output_dir.resolve()
     outputs: dict[str, dict[str, int | str]] = {}
     for file_name in stem_files:
-        path = Path(file_name).resolve()
-        role = _exact_stem_role(path)
-        if role is None:
-            raise ValueError(f"Stem-Datei hat keine eindeutige exakte Rolle: {path.name}")
+        role, record = _validated_stem_output_record(
+            source,
+            output_dir,
+            file_name,
+        )
         if role not in required_roles or role in outputs:
             raise ValueError(f"Stem-Rolle ist unerwartet oder doppelt: {role}")
-        if not path.is_relative_to(output_root):
-            raise ValueError(f"Stem-Datei liegt ausserhalb des Output-Ordners: {path}")
-        stat = path.stat()
-        info = sf.info(str(path))
-        if (
-            stat.st_size <= 0
-            or int(info.frames) <= 0
-            or abs(float(info.duration) - source_duration) > duration_tolerance
-        ):
-            raise ValueError(f"Stem-Datei ist unvollstaendig: {path.name}")
-        outputs[role] = {
-            "path": str(path),
-            "size": int(stat.st_size),
-            "mtime_ns": int(stat.st_mtime_ns),
-            "frames": int(info.frames),
-            "sample_rate": int(info.samplerate),
-            "channels": int(info.channels),
-        }
+        outputs[role] = record
 
     if set(outputs) != required_roles:
         missing = ", ".join(sorted(required_roles - set(outputs)))
         raise ValueError(f"Stem-Rollen fehlen: {missing}")
 
     marker_path = _stem_cache_marker_path(source, model_name, output_dir)
+    partial_marker_path = _stem_partial_marker_path(source, model_name, output_dir)
     marker = {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": _stem_source_identity(source),
         "model": Path(model_name).name.casefold(),
+        "model_artifact": _stem_model_identity(model_name),
         "outputs": outputs,
     }
     temp_path = marker_path.with_name(f"{marker_path.name}.{uuid.uuid4().hex}.tmp")
@@ -237,8 +477,10 @@ def _write_stem_cache_marker(
         if state is not None and context is not None:
             with state.project_commit(context):
                 os.replace(temp_path, marker_path)
+                partial_marker_path.unlink(missing_ok=True)
         else:
             os.replace(temp_path, marker_path)
+            partial_marker_path.unlink(missing_ok=True)
     finally:
         try:
             temp_path.unlink()
@@ -268,6 +510,7 @@ def _get_beat_detector() -> "Any":
         "Ermittelt Dauer via ffprobe und gibt die Clip-Metadaten zurück."
     ),
 )
+@recovery_write_operation("audio-media")
 async def import_audio(
     request: AudioImportRequest,
     state: AppState = Depends(get_app_state),
@@ -479,6 +722,7 @@ async def list_clips(
     response_model=DeleteResponse,
     summary="Audio-Clip loeschen (single)",
 )
+@recovery_write_operation("audio-media")
 async def delete_clip(
     clip_id: int,
     state: AppState = Depends(get_app_state),
@@ -495,6 +739,7 @@ async def delete_clip(
     response_model=DeleteResponse,
     summary="Audio-Clips batch-loeschen",
 )
+@recovery_write_operation("audio-media")
 async def delete_clips_batch(
     request: BatchDeleteRequest,
     state: AppState = Depends(get_app_state),
@@ -832,6 +1077,7 @@ def _merge_audio_analysis_result(
         "spektrale Daten. Ergebnis wird gecacht. Kann mehrere Sekunden dauern."
     ),
 )
+@recovery_write_operation("audio-analysis")
 async def analyze_audio(
     request: AudioAnalyzeRequest,
     state: AppState = Depends(get_app_state),
@@ -880,6 +1126,34 @@ async def _analyze_audio_in_context(
         )
 
     logger.info(f"Starte Audio-Analyse für Clip {request.clip_id}: {clip['name']}")
+    _loop = asyncio.get_running_loop()
+    _progress_terminal = threading.Event()
+
+    def _analysis_progress(
+        step: str,
+        percent: float,
+        message: str,
+    ) -> None:
+        async def _publish_if_active() -> None:
+            if _progress_terminal.is_set():
+                return
+            await publish_event("analysis_progress", {
+                "event": "analysis_progress",
+                "task_id": str(request.clip_id),
+                "clip_id": request.clip_id,
+                "status": "running",
+                "step": step,
+                "percent": percent,
+                "message": message,
+            })
+
+        if _progress_terminal.is_set():
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(_publish_if_active(), _loop)
+        except Exception:
+            pass
+
     await publish_log(
         f"Audio-Analyse gestartet: {clip['name']}",
         level="info",
@@ -889,6 +1163,7 @@ async def _analyze_audio_in_context(
     await publish_event("analysis_progress", {
         "event": "analysis_progress",
         "task_id": str(request.clip_id),
+        "clip_id": request.clip_id,
         "status": "running",
         "percent": 0,
         "message": f"Analyse gestartet: Clip {request.clip_id}",
@@ -901,7 +1176,6 @@ async def _analyze_audio_in_context(
     planned_request: AudioAnalyzeRequest | None = None
 
     try:
-        _loop = asyncio.get_running_loop()
         # Cache bleibt Merge-Basis: gezielte Retries bewahren alle anderen Stages.
         _pre_cached = dict(state.get_audio_analysis(request.clip_id) or {})
         planned_request = _plan_audio_analysis(request, _pre_cached)
@@ -1021,7 +1295,7 @@ async def _analyze_audio_in_context(
                 request.clip_id,
                 planned_request,
                 stems_paths,
-                _loop,
+                _analysis_progress,
                 **worker_kwargs,
             )
         else:
@@ -1099,9 +1373,17 @@ async def _analyze_audio_in_context(
             source="audio.analyze",
             detail=f"clip_id={request.clip_id} bpm={float(result.get('bpm', 0.0) or 0.0):.2f} beats={int(result.get('beat_count', 0) or 0)}",
         )
+        public_result = dict(result)
+        public_result["analysis_status"] = analysis_status
+        public_result["stage_status"] = result.get("_stage_status", {})
+        public_result["stage_errors"] = result.get("_stage_errors", {})
+        public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
+        response = AudioAnalysisResult(**public_result)
+        _progress_terminal.set()
         await publish_event("analysis_progress", {
             "event": "analysis_progress",
             "task_id": str(request.clip_id),
+            "clip_id": request.clip_id,
             "status": analysis_status,
             "percent": 100,
             "message": (
@@ -1112,13 +1394,9 @@ async def _analyze_audio_in_context(
             "stage_status": result.get("_stage_status", {}),
             "stage_errors": result.get("_stage_errors", {}),
         })
-        public_result = dict(result)
-        public_result["analysis_status"] = analysis_status
-        public_result["stage_status"] = result.get("_stage_status", {})
-        public_result["stage_errors"] = result.get("_stage_errors", {})
-        public_result["chunk_evidence"] = result.get("_chunk_evidence", {})
-        return AudioAnalysisResult(**public_result)
+        return response
     except asyncio.CancelledError:
+        _progress_terminal.set()
         _checkpoint_cancel_event.set()
         if planned_request is not None:
             try:
@@ -1145,6 +1423,7 @@ async def _analyze_audio_in_context(
             await publish_event("analysis_progress", {
                 "event": "analysis_progress",
                 "task_id": str(request.clip_id),
+                "clip_id": request.clip_id,
                 "status": "interrupted",
                 "percent": 0,
                 "message": f"Audio-Analyse unterbrochen: {clip['name']}",
@@ -1160,8 +1439,18 @@ async def _analyze_audio_in_context(
             )
         raise
     except ProjectContextChangedError:
+        _progress_terminal.set()
+        await publish_event("analysis_progress", {
+            "event": "analysis_progress",
+            "task_id": str(request.clip_id),
+            "clip_id": request.clip_id,
+            "status": "interrupted",
+            "percent": 0,
+            "message": f"Audio-Analyse durch Projektwechsel unterbrochen: {clip['name']}",
+        })
         raise
     except Exception as e:
+        _progress_terminal.set()
         logger.error(f"Audio-Analyse fehlgeschlagen: {e}", exc_info=True)
         await publish_log(
             f"Audio-Analyse fehlgeschlagen: {clip['name']}",
@@ -1172,6 +1461,7 @@ async def _analyze_audio_in_context(
         await publish_event("analysis_progress", {
             "event": "analysis_progress",
             "task_id": str(request.clip_id),
+            "clip_id": request.clip_id,
             "status": "failed",
             "percent": 0,
             "message": f"Analyse fehlgeschlagen: {str(e)}",
@@ -1255,6 +1545,7 @@ async def get_waveform(
         "Belegt GPU-Lock für die Dauer der Separation (kann mehrere Minuten dauern)."
     ),
 )
+@recovery_write_operation("stem-output")
 async def separate_stems(
     request: StemSeparateRequest,
     state: AppState = Depends(get_app_state),
@@ -1284,22 +1575,37 @@ async def _separate_stems_in_context(
     # Audit C2: per-stage stem_progress SSE callback (init/loading/inference/saving/complete).
     _loop = asyncio.get_running_loop()
     _clip_id = request.clip_id
+    _stem_progress_terminal = threading.Event()
 
     def _stem_progress(pct: float) -> None:
-        state.require_project_context_current(context)
-        if _loop is None:
+        if _stem_progress_terminal.is_set():
             return
+        state.require_project_context_current(context)
+
+        async def _publish_if_active() -> None:
+            if _stem_progress_terminal.is_set():
+                return
+            visible_percent = min(max(float(pct), 0.0), 99.0)
+            await publish_event("stem_progress", {
+                "task_id": str(_clip_id),
+                "clip_id": _clip_id,
+                "status": "running",
+                "percent": visible_percent,
+                "message": f"Stem-Separation: {visible_percent:.0f}%",
+            })
+
         try:
-            asyncio.run_coroutine_threadsafe(
-                publish_event("stem_progress", {
-                    "clip_id": _clip_id,
-                    "percent": float(pct),
-                    "message": f"Stem-Separation: {float(pct):.0f}%",
-                }),
-                _loop,
-            )
+            asyncio.run_coroutine_threadsafe(_publish_if_active(), _loop)
         except Exception:
             pass
+
+    await publish_event("stem_progress", {
+        "task_id": str(_clip_id),
+        "clip_id": _clip_id,
+        "status": "running",
+        "percent": 0.0,
+        "message": f"Stem-Separation gestartet: {clip['name']}",
+    })
 
     try:
         # B3-Fix (2026-05-19): explizit stem_timeout uebergeben (900s default
@@ -1415,13 +1721,63 @@ async def _separate_stems_in_context(
             except Exception as sub_err:
                 logger.error(f"Re-Run der Sub-Track-Detection mit Stems fehlgeschlagen: {sub_err}", exc_info=True)
 
-        return StemResult(clip_id=request.clip_id, **result)
+        response = StemResult(clip_id=request.clip_id, **result)
+        _stem_progress_terminal.set()
+        await publish_event("stem_progress", {
+            "task_id": str(_clip_id),
+            "clip_id": _clip_id,
+            "status": "completed",
+            "percent": 100.0,
+            "message": f"Stem-Separation abgeschlossen: {clip['name']}",
+        })
+        return response
     except asyncio.CancelledError:
+        _stem_progress_terminal.set()
+        try:
+            await publish_event("stem_progress", {
+                "task_id": str(_clip_id),
+                "clip_id": _clip_id,
+                "status": "interrupted",
+                "percent": 0.0,
+                "message": f"Stem-Separation unterbrochen: {clip['name']}",
+            })
+        except asyncio.CancelledError:
+            pass
         raise
     except ProjectContextChangedError:
+        _stem_progress_terminal.set()
+        await publish_event("stem_progress", {
+            "task_id": str(_clip_id),
+            "clip_id": _clip_id,
+            "status": "interrupted",
+            "percent": 0.0,
+            "message": f"Stem-Separation durch Projektwechsel unterbrochen: {clip['name']}",
+        })
         raise
+    except TimeoutError as e:
+        _stem_progress_terminal.set()
+        logger.error(f"Stem-Separation Timeout: {e}", exc_info=True)
+        await publish_event("stem_progress", {
+            "task_id": str(_clip_id),
+            "clip_id": _clip_id,
+            "status": "timed_out",
+            "percent": 0.0,
+            "message": f"Stem-Separation Timeout: {clip['name']}",
+            "error": str(e),
+            "background_worker": "continues_until_worker_exit",
+        })
+        raise HTTPException(status_code=504, detail=f"Stem-Separation Timeout: {e}")
     except Exception as e:
+        _stem_progress_terminal.set()
         logger.error(f"Stem-Separation fehlgeschlagen: {e}", exc_info=True)
+        await publish_event("stem_progress", {
+            "task_id": str(_clip_id),
+            "clip_id": _clip_id,
+            "status": "failed",
+            "percent": 0.0,
+            "message": f"Stem-Separation fehlgeschlagen: {clip['name']}",
+            "error": str(e),
+        })
         raise HTTPException(status_code=500, detail=f"Stem-Separation fehlgeschlagen: {e}")
 
 
@@ -1505,15 +1861,17 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
     return {"duration": duration, "sample_rate": sample_rate, "channels": channels}
 
 
-def _emit_analysis_progress(loop, step: str, percent: float, message: str) -> None:
-    """Sendet ein analysis_progress SSE-Event aus einem Worker-Thread (fire-and-forget)."""
-    if loop is None:
+def _emit_analysis_progress(
+    publisher,
+    step: str,
+    percent: float,
+    message: str,
+) -> None:
+    """Delegiert korrelierten Analysefortschritt an den Request-Publisher."""
+    if publisher is None:
         return
     try:
-        asyncio.run_coroutine_threadsafe(
-            publish_event("analysis_progress", {"step": step, "percent": percent, "message": message}),
-            loop,
-        )
+        publisher(step, percent, message)
     except Exception:
         pass
 
@@ -1723,7 +2081,6 @@ def _run_audio_analysis(
                         checkpoint_guard=_stream_guard,
                     )
                     _stream_energy = list(_energy_res.energy_curve)
-                    _stream_features = _energy_res
                     _stream_chunk_evidence["mix_energy"] = {
                         "source_role": "original_mix_energy",
                         "window_count": _energy_res.window_count,
@@ -2084,21 +2441,51 @@ def _run_audio_analysis(
     if request.detect_key:
         try:
             from pb_studio.audio.key_detector import KeyDetector
-            if _use_streaming:
-                if _stream_features is None or not _stream_features.chroma_mean:
-                    raise RuntimeError("Streaming-Chromarepräsentation ist leer")
-                key = KeyDetector().detect_key_from_chroma(
-                    _stream_features.chroma_mean
-                )
-            elif instrumental_path and Path(instrumental_path).exists():
+            key_detector = KeyDetector()
+
+            def _detect_original_mix_key() -> str:
+                if _use_streaming:
+                    if _stream_features is None or not _stream_features.chroma_mean:
+                        raise RuntimeError("Streaming-Chromarepräsentation ist leer")
+                    return key_detector.detect_key_from_chroma(
+                        _stream_features.chroma_mean
+                    )
+                return key_detector.detect_key(y, sr)
+
+            instrumental_is_valid = bool(
+                instrumental_path
+                and Path(instrumental_path).is_file()
+                and Path(instrumental_path).stat().st_size > 0
+            )
+            if instrumental_is_valid:
                 logger.info(f"Key-Detection verwendet Instrumental-Pfad: {instrumental_path}")
-                y_inst, sr_inst = librosa.load(instrumental_path, sr=22050, mono=True, duration=600.0)
-                key = KeyDetector().detect_key(y_inst, sr_inst)
+                try:
+                    y_inst, sr_inst = librosa.load(
+                        instrumental_path,
+                        sr=22050,
+                        mono=True,
+                        duration=600.0,
+                    )
+                    key = key_detector.detect_key(y_inst, sr_inst)
+                    if not key or key == "Unknown":
+                        logger.warning(
+                            "Instrumental-Key-Quelle lieferte keine Tonart; "
+                            "verwende Original-Mix"
+                        )
+                        key = _detect_original_mix_key()
+                except Exception as instrumental_error:
+                    logger.warning(
+                        "Instrumental-Key-Quelle unbrauchbar (%s); "
+                        "verwende Original-Mix",
+                        instrumental_error,
+                    )
+                    key = _detect_original_mix_key()
             else:
-                key = KeyDetector().detect_key(y, sr)
+                key = _detect_original_mix_key()
             if not key or key == "Unknown":
                 raise RuntimeError("Tonart konnte nicht ermittelt werden")
-            _mark_stage_completed("key", ("load", "features"))
+            _stage_status["key"] = "completed"
+            _stage_errors.pop("key", None)
         except Exception as e:
             logger.warning(f"Key-Detection fehlgeschlagen: {e}")
             _stage_status["key"] = "failed"
@@ -2208,6 +2595,7 @@ def _extract_waveform(audio_path: str, bands: int) -> list[list[float]]:
         return []
 
 
+@recovery_write_operation("stem-output")
 def _run_stem_separation(
     audio_path: str,
     model_name: str,
@@ -2222,8 +2610,17 @@ def _run_stem_separation(
 
     config_manager = ConfigManager()
     output_dir_raw = config_manager.get("paths", {}).get("temp_dir", "./temp")
-    output_dir = config_manager.resolve_path(output_dir_raw)
+    base_output_dir = Path(config_manager.resolve_path(output_dir_raw))
+    source = Path(audio_path)
+    output_dir = _stem_run_output_dir(source, model_name, base_output_dir)
     reusable = _find_reusable_stem_files(audio_path, model_name, output_dir)
+    if not reusable:
+        # Backwards compatibility: accept an already validated pre-isolation run.
+        reusable = _find_reusable_stem_files(
+            audio_path,
+            model_name,
+            base_output_dir,
+        )
     used_reusable_cache = bool(reusable)
     if reusable:
         logger.info("Verwende %d vollständig validierte Stem-Dateien erneut", len(reusable))
@@ -2232,9 +2629,42 @@ def _run_stem_separation(
         result = {"stems": reusable}
     else:
         separator = StemSeparator()
+        partial_stems = _load_partial_stem_outputs(
+            audio_path,
+            model_name,
+            output_dir,
+        )
+
+        def _on_stem_completed(
+            role: str,
+            file_name: str,
+            _reused: bool,
+        ) -> None:
+            _checkpoint_partial_stem(
+                audio_path,
+                model_name,
+                output_dir,
+                role,
+                file_name,
+                state=state,
+                context=context,
+            )
+
         if state is not None and context is not None:
             state.require_project_context_current(context)
-        result = separator.separate(audio_path, model_name=model_name, on_progress=on_progress)
+        result = separator.separate(
+            audio_path,
+            model_name=model_name,
+            on_progress=on_progress,
+            resume_stems=partial_stems,
+            on_stem_completed=_on_stem_completed,
+            output_dir=output_dir,
+            checkpoint_guard=(
+                (lambda: state.require_project_context_current(context))
+                if state is not None and context is not None
+                else None
+            ),
+        )
 
     # Fehler vom Separator prüfen
     if "error" in result:
@@ -2251,6 +2681,26 @@ def _run_stem_separation(
         resolved = p.resolve() if p.is_absolute() else (output_dir / p).resolve()
         normalized_stem_files.append(str(resolved))
 
+    if not used_reusable_cache:
+        _write_stem_cache_marker(
+            audio_path,
+            model_name,
+            output_dir,
+            normalized_stem_files,
+            state=state,
+            context=context,
+        )
+        validated_stem_files = _find_reusable_stem_files(
+            audio_path,
+            model_name,
+            output_dir,
+        )
+        if validated_stem_files != sorted(normalized_stem_files):
+            raise RuntimeError(
+                "Stem-Erfolgsmarker oder Artefakte sind nach Publikation ungueltig"
+            )
+        normalized_stem_files = validated_stem_files
+
     mapped: dict[str, str | None] = {
         "vocals_path": None,
         "instrumental_path": None,
@@ -2261,72 +2711,88 @@ def _run_stem_separation(
     }
 
     for fpath in normalized_stem_files:
-        name_lower = Path(fpath).stem.lower()
-        if "vocal" in name_lower:
-            mapped["vocals_path"] = fpath
-        elif "instrumental" in name_lower or "no_vocals" in name_lower or "instrum" in name_lower:
-            mapped["instrumental_path"] = fpath
-        elif "drum" in name_lower:
-            mapped["drums_path"] = fpath
-        elif "bass" in name_lower:
-            mapped["bass_path"] = fpath
-        elif "other" in name_lower:
-            mapped["other_path"] = fpath
-        else:
-            # Unbekannter Stem — als "other" zuweisen falls noch frei
-            if mapped["other_path"] is None:
-                mapped["other_path"] = fpath
+        role = _exact_stem_role(Path(fpath))
+        if role is None:
+            raise RuntimeError(f"Validierter Stem hat keine eindeutige Rolle: {fpath}")
+        mapped[f"{role}_path"] = fpath
 
     # Synthetisiere instrumental_path falls htdemucs (drums, bass, other, vocals vorhanden, aber kein instrumental)
     if (mapped["vocals_path"] and mapped["drums_path"] and mapped["bass_path"] and mapped["other_path"] 
             and mapped["instrumental_path"] is None):
+        temp_inst_path: Path | None = None
         try:
             logger.info("Synthetisiere Instrumental-Stem aus Drums + Bass + Other...")
             import soundfile as sf
             import numpy as np
+            import os
+            import uuid
             
             # Ausgabepfad generieren (im selben Verzeichnis wie die anderen Stems)
             drums_p = Path(mapped["drums_path"])
             inst_p = drums_p.parent / f"{drums_p.stem.replace('(Drums)', '(Instrumental)').replace('drums', 'instrumental')}.wav"
-            
-            data_drums, sr = sf.read(mapped["drums_path"])
-            data_bass, _ = sf.read(mapped["bass_path"])
-            data_other, _ = sf.read(mapped["other_path"])
-            
-            # Sicherstellen, dass die Arrays die gleiche Länge haben (falls minimal abweichend)
-            min_len = min(len(data_drums), len(data_bass), len(data_other))
-            data_inst = data_drums[:min_len] + data_bass[:min_len] + data_other[:min_len]
-            
-            # Amplitudenbegrenzung gegen Clipping
-            data_inst = np.clip(data_inst, -1.0, 1.0)
-            
+            temp_inst_path = inst_p.with_name(f".{inst_p.name}.{uuid.uuid4().hex}.tmp.wav")
+
+            with (
+                sf.SoundFile(str(mapped["drums_path"]), mode="r") as drums_file,
+                sf.SoundFile(str(mapped["bass_path"]), mode="r") as bass_file,
+                sf.SoundFile(str(mapped["other_path"]), mode="r") as other_file,
+            ):
+                stream_contracts = {
+                    (int(stem.samplerate), int(stem.channels))
+                    for stem in (drums_file, bass_file, other_file)
+                }
+                if len(stream_contracts) != 1:
+                    raise ValueError("Stem-Samplerate oder Kanalzahl stimmen nicht überein")
+                sample_rate, channels = stream_contracts.pop()
+                remaining = min(
+                    int(drums_file.frames),
+                    int(bass_file.frames),
+                    int(other_file.frames),
+                )
+                with sf.SoundFile(
+                    str(temp_inst_path),
+                    mode="w",
+                    samplerate=sample_rate,
+                    channels=channels,
+                    subtype="FLOAT",
+                    format="WAV",
+                ) as output_file:
+                    while remaining > 0:
+                        frame_count = min(65536, remaining)
+                        blocks = [
+                            stem.read(frame_count, dtype="float32", always_2d=True)
+                            for stem in (drums_file, bass_file, other_file)
+                        ]
+                        if any(len(block) != frame_count for block in blocks):
+                            raise ValueError("Stem-Datei endete während der Synthese vorzeitig")
+                        mixed = blocks[0]
+                        mixed += blocks[1]
+                        mixed += blocks[2]
+                        np.clip(mixed, -1.0, 1.0, out=mixed)
+                        output_file.write(mixed)
+                        remaining -= frame_count
+                    output_file.flush()
+            with temp_inst_path.open("rb") as completed_file:
+                os.fsync(completed_file.fileno())
+            _validated_stem_output_record(
+                Path(audio_path),
+                output_dir,
+                str(temp_inst_path),
+                expected_role="instrumental",
+            )
             if state is not None and context is not None:
                 with state.project_commit(context):
-                    sf.write(str(inst_p), data_inst, sr)
+                    os.replace(temp_inst_path, inst_p)
             else:
-                sf.write(str(inst_p), data_inst, sr)
+                os.replace(temp_inst_path, inst_p)
             mapped["instrumental_path"] = str(inst_p)
             logger.info(f"Instrumental-Stem erfolgreich synthetisiert unter: {inst_p}")
         except Exception as synth_err:
             logger.error(f"Fehler bei der Synthese des Instrumental-Stems: {synth_err}", exc_info=True)
+        finally:
+            if temp_inst_path is not None:
+                temp_inst_path.unlink(missing_ok=True)
 
     logger.info(f"Stem-Mapping: {len(normalized_stem_files)} Dateien → {sum(1 for v in mapped.values() if v and v != model_name)} Stems")
-    if not used_reusable_cache:
-        try:
-            _write_stem_cache_marker(
-                audio_path,
-                model_name,
-                output_dir,
-                normalized_stem_files,
-                state=state,
-                context=context,
-            )
-        except ProjectContextChangedError:
-            raise
-        except (OSError, RuntimeError, ValueError) as marker_error:
-            logger.warning(
-                "Stem-Erfolgsmarker konnte nicht publiziert werden; Reuse deaktiviert: %s",
-                marker_error,
-            )
 
     return mapped

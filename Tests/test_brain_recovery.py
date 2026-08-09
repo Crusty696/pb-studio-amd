@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.storage.brain_store import BrainStore
 
@@ -51,6 +53,42 @@ def test_brain_handles_corrupt_patterns(tmp_path: Path):
         assert (brain / "patterns.db.corrupt").is_file()
     finally:
         store.close()
+
+
+def test_brain_recovers_corrupt_embedding_cache(tmp_path: Path):
+    brain = tmp_path / "brain"
+    brain.mkdir()
+    (brain / "embedding_cache.db").write_bytes(b"not-a-sqlite-cache")
+
+    store = BrainStore(brain)
+    try:
+        rows = store.cache.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        assert "media_embedding_index" in {row[0] for row in rows}
+        assert (brain / "embedding_cache.db.corrupt").is_file()
+    finally:
+        store.close()
+
+
+def test_brain_init_failure_closes_already_open_connections(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from pb_studio.storage import brain_store as brain_store_module
+
+    class FailedCache:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("cache init failed")
+
+    brain = tmp_path / "brain"
+    monkeypatch.setattr(brain_store_module, "EmbeddingCache", FailedCache)
+
+    with pytest.raises(RuntimeError, match="cache init failed"):
+        BrainStore(brain)
+
+    (brain / "weights.db").replace(brain / "weights-renamed.db")
+    (brain / "patterns.db").replace(brain / "patterns-renamed.db")
 
 
 def test_concurrent_patterns(tmp_path: Path):

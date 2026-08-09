@@ -53,6 +53,9 @@ def backup_brain_store(
                     raise sqlite3.DatabaseError(f"Backup-Integritätsprüfung fehlgeschlagen: {db_file}")
             finally:
                 verify.close()
+        embeddings = brain_dir / "embeddings"
+        if embeddings.is_dir():
+            shutil.copytree(embeddings, staging / "embeddings")
         staging.replace(target)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

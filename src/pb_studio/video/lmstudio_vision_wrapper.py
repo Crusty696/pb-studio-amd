@@ -21,6 +21,7 @@ import asyncio
 import hashlib
 import logging
 import re
+import threading
 import time
 from collections import defaultdict
 from typing import Any, Callable, Optional
@@ -69,9 +70,12 @@ _WARM_WINDOW_SECONDS = 600.0
 _WARM_MODELS: dict[tuple[str, str], float] = {}
 _LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
 _TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+_COLD_START_STATE_LOCK = threading.RLock()
+_COLD_START_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_COLD_START_LOCK_POLL_SECONDS = 0.05
 
 
-def _ist_warm(model_key: tuple[str, str]) -> bool:
+def _ist_warm_unlocked(model_key: tuple[str, str]) -> bool:
     """True, solange das Modell innerhalb des Warm-Fensters geantwortet hat."""
     zuletzt = _WARM_MODELS.get(model_key)
     if zuletzt is None:
@@ -83,6 +87,24 @@ def _ist_warm(model_key: tuple[str, str]) -> bool:
         _LOAD_BUDGET_SPENT.discard(model_key)
         return False
     return True
+
+
+def _ist_warm(model_key: tuple[str, str]) -> bool:
+    """Thread-safe warm-state query used by concurrent analysis workers."""
+    with _COLD_START_STATE_LOCK:
+        return _ist_warm_unlocked(model_key)
+
+
+def _cold_start_lock_for(model_key: tuple[str, str]) -> threading.Lock:
+    with _COLD_START_STATE_LOCK:
+        return _COLD_START_LOCKS.setdefault(model_key, threading.Lock())
+
+
+async def _acquire_cold_start_lock(lock: threading.Lock) -> None:
+    """Acquire a cross-thread model lock without blocking the asyncio loop."""
+    while not lock.acquire(blocking=False):
+        await asyncio.sleep(_COLD_START_LOCK_POLL_SECONDS)
+
 
 # Review-Fix 2026-07-09: injizierbarer Status-Publisher statt Direktimport von
 # backend.dependencies (Layering-Inversion). Backend wired beim Startup
@@ -311,14 +333,18 @@ async def _async_extract_tags(
         is_provider_failure,
     )
 
-    blocked_until = _TASK_UNAVAILABLE_UNTIL.get(task)
+    now = time.monotonic()
+    with _COLD_START_STATE_LOCK:
+        blocked_until = _TASK_UNAVAILABLE_UNTIL.get(task)
+        task_blocked = blocked_until is not None and now < blocked_until
+        if blocked_until is not None and not task_blocked:
+            _TASK_UNAVAILABLE_UNTIL.pop(task, None)
     if blocked_until is not None:
-        if time.monotonic() < blocked_until:
+        if task_blocked:
             # Kein erneuter Failover-Durchlauf — der letzte hat bewiesen, dass
             # kein Kandidat liefert. Sonst zahlt jeder Frame denselben Preis.
             _publish_status("none", "LLM", "unavailable", 0.0)
             return [], "none"
-        _TASK_UNAVAILABLE_UNTIL.pop(task, None)
 
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
@@ -351,60 +377,90 @@ async def _async_extract_tags(
         _publish_status(receipt.model_id, provider_name, "loading", 25.0)
 
         model_key = (receipt.provider, receipt.model_id)
-        gewaehrt_budget = (
-            not _ist_warm(model_key)
-            and model_key not in _LOAD_BUDGET_SPENT
-            and not budget_granted_here
-        )
-        if gewaehrt_budget:
-            budget_granted_here = True
-            effective_timeout = max(timeout_seconds, load_timeout_seconds)
-            logger.info(
-                "Kalter Vision-Call gegen %s/%s — Ladebudget %.0fs (JIT-Load).",
-                receipt.provider,
-                receipt.model_id,
-                effective_timeout,
-            )
-        else:
-            effective_timeout = timeout_seconds
-
+        held_cold_start_lock: threading.Lock | None = None
         try:
-            response = await asyncio.wait_for(
-                client.chat(
-                    model=receipt.model_id,
-                    messages=[{"role": "user", "content": prompt}],
-                    images=[frame_rgb],
-                    # Kein frequency_penalty: gegen die Wortschleifen wirkt
-                    # bereits _MAX_PER_STEM im Parser, und zwar deterministisch.
-                    # Die Penalty wurde live gegengemessen (2 Laeufe x 3 Frames)
-                    # und war schlechter — ohne sie 41 Tags/0 verklebt, mit 0.6
-                    # nur 30 Tags/4 verklebt ("bewegtefiguren").
-                    options={"temperature": 0.2},
-                ),
-                timeout=effective_timeout,
-            )
-        except asyncio.TimeoutError:
+            with _COLD_START_STATE_LOCK:
+                needs_cold_start_sync = not _ist_warm_unlocked(model_key)
+            if needs_cold_start_sync:
+                cold_start_lock = _cold_start_lock_for(model_key)
+                await _acquire_cold_start_lock(cold_start_lock)
+                with _COLD_START_STATE_LOCK:
+                    warmed_while_waiting = _ist_warm_unlocked(model_key)
+                if warmed_while_waiting:
+                    cold_start_lock.release()
+                    cached = _cache_get(cache_key)
+                    if cached:
+                        _publish_status(
+                            receipt.model_id,
+                            provider_name,
+                            "active",
+                            100.0,
+                        )
+                        return list(cached)
+                else:
+                    held_cold_start_lock = cold_start_lock
+
+            with _COLD_START_STATE_LOCK:
+                gewaehrt_budget = (
+                    not _ist_warm_unlocked(model_key)
+                    and model_key not in _LOAD_BUDGET_SPENT
+                    and not budget_granted_here
+                )
+                if gewaehrt_budget:
+                    budget_granted_here = True
             if gewaehrt_budget:
-                # Das Ladebudget hat nicht gereicht. Kein zweiter Langlaeufer
-                # fuer dieses Modell, bis es nachweislich wieder warm war.
-                # Wichtig: NUR beim Timeout sperren — ein HTTP-500 oder ein
-                # Verbindungsabbruch sagt nichts ueber die Ladezeit aus und
-                # darf das einmalige Budget nicht verbrennen.
-                _LOAD_BUDGET_SPENT.add(model_key)
-            raise
-        _WARM_MODELS[model_key] = time.monotonic()
-        _LOAD_BUDGET_SPENT.discard(model_key)
-        message = response.get("message") or {}
-        raw = message.get("content") or response.get("response") or ""
-        tags = _parse_tags(str(raw))
-        if not tags:
-            _publish_status(receipt.model_id, provider_name, "failed", 0.0)
-            raise _NoUsableTagsError(
-                f"Vision-Modell {receipt.model_id!r} lieferte keine nutzbaren Tags"
-            )
-        _cache_put(cache_key, tags)
-        _publish_status(receipt.model_id, provider_name, "active", 100.0)
-        return tags
+                effective_timeout = max(timeout_seconds, load_timeout_seconds)
+                logger.info(
+                    "Kalter Vision-Call gegen %s/%s — Ladebudget %.0fs (JIT-Load).",
+                    receipt.provider,
+                    receipt.model_id,
+                    effective_timeout,
+                )
+            else:
+                effective_timeout = timeout_seconds
+
+            try:
+                response = await asyncio.wait_for(
+                    client.chat(
+                        model=receipt.model_id,
+                        messages=[{"role": "user", "content": prompt}],
+                        images=[frame_rgb],
+                        # Kein frequency_penalty: gegen die Wortschleifen wirkt
+                        # bereits _MAX_PER_STEM im Parser, und zwar deterministisch.
+                        # Die Penalty wurde live gegengemessen (2 Laeufe x 3 Frames)
+                        # und war schlechter — ohne sie 41 Tags/0 verklebt, mit 0.6
+                        # nur 30 Tags/4 verklebt ("bewegtefiguren").
+                        options={"temperature": 0.2},
+                    ),
+                    timeout=effective_timeout,
+                )
+            except asyncio.TimeoutError:
+                if gewaehrt_budget:
+                    # Das Ladebudget hat nicht gereicht. Kein zweiter Langlaeufer
+                    # fuer dieses Modell, bis es nachweislich wieder warm war.
+                    # Wichtig: NUR beim Timeout sperren — ein HTTP-500 oder ein
+                    # Verbindungsabbruch sagt nichts ueber die Ladezeit aus und
+                    # darf das einmalige Budget nicht verbrennen.
+                    with _COLD_START_STATE_LOCK:
+                        _LOAD_BUDGET_SPENT.add(model_key)
+                raise
+            with _COLD_START_STATE_LOCK:
+                _WARM_MODELS[model_key] = time.monotonic()
+                _LOAD_BUDGET_SPENT.discard(model_key)
+            message = response.get("message") or {}
+            raw = message.get("content") or response.get("response") or ""
+            tags = _parse_tags(str(raw))
+            if not tags:
+                _publish_status(receipt.model_id, provider_name, "failed", 0.0)
+                raise _NoUsableTagsError(
+                    f"Vision-Modell {receipt.model_id!r} lieferte keine nutzbaren Tags"
+                )
+            _cache_put(cache_key, tags)
+            _publish_status(receipt.model_id, provider_name, "active", 100.0)
+            return tags
+        finally:
+            if held_cold_start_lock is not None:
+                held_cold_start_lock.release()
 
     try:
         tags, receipt, _attempts = await execute_with_model_failover(
@@ -421,9 +477,10 @@ async def _async_extract_tags(
         )
         return tags, receipt.model_id
     except ModelFailoverExhaustedError as exc:
-        _TASK_UNAVAILABLE_UNTIL[task] = (
-            time.monotonic() + _UNAVAILABLE_COOLDOWN_SECONDS
-        )
+        with _COLD_START_STATE_LOCK:
+            _TASK_UNAVAILABLE_UNTIL[task] = (
+                time.monotonic() + _UNAVAILABLE_COOLDOWN_SECONDS
+            )
         logger.warning(
             "Keine nutzbare Receipt-Auswahl für Tags: %s — Task %r fuer %.0fs "
             "gesperrt, sonst wiederholt jeder Frame dieselbe Kette.",
@@ -435,7 +492,7 @@ async def _async_extract_tags(
         return [], "none"
 
 
-def extract_tags_and_model_via_lmstudio(
+async def extract_tags_and_model_via_lmstudio_async(
     frame_rgb: Optional[np.ndarray],
     *,
     mode: str = DEFAULT_MODE,
@@ -450,7 +507,7 @@ def extract_tags_and_model_via_lmstudio(
     timeout_seconds: float = 45.0,
     load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
 ) -> tuple[list[str], str]:
-    """Synchrone Tag-Extraktion via LM-Studio-Vision-Modell inkl. verwendetem Modellnamen.
+    """Asynchrone Tag-Extraktion inkl. verwendetem Modellnamen.
 
     Bei Fehlern (LM Studio down, kein Modell, Timeout) -> (leere Liste, "none") +
     Warnlog. Der Aufrufer kann dann auf Moondream-Fallback umschalten.
@@ -481,8 +538,46 @@ def extract_tags_and_model_via_lmstudio(
         return [], "none"
 
     try:
+        return await _async_extract_tags(
+            frame_rgb,
+            mode=mode,
+            task=task,
+            prompt=prompt,
+            model_override=model_override,
+            timeout_seconds=timeout_seconds,
+            load_timeout_seconds=load_timeout_seconds,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("LM Studio tag extraction failed: %s", exc)
+        return [], "none"
+
+
+def extract_tags_and_model_via_lmstudio(
+    frame_rgb: Optional[np.ndarray],
+    *,
+    mode: str = DEFAULT_MODE,
+    task: str = DEFAULT_TASK,
+    prompt: str = DEFAULT_PROMPT,
+    model_override: Optional[str] = None,
+    timeout_seconds: float = 45.0,
+    load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
+) -> tuple[list[str], str]:
+    """Synchrone CLI-/Legacy-Fassade fuer die asynchrone Extraktion."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        logger.warning(
+            "Sync Vision-API in laufendem Eventloop abgelehnt; "
+            "extract_tags_and_model_via_lmstudio_async verwenden"
+        )
+        return [], "none"
+    try:
         return asyncio.run(
-            _async_extract_tags(
+            extract_tags_and_model_via_lmstudio_async(
                 frame_rgb,
                 mode=mode,
                 task=task,
@@ -492,28 +587,6 @@ def extract_tags_and_model_via_lmstudio(
                 load_timeout_seconds=load_timeout_seconds,
             )
         )
-    except RuntimeError as exc:
-        # Falls schon ein Loop laeuft (z.B. innerhalb von async-Tests),
-        # nutze get_event_loop + run_until_complete in einem neuen Loop.
-        logger.debug("asyncio.run nicht moeglich (%s) — fallback loop", exc)
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(
-                _async_extract_tags(
-                    frame_rgb,
-                    mode=mode,
-                    task=task,
-                    prompt=prompt,
-                    model_override=model_override,
-                    timeout_seconds=timeout_seconds,
-                    load_timeout_seconds=load_timeout_seconds,
-                )
-            )
-        except Exception as inner:
-            logger.warning("LM Studio tag extraction failed: %s", inner)
-            return [], "none"
-        finally:
-            loop.close()
     except Exception as exc:
         logger.warning("LM Studio tag extraction failed: %s", exc)
         return [], "none"
@@ -556,9 +629,11 @@ def extract_tags_via_lmstudio(
 def clear_tag_cache() -> None:
     """Test-Helper: leert Tag-Cache, Warm-Status und Task-Sperre."""
     _TAG_CACHE.clear()
-    _WARM_MODELS.clear()
-    _LOAD_BUDGET_SPENT.clear()
-    _TASK_UNAVAILABLE_UNTIL.clear()
+    with _COLD_START_STATE_LOCK:
+        _WARM_MODELS.clear()
+        _LOAD_BUDGET_SPENT.clear()
+        _TASK_UNAVAILABLE_UNTIL.clear()
+        _COLD_START_LOCKS.clear()
 
 
 # Backwards-compatibility-Alias: alter Name funktioniert noch (Deprecated).
@@ -567,6 +642,8 @@ extract_tags_via_ollama = extract_tags_via_lmstudio
 
 
 __all__ = [
+    "extract_tags_and_model_via_lmstudio_async",
+    "extract_tags_and_model_via_lmstudio",
     "extract_tags_via_lmstudio",
     "extract_tags_via_ollama",  # deprecated alias
     "clear_tag_cache",

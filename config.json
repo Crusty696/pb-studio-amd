@@ -11,7 +11,7 @@
     "hardware": {
         "gpu_backend": "directml",
         "directml_adapter_policy": "highest_vram_amd",
-        "vram_limit_mb": 0
+        "vram_limit_mb": 15872
     },
     "ai": {
         "task_overrides": {

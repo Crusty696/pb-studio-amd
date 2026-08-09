@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import uuid
 from pathlib import Path
 
 from .sqlite_init import init_connection
@@ -139,5 +140,88 @@ def migrate(db_path: str | Path, migrations_dir: str | Path) -> int:
                     pass
                 raise
         return applied
+    finally:
+        conn.close()
+
+
+def migrate_project_state(
+    db_path: str | Path,
+    migrations_dir: str | Path,
+    *,
+    project_uuid: str,
+) -> int:
+    """Migrate one project State DB and bind every feedback row to its UUID.
+
+    The schema upgrade is additive. The idempotent data backfill is completed
+    before callers may publish the connection to the running application.
+    """
+    normalized_project_uuid = str(uuid.UUID(str(project_uuid)))
+    applied = migrate(db_path, migrations_dir)
+    conn = sqlite3.connect(str(Path(db_path)), isolation_level=None)
+    try:
+        init_connection(conn)
+        conn.execute("BEGIN IMMEDIATE")
+        identity_rows = conn.execute(
+            "SELECT project_uuid FROM project_identity"
+        ).fetchall()
+        if len(identity_rows) > 1:
+            raise RuntimeError("State DB contains multiple project identities")
+        if identity_rows:
+            stored = str(uuid.UUID(str(identity_rows[0][0])))
+            if stored != normalized_project_uuid:
+                raise RuntimeError(
+                    "State DB project_uuid conflicts with the project catalog"
+                )
+        else:
+            conn.execute(
+                "INSERT INTO project_identity(singleton_id, project_uuid) "
+                "VALUES (1, ?)",
+                (normalized_project_uuid,),
+            )
+
+        rows = conn.execute(
+            "SELECT id, project_uuid, event_uuid FROM feedback_events ORDER BY id"
+        ).fetchall()
+        for event_id, row_project_uuid, row_event_uuid in rows:
+            if row_project_uuid:
+                existing_project_uuid = str(uuid.UUID(str(row_project_uuid)))
+                if existing_project_uuid != normalized_project_uuid:
+                    raise RuntimeError(
+                        f"Feedback event {event_id} belongs to another project"
+                    )
+            event_uuid = (
+                str(uuid.UUID(str(row_event_uuid)))
+                if row_event_uuid
+                else str(
+                    uuid.uuid5(
+                        uuid.UUID(normalized_project_uuid),
+                        f"legacy-feedback:{int(event_id)}",
+                    )
+                )
+            )
+            conn.execute(
+                "UPDATE feedback_events SET project_uuid=?, event_uuid=? "
+                "WHERE id=?",
+                (normalized_project_uuid, event_uuid, int(event_id)),
+            )
+
+        incomplete = conn.execute(
+            "SELECT COUNT(*) FROM feedback_events WHERE project_uuid IS NULL "
+            "OR event_uuid IS NULL"
+        ).fetchone()[0]
+        duplicates = conn.execute(
+            "SELECT COUNT(*) FROM (SELECT event_uuid FROM feedback_events "
+            "GROUP BY event_uuid HAVING COUNT(*) > 1)"
+        ).fetchone()[0]
+        if incomplete or duplicates:
+            raise RuntimeError("State feedback identity backfill is incomplete")
+        conn.execute("COMMIT")
+        return applied
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.OperationalError:
+            pass
+        raise
     finally:
         conn.close()

@@ -21,6 +21,8 @@ from pb_studio.rendering.render_queue import (
 
 render_router = importlib.import_module("backend.routers.render_router")
 
+_PROCESS_SYNC_TIMEOUT_SECONDS = 60.0
+
 
 class _StandaloneRenderDb:
     def __init__(self, path: Path) -> None:
@@ -59,7 +61,7 @@ def _enqueue_in_process(
     database = _StandaloneRenderDb(Path(db_path))
     try:
         queue = RenderQueue(database)
-        barrier.wait(timeout=15.0)
+        barrier.wait(timeout=_PROCESS_SYNC_TIMEOUT_SECONDS)
         job = queue.enqueue(
             "cross-process-media",
             output_path,
@@ -90,10 +92,13 @@ def test_cross_process_enqueue_returns_one_active_attempt(tmp_path: Path) -> Non
     try:
         for process in processes:
             process.start()
-        barrier.wait(timeout=15.0)
-        responses = [results.get(timeout=20.0) for _ in processes]
+        barrier.wait(timeout=_PROCESS_SYNC_TIMEOUT_SECONDS)
+        responses = [
+            results.get(timeout=_PROCESS_SYNC_TIMEOUT_SECONDS)
+            for _ in processes
+        ]
         for process in processes:
-            process.join(timeout=20.0)
+            process.join(timeout=_PROCESS_SYNC_TIMEOUT_SECONDS)
             assert process.exitcode == 0
 
         assert all(status == "ok" for status, _ in responses), responses

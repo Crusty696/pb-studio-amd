@@ -40,12 +40,19 @@ from ..schemas.video_schemas import (
     ClipwaveResponse,
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
 
 MAX_MOTION_SAMPLES = 120
 MAX_EMBEDDING_SAMPLES = 24
+MAX_UNREADABLE_SAMPLE_FRAMES = 1
+FRAME_SAMPLE_REPLACEMENT_RADIUS = 2
+CAPTION_STAGE_TIMEOUT_SECONDS = 270.0
+CAPTION_HEARTBEAT_INTERVAL_SECONDS = 5.0
+CAPTION_PROGRESS_START_PERCENT = 60.0
+CAPTION_PROGRESS_END_PERCENT = 85.0
 SIGLIP_EMBEDDING_DIM = 1152
 VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
@@ -96,7 +103,7 @@ def _video_stage_data_is_valid(stage: str, result: dict[str, Any]) -> bool:
         return (
             isinstance(scenes, list)
             and isinstance(scene_count, int)
-            and scene_count >= 0
+            and scene_count > 0
             and scene_count == len(scenes)
         )
     if stage == "motion":
@@ -193,7 +200,12 @@ def _merge_video_stage_outcome(
     elif status == "completed":
         result["stage_errors"].pop(stage, None)
 
-    if status != "completed":
+    merge_partial_caption = (
+        stage == "captions"
+        and status == "partial"
+        and _video_stage_data_is_valid("captions", stage_result)
+    )
+    if status != "completed" and not merge_partial_caption:
         return
     for field in VIDEO_ANALYSIS_STAGE_FIELDS[stage]:
         if field in stage_result:
@@ -501,6 +513,7 @@ def _dedupe_old_video_embeddings(result: dict[str, Any]) -> None:
         "Dateien die nicht existieren oder ein nicht unterstütztes Format haben werden übersprungen."
     ),
 )
+@recovery_write_operation("video-media")
 async def import_videos(
     request: VideoImportRequest,
     state: AppState = Depends(get_app_state),
@@ -902,6 +915,7 @@ def _extract_clip_peaks(media_path: str, n: int) -> list[float]:
     response_model=DeleteResponse,
     summary="Video-Clip loeschen (single)",
 )
+@recovery_write_operation("video-media")
 async def delete_clip(
     clip_id: int,
     state: AppState = Depends(get_app_state),
@@ -918,6 +932,7 @@ async def delete_clip(
     response_model=DeleteResponse,
     summary="Video-Clips batch-loeschen",
 )
+@recovery_write_operation("video-media")
 async def delete_clips_batch(
     request: BatchDeleteRequest,
     state: AppState = Depends(get_app_state),
@@ -948,6 +963,7 @@ async def delete_clips_batch(
         "Belegt GPU-Lock. Ergebnis wird gecacht."
     ),
 )
+@recovery_write_operation("video-analysis")
 async def analyze_video(
     request: VideoAnalyzeRequest,
     state: AppState = Depends(get_app_state),
@@ -1055,6 +1071,10 @@ async def _analyze_video_in_project(
                 clip["path"],
                 True,
             )
+            scene_res = _bound_scene_result_to_duration(
+                scene_res,
+                clip.get("duration_seconds"),
+            )
             _merge_video_stage_outcome(result, scene_res, "scenes")
             active_stages = ()
 
@@ -1088,6 +1108,7 @@ async def _analyze_video_in_project(
                 clip.get("video_hash") if run_stage["embedding"] else None,
                 state,
                 context,
+                clip.get("duration_seconds"),
             )
             gpu_res = await with_gpu_task(
                 _run_video_gpu_analysis, *gpu_args,
@@ -1144,6 +1165,15 @@ async def _analyze_video_in_project(
         if (
             run_stage["colors"]
             and result["stage_status"].get("colors") == "completed"
+            and not all(
+                field in color_caption_res
+                for field in (
+                    "avg_brightness",
+                    "avg_saturation",
+                    "avg_color_temp",
+                    "mood_tags",
+                )
+            )
         ):
             from pb_studio.video.moondream_wrapper import compute_color_features
             color_features = compute_color_features(result["dominant_colors"])
@@ -1519,6 +1549,8 @@ def _run_scene_detection(video_path: str, detect_scenes: bool) -> dict[str, Any]
         try:
             from pb_studio.video.scene_detect import SceneDetector
             scenes_raw = SceneDetector().detect_scenes(video_path)
+            if not scenes_raw:
+                raise RuntimeError("Scene detection produced no valid scenes")
             result["scenes"] = [
                 {
                     "start_time": float(s[0]),
@@ -1534,6 +1566,51 @@ def _run_scene_detection(video_path: str, detect_scenes: bool) -> dict[str, Any]
         except Exception as e:
             logger.warning(f"Scene-Detection fehlgeschlagen: {e}")
             result["stage_errors"]["scenes"] = str(e)
+    return result
+
+
+def _positive_duration(value: Any) -> Optional[float]:
+    """Return a finite positive duration or ``None``."""
+    try:
+        duration = float(value)
+    except (TypeError, ValueError):
+        return None
+    if duration <= 0.0 or duration == float("inf") or duration != duration:
+        return None
+    return duration
+
+
+def _bound_scene_result_to_duration(
+    result: dict[str, Any],
+    duration_seconds: Any,
+) -> dict[str, Any]:
+    """Clamp scene metadata to the persisted ffprobe-visible duration."""
+    duration = _positive_duration(duration_seconds)
+    if duration is None or result.get("stage_status", {}).get("scenes") != "completed":
+        return result
+
+    bounded_scenes = []
+    for scene in result.get("scenes", []):
+        if not isinstance(scene, dict):
+            continue
+        try:
+            start = max(0.0, min(float(scene.get("start_time", 0.0)), duration))
+            end = max(start, min(float(scene.get("end_time", start)), duration))
+        except (TypeError, ValueError):
+            continue
+        if end <= start:
+            continue
+        bounded_scenes.append({**scene, "start_time": start, "end_time": end})
+
+    if not bounded_scenes:
+        bounded_scenes = [{
+            "start_time": 0.0,
+            "end_time": duration,
+            "scene_type": "cut",
+            "confidence": None,
+        }]
+    result["scenes"] = bounded_scenes
+    result["scene_count"] = len(bounded_scenes)
     return result
 
 
@@ -1558,6 +1635,45 @@ def _representative_frame_indices(
         round(position * last / (sample_count - 1))
         for position in range(sample_count)
     })
+
+
+def _addressable_frame_count(
+    reported_total_frames: int,
+    fps: float,
+    duration_seconds: Any,
+) -> int:
+    """Bound OpenCV's packet-inflated frame count by visible ffprobe duration."""
+    if reported_total_frames <= 0:
+        return 0
+    duration = _positive_duration(duration_seconds)
+    if duration is None or fps <= 0.0:
+        return reported_total_frames
+    duration_frames = max(1, int(round(duration * fps)))
+    return min(reported_total_frames, duration_frames)
+
+
+def _read_sample_frame(
+    cap: Any,
+    target_index: int,
+    addressable_frames: int,
+    used_indices: set[int],
+) -> tuple[Optional[int], Any]:
+    """Read one sample, replacing an unreadable target with a nearby frame."""
+    candidates = [target_index]
+    for offset in range(1, FRAME_SAMPLE_REPLACEMENT_RADIUS + 1):
+        candidates.extend((target_index - offset, target_index + offset))
+
+    import cv2
+
+    for candidate in candidates:
+        if not 0 <= candidate < addressable_frames or candidate in used_indices:
+            continue
+        cap.set(cv2.CAP_PROP_POS_FRAMES, candidate)
+        ret, frame = cap.read()
+        if ret and frame is not None:
+            used_indices.add(candidate)
+            return candidate, frame
+    return None, None
 
 
 def _select_motion_peak_frames(
@@ -1688,6 +1804,7 @@ def _run_video_gpu_analysis(
     video_hash: Optional[str] = None,
     state: Optional[AppState] = None,
     context: Optional[ProjectOperationContext] = None,
+    duration_seconds: Optional[float] = None,
 ) -> dict[str, Any]:
     """Motion + Embedding via RAFT und SigLIP (DirectML, GPU)."""
     if state is not None and context is not None:
@@ -1710,9 +1827,17 @@ def _run_video_gpu_analysis(
 
             cap = cv2.VideoCapture(video_path)
             try:
-                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                reported_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-                duration_sec = total / max(fps, 1.0)
+                total = _addressable_frame_count(
+                    reported_total,
+                    fps,
+                    duration_seconds,
+                )
+                duration_sec = (
+                    _positive_duration(duration_seconds)
+                    or total / max(fps, 1.0)
+                )
                 frame_indices = _representative_frame_indices(
                     total,
                     desired_samples=max(2, int(duration_sec * 2)),
@@ -1722,17 +1847,33 @@ def _run_video_gpu_analysis(
 
                 frames = []
                 sampled_indices = []
+                used_indices: set[int] = set()
+                unreadable_samples = 0
                 for frame_index in frame_indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        h, w = frame.shape[:2]
-                        if h > 360:
-                            scale = 360.0 / h
-                            new_w = int(w * scale)
-                            frame = cv2.resize(frame, (new_w, 360), interpolation=cv2.INTER_AREA)
-                        frames.append(frame)
-                        sampled_indices.append(frame_index)
+                    sampled_index, frame = _read_sample_frame(
+                        cap,
+                        frame_index,
+                        total,
+                        used_indices,
+                    )
+                    if frame is None or sampled_index is None:
+                        unreadable_samples += 1
+                        if unreadable_samples > MAX_UNREADABLE_SAMPLE_FRAMES:
+                            raise RuntimeError(
+                                "RAFT sampling exceeded unreadable frame tolerance"
+                            )
+                        logger.warning(
+                            "RAFT sample at frame %s unreadable; continuing with valid samples",
+                            frame_index,
+                        )
+                        continue
+                    h, w = frame.shape[:2]
+                    if h > 360:
+                        scale = 360.0 / h
+                        new_w = int(w * scale)
+                        frame = cv2.resize(frame, (new_w, 360), interpolation=cv2.INTER_AREA)
+                    frames.append(frame)
+                    sampled_indices.append(sampled_index)
             finally:
                 cap.release()
 
@@ -1811,7 +1952,7 @@ def _run_video_gpu_analysis(
                 state,
                 context,
             )
-            if state is not None and context is not None
+            if not request.force and state is not None and context is not None
             else None
         )
         if reusable is not None:
@@ -1844,28 +1985,49 @@ def _run_video_gpu_analysis(
                     cap = cv2.VideoCapture(video_path)
                     embeddings_collected = []
                     try:
-                        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        reported_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-                        duration_sec = total_frames / max(fps, 1.0)
+                        total_frames = _addressable_frame_count(
+                            reported_total_frames,
+                            fps,
+                            duration_seconds,
+                        )
+                        duration_sec = (
+                            _positive_duration(duration_seconds)
+                            or total_frames / max(fps, 1.0)
+                        )
                         embedding_indices = _representative_frame_indices(
                             total_frames,
                             desired_samples=max(3, int(duration_sec / 5.0)),
                             max_samples=MAX_EMBEDDING_SAMPLES,
                             min_samples=3,
                         )
+                        used_indices: set[int] = set()
+                        unreadable_samples = 0
                         for frame_index in embedding_indices:
-                            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-                            ret, frame = cap.read()
-                            if not ret or frame is None:
-                                raise RuntimeError(
-                                    f"SigLIP frame read failed at index {frame_index}"
+                            sampled_index, frame = _read_sample_frame(
+                                cap,
+                                frame_index,
+                                total_frames,
+                                used_indices,
+                            )
+                            if frame is None or sampled_index is None:
+                                unreadable_samples += 1
+                                if unreadable_samples > MAX_UNREADABLE_SAMPLE_FRAMES:
+                                    raise RuntimeError(
+                                        "SigLIP sampling exceeded unreadable frame tolerance"
+                                    )
+                                logger.warning(
+                                    "SigLIP sample at frame %s unreadable; continuing with valid samples",
+                                    frame_index,
                                 )
+                                continue
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             pil_img = _PILImage.fromarray(frame_rgb)
                             emb = wrapper.encode_image(pil_img)
                             if emb is None:
                                 raise RuntimeError(
-                                    f"SigLIP inference failed at frame {frame_index}"
+                                    f"SigLIP inference failed at frame {sampled_index}"
                                 )
                             embeddings_collected.append(emb)
                     finally:
@@ -1897,9 +2059,7 @@ def _run_video_gpu_analysis(
                                 raise RuntimeError(
                                     f"Kein DB-Eintrag für Video-Clip {clip_id}"
                                 )
-                            duration_seconds = (
-                                duration_sec if "duration_sec" in locals() else 0.0
-                            )
+                            embedding_duration_seconds = duration_sec
                             result["_pending_embedding"] = {
                                 "vector": embedding.astype(_np.float32),
                                 "meta_info": {
@@ -1907,11 +2067,11 @@ def _run_video_gpu_analysis(
                                     "path": video_path,
                                     "video_hash": video_hash,
                                     "scene_id": f"clip_{clip_id}_full",
-                                    "duration": duration_seconds,
+                                    "duration": embedding_duration_seconds,
                                     "samples": len(embeddings_collected),
                                 },
                                 "media_id": int(_media_id),
-                                "segment_end": duration_seconds,
+                                "segment_end": embedding_duration_seconds,
                                 "description": f"clip_{clip_id}_full",
                             }
                             result["has_embedding"] = True
@@ -1969,6 +2129,62 @@ def _run_moondream_inference_on_frames(frames_rgb: list) -> list[list[str]]:
     return tags_collected
 
 
+async def _publish_caption_progress(
+    clip_id: int,
+    *,
+    step: str,
+    percent: float,
+    message: str,
+    status: str,
+) -> None:
+    """Publish caption progress without letting cosmetic SSE break analysis."""
+    try:
+        await publish_event("analysis_progress", {
+            "clip_id": clip_id,
+            "step": step,
+            "step_index": 3,
+            "step_total": 4,
+            "percent": percent,
+            "status": status,
+            "message": message,
+        })
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.debug("Caption-Fortschritt konnte nicht publiziert werden: %s", exc)
+
+
+async def _caption_progress_heartbeat(
+    clip_id: int,
+    frame_total: int,
+    progress_state: dict[str, int],
+) -> None:
+    """Keep the UI visibly alive while a cold VLM call is loading."""
+    started_at = asyncio.get_running_loop().time()
+    while True:
+        await asyncio.sleep(CAPTION_HEARTBEAT_INTERVAL_SECONDS)
+        completed = min(progress_state.get("completed_frames", 0), frame_total)
+        active_frame = min(
+            max(progress_state.get("active_frame", completed + 1), 1),
+            max(frame_total, 1),
+        )
+        span = CAPTION_PROGRESS_END_PERCENT - CAPTION_PROGRESS_START_PERCENT
+        percent = CAPTION_PROGRESS_START_PERCENT + span * (
+            completed / max(frame_total, 1)
+        )
+        elapsed = int(asyncio.get_running_loop().time() - started_at)
+        await _publish_caption_progress(
+            clip_id,
+            step="captions",
+            percent=percent,
+            status="running",
+            message=(
+                f"Vision-Analyse Frame {active_frame}/{frame_total} laeuft "
+                f"({elapsed}s)"
+            ),
+        )
+
+
 async def _run_color_and_caption_analysis(
     video_path: str,
     clip_id: int,
@@ -1994,7 +2210,10 @@ async def _run_color_and_caption_analysis(
     try:
         import cv2
         import numpy as _np
-        from pb_studio.video.moondream_wrapper import extract_dominant_colors
+        from pb_studio.video.moondream_wrapper import (
+            compute_color_features,
+            extract_dominant_colors_with_weights,
+        )
 
         # Frames sammeln (CPU)
         cap = cv2.VideoCapture(video_path)
@@ -2016,7 +2235,12 @@ async def _run_color_and_caption_analysis(
             # 1. Dominante Farben (KMeans, CPU)
             if analyze_colors:
                 combined_rgb = _np.vstack(frames_rgb)
-                result["dominant_colors"] = extract_dominant_colors(combined_rgb, k=5)
+                dominant_colors, color_weights = extract_dominant_colors_with_weights(
+                    combined_rgb,
+                    k=5,
+                )
+                result["dominant_colors"] = dominant_colors
+                result.update(compute_color_features(dominant_colors, color_weights))
                 result["stage_status"]["colors"] = "completed"
 
             if not generate_captions:
@@ -2035,24 +2259,80 @@ async def _run_color_and_caption_analysis(
             from pb_studio.config_manager import ConfigManager
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
 
-            from pb_studio.video.lmstudio_vision_wrapper import extract_tags_and_model_via_lmstudio
+            from pb_studio.video.lmstudio_vision_wrapper import (
+                extract_tags_and_model_via_lmstudio_async,
+            )
             from pb_studio.video.moondream import onnx_models_available as moondream_onnx_models_available
 
-            async def run_lm_studio(f):
-                return await asyncio.to_thread(extract_tags_and_model_via_lmstudio, f, mode=current_mode)
-
             moondream_frames_to_run = []
-            for f_rgb in frames_rgb:
-                tags, used_model = await run_lm_studio(f_rgb)
-                if tags:
-                    for tag in tags:
-                        if tag not in seen_tags:
-                            all_tags.append(tag)
-                            seen_tags.add(tag)
-                    if used_model not in tag_sources:
-                        tag_sources.append(used_model)
-                else:
-                    moondream_frames_to_run.append(f_rgb)
+            caption_progress = {"completed_frames": 0, "active_frame": 1}
+            caption_timeout_error: Optional[str] = None
+
+            async def run_lm_studio_frames() -> None:
+                for frame_number, f_rgb in enumerate(frames_rgb, start=1):
+                    caption_progress["active_frame"] = frame_number
+                    tags, used_model = (
+                        await extract_tags_and_model_via_lmstudio_async(
+                            f_rgb,
+                            mode=current_mode,
+                        )
+                    )
+                    caption_progress["completed_frames"] = frame_number
+                    if tags:
+                        for tag in tags:
+                            if tag not in seen_tags:
+                                all_tags.append(tag)
+                                seen_tags.add(tag)
+                        if used_model not in tag_sources:
+                            tag_sources.append(used_model)
+                    else:
+                        moondream_frames_to_run.append(f_rgb)
+
+            await _publish_caption_progress(
+                clip_id,
+                step="captions",
+                percent=CAPTION_PROGRESS_START_PERCENT,
+                status="running",
+                message=f"Vision-Analyse startet (0/{len(frames_rgb)} Frames)",
+            )
+            heartbeat_task = asyncio.create_task(
+                _caption_progress_heartbeat(
+                    clip_id,
+                    len(frames_rgb),
+                    caption_progress,
+                )
+            )
+            try:
+                await asyncio.wait_for(
+                    run_lm_studio_frames(),
+                    timeout=CAPTION_STAGE_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                caption_timeout_error = (
+                    "LM-Studio-Captioning nach "
+                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s abgebrochen"
+                )
+                completed = caption_progress["completed_frames"]
+                moondream_frames_to_run.extend(frames_rgb[completed:])
+                logger.warning(
+                    "%s fuer clip %s; verbleibende Frames gehen in den "
+                    "verfuegbaren Fallback",
+                    caption_timeout_error,
+                    clip_id,
+                )
+                await _publish_caption_progress(
+                    clip_id,
+                    step="captions_primary_timeout",
+                    percent=CAPTION_PROGRESS_END_PERCENT,
+                    status="partial",
+                    message=caption_timeout_error,
+                )
+            finally:
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
 
             # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
             if moondream_frames_to_run and not moondream_onnx_models_available():
@@ -2133,12 +2413,36 @@ async def _run_color_and_caption_analysis(
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
-            if result["tags"]:
+            if result["tags"] and caption_timeout_error is None:
                 result["stage_status"]["captions"] = "completed"
+                result["stage_errors"].pop("captions", None)
+            elif result["tags"]:
+                result["stage_status"]["captions"] = "partial"
+                result["stage_errors"]["captions"] = caption_timeout_error
             else:
                 result["stage_errors"]["captions"] = (
-                    "Keine Tags von verfuegbarem Vision-Provider erzeugt"
+                    caption_timeout_error
+                    or "Keine Tags von verfuegbarem Vision-Provider erzeugt"
                 )
+
+            caption_status = result["stage_status"]["captions"]
+            if caption_status == "completed":
+                caption_step = "captions_complete"
+            elif caption_status == "partial":
+                caption_step = "captions_partial"
+            else:
+                caption_step = "captions_error"
+            await _publish_caption_progress(
+                clip_id,
+                step=caption_step,
+                percent=CAPTION_PROGRESS_END_PERCENT,
+                status=caption_status,
+                message=(
+                    f"Vision-Analyse {caption_status}: "
+                    f"{caption_progress['completed_frames']}/{len(frames_rgb)} "
+                    "Frames"
+                ),
+            )
 
             # Review-Fix MEDIUM (2026-07-09): Terminal-State auch fuer den
             # reinen LM-Studio-Pfad (Wrapper endet mit "active").
@@ -2170,6 +2474,13 @@ async def _run_color_and_caption_analysis(
                 result["stage_errors"]["captions"] = (
                     "Keine lesbaren Frames fuer Captioning"
                 )
+                await _publish_caption_progress(
+                    clip_id,
+                    step="captions_error",
+                    percent=CAPTION_PROGRESS_END_PERCENT,
+                    status="failed",
+                    message="Vision-Analyse fehlgeschlagen: keine lesbaren Frames",
+                )
 
     except Exception as e:
         logger.warning(f"Color/Tag-Analyse fehlgeschlagen (unkritisch): {e}")
@@ -2181,6 +2492,13 @@ async def _run_color_and_caption_analysis(
         if generate_captions:
             result["stage_status"]["captions"] = "failed"
             result["stage_errors"]["captions"] = str(e)
+            await _publish_caption_progress(
+                clip_id,
+                step="captions_error",
+                percent=CAPTION_PROGRESS_END_PERCENT,
+                status="failed",
+                message=f"Vision-Analyse fehlgeschlagen: {type(e).__name__}",
+            )
 
     return result
 

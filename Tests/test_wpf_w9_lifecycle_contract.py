@@ -90,7 +90,11 @@ def test_timeline_asset_load_is_deduplicated_and_cancellable():
     assert "Dictionary<TimelineEntryModel, Task> _assetLoads" in timeline
     assert "_assetLoads.TryGetValue(entry, out var existing)" in timeline
     assert "LoadClipAssetsAsync(entry, _assetLoadCts.Token)" in timeline
-    assert timeline.count("_ = QueueClipAssetLoad(") == 2
+    assert timeline.count("_ = QueueClipAssetLoad(") == 1
+    assert "VisibleTimelineEntries" in timeline
+    assert "Take(MaxAssetClipCount)" in timeline
+    assert "EntriesInRange(" in timeline
+    assert "MaxVisibleClipCount" not in timeline
     assert "GetThumbStripAsync(cid, n: 8, cancellationToken: ct)" in timeline
     assert "GetClipWaveAsync(cid, n: 256, cancellationToken: ct)" in timeline
     assert "CancelAssetLoads();" in timeline

@@ -17,26 +17,18 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def extract_dominant_colors(frame_rgb: Optional[np.ndarray], k: int = 5) -> list[str]:
-    """Extrahiert k dominante Farben aus Frame als Hex-Strings.
-
-    KMeans-Clustering im RGB-Raum (sklearn). 100% pure NumPy-Fallback wenn
-    sklearn fehlt (Histogram-Quantization mit 32er-Bins).
-
-    Args:
-        frame_rgb: Frame als (H, W, 3) uint8 RGB-Array. None oder leer -> [].
-        k: Anzahl der dominanten Farben.
-
-    Returns:
-        Liste von k Hex-Strings im Format "#RRGGBB".
-    """
+def _extract_dominant_color_clusters(
+    frame_rgb: Optional[np.ndarray],
+    k: int,
+) -> tuple[list[str], list[float]]:
+    """Return dominant color centers and their normalized populations."""
     if frame_rgb is None:
-        return []
+        return [], []
     try:
         if frame_rgb.size == 0:
-            return []
+            return [], []
     except AttributeError:
-        return []
+        return [], []
 
     pixels = frame_rgb.reshape(-1, 3).astype(np.float32)
 
@@ -50,30 +42,64 @@ def extract_dominant_colors(frame_rgb: Optional[np.ndarray], k: int = 5) -> list
         from sklearn.cluster import KMeans
         kmeans = KMeans(n_clusters=k, n_init=3, random_state=42)
         kmeans.fit(pixels)
-        # Sortiere Cluster nach Groesse (haeufigste Farbe zuerst)
         labels = kmeans.labels_
         counts = np.bincount(labels, minlength=k)
         order = np.argsort(counts)[::-1]
         centers = kmeans.cluster_centers_[order].astype(int)
+        populations = counts[order]
     except ImportError:
         # Pure-NumPy Fallback: Histogram-Quantization
         quantized = (pixels // 32).astype(int) * 32
         unique, counts = np.unique(quantized, axis=0, return_counts=True)
         top_idx = np.argsort(counts)[::-1][:k]
         centers = unique[top_idx]
+        populations = counts[top_idx]
     except Exception as e:
         logger.debug(f"KMeans fehlgeschlagen (unkritisch): {e}")
-        return []
+        return [], []
 
-    return [
+    colors = [
         f"#{int(np.clip(c[0], 0, 255)):02X}"
         f"{int(np.clip(c[1], 0, 255)):02X}"
         f"{int(np.clip(c[2], 0, 255)):02X}"
         for c in centers
     ]
+    total_population = float(np.sum(populations))
+    if total_population <= 0.0:
+        return colors, []
+    weights = [float(value) / total_population for value in populations]
+    return colors, weights
 
 
-def compute_color_features(hex_colors: list[str]) -> dict:
+def extract_dominant_colors(frame_rgb: Optional[np.ndarray], k: int = 5) -> list[str]:
+    """Extrahiert k dominante Farben aus Frame als Hex-Strings.
+
+    KMeans-Clustering im RGB-Raum (sklearn). 100% pure NumPy-Fallback wenn
+    sklearn fehlt (Histogram-Quantization mit 32er-Bins).
+
+    Args:
+        frame_rgb: Frame als (H, W, 3) uint8 RGB-Array. None oder leer -> [].
+        k: Anzahl der dominanten Farben.
+
+    Returns:
+        Liste von k Hex-Strings im Format "#RRGGBB".
+    """
+    colors, _weights = _extract_dominant_color_clusters(frame_rgb, k)
+    return colors
+
+
+def extract_dominant_colors_with_weights(
+    frame_rgb: Optional[np.ndarray],
+    k: int = 5,
+) -> tuple[list[str], list[float]]:
+    """Extrahiert dominante Farben plus ausgerichtete Clusteranteile."""
+    return _extract_dominant_color_clusters(frame_rgb, k)
+
+
+def compute_color_features(
+    hex_colors: list[str],
+    weights: Optional[list[float]] = None,
+) -> dict:
     """Berechnet Brightness/Saturation/Color-Temp/Mood-Tags aus dominanten Farben.
 
     Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): die Brain-Bridge-Achsen
@@ -89,6 +115,7 @@ def compute_color_features(hex_colors: list[str]) -> dict:
     Args:
         hex_colors: Liste von Hex-Farbstrings ("#RRGGBB"), z.B. aus
             ``extract_dominant_colors``.
+        weights: Optionale, zu ``hex_colors`` ausgerichtete Clusteranteile.
 
     Returns:
         Dict mit ``avg_brightness``/``avg_saturation`` (0..1) und
@@ -105,25 +132,42 @@ def compute_color_features(hex_colors: list[str]) -> dict:
     brightness_vals: list[float] = []
     saturation_vals: list[float] = []
     warmth_vals: list[float] = []  # -1 (kuehl/blau) .. +1 (warm/rot)
-    for hex_str in hex_colors:
+    feature_weights: list[float] = []
+    aligned_weights = (
+        weights
+        if weights is not None and len(weights) == len(hex_colors)
+        else [1.0] * len(hex_colors)
+    )
+    for hex_str, raw_weight in zip(hex_colors, aligned_weights):
         h = (hex_str or "").lstrip("#")
         if len(h) != 6:
             continue
         try:
             r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        except ValueError:
+            weight = float(raw_weight)
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(weight) or weight <= 0.0:
             continue
         _hue, sat, val = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
         brightness_vals.append(val)
         saturation_vals.append(sat)
         warmth_vals.append((r - b) / 255.0)
+        feature_weights.append(weight)
 
-    if not brightness_vals:
+    total_weight = sum(feature_weights)
+    if not brightness_vals or total_weight <= 0.0:
         return default
 
-    avg_brightness = sum(brightness_vals) / len(brightness_vals)
-    avg_saturation = sum(saturation_vals) / len(saturation_vals)
-    avg_color_temp = sum(warmth_vals) / len(warmth_vals)
+    avg_brightness = sum(
+        value * weight for value, weight in zip(brightness_vals, feature_weights)
+    ) / total_weight
+    avg_saturation = sum(
+        value * weight for value, weight in zip(saturation_vals, feature_weights)
+    ) / total_weight
+    avg_color_temp = sum(
+        value * weight for value, weight in zip(warmth_vals, feature_weights)
+    ) / total_weight
 
     mood_tags: list[str] = []
     if avg_color_temp > 0.15:

@@ -225,8 +225,13 @@ def test_directml_consumers_share_provider_and_disable_both_session_flags(
     source = consumer_path.read_text(encoding="utf-8")
     central = _read("src/pb_studio/core/directml_adapter.py")
 
-    assert "get_directml_provider" in source
-    assert "get_directml_provider()" in source
+    if consumer_path.name == "siglip_wrapper.py":
+        assert "from pb_studio.core.model_loader import ModelLoader" in source
+        assert 'loader.load_model("siglip_vision", force=True)' in source
+        assert "ort.InferenceSession(" not in source
+    else:
+        assert "get_directml_provider" in source
+        assert "get_directml_provider()" in source
     assert "enable_mem_pattern = False" in central
     assert "enable_cpu_mem_arena = False" in central
     assert '"session.disable_cpu_ep_fallback"' in central
@@ -243,6 +248,8 @@ def test_directml_consumers_share_provider_and_disable_both_session_flags(
         assert "enforce_directml_session" in source
         assert "_directml_session_created" in source
         assert "PyTorch CPU conversion is disabled" in source
+    elif consumer_path.name == "siglip_wrapper.py":
+        assert "enforce_directml_session" in source
     elif consumer_path.name != "clap_wrapper.py":
         assert "providers=providers" in source
         assert "configure_directml_session_options" in source

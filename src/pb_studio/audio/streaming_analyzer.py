@@ -1215,11 +1215,19 @@ class StreamingAudioAnalyzer:
         ).tolist()
 
         def _band_times(*, signal: np.ndarray, fmin=None, fmax=None) -> list[float]:
+            lower = float(fmin or 0.0)
+            upper = float(fmax) if fmax is not None else float(self.SR) / 2.0
+            span = max(1.0, upper - lower)
+            n_fft = 2048
+            while n_fft < 8192 and (span / (self.SR / n_fft)) < 24.0:
+                n_fft *= 2
+            bins_in_band = max(1, int(span / (self.SR / n_fft)))
             kwargs = {
                 "y": signal,
                 "sr": self.SR,
                 "hop_length": hop,
-                "n_mels": 64,
+                "n_fft": n_fft,
+                "n_mels": max(4, min(64, bins_in_band // 2)),
             }
             if fmin is not None:
                 kwargs["fmin"] = fmin

@@ -25,6 +25,7 @@ import queue
 import uuid
 from pathlib import Path
 from typing import Any, List, Dict, Optional, Callable
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 
 class RenderCancelledError(RuntimeError):
@@ -267,6 +268,7 @@ class RenderService:
             raise RuntimeError("No valid AMD AMF encoder is active")
         return encoder
 
+    @recovery_write_operation("render-output")
     def render_timeline(
         self,
         timeline: List[Dict],
@@ -452,9 +454,11 @@ class RenderService:
 
         for i, clip in enumerate(timeline):
             if cancel_callback and cancel_callback():
+                self._cleanup_temp(normalized)
                 raise RenderCancelledError("Rendering cancelled during clip normalization")
             path = _get_clip_path_str(clip)
             if not path:
+                self._cleanup_temp(normalized)
                 raise FileNotFoundError(
                     f"Timeline-Clip {i} fehlt oder ist nicht mehr lesbar"
                 )
@@ -469,26 +473,49 @@ class RenderService:
                 normalized.append(new_clip)
                 continue
 
-            needs_norm = self._check_needs_normalization(
-                path,
-                w,
-                h,
-                fps,
-                target_codec,
-                cancel_callback,
-            )
-            if not needs_norm:
-                needs_norm = not self._is_frame_addressable(path, cancel_callback)
+            try:
+                needs_norm = self._check_needs_normalization(
+                    path,
+                    w,
+                    h,
+                    fps,
+                    target_codec,
+                    cancel_callback,
+                )
+                if not needs_norm:
+                    needs_norm = not self._is_frame_addressable(path, cancel_callback)
+            except Exception:
+                self._cleanup_temp(normalized)
+                raise
             if needs_norm:
                 if cb:
-                    pct = 10 + int(40 * (i / total))
-                    cb(f"Normalisiere Clip {i + 1}/{total}...", pct)
+                    try:
+                        pct = 10 + int(40 * (i / total))
+                        cb(f"Normalisiere Clip {i + 1}/{total}...", pct)
+                    except Exception:
+                        self._cleanup_temp(normalized)
+                        raise
 
                 temp_name = f"norm_{i}.mp4"
                 temp_path = self.temp_dir / temp_name
-                self._transcode_clip(path, temp_path, w, h, fps, cancel_callback)
-                if not self._is_frame_addressable(temp_path, cancel_callback):
+                try:
+                    self._transcode_clip(path, temp_path, w, h, fps, cancel_callback)
+                except Exception:
                     temp_path.unlink(missing_ok=True)
+                    self._cleanup_temp(normalized)
+                    raise
+                try:
+                    is_frame_addressable = self._is_frame_addressable(
+                        temp_path,
+                        cancel_callback,
+                    )
+                except Exception:
+                    temp_path.unlink(missing_ok=True)
+                    self._cleanup_temp(normalized)
+                    raise
+                if not is_frame_addressable:
+                    temp_path.unlink(missing_ok=True)
+                    self._cleanup_temp(normalized)
                     raise RuntimeError(
                         f"Normalisierter Clip ist nicht frame-adressierbar: {Path(path).name}"
                     )
@@ -689,22 +716,20 @@ class RenderService:
                     bufsize=1,
                 )
                 self._register_process(process)
-                stderr_lines: list[str] = []
-                while process.poll() is None:
+                stderr_text = ""
+                while True:
                     if cancel_callback and cancel_callback():
                         process.kill()
-                        process.wait(timeout=5)
+                        try:
+                            _, stderr_text = process.communicate(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.wait(timeout=5)
                         raise RenderCancelledError("Rendering cancelled during clip normalization")
-                    if process.stderr is not None:
-                        line = process.stderr.readline()
-                        if line:
-                            stderr_lines.append(line)
-                            continue
-                    time.sleep(0.1)
-
-                if process.stderr is not None:
-                    stderr_lines.extend(process.stderr.readlines())
-                stderr_text = "".join(stderr_lines)
+                    try:
+                        _, stderr_text = process.communicate(timeout=0.1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
                 if process.returncode != 0:
                     raise subprocess.CalledProcessError(process.returncode, cmd, stderr=stderr_text)
                 if not output_path.exists() or output_path.stat().st_size == 0:

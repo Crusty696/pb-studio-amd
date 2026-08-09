@@ -38,6 +38,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,7 @@ class RenderQueue:
 
     # -- Public API -----------------------------------------------------------
 
+    @recovery_write_operation("render-queue")
     def enqueue(
         self,
         media_hash: str,
@@ -303,6 +305,7 @@ class RenderQueue:
             assert stored is not None, "INSERT erfolgreich aber row nicht abrufbar"
             return stored
 
+    @recovery_write_operation("render-queue")
     def update_status(
         self,
         job_id: str,
@@ -415,6 +418,7 @@ class RenderQueue:
         ).fetchall()
         return [self._row_to_job(r) for r in rows if r is not None]
 
+    @recovery_write_operation("render-queue")
     def restore_running_as_interrupted(self) -> list[str]:
         """Resume on startup: alle "running"-Zeilen → "interrupted" requeuen.
 
@@ -456,6 +460,7 @@ class RenderQueue:
         )
         return job_ids
 
+    @recovery_write_operation("render-queue")
     def remove(self, job_id: str) -> bool:
         """Entfernt einen Job (nur für Cleanup / Tests gedacht)."""
         with self._db.transaction(immediate=True) as conn:
@@ -464,6 +469,7 @@ class RenderQueue:
             )
             return cur.rowcount > 0
 
+    @recovery_write_operation("render-queue")
     def clear(self) -> int:
         """Entfernt ALLE Jobs (nur Tests / explizites Reset)."""
         with self._db.transaction(immediate=True) as conn:

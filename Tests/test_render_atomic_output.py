@@ -3,6 +3,7 @@ import subprocess
 
 import pytest
 
+from pb_studio.rendering import render_service
 from pb_studio.rendering.render_service import RenderCancelledError, RenderService
 
 
@@ -130,3 +131,59 @@ def test_shutdown_terminates_kills_and_waits_active_ffmpeg() -> None:
     assert process.terminated
     assert process.killed
     assert process.waited
+
+
+def test_transcode_cancel_poll_does_not_block_on_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Pipe:
+        def readline(self):
+            raise AssertionError("blocking readline must not be used")
+
+        def close(self):
+            return None
+
+    class Process:
+        def __init__(self):
+            self.stdout = None
+            self.stderr = Pipe()
+            self.returncode = None
+            self.killed = False
+            self.communicate_timeouts: list[float | None] = []
+
+        def poll(self):
+            return self.returncode
+
+        def communicate(self, timeout=None):
+            self.communicate_timeouts.append(timeout)
+            if not self.killed:
+                raise subprocess.TimeoutExpired("ffmpeg", timeout)
+            return None, "cancelled"
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    process = Process()
+    monkeypatch.setattr(render_service.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(render_service, "_get_ffmpeg_path", lambda: "ffmpeg.exe")
+    monkeypatch.setattr(render_service, "get_amf_device_args", lambda: [])
+    service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
+    cancel_checks = iter((False, True))
+
+    with pytest.raises(RenderCancelledError):
+        service._transcode_clip(
+            "input.mp4",
+            tmp_path / "output.mp4",
+            1920,
+            1080,
+            30.0,
+            lambda: next(cancel_checks),
+        )
+
+    assert process.killed
+    assert process.communicate_timeouts == [0.1, 5]

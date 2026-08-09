@@ -1,6 +1,18 @@
 import pytest
 import time
+from types import SimpleNamespace
 from pb_studio.core.vram_budget_manager import VRAMBudgetManager, ModelPriority
+
+
+def test_forced_vram_environment_takes_priority_over_normal_cap(monkeypatch):
+    manager = object.__new__(VRAMBudgetManager)
+    manager._physical_vram_mb = 16384
+    manager.adapter = SimpleNamespace(device_id=0, luid="test-luid")
+    manager.config = SimpleNamespace(get=lambda *_args, **_kwargs: {})
+    monkeypatch.setenv("PBSTUDIO_VRAM_LIMIT_MB", "15872")
+    monkeypatch.setenv("PB_STUDIO_FORCED_VRAM", "14336")
+
+    assert manager._detect_vram_limit() == 14336
 
 def test_vram_allocation_and_eviction():
     VRAMBudgetManager.reset_for_testing()

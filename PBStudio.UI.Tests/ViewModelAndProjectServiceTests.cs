@@ -17,7 +17,10 @@ public sealed class ViewModelAndProjectServiceTests
             .Handle(
                 nameof(IApiClient.ClearChatHistoryAsync),
                 _ => Task.FromResult(false));
-        using var viewModel = new ChatViewModel(api.Client);
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        using var viewModel = new ChatViewModel(api.Client, projects);
         var originalWelcome = viewModel.Messages.Single();
 
         await viewModel.ClearAsync();
@@ -34,7 +37,10 @@ public sealed class ViewModelAndProjectServiceTests
             .Handle(
                 nameof(IApiClient.ClearChatHistoryAsync),
                 _ => Task.FromResult(true));
-        using var viewModel = new ChatViewModel(api.Client);
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        using var viewModel = new ChatViewModel(api.Client, projects);
         var originalWelcome = viewModel.Messages.Single();
 
         await viewModel.ClearAsync();

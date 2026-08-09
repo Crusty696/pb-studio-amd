@@ -3281,6 +3281,15 @@
             "type": "string",
             "pattern": "^(perfect|fits|not_quite|no_match)$",
             "title": "Rating"
+          },
+          "operation_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 16,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.:-]*$",
+            "nullable": true,
+            "title": "Operation Id",
+            "description": "Retry-stabile ID eines logischen Feedback-Klicks. Derselbe Wert mit derselben Nutzlast liefert die bestehende Quittung, ohne erneut zu lernen."
           }
         },
         "type": "object",

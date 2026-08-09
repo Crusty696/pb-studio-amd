@@ -1,6 +1,6 @@
 """Render-bezogene Schemas."""
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pathlib import Path as _Path
 from typing import Optional
 from enum import Enum
@@ -26,7 +26,7 @@ class RenderEncoder(str, Enum):
 class RenderRequest(BaseModel):
     """Request: Rendering starten."""
     output_path: str = Field(..., description="Ziel-Dateipfad")
-    audio_path: str = Field(..., description="Audio-Quell-Pfad")
+    audio_path: str = Field(default="", description="Audio-Quell-Pfad")
     quality: RenderQuality = RenderQuality.HIGH
     encoder: Optional[RenderEncoder] = None  # None = Auto-Detect
     resolution_width: int = Field(default=1920, ge=2, le=7680)
@@ -51,6 +51,12 @@ class RenderRequest(BaseModel):
         if not v:
             return v
         return str(canonical_local_media_file(v, label="audio_path"))
+
+    @model_validator(mode="after")
+    def audio_path_required_when_audio_enabled(self) -> "RenderRequest":
+        if self.include_audio and not self.audio_path:
+            raise ValueError("audio_path fehlt trotz include_audio=True")
+        return self
 
 
 class RenderProgress(BaseModel):

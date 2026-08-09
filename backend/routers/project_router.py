@@ -23,6 +23,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 from ..app_state import (
     AppState,
@@ -62,6 +63,7 @@ def _bind_brain_to_project(
     *,
     project_epoch: int,
     project_id: int,
+    project_uuid: str,
 ) -> None:
     """Bind Brain to this project's state.db before switching runtime state."""
     try:
@@ -71,6 +73,7 @@ def _bind_brain_to_project(
             state_db,
             project_epoch=project_epoch,
             project_id=project_id,
+            project_uuid=project_uuid,
         )
         logger.info(f"Brain bound to {state_db}")
     except Exception as e:
@@ -204,6 +207,30 @@ def _find_project_db_record_id(project_path: Path) -> int | None:
         if data.get("path") == normalized_path:
             return int(row["id"])
     return None
+
+
+def _catalog_project_uuid(
+    project_id: int,
+    project_path: Path,
+    *,
+    fallback_uuid: str | None = None,
+) -> str:
+    row = ProjectRepository().get_by_id(int(project_id))
+    if row is not None:
+        value = row.get("project_uuid") or (row.get("data") or {}).get(
+            "project_uuid"
+        )
+        if value:
+            return str(uuid.UUID(str(value)))
+    if fallback_uuid:
+        return str(uuid.UUID(str(fallback_uuid)))
+    fallback = str(uuid.uuid5(uuid.NAMESPACE_URL, project_path.resolve().as_uri()))
+    logger.warning(
+        "Project %s has no catalog project_uuid; using standalone identity %s",
+        project_id,
+        fallback,
+    )
+    return fallback
 
 
 def _read_project_meta(project_path: Path) -> dict:
@@ -342,6 +369,10 @@ async def _activate_project(
             project_path,
             project_epoch=state.project_epoch,
             project_id=int(project_data["db_project_id"]),
+            project_uuid=str(
+                project_data.get("project_uuid")
+                or uuid.uuid5(uuid.NAMESPACE_URL, project_path.resolve().as_uri())
+            ),
         )
         state.reset(invalidate_context=False)
         state.install_project_state(project_data, candidate_state)
@@ -354,6 +385,7 @@ async def _activate_project(
 
 
 @router.post("/create", response_model=ProjectInfo)
+@recovery_write_operation("project-files")
 async def create_project(
     request: ProjectCreate,
     state: AppState = Depends(get_app_state),
@@ -399,6 +431,7 @@ async def create_project(
         project_data = {
             "name": request.name,
             "path": str(project_path),
+            "project_uuid": str(uuid.uuid4()),
             "audio_count": 0,
             "video_count": 0,
             "has_timeline": False,
@@ -489,6 +522,7 @@ async def create_project(
 
 
 @router.post("/open", response_model=ProjectInfo)
+@recovery_write_operation("project-files")
 async def open_project(
     request: ProjectOpen,
     state: AppState = Depends(get_app_state),
@@ -565,6 +599,11 @@ async def open_project(
         "name": meta.get("name", project_path.name),
         "path": str(project_path),
         "db_project_id": db_project_id,
+        "project_uuid": _catalog_project_uuid(
+            db_project_id,
+            project_path,
+            fallback_uuid=meta.get("project_uuid"),
+        ),
         "audio_count": audio_count,
         "video_count": video_count,
         "has_timeline": bool(meta.get("has_timeline", has_timeline)),
@@ -596,6 +635,7 @@ async def open_project(
 
 
 @router.post("/save", response_model=StatusResponse)
+@recovery_write_operation("project-files")
 async def save_project(state: AppState = Depends(get_app_state)) -> StatusResponse:
     """Persist the current project without reporting false success."""
     try:
@@ -626,6 +666,9 @@ def _save_project_in_context(
         "name": current_project.get("name", project_path.name),
         "path": str(project_path),
         "db_project_id": context.project_id,
+        "project_uuid": current_project.get("project_uuid")
+        or existing_meta.get("project_uuid")
+        or _catalog_project_uuid(context.project_id, project_path),
         "audio_count": len(state.get_audio_clips_snapshot()),
         "video_count": len(state.get_video_clips_snapshot()),
         "has_timeline": bool(timeline),
@@ -714,6 +757,7 @@ def _save_project_in_context(
 
 
 @router.post("/close", response_model=StatusResponse)
+@recovery_write_operation("project-files")
 async def close_project(state: AppState = Depends(get_app_state)) -> StatusResponse:
     """Schließt das aktuelle Projekt und räumt State auf."""
     async with state.project_lifecycle_lock:
@@ -728,14 +772,30 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
             task_ids = list(state.render_tasks.keys())
         for task_id in task_ids:
             state.set_cancel_flag(task_id, True)
-        state.reset(invalidate_context=False)
         # L-STATE-4: Brain-State-Connection vom alten Projekt loesen, sonst
         # schreiben /brain/feedback Calls weiter in die alte state.db.
         try:
-            from backend._brain_singleton import clear_project_state
+            from backend._brain_singleton import (
+                clear_project_state,
+                current_project_state_identity,
+            )
             clear_project_state()
+            if current_project_state_identity() is not None:
+                raise RuntimeError("Brain-State ist weiterhin an ein Projekt gebunden")
         except Exception as e:
-            logger.warning("Brain-State-Unbind beim Close fehlgeschlagen: %s", e)
+            logger.error(
+                "Brain-State-Unbind beim Close fehlgeschlagen: %s",
+                e,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Projekt konnte nicht geschlossen werden, weil der "
+                    "Brain-State nicht freigegeben wurde"
+                ),
+            ) from e
+        state.reset(invalidate_context=False)
         if pending:
             logger.warning(
                 "Projekt-Close mit %d noch auslaufenden stale Task(s); "
@@ -815,25 +875,27 @@ async def get_anchors(
     state: AppState = Depends(get_app_state),
 ) -> AnchorListResponse:
     """Liefert die manuellen Anker des aktiven Projekts."""
-    if not state.current_project:
-        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
-    entries = load_project_anchors(state.current_project["path"])
-    return AnchorListResponse(
-        anchors=[AnchorEntry(**entry) for entry in entries],
-        count=len(entries),
-    )
+    try:
+        async with state.project_operation() as context:
+            entries = load_project_anchors(context.project_root)
+            state.require_project_context_current(context)
+            return AnchorListResponse(
+                anchors=[AnchorEntry(**entry) for entry in entries],
+                count=len(entries),
+            )
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/anchors", response_model=AnchorListResponse)
+@recovery_write_operation("project-files")
 async def set_anchors(
     payload: list[AnchorEntry],
     state: AppState = Depends(get_app_state),
 ) -> AnchorListResponse:
     """Ersetzt die manuellen Anker des aktiven Projekts."""
-    if not state.current_project:
-        raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
-
-    root = Path(state.current_project["path"])
     normalized = sorted(
         ({
             "time": float(entry.time),
@@ -842,23 +904,33 @@ async def set_anchors(
         } for entry in payload),
         key=lambda entry: entry["time"],
     )
-    path = _anchors_path(root)
+    tmp: Optional[Path] = None
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(normalized, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        tmp.replace(path)
+        async with state.project_operation() as context:
+            path = _anchors_path(context.project_root)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+            tmp.write_text(
+                json.dumps(normalized, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            with state.project_commit(context):
+                os.replace(tmp, path)
+            logger.info("Manuelle Anker gespeichert: %d in %s", len(normalized), path)
     except OSError as exc:
         logger.error("anchors.json nicht schreibbar: %s", exc)
         raise HTTPException(
             status_code=500,
             detail=f"Anker konnten nicht gespeichert werden: {exc}",
         ) from exc
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
-    logger.info("Manuelle Anker gespeichert: %d in %s", len(normalized), path)
     return AnchorListResponse(
         anchors=[AnchorEntry(**entry) for entry in normalized],
         count=len(normalized),
@@ -870,7 +942,14 @@ async def project_info(state: AppState = Depends(get_app_state)) -> ProjectInfo:
     """Gibt Informationen zum aktuellen Projekt zurück."""
     if not state.current_project:
         raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
-    project_data = dict(state.current_project)
-    project_data["audio_count"] = len(state.get_audio_clips_snapshot())
-    project_data["video_count"] = len(state.get_video_clips_snapshot())
-    return ProjectInfo(**project_data)
+    try:
+        async with state.project_operation() as context:
+            with state.project_commit(context):
+                project_data = dict(state.current_project or {})
+                project_data["audio_count"] = len(state.audio_clips)
+                project_data["video_count"] = len(state.video_clips)
+            return ProjectInfo(**project_data)
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=400, detail="Kein Projekt geoeffnet") from exc
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

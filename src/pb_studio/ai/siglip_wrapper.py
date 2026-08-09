@@ -9,7 +9,7 @@ Optimized for AMD GPUs via DirectML.
 import logging
 import numpy as np
 from pathlib import Path
-from typing import Optional, List, Union, Tuple, Any
+from typing import Optional, List, Union, Tuple
 from PIL import Image
 
 try:
@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 from pb_studio.core.gpu_lock import gpu_inference_lock
 from pb_studio.core.directml_adapter import (
-    configure_directml_session_options,
     enforce_directml_session,
-    get_directml_provider,
 )
 
 
@@ -58,25 +56,6 @@ class SigLIPWrapper:
         if not lazy_load:
             self._init_model()
 
-    def _create_session_options(self) -> ort.SessionOptions:
-        sess_options = configure_directml_session_options(ort.SessionOptions())
-        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        return sess_options
-
-    def _get_providers(self) -> List[Any]:
-        """IRC-1 / IRON RULE 1: AMD DirectML ONLY — kein CPU-Fallback.
-
-        Wenn DmlExecutionProvider nicht verfuegbar ist, scheitert die
-        Initialisierung explizit (loud) statt silent in CPU-Mode zu rutschen
-        (~10x langsamer, VRAMBudgetManager sieht den Speicher nicht)."""
-        available = ort.get_available_providers()
-        if 'DmlExecutionProvider' not in available:
-            raise RuntimeError(
-                "SigLIP benoetigt DmlExecutionProvider (IRON RULE 1: AMD DirectML ONLY). "
-                "onnxruntime-directml ist nicht korrekt installiert oder DML ist nicht verfuegbar."
-            )
-        return [get_directml_provider()]
-
     def _init_tokenizer(self) -> bool:
         try:
             from transformers import AutoTokenizer
@@ -97,8 +76,6 @@ class SigLIPWrapper:
         if self._initialized: return True
         self._init_tokenizer()
         models_path = Path(self._models_dir)
-        sess_options = self._create_session_options()
-        providers = self._get_providers()
 
         try:
             from pb_studio.core.model_loader import ModelLoader
@@ -110,27 +87,24 @@ class SigLIPWrapper:
             if vision_path.exists():
                 self.vision_session = loader.load_model("siglip_vision", force=True)
                 if self.vision_session is None:
-                    self.vision_session = enforce_directml_session(
-                        ort.InferenceSession(
-                            str(vision_path),
-                            sess_options,
-                            providers=providers,
-                        )
-                    )
+                    return False
+                loader.register_session_owner(
+                    "siglip_vision",
+                    self._release_loader_session,
+                )
                 self.vision_session = enforce_directml_session(self.vision_session)
                 self._active_provider = "DmlExecutionProvider"
                 
                 if text_path.exists():
                     self.text_session = loader.load_model("siglip_text", force=True)
                     if self.text_session is None:
-                        self.text_session = enforce_directml_session(
-                            ort.InferenceSession(
-                                str(text_path),
-                                sess_options,
-                                providers=providers,
-                            )
+                        self._init_text_fallback()
+                    else:
+                        loader.register_session_owner(
+                            "siglip_text",
+                            self._release_loader_session,
                         )
-                    self.text_session = enforce_directml_session(self.text_session)
+                        self.text_session = enforce_directml_session(self.text_session)
                 else:
                     self._init_text_fallback()
                 
@@ -240,6 +214,15 @@ class SigLIPWrapper:
 
     @property
     def embedding_dimension(self) -> int: return EMBEDDING_DIM
+
+    def _release_loader_session(self, model_id: str) -> None:
+        if model_id == "siglip_vision":
+            self.vision_session = None
+        elif model_id == "siglip_text":
+            self.text_session = None
+        if self.vision_session is None:
+            self._initialized = False
+            self._active_provider = "Unknown"
 
     def unload(self):
         try:

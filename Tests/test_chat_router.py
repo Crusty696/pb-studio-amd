@@ -26,6 +26,30 @@ def client(app):
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def active_chat_project(tmp_path):
+    """Chat-Turns besitzen immer eine vollständige Projektidentität."""
+    from backend.app_state import get_app_state
+
+    state = get_app_state()
+    project_root = tmp_path / "active-project"
+    project_root.mkdir()
+    with state._state_lock:
+        previous_project = state.current_project
+        state._project_epoch += 1
+        state._project_capabilities.clear()
+        state.current_project = {
+            "db_project_id": 7001,
+            "name": "Chat Test",
+            "path": str(project_root),
+        }
+    yield state
+    with state._state_lock:
+        state._project_epoch += 1
+        state._project_capabilities.clear()
+        state.current_project = previous_project
+
+
 # ======================================================================
 # GET /chat/tools
 # ======================================================================
@@ -178,3 +202,179 @@ def test_post_message_accepts_explicit_history(client):
         assert captured["mode"] == "speed"
     finally:
         chat_agent.ChatAgent = original
+
+
+def test_history_store_keeps_request_project_after_active_project_changes(
+    tmp_path,
+):
+    from backend.routers.chat_router import _ChatHistoryStore
+
+    async def run() -> None:
+        store = _ChatHistoryStore()
+        project_a = await store.bind_project(str(tmp_path / "a"))
+        await store.append("user", "question-a", project_key=project_a)
+
+        project_b = await store.bind_project(str(tmp_path / "b"))
+        await store.append("user", "question-b", project_key=project_b)
+        await store.append("assistant", "answer-a", project_key=project_a)
+
+        assert await store.snapshot(project_a) == [
+            {"role": "user", "content": "question-a"},
+            {"role": "assistant", "content": "answer-a"},
+        ]
+        assert await store.snapshot(project_b) == [
+            {"role": "user", "content": "question-b"},
+        ]
+
+    asyncio.run(run())
+
+
+def test_client_supplied_history_is_trimmed_to_server_token_budget():
+    from backend.routers.chat_router import _ChatHistoryStore
+
+    store = _ChatHistoryStore()
+    entries = [
+        {"role": "assistant", "content": "x" * 6000},
+        {"role": "user", "content": "newest"},
+    ]
+
+    trimmed = store.trim_for_llm(
+        entries,
+        max_tokens=2048,
+        reserved_tokens=500,
+    )
+
+    assert trimmed == [{"role": "user", "content": "newest"}]
+
+
+def test_project_switch_cancels_stream_with_typed_event_and_no_b_history(
+    active_chat_project,
+    tmp_path,
+):
+    from backend.routers import chat_router
+    from backend.routers.chat_router import ChatMessageRequest
+    from pb_studio.ai import chat_agent
+    from pb_studio.ai.chat_agent import ChatEvent
+
+    state = active_chat_project
+    project_a = str(state.capture_project_context().project_root)
+    project_b_path = tmp_path / "project-b"
+    project_b_path.mkdir()
+    started = asyncio.Event()
+
+    class SlowToolAgent(_FakeAgent):
+        async def process_message(self, *args, **kwargs):
+            yield ChatEvent("tool_call", {"name": "audio_list_clips", "id": "slow"})
+            started.set()
+            await asyncio.Event().wait()
+
+    async def run() -> list[dict[str, Any]]:
+        original = chat_agent.ChatAgent
+        chat_agent.ChatAgent = SlowToolAgent
+        try:
+            response = await chat_router.post_message(
+                ChatMessageRequest(message="slow tool")
+            )
+
+            async def consume() -> str:
+                chunks = []
+                async for chunk in response.body_iterator:
+                    chunks.append(
+                        chunk.decode("utf-8") if isinstance(chunk, bytes) else chunk
+                    )
+                return "".join(chunks)
+
+            consumer = asyncio.create_task(consume())
+            await asyncio.wait_for(started.wait(), timeout=2.0)
+            state.invalidate_project_context()
+            await state.cancel_and_drain_project_tasks(timeout_seconds=2.0)
+            with state._state_lock:
+                state.current_project = {
+                    "db_project_id": 7002,
+                    "name": "Project B",
+                    "path": str(project_b_path),
+                }
+            events = _parse_sse(await asyncio.wait_for(consumer, timeout=2.0))
+
+            project_a_entries = await chat_router._history_store.snapshot(project_a)
+            project_b = await chat_router._history_store.bind_project(
+                str(project_b_path)
+            )
+            project_b_entries = await chat_router._history_store.snapshot(project_b)
+            assert project_a_entries == [{"role": "user", "content": "slow tool"}]
+            assert project_b_entries == []
+            return events
+        finally:
+            chat_agent.ChatAgent = original
+
+    events = asyncio.run(run())
+    error = next(event for event in events if event["event"] == "error")
+    assert error["data"]["code"] == "project_context_changed"
+    assert error["data"]["status_code"] == 409
+    assert events[-1] == {
+        "event": "done",
+        "data": {"reason": "project_context_changed"},
+    }
+    assert state._project_capabilities == {}
+    assert state._project_tasks == {}
+
+
+def test_client_disconnect_revokes_turn_capability(
+    active_chat_project,
+):
+    from backend.routers import chat_router
+    from backend.routers.chat_router import ChatMessageRequest
+    from pb_studio.ai import chat_agent
+    from pb_studio.ai.chat_agent import ChatEvent
+
+    exited = False
+
+    class WaitingAgent(_FakeAgent):
+        async def __aexit__(self, *args):
+            nonlocal exited
+            exited = True
+
+        async def process_message(self, *args, **kwargs):
+            yield ChatEvent("tool_confirmation_required", {
+                "confirmation_id": "pending",
+                "name": "render_start",
+            })
+            await asyncio.Event().wait()
+
+    async def run() -> None:
+        original = chat_agent.ChatAgent
+        chat_agent.ChatAgent = WaitingAgent
+        try:
+            response = await chat_router.post_message(
+                ChatMessageRequest(message="wait for confirmation")
+            )
+            iterator = response.body_iterator
+            first = await iterator.__anext__()
+            first_text = first.decode("utf-8") if isinstance(first, bytes) else first
+            assert _parse_sse(first_text)[0]["event"] == "tool_confirmation_required"
+            await iterator.aclose()
+        finally:
+            chat_agent.ChatAgent = original
+
+    asyncio.run(run())
+    assert exited is True
+    assert active_chat_project._project_capabilities == {}
+    assert active_chat_project._project_tasks == {}
+
+
+def test_loopback_project_capability_is_valid_then_returns_409_when_stale(
+    client,
+    active_chat_project,
+):
+    from backend.app_state import PROJECT_CAPABILITY_HEADER
+
+    state = active_chat_project
+    capability = state.issue_project_capability(state.capture_project_context())
+    headers = {PROJECT_CAPABILITY_HEADER: capability}
+
+    assert client.get("/health", headers=headers).status_code == 200
+
+    state.invalidate_project_context()
+    stale = client.get("/health", headers=headers)
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "project_context_changed"

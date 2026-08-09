@@ -19,7 +19,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from .. import dependencies
-from ..dependencies import get_event_queue, get_journaled_events_since
+from ..dependencies import (
+    get_event_journal_gap,
+    get_event_queue,
+    get_journaled_events_since,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["Events (SSE)"])
@@ -75,6 +79,37 @@ async def _event_stream(
         # "completed" in das Reconnect-Fenster fiel.
         last_event_id = _parse_last_event_id(request)
         if last_event_id > 0:
+            replay_gap = get_event_journal_gap(last_event_id, event_filter)
+            if replay_gap is not None:
+                gap_start, gap_end = replay_gap
+                logger.warning(
+                    "SSE Reconnect %s: Journal-Lücke id=%d..%d",
+                    client_id,
+                    gap_start,
+                    gap_end,
+                )
+                marker_id = gap_end
+                if event_filter == {"log"}:
+                    gap_data = json.dumps(
+                        {
+                            "level": "warning",
+                            "message": (
+                                "Log-Verbindung war unterbrochen; "
+                                f"Events {gap_start}–{gap_end} sind nicht mehr verfügbar."
+                            ),
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield f"id: {marker_id}\nevent: log\ndata: {gap_data}\n\n"
+                else:
+                    gap_data = json.dumps(
+                        {"first_missing_id": gap_start, "last_missing_id": gap_end},
+                        ensure_ascii=False,
+                    )
+                    yield (
+                        f"id: {marker_id}\nevent: replay_gap\n"
+                        f"data: {gap_data}\n\n"
+                    )
             missed = get_journaled_events_since(last_event_id, event_filter)
             if missed:
                 logger.info(

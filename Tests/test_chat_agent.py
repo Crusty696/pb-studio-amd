@@ -13,7 +13,11 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 import pytest
 
-from pb_studio.ai.chat_agent import ChatAgent, ChatEvent
+from pb_studio.ai.chat_agent import (
+    ChatAgent,
+    ChatEvent,
+    tool_confirmation_broker,
+)
 from pb_studio.ai.lmstudio_client import LMStudioClient, LMStudioError, LMStudioConnectionError, LMStudioModelInfo
 from pb_studio.ai import model_inventory
 from pb_studio.ai.model_inventory import (
@@ -22,7 +26,12 @@ from pb_studio.ai.model_inventory import (
     ProviderInventory,
 )
 from pb_studio.ai.model_registry import ModelRegistry, NoSuitableModelError
-from pb_studio.ai.tool_registry import Tool, ToolRegistry, build_default_registry
+from pb_studio.ai.tool_registry import (
+    Tool,
+    ToolRegistry,
+    _owner_headers_for_loopback,
+    build_default_registry,
+)
 
 
 def _run(coro):
@@ -608,6 +617,8 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
     model_events = [e for e in events if e.type == "model"]
     assert len(model_events) >= 2  # Erstes Modell, dann nach Fallback das zweite Modell
     assert model_events[-1].payload["model"] == "gemma-4-e4b"
+    assert model_events[-1].payload["provider"] == "ollama"
+    assert model_events[-1].payload["selection_receipt"]["provider"] == "ollama"
 
     # Pruefe, ob der Text von Ollama geliefert wurde
     text_event = next(e for e in events if e.type == "text")
@@ -777,3 +788,128 @@ def test_long_running_tool_dispatch_uses_extended_timeout():
 
     assert _run(go()) == {"ok": True}
     assert observed["read_timeout"] == 600.0
+
+
+@pytest.mark.parametrize("long_running", [False, True])
+def test_project_capability_is_bound_to_every_loopback_dispatch(long_running):
+    from backend.app_state import PROJECT_CAPABILITY_HEADER
+
+    observed: dict[str, str | None] = {}
+
+    async def handler(args, *, http_client):
+        headers = _owner_headers_for_loopback("http://127.0.0.1:8765/health")
+        observed["capability"] = headers.get(PROJECT_CAPABILITY_HEADER)
+        return {"ok": True}
+
+    registry = ToolRegistry()
+    registry.register(Tool(
+        name="system.health",
+        description="test",
+        parameters={"type": "object", "properties": {}, "required": []},
+        handler=handler,
+        destructive=False,
+        category="system",
+        long_running=long_running,
+    ))
+    fake = FakeLMStudioClient(responses=[])
+    http = _mock_backend({})
+
+    async def go():
+        async with ChatAgent(
+            registry=registry,
+            lmstudio_client=fake,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=fake),
+            project_capability="turn-project-capability",
+        ) as agent:
+            result = await agent._dispatch_tool(_tool_call("system_health", {}))
+        await http.aclose()
+        return result
+
+    assert _run(go()) == {"ok": True}
+    assert observed["capability"] == "turn-project-capability"
+
+
+def test_confirmation_wait_cancellation_never_dispatches_tool():
+    handler_called = False
+    confirmation_seen = asyncio.Event()
+
+    async def handler(args, *, http_client):
+        nonlocal handler_called
+        handler_called = True
+        return {"ok": True}
+
+    registry = ToolRegistry()
+    registry.register(Tool(
+        name="render.start",
+        description="test",
+        parameters={"type": "object", "properties": {}, "required": []},
+        handler=handler,
+        destructive=True,
+        category="render",
+    ))
+    fake = FakeLMStudioClient(responses=[{
+        "message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [_tool_call("render_start", {}, call_id="confirm")],
+        }
+    }])
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+
+        async def consume():
+            async with ChatAgent(
+                registry=registry,
+                lmstudio_client=fake,
+                http_client=http,
+                model_registry=ModelRegistry({}, client=fake),
+                confirmation_timeout_seconds=30.0,
+                project_capability="turn-project-capability",
+            ) as agent:
+                async for event in agent.process_message("render"):
+                    events.append(event)
+                    if event.type == "tool_confirmation_required":
+                        confirmation_seen.set()
+
+        task = asyncio.create_task(consume())
+        await asyncio.wait_for(confirmation_seen.wait(), timeout=2.0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    assert any(event.type == "tool_confirmation_required" for event in events)
+    assert handler_called is False
+    assert tool_confirmation_broker._entries == {}
+
+
+def test_project_capability_and_commit_are_stale_after_epoch_change(tmp_path):
+    from backend.app_state import AppState, ProjectContextChangedError
+
+    state = AppState(current_project={
+        "db_project_id": 1,
+        "name": "A",
+        "path": str(tmp_path / "a"),
+    })
+    context = state.capture_project_context()
+    capability = state.issue_project_capability(context)
+
+    state.invalidate_project_context()
+    with state._state_lock:
+        state.current_project = {
+            "db_project_id": 2,
+            "name": "B",
+            "path": str(tmp_path / "b"),
+        }
+
+    with pytest.raises(ProjectContextChangedError):
+        state.resolve_project_capability(capability)
+    with pytest.raises(ProjectContextChangedError):
+        with state.project_commit(context):
+            state.current_timeline.append({"wrong": "project-b"})
+    assert state.current_timeline == []

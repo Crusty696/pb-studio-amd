@@ -90,6 +90,9 @@ def test_clip_transcode_places_dynamic_amf_device_before_input(
         def poll(self):
             return self.returncode
 
+        def communicate(self, timeout=None):
+            return None, ""
+
         def kill(self):
             self.returncode = -1
 
