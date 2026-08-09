@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 import importlib
 import inspect
 import json
@@ -326,6 +327,45 @@ def test_complete_owner_inventory_commits_one_shared_generation(tmp_path):
     )
 
 
+def test_default_catalog_without_materialized_project_is_valid(tmp_path):
+    api = _api()
+    root = tmp_path / "workspace"
+    config = root / "config.json"
+    catalog = root / "data" / "pb_studio.db"
+    brain_dir = root / "brain"
+    _write_json(config, {"hardware": {"gpu_backend": "directml"}})
+    default_payload = json.dumps({"id": 1, "name": "Default", "path": None})
+    _create_sqlite(
+        catalog,
+        (
+            "CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+            "created_at TEXT, json_data TEXT, project_uuid TEXT UNIQUE)",
+            "INSERT INTO projects VALUES "
+            f"(1, 'Default', '2026-08-09T00:00:00Z', '{default_payload}', NULL)",
+        ),
+    )
+    _create_brain_db(brain_dir / "weights.db", "axis_weights")
+    _create_brain_db(brain_dir / "patterns.db", "patterns")
+    _create_brain_db(brain_dir / "embedding_cache.db", "media_embedding_index")
+    snapshot = api.RecoveryOwnerSnapshot(
+        config_path=config,
+        catalog_db_path=catalog,
+        brain_dir=brain_dir,
+    )
+
+    committed = _await_if_needed(
+        api.create_owner_generation(snapshot, control_root=tmp_path / "control")
+    )
+    validation = api.validate_owner_generation(
+        tmp_path / "control",
+        committed.generation_id,
+    )
+    manifest = json.loads(committed.manifest_path.read_text(encoding="utf-8"))
+
+    assert validation.valid is True
+    assert "project" not in {record["group"] for record in manifest["artifacts"]}
+
+
 def test_half_applied_brain_operation_fails_closed_before_publish(tmp_path):
     api = _api()
     paths = _create_complete_workspace(tmp_path)
@@ -392,7 +432,7 @@ def test_missing_optional_external_media_is_reported_degraded(tmp_path):
     assert "source.wav" in validation.degraded_references[0]
 
 
-def test_bootstrap_restart_validates_snapshot_without_reapplying_it(tmp_path):
+def test_clean_bootstrap_restart_preserves_newer_live_owner_targets(tmp_path):
     from backend.recovery_bootstrap import ensure_recovery_ready
 
     paths = _create_complete_workspace(tmp_path)
@@ -409,3 +449,208 @@ def test_bootstrap_restart_validates_snapshot_without_reapplying_it(tmp_path):
     assert second.status == "ready"
     assert first.generation_id == second.generation_id == committed.generation_id
     assert config.read_bytes() == newer_live_value
+
+
+def test_dirty_bootstrap_restart_converges_live_owner_targets(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready, mark_runtime_dirty
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    committed = _snapshot(paths, control_root)
+    config = Path(paths["config"])
+    snapshot_value = config.read_bytes()
+    assert mark_runtime_dirty(control_root) is True
+    config.write_bytes(b'{"unclean":"work"}\n')
+
+    result = ensure_recovery_ready(control_root)
+
+    assert result.status == "recovered"
+    assert result.generation_id == committed.generation_id
+    assert config.read_bytes() == snapshot_value
+
+
+def test_dirty_recovery_removes_only_new_scoped_variable_artifacts(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready, mark_runtime_dirty
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    _snapshot(paths, control_root)
+    assert mark_runtime_dirty(control_root) is True
+
+    project_root = Path(paths["project_root"])
+    new_outbox = project_root / "runtime.brain-feedback-outbox.json"
+    new_embedding = Path(paths["brain_dir"]) / "embeddings" / "new" / "runtime.npy"
+    stem_run = Path(paths["root"]) / "temp" / "stem-runs" / "runtime-run"
+    new_stem = stem_run / "drums.wav"
+    new_marker = stem_run / ".runtime.stems-complete.json"
+    _write_json(new_outbox, {})
+    new_embedding.parent.mkdir(parents=True)
+    np.save(new_embedding, np.asarray([0.0, 1.0], dtype=np.float32))
+    stem_run.mkdir(parents=True)
+    new_stem.write_bytes(b"runtime stem")
+    _write_json(new_marker, {"status": "complete"})
+    foreign = project_root / "stems" / "user-recording.wav"
+    foreign.write_bytes(b"user file")
+
+    result = ensure_recovery_ready(control_root)
+
+    assert result.status == "recovered"
+    assert all(
+        not path.exists()
+        for path in (new_outbox, new_embedding, new_stem, new_marker)
+    )
+    assert foreign.read_bytes() == b"user file"
+
+
+def test_restore_older_generation_removes_later_optional_owner_files(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready
+    from pb_studio.storage.recovery_generation import request_restore_generation
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    optional = tuple(
+        Path(paths["project"][key])
+        for key in ("timeline", "anchors", "chat", "project_outbox")
+    )
+    for path in optional:
+        path.unlink()
+    old = _snapshot(paths, control_root)
+
+    for path in optional:
+        _write_json(
+            path,
+            {} if path.name.endswith("brain-feedback-outbox.json") else {"newer": True},
+        )
+    foreign = Path(paths["project_root"]) / "user-notes.txt"
+    foreign.write_text("preserve me", encoding="utf-8")
+    _snapshot(paths, control_root)
+    request_restore_generation(old.generation_id, control_root=control_root)
+
+    result = ensure_recovery_ready(control_root)
+
+    assert result.status == "recovered"
+    assert all(not path.exists() for path in optional)
+    assert foreign.read_text(encoding="utf-8") == "preserve me"
+
+
+def test_restore_older_generation_deletes_previous_only_variable_artifacts(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready
+    from pb_studio.storage.recovery_generation import request_restore_generation
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    embedding = Path(paths["brain"]["embedding"])
+    stems = tuple(Path(path) for path in paths["stems"])
+    saved = {path: path.read_bytes() for path in (embedding, *stems)}
+    for path in saved:
+        path.unlink()
+    old = _await_if_needed(
+        _api().create_owner_generation(
+            replace(_owner_snapshot(paths), stem_artifacts=()),
+            control_root=control_root,
+            timeout=5.0,
+        )
+    )
+
+    variable_outbox = (
+        Path(paths["project_root"]) / "later.brain-feedback-outbox.json"
+    )
+    _write_json(variable_outbox, {})
+    for path, content in saved.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    _snapshot(paths, control_root)
+    foreign = Path(paths["project_root"]) / "user-notes.txt"
+    foreign.write_text("preserve me", encoding="utf-8")
+    request_restore_generation(old.generation_id, control_root=control_root)
+
+    result = ensure_recovery_ready(control_root)
+
+    assert result.status == "recovered"
+    assert not variable_outbox.exists()
+    assert not embedding.exists()
+    assert all(not path.exists() for path in stems)
+    assert foreign.read_text(encoding="utf-8") == "preserve me"
+
+
+def test_new_generation_tombstones_disappeared_variable_owner_artifacts(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready
+    from pb_studio.storage.recovery_generation import request_restore_generation
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    variable_outbox = (
+        Path(paths["project_root"]) / "custom.brain-feedback-outbox.json"
+    )
+    _write_json(variable_outbox, {})
+    variable = (
+        variable_outbox,
+        Path(paths["brain"]["embedding"]),
+        *(Path(path) for path in paths["stems"]),
+    )
+    _snapshot(paths, control_root)
+    contents = {path: path.read_bytes() for path in variable}
+    for path in variable:
+        path.unlink()
+
+    current = _await_if_needed(
+        _api().create_owner_generation(
+            replace(_owner_snapshot(paths), stem_artifacts=()),
+            control_root=control_root,
+            timeout=5.0,
+        )
+    )
+    manifest = json.loads(current.manifest_path.read_text(encoding="utf-8"))
+    tombstone_targets = {
+        Path(record["absolute_target"]).resolve()
+        for record in manifest["artifacts"]
+        if record["restore_policy"] == "delete_if_present"
+    }
+    for path, content in contents.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    foreign = Path(paths["project_root"]) / "user-notes.txt"
+    foreign.write_text("preserve me", encoding="utf-8")
+    request_restore_generation(current.generation_id, control_root=control_root)
+
+    result = ensure_recovery_ready(control_root)
+
+    assert {path.resolve() for path in variable} <= tombstone_targets
+    assert result.status == "recovered"
+    assert all(not path.exists() for path in variable)
+    assert foreign.read_text(encoding="utf-8") == "preserve me"
+
+
+def test_restore_does_not_delete_external_stem_without_project_scope(tmp_path):
+    from backend.recovery_bootstrap import ensure_recovery_ready
+    from pb_studio.storage.recovery_generation import request_restore_generation
+
+    paths = _create_complete_workspace(tmp_path)
+    control_root = tmp_path / "control"
+    old = _snapshot(paths, control_root)
+    external_stem = tmp_path / "external-stems" / "vocals.wav"
+    external_stem.parent.mkdir()
+    external_stem.write_bytes(b"external application output")
+    newer = _await_if_needed(
+        _api().create_owner_generation(
+            replace(
+                _owner_snapshot(paths),
+                stem_artifacts=(*paths["stems"], external_stem),
+            ),
+            control_root=control_root,
+            timeout=5.0,
+        )
+    )
+    manifest = json.loads(newer.manifest_path.read_text(encoding="utf-8"))
+    external_record = next(
+        record
+        for record in manifest["artifacts"]
+        if Path(record["absolute_target"]).resolve() == external_stem.resolve()
+    )
+    request_restore_generation(old.generation_id, control_root=control_root)
+
+    result = ensure_recovery_ready(control_root)
+
+    assert external_record["owner_scope"] is None
+    assert result.status == "recovered"
+    assert external_stem.read_bytes() == b"external application output"

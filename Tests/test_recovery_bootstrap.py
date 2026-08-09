@@ -10,6 +10,7 @@ import backend.recovery_bootstrap as recovery_bootstrap
 from backend.recovery_bootstrap import (
     RecoveryBootstrapError,
     ensure_recovery_ready,
+    mark_runtime_dirty,
 )
 
 
@@ -29,6 +30,9 @@ def _generation(
     content: bytes,
     *,
     external_references: list[dict] | None = None,
+    restore_policy: str = "replace",
+    owner: str = "ProjectLifecycle",
+    owner_scope: Path | None = None,
 ) -> str:
     generation = root / "generations" / generation_id
     artifact = generation / "artifacts" / "state.bin"
@@ -45,6 +49,13 @@ def _generation(
             "generation_relpath": "artifacts/state.bin",
             "size": len(content),
             "sha256": _sha256(artifact),
+            "restore_policy": restore_policy,
+            "owner": owner,
+            "owner_scope": (
+                str((owner_scope or target.resolve().parent).resolve())
+                if restore_policy == "delete_if_present"
+                else None
+            ),
         }],
         "external_references": external_references or [],
     }
@@ -68,6 +79,16 @@ def test_backend_runs_bootstrap_before_config_and_logging() -> None:
     assert bootstrap < config < log_directory
 
 
+def test_backend_marks_dirty_after_startup_snapshot_before_resume() -> None:
+    source = (Path(__file__).parents[1] / "backend" / "main.py").read_text(
+        encoding="utf-8"
+    )
+    snapshot = source.index("startup_generation = await asyncio.to_thread")
+    dirty = source.index("if mark_runtime_dirty():")
+    resume = source.index("await _resume_render_queue_on_startup")
+    assert snapshot < dirty < resume
+
+
 def test_ready_current_validates_manifest_without_replacing_target(
     tmp_path: Path,
 ) -> None:
@@ -88,7 +109,7 @@ def test_ready_current_validates_manifest_without_replacing_target(
     assert target.read_bytes() == b"current"
 
 
-def test_current_generation_never_replays_without_restore_journal(tmp_path: Path) -> None:
+def test_clean_current_generation_does_not_replay_missing_live_target(tmp_path: Path) -> None:
     root = tmp_path / "control"
     target = tmp_path / "missing-live.bin"
     manifest_hash = _generation(root, "g1", target, b"restored")
@@ -104,7 +125,25 @@ def test_current_generation_never_replays_without_restore_journal(tmp_path: Path
     assert not target.exists()
 
 
-def test_committed_restore_never_replays_over_newer_live_work(tmp_path: Path) -> None:
+def test_dirty_current_generation_converges_missing_live_target(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "missing-live.bin"
+    manifest_hash = _generation(root, "g1", target, b"restored")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": manifest_hash,
+    })
+    assert mark_runtime_dirty(root) is True
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "recovered"
+    assert target.read_bytes() == b"restored"
+    assert not (root / "RUNTIME_DIRTY").exists()
+
+
+def test_clean_committed_restore_preserves_newer_live_work(tmp_path: Path) -> None:
     root = tmp_path / "control"
     target = tmp_path / "live.bin"
     target.write_bytes(b"restored")
@@ -122,6 +161,7 @@ def test_committed_restore_never_replays_over_newer_live_work(tmp_path: Path) ->
         "next_generation": "g1",
         "next_manifest_sha256": manifest_hash,
         "committed_generation": "g1",
+        "committed_manifest_sha256": manifest_hash,
         "applied": ["state"],
     })
     target.write_bytes(b"newer-live-work")
@@ -131,6 +171,34 @@ def test_committed_restore_never_replays_over_newer_live_work(tmp_path: Path) ->
     assert result.status == "ready"
     assert result.generation_id == "g1"
     assert target.read_bytes() == b"newer-live-work"
+
+
+def test_absence_tombstone_removes_only_its_owned_file(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    owned = tmp_path / "project" / "timeline.json"
+    foreign = owned.parent / "notes.txt"
+    manifest_hash = _generation(
+        root,
+        "g1",
+        owned,
+        b"absence receipt",
+        restore_policy="delete_if_present",
+    )
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": manifest_hash,
+    })
+    owned.parent.mkdir(parents=True, exist_ok=True)
+    assert mark_runtime_dirty(root) is True
+    owned.write_text("newer owner state", encoding="utf-8")
+    foreign.write_text("user note", encoding="utf-8")
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "recovered"
+    assert not owned.exists()
+    assert foreign.read_text(encoding="utf-8") == "user note"
 
 
 def test_manifest_cannot_restore_into_control_root(tmp_path: Path) -> None:
@@ -147,7 +215,7 @@ def test_manifest_cannot_restore_into_control_root(tmp_path: Path) -> None:
         ensure_recovery_ready(root)
 
 
-def test_staged_snapshot_publishes_current_without_touching_live_target(
+def test_staged_snapshot_publishes_current_without_replaying_live_target(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "control"
@@ -197,6 +265,176 @@ def test_preparing_snapshot_keeps_previous_current(tmp_path: Path) -> None:
     assert result.status == "snapshot_aborted"
     assert result.generation_id == "g0"
     assert target.read_bytes() == b"live"
+
+
+def test_dirty_preparing_snapshot_rolls_back_to_base_generation(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    target.write_bytes(b"previous")
+    previous_hash = _generation(root, "g0", target, b"previous")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g0",
+        "manifest_sha256": previous_hash,
+    })
+    assert mark_runtime_dirty(root) is True
+    target.write_bytes(b"unclean-work")
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "snapshot",
+        "state": "PREPARING",
+        "previous_generation": "g0",
+        "previous_manifest_sha256": previous_hash,
+        "next_generation": "g1",
+        "applied": [],
+    })
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "snapshot_aborted"
+    assert target.read_bytes() == b"previous"
+    assert not (root / "RUNTIME_DIRTY").exists()
+
+
+def test_committed_journal_must_match_current_manifest(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    target.write_bytes(b"one")
+    first_hash = _generation(root, "g1", target, b"one")
+    second_hash = _generation(root, "g2", target, b"two")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g2",
+        "manifest_sha256": second_hash,
+    })
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "snapshot",
+        "state": "COMMITTED",
+        "committed_generation": "g2",
+        "committed_manifest_sha256": first_hash,
+    })
+
+    with pytest.raises(RecoveryBootstrapError, match="does not match CURRENT"):
+        ensure_recovery_ready(root)
+
+
+def test_committed_journal_rejects_foreign_valid_dirty_base(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    target.write_bytes(b"old")
+    old_hash = _generation(root, "g0", target, b"old")
+    current_hash = _generation(root, "g1", target, b"current")
+    foreign_hash = _generation(root, "g2", target, b"foreign")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": current_hash,
+    })
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "snapshot",
+        "state": "COMMITTED",
+        "previous_generation": "g0",
+        "previous_manifest_sha256": old_hash,
+        "next_generation": "g1",
+        "next_manifest_sha256": current_hash,
+        "committed_generation": "g1",
+        "committed_manifest_sha256": current_hash,
+    })
+    _write_json(root / "RUNTIME_DIRTY", {
+        "schema_version": 1,
+        "base_generation": "g2",
+        "base_manifest_sha256": foreign_hash,
+        "variable_inventory": [],
+    })
+
+    with pytest.raises(RecoveryBootstrapError, match="neither CURRENT nor journal previous"):
+        ensure_recovery_ready(root)
+
+
+def test_staged_snapshot_rejects_unrelated_current(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "live.bin"
+    previous_hash = _generation(root, "g0", target, b"old")
+    next_hash = _generation(root, "g1", target, b"new")
+    foreign_hash = _generation(root, "g2", target, b"foreign")
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g2",
+        "manifest_sha256": foreign_hash,
+    })
+    _write_json(root / "journal.json", {
+        "schema_version": 1,
+        "operation": "snapshot",
+        "state": "STAGED",
+        "previous_generation": "g0",
+        "previous_manifest_sha256": previous_hash,
+        "next_generation": "g1",
+        "next_manifest_sha256": next_hash,
+        "applied": [],
+    })
+
+    with pytest.raises(RecoveryBootstrapError, match="neither previous nor next"):
+        ensure_recovery_ready(root)
+
+
+def test_delete_tombstone_cannot_escape_manifest_owner_scope(tmp_path: Path) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "project" / "timeline.json"
+    _generation(
+        root,
+        "g1",
+        target,
+        b"absence receipt",
+        restore_policy="delete_if_present",
+    )
+    manifest_path = root / "generations" / "g1" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"][0]["owner_scope"] = str((tmp_path / "other").resolve())
+    _write_json(manifest_path, manifest)
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": _sha256(manifest_path),
+    })
+
+    with pytest.raises(RecoveryBootstrapError, match="owner scope"):
+        ensure_recovery_ready(root)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("custom.faiss", "custom_meta.json", "custom_tombstones.json"),
+)
+def test_vector_tombstone_allows_custom_triplet_names(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    root = tmp_path / "control"
+    target = tmp_path / "vectors" / name
+    manifest_hash = _generation(
+        root,
+        "g1",
+        target,
+        b"absence receipt",
+        restore_policy="delete_if_present",
+        owner="VectorStore",
+        owner_scope=target.parent,
+    )
+    _write_json(root / "CURRENT", {
+        "schema_version": 1,
+        "generation_id": "g1",
+        "manifest_sha256": manifest_hash,
+    })
+    assert mark_runtime_dirty(root) is True
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"newer vector artifact")
+
+    result = ensure_recovery_ready(root)
+
+    assert result.status == "recovered"
+    assert not target.exists()
 
 
 @pytest.mark.parametrize("state", ["STAGED", "APPLYING", "VALIDATING"])

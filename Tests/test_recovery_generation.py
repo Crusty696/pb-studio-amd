@@ -105,6 +105,7 @@ def test_commit_publishes_immutable_file_and_external_receipt(tmp_path):
     journal = _read_json(root / "journal.json")
     assert journal["operation"] == "snapshot"
     assert journal["state"] == "COMMITTED"
+    assert journal["committed_manifest_sha256"] == committed.manifest_sha256
 
     source.write_text("new live value", encoding="utf-8")
     staged = committed.generation_dir / manifest["artifacts"][0]["generation_relpath"]
@@ -235,7 +236,7 @@ def test_fault_injection_leaves_durable_convergence_receipts(
     assert (current["generation_id"] == "gen-second") is current_is_new
 
 
-def test_staged_writer_generation_bootstrap_publishes_pointer_without_restore(
+def test_staged_writer_generation_bootstrap_publishes_without_replaying_target(
     tmp_path,
 ):
     from backend.recovery_bootstrap import ensure_recovery_ready
@@ -358,6 +359,57 @@ def test_restore_request_is_durable_and_bootstrap_only(tmp_path):
     assert journal["operation"] == "restore"
     assert journal["state"] == "STAGED"
     assert journal["next_manifest_sha256"] == old.manifest_sha256
+
+
+def test_failed_selected_restore_removes_selected_only_artifact_on_rollback(
+    tmp_path,
+    monkeypatch,
+):
+    import backend.recovery_bootstrap as recovery_bootstrap
+
+    root = tmp_path / "control"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    common = tmp_path / "config.json"
+    common.write_text("old", encoding="utf-8")
+    first = _writer(root, "gen-old")
+    first.add_file("config", common, group="G1", owner="ConfigManager")
+    old = first.commit()
+
+    variable = project_root / "later.brain-feedback-outbox.json"
+    variable.write_text("{}", encoding="utf-8")
+    common.write_text("new", encoding="utf-8")
+    second = _writer(root, "gen-new")
+    second.add_file(
+        "project-outbox",
+        variable,
+        group="project",
+        owner="ProjectLifecycle",
+        owner_scope=project_root,
+    )
+    second.add_file("config", common, group="G1", owner="ConfigManager")
+    new = second.commit()
+
+    request_restore_generation(old.generation_id, control_root=root)
+    ensure_recovery_ready = recovery_bootstrap.ensure_recovery_ready
+    ensure_recovery_ready(root)
+    assert not variable.exists()
+    request_restore_generation(new.generation_id, control_root=root)
+    real_replace = recovery_bootstrap.os.replace
+
+    def fail_selected_common(source, destination):
+        if Path(destination) == common:
+            raise PermissionError("simulated selected restore failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(recovery_bootstrap.os, "replace", fail_selected_common)
+
+    result = ensure_recovery_ready(root)
+
+    assert result.generation_id == old.generation_id
+    assert common.read_text(encoding="utf-8") == "old"
+    assert not variable.exists()
+    assert _read_json(root / "CURRENT")["generation_id"] == old.generation_id
 
 
 def test_writer_rejects_control_root_as_an_artifact(tmp_path):

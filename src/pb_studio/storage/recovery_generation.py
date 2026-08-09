@@ -71,21 +71,12 @@ def request_restore_generation(
             raise RecoveryGenerationError(
                 "Pending recovery journal must converge before restore"
             )
+        validate_committed_journal(root, existing)
     current_generation: str | None = None
     current_hash: str | None = None
-    current_path = root / "CURRENT"
-    if current_path.is_file():
-        current = _read_json(current_path)
-        current_generation = _validate_generation_id(
-            str(current.get("generation_id", ""))
-        )
-        current_hash = str(current.get("manifest_sha256", ""))
-        _validate_digest(current_hash, "CURRENT manifest_sha256")
-        validate_generation(
-            root,
-            current_generation,
-            expected_manifest_sha256=current_hash,
-        )
+    current = load_current_generation(root)
+    if current is not None:
+        current_generation, current_hash, _manifest = current
     _atomic_write_json(
         journal_path,
         {
@@ -115,6 +106,7 @@ class _ArtifactSpec:
     adapter: Literal["file", "sqlite_backup"]
     restore_policy: str
     schema_version: int | None
+    owner_scope: Path | None
 
 
 @dataclass(frozen=True)
@@ -324,10 +316,22 @@ def validate_generation(
             raise RecoveryGenerationValidationError("Artifact must be owned")
         if artifact.get("adapter") not in {"file", "sqlite_backup"}:
             raise RecoveryGenerationValidationError("Unknown artifact adapter")
+        restore_policy = str(artifact.get("restore_policy", "replace"))
+        if restore_policy not in {"replace", "delete_if_present"}:
+            raise RecoveryGenerationValidationError("Unknown artifact restore policy")
         target = Path(str(artifact.get("absolute_target", "")))
         if not target.is_absolute() or str(target).casefold() in targets:
             raise RecoveryGenerationValidationError("Invalid artifact target")
         targets.add(str(target).casefold())
+        if restore_policy == "delete_if_present":
+            owner_scope = Path(str(artifact.get("owner_scope", "")))
+            if (
+                not owner_scope.is_absolute()
+                or not target.resolve().is_relative_to(owner_scope.resolve())
+            ):
+                raise RecoveryGenerationValidationError(
+                    "Delete artifact lacks a valid owner scope"
+                )
         relative = Path(str(artifact.get("generation_relpath", "")))
         if relative.is_absolute() or ".." in relative.parts:
             raise RecoveryGenerationValidationError("Artifact path escapes generation")
@@ -372,6 +376,61 @@ def validate_generation(
     return manifest
 
 
+def load_current_generation(
+    control_root: str | Path,
+) -> tuple[str, str, dict[str, Any]] | None:
+    """Return the fully validated CURRENT generation, if one exists."""
+    root = Path(control_root).resolve()
+    current_path = root / "CURRENT"
+    if not current_path.is_file():
+        return None
+    current = _read_json(current_path)
+    if current.get("schema_version") != 1:
+        raise RecoveryGenerationValidationError("Unsupported CURRENT schema")
+    generation_id = _validate_generation_id(str(current.get("generation_id", "")))
+    manifest_hash = str(current.get("manifest_sha256", ""))
+    _validate_digest(manifest_hash, "CURRENT manifest_sha256")
+    manifest = validate_generation(
+        root,
+        generation_id,
+        expected_manifest_sha256=manifest_hash,
+    )
+    return generation_id, manifest_hash, manifest
+
+
+def validate_committed_journal(
+    control_root: str | Path,
+    journal: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    """Bind a terminal journal receipt exactly to CURRENT."""
+    root = Path(control_root).resolve()
+    value = journal or _read_json(root / "journal.json")
+    if value.get("state") != "COMMITTED":
+        raise RecoveryGenerationValidationError("Recovery journal is not committed")
+    current = load_current_generation(root)
+    if current is None:
+        raise RecoveryGenerationValidationError("Committed journal lacks CURRENT")
+    current_generation, current_hash, _manifest = current
+    committed_generation = _validate_generation_id(
+        str(value.get("committed_generation", ""))
+    )
+    committed_hash = str(value.get("committed_manifest_sha256", ""))
+    if not committed_hash:
+        if committed_generation == str(value.get("next_generation", "")):
+            committed_hash = str(value.get("next_manifest_sha256", ""))
+        elif committed_generation == str(value.get("previous_generation", "")):
+            committed_hash = str(value.get("previous_manifest_sha256", ""))
+    _validate_digest(committed_hash, "committed_manifest_sha256")
+    if (
+        committed_generation != current_generation
+        or committed_hash != current_hash
+    ):
+        raise RecoveryGenerationValidationError(
+            "Committed recovery journal does not match CURRENT"
+        )
+    return committed_generation, committed_hash
+
+
 class RecoveryGenerationWriter:
     """Build and publish one immutable recovery generation."""
 
@@ -412,6 +471,7 @@ class RecoveryGenerationWriter:
         required: bool = True,
         restore_policy: str = "replace",
         schema_version: int | None = None,
+        owner_scope: str | Path | None = None,
     ) -> None:
         self._add_artifact(
             logical_id,
@@ -423,6 +483,7 @@ class RecoveryGenerationWriter:
             adapter="file",
             restore_policy=restore_policy,
             schema_version=schema_version,
+            owner_scope=owner_scope,
         )
 
     def add_sqlite(
@@ -435,6 +496,7 @@ class RecoveryGenerationWriter:
         absolute_target: str | Path | None = None,
         required: bool = True,
         restore_policy: str = "replace",
+        owner_scope: str | Path | None = None,
     ) -> None:
         self._add_artifact(
             logical_id,
@@ -446,6 +508,7 @@ class RecoveryGenerationWriter:
             adapter="sqlite_backup",
             restore_policy=restore_policy,
             schema_version=None,
+            owner_scope=owner_scope,
         )
 
     def _add_artifact(
@@ -460,6 +523,7 @@ class RecoveryGenerationWriter:
         adapter: Literal["file", "sqlite_backup"],
         restore_policy: str,
         schema_version: int | None,
+        owner_scope: str | Path | None,
     ) -> None:
         self._require_mutable()
         logical_id = self._validate_new_logical_id(logical_id)
@@ -478,6 +542,19 @@ class RecoveryGenerationWriter:
         group = self._required_text(group, "group")
         owner = self._required_text(owner, "owner")
         restore_policy = self._required_text(restore_policy, "restore_policy")
+        resolved_owner_scope: Path | None = None
+        if owner_scope is not None:
+            raw_scope = Path(owner_scope)
+            if not raw_scope.is_absolute():
+                raise RecoveryGenerationError("Artifact owner scope must be absolute")
+            resolved_owner_scope = raw_scope.resolve()
+        if restore_policy == "delete_if_present":
+            if resolved_owner_scope is None or not target.is_relative_to(
+                resolved_owner_scope
+            ):
+                raise RecoveryGenerationError(
+                    "Delete artifact target must be inside its owner scope"
+                )
         self._logical_ids.add(logical_id)
         self._targets.add(target_key)
         self._artifacts.append(
@@ -491,6 +568,7 @@ class RecoveryGenerationWriter:
                 adapter=adapter,
                 restore_policy=restore_policy,
                 schema_version=schema_version,
+                owner_scope=resolved_owner_scope,
             )
         )
 
@@ -607,6 +685,7 @@ class RecoveryGenerationWriter:
         journal.update(
             state="COMMITTED",
             committed_generation=self.generation_id,
+            committed_manifest_sha256=manifest_hash,
             updated_at=_utc_now(),
         )
         _atomic_write_json(journal_path, journal)
@@ -649,6 +728,11 @@ class RecoveryGenerationWriter:
             "adapter": artifact.adapter,
             "restore_policy": artifact.restore_policy,
             "schema_version": artifact.schema_version,
+            "owner_scope": (
+                str(artifact.owner_scope)
+                if artifact.owner_scope is not None
+                else None
+            ),
         }
         if artifact.adapter == "sqlite_backup":
             record["user_version"] = user_version
@@ -742,22 +826,13 @@ class RecoveryGenerationWriter:
             raise RecoveryGenerationError(
                 "Pending recovery journal must converge before a new snapshot"
             )
+        validate_committed_journal(self.control_root, journal)
 
     def _read_current(self) -> tuple[str | None, str | None]:
-        path = self.control_root / "CURRENT"
-        if not path.is_file():
+        current = load_current_generation(self.control_root)
+        if current is None:
             return None, None
-        current = _read_json(path)
-        if current.get("schema_version") != 1:
-            raise RecoveryGenerationValidationError("Unsupported CURRENT schema")
-        generation_id = _validate_generation_id(str(current.get("generation_id", "")))
-        manifest_hash = str(current.get("manifest_sha256", ""))
-        _validate_digest(manifest_hash, "CURRENT manifest_sha256")
-        validate_generation(
-            self.control_root,
-            generation_id,
-            expected_manifest_sha256=manifest_hash,
-        )
+        generation_id, manifest_hash, _manifest = current
         return generation_id, manifest_hash
 
     def _validate_new_logical_id(self, logical_id: str) -> str:
@@ -888,7 +963,9 @@ __all__ = [
     "RetentionPlan",
     "apply_protected_retention",
     "fixed_control_root",
+    "load_current_generation",
     "plan_protected_retention",
     "request_restore_generation",
+    "validate_committed_journal",
     "validate_generation",
 ]

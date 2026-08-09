@@ -22,7 +22,11 @@ from typing import Any
 _RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS = 60.0
 _GRACEFUL_SHUTDOWN_HARD_EXIT_SECONDS = 300.0
 
-from .recovery_bootstrap import ensure_recovery_ready
+from .recovery_bootstrap import (
+    clear_runtime_dirty,
+    ensure_recovery_ready,
+    mark_runtime_dirty,
+)
 
 # Muss vor Config, Logging, Datenbanken, Routern und produktiven Ownern laufen.
 _recovery_bootstrap_result = ensure_recovery_ready()
@@ -217,6 +221,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "  Recovery-Snapshot bereit: %s",
                 startup_generation.generation_id,
             )
+        if mark_runtime_dirty():
+            logger.info("  Recovery-Laufzeit als DIRTY markiert")
+        else:
+            logger.info("  Recovery-DIRTY-Marker: noch keine Basisgeneration")
 
     # Provider-/Modellwahrheit einmal pro Backendstart neu erfassen. Der
     # Service bündelt LM-Studio- und Ollama-Abfragen und publiziert atomar.
@@ -340,6 +348,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 timeout=_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS,
             )
             if shutdown_generation is not None:
+                clear_runtime_dirty(
+                    expected_generation_id=shutdown_generation.generation_id,
+                    expected_manifest_sha256=shutdown_generation.manifest_sha256,
+                )
                 logger.info(
                     "  Recovery-Shutdown-Snapshot: %s",
                     shutdown_generation.generation_id,

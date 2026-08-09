@@ -13,6 +13,7 @@ from .recovery_barrier import RecoveryWriteBarrier, get_recovery_write_barrier
 from .recovery_generation import (
     CommittedGeneration,
     RecoveryGenerationWriter,
+    load_current_generation,
     validate_generation,
 )
 
@@ -381,12 +382,130 @@ def _unique_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
     return tuple(unique[key] for key in sorted(unique))
 
 
+def _configured_stem_run_roots(config: Path, payload: dict) -> tuple[Path, ...]:
+    paths = payload.get("paths", {})
+    raw_temp = paths.get("temp_dir", "./temp") if isinstance(paths, dict) else "./temp"
+    temp_dir = Path(str(raw_temp))
+    if not temp_dir.is_absolute():
+        cleaned = str(raw_temp)
+        while cleaned.startswith("./") or cleaned.startswith(".\\"):
+            cleaned = cleaned[2:]
+        temp_dir = config.parent / cleaned
+    return ((temp_dir.resolve() / "stem-runs"),)
+
+
+def _add_absence_tombstone(
+    writer: RecoveryGenerationWriter,
+    receipt_source: Path,
+    target: Path,
+    *,
+    prefix: str,
+    group: str,
+    owner: str,
+    owner_scope: Path,
+    seen_targets: set[str],
+) -> None:
+    target = target.resolve()
+    target_key = str(target).casefold()
+    if target_key in seen_targets or target.exists() or target.is_symlink():
+        return
+    writer.add_file(
+        _logical_id(f"absence:{prefix}", target),
+        receipt_source,
+        group=group,
+        owner=owner,
+        absolute_target=target,
+        restore_policy="delete_if_present",
+        owner_scope=owner_scope.resolve(),
+    )
+    seen_targets.add(target_key)
+
+
+def _add_previous_inventory_tombstones(
+    writer: RecoveryGenerationWriter,
+    receipt_source: Path,
+    project_roots: tuple[Path, ...],
+    brain_dir: Path,
+    stem_run_roots: tuple[Path, ...],
+    seen_targets: set[str],
+) -> None:
+    current = load_current_generation(writer.control_root)
+    if current is None:
+        return
+    _generation_id, _manifest_hash, manifest = current
+    previous_project_roots = {
+        Path(str(record.get("absolute_target", ""))).resolve().parent
+        for record in manifest.get("artifacts", [])
+        if isinstance(record, dict)
+        and record.get("owner") == "ProjectLifecycle"
+        and Path(str(record.get("absolute_target", ""))).name == "project.json"
+    }
+    safe_project_roots = tuple(
+        sorted(
+            {*(root.resolve() for root in project_roots), *previous_project_roots},
+            key=lambda path: str(path).casefold(),
+        )
+    )
+    embeddings_root = (brain_dir / "embeddings").resolve()
+    for record in manifest.get("artifacts", []):
+        if not isinstance(record, dict) or record.get("restore_policy") == "delete_if_present":
+            continue
+        target = Path(str(record.get("absolute_target", "")))
+        if not target.is_absolute() or target.exists() or target.is_symlink():
+            continue
+        target = target.resolve()
+        owner = str(record.get("owner", ""))
+        scope: Path | None = None
+        group = str(record.get("group", ""))
+        if owner == "ProjectLifecycle" and target.name.endswith(
+            ".brain-feedback-outbox.json"
+        ):
+            scope = next(
+                (root for root in safe_project_roots if target.is_relative_to(root)),
+                None,
+            )
+        elif (
+            owner == "BrainStore"
+            and target.suffix.casefold() == ".npy"
+            and target.is_relative_to(embeddings_root)
+        ):
+            scope = embeddings_root
+        elif owner == "AudioStemOwner" and (
+            target.suffix.casefold() == ".wav"
+            or (
+                target.name.startswith(".")
+                and ".stems-" in target.name
+                and target.suffix.casefold() == ".json"
+            )
+        ):
+            scope = next(
+                (
+                    root
+                    for root in (*safe_project_roots, *stem_run_roots)
+                    if target.is_relative_to(root)
+                ),
+                None,
+            )
+        if scope is not None:
+            _add_absence_tombstone(
+                writer,
+                receipt_source,
+                target,
+                prefix=f"previous:{owner}",
+                group=group,
+                owner=owner,
+                owner_scope=scope,
+                seen_targets=seen_targets,
+            )
+
+
 def add_owner_snapshot(
     writer: RecoveryGenerationWriter,
     snapshot: RecoveryOwnerSnapshot,
 ) -> None:
     config = Path(snapshot.config_path).resolve()
-    _json_object(config, "config")
+    config_payload = _json_object(config, "config")
+    stem_run_roots = _configured_stem_run_roots(config, config_payload)
     catalog = Path(snapshot.catalog_db_path).resolve()
     (
         catalog_projects,
@@ -402,7 +521,9 @@ def add_owner_snapshot(
         else ((catalog.parent / "video_index.faiss") if vector_ids else None)
     )
     vector_files = _validate_vector(vector_index, vector_ids)
-    brain_files = _brain_files(Path(snapshot.brain_dir))
+    brain_dir = Path(snapshot.brain_dir).resolve()
+    brain_files = _brain_files(brain_dir)
+    absence_targets: set[str] = set()
 
     config_digest, inventory_digest = owner_snapshot_digests(snapshot)
     if writer.config_digest != config_digest:
@@ -418,36 +539,130 @@ def add_owner_snapshot(
             writer.add_file(
                 "config:wpf-settings", settings,
                 group="global-config", owner="SettingsService",
+                owner_scope=settings.parent,
+            )
+        else:
+            _add_absence_tombstone(
+                writer,
+                config,
+                settings,
+                prefix="wpf-settings",
+                group="global-config",
+                owner="SettingsService",
+                owner_scope=settings.parent,
+                seen_targets=absence_targets,
             )
     writer.add_sqlite("catalog:pb-studio", catalog, group="global-index", owner="DatabaseCore")
     for path in vector_files:
         writer.add_file(
             _logical_id("vector", path), path,
             group="global-index", owner="VectorStore",
+            owner_scope=path.parent,
         )
+    if not vector_files:
+        vector_target = (
+            Path(snapshot.vector_index_path).resolve()
+            if snapshot.vector_index_path is not None
+            else (catalog.parent / "video_index.faiss").resolve()
+        )
+        for path in _vector_triplet(vector_target):
+            _add_absence_tombstone(
+                writer,
+                config,
+                path,
+                prefix="vector",
+                group="global-index",
+                owner="VectorStore",
+                owner_scope=vector_target.parent,
+                seen_targets=absence_targets,
+            )
     for project_uuid, root in projects:
-        for path in _project_files(project_uuid, root):
+        project_files = _project_files(project_uuid, root)
+        for path in project_files:
             if path.suffix.casefold() == ".db":
                 writer.add_sqlite(
                     _logical_id(f"project:{project_uuid}", path), path,
                     group="project", owner="ProjectLifecycle",
+                    owner_scope=root,
                 )
             else:
                 writer.add_file(
                     _logical_id(f"project:{project_uuid}", path), path,
                     group="project", owner="ProjectLifecycle",
+                    owner_scope=root,
+                )
+        present_project_paths = {path.resolve() for path in project_files}
+        for path in (
+            root / "timeline.json",
+            root / "anchors.json",
+            root / "chat_history.json",
+            root / "state.db.brain-feedback-outbox.json",
+        ):
+            if path.resolve() not in present_project_paths:
+                _add_absence_tombstone(
+                    writer,
+                    config,
+                    path,
+                    prefix=f"project:{project_uuid}",
+                    group="project",
+                    owner="ProjectLifecycle",
+                    owner_scope=root,
+                    seen_targets=absence_targets,
                 )
     for path in brain_files:
         if path.suffix.casefold() == ".db":
             writer.add_sqlite(
                 _logical_id("brain", path), path,
                 group="brain", owner="BrainStore",
+                owner_scope=brain_dir,
             )
         else:
+            owner_scope = (
+                brain_dir / "embeddings"
+                if path.suffix.casefold() == ".npy"
+                else brain_dir
+            )
             writer.add_file(
                 _logical_id("brain", path), path,
                 group="brain", owner="BrainStore",
+                owner_scope=owner_scope,
             )
+    present_brain_paths = {path.resolve() for path in brain_files}
+    for path in (
+        brain_dir / "feedback_outbox.json",
+        brain_dir / "feedback_receipts.json",
+        brain_dir / "cross_modal_projector.npz",
+    ):
+        if path.resolve() not in present_brain_paths:
+            _add_absence_tombstone(
+                writer,
+                config,
+                path,
+                prefix="brain",
+                group="brain",
+                owner="BrainStore",
+                owner_scope=brain_dir,
+                seen_targets=absence_targets,
+            )
+    for root in stem_run_roots:
+        _add_absence_tombstone(
+            writer,
+            config,
+            root / ".pb-studio-recovery-scope.stems-partial.json",
+            prefix="stem-run-scope",
+            group="project-media",
+            owner="AudioStemOwner",
+            owner_scope=root,
+            seen_targets=absence_targets,
+        )
+    _add_previous_inventory_tombstones(
+        writer,
+        config,
+        tuple(root for _project_uuid, root in projects),
+        brain_dir,
+        stem_run_roots,
+        absence_targets,
+    )
     stem_paths: set[Path] = {
         Path(path).resolve()
         for path in (snapshot.stem_artifacts or catalog_stems)
@@ -458,9 +673,21 @@ def add_owner_snapshot(
     for path in sorted(stem_paths, key=lambda value: str(value).casefold()):
         if not path.is_file():
             raise RecoveryOwnerAdapterError(f"Stem artifact missing: {path}")
+        owner_scope = next(
+            (
+                root
+                for root in (
+                    *(root for _project_uuid, root in projects),
+                    *stem_run_roots,
+                )
+                if path.is_relative_to(root)
+            ),
+            None,
+        )
         writer.add_file(
             _logical_id("stem", path), path,
             group="project-media", owner="AudioStemOwner",
+            owner_scope=owner_scope,
         )
 
     media_refs = _unique_paths(
@@ -514,7 +741,10 @@ def validate_owner_generation(
 ) -> OwnerGenerationValidation:
     manifest = validate_generation(control_root, generation_id)
     groups = {str(record.get("group", "")) for record in manifest["artifacts"]}
-    required_groups = {"global-config", "global-index", "project", "brain"}
+    required_groups = {"global-config", "global-index", "brain"}
+    empty_inventory_digest = _sha256_bytes(b"[]")
+    if manifest.get("project_inventory_digest") != empty_inventory_digest:
+        required_groups.add("project")
     if not required_groups.issubset(groups):
         raise RecoveryOwnerAdapterError("Owner generation lacks a consistency group")
     degraded = tuple(
