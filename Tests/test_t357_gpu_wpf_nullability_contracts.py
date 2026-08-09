@@ -620,7 +620,7 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
         ),
     ),
 )
-def test_video_batch_counts_success_only_after_non_null_analysis(
+def test_video_batch_retries_requested_stages_and_counts_success_only_after_non_null_analysis(
     method_marker: str,
     next_marker: str,
     status_prefix: str,
@@ -649,8 +649,9 @@ def test_video_batch_counts_success_only_after_non_null_analysis(
     assert apply_result < partial_branch < success_increment
     assert "clip.IsAnalyzed = IsCompleted(result);" in source
     assert method.count("failed++;") >= 3
-    assert "skipped++; done++; continue;" in method
+    assert "if (target.IsAnalyzed)" not in method
+    assert "skipped++" not in method
     assert status_prefix in method
     assert "{succeeded} erfolgreich" in method
     assert "{failed} fehlgeschlagen" in method
-    assert "{skipped} \u00fcbersprungen" in method
+    assert "{skipped}" not in method

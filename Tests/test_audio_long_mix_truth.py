@@ -4,6 +4,16 @@ import numpy as np
 import pytest
 
 
+@pytest.fixture
+def stem_model_dir(monkeypatch, tmp_path):
+    from pb_studio.config_manager import ConfigManager
+
+    model_path = tmp_path / "UVR-MDX-NET-Inst_HQ_3.onnx"
+    model_path.write_bytes(b"model")
+    monkeypatch.setattr(ConfigManager, "resolve_path", lambda self, _path: tmp_path)
+    return tmp_path
+
+
 def test_long_mix_stem_timeout_scales_beyond_fixed_floor():
     from backend.routers.audio_router import _stem_timeout_for_duration
 
@@ -11,7 +21,7 @@ def test_long_mix_stem_timeout_scales_beyond_fixed_floor():
     assert _stem_timeout_for_duration(6335.0, 900.0) == pytest.approx(4751.25)
 
 
-def test_reusable_stems_require_complete_matching_outputs(tmp_path):
+def test_reusable_stems_require_complete_matching_outputs(tmp_path, stem_model_dir):
     import soundfile as sf
 
     from backend.routers.audio_router import (
@@ -52,7 +62,7 @@ def test_reusable_stems_require_complete_matching_outputs(tmp_path):
     assert reusable == sorted([str(instrumental.resolve()), str(vocals.resolve())])
 
 
-def test_reusable_stems_are_bound_to_exact_source_identity(tmp_path):
+def test_reusable_stems_are_bound_to_exact_source_identity(tmp_path, stem_model_dir):
     import soundfile as sf
 
     from backend.routers.audio_router import (
@@ -107,7 +117,7 @@ def test_reusable_stem_role_parsing_rejects_multi_role_filename(tmp_path):
         )
 
 
-def test_reusable_stems_reject_output_truncated_after_success(tmp_path):
+def test_reusable_stems_reject_output_truncated_after_success(tmp_path, stem_model_dir):
     import soundfile as sf
 
     from backend.routers.audio_router import (
