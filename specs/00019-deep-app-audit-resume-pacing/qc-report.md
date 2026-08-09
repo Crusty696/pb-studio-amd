@@ -2,7 +2,7 @@
 
 ## Authoritative OBJ-74 Gate
 
-- **Overall result:** **PASSED / RELEASE-READY**.
+- **Overall result:** **REOPENED / NOT RELEASE-READY**.
 - T001–T035 geschlossen; unabhängiger Diff-Review ohne CRITICAL/HIGH/MEDIUM-
   Codebefund.
 - Resume, Long-Mix-Checkpoint, Pacing-Provenienz, Branch-Konvergenz, Live-API,

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-74",
+  "phase": "implementation",
+  "task_range": "T001-T035",
+  "task_digest_sha256": "ecdeb14953346315c3eb335a4ce8a391423eefafbdccc1fb9fe62f56c56a81e2",
+  "evidence_manifest": "evidence/T025-implementation-manifest.json",
+  "evidence_manifest_sha256": "fb028c024b0b2e1b9e6c38338f760339e994fd007f6f70174b23ddf4ef7d700c",
+  "commit_sha": "62e32fcb50bb4f36fccf9ab87e6a1683d9c97092"
+}
