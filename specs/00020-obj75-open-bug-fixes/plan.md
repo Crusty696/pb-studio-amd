@@ -75,6 +75,12 @@
     Risikokorridore, C#-Tests, WPF Release, API/SSE, reale Medien und alle 14
     Hauptviews abnehmen. Bereits grüne Langläufe und Live-Smokes nicht wiederholen.
 20. Doppel-Audit-Bericht, SDD-Evidence, Marker und Brain-Status synchronisieren.
+21. Consulting-Nachtrag: Video-Batches immer durch den stage-aware Backend-Planer
+    fuehren, Captioning mit einer gemeinsamen LM-Studio-/Moondream-Deadline und
+    durchgaengigem Heartbeat begrenzen sowie die Video-Sortierung auf eine
+    CollectionView ohne per-Element-Move-Serie umstellen. Cancellation vor dem
+    GPU-Lock muss eine bereits angelegte VRAM-Reservierung wieder freigeben und
+    darf waehrend physischem Worker-Cleanup keinen falschen Idle-Status melden.
 
 ## Risiken
 

@@ -172,4 +172,4 @@ minimal geschlossen; Full-, Live-, Medien- und GUI-QC müssen konvergieren.
 
 ## Task Range
 
-T001–T051 implementieren und prüfen OBJ-75.
+T001–T053 implementieren und prüfen OBJ-75.

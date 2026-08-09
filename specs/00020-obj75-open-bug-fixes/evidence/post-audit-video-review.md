@@ -57,3 +57,19 @@ Result: **3 passed**, 0 failed, 0 skipped; Release build succeeded.
 - App und Backend wurden sauber beendet; `BACKEND_FORCED=0`.
 
 Damit ist T049 vollständig geschlossen.
+
+## T052/T053 Consulting follow-up
+
+**Status:** PASS
+
+- Eine monotone 270-Sekunden-Deadline umfasst LM Studio, Moondream und die
+  Wartezeit auf den GPU-Lock; der Heartbeat bleibt providerübergreifend aktiv.
+- Cancellation vor Worker-Start storniert eine uncommittete VRAM-Reservierung.
+  Ein physisch noch aufräumender Worker wird nicht vorzeitig als `idle` gemeldet.
+- Bereits als analysiert markierte Video-Clips erreichen weiterhin den
+  stage-aware Backend-Planer. `ICollectionView` sortiert ohne die Quellsammlung
+  umzuordnen und bewahrt die selektierten Objektinstanzen.
+- Fokussierte Python-QC: **75 einzigartige Verträge PASS** (73er Korridor plus
+  zwei neue direkte Regressionen); 4 externe Deprecation-Warnungen.
+- Video-C#-QC: **3/3 PASS**, direkte neue Regression **1/1 PASS**; WPF Release
+  erfolgreich kompiliert.

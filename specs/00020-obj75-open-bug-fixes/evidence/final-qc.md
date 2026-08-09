@@ -44,4 +44,16 @@ risikobasierte Delta-Konvergenz. Es wird kein grüner neuer Gesamtlauf behauptet
   ID 1. Danach waren 0 Clips selektiert und Analyze/Delete deaktiviert.
 - Keine destruktive Aktion; App/Backend sauber beendet (`BACKEND_FORCED=0`).
 
-T044 und T049 sind erfüllt. Alle registrierten Release-Gates sind grün.
+## T052/T053 Consulting-Nachtrag
+
+- Video-/Resume-/Vision-/GPU-Korridor: **73 passed**, 4 ausschließlich
+  externe madmom/scipy-Deprecation-Warnungen.
+- Direkte neue Python-Regressionen: gemeinsame LM-Studio-/Moondream-Deadline
+  und VRAM-Aufräumen bei Cancellation im GPU-Lock-Wait jeweils **1/1 PASS**.
+- Video-C#-Korridor: **3/3 PASS**; direkte Batch-Retry-/CollectionView-
+  Identitätsregression zusätzlich **1/1 PASS**.
+- WPF Release-Kompilierung im C#-Testlauf erfolgreich; 0 Fehler.
+- `git diff --check` PASS. Kein breiter Gesamtlauf wurde wiederholt.
+
+T044, T049 und T052/T053 sind erfüllt. Alle registrierten Release-Gates sind
+grün.

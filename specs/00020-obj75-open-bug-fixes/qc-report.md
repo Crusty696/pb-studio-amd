@@ -1,5 +1,9 @@
 # QC Report: OBJ-75
 
+> **Nachtrag 2026-08-09:** T052/T053 sind implementiert und fokussiert
+> verifiziert. Die erneuerten Marker binden den Consulting-Nachtrag an den
+> geprüften Code-, Test- und Evidence-Stand.
+
 ## Authoritative OBJ-75 Gate
 
 - **Overall result:** **PASSED / RELEASE-READY**.
@@ -17,6 +21,9 @@ Finales SDD-/Diff-Gate bestand; Abschlussmarker wurden gesetzt.
   `BrokenBarrierError` im T412-Last-Harness, 60 warnings, 1024,92 s.
 - Root-Cause-/Delta-Konvergenz: T412 vollständig 3/3 und zehn Stressläufe 10/10.
 - Native C# 55/55; WPF Release 0 Warnungen/0 Fehler.
+- T052/T053-Delta: 75 fokussierte Python-Verträge und 3 Video-C#-Verträge
+  bestanden; die neuen Deadline-, GPU-Lock- und Batch-/Sortierregressionen
+  bestanden zusätzlich einzeln. WPF Release wurde dabei erfolgreich kompiliert.
 - Zwei 14-View-GUI-Runden, echte Log-/Progress-/GPU-SSE-Verbindungen,
   Live-VLM auf Katalogvideo und Recovery-Crash-/Shutdown-Smokes bestanden.
 
@@ -40,6 +47,6 @@ in TR-369/TR-371 definierte Root-Cause- und Stresskonvergenz.
   `target_selected=0`; Analyze/Delete deaktiviert; keine destruktive Aktion.
 - App/Backend regulär beendet; `BACKEND_FORCED=0`.
 
-Alle in T001–T051 registrierten Produkt-, Migrations-, Recovery-, Test- und
+Alle in T001–T053 registrierten Produkt-, Migrations-, Recovery-, Test- und
 Live-Gates sind erfüllt. Finaler Status-/Diff-Digest ist im Baseline-Manifest
 gebunden.
