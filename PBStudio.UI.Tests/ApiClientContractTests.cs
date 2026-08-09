@@ -1,6 +1,8 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PBStudio.UI.Services;
@@ -82,6 +84,46 @@ public sealed class ApiClientContractTests
         await handlerSawCancellation.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.IsNull(result);
+    }
+
+    [TestMethod]
+    public async Task BrainFeedback_RetryIdIsStableOnlyWithinSameProject()
+    {
+        var operationIds = new List<Guid>();
+        using var client = CreateClient(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/project/open")
+            {
+                var requestJson = await request.Content!.ReadAsStringAsync(cancellationToken);
+                using var requestBody = JsonDocument.Parse(requestJson);
+                var path = requestBody.RootElement.GetProperty("path").GetString()!;
+                var responseJson = JsonSerializer.Serialize(new
+                {
+                    name = Path.GetFileName(path),
+                    path,
+                    audio_count = 0,
+                    video_count = 0,
+                    has_timeline = false,
+                });
+                return await JsonResponse(responseJson);
+            }
+
+            var feedbackJson = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var feedbackBody = JsonDocument.Parse(feedbackJson);
+            operationIds.Add(feedbackBody.RootElement.GetProperty("operation_id").GetGuid());
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        });
+
+        await client.OpenProjectAsync(@"C:\Projects\A");
+        await client.BrainFeedbackAsync(17, "perfect");
+        await client.BrainFeedbackAsync(17, "perfect");
+
+        await client.OpenProjectAsync(@"C:\Projects\B");
+        await client.BrainFeedbackAsync(17, "perfect");
+
+        Assert.AreEqual(3, operationIds.Count);
+        Assert.AreEqual(operationIds[0], operationIds[1]);
+        Assert.AreNotEqual(operationIds[0], operationIds[2]);
     }
 
     private static ApiClient CreateClient(

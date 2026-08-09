@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -16,8 +17,9 @@ public class ApiClient : IApiClient
     private readonly HttpClient _http;
     private readonly ILogger<ApiClient> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
-    private readonly ConcurrentDictionary<(int CutId, string Rating), Guid>
+    private readonly ConcurrentDictionary<(string ProjectIdentity, int CutId, string Rating), Guid>
         _pendingBrainFeedbackOperations = new();
+    private string _activeProjectIdentity = $"session:{Guid.NewGuid():N}";
     private volatile bool _isShuttingDown;
     private bool _disposed;
 
@@ -133,16 +135,37 @@ public class ApiClient : IApiClient
     // --- Project ---
 
     public async Task<ProjectInfo?> CreateProjectAsync(string name, string path)
-        => await PostAsync<ProjectInfo>("/project/create", new { name, path }).ConfigureAwait(false);
+    {
+        var project = await PostAsync<ProjectInfo>(
+            "/project/create",
+            new { name, path }).ConfigureAwait(false);
+        if (project is not null)
+            SetActiveProjectIdentity(project);
+        return project;
+    }
 
     public async Task<ProjectInfo?> OpenProjectAsync(string path)
-        => await PostAsync<ProjectInfo>("/project/open", new { path }).ConfigureAwait(false);
+    {
+        var project = await PostAsync<ProjectInfo>(
+            "/project/open",
+            new { path }).ConfigureAwait(false);
+        if (project is not null)
+            SetActiveProjectIdentity(project);
+        return project;
+    }
 
     public async Task<StatusResponse?> SaveProjectAsync()
         => await PostAsync<StatusResponse>("/project/save", null).ConfigureAwait(false);
 
     public async Task<StatusResponse?> CloseProjectAsync()
-        => await PostAsync<StatusResponse>("/project/close", null).ConfigureAwait(false);
+    {
+        var result = await PostAsync<StatusResponse>(
+            "/project/close",
+            null).ConfigureAwait(false);
+        if (result is not null)
+            ResetActiveProjectIdentity();
+        return result;
+    }
 
     /// <summary>
     /// Laedt die manuellen Anker des aktiven Projekts.
@@ -170,12 +193,16 @@ public class ApiClient : IApiClient
                 if (detail.Contains("Kein Projekt geöffnet", StringComparison.OrdinalIgnoreCase)
                     || detail.Contains("Kein Projekt ge\u00f6ffnet", StringComparison.OrdinalIgnoreCase))
                 {
+                    ResetActiveProjectIdentity();
                     return null;
                 }
             }
 
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<ProjectInfo>(JsonOptions).ConfigureAwait(false);
+            var project = await response.Content.ReadFromJsonAsync<ProjectInfo>(JsonOptions).ConfigureAwait(false);
+            if (project is not null)
+                SetActiveProjectIdentity(project);
+            return project;
         }
         catch (Exception ex) when (IsExpectedCancellation(ex))
         {
@@ -387,7 +414,7 @@ public class ApiClient : IApiClient
 
     public async Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
     {
-        var operationKey = (cutId, rating);
+        var operationKey = (Volatile.Read(ref _activeProjectIdentity), cutId, rating);
         var operationId = _pendingBrainFeedbackOperations.GetOrAdd(
             operationKey,
             static _ => Guid.NewGuid());
@@ -435,6 +462,34 @@ public class ApiClient : IApiClient
             return new BrainFeedbackResponse("failed", 0, 0, ex.Message);
         }
     }
+
+    private void SetActiveProjectIdentity(ProjectInfo project)
+    {
+        var projectPath = project.Path.Trim();
+        try
+        {
+            projectPath = Path.GetFullPath(projectPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException
+                                   or NotSupportedException
+                                   or PathTooLongException)
+        {
+            _logger.LogWarning(
+                ex,
+                "Projektpfad konnte fuer Feedback-Idempotenz nicht normalisiert werden: {Path}",
+                project.Path);
+        }
+
+        projectPath = Path.TrimEndingDirectorySeparator(projectPath)
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .ToUpperInvariant();
+        Volatile.Write(ref _activeProjectIdentity, $"path:{projectPath}");
+    }
+
+    private void ResetActiveProjectIdentity()
+        => Volatile.Write(
+            ref _activeProjectIdentity,
+            $"session:{Guid.NewGuid():N}");
 
     private static string? TryReadErrorDetail(string raw)
     {
