@@ -2,9 +2,9 @@
   "schema_version": 1,
   "objective": "OBJ-75",
   "phase": "implementation",
-  "task_range": "T001-T051",
-  "task_digest_sha256": "e949a8b4b5f843a2c25882ee471ab24ab471251f2d42ae2fb8446f7bc7bb86e0",
-  "evidence_manifest": "evidence/T032-implementation-manifest.json",
-  "evidence_manifest_sha256": "7ad90b52279af43bcb12443ed5ed66109737b072b36f8e0c89da0a4f2ec7502a",
-  "commit_sha": "a8c7f7749a9ff31462f52914b3eeca7715e3e172"
+  "task_range": "T001-T053",
+  "task_digest_sha256": "8f7a0268a6212c293b849c2a3869c645a193eebf07cb237e12a6009dd8363150",
+  "evidence_manifest": "evidence/T052-implementation-manifest.json",
+  "evidence_manifest_sha256": "222b2d6bb579404be58c1a083b931521456d4249f90bb38b60a33550eafd2bec",
+  "commit_sha": "4d9b3176e6d463d616fb78fcee389bc2f69d4422"
 }
