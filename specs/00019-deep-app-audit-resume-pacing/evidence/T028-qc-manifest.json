@@ -2,7 +2,7 @@
   "schema_version": 1,
   "objective": "OBJ-74",
   "task_range": "T001-T035",
-  "commit_sha": "8d8e7050cabde2e1e9de2ac067c8fed78c5e093f",
+  "commit_sha": "bb6916ff3d359ce4a7f95ee3257d6b48ea948a2d",
   "receipts": [
     { "task_id": "T001", "path": "evidence/T026-qc-convergence.md", "sha256": "76d4e5ce2677a64ec3e7ede0fd110bc98460b7a949866aab25ea6e5bc6d714df" },
     { "task_id": "T002", "path": "evidence/T026-qc-convergence.md", "sha256": "76d4e5ce2677a64ec3e7ede0fd110bc98460b7a949866aab25ea6e5bc6d714df" },
