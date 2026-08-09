@@ -40,6 +40,7 @@ async def with_gpu_task(
     model_id: str = "",
     manage_vram: bool = True,
     timeout_seconds: int | None = None,
+    worker_started_event: asyncio.Event | None = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -50,6 +51,9 @@ async def with_gpu_task(
     ``manage_vram=False`` ist für zusammengesetzte Tasks, deren interne
     Modell-Owner ihre einzelnen Sessions selbst reservieren und freigeben.
     GPU-Lock und Telemetrie bleiben dabei aktiv.
+
+    ``worker_started_event`` wird erst gesetzt, wenn der geschützte Worker-Task
+    existiert und bei Cancellation durch den Cleanup-Pfad übernommen werden kann.
     """
     manager = None
     vram_reserved = False
@@ -91,9 +95,12 @@ async def with_gpu_task(
         except Exception as e:  # pragma: no cover — defensiv, Manager sollte verfuegbar sein
             logger.debug(f"VRAM-Manager fuer Telemetrie nicht verfuegbar: {e}")
 
-    await gpu_lock.acquire()
+    lock_acquired = False
     lock_handed_to_cleanup = False
     try:
+        await gpu_lock.acquire()
+        lock_acquired = True
+
         if vram_reserved and manager and not manager.commit(model_id):
             manager.cancel_reservation(model_id)
             raise RuntimeError(f"VRAM-Commit fehlgeschlagen: {model_id}")
@@ -102,6 +109,8 @@ async def with_gpu_task(
         start_ts = time.perf_counter()
         vram_baseline_mb = float(manager.total_committed_mb) if manager else 0.0
         task = asyncio.create_task(asyncio.to_thread(func, *args, **kwargs))
+        if worker_started_event is not None:
+            worker_started_event.set()
 
         async def finalize_after_worker(
             *,
@@ -209,7 +218,17 @@ async def with_gpu_task(
             await finalize_after_worker(success=True, error_payload=None)
             return result
     finally:
-        if not lock_handed_to_cleanup and gpu_lock.locked():
+        if not lock_acquired and vram_reserved and manager:
+            try:
+                manager.cancel_reservation(model_id)
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "VRAM-Reservierung nach abgebrochenem Lock-Wait konnte "
+                    "nicht storniert werden (%s): %s",
+                    model_id,
+                    cleanup_exc,
+                )
+        if not lock_handed_to_cleanup and lock_acquired:
             gpu_lock.release()
 
 

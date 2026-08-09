@@ -52,7 +52,9 @@ FRAME_SAMPLE_REPLACEMENT_RADIUS = 2
 CAPTION_STAGE_TIMEOUT_SECONDS = 270.0
 CAPTION_HEARTBEAT_INTERVAL_SECONDS = 5.0
 CAPTION_PROGRESS_START_PERCENT = 60.0
+CAPTION_PRIMARY_PROGRESS_END_PERCENT = 75.0
 CAPTION_PROGRESS_END_PERCENT = 85.0
+CAPTION_PROGRESS_TERMINAL_MARGIN = 0.1
 SIGLIP_EMBEDDING_DIM = 1152
 VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
@@ -2156,31 +2158,55 @@ async def _publish_caption_progress(
 
 async def _caption_progress_heartbeat(
     clip_id: int,
-    frame_total: int,
-    progress_state: dict[str, int],
+    progress_state: dict[str, Any],
 ) -> None:
-    """Keep the UI visibly alive while a cold VLM call is loading."""
-    started_at = asyncio.get_running_loop().time()
+    """Keep caption progress monotonic and visibly alive across providers."""
+    loop = asyncio.get_running_loop()
+    started_at = float(progress_state["started_at"])
     while True:
         await asyncio.sleep(CAPTION_HEARTBEAT_INTERVAL_SECONDS)
-        completed = min(progress_state.get("completed_frames", 0), frame_total)
+        now = loop.time()
+        frame_total = max(int(progress_state.get("phase_total_frames", 0)), 1)
+        completed = min(
+            int(progress_state.get("phase_completed_frames", 0)),
+            frame_total,
+        )
         active_frame = min(
-            max(progress_state.get("active_frame", completed + 1), 1),
-            max(frame_total, 1),
+            max(int(progress_state.get("phase_active_frame", completed + 1)), 1),
+            frame_total,
         )
-        span = CAPTION_PROGRESS_END_PERCENT - CAPTION_PROGRESS_START_PERCENT
-        percent = CAPTION_PROGRESS_START_PERCENT + span * (
-            completed / max(frame_total, 1)
+        phase_started_at = float(progress_state.get("phase_started_at", started_at))
+        phase_budget = max(
+            float(progress_state.get("phase_budget_seconds", 0.0)),
+            CAPTION_HEARTBEAT_INTERVAL_SECONDS,
         )
-        elapsed = int(asyncio.get_running_loop().time() - started_at)
+        phase_elapsed = max(0.0, now - phase_started_at)
+        work_fraction = completed / frame_total
+        elapsed_fraction = min(phase_elapsed / phase_budget, 0.98)
+        fraction = min(max(work_fraction, elapsed_fraction), 0.98)
+        phase_start = float(
+            progress_state.get("phase_progress_start", CAPTION_PROGRESS_START_PERCENT)
+        )
+        phase_end = float(
+            progress_state.get("phase_progress_end", CAPTION_PROGRESS_END_PERCENT)
+        )
+        candidate = phase_start + (phase_end - phase_start) * fraction
+        terminal_ceiling = CAPTION_PROGRESS_END_PERCENT - CAPTION_PROGRESS_TERMINAL_MARGIN
+        percent = min(
+            terminal_ceiling,
+            max(float(progress_state.get("reported_percent", phase_start)), candidate),
+        )
+        progress_state["reported_percent"] = percent
+        elapsed = int(now - started_at)
         await _publish_caption_progress(
             clip_id,
             step="captions",
             percent=percent,
             status="running",
             message=(
-                f"Vision-Analyse Frame {active_frame}/{frame_total} laeuft "
-                f"({elapsed}s)"
+                f"Vision-Analyse {progress_state.get('phase', 'Provider')}: "
+                f"Frame {active_frame}/{frame_total}, Phase {int(phase_elapsed)}s, "
+                f"gesamt {elapsed}s"
             ),
         )
 
@@ -2265,19 +2291,36 @@ async def _run_color_and_caption_analysis(
             from pb_studio.video.moondream import onnx_models_available as moondream_onnx_models_available
 
             moondream_frames_to_run = []
-            caption_progress = {"completed_frames": 0, "active_frame": 1}
+            caption_loop = asyncio.get_running_loop()
+            caption_started_at = caption_loop.time()
+            caption_deadline = caption_started_at + CAPTION_STAGE_TIMEOUT_SECONDS
+            caption_progress: dict[str, Any] = {
+                "started_at": caption_started_at,
+                "phase": "LM Studio",
+                "phase_started_at": caption_started_at,
+                "phase_budget_seconds": CAPTION_STAGE_TIMEOUT_SECONDS,
+                "phase_total_frames": len(frames_rgb),
+                "phase_completed_frames": 0,
+                "phase_active_frame": 1,
+                "phase_progress_start": CAPTION_PROGRESS_START_PERCENT,
+                "phase_progress_end": CAPTION_PRIMARY_PROGRESS_END_PERCENT,
+                "reported_percent": CAPTION_PROGRESS_START_PERCENT,
+            }
             caption_timeout_error: Optional[str] = None
+
+            def caption_remaining_seconds() -> float:
+                return max(0.0, caption_deadline - caption_loop.time())
 
             async def run_lm_studio_frames() -> None:
                 for frame_number, f_rgb in enumerate(frames_rgb, start=1):
-                    caption_progress["active_frame"] = frame_number
+                    caption_progress["phase_active_frame"] = frame_number
                     tags, used_model = (
                         await extract_tags_and_model_via_lmstudio_async(
                             f_rgb,
                             mode=current_mode,
                         )
                     )
-                    caption_progress["completed_frames"] = frame_number
+                    caption_progress["phase_completed_frames"] = frame_number
                     if tags:
                         for tag in tags:
                             if tag not in seen_tags:
@@ -2298,44 +2341,53 @@ async def _run_color_and_caption_analysis(
             heartbeat_task = asyncio.create_task(
                 _caption_progress_heartbeat(
                     clip_id,
-                    len(frames_rgb),
                     caption_progress,
                 )
             )
             try:
+                remaining = caption_remaining_seconds()
+                if remaining <= 0.0:
+                    raise asyncio.TimeoutError
                 await asyncio.wait_for(
                     run_lm_studio_frames(),
-                    timeout=CAPTION_STAGE_TIMEOUT_SECONDS,
+                    timeout=remaining,
                 )
             except asyncio.TimeoutError:
                 caption_timeout_error = (
-                    "LM-Studio-Captioning nach "
-                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s abgebrochen"
+                    "Captioning-Gesamtdeadline von "
+                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend LM Studio erreicht"
                 )
-                completed = caption_progress["completed_frames"]
+                completed = int(caption_progress["phase_completed_frames"])
                 moondream_frames_to_run.extend(frames_rgb[completed:])
                 logger.warning(
-                    "%s fuer clip %s; verbleibende Frames gehen in den "
-                    "verfuegbaren Fallback",
+                    "%s fuer clip %s",
                     caption_timeout_error,
                     clip_id,
                 )
                 await _publish_caption_progress(
                     clip_id,
                     step="captions_primary_timeout",
-                    percent=CAPTION_PROGRESS_END_PERCENT,
-                    status="partial",
+                    percent=float(caption_progress["reported_percent"]),
+                    status="running",
                     message=caption_timeout_error,
                 )
-            finally:
-                heartbeat_task.cancel()
-                try:
-                    await heartbeat_task
-                except asyncio.CancelledError:
-                    pass
 
             # Moondream Fallback falls LM Studio keine Tags geliefert hat (GPU)
-            if moondream_frames_to_run and not moondream_onnx_models_available():
+            if moondream_frames_to_run and caption_remaining_seconds() <= 0.0:
+                caption_timeout_error = (
+                    caption_timeout_error
+                    or "Captioning-Gesamtdeadline von "
+                    f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s vor Moondream erreicht"
+                )
+                logger.warning("%s fuer clip %s", caption_timeout_error, clip_id)
+                await publish_event("llm_status", {
+                    "model": "Moondream2 (ONNX)",
+                    "provider": "Local GPU (DirectML)",
+                    "status": "failed",
+                    "percent": 0.0,
+                    "clip_id": clip_id,
+                })
+            elif moondream_frames_to_run and not moondream_onnx_models_available():
                 # Audit-Fix (2026-07-10): ONNX-Modelldateien fehlen (nur .pt-Checkpoint
                 # vorhanden, kein CPU-Fallback erlaubt - IRON RULE). Vorher wurde hier
                 # trotzdem with_gpu_task gestartet, das lautlos 0 Tags lieferte, aber
@@ -2352,7 +2404,22 @@ async def _run_color_and_caption_analysis(
                     "clip_id": clip_id,
                 })
             elif moondream_frames_to_run:
+                moondream_worker_detached = False
+                moondream_worker_started = asyncio.Event()
+                moondream_worker_finished = False
                 try:
+                    remaining = caption_remaining_seconds()
+                    caption_progress.update({
+                        "phase": "Moondream",
+                        "phase_started_at": caption_loop.time(),
+                        "phase_budget_seconds": remaining,
+                        "phase_total_frames": len(moondream_frames_to_run),
+                        "phase_completed_frames": 0,
+                        "phase_active_frame": 1,
+                        "phase_progress_start": CAPTION_PRIMARY_PROGRESS_END_PERCENT,
+                        "phase_progress_end": CAPTION_PROGRESS_END_PERCENT,
+                    })
+
                     await publish_event("llm_status", {
                         "model": "Moondream2 (ONNX)",
                         "provider": "Local GPU (DirectML)",
@@ -2361,9 +2428,25 @@ async def _run_color_and_caption_analysis(
                         "clip_id": clip_id,
                     })
 
-                    moondream_tags_list = await with_gpu_task(
-                        _run_moondream_inference_on_frames, moondream_frames_to_run,
-                        model_id="moondream_fp16"
+                    remaining = caption_remaining_seconds()
+                    if remaining <= 0.0:
+                        raise asyncio.TimeoutError
+                    moondream_tags_list = await asyncio.wait_for(
+                        with_gpu_task(
+                            _run_moondream_inference_on_frames,
+                            moondream_frames_to_run,
+                            model_id="moondream_fp16",
+                            timeout_seconds=remaining,
+                            worker_started_event=moondream_worker_started,
+                        ),
+                        timeout=remaining,
+                    )
+                    moondream_worker_finished = True
+                    caption_progress["phase_completed_frames"] = len(
+                        moondream_frames_to_run
+                    )
+                    caption_progress["phase_active_frame"] = len(
+                        moondream_frames_to_run
                     )
                     used_model = "moondream"
 
@@ -2384,7 +2467,27 @@ async def _run_color_and_caption_analysis(
                                     seen_tags.add(tag)
                             if used_model not in tag_sources:
                                 tag_sources.append(used_model)
+                except asyncio.CancelledError:
+                    # with_gpu_task may keep the physical worker alive until its
+                    # protected cleanup finishes. Do not claim idle meanwhile.
+                    moondream_worker_detached = (
+                        moondream_worker_started.is_set()
+                        and not moondream_worker_finished
+                    )
+                    raise
                 except Exception as moondream_err:
+                    if isinstance(moondream_err, (asyncio.TimeoutError, TimeoutError)):
+                        # with_gpu_task keeps a timed-out thread alive under the GPU
+                        # lock until physical cleanup completes. Keep the truthful
+                        # failed state instead of publishing a premature idle state.
+                        moondream_worker_detached = (
+                            moondream_worker_started.is_set()
+                            and not moondream_worker_finished
+                        )
+                        caption_timeout_error = (
+                            "Captioning-Gesamtdeadline von "
+                            f"{CAPTION_STAGE_TIMEOUT_SECONDS:.0f}s waehrend Moondream erreicht"
+                        )
                     # Log ZUERST — publish darf die Root-Cause nie maskieren
                     logger.warning(f"Moondream Fallback GPU-Inferenz fehlgeschlagen: {moondream_err}")
                     try:
@@ -2399,17 +2502,24 @@ async def _run_color_and_caption_analysis(
                         logger.debug("llm_status publish nach Moondream-Fehler fehlgeschlagen")
                 finally:
                     # Review-Fix MEDIUM (2026-07-09): Terminal-State, damit das
-                    # Widget nach der Analyse nicht dauerhaft "Aktiv" zeigt.
-                    try:
-                        await publish_event("llm_status", {
-                            "model": "none",
-                            "provider": "Local GPU (DirectML)",
-                            "status": "idle",
-                            "percent": 0.0,
-                            "clip_id": clip_id,
-                        })
-                    except Exception:
-                        pass
+                    # Widget nach synchronem Ende nicht dauerhaft "Aktiv" zeigt.
+                    if not moondream_worker_detached:
+                        try:
+                            await publish_event("llm_status", {
+                                "model": "none",
+                                "provider": "Local GPU (DirectML)",
+                                "status": "idle",
+                                "percent": 0.0,
+                                "clip_id": clip_id,
+                            })
+                        except Exception:
+                            pass
+
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
@@ -2439,7 +2549,8 @@ async def _run_color_and_caption_analysis(
                 status=caption_status,
                 message=(
                     f"Vision-Analyse {caption_status}: "
-                    f"{caption_progress['completed_frames']}/{len(frames_rgb)} "
+                    f"{caption_progress['phase_completed_frames']}/"
+                    f"{caption_progress['phase_total_frames']} "
                     "Frames"
                 ),
             )
@@ -2482,7 +2593,23 @@ async def _run_color_and_caption_analysis(
                     message="Vision-Analyse fehlgeschlagen: keine lesbaren Frames",
                 )
 
+    except asyncio.CancelledError:
+        heartbeat_task = locals().get("heartbeat_task")
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        raise
     except Exception as e:
+        heartbeat_task = locals().get("heartbeat_task")
+        if heartbeat_task is not None and not heartbeat_task.done():
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
         logger.warning(f"Color/Tag-Analyse fehlgeschlagen (unkritisch): {e}")
         result["tags"] = []
         result["tag_source"] = "error"
