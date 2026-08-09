@@ -19,6 +19,7 @@ from __future__ import annotations
 import gc
 import logging
 import math
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -51,6 +52,7 @@ class StreamingAnalysisResult:
     spectral_centroids: list[float] = field(default_factory=list)
     stage_errors: dict[str, list[str]] = field(default_factory=dict)
     chunk_evidence: list[dict] = field(default_factory=list)
+    resume_checkpoint: dict = field(default_factory=dict)
     window_count: int = 0
 
 
@@ -74,6 +76,13 @@ class _RunningBPMEstimator:
         if not self._estimates:
             return 0.0
         return float(np.median(self._estimates))
+
+    @property
+    def count(self) -> int:
+        return len(self._estimates)
+
+    def values_since(self, start: int) -> list[float]:
+        return [float(value) for value in self._estimates[start:]]
 
 
 class _BeatAccumulator:
@@ -114,6 +123,9 @@ class _BeatAccumulator:
     @property
     def count(self) -> int:
         return len(self._beats)
+
+    def values_since(self, start: int) -> list[float]:
+        return [float(value) for value in self._beats[start:]]
 
 
 class _EnergyAggregator:
@@ -186,6 +198,17 @@ class _EnergyAggregator:
         inv = 1.0 / self._global_max
         return [v * inv for v in self._frames]
 
+    def add_checkpoint(self, frames: list[float], observed_max: float) -> None:
+        self._frames.extend(float(value) for value in frames)
+        self._global_max = max(self._global_max, float(observed_max))
+
+    def values_since(self, start: int) -> list[float]:
+        return [float(value) for value in self._frames[start:]]
+
+    @property
+    def global_max(self) -> float:
+        return self._global_max
+
     @property
     def count(self) -> int:
         return len(self._frames)
@@ -211,6 +234,7 @@ class StreamingAudioAnalyzer:
     N_FFT = 2048
     HOP_LENGTH = 512
     MAX_REPRESENTATIVE_POINTS = 7200
+    CHECKPOINT_SCHEMA_VERSION = 2
 
     def __init__(
         self,
@@ -225,6 +249,9 @@ class StreamingAudioAnalyzer:
         audio_path: str | Path,
         on_progress: Optional[Callable[[float], None]] = None,
         energy_only: bool = False,
+        resume_checkpoint: Optional[dict] = None,
+        on_chunk_checkpoint: Optional[Callable[[dict], None]] = None,
+        checkpoint_guard: Optional[Callable[[], None]] = None,
     ) -> StreamingAnalysisResult:
         """Volle chunked Analyse. on_progress(0..100).
 
@@ -242,6 +269,8 @@ class StreamingAudioAnalyzer:
         if not path.exists():
             raise FileNotFoundError(f"Audio not found: {path}")
 
+        source_identity = self._source_identity(path)
+
         duration = librosa.get_duration(path=str(path))
         if duration <= 0:
             raise ValueError(f"Invalid duration: {duration}")
@@ -250,7 +279,16 @@ class StreamingAudioAnalyzer:
         if duration <= self.window_sec * 1.5:
             return self._analyze_single_shot(path, duration, on_progress, energy_only=energy_only)
 
-        return self._analyze_streaming(path, duration, on_progress, energy_only=energy_only)
+        return self._analyze_streaming(
+            path,
+            duration,
+            on_progress,
+            energy_only=energy_only,
+            resume_checkpoint=resume_checkpoint,
+            on_chunk_checkpoint=on_chunk_checkpoint,
+            checkpoint_guard=checkpoint_guard,
+            source_identity=source_identity,
+        )
 
     # ------------------------------------------------------------------
     # Single-Shot (kurze Files)
@@ -339,6 +377,10 @@ class StreamingAudioAnalyzer:
         duration: float,
         on_progress: Optional[Callable[[float], None]],
         energy_only: bool = False,
+        resume_checkpoint: Optional[dict] = None,
+        on_chunk_checkpoint: Optional[Callable[[dict], None]] = None,
+        checkpoint_guard: Optional[Callable[[], None]] = None,
+        source_identity: Optional[dict] = None,
     ) -> StreamingAnalysisResult:
         """Prepare an O(1)-seek source and always remove its temp transcode."""
         import soundfile as sf
@@ -364,6 +406,10 @@ class StreamingAudioAnalyzer:
                 on_progress,
                 energy_only,
                 native_sr,
+                resume_checkpoint=resume_checkpoint,
+                on_chunk_checkpoint=on_chunk_checkpoint,
+                checkpoint_guard=checkpoint_guard,
+                source_identity=source_identity,
             )
         finally:
             if temp_wav_path is not None:
@@ -375,6 +421,208 @@ class StreamingAudioAnalyzer:
                         exc,
                     )
 
+    @staticmethod
+    def _source_identity(path: Path) -> dict[str, int | str]:
+        resolved = path.resolve(strict=True)
+        stat = resolved.stat()
+        return {
+            "path": os.path.normcase(str(resolved)),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+        }
+
+    def _checkpoint_config(self, energy_only: bool) -> dict[str, int | float | bool]:
+        return {
+            "sample_rate": self.SR,
+            "window_seconds": float(self.window_sec),
+            "overlap_seconds": float(self.overlap_sec),
+            "n_fft": self.N_FFT,
+            "hop_length": self.HOP_LENGTH,
+            "energy_only": bool(energy_only),
+        }
+
+    @staticmethod
+    def _is_finite_number(value) -> bool:
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(float(value))
+        )
+
+    @classmethod
+    def _is_numeric_list(cls, value, *, length: int | None = None) -> bool:
+        return (
+            isinstance(value, list)
+            and (length is None or len(value) == length)
+            and all(cls._is_finite_number(item) for item in value)
+        )
+
+    def _checkpoint_is_compatible(
+        self,
+        checkpoint: Optional[dict],
+        *,
+        source_identity: Optional[dict],
+        duration: float,
+        n_windows: int,
+        energy_only: bool,
+    ) -> bool:
+        if not isinstance(checkpoint, dict) or source_identity is None:
+            return False
+        checkpoint_duration = checkpoint.get("duration_seconds")
+        return (
+            checkpoint.get("schema_version") == self.CHECKPOINT_SCHEMA_VERSION
+            and checkpoint.get("source") == source_identity
+            and checkpoint.get("config") == self._checkpoint_config(energy_only)
+            and checkpoint.get("window_count") == n_windows
+            and self._is_finite_number(checkpoint_duration)
+            and abs(float(checkpoint_duration) - duration) <= 0.01
+            and isinstance(checkpoint.get("chunks"), list)
+        )
+
+    def _checkpoint_row_is_valid(
+        self,
+        row: dict,
+        *,
+        chunk_index: int,
+        chunk_start: float,
+        chunk_duration: float,
+        energy_only: bool,
+    ) -> bool:
+        if not isinstance(row, dict) or row.get("chunk_index") != chunk_index:
+            return False
+        if not (
+            self._is_finite_number(row.get("start_seconds"))
+            and self._is_finite_number(row.get("duration_seconds"))
+            and abs(float(row["start_seconds"]) - chunk_start) <= 1e-6
+            and abs(float(row["duration_seconds"]) - chunk_duration) <= 0.01
+        ):
+            return False
+
+        if chunk_duration < 2.0:
+            return (
+                row.get("status") == "skipped"
+                and row.get("error") == "terminal chunk shorter than 2.0 seconds"
+            )
+        if row.get("status") != "completed":
+            return False
+
+        stages = row.get("stages")
+        payload = row.get("payload")
+        if not isinstance(stages, dict) or not isinstance(payload, dict):
+            return False
+        if stages.get("load", {}).get("status") != "completed":
+            return False
+        expected_detection_status = "skipped" if energy_only else "completed"
+        if (
+            stages.get("beats", {}).get("status") != expected_detection_status
+            or stages.get("triggers", {}).get("status") != expected_detection_status
+            or stages.get("features", {}).get("status") != "completed"
+            or stages.get("energy", {}).get("status") != "completed"
+        ):
+            return False
+
+        timed_names = ("beats", "onsets", "kicks", "snares", "hihats")
+        if not all(self._is_numeric_list(payload.get(name)) for name in timed_names):
+            return False
+        if energy_only and any(payload[name] for name in timed_names):
+            return False
+        time_margin = self.HOP_LENGTH / self.SR + self.BEAT_DEDUP_THRESHOLD_SEC
+        lower = chunk_start - time_margin
+        upper = chunk_start + chunk_duration + time_margin
+        if any(
+            not lower <= float(value) <= upper
+            for name in timed_names
+            for value in payload[name]
+        ):
+            return False
+        if not self._is_numeric_list(payload.get("bpm_estimates")):
+            return False
+
+        energy_frames = payload.get("energy_frames")
+        energy_max = payload.get("energy_max")
+        if (
+            not self._is_numeric_list(energy_frames)
+            or not energy_frames
+            or not self._is_finite_number(energy_max)
+            or float(energy_max) < 0.0
+            or float(energy_max)
+            < max(float(value) for value in energy_frames)
+            or len(energy_frames) != stages["energy"].get("point_count")
+        ):
+            return False
+
+        features = payload.get("features")
+        if not isinstance(features, dict):
+            return False
+        feature_times = features.get("times")
+        centroids = features.get("centroids")
+        bands = features.get("bands")
+        chroma_mean = features.get("chroma_mean")
+        chroma_weight = features.get("chroma_weight")
+        from .spectral_analyzer import FREQUENCY_BANDS
+
+        expected_band_names = set(FREQUENCY_BANDS) | {"low", "mid", "high"}
+        if (
+            not self._is_numeric_list(feature_times)
+            or not feature_times
+            or any(
+                not lower <= float(value) <= upper
+                for value in feature_times
+            )
+            or not self._is_numeric_list(centroids, length=len(feature_times))
+            or not isinstance(bands, dict)
+            or set(bands) != expected_band_names
+            or not all(
+                isinstance(name, str)
+                and self._is_numeric_list(values, length=len(feature_times))
+                for name, values in bands.items()
+            )
+            or not self._is_numeric_list(chroma_mean, length=12)
+            or not isinstance(chroma_weight, int)
+            or isinstance(chroma_weight, bool)
+            or chroma_weight <= 0
+            or len(feature_times)
+            != stages["features"].get("representative_point_count")
+        ):
+            return False
+
+        if energy_only:
+            return True
+        return (
+            len(payload["beats"]) == stages["beats"].get("beat_count")
+            and len(payload["onsets"]) == stages["triggers"].get("onset_count")
+            and len(payload["kicks"]) == stages["triggers"].get("kick_count")
+            and len(payload["snares"]) == stages["triggers"].get("snare_count")
+            and len(payload["hihats"]) == stages["triggers"].get("hihat_count")
+        )
+
+    def _checkpoint_snapshot(
+        self,
+        *,
+        source_identity: Optional[dict],
+        duration: float,
+        n_windows: int,
+        energy_only: bool,
+        chunks: list[dict],
+    ) -> dict:
+        if source_identity is None:
+            return {}
+        return {
+            "schema_version": self.CHECKPOINT_SCHEMA_VERSION,
+            "source": dict(source_identity),
+            "config": self._checkpoint_config(energy_only),
+            "duration_seconds": float(duration),
+            "window_count": int(n_windows),
+            "chunks": list(chunks),
+        }
+
+    @staticmethod
+    def _public_chunk_evidence(row: dict, *, reused: bool = False) -> dict:
+        evidence = {key: value for key, value in row.items() if key != "payload"}
+        if reused:
+            evidence["reused_from_checkpoint"] = True
+        return evidence
+
     def _analyze_streaming_prepared(
         self,
         path: Path,
@@ -382,6 +630,11 @@ class StreamingAudioAnalyzer:
         on_progress: Optional[Callable[[float], None]],
         energy_only: bool,
         native_sr: int,
+        *,
+        resume_checkpoint: Optional[dict] = None,
+        on_chunk_checkpoint: Optional[Callable[[dict], None]] = None,
+        checkpoint_guard: Optional[Callable[[], None]] = None,
+        source_identity: Optional[dict] = None,
     ) -> StreamingAnalysisResult:
         """Echtes Chunk-Streaming mit soundfile block-I/O.
 
@@ -409,23 +662,103 @@ class StreamingAudioAnalyzer:
         spectral_centroids: list[float] = []
         stage_errors: dict[str, list[str]] = {}
         chunk_evidence: list[dict] = []
+        checkpoint_records: list[dict] = []
+
+        resume_rows: dict[int, dict] = {}
+        if self._checkpoint_is_compatible(
+            resume_checkpoint,
+            source_identity=source_identity,
+            duration=duration,
+            n_windows=n_windows,
+            energy_only=energy_only,
+        ):
+            for row in resume_checkpoint.get("chunks", []):
+                index = row.get("chunk_index") if isinstance(row, dict) else None
+                if isinstance(index, int) and not isinstance(index, bool):
+                    resume_rows[index] = row
+
+        def _guard_checkpoint() -> None:
+            if checkpoint_guard is not None:
+                checkpoint_guard()
+
+        def _publish_chunk_checkpoint(record: dict) -> None:
+            checkpoint_records.append(record)
+            if on_chunk_checkpoint is None:
+                return
+            snapshot = self._checkpoint_snapshot(
+                source_identity=source_identity,
+                duration=duration,
+                n_windows=n_windows,
+                energy_only=energy_only,
+                chunks=checkpoint_records,
+            )
+            if not snapshot:
+                return
+            _guard_checkpoint()
+            on_chunk_checkpoint(snapshot)
 
         overlap_frames = int(self.overlap_sec * self.SR / self.HOP_LENGTH)
 
         for i in range(n_windows):
+            _guard_checkpoint()
             # Berechne start_sample absolut und drift-frei
             start_sample = int(i * step * native_sr)
             chunk_start = start_sample / native_sr
             chunk_dur = min(self.window_sec, duration - chunk_start)
+            resume_row = resume_rows.get(i)
+            if resume_row is not None and self._checkpoint_row_is_valid(
+                resume_row,
+                chunk_index=i,
+                chunk_start=chunk_start,
+                chunk_duration=chunk_dur,
+                energy_only=energy_only,
+            ):
+                if chunk_dur >= 2.0:
+                    payload = resume_row["payload"]
+                    for value in payload["bpm_estimates"]:
+                        bpm_est.add(float(value))
+                    beat_acc.add_chunk_beats(payload["beats"])
+                    onset_acc.add_chunk_beats(payload["onsets"])
+                    kick_acc.add_chunk_beats(payload["kicks"])
+                    snare_acc.add_chunk_beats(payload["snares"])
+                    hihat_acc.add_chunk_beats(payload["hihats"])
+                    energy_agg.add_checkpoint(
+                        payload["energy_frames"],
+                        float(payload["energy_max"]),
+                    )
+                    representative = payload["features"]
+                    feature_weight = int(representative["chroma_weight"])
+                    chroma_sum += (
+                        np.asarray(
+                            representative["chroma_mean"],
+                            dtype=np.float64,
+                        )
+                        * feature_weight
+                    )
+                    chroma_weight += feature_weight
+                    spectral_times.extend(representative["times"])
+                    spectral_centroids.extend(representative["centroids"])
+                    for band_name, values in representative["bands"].items():
+                        spectral_bands.setdefault(band_name, []).extend(values)
+                checkpoint_records.append(resume_row)
+                chunk_evidence.append(
+                    self._public_chunk_evidence(resume_row, reused=True)
+                )
+                if on_progress:
+                    on_progress((i + 1) * 100.0 / n_windows)
+                continue
+
             if chunk_dur < 2.0:
-                chunk_evidence.append({
+                record = {
                     "chunk_index": i,
                     "start_seconds": chunk_start,
                     "duration_seconds": max(chunk_dur, 0.0),
                     "status": "skipped",
                     "error": "terminal chunk shorter than 2.0 seconds",
                     "stages": {},
-                })
+                }
+                chunk_evidence.append(record)
+                _publish_chunk_checkpoint(record)
                 continue
 
             try:
@@ -442,7 +775,7 @@ class StreamingAudioAnalyzer:
                 )
                 if on_progress:
                     on_progress((i + 1) * 100.0 / n_windows)
-                chunk_evidence.append({
+                record = {
                     "chunk_index": i,
                     "start_seconds": chunk_start,
                     "duration_seconds": chunk_dur,
@@ -454,13 +787,22 @@ class StreamingAudioAnalyzer:
                         "features": {"status": "blocked"},
                         "energy": {"status": "failed", "error": "load failed"},
                     },
-                })
+                }
+                chunk_evidence.append(record)
+                _publish_chunk_checkpoint(record)
                 continue
 
             stages: dict[str, dict] = {"load": {"status": "completed"}}
+            bpm_count_before = bpm_est.count
+            beat_count_before = beat_acc.count
+            trigger_counts_before = (
+                onset_acc.count,
+                kick_acc.count,
+                snare_acc.count,
+                hihat_acc.count,
+            )
             # --- Beat-Detection pro Chunk (bei energy_only uebersprungen) ---
             if not energy_only:
-                beat_count_before = beat_acc.count
                 beats_error = self._process_beats(
                     chunk, chunk_start, bpm_est, beat_acc
                 )
@@ -478,12 +820,6 @@ class StreamingAudioAnalyzer:
                         "status": "completed",
                         "beat_count": beat_acc.count - beat_count_before,
                     }
-                trigger_counts_before = (
-                    onset_acc.count,
-                    kick_acc.count,
-                    snare_acc.count,
-                    hihat_acc.count,
-                )
                 triggers_error = self._process_triggers(
                     chunk,
                     chunk_start,
@@ -512,6 +848,7 @@ class StreamingAudioAnalyzer:
                 stages["beats"] = {"status": "skipped"}
                 stages["triggers"] = {"status": "skipped"}
 
+            representative: dict = {}
             try:
                 representative = self._extract_representative_features(
                     chunk,
@@ -571,7 +908,7 @@ class StreamingAudioAnalyzer:
                     "point_count": energy_agg.count - energy_count_before,
                 }
 
-            chunk_evidence.append({
+            evidence = {
                 "chunk_index": i,
                 "start_seconds": chunk_start,
                 "duration_seconds": chunk_dur,
@@ -584,11 +921,28 @@ class StreamingAudioAnalyzer:
                     else "completed"
                 ),
                 "stages": stages,
-            })
+            }
+            record = {
+                **evidence,
+                "payload": {
+                    "bpm_estimates": bpm_est.values_since(bpm_count_before),
+                    "beats": beat_acc.values_since(beat_count_before),
+                    "onsets": onset_acc.values_since(trigger_counts_before[0]),
+                    "kicks": kick_acc.values_since(trigger_counts_before[1]),
+                    "snares": snare_acc.values_since(trigger_counts_before[2]),
+                    "hihats": hihat_acc.values_since(trigger_counts_before[3]),
+                    "energy_frames": energy_agg.values_since(energy_count_before),
+                    "energy_max": float(energy_agg.global_max),
+                    "features": representative,
+                },
+            }
+            chunk_evidence.append(evidence)
 
             # Chunk-Buffer freigeben
             del chunk
             gc.collect()
+
+            _publish_chunk_checkpoint(record)
 
             if on_progress:
                 on_progress((i + 1) * 100.0 / n_windows)
@@ -621,6 +975,13 @@ class StreamingAudioAnalyzer:
             spectral_centroids=spectral_centroids,
             stage_errors=stage_errors,
             chunk_evidence=chunk_evidence,
+            resume_checkpoint=self._checkpoint_snapshot(
+                source_identity=source_identity,
+                duration=duration,
+                n_windows=n_windows,
+                energy_only=energy_only,
+                chunks=checkpoint_records,
+            ),
             window_count=n_windows,
         )
 
@@ -854,11 +1215,19 @@ class StreamingAudioAnalyzer:
         ).tolist()
 
         def _band_times(*, signal: np.ndarray, fmin=None, fmax=None) -> list[float]:
+            lower = float(fmin or 0.0)
+            upper = float(fmax) if fmax is not None else float(self.SR) / 2.0
+            span = max(1.0, upper - lower)
+            n_fft = 2048
+            while n_fft < 8192 and (span / (self.SR / n_fft)) < 24.0:
+                n_fft *= 2
+            bins_in_band = max(1, int(span / (self.SR / n_fft)))
             kwargs = {
                 "y": signal,
                 "sr": self.SR,
                 "hop_length": hop,
-                "n_mels": 64,
+                "n_fft": n_fft,
+                "n_mels": max(4, min(64, bins_in_band // 2)),
             }
             if fmin is not None:
                 kwargs["fmin"] = fmin

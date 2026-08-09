@@ -179,22 +179,23 @@ def _stored_render_media_hashes(
                 digest.update(chunk)
         return digest.hexdigest()
 
-    audio_path_key = _canonical_identity_path(request.audio_path)
     audio_identity: Optional[dict[str, Any]] = None
-    for clip_id, clip in state.get_audio_clips_snapshot().items():
-        if _canonical_identity_path(str(clip.get("path") or "")) != audio_path_key:
-            continue
-        audio_identity = {
-            "clip_id": int(clip_id),
-            "path": audio_path_key,
-            "content_hash": content_hash_or_file_hash(
-                clip.get("audio_hash") or clip.get("file_hash"),
-                request.audio_path,
-            ),
-        }
-        break
-    if audio_identity is None:
-        raise ValueError("Render-Audio fehlt im Medienkatalog")
+    if request.include_audio:
+        audio_path_key = _canonical_identity_path(request.audio_path)
+        for clip_id, clip in state.get_audio_clips_snapshot().items():
+            if _canonical_identity_path(str(clip.get("path") or "")) != audio_path_key:
+                continue
+            audio_identity = {
+                "clip_id": int(clip_id),
+                "path": audio_path_key,
+                "content_hash": content_hash_or_file_hash(
+                    clip.get("audio_hash") or clip.get("file_hash"),
+                    request.audio_path,
+                ),
+            }
+            break
+        if audio_identity is None:
+            raise ValueError("Render-Audio fehlt im Medienkatalog")
 
     video_clips = state.get_video_clips_snapshot()
     video_identities: dict[int, dict[str, Any]] = {}
@@ -242,7 +243,7 @@ def _compute_render_media_hash(
     canonical = json.dumps(
         {
             "version": _RENDER_IDENTITY_VERSION,
-            "audio_path": _canonical_identity_path(audio_path),
+            "audio_path": _canonical_identity_path(audio_path) if audio_path else None,
             "timeline": timeline or [],
             "render_settings": render_settings or {},
             "project": {
@@ -311,7 +312,9 @@ def _request_settings_dict(
     ):
         request_snapshot = request.model_dump(mode="json")
         request_snapshot["output_path"] = str(Path(request.output_path).resolve())
-        request_snapshot["audio_path"] = str(Path(request.audio_path).resolve())
+        request_snapshot["audio_path"] = (
+            str(Path(request.audio_path).resolve()) if request.audio_path else ""
+        )
         settings["_resume"] = {
             "version": _RENDER_RESUME_PAYLOAD_VERSION,
             "request": request_snapshot,
@@ -398,22 +401,24 @@ def _validate_render_media_contract(
     state: AppState,
 ) -> tuple[RenderRequest, list[dict[str, Any]]]:
     """Bind all render inputs to canonical files in the active media catalogue."""
-    audio_clips = state.get_audio_clips_snapshot()
-    validated_audio = validate_registered_media_path(
-        request.audio_path,
-        (clip.get("path", "") for clip in audio_clips.values()),
-        label="Render audio_path",
-    )
-    if state.current_audio_path:
-        active_audio = validate_registered_media_path(
-            state.current_audio_path,
+    validated_audio = ""
+    if request.include_audio:
+        audio_clips = state.get_audio_clips_snapshot()
+        validated_audio = validate_registered_media_path(
+            request.audio_path,
             (clip.get("path", "") for clip in audio_clips.values()),
-            label="Aktive Timeline audio_path",
+            label="Render audio_path",
         )
-        if os.path.normcase(validated_audio) != os.path.normcase(active_audio):
-            raise MediaPathPolicyError(
-                "Render audio_path gehoert nicht zur aktiven Timeline"
+        if state.current_audio_path:
+            active_audio = validate_registered_media_path(
+                state.current_audio_path,
+                (clip.get("path", "") for clip in audio_clips.values()),
+                label="Aktive Timeline audio_path",
             )
+            if os.path.normcase(validated_audio) != os.path.normcase(active_audio):
+                raise MediaPathPolicyError(
+                    "Render audio_path gehoert nicht zur aktiven Timeline"
+                )
 
     validated_timeline = validate_timeline_media_paths(
         timeline_snapshot,
@@ -1408,13 +1413,15 @@ def _execute_render(
     # greift. pacing_router macht das richtig (siehe pacing_router.py:261-263),
     # render_router rief vorher OHNE audio_duration auf → Audio-Overflow-Check
     # übersprungen. L-TI-5 Iron Audit-Lesson 2026-05-11.
-    from pb_studio.rendering.render_service import RenderService as _RenderServiceForAudio
-    try:
-        audio_duration = _RenderServiceForAudio()._get_audio_duration(audio_path) or 0.0
-    except Exception as exc:
-        logger.warning(f"audio_duration via ffprobe fehlgeschlagen ({exc}) — overflow-check skipped")
-        audio_duration = 0.0
-    if request.include_audio and audio_duration > 0.0:
+    audio_duration: float | None = None
+    if request.include_audio:
+        from pb_studio.rendering.render_service import RenderService as _RenderServiceForAudio
+        try:
+            audio_duration = _RenderServiceForAudio()._get_audio_duration(audio_path) or 0.0
+        except Exception as exc:
+            logger.warning(f"audio_duration via ffprobe fehlgeschlagen ({exc}) — overflow-check skipped")
+            audio_duration = 0.0
+    if audio_duration and audio_duration > 0.0:
         timeline = _finalize_timeline_for_render(timeline, audio_duration)
     warnings, errors = validate_timeline(timeline, audio_duration=audio_duration)
     if errors:

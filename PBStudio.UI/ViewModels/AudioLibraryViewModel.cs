@@ -37,6 +37,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _importProgress;
     private int _currentImportFileIdx;
     private int _totalImportFiles;
+    private int? _activeAnalysisClipId;
+    private int? _activeStemClipId;
 
     public ObservableCollection<AudioClipModel> AudioClips { get; } = [];
     public ObservableCollection<AudioClipModel> SelectedClips { get; } = [];
@@ -67,7 +69,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
-        if ((e.EventType == "analysis_progress" || e.EventType == "stem_progress") && (IsAnalyzing || IsSeparating))
+        var isActiveAnalysis = e.EventType == "analysis_progress"
+            && IsAnalyzing
+            && IsEventForClip(e, _activeAnalysisClipId);
+        var isActiveStem = e.EventType == "stem_progress"
+            && IsSeparating
+            && IsEventForClip(e, _activeStemClipId);
+        if (isActiveAnalysis || isActiveStem)
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -93,6 +101,16 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 }
             });
         }
+    }
+
+    private static bool IsEventForClip(ProgressEventArgs e, int? activeClipId)
+    {
+        if (!activeClipId.HasValue)
+            return false;
+        if (e.ClipId > 0)
+            return e.ClipId == activeClipId.Value;
+        return int.TryParse(e.TaskId, out var taskClipId)
+            && taskClipId == activeClipId.Value;
     }
 
     [RelayCommand]
@@ -410,6 +428,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             {
                 if (clip.IsAnalyzed) { done++; continue; }
 
+                _activeAnalysisClipId = clip.Id;
                 StatusText = $"Analysiere {done + 1}/{total}: {clip.Name}...";
                 AnalysisProgress = (double)done / total * 100;
 
@@ -449,6 +468,10 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     failed++;
                     failures.Add($"{clip.Name}: {ex.Message}");
                 }
+                finally
+                {
+                    _activeAnalysisClipId = null;
+                }
                 done++;
             }
 
@@ -487,6 +510,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         var operation = _projectService.CaptureOperationContext();
         var clip = SelectedClip;
+        _activeAnalysisClipId = clip.Id;
         IsAnalyzing = true;
         AnalysisProgress = 0.01;  // sichtbarer Start (0.00% Label)
         CurrentStep = "init";
@@ -525,6 +549,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activeAnalysisClipId = null;
             if (_projectService.IsCurrent(operation))
                 IsAnalyzing = false;
         }
@@ -541,6 +566,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
         var operation = _projectService.CaptureOperationContext();
         var clip = SelectedClip;
+        _activeStemClipId = clip.Id;
         IsSeparating = true;
         StatusText = $"Stem-Separation läuft: {SelectedClip.Name}...";
 
@@ -578,6 +604,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _activeStemClipId = null;
             if (_projectService.IsCurrent(operation))
                 IsSeparating = false;
         }
@@ -625,6 +652,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         StatusText = "Kein Projekt geöffnet";
         IsAnalyzing = false;
         IsSeparating = false;
+        _activeAnalysisClipId = null;
+        _activeStemClipId = null;
         AnalysisProgress = 0;
         Bpm = 0;
         BeatCount = 0;
@@ -643,6 +672,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         IsAnalyzing = false;
         IsSeparating = false;
+        _activeAnalysisClipId = null;
+        _activeStemClipId = null;
         AnalysisProgress = 0;
         CurrentStep = string.Empty;
     }

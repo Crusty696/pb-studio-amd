@@ -43,6 +43,54 @@ VIDEO_AXES: tuple[str, ...] = (
 BRIDGE_AXES: tuple[str, ...] = AUDIO_AXES + VIDEO_AXES
 
 
+_MOOD_TAG_ALIASES: dict[str, str] = {
+    "aggressiv": "aggressive",
+    "angespannt": "tense",
+    "dunkel": "dark",
+    "düster": "dark",
+    "duester": "dark",
+    "energetisch": "energetic",
+    "entspannt": "relaxed",
+    "episch": "epic",
+    "erhebend": "uplifting",
+    "fantasie": "mystical",
+    "fantasy": "mystical",
+    "friedlich": "peaceful",
+    "fröhlich": "happy",
+    "froehlich": "happy",
+    "froh": "happy",
+    "glücklich": "happy",
+    "gluecklich": "happy",
+    "kalt": "cool",
+    "kühl": "cool",
+    "kuehl": "cool",
+    "magical": "mystical",
+    "magie": "mystical",
+    "magisch": "mystical",
+    "melancholisch": "melancholic",
+    "mysterious": "mystical",
+    "mystic": "mystical",
+    "mystisch": "mystical",
+    "ruhig": "calm",
+    "traurig": "sad",
+    "traumhaft": "dreamy",
+    "verträumt": "dreamy",
+    "vertraeumt": "dreamy",
+}
+
+
+def canonical_mood_tags(values: Any) -> list[str]:
+    """Return stable cross-language mood labels used by all Brain scorers."""
+    if isinstance(values, str):
+        values = [values]
+    canonical: set[str] = set()
+    for value in values or []:
+        tag = str(value).strip().casefold()
+        if tag:
+            canonical.add(_MOOD_TAG_ALIASES.get(tag, tag))
+    return sorted(canonical)
+
+
 @dataclass
 class CandidateFeatures:
     """Feature snapshot for one (audio cut, candidate clip) pair."""
@@ -71,6 +119,7 @@ class CandidateFeatures:
     video_confidence: float = 0.0
     confidence: float = 0.0
     feature_provenance: dict[str, Any] = field(default_factory=dict)
+    axis_status: dict[str, dict[str, str]] = field(default_factory=dict)
     semantic_status: str = "unavailable"
     semantic_reason: str = "embeddings_missing"
 
@@ -121,7 +170,7 @@ class BridgeDimensions:
             return 1.0 - abs(_clip01(f.brightness) - _clip01(f.audio_centroid))
 
         if axis == "color_temp_match_weight":
-            mood = _audio_mood_score(f.audio_mood_tags)
+            mood = _audio_mood_score(canonical_mood_tags(f.audio_mood_tags))
             return 1.0 - 0.5 * abs(mood - f.color_temp)
 
         if axis == "pace_match_weight":
@@ -133,10 +182,12 @@ class BridgeDimensions:
             return _cosine_zero_one(f.audio_embedding, f.video_embedding)
 
         if axis == "mood_match_weight":
-            if not f.mood_tags or not f.audio_mood_tags:
+            video_tags = set(canonical_mood_tags(f.mood_tags))
+            audio_tags = set(canonical_mood_tags(f.audio_mood_tags))
+            if not video_tags or not audio_tags:
                 return 0.5
-            overlap = len(set(f.mood_tags) & set(f.audio_mood_tags))
-            denom = max(len(set(f.audio_mood_tags) | set(f.mood_tags)), 1)
+            overlap = len(video_tags & audio_tags)
+            denom = max(len(audio_tags | video_tags), 1)
             return overlap / denom
 
         return 0.5

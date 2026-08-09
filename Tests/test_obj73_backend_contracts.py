@@ -283,6 +283,10 @@ def test_stem_service_forwards_cached_structure_without_reanalysis(
         cached_analysis={"structure_segments": cached_segments},
     )
 
-    assert result == []
+    assert len(result) == 1
+    assert result[0].clip_id == "clip_1"
+    assert result[0].start_time == pytest.approx(0.0)
+    assert result[0].end_time == pytest.approx(4.0)
+    assert result[0].metadata["trigger_type"] == "time_grid_fallback"
     assert captured["song_sections"] is cached_segments
     assert service._last_skipped_structure_reanalyze is True

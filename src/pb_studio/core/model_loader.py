@@ -13,12 +13,13 @@ DirectML Considerations:
 
 import logging
 import threading
+import weakref
 # pyrefly: ignore [missing-import]
 import onnxruntime as ort
 
 _model_loader_init_lock = threading.Lock()
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -166,6 +167,10 @@ class ModelLoader:
 
         # Model storage
         self._sessions: Dict[str, Any] = {}
+        self._session_owner_callbacks: Dict[
+            str,
+            list[weakref.WeakMethod],
+        ] = {}
         # Z3 / M-1 (CRITICAL): RLock statt Lock — load_model(force=True) ruft
         # _evict_for_space, das die session_lock erneut acquired. threading.Lock
         # ist non-reentrant → Deadlock im force-reload-Pfad. RLock erlaubt
@@ -183,6 +188,39 @@ class ModelLoader:
         """Register a custom model specification."""
         self._specs[spec.model_id] = spec
         logger.info(f"Registered model: {spec.name} ({spec.vram_mb}MB)")
+
+    def register_session_owner(
+        self,
+        model_id: str,
+        release_callback: Callable[[str], None],
+    ) -> None:
+        """Register a weak owner callback cleared before a session is evicted."""
+        callback_ref = weakref.WeakMethod(release_callback)
+        with self._session_lock:
+            callbacks = self._session_owner_callbacks.setdefault(model_id, [])
+            callbacks[:] = [ref for ref in callbacks if ref() is not None]
+            if any(ref() == release_callback for ref in callbacks):
+                return
+            callbacks.append(callback_ref)
+
+    def _notify_session_owners(self, model_id: str) -> None:
+        with self._session_lock:
+            callback_refs = list(
+                getattr(self, "_session_owner_callbacks", {}).get(model_id, [])
+            )
+        live_refs: list[weakref.WeakMethod] = []
+        for callback_ref in callback_refs:
+            callback = callback_ref()
+            if callback is None:
+                continue
+            live_refs.append(callback_ref)
+            try:
+                callback(model_id)
+            except Exception:
+                logger.exception("Session-Owner konnte %s nicht freigeben", model_id)
+        with self._session_lock:
+            if hasattr(self, "_session_owner_callbacks"):
+                self._session_owner_callbacks[model_id] = live_refs
 
     def _create_session_options(self) -> ort.SessionOptions:
         """Create DirectML-compatible session options."""
@@ -419,6 +457,7 @@ class ModelLoader:
 
     def _do_unload(self, model_id: str) -> bool:
         """Internal unload implementation (thread-safe)."""
+        self._notify_session_owners(model_id)
         with self._session_lock:
             if model_id not in self._sessions:
                 return False
@@ -481,6 +520,10 @@ class ModelLoader:
     def unload_all(self) -> bool:
         """Unload all models and confirm every budget release."""
         unloaded_ids = []
+        with self._session_lock:
+            loaded_ids = list(self._sessions.keys())
+        for model_id in loaded_ids:
+            self._notify_session_owners(model_id)
         with self._session_lock:
             for model_id in list(self._sessions.keys()):
                 if model_id in self._sessions:

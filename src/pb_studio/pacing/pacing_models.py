@@ -40,6 +40,62 @@ class CutListEntry:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class SelectionProvenance:
+    """Deterministic explanation of one ClipSelector decision."""
+
+    selection_path: str
+    requested_strategy: str
+    trigger_type: str
+    trigger_strength: float
+    candidate_ids: List[str] = field(default_factory=list)
+    eligible_candidate_ids: List[str] = field(default_factory=list)
+    excluded_recent_clip_ids: List[str] = field(default_factory=list)
+    recent_clip_ids: List[str] = field(default_factory=list)
+    blacklist_size: int = 0
+    diversity_policy: str = "adaptive_unique_lru"
+    diversity_relaxed: bool = False
+    fallback_reason: Optional[str] = None
+    score_components: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def _stable_value(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                str(key): cls._stable_value(value[key])
+                for key in sorted(value, key=str)
+            }
+        if isinstance(value, (list, tuple)):
+            return [cls._stable_value(item) for item in value]
+        if value is None or isinstance(value, (str, bool, int, float)):
+            return value
+        item = getattr(value, "item", None)
+        if callable(item):
+            try:
+                return cls._stable_value(item())
+            except (TypeError, ValueError):
+                pass
+        return str(value)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-safe copy with stable field and list ordering."""
+        return {
+            "selection_path": self.selection_path,
+            "requested_strategy": self.requested_strategy,
+            "trigger_type": self.trigger_type,
+            "trigger_strength": self.trigger_strength,
+            "candidate_ids": list(self.candidate_ids),
+            "eligible_candidate_ids": list(self.eligible_candidate_ids),
+            "excluded_recent_clip_ids": list(self.excluded_recent_clip_ids),
+            "recent_clip_ids": list(self.recent_clip_ids),
+            "blacklist_size": self.blacklist_size,
+            "diversity_policy": self.diversity_policy,
+            "diversity_relaxed": self.diversity_relaxed,
+            "fallback_reason": self.fallback_reason,
+            "score_components": self._stable_value(self.score_components),
+        }
+
+
 @dataclass
 class SelectedClip:
     """Ein ausgewählter Video-Clip mit Score und Motion-Profil."""
@@ -49,6 +105,19 @@ class SelectedClip:
     motion_score: float = 0.5
     motion_profile: Optional[List[float]] = None
     metadata: Optional[Dict[str, Any]] = None  # Plan Phase 4: brain_scores etc.
+
+    def attach_selection_provenance(
+        self,
+        provenance: SelectionProvenance,
+    ) -> "SelectedClip":
+        """Attach selector evidence without discarding Brain metadata."""
+        metadata = dict(self.metadata or {})
+        payload = provenance.to_dict()
+        payload["selected_clip_id"] = self.clip_id
+        payload["selected_score"] = float(self.score)
+        metadata["selection_provenance"] = payload
+        self.metadata = metadata
+        return self
 
     def get_motion_at_time(self, t: float, duration: float = 0.0) -> float:
         """

@@ -10,6 +10,7 @@ Kein Auth, kein HTTPS, kein Multi-User.
 
 import asyncio
 import logging
+import os
 import sys
 import threading
 import time
@@ -18,12 +19,32 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS = 60.0
+_GRACEFUL_SHUTDOWN_HARD_EXIT_SECONDS = 300.0
+
+from .recovery_bootstrap import (
+    clear_runtime_dirty,
+    ensure_recovery_ready,
+    mark_runtime_dirty,
+)
+
+# Muss vor Config, Logging, Datenbanken, Routern und produktiven Ownern laufen.
+_recovery_bootstrap_result = ensure_recovery_ready()
+
 import uvicorn
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import config
+from pb_studio.storage.recovery_adapters import validate_owner_generation
+from pb_studio.storage.recovery_generation import fixed_control_root
+
+if _recovery_bootstrap_result.generation_id is not None:
+    validate_owner_generation(
+        fixed_control_root(),
+        _recovery_bootstrap_result.generation_id,
+    )
 from .owner_capability import (
     OWNER_CAPABILITY_HEADER,
     authorize_owner,
@@ -90,6 +111,12 @@ logging.basicConfig(
     handlers=[_console_handler, _file_handler, _sse_handler],
 )
 logger = logging.getLogger("pb_studio.backend")
+logger.info(
+    "Recovery bootstrap: %s generation=%s degraded=%d",
+    _recovery_bootstrap_result.status,
+    _recovery_bootstrap_result.generation_id or "none",
+    len(_recovery_bootstrap_result.degraded_references),
+)
 
 # Server-Startzeit für Uptime
 _start_time = time.time()
@@ -169,6 +196,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"  Projekt-Verzeichnis bereit: {config.project_dir}")
     except Exception as e:
         logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
+
+    # Gate B: Nach Config, aber vor Render-Resume und neuer Produktarbeit wird
+    # ein vollständiger, owner-validierter Wiederanlaufpunkt publiziert.
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        from .recovery_runtime import create_runtime_recovery_generation
+        startup_generation = await asyncio.to_thread(
+            create_runtime_recovery_generation,
+            timeout=_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS,
+            only_if_uninitialized=True,
+        )
+        if startup_generation is None:
+            if _recovery_bootstrap_result.generation_id is None:
+                logger.info(
+                    "  Recovery-Snapshot: kalte Installation, noch keine Vollwahrheit"
+                )
+            else:
+                logger.info(
+                    "  Recovery-Snapshot: bestehende validierte Generation %s beibehalten",
+                    _recovery_bootstrap_result.generation_id,
+                )
+        else:
+            logger.info(
+                "  Recovery-Snapshot bereit: %s",
+                startup_generation.generation_id,
+            )
+        if mark_runtime_dirty():
+            logger.info("  Recovery-Laufzeit als DIRTY markiert")
+        else:
+            logger.info("  Recovery-DIRTY-Marker: noch keine Basisgeneration")
 
     # Provider-/Modellwahrheit einmal pro Backendstart neu erfassen. Der
     # Service bündelt LM-Studio- und Ollama-Abfragen und publiziert atomar.
@@ -283,6 +339,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("  Render-Shutdown: %s", render_shutdown)
     except Exception as e:
         logger.warning(f"  Render-Shutdown fehlgeschlagen: {e}")
+
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        try:
+            from .recovery_runtime import create_runtime_recovery_generation
+            shutdown_generation = await asyncio.to_thread(
+                create_runtime_recovery_generation,
+                timeout=_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS,
+            )
+            if shutdown_generation is not None:
+                clear_runtime_dirty(
+                    expected_generation_id=shutdown_generation.generation_id,
+                    expected_manifest_sha256=shutdown_generation.manifest_sha256,
+                )
+                logger.info(
+                    "  Recovery-Shutdown-Snapshot: %s",
+                    shutdown_generation.generation_id,
+                )
+        except Exception as e:
+            logger.error("  Recovery-Shutdown-Snapshot fehlgeschlagen: %s", e)
 
     # Review-Fix 2026-07-09: Publisher/Loop-Referenzen zurücksetzen
     try:
@@ -496,7 +571,8 @@ async def gpu_cleanup() -> GpuCleanupResponse:
             for model_id, state in before.items()
             if state["is_loaded"]
             and ModelPriority[state["priority"]] >= ModelPriority.LOW
-            and manager.get_model_budget(model_id).unload_callback is not None
+            and (budget := manager.get_model(model_id)) is not None
+            and budget.unload_callback is not None
         }
 
         freed_mb = await asyncio.to_thread(
@@ -570,6 +646,16 @@ async def shutdown(
 ) -> dict[str, str]:
     """Owner-authorized graceful shutdown called by the WPF launcher."""
     authorize_owner(owner_capability, operation="Backend-Shutdown")
+    from .app_state import get_app_state
+
+    completed, pending = await get_app_state().cancel_and_drain_project_tasks()
+    if completed or pending:
+        logger.info(
+            "Shutdown unterbrach %d Projektoperation(en); %d Task(s) laufen "
+            "bis zum Epoch-/Prozess-Guard weiter",
+            completed,
+            pending,
+        )
     logger.info("Shutdown-Request erhalten, fahre in 2s herunter...")
     # Windows/Uvicorn: loop.call_later() hat hier im detached Launcher-Pfad
     # nicht zuverlässig ausgelöst, wodurch der alte Prozess Port 8765 belegt hielt.
@@ -597,7 +683,10 @@ def _force_exit() -> None:
     Sucht zuerst die uvicorn.Server-Instanz im GC und setzt `should_exit = True`.
     Falls nicht gefunden, ruft signal.raise_signal(signal.SIGINT) auf →
     sorgt für echten Lifespan-Shutdown (SQLite/WAL, SmartDirector.reset_instance).
-    Fallback: harter Exit nach 10s, falls der graceful Shutdown hängt.
+    Fallback: harter Exit nach fünf Minuten, falls der graceful Shutdown hängt.
+    Vollständige Recovery-Generationen können mehrere GB umfassen und dürfen
+    nicht von einem kürzeren Prozess-Timer als ihrem Quiesce-Budget abgeschnitten
+    werden. Das PREPARING-Journal bleibt auch beim letzten Notausstieg crash-sicher.
     """
     import os
     import signal
@@ -611,7 +700,10 @@ def _force_exit() -> None:
         finally:
             os._exit(0)
 
-    fallback = _threading.Timer(10.0, _hard_exit)
+    fallback = _threading.Timer(
+        _GRACEFUL_SHUTDOWN_HARD_EXIT_SECONDS,
+        _hard_exit,
+    )
     fallback.daemon = True
     fallback.start()
     

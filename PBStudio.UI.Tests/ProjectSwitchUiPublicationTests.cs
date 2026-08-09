@@ -65,6 +65,90 @@ public sealed class ProjectSwitchUiPublicationTests
     }
 
     [TestMethod]
+    public async Task VideoSelection_ProjectClosingClearsBatchStateBeforeReusedId()
+    {
+        var analyzeCalls = 0;
+        var deleteCalls = 0;
+        var projectA = new ProjectInfo("A", @"C:\Projects\A", 0, 1, false);
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(projectA))
+            .Handle(nameof(IApiClient.AnalyzeVideoAsync), _ =>
+            {
+                analyzeCalls++;
+                return Task.FromResult<VideoAnalysisResult?>(null);
+            })
+            .Handle(nameof(IApiClient.DeleteVideoClipAsync), _ =>
+            {
+                deleteCalls++;
+                return Task.FromResult<DeleteResponse?>(new DeleteResponse(1, []));
+            })
+            .Handle(nameof(IApiClient.DeleteVideoClipsBatchAsync), _ =>
+            {
+                deleteCalls++;
+                return Task.FromResult<DeleteResponse?>(new DeleteResponse(1, []));
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(projectA.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        var dialogs = new RecordingDialogService();
+        using var viewModel = new VideoLibraryViewModel(
+            api.Client,
+            new VideoLibraryStateService(
+                api.Client,
+                NullLogger<VideoLibraryStateService>.Instance),
+            projects,
+            sse,
+            dialogs);
+        var clipA = new VideoClipModel
+        {
+            Id = 1,
+            Name = "A video",
+            Path = @"C:\Projects\A\video.mp4",
+            IsMarked = true,
+        };
+        viewModel.VideoClips.Add(clipA);
+        viewModel.SelectedClip = clipA;
+        viewModel.UpdateSelectedClips(new List<VideoClipModel> { clipA });
+        Assert.IsTrue(viewModel.AnalyzeMarkedCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.DeleteSelectedCommand.CanExecute(null));
+
+        WeakReferenceMessenger.Default.Send(new ProjectClosingMessage());
+
+        Assert.AreEqual(0, viewModel.VideoClips.Count);
+        Assert.AreEqual(0, viewModel.SelectedClips.Count);
+        Assert.IsNull(viewModel.SelectedClip);
+        Assert.IsFalse(clipA.IsMarked);
+
+        var clipB = new VideoClipModel
+        {
+            Id = 1,
+            Name = "B video",
+            Path = @"C:\Projects\B\video.mp4",
+        };
+        viewModel.VideoClips.Add(clipB);
+        viewModel.UpdateSelectedClips(new List<VideoClipModel> { clipA });
+
+        Assert.IsFalse(viewModel.AnalyzeMarkedCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteSelectedCommand.CanExecute(null));
+        viewModel.UpdateSelectedClips(new List<VideoClipModel>());
+
+        await viewModel.AnalyzeMarkedCommand.ExecuteAsync(null);
+        await viewModel.DeleteSelectedCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, viewModel.SelectedClips.Count);
+        Assert.IsFalse(clipB.IsMarked);
+        Assert.AreEqual(0, analyzeCalls);
+        Assert.AreEqual(0, deleteCalls);
+        Assert.AreEqual(0, dialogs.ConfirmationCount);
+    }
+
+    [TestMethod]
     public async Task PacingGeneration_ProjectTransitionRejectsLateError()
     {
         var pacingStarted = new TaskCompletionSource<bool>(
@@ -222,6 +306,7 @@ public sealed class ProjectSwitchUiPublicationTests
             StartTime = 0,
             EndTime = 1,
         });
+        viewModel.MarkTimelineDirty();
 
         var command = viewModel.SyncTimelineCommand.ExecuteAsync(null);
         await syncStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -303,6 +388,26 @@ public sealed class ProjectSwitchUiPublicationTests
         finally
         {
             WeakReferenceMessenger.Default.UnregisterAll(recipient);
+        }
+    }
+
+    private sealed class RecordingDialogService : IDialogService
+    {
+        public int ConfirmationCount { get; private set; }
+
+        public string? OpenFile(string title, string filter, string? initialDirectory = null) => null;
+        public List<string> OpenFiles(string title, string filter, string? initialDirectory = null) => [];
+        public string? OpenFolder(string title, string? initialDirectory = null) => null;
+        public string? SaveFile(
+            string title,
+            string filter,
+            string defaultFileName,
+            string? initialDirectory = null) => null;
+
+        public bool ConfirmDestructiveAction(string title, string message)
+        {
+            ConfirmationCount++;
+            return true;
         }
     }
 }

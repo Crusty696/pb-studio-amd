@@ -335,6 +335,9 @@
             <md:Card Grid.Row="0" Style="{StaticResource AbletonCard}" Padding="0">
                 <ListView x:Name="TimelineSummaryList"
                           ItemsSource="{Binding TimelineEntries}" SelectedItem="{Binding SelectedEntry}"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          ScrollViewer.CanContentScroll="True"
                           Background="Transparent" BorderThickness="0" Foreground="{StaticResource AbletonText}"
                           AutomationProperties.Name="Timeline-Cut-Liste"
                           AutomationProperties.HelpText="Pfeil hoch und runter wählt Cuts; Pos1 und Ende springen zum ersten oder letzten Cut."
@@ -389,6 +392,8 @@
                     <!-- Single horizontal ScrollViewer spanning both lanes -->
                     <ScrollViewer Grid.Column="1" Grid.Row="1" Grid.RowSpan="2"
                                   x:Name="LanesScrollViewer"
+                                  ScrollChanged="LanesScrollViewer_OnScrollChanged"
+                                  SizeChanged="LanesScrollViewer_OnSizeChanged"
                                   Focusable="True"
                                   IsTabStop="True"
                                   AutomationProperties.Name="Interaktive Timeline-Spuren"
@@ -479,7 +484,7 @@
 
                             <!-- Video clips -->
                             <ItemsControl x:Name="TimelineItemsControl" Grid.Row="0"
-                                          ItemsSource="{Binding TimelineEntries}">
+                                          ItemsSource="{Binding VisibleTimelineEntries}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Canvas Background="Transparent" VerticalAlignment="Stretch"/>

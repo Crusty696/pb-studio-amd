@@ -17,6 +17,8 @@ def test_terminal_sources_share_a_bounded_replay_buffer():
     app_source = _source("PBStudio.UI/App.xaml.cs")
 
     assert "MaxCharacters = 100_000" in buffer_source
+    assert "MaxMessageCharacters = 20_000" in buffer_source
+    assert "Logeintrag gekürzt" in buffer_source
     assert "TerminalLogEntry[] Subscribe" in buffer_source
     assert "while (_characterCount > MaxCharacters" in buffer_source
     assert "_buffer.Append(levelStr" in logger_source
@@ -31,6 +33,9 @@ def test_terminal_view_model_replays_and_clears_shared_history():
     assert "foreach (var entry in history)" in source
     assert "_buffer.Clear();" in source
     assert "_buffer.Unsubscribe(OnEntryAdded);" in source
+    assert "ConcurrentQueue<TerminalLogEntry>" in source
+    assert "Interlocked.Exchange(ref _flushScheduled, 1)" in source
+    assert "Volatile.Read(ref _disposed)" in source
     assert "WeakReferenceMessenger" not in source
     assert "_sse.LogReceived" not in source
 

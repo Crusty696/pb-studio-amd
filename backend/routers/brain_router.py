@@ -17,6 +17,7 @@ import logging
 import secrets
 import sqlite3
 import time
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -151,6 +152,44 @@ async def feedback(
             lease = _acquire_project_state_lease(svc, context)
             try:
                 feedback_logger = svc.feedback_logger_for_lease(lease)
+                from pb_studio.brain.feedback_logger import (
+                    FeedbackOperationConflictError,
+                    build_credit_assignments,
+                )
+                from ..dependencies import db_write_lock
+
+                if req.operation_id is not None:
+                    async with db_write_lock:
+                        try:
+                            prior_result = await asyncio.to_thread(
+                                lease.run_write,
+                                lambda _connection: (
+                                    feedback_logger.lookup_feedback_result(
+                                        operation_id=req.operation_id,
+                                        cut_id=req.cut_id,
+                                        rating=req.rating,
+                                    )
+                                ),
+                            )
+                        except StaleBrainProjectLeaseError as exc:
+                            raise HTTPException(
+                                status_code=409,
+                                detail=str(exc),
+                            ) from exc
+                        except FeedbackOperationConflictError as exc:
+                            raise HTTPException(
+                                status_code=409,
+                                detail=str(exc),
+                            ) from exc
+                    if prior_result is not None:
+                        total = await asyncio.to_thread(svc.weights.total_clicks)
+                        return BrainFeedbackResponse(
+                            status="ok",
+                            updated_buckets=prior_result.updated_buckets,
+                            total_clicks=total,
+                            message="Feedback operation was already applied",
+                        )
+
                 row = await asyncio.to_thread(
                     lambda: lease.connection.execute(
                         "SELECT brain_scores_json, metadata_json "
@@ -176,36 +215,27 @@ async def feedback(
                     )
                     context_keys = [""]
 
-                from pb_studio.brain.feedback_logger import build_credit_assignments
                 assignments = build_credit_assignments(
                     metadata=metadata,
                     brain_scores=brain_scores,
                     context_keys=context_keys,
                 )
-                if not assignments:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
-                            "Cut has no relevant, available Brain feature evidence; "
-                            "feedback was not applied"
-                        ),
-                    )
 
                 def _apply_feedback(_connection):
-                    return feedback_logger.log_feedback(
+                    return feedback_logger.log_feedback_result(
                         cut_id=req.cut_id,
                         rating=req.rating,
                         context_keys=context_keys,
                         assignments=assignments,
+                        operation_id=req.operation_id,
                     )
 
                 # Z2 / GPU-F4: log_feedback macht SQLite-INSERT + WeightStore-Math
                 # (~10-50ms). db_write_lock bleibt der globale Vertrag; der
                 # Lease-Guard linearisiert zusaetzlich gegen Projektwechsel.
-                from ..dependencies import db_write_lock
                 async with db_write_lock:
                     try:
-                        bumps = await asyncio.to_thread(
+                        feedback_result = await asyncio.to_thread(
                             lease.run_write,
                             _apply_feedback,
                         )
@@ -214,13 +244,30 @@ async def feedback(
                             status_code=409,
                             detail=str(exc),
                         ) from exc
+                    except FeedbackOperationConflictError as exc:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=str(exc),
+                        ) from exc
+                    except ValueError as exc:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=str(exc),
+                        ) from exc
+                bumps = feedback_result.updated_buckets
                 total = await asyncio.to_thread(svc.weights.total_clicks)
-                await _maybe_train_projector(svc, total)
+                if feedback_result.applied:
+                    await _maybe_train_projector(svc, total)
+                message = (
+                    f"{bumps} evidence-relevant buckets updated"
+                    if feedback_result.applied
+                    else "Feedback operation was already applied"
+                )
                 return BrainFeedbackResponse(
                     status="ok",
                     updated_buckets=bumps,
                     total_clicks=total,
-                    message=f"{bumps} evidence-relevant buckets updated",
+                    message=message,
                 )
             finally:
                 lease.release()
@@ -306,7 +353,92 @@ async def learning_session(
 # — die komplette R-Brain-05-Architektur (Rating -> Label -> fit_pairs) war rein
 # hypothetisch. Hier ist der fehlende Producer: alle N erfolgreichen Feedbacks
 # ein Fit-Schritt.
-PROJECTOR_TRAIN_EVERY_N_FEEDBACKS = 20
+
+
+def _fit_projector_v2(svc) -> dict:
+    from pb_studio.brain.cross_modal_projector import (
+        WEIGHTS_FILENAME,
+        get_default_projector,
+    )
+    from pb_studio.brain.projector_trainer import (
+        ProjectTrainingSource,
+        run_v2_fit_step,
+    )
+    from pb_studio.data.repositories.project_repository import ProjectRepository
+    from pb_studio.storage.migration_runner import migrate_project_state
+
+    repo = ProjectRepository()
+    catalog_conn = repo.db.get_connection()
+    migrations = (
+        Path(__file__).resolve().parents[2]
+        / "src" / "pb_studio" / "storage" / "migrations" / "state"
+    )
+    sources: list[ProjectTrainingSource] = []
+    opened: list[sqlite3.Connection] = []
+    try:
+        for project in repo.get_all():
+            data = project.get("data") or {}
+            project_uuid = project.get("project_uuid") or data.get("project_uuid")
+            if not project_uuid:
+                raise RuntimeError(f"Project {project['id']} lacks project_uuid")
+            media_rows = catalog_conn.execute(
+                "SELECT id, file_hash FROM media WHERE project_id=?",
+                (int(project["id"]),),
+            ).fetchall()
+            hashes = {int(row[0]): str(row[1] or "") for row in media_rows}
+            project_path = data.get("path")
+            if not project_path:
+                if media_rows:
+                    raise RuntimeError(f"Pathless project {project['id']} owns media")
+                sources.append(ProjectTrainingSource(
+                    project_uuid=str(project_uuid),
+                    state_conn=None,
+                    audio_hash_for_clip_id=lambda _clip_id: None,
+                    video_hash_for_clip_id=lambda _clip_id: None,
+                    status="pathless_empty",
+                ))
+                continue
+            state_path = Path(str(project_path)) / "state.db"
+            if not state_path.is_file():
+                raise RuntimeError(f"Project {project['id']} state.db is missing")
+            migrate_project_state(
+                state_path,
+                migrations,
+                project_uuid=str(project_uuid),
+            )
+            conn = sqlite3.connect(
+                str(state_path), isolation_level=None, check_same_thread=False
+            )
+            opened.append(conn)
+
+            def _audio_hash(clip_id: int, values=hashes):
+                return values.get(int(clip_id)) or None
+
+            def _video_hash(clip_id: str, values=hashes):
+                raw = str(clip_id)
+                if raw.startswith("clip_"):
+                    raw = raw[len("clip_"):]
+                try:
+                    return values.get(int(raw)) or None
+                except (TypeError, ValueError):
+                    return None
+
+            sources.append(ProjectTrainingSource(
+                project_uuid=str(project_uuid),
+                state_conn=conn,
+                audio_hash_for_clip_id=_audio_hash,
+                video_hash_for_clip_id=_video_hash,
+            ))
+
+        weights_path = svc.brain.brain_dir / WEIGHTS_FILENAME
+        return run_v2_fit_step(
+            get_default_projector(weights_path=weights_path),
+            sources=sources,
+            embedding_cache=svc.brain.cache,
+        )
+    finally:
+        for conn in opened:
+            conn.close()
 
 
 async def _maybe_train_projector(svc, total_clicks: int) -> None:
@@ -316,43 +448,11 @@ async def _maybe_train_projector(svc, total_clicks: int) -> None:
     Best-effort und bewusst nach dem Response-relevanten Teil: ein Fehler hier
     darf ein erfolgreich verbuchtes Feedback niemals zu einem Fehler machen.
     """
-    if total_clicks <= 0 or total_clicks % PROJECTOR_TRAIN_EVERY_N_FEEDBACKS != 0:
+    if total_clicks <= 0:
         return
 
-    def _fit() -> dict:
-        from pb_studio.brain.cross_modal_projector import get_default_projector
-        from pb_studio.brain.projector_trainer import run_fit_step
-
-        state = get_app_state()
-
-        def _audio_hash(clip_id: int):
-            clip = (state.audio_clips or {}).get(int(clip_id)) or {}
-            return clip.get("audio_hash")
-
-        def _video_hash(clip_id: str):
-            raw = str(clip_id)
-            if raw.startswith("clip_"):
-                raw = raw[len("clip_"):]
-            try:
-                key = int(raw)
-            except (TypeError, ValueError):
-                return None
-            clip = (state.video_clips or {}).get(key) or {}
-            return clip.get("video_hash")
-
-        # state_conn haengt am BrainService, der Cache am BrainStore, und der
-        # Projektor ist ein eigenes Lazy-Singleton — empirisch geprueft, nicht
-        # geraten (svc.brain ist ein BrainStore ohne state_conn/projector).
-        return run_fit_step(
-            get_default_projector(),
-            state_conn=svc.state_conn,
-            embedding_cache=svc.brain.cache,
-            audio_hash_for_clip_id=_audio_hash,
-            video_hash_for_clip_id=_video_hash,
-        )
-
     try:
-        result = await asyncio.to_thread(_fit)
+        result = await asyncio.to_thread(_fit_projector_v2, svc)
         logger.info(
             "Cross-Modal-Projektor nach %d Feedbacks trainiert: %s",
             total_clicks,

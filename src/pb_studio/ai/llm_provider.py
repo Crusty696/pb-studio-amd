@@ -27,9 +27,7 @@ hybrid Modus default-on.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from pathlib import Path
 from typing import Optional
 
 from .lmstudio_client import LMStudioClient, LMStudioConnectionError
@@ -49,10 +47,12 @@ DEFAULT_GENERATION_TIMEOUT = 180.0
 
 def _load_config() -> dict:
     """Liefert die ai-Sektion aus config.json, leeres dict bei Fehler."""
-    cfg_path = Path(__file__).resolve().parents[3] / "config.json"
     try:
-        return json.loads(cfg_path.read_text(encoding="utf-8")).get("ai", {})
-    except (OSError, json.JSONDecodeError) as exc:
+        from pb_studio.config_manager import ConfigManager
+
+        config = ConfigManager().get("ai") or {}
+        return config if isinstance(config, dict) else {}
+    except Exception as exc:
         logger.warning("config.json nicht lesbar (%s) — Defaults werden verwendet", exc)
         return {}
 

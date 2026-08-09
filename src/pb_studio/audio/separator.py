@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 import types
+import uuid
 from pathlib import Path
 
 import onnxruntime as ort
@@ -28,6 +29,14 @@ logger = logging.getLogger(__name__)
 from pb_studio.core.gpu_lock import gpu_inference_lock
 
 _directml_session_options_patch_lock = threading.RLock()
+
+
+class StemCheckpointError(RuntimeError):
+    """Preserve checkpoint failures across the separator result boundary."""
+
+    def __init__(self, cause: Exception):
+        super().__init__(str(cause))
+        self.cause = cause
 
 
 def _box_iou(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -264,6 +273,10 @@ class StemSeparator:
         model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx",
         callback=None,
         on_progress=None,
+        resume_stems=None,
+        on_stem_completed=None,
+        output_dir=None,
+        checkpoint_guard=None,
     ):
         """
         Separates audio into stems.
@@ -276,6 +289,13 @@ class StemSeparator:
                 Stages: 0% init, 10% loading_model, 30% running_inference,
                 90% saving_stems, 100% complete. Audit C2 — feeds the
                 ``stem_progress`` SSE channel during multi-minute Demucs/MDX runs.
+            resume_stems: Validated mapping ``role -> absolute path``. Matching
+                outputs are preserved instead of overwritten.
+            on_stem_completed: Strict callback ``(role, path, reused)`` called
+                only after a write returns or a validated output is reused.
+            output_dir: Optional source/model-isolated output directory.
+            checkpoint_guard: Strict callable checked before model work and each
+                stem write/reuse. Exceptions abort separation unchanged.
         """
         # Legacy `callback` kept as alias — prefer `on_progress` (Audit C2)
         progress_cb = on_progress if on_progress is not None else callback
@@ -293,6 +313,14 @@ class StemSeparator:
                     logger.debug("on_progress callback raised — ignoring", exc_info=True)
             except Exception:
                 logger.debug("on_progress callback raised — ignoring", exc_info=True)
+
+        def _guard() -> None:
+            if checkpoint_guard is None:
+                return
+            try:
+                checkpoint_guard()
+            except Exception as exc:
+                raise StemCheckpointError(exc) from exc
 
         _emit(0.0, "init")
 
@@ -319,11 +347,17 @@ class StemSeparator:
                          "Please run the setup scripts to download models before using PB Studio offline."
             }
 
+        if output_dir is not None:
+            isolated_output_dir = Path(output_dir).resolve()
+            isolated_output_dir.mkdir(parents=True, exist_ok=True)
+            self.separator.output_dir = str(isolated_output_dir)
+
         self._apply_directml_patch()
         vram_reserved = False
         model_id = None
         vram_mgr = None
         try:
+            _guard()
             # Demucs is the documented PyTorch-CPU exception. Only ONNX stem
             # inference owns a GPU budget in this direct separator path.
             if is_onnx_model:
@@ -339,6 +373,7 @@ class StemSeparator:
 
             logger.info(f"Loading model: {model_name}")
             _emit(10.0, "loading_model")
+            _guard()
             self.separator.load_model(model_name)
             if is_onnx_model and not self._directml_session_created:
                 raise RuntimeError(
@@ -354,8 +389,78 @@ class StemSeparator:
                     )
 
             logger.info(f"Starting separation for: {file_path}")
+            _guard()
             _emit(30.0, "running_inference")
-            output_files = self._run_inference(file_path)
+            if resume_stems or on_stem_completed is not None:
+                model_instance = self.separator.model_instance
+                original_final_process = model_instance.final_process
+                committed_output_files = []
+                resume_by_role = {
+                    str(role).strip().casefold(): Path(path).resolve()
+                    for role, path in dict(resume_stems or {}).items()
+                }
+                output_root = Path(model_instance.output_dir).resolve()
+
+                def _checkpointing_final_process(stem_path, source, stem_name):
+                    _guard()
+                    role = str(stem_name).strip().casefold()
+                    target_path = (output_root / Path(stem_path)).resolve()
+                    if not target_path.is_relative_to(output_root):
+                        raise RuntimeError(
+                            f"Stem output escaped isolated directory: {target_path}"
+                        )
+                    reusable_path = resume_by_role.get(role)
+                    if reusable_path is not None and reusable_path == target_path:
+                        logger.info("Preserving validated %s stem: %s", role, target_path)
+                        if on_stem_completed is not None:
+                            try:
+                                on_stem_completed(role, str(target_path), True)
+                            except Exception as exc:
+                                raise StemCheckpointError(exc) from exc
+                        committed_output_files.append(str(target_path))
+                        return {stem_name: source}
+
+                    previous_path = None
+                    if target_path.exists():
+                        previous_path = target_path.with_name(
+                            f".{target_path.name}.{uuid.uuid4().hex}.prewrite"
+                        )
+                        os.replace(target_path, previous_path)
+                    try:
+                        _guard()
+                        result = original_final_process(
+                            str(target_path),
+                            source,
+                            stem_name,
+                        )
+                        if not target_path.is_file() or target_path.stat().st_size <= 0:
+                            raise RuntimeError(
+                                f"Stem writer did not publish output: {target_path}"
+                            )
+                        _guard()
+                        if on_stem_completed is not None:
+                            try:
+                                on_stem_completed(role, str(target_path), False)
+                            except Exception as exc:
+                                raise StemCheckpointError(exc) from exc
+                        committed_output_files.append(str(target_path))
+                        if previous_path is not None:
+                            previous_path.unlink(missing_ok=True)
+                        return result
+                    except Exception:
+                        target_path.unlink(missing_ok=True)
+                        if previous_path is not None and previous_path.exists():
+                            os.replace(previous_path, target_path)
+                        raise
+
+                model_instance.final_process = _checkpointing_final_process
+                try:
+                    self._run_inference(file_path)
+                    output_files = list(committed_output_files)
+                finally:
+                    model_instance.final_process = original_final_process
+            else:
+                output_files = self._run_inference(file_path)
 
             _emit(90.0, "saving_stems")
             logger.info(f"Separation complete. Files: {output_files}")
@@ -367,6 +472,9 @@ class StemSeparator:
             
             return {"stems": output_files}
 
+        except StemCheckpointError as e:
+            logger.error(f"Stem checkpoint failed: {e.cause}")
+            raise e.cause
         except Exception as e:
             logger.error(f"Separation failed: {e}")
             return {"error": str(e)}

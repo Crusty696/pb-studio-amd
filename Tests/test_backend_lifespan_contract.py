@@ -27,3 +27,12 @@ def test_hard_exit_terminates_render_processes_first():
 
     assert "RenderService.terminate_active_processes" in hard_exit
     assert hard_exit.index("terminate_active_processes") < hard_exit.index("os._exit(0)")
+
+
+def test_hard_exit_budget_exceeds_recovery_snapshot_barrier_budget():
+    main = (ROOT / "backend" / "main.py").read_text(encoding="utf-8")
+
+    assert "_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS = 60.0" in main
+    assert "_GRACEFUL_SHUTDOWN_HARD_EXIT_SECONDS = 300.0" in main
+    assert "timeout=_RECOVERY_SNAPSHOT_BARRIER_TIMEOUT_SECONDS" in main
+    assert "_threading.Timer(\n        _GRACEFUL_SHUTDOWN_HARD_EXIT_SECONDS" in main

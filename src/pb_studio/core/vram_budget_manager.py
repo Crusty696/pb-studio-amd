@@ -293,14 +293,24 @@ class VRAMBudgetManager:
         """Clamp a configured limit to the selected adapter's physical VRAM."""
         import os
 
-        env_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB") or os.environ.get(
-            "PB_STUDIO_FORCED_VRAM"
+        forced_limit = os.environ.get("PB_STUDIO_FORCED_VRAM")
+        configured_limit = os.environ.get("PBSTUDIO_VRAM_LIMIT_MB")
+        env_limit = forced_limit or configured_limit
+        if forced_limit and not forced_limit.isdigit():
+            raise ValueError(
+                "PB_STUDIO_FORCED_VRAM must be a non-negative integer"
+            )
+        forced_value = int(forced_limit) if forced_limit else 0
+        self._forced_vram_ceiling_mb = (
+            min(forced_value, self._physical_vram_mb)
+            if forced_value > 0
+            else self._physical_vram_mb
         )
         if requested_limit is None:
             if env_limit:
                 if not env_limit.isdigit():
                     raise ValueError(
-                        "PBSTUDIO_VRAM_LIMIT_MB must be a non-negative integer"
+                        "VRAM limit environment value must be a non-negative integer"
                     )
                 requested_limit = int(env_limit)
             else:
@@ -314,16 +324,16 @@ class VRAMBudgetManager:
             raise ValueError("VRAM limit cannot be negative")
 
         effective = (
-            min(requested_limit, self._physical_vram_mb)
+            min(requested_limit, self._forced_vram_ceiling_mb)
             if requested_limit > 0
-            else self._physical_vram_mb
+            else self._forced_vram_ceiling_mb
         )
-        if requested_limit > self._physical_vram_mb:
+        if requested_limit > self._forced_vram_ceiling_mb:
             logger.warning(
-                "Configured VRAM limit %dMB exceeds selected adapter physical "
-                "VRAM %dMB; clamped",
+                "Configured VRAM limit %dMB exceeds the active VRAM ceiling "
+                "%dMB; clamped",
                 requested_limit,
-                self._physical_vram_mb,
+                self._forced_vram_ceiling_mb,
             )
         logger.info(
             "VRAM ceiling bound to DirectML adapter index=%d luid=%s: "
@@ -425,14 +435,19 @@ class VRAMBudgetManager:
         """
         if isinstance(limit_mb, bool) or not isinstance(limit_mb, int):
             raise ValueError("VRAM limit must be an integer number of MB")
+        physical_ceiling = getattr(
+            self,
+            "_forced_vram_ceiling_mb",
+            self._physical_vram_mb,
+        )
         if limit_mb <= 0:
-            limit_mb = self._physical_vram_mb
-        effective_limit = min(limit_mb, self._physical_vram_mb)
+            limit_mb = physical_ceiling
+        effective_limit = min(limit_mb, physical_ceiling)
         if effective_limit < limit_mb:
             logger.warning(
                 "Requested VRAM limit %dMB exceeds physical ceiling %dMB; clamped",
                 limit_mb,
-                self._physical_vram_mb,
+                physical_ceiling,
             )
         new_usable = effective_limit - self._safety_buffer_mb
         if new_usable < 0:

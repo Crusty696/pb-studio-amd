@@ -585,3 +585,74 @@ def test_task_sperre_laeuft_ab():
         w._TASK_UNAVAILABLE_UNTIL["video_captioning"] = time.monotonic() - 1.0
         assert extract_tags_via_lmstudio(frame, mode="balance") == ["tanzen", "club"]
     assert "video_captioning" not in w._TASK_UNAVAILABLE_UNTIL
+
+
+def test_failed_candidate_lock_does_not_self_block_next_frame(monkeypatch):
+    """A receipt lock must end with its attempt, not with the frame-batch task."""
+    import pb_studio.ai.model_registry as registry_module
+    from pb_studio.ai.model_registry import ModelSelectionReceipt
+    from pb_studio.video.lmstudio_vision_wrapper import (
+        extract_tags_and_model_via_lmstudio_async,
+    )
+
+    receipts = {
+        model_id: ModelSelectionReceipt(
+            provider="lmstudio",
+            model_id=model_id,
+            task="video_captioning",
+            mode="balance",
+            required_capabilities=("vision",),
+            verified_capabilities=("vision",),
+            source="test",
+            reason="test",
+            selected_at="2026-08-09T00:00:00Z",
+        )
+        for model_id in ("vlm-a", "vlm-b")
+    }
+    calls = {"vlm-a": 0, "vlm-b": 0}
+
+    class FakeClient:
+        def __init__(self, model_id):
+            self.model_id = model_id
+
+        async def chat(self, **_kwargs):
+            calls[self.model_id] += 1
+            if self.model_id == "vlm-a" and calls[self.model_id] == 1:
+                raise asyncio.TimeoutError
+            return {"message": {"content": f"tag-{self.model_id}"}}
+
+    async def fake_failover(_registry, _task, _mode, operation, **_kwargs):
+        attempts = []
+        for model_id in ("vlm-a", "vlm-b"):
+            receipt = receipts[model_id]
+            attempts.append(receipt)
+            try:
+                value = await operation(FakeClient(model_id), receipt)
+            except asyncio.TimeoutError:
+                continue
+            return value, receipt, tuple(attempts)
+        raise AssertionError("test failover unexpectedly exhausted")
+
+    monkeypatch.setattr(
+        registry_module,
+        "execute_with_model_failover",
+        fake_failover,
+    )
+
+    async def analyze_two_frames():
+        first = await extract_tags_and_model_via_lmstudio_async(
+            np.zeros((8, 8, 3), dtype=np.uint8),
+            load_timeout_seconds=0.1,
+        )
+        second = await extract_tags_and_model_via_lmstudio_async(
+            np.full((8, 8, 3), 1, dtype=np.uint8),
+            load_timeout_seconds=0.1,
+        )
+        return first, second
+
+    first, second = asyncio.run(
+        asyncio.wait_for(analyze_two_frames(), timeout=1.0)
+    )
+
+    assert first == (["tag-vlm-b"], "vlm-b")
+    assert second == (["tag-vlm-a"], "vlm-a")

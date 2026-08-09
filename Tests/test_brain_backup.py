@@ -20,12 +20,15 @@ def test_backup_creates_atomic_copies(tmp_path: Path):
             "positive_count, negative_count, last_updated) VALUES (?,?,?,?,?,?)",
             ("kick_weight", 0, "", 5.0, 1.0, "2026-05-06"),
         )
+        embedding = store.embeddings_dir / "sample.npy"
+        embedding.write_bytes(b"embedding")
     finally:
         store.close()
 
     target = backup_brain_store(tmp_path / "brain", tmp_path / "backups")
     for f in ("weights.db", "patterns.db", "embedding_cache.db"):
         assert (target / f).is_file(), f"missing {f}"
+    assert (target / "embeddings" / "sample.npy").read_bytes() == b"embedding"
 
     # Verify backup is a valid SQLite file with seeded row
     conn = sqlite3.connect(str(target / "weights.db"))

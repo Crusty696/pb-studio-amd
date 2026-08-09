@@ -13,7 +13,7 @@ from backend.app_state import AppState
 from backend.schemas.render_schemas import RenderEncoder, RenderQuality, RenderRequest
 from pb_studio.rendering import preview_renderer, render_service
 from pb_studio.rendering.preview_renderer import PreviewGenerator, TimelineEntry
-from pb_studio.rendering.render_service import RenderService
+from pb_studio.rendering.render_service import RenderCancelledError, RenderService
 
 render_router = importlib.import_module("backend.routers.render_router")
 
@@ -104,6 +104,92 @@ def test_quality_and_include_audio_reach_render_service(
 
     assert captured["preset"] == "speed"
     assert captured["include_audio"] is False
+
+
+def test_video_only_request_does_not_require_or_probe_audio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip")
+    request = RenderRequest(
+        output_path=str(tmp_path / "output.mp4"),
+        include_audio=False,
+    )
+    captured: dict[str, object] = {}
+
+    def unexpected_probe(*args, **kwargs):
+        raise AssertionError("video-only render must not probe audio")
+
+    def fake_render(self, **kwargs):
+        captured.update(kwargs)
+        return str(tmp_path / "output.mp4")
+
+    monkeypatch.setattr(RenderService, "_get_audio_duration", unexpected_probe)
+    monkeypatch.setattr(RenderService, "render_timeline", fake_render)
+    state = AppState()
+    loop = asyncio.new_event_loop()
+    try:
+        render_router._execute_render(
+            "task-video-only",
+            request,
+            state,
+            [{
+                "start_time": 0.0,
+                "end_time": 30.0,
+                "metadata": {"file_path": str(clip)},
+            }],
+            loop,
+        )
+    finally:
+        loop.close()
+
+    assert captured["audio_path"] == ""
+    assert captured["include_audio"] is False
+
+
+def test_audio_path_is_required_only_when_audio_is_enabled(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="audio_path"):
+        RenderRequest(output_path=str(tmp_path / "with-audio.mp4"))
+
+    request = RenderRequest(
+        output_path=str(tmp_path / "video-only.mp4"),
+        include_audio=False,
+    )
+    assert request.audio_path == ""
+
+
+def test_normalization_cancel_during_post_probe_removes_temp_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"clip")
+    service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
+    service.temp_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(service, "_active_encoder", lambda: "h264_amf")
+    monkeypatch.setattr(service, "_check_needs_normalization", lambda *args: True)
+
+    def fake_transcode(_source, target, *args):
+        target.write_bytes(b"partial")
+
+    monkeypatch.setattr(service, "_transcode_clip", fake_transcode)
+    monkeypatch.setattr(
+        service,
+        "_is_frame_addressable",
+        lambda *args: (_ for _ in ()).throw(RenderCancelledError("cancelled")),
+    )
+
+    with pytest.raises(RenderCancelledError):
+        service._normalize_clips(
+            [{"file_path": str(source)}],
+            1920,
+            1080,
+            30.0,
+            None,
+        )
+
+    assert not (service.temp_dir / "norm_0.mp4").exists()
 
 
 def test_missing_clip_fails_before_probe_or_media_work(

@@ -185,6 +185,7 @@ public class SSEClient : IDisposable
 
                 var eventType = "message";
                 var dataBuilder = new StringBuilder();
+                long pendingEventId = 0;
 
                 while (!ct.IsCancellationRequested)
                 {
@@ -198,8 +199,16 @@ public class SSEClient : IDisposable
 
                     if (string.IsNullOrEmpty(line))
                     {
-                        DispatchBufferedEvent(streamKind, eventType, dataBuilder);
+                        var processed = TryDispatchBufferedEvent(
+                            streamKind,
+                            eventType,
+                            dataBuilder,
+                            pendingEventId);
+                        if (pendingEventId > 0 && !processed)
+                            throw new InvalidDataException(
+                                $"SSE event {pendingEventId} could not be processed.");
                         eventType = "message";
+                        pendingEventId = 0;
                         dataBuilder.Clear();
                         continue;
                     }
@@ -220,7 +229,7 @@ public class SSEClient : IDisposable
                     if (line.StartsWith("id: ", StringComparison.Ordinal))
                     {
                         if (long.TryParse(line[4..].Trim(), out var parsedId) && parsedId > 0)
-                            RememberLastEventId(streamKind, parsedId);
+                            pendingEventId = parsedId;
                         continue;
                     }
 
@@ -232,7 +241,11 @@ public class SSEClient : IDisposable
                     }
                 }
 
-                DispatchBufferedEvent(streamKind, eventType, dataBuilder);
+                TryDispatchBufferedEvent(
+                    streamKind,
+                    eventType,
+                    dataBuilder,
+                    pendingEventId);
                 UpdateStreamState(streamKind, false, generation, markUnreachable: false);
             }
             catch (OperationCanceledException)
@@ -303,12 +316,29 @@ public class SSEClient : IDisposable
             BackendReachabilityChanged?.Invoke(this, reachabilityValue);
     }
 
-    private void DispatchBufferedEvent(StreamKind streamKind, string eventType, StringBuilder dataBuilder)
+    private void DispatchBufferedEvent(
+        StreamKind streamKind,
+        string eventType,
+        StringBuilder dataBuilder)
+    {
+        _ = TryDispatchBufferedEvent(streamKind, eventType, dataBuilder);
+    }
+
+    private bool TryDispatchBufferedEvent(
+        StreamKind streamKind,
+        string eventType,
+        StringBuilder dataBuilder,
+        long eventId = 0)
     {
         if (dataBuilder.Length == 0)
-            return;
+            return false;
 
-        ProcessEvent(streamKind, eventType, dataBuilder.ToString());
+        if (!TryProcessEvent(streamKind, eventType, dataBuilder.ToString()))
+            return false;
+
+        if (eventId > 0)
+            RememberLastEventId(streamKind, eventId);
+        return true;
     }
 
     private void LogReconnectFailure(string endpoint, int reconnectDelayMs, int reconnectAttempts, Exception ex)
@@ -348,6 +378,11 @@ public class SSEClient : IDisposable
 
     private void ProcessEvent(StreamKind streamKind, string eventType, string jsonData)
     {
+        _ = TryProcessEvent(streamKind, eventType, jsonData);
+    }
+
+    private bool TryProcessEvent(StreamKind streamKind, string eventType, string jsonData)
+    {
         try
         {
             using var json = JsonDocument.Parse(jsonData);
@@ -379,6 +414,15 @@ public class SSEClient : IDisposable
                     }
                     break;
 
+                case StreamKind.Progress when eventType == "replay_gap":
+                    ProgressReceived?.Invoke(this, new ProgressEventArgs
+                    {
+                        EventType = eventType,
+                        Status = "interrupted",
+                        Message = "Fortschrittsereignisse gingen während der Unterbrechung verloren; Status wird neu geladen.",
+                    });
+                    break;
+
                 case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "pacing_progress" or "gpu_error":
                     {
                         var pct = TryGetDouble(root, "percent");
@@ -389,7 +433,7 @@ public class SSEClient : IDisposable
                             TryGetString(root, "error"),
                             TryGetString(root, "detail"));
 
-                        bool isFinal = status == "completed" || status == "failed" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
                         bool shouldEmit = true;
 
                         if (!isFinal && !string.IsNullOrEmpty(taskId))
@@ -466,10 +510,12 @@ public class SSEClient : IDisposable
                     });
                     break;
             }
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "SSE Event Parsing fehlgeschlagen ({StreamKind}): {Data}", streamKind, jsonData);
+            return false;
         }
     }
 
@@ -546,7 +592,16 @@ public class SSEClient : IDisposable
         {
             // Wait up to 2 s for listen tasks to observe CancellationToken and exit cleanly
             // before we dispose the HttpClient they are using (CRITICAL-001 fix).
-            Task.WaitAll([.. _listenTasks], TimeSpan.FromSeconds(2));
+            try
+            {
+                Task.WaitAll([.. _listenTasks], TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException ex) when (
+                ex.Flatten().InnerExceptions.All(
+                    static inner => inner is OperationCanceledException))
+            {
+                // Erwarteter Stop-Pfad: Reconnect-Delay beobachtet das CancellationToken.
+            }
             _listenTasks.Clear();
         }
         _httpClient.Dispose();

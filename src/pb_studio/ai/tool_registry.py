@@ -23,8 +23,10 @@ import json
 import logging
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Iterator, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -46,14 +48,28 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ----------------------------------------------------------------------
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8765"
+_project_capability: ContextVar[str | None] = ContextVar(
+    "pb_studio_chat_project_capability",
+    default=None,
+)
 
 
 def _get_backend_base_url() -> str:
     return os.environ.get("PBSTUDIO_BACKEND_URL", DEFAULT_BACKEND_BASE_URL)
 
 
+@contextmanager
+def project_capability_scope(capability: str | None) -> Iterator[None]:
+    """Bindet die Projekt-Capability an alle Loopbacks dieses Tool-Dispatches."""
+    token = _project_capability.set(capability)
+    try:
+        yield
+    finally:
+        _project_capability.reset(token)
+
+
 def _owner_headers_for_loopback(url: str) -> dict[str, str]:
-    """Return backend capability only for PB Studio's canonical loopback target."""
+    """Return internal capabilities only for PB Studio's canonical loopback."""
     parsed = urlparse(url)
     try:
         port = parsed.port
@@ -71,8 +87,16 @@ def _owner_headers_for_loopback(url: str) -> dict[str, str]:
         get_owner_capability,
     )
 
-    capability = get_owner_capability()
-    return {OWNER_CAPABILITY_HEADER: capability} if capability else {}
+    headers: dict[str, str] = {}
+    owner_capability = get_owner_capability()
+    if owner_capability:
+        headers[OWNER_CAPABILITY_HEADER] = owner_capability
+    project_capability = _project_capability.get()
+    if project_capability:
+        from backend.app_state import PROJECT_CAPABILITY_HEADER
+
+        headers[PROJECT_CAPABILITY_HEADER] = project_capability
+    return headers
 
 
 # ----------------------------------------------------------------------
@@ -1038,4 +1062,5 @@ __all__ = [
     "ToolHandler",
     "build_default_registry",
     "DEFAULT_BACKEND_BASE_URL",
+    "project_capability_scope",
 ]

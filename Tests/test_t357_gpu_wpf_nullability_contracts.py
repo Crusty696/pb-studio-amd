@@ -225,8 +225,13 @@ def test_directml_consumers_share_provider_and_disable_both_session_flags(
     source = consumer_path.read_text(encoding="utf-8")
     central = _read("src/pb_studio/core/directml_adapter.py")
 
-    assert "get_directml_provider" in source
-    assert "get_directml_provider()" in source
+    if consumer_path.name == "siglip_wrapper.py":
+        assert "from pb_studio.core.model_loader import ModelLoader" in source
+        assert 'loader.load_model("siglip_vision", force=True)' in source
+        assert "ort.InferenceSession(" not in source
+    else:
+        assert "get_directml_provider" in source
+        assert "get_directml_provider()" in source
     assert "enable_mem_pattern = False" in central
     assert "enable_cpu_mem_arena = False" in central
     assert '"session.disable_cpu_ep_fallback"' in central
@@ -243,6 +248,8 @@ def test_directml_consumers_share_provider_and_disable_both_session_flags(
         assert "enforce_directml_session" in source
         assert "_directml_session_created" in source
         assert "PyTorch CPU conversion is disabled" in source
+    elif consumer_path.name == "siglip_wrapper.py":
+        assert "enforce_directml_session" in source
     elif consumer_path.name != "clap_wrapper.py":
         assert "providers=providers" in source
         assert "configure_directml_session_options" in source
@@ -613,7 +620,7 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
         ),
     ),
 )
-def test_video_batch_counts_success_only_after_non_null_analysis(
+def test_video_batch_retries_requested_stages_and_counts_success_only_after_non_null_analysis(
     method_marker: str,
     next_marker: str,
     status_prefix: str,
@@ -642,8 +649,9 @@ def test_video_batch_counts_success_only_after_non_null_analysis(
     assert apply_result < partial_branch < success_increment
     assert "clip.IsAnalyzed = IsCompleted(result);" in source
     assert method.count("failed++;") >= 3
-    assert "skipped++; done++; continue;" in method
+    assert "if (target.IsAnalyzed)" not in method
+    assert "skipped++" not in method
     assert status_prefix in method
     assert "{succeeded} erfolgreich" in method
     assert "{failed} fehlgeschlagen" in method
-    assert "{skipped} \u00fcbersprungen" in method
+    assert "{skipped}" not in method

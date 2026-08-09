@@ -15,6 +15,19 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def _bounded_duration(
+    total_frames: int,
+    fps: float,
+    duration_seconds: Optional[float] = None,
+) -> float:
+    decoded_duration = total_frames / fps if total_frames > 0 and fps > 0 else 0.0
+    if duration_seconds is None or duration_seconds <= 0:
+        return decoded_duration
+    if decoded_duration <= 0:
+        return duration_seconds
+    return min(decoded_duration, duration_seconds)
+
+
 class FrameGrabber:
     """Extrahiert Frames aus Videos mittels OpenCV."""
 
@@ -23,7 +36,8 @@ class FrameGrabber:
 
     def extract_batch(
         self, video_path: str, start_time: float, end_time: float,
-        count: Optional[int] = None
+        count: Optional[int] = None,
+        duration_seconds: Optional[float] = None,
     ) -> List[Image.Image]:
         video_path = Path(video_path)
         count = count or self.default_count
@@ -41,7 +55,7 @@ class FrameGrabber:
 
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = total_frames / fps if fps > 0 else 0
+            duration = _bounded_duration(total_frames, fps, duration_seconds)
 
             if end_time > duration:
                 logger.warning(f"end_time ({end_time:.2f}s) > Dauer ({duration:.2f}s)")
@@ -102,7 +116,11 @@ class FrameGrabber:
                 cap.release()
 
     def extract_thumbnail_strip(
-        self, video_path: str, n: int = 8, size: tuple = (160, 90)
+        self,
+        video_path: str,
+        n: int = 8,
+        size: tuple = (160, 90),
+        duration_seconds: Optional[float] = None,
     ) -> list:
         """Extract N evenly-spaced thumbnails across the full video.
 
@@ -123,7 +141,7 @@ class FrameGrabber:
         try:
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-            duration = total / fps if fps > 0 else 0.0
+            duration = _bounded_duration(total, fps, duration_seconds)
             if total <= 0 or duration <= 0:
                 return []
 

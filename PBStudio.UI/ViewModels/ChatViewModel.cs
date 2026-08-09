@@ -25,11 +25,14 @@ namespace PBStudio.UI.ViewModels;
 public partial class ChatViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private readonly ProjectService _projects;
     private readonly ILogger<ChatViewModel>? _logger;
     private CancellationTokenSource? _streamCts;
     private int _streamGeneration;
     private bool _isClearing;
+    private bool _isProjectTransitioning;
     private bool _disposed;
+    private string? _projectPath;
 
     [ObservableProperty] private string _inputText = string.Empty;
     [ObservableProperty] private bool _isStreaming;
@@ -41,11 +44,62 @@ public partial class ChatViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<string> Modes { get; } = new[] { "speed", "balance", "quality" };
 
-    public ChatViewModel(IApiClient api, ILogger<ChatViewModel>? logger = null)
+    public ChatViewModel(
+        IApiClient api,
+        ProjectService projects,
+        ILogger<ChatViewModel>? logger = null)
     {
         _api = api;
+        _projects = projects;
         _logger = logger;
+        _projectPath = projects.CurrentProjectPath;
+        _projects.ProjectTransitionStarted += OnProjectTransitionStarted;
+        _projects.ProjectChanged += OnProjectChanged;
         AddWelcomeMessage();
+    }
+
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+
+        _isProjectTransitioning = true;
+        SendCommand.NotifyCanExecuteChanged();
+        Interlocked.Increment(ref _streamGeneration);
+        _streamCts?.Cancel();
+        foreach (var message in Messages.Where(message => message.IsStreaming))
+        {
+            message.SetError("Abgebrochen: Projektwechsel");
+            message.MarkComplete();
+        }
+        IsStreaming = false;
+        StatusText = "Projektwechsel: Chat angehalten.";
+    }
+
+    private void OnProjectChanged(object? sender, ProjectInfo? project)
+    {
+        if (_disposed) return;
+
+        _isProjectTransitioning = false;
+        SendCommand.NotifyCanExecuteChanged();
+        var nextPath = project?.Path;
+        if (string.Equals(
+                _projectPath,
+                nextPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _projectPath = nextPath;
+        Interlocked.Increment(ref _streamGeneration);
+        _streamCts?.Cancel();
+        Messages.Clear();
+        AddWelcomeMessage();
+        CurrentModel = null;
+        IsStreaming = false;
+        StatusText = project is null
+            ? "Kein Projekt geoeffnet."
+            : "Bereit. Frag mich was zu deinem Projekt.";
     }
 
     private void AddWelcomeMessage()
@@ -63,6 +117,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     public bool CanSend =>
         !IsStreaming &&
         !_isClearing &&
+        !_isProjectTransitioning &&
         !string.IsNullOrWhiteSpace(InputText);
 
     partial void OnInputTextChanged(string value) => SendCommand.NotifyCanExecuteChanged();
@@ -107,6 +162,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         var textBuilder = new System.Text.StringBuilder();
         var toolCalls = new List<ToolCallInfo>();
         string? errorMessage = null;
+        var receivedDone = false;
 
         try
         {
@@ -190,6 +246,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                         StatusText = $"Fehler: {errorMessage}";
                         break;
                     case ChatEventType.Done:
+                        receivedDone = true;
                         if (!string.IsNullOrEmpty(ev.Text) && textBuilder.Length == 0)
                         {
                             textBuilder.Append(ev.Text);
@@ -198,17 +255,42 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                         break;
                 }
             }
+            if (!_disposed
+                && generation == Volatile.Read(ref _streamGeneration)
+                && token.IsCancellationRequested)
+            {
+                errorMessage = "Abgebrochen";
+                assistantVm.AppendContent("\n[abgebrochen]");
+                StatusText = "Chat abgebrochen.";
+            }
+            else if (!_disposed
+                && generation == Volatile.Read(ref _streamGeneration)
+                && !receivedDone
+                && errorMessage is null)
+            {
+                errorMessage = "Chat-Stream wurde ohne Abschluss beendet.";
+                assistantVm.SetError(errorMessage);
+                StatusText = errorMessage;
+            }
         }
         catch (OperationCanceledException)
         {
             if (!_disposed && generation == Volatile.Read(ref _streamGeneration))
+            {
+                errorMessage = "Abgebrochen";
                 assistantVm.AppendContent("\n[abgebrochen]");
+                StatusText = "Chat abgebrochen.";
+            }
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Chat-Stream fehlgeschlagen");
             if (!_disposed && generation == Volatile.Read(ref _streamGeneration))
-                assistantVm.SetError($"Chat-Stream-Fehler: {ex.Message}");
+            {
+                errorMessage = $"Chat-Stream-Fehler: {ex.Message}";
+                assistantVm.SetError(errorMessage);
+                StatusText = errorMessage;
+            }
         }
         finally
         {
@@ -229,6 +311,8 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(IsStreaming))]
     public void Stop()
     {
+        if (IsStreaming)
+            StatusText = "Chat wird abgebrochen...";
         _streamCts?.Cancel();
     }
 
@@ -276,6 +360,8 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _projects.ProjectTransitionStarted -= OnProjectTransitionStarted;
+        _projects.ProjectChanged -= OnProjectChanged;
         Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
         _streamCts = null;

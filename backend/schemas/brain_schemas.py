@@ -36,6 +36,17 @@ class BrainSuggestResponse(BaseModel):
 class BrainFeedbackRequest(BaseModel):
     cut_id: int
     rating: str = Field(..., pattern="^(perfect|fits|not_quite|no_match)$")
+    operation_id: Optional[str] = Field(
+        default=None,
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9.:-]*$",
+        description=(
+            "Retry-stabile ID eines logischen Feedback-Klicks. Derselbe Wert "
+            "mit derselben Nutzlast liefert die bestehende Quittung, ohne "
+            "erneut zu lernen."
+        ),
+    )
 
 
 class BrainFeedbackResponse(BaseModel):

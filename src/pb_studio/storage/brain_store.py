@@ -47,31 +47,43 @@ class BrainStore:
         self.patterns_path = self.brain_dir / "patterns.db"
         self.cache_path = self.brain_dir / "embedding_cache.db"
         self.embeddings_dir = self.brain_dir / "embeddings"
-
-        self._ensure_or_recover(self.weights_path, _MIG_ROOT / "weights")
-        self._ensure_or_recover(self.patterns_path, _MIG_ROOT / "patterns")
-
-        self.weights_conn = sqlite3.connect(
-            str(self.weights_path),
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        init_connection(self.weights_conn)
         self._weights_lock = __import__("threading").Lock()
-
-        self.patterns_conn = sqlite3.connect(
-            str(self.patterns_path),
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        init_connection(self.patterns_conn)
-        # AP5.5 (Audit 2026-06-10) + Review-Fix HIGH-3 (2026-07-09):
-        # Locks serialisieren close() gegen Queries. _weights_lock wird an
-        # WeightStore durchgereicht (brain_service.py); patterns_conn hat
-        # aktuell keine externen Query-Consumer.
         self._patterns_lock = __import__("threading").Lock()
+        self.weights_conn: Optional[sqlite3.Connection] = None
+        self.patterns_conn: Optional[sqlite3.Connection] = None
+        self.cache: Optional[EmbeddingCache] = None
+        self._ready = False
 
-        self.cache = EmbeddingCache(self.cache_path, self.embeddings_dir)
+        try:
+            self._ensure_or_recover(self.weights_path, _MIG_ROOT / "weights")
+            self._ensure_or_recover(self.patterns_path, _MIG_ROOT / "patterns")
+            self._ensure_or_recover(
+                self.cache_path,
+                _MIG_ROOT / "embedding_cache",
+            )
+
+            self.weights_conn = sqlite3.connect(
+                str(self.weights_path),
+                isolation_level=None,
+                check_same_thread=False,
+            )
+            init_connection(self.weights_conn)
+
+            self.patterns_conn = sqlite3.connect(
+                str(self.patterns_path),
+                isolation_level=None,
+                check_same_thread=False,
+            )
+            init_connection(self.patterns_conn)
+            # AP5.5 (Audit 2026-06-10) + Review-Fix HIGH-3 (2026-07-09):
+            # Locks serialisieren close() gegen Queries. _weights_lock wird an
+            # WeightStore durchgereicht (brain_service.py); patterns_conn hat
+            # aktuell keine externen Query-Consumer.
+            self.cache = EmbeddingCache(self.cache_path, self.embeddings_dir)
+            self._ready = True
+        except Exception:
+            self.close(create_backup=False)
+            raise
 
     def _ensure_or_recover(self, db_path: Path, mig_dir: Path) -> None:
         try:
@@ -106,7 +118,9 @@ class BrainStore:
                     db_path.unlink(missing_ok=True)
             migrate(db_path, mig_dir)
 
-    def close(self) -> None:
+    def close(self, *, create_backup: bool = True) -> None:
+        should_backup = create_backup and self._ready
+        self._ready = False
         with self._weights_lock:
             if self.weights_conn is not None:
                 try:
@@ -123,4 +137,19 @@ class BrainStore:
                     pass
                 self.patterns_conn = None
 
-        self.cache.close()
+        if self.cache is not None:
+            self.cache.close()
+            self.cache = None
+
+        if should_backup:
+            try:
+                from .backup import backup_brain_store, prune_backups
+
+                backup_root = self.brain_dir.parent / "backups"
+                backup_brain_store(
+                    self.brain_dir,
+                    backup_root,
+                )
+                prune_backups(backup_root)
+            except Exception:
+                logger.exception("Brain-Store-Backup beim Schließen fehlgeschlagen")

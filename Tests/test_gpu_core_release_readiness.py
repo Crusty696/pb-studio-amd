@@ -59,6 +59,45 @@ def test_gpu_deadline_returns_while_worker_keeps_lock() -> None:
     asyncio.run(scenario())
 
 
+def test_gpu_lock_wait_cancellation_releases_uncommitted_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend import dependencies
+
+    manager = MagicMock()
+    manager.reserve.return_value = True
+    manager.cancel_reservation.return_value = True
+    monkeypatch.setattr(
+        "pb_studio.core.vram_budget_manager.get_vram_manager",
+        lambda monitor=None: manager,
+    )
+
+    async def scenario() -> None:
+        lock = asyncio.Lock()
+        monkeypatch.setattr(dependencies, "gpu_lock", lock)
+        await lock.acquire()
+        worker_started = asyncio.Event()
+        task = asyncio.create_task(
+            dependencies.with_gpu_task(
+                lambda: None,
+                model_id="moondream_fp16",
+                timeout_seconds=1,
+                worker_started_event=worker_started,
+            )
+        )
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert not worker_started.is_set()
+        assert lock.locked()
+        manager.cancel_reservation.assert_called_once_with("moondream_fp16")
+        lock.release()
+
+    asyncio.run(scenario())
+
+
 def test_failed_eviction_callback_keeps_committed_accounting() -> None:
     VRAMBudgetManager.reset_for_testing()
     manager = VRAMBudgetManager(max_vram_mb=2500)
@@ -191,6 +230,32 @@ def test_model_loader_unload_requires_release_confirmation(
     monkeypatch.setattr("gc.collect", lambda: 0)
 
     assert loader._do_unload("test") is False
+    loader.vram_manager.release.assert_called_once_with("test")
+
+
+def test_model_loader_clears_external_session_owner_before_release() -> None:
+    class Owner:
+        def __init__(self, session) -> None:
+            self.session = session
+            self.release_order: list[str] = []
+
+        def release(self, model_id: str) -> None:
+            self.release_order.append(model_id)
+            self.session = None
+
+    session = object()
+    owner = Owner(session)
+    loader = object.__new__(ModelLoader)
+    loader._sessions = {"test": session}
+    loader._session_owner_callbacks = {}
+    loader._session_lock = threading.RLock()
+    loader.vram_manager = MagicMock()
+    loader.vram_manager.release.side_effect = lambda _model_id: owner.session is None
+    loader.register_session_owner("test", owner.release)
+
+    assert loader._do_unload("test") is True
+    assert owner.session is None
+    assert owner.release_order == ["test"]
     loader.vram_manager.release.assert_called_once_with("test")
 
 

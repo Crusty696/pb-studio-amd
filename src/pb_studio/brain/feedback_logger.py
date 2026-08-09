@@ -8,6 +8,7 @@ then inserted idempotently into the project state DB.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -15,12 +16,14 @@ import os
 import sqlite3
 import threading
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
 from .bridge_dimensions import BRIDGE_AXES
 from .weight_store import WeightStore
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,16 @@ _CONTEXT_LEVEL_WEIGHTS = {
 }
 
 
+class FeedbackOperationConflictError(ValueError):
+    """A caller operation ID was reused with a different feedback payload."""
+
+
+@dataclass(frozen=True)
+class FeedbackLogResult:
+    updated_buckets: int
+    applied: bool
+
+
 class FeedbackLogger:
     """Persist raw feedback and Beta-Bernoulli updates crash-consistently."""
 
@@ -76,6 +89,7 @@ class FeedbackLogger:
             if outbox_path is not None
             else self._default_outbox_path(state_conn)
         )
+        self.receipt_path = self.outbox_path.with_name("feedback_receipts.json")
         self._fault_injector = fault_injector
 
     def log_feedback(
@@ -86,25 +100,94 @@ class FeedbackLogger:
         context_keys: list[str],
         assignments: list[dict],
         timestamp: Optional[str] = None,
+        operation_id: Optional[str] = None,
     ) -> int:
+        return self.log_feedback_result(
+            cut_id=cut_id,
+            rating=rating,
+            context_keys=context_keys,
+            assignments=assignments,
+            timestamp=timestamp,
+            operation_id=operation_id,
+        ).updated_buckets
+
+    def lookup_feedback_result(
+        self,
+        *,
+        operation_id: str,
+        cut_id: int,
+        rating: str,
+    ) -> Optional[FeedbackLogResult]:
+        """Return a durable prior result before current cut evidence is read."""
+        if rating not in RATING_MAP:
+            raise ValueError(f"unknown rating: {rating}")
+        caller_operation_id = self._validate_client_operation_id(operation_id)
+        if caller_operation_id is None:
+            return None
+        project_uuid = self._state_project_uuid(self.state_conn)
+        request_fingerprint = self._request_fingerprint(
+            project_uuid=project_uuid,
+            cut_id=cut_id,
+            rating=rating,
+        )
+        with _OUTBOX_LOCK:
+            self._recover_pending_locked()
+            return self._result_from_receipt(
+                caller_operation_id,
+                request_fingerprint,
+            )
+
+    @recovery_write_operation("brain-feedback")
+    def log_feedback_result(
+        self,
+        *,
+        cut_id: int,
+        rating: str,
+        context_keys: list[str],
+        assignments: list[dict],
+        timestamp: Optional[str] = None,
+        operation_id: Optional[str] = None,
+    ) -> FeedbackLogResult:
         """Apply one feedback event once, even across process interruption."""
         if rating not in RATING_MAP:
             raise ValueError(f"unknown rating: {rating}")
         if not context_keys:
             context_keys = [""]
-        if not assignments:
-            raise ValueError("feedback requires at least one relevant credit assignment")
 
+        caller_operation_id = self._validate_client_operation_id(operation_id)
+        state_db_path = self._connection_path(self.state_conn)
+        project_uuid = self._state_project_uuid(self.state_conn)
+        request_fingerprint = self._request_fingerprint(
+            project_uuid=project_uuid,
+            cut_id=cut_id,
+            rating=rating,
+        )
         with _OUTBOX_LOCK:
             self._recover_pending_locked()
+            if caller_operation_id is not None:
+                receipt = self._result_from_receipt(
+                    caller_operation_id,
+                    request_fingerprint,
+                )
+                if receipt is not None:
+                    return receipt
+            if not assignments:
+                raise ValueError(
+                    "Cut has no relevant, available Brain feature evidence; "
+                    "feedback was not applied"
+                )
 
             alpha_delta, beta_delta = RATING_MAP[rating]
             ts = timestamp or self._unique_timestamp(self.state_conn)
             operation = {
                 "schema_version": _OUTBOX_SCHEMA_VERSION,
                 "operation_id": uuid.uuid4().hex,
+                "event_uuid": str(uuid.uuid4()),
+                "project_uuid": project_uuid,
+                "caller_operation_id": caller_operation_id,
+                "request_fingerprint": request_fingerprint,
                 "stage": "prepared",
-                "state_db_path": self._connection_path(self.state_conn),
+                "state_db_path": state_db_path,
                 "cut_id": int(cut_id),
                 "rating": rating,
                 "alpha_delta": float(alpha_delta),
@@ -134,9 +217,13 @@ class FeedbackLogger:
                 self._clear_outbox()
                 raise
             self._inject_fault("after_event_insert")
+            self._record_feedback_receipt(operation)
             self._clear_outbox()
 
-        return len(operation["before"])
+        return FeedbackLogResult(
+            updated_buckets=len(operation["before"]),
+            applied=True,
+        )
 
     def recover_pending(self) -> bool:
         """Complete or compensate one durable operation. Returns recovery work."""
@@ -180,6 +267,8 @@ class FeedbackLogger:
                     operation["operation_id"],
                     operation["cut_id"],
                 )
+            else:
+                self._record_feedback_receipt(operation)
             self._clear_outbox()
             return True
         finally:
@@ -352,10 +441,51 @@ class FeedbackLogger:
                 raise
         self.weights._invalidate()
 
-    @staticmethod
+    @classmethod
     def _ensure_feedback_event(
-        conn: sqlite3.Connection, operation: dict,
+        cls, conn: sqlite3.Connection, operation: dict,
     ) -> None:
+        project_uuid = operation.get("project_uuid") or cls._state_project_uuid(conn)
+        project_uuid = str(uuid.UUID(str(project_uuid)))
+        raw_event_uuid = operation.get("event_uuid")
+        event_uuid = (
+            str(uuid.UUID(str(raw_event_uuid)))
+            if raw_event_uuid
+            else str(
+                uuid.uuid5(
+                    uuid.UUID(project_uuid),
+                    f"outbox:{operation['operation_id']}",
+                )
+            )
+        )
+        operation["project_uuid"] = project_uuid
+        operation["event_uuid"] = event_uuid
+        existing_event = conn.execute(
+            "SELECT project_uuid FROM feedback_events WHERE event_uuid=?",
+            (event_uuid,),
+        ).fetchone()
+        if existing_event is not None:
+            if str(existing_event[0]) != project_uuid:
+                raise FeedbackOperationConflictError(
+                    "Brain feedback event_uuid belongs to another project"
+                )
+            return
+
+        caller_operation_id = operation.get("caller_operation_id")
+        if caller_operation_id:
+            receipt = cls._find_event_receipt(conn, caller_operation_id)
+            if receipt is not None:
+                if (
+                    receipt.get("request_fingerprint")
+                    != operation.get("request_fingerprint")
+                ):
+                    raise FeedbackOperationConflictError(
+                        "Brain feedback operation_id was already used with "
+                        "a different request"
+                    )
+                return
+
+        context_payload = cls._feedback_context_json(operation)
         exists = conn.execute(
             "SELECT 1 FROM feedback_events WHERE cut_id=? AND rating=? "
             "AND alpha_delta=? AND beta_delta=? AND context_keys_json=? "
@@ -363,7 +493,7 @@ class FeedbackLogger:
             (
                 int(operation["cut_id"]), operation["rating"],
                 float(operation["alpha_delta"]), float(operation["beta_delta"]),
-                json.dumps(operation["context_keys"]),
+                context_payload,
                 operation["timestamp"],
             ),
         ).fetchone()
@@ -377,14 +507,167 @@ class FeedbackLogger:
             raise LookupError(f"Cut {operation['cut_id']} no longer exists")
         conn.execute(
             "INSERT INTO feedback_events (cut_id, rating, alpha_delta, "
-            "beta_delta, context_keys_json, timestamp) VALUES (?,?,?,?,?,?)",
+            "beta_delta, context_keys_json, timestamp, project_uuid, event_uuid) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 int(operation["cut_id"]), operation["rating"],
                 float(operation["alpha_delta"]), float(operation["beta_delta"]),
-                json.dumps(operation["context_keys"]),
+                context_payload,
                 operation["timestamp"],
+                project_uuid,
+                event_uuid,
             ),
         )
+
+    @staticmethod
+    def _feedback_context_json(operation: dict) -> str:
+        caller_operation_id = operation.get("caller_operation_id")
+        if not caller_operation_id:
+            return json.dumps(operation["context_keys"])
+        return json.dumps(
+            {
+                "context_keys": list(operation["context_keys"]),
+                "operation_id": str(caller_operation_id),
+                "request_fingerprint": str(operation["request_fingerprint"]),
+                "schema_version": 2,
+                "updated_buckets": len(operation["before"]),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def _find_event_receipt(
+        conn: sqlite3.Connection,
+        operation_id: str,
+    ) -> Optional[dict]:
+        rows = conn.execute(
+            "SELECT context_keys_json FROM feedback_events "
+            "WHERE context_keys_json LIKE ? ORDER BY id DESC",
+            (f"%{operation_id}%",),
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row[0])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if (
+                isinstance(payload, dict)
+                and payload.get("operation_id") == operation_id
+                and payload.get("schema_version") == 2
+            ):
+                return payload
+        return None
+
+    def _result_from_receipt(
+        self,
+        operation_id: str,
+        request_fingerprint: str,
+    ) -> Optional[FeedbackLogResult]:
+        receipt = self._read_feedback_receipts().get(operation_id)
+        if receipt is None:
+            receipt = self._find_event_receipt(self.state_conn, operation_id)
+        if receipt is None:
+            return None
+        if receipt.get("request_fingerprint") != request_fingerprint:
+            raise FeedbackOperationConflictError(
+                "Brain feedback operation_id was already used with "
+                "a different request"
+            )
+        return FeedbackLogResult(
+            updated_buckets=int(receipt.get("updated_buckets", 0)),
+            applied=False,
+        )
+
+    def _record_feedback_receipt(self, operation: dict) -> None:
+        operation_id = operation.get("caller_operation_id")
+        if not operation_id:
+            return
+        receipts = self._read_feedback_receipts()
+        existing = receipts.get(operation_id)
+        receipt = {
+            "cut_id": int(operation["cut_id"]),
+            "rating": str(operation["rating"]),
+            "request_fingerprint": str(operation["request_fingerprint"]),
+            "state_db_path": str(operation["state_db_path"]),
+            "project_uuid": str(operation["project_uuid"]),
+            "event_uuid": str(operation["event_uuid"]),
+            "timestamp": str(operation["timestamp"]),
+            "updated_buckets": len(operation["before"]),
+        }
+        if existing is not None:
+            if existing.get("request_fingerprint") != receipt["request_fingerprint"]:
+                raise FeedbackOperationConflictError(
+                    "Brain feedback operation_id was already used with "
+                    "a different request"
+                )
+            return
+        receipts[operation_id] = receipt
+        self._write_feedback_receipts(receipts)
+
+    def _read_feedback_receipts(self) -> dict[str, dict]:
+        if not self.receipt_path.is_file():
+            return {}
+        try:
+            payload = json.loads(self.receipt_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise RuntimeError(
+                f"Brain feedback receipts are unreadable: {self.receipt_path}"
+            ) from exc
+        if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+            raise RuntimeError("Unsupported Brain feedback receipt schema")
+        receipts = payload.get("receipts")
+        if not isinstance(receipts, dict):
+            raise RuntimeError("Invalid Brain feedback receipt store")
+        return receipts
+
+    def _write_feedback_receipts(self, receipts: dict[str, dict]) -> None:
+        self.receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        temp = self.receipt_path.with_suffix(self.receipt_path.suffix + ".tmp")
+        with temp.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(
+                {"receipts": receipts, "schema_version": 1},
+                handle,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, self.receipt_path)
+
+    @staticmethod
+    def _request_fingerprint(
+        *,
+        project_uuid: str,
+        cut_id: int,
+        rating: str,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "cut_id": int(cut_id),
+                "rating": str(rating),
+                "project_uuid": str(uuid.UUID(str(project_uuid))),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    @staticmethod
+    def _validate_client_operation_id(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if not 16 <= len(normalized) <= 128:
+            raise ValueError("operation_id must contain 16 to 128 characters")
+        allowed = set(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:-"
+        )
+        if normalized[0] not in allowed or any(ch not in allowed for ch in normalized):
+            raise ValueError("operation_id contains unsupported characters")
+        return normalized
 
     def _open_target_state(
         self, operation: dict,
@@ -443,6 +726,11 @@ class FeedbackLogger:
             raise RuntimeError("Invalid Brain feedback outbox stage")
         if operation["rating"] not in RATING_MAP:
             raise RuntimeError("Invalid Brain feedback rating in outbox")
+        caller_operation_id = operation.get("caller_operation_id")
+        if caller_operation_id is not None:
+            FeedbackLogger._validate_client_operation_id(caller_operation_id)
+            if not operation.get("request_fingerprint"):
+                raise RuntimeError("Brain feedback outbox lacks request fingerprint")
 
     @staticmethod
     def _connection_path(conn: sqlite3.Connection) -> str:
@@ -451,6 +739,25 @@ class FeedbackLogger:
             if name == "main" and path:
                 return str(Path(path).resolve())
         raise RuntimeError("Durable Brain feedback requires a file-backed state DB")
+
+    @classmethod
+    def _state_project_uuid(cls, conn: sqlite3.Connection) -> str:
+        row = conn.execute(
+            "SELECT project_uuid FROM project_identity WHERE singleton_id=1"
+        ).fetchone()
+        if row is not None:
+            return str(uuid.UUID(str(row[0])))
+        state_path = Path(cls._connection_path(conn)).resolve()
+        fallback = str(uuid.uuid5(uuid.NAMESPACE_URL, state_path.as_uri()))
+        conn.execute(
+            "INSERT INTO project_identity(singleton_id, project_uuid) VALUES (1, ?)",
+            (fallback,),
+        )
+        logger.warning(
+            "Feedback state %s had no catalog identity; initialized standalone UUID",
+            state_path,
+        )
+        return fallback
 
     @classmethod
     def _default_outbox_path(cls, conn: sqlite3.Connection) -> Path:
@@ -485,15 +792,21 @@ def build_credit_assignments(
     bridge_values = metadata.get("bridge_values")
     values = bridge_values if isinstance(bridge_values, dict) else brain_scores
     axis_status = metadata.get("brain_axis_status") or {}
+    strict_axis_status = metadata.get("brain_axis_status_version") == 1
     assignments: list[dict] = []
+
+    if not isinstance(axis_status, dict):
+        return assignments
 
     for axis in BRIDGE_AXES:
         if axis not in values:
             continue
-        if axis == "semantic_match_weight":
-            status = axis_status.get(axis) if isinstance(axis_status, dict) else None
-            if not isinstance(status, dict) or status.get("status") != "available":
+        status = axis_status.get(axis)
+        if status is None:
+            if strict_axis_status:
                 continue
+        elif not isinstance(status, dict) or status.get("status") != "available":
+            continue
         try:
             relevance = float(values[axis])
         except (TypeError, ValueError):

@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
 
@@ -379,6 +380,7 @@ def _repository_head(feature: Path) -> str | None:
     return head if COMMIT_RE.fullmatch(head) else None
 
 
+@lru_cache(maxsize=None)
 def _repository_root(feature: Path) -> Path | None:
     result = subprocess.run(
         ["git", "-C", str(feature), "rev-parse", "--show-toplevel"],
@@ -430,17 +432,22 @@ def _qc_commit_is_current(feature: Path, commit_sha: str, head: str) -> bool:
     return result.returncode == 0 and result.stdout.strip().lower() == commit_sha
 
 
+@lru_cache(maxsize=None)
 def _git_show(feature: Path, commit_sha: str, source_path: str) -> bytes | None:
     root = _repository_root(feature)
     source = Path(source_path.replace("\\", "/"))
     if root is None or source.is_absolute() or ".." in source.parts:
         return None
     repo_relative = (feature.resolve().relative_to(root) / source).as_posix()
-    result = subprocess.run(
-        ["git", "-C", str(root), "show", f"{commit_sha}:{repo_relative}"],
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit_sha}:{repo_relative}"],
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return None
     return result.stdout if result.returncode == 0 else None
 
 
@@ -481,24 +488,49 @@ def _git_blob_sha(data: bytes) -> str:
 
 
 def _git_clean_blob_sha(feature: Path, source_path: str, archived: Path) -> str | None:
+    try:
+        stat = archived.stat()
+    except OSError:
+        return None
+    return _git_clean_blob_sha_cached(
+        feature,
+        source_path,
+        archived,
+        int(stat.st_size),
+        int(stat.st_mtime_ns),
+    )
+
+
+@lru_cache(maxsize=None)
+def _git_clean_blob_sha_cached(
+    feature: Path,
+    source_path: str,
+    archived: Path,
+    _size: int,
+    _mtime_ns: int,
+) -> str | None:
     root = _repository_root(feature)
     source = Path(source_path.replace("\\", "/"))
     if root is None or source.is_absolute() or ".." in source.parts:
         return None
     repo_relative = (feature.resolve().relative_to(root) / source).as_posix()
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(root),
-            "hash-object",
-            f"--path={repo_relative}",
-            str(archived),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "hash-object",
+                f"--path={repo_relative}",
+                str(archived),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return None
     value = result.stdout.strip().lower()
     return value if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", value) else None
 

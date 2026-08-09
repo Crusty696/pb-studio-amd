@@ -1,0 +1,1701 @@
+{
+  "visible_texts": [
+    "Systemmenü",
+    "Minimieren",
+    "Maximieren",
+    "Schließen",
+    "PB STUDIO",
+    "•",
+    "obj74_qc_20260809_001",
+    "GPU: 0/0 MB",
+    "Backend: Online",
+    "LLM: Keines (Moondream-Fallback)",
+    "Lokal (GPU)",
+    "Bereit",
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR",
+    "Einstellungen",
+    "GPU STATUS",
+    "GPU-Status aktualisieren",
+    "Inaktive GPU-Modelle entladen",
+    "Cleanup",
+    "GPU",
+    "AMD Radeon RX 7800 XT",
+    "Adapterindex",
+    "0",
+    "LUID",
+    "0x00000000_0x00010cb5",
+    "Auswahl",
+    "highest_vram_amd",
+    "DirectML",
+    "Aktiv auf ausgewähltem Adapter",
+    "Monitoring",
+    "Eingeschränkt",
+    "VRAM Gesamt",
+    "16177 MB",
+    "VRAM Belegt",
+    "0 MB",
+    "Temperatur",
+    "0 °C",
+    "Treiber",
+    "Unknown",
+    "LibreHardwareMonitor ist eingeschränkt; Details stehen im Backend-Log.",
+    "HARDWARE KONFIGURATION",
+    "VRAM Limit",
+    "15872 MB",
+    "VRAM-Limit",
+    "Bestimmt wann der Arbiter Modelle auslagert oder Anfragen ablehnt.",
+    "echt: 16177 MB",
+    "VRAM-Testwert erzwingen",
+    "VRAM erzwingen (PB_STUDIO_FORCED_VRAM)",
+    "14336 MB",
+    "Simulierter VRAM",
+    "Greift erst nach Backend-Restart. Nützlich für Tests auf kleineren GPUs.",
+    "Einstellungen speichern",
+    "_Einstellungen übernehmen",
+    "KI-MODUS",
+    "Bestimmt welches Vision-Modell die App automatisch waehlt. Wirkt sich auf Captioning und kuenftige Audio/Pacing-Tracks aus.",
+    "Modus",
+    "Balance",
+    "KI-Modus",
+    "SPEED",
+    "BALANCE",
+    "QUALITY",
+    "Mittlere Modellgroesse (z.B. gemma4:latest). Guter Kompromiss zwischen Speed und Qualitaet.",
+    "Wird beim naechsten Captioning ermittelt.",
+    "FFMPEG KONFIGURATION",
+    "Kanonische Projekt-Runtime (schreibgeschützt)",
+    "FFmpeg-Runtime prüfen",
+    "Probe",
+    "FFmpeg-Runtime-Pfad",
+    "Version: 6.1.1-essentials_build-www.gyan.dev",
+    "Manifest verifiziert · FFmpeg SHA-256 04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00 · FFprobe SHA-256 3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4 · Quelle: https://github.com/GyanD/codexffmpeg/releases/download/6.1.1/ffmpeg-6.1.1-essentials_build.zip",
+    "Settings-Datei: C:\\Users\\david\\AppData\\Roaming\\PBStudio\\settings.json",
+    "BACKEND STATUS",
+    "Online (Port 8765)",
+    "VRAM-Limit live gedrosselt auf 15872 MB.",
+    "PB STUDIO AMD EDITION",
+    "Audio-reaktiver Video-Editor mit AMD GPU-Beschleunigung",
+    "DirectML + AMF Encoding | .NET 9.0 + FastAPI",
+    "LIZENZEN & ATTRIBUTION",
+    "Audio-Embedding by  LAION CLAP  (laion/larger_clap_music) — CC-BY-4.0",
+    "https://creativecommons.org/licenses/by/4.0/",
+    "Video-Embedding by  Google SigLIP SO400M  (google/siglip-so400m-patch14-384) — Apache 2.0",
+    "https://www.apache.org/licenses/LICENSE-2.0",
+    "Hardware Encoding by  FFmpeg  (LGPL/GPL, dynamisch verlinkt)",
+    "Stem-Separation by  UVR-MDX-NET  — MIT",
+    "Volle Lizenztexte: LICENSES.md im Projekt-Root."
+  ],
+  "visible_controls": [
+    {
+      "name": "",
+      "control_type": "TitleBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 249,
+        "right": 1972,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuBar",
+      "automation_id": "MenuBar",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Minimieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1833,
+        "top": 247,
+        "right": 1880,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Maximieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1880,
+        "top": 247,
+        "right": 1926,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Schließen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1926,
+        "top": 247,
+        "right": 1973,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "PB STUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 600,
+        "top": 287,
+        "right": 660,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "•",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 660,
+        "top": 287,
+        "right": 681,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "obj74_qc_20260809_001",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 681,
+        "top": 287,
+        "right": 799,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "GPU: 0/0 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1792,
+        "top": 288,
+        "right": 1854,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Backend: Online",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1882,
+        "top": 288,
+        "right": 1960,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "",
+      "control_type": "ProgressBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1093,
+        "top": 283,
+        "right": 1493,
+        "bottom": 307
+      }
+    },
+    {
+      "name": "LLM: Keines (Moondream-Fallback)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1120,
+        "top": 288,
+        "right": 1386,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Lokal (GPU)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1396,
+        "top": 290,
+        "right": 1446,
+        "bottom": 300
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1456,
+        "top": 289,
+        "right": 1484,
+        "bottom": 301
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Tab",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 314,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 590,
+        "top": 316,
+        "right": 662,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 324,
+        "right": 648,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 662,
+        "top": 316,
+        "right": 725,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 676,
+        "top": 324,
+        "right": 711,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 316,
+        "right": 785,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 739,
+        "top": 324,
+        "right": 771,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 785,
+        "top": 316,
+        "right": 856,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 799,
+        "top": 324,
+        "right": 842,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 856,
+        "top": 316,
+        "right": 932,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 870,
+        "top": 324,
+        "right": 918,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 932,
+        "top": 316,
+        "right": 1000,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 946,
+        "top": 324,
+        "right": 986,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1000,
+        "top": 316,
+        "right": 1055,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1014,
+        "top": 324,
+        "right": 1041,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1055,
+        "top": 316,
+        "right": 1132,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1069,
+        "top": 324,
+        "right": 1118,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1132,
+        "top": 316,
+        "right": 1238,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1146,
+        "top": 324,
+        "right": 1224,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1238,
+        "top": 316,
+        "right": 1315,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1252,
+        "top": 324,
+        "right": 1301,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1315,
+        "top": 316,
+        "right": 1370,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1329,
+        "top": 324,
+        "right": 1356,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1370,
+        "top": 316,
+        "right": 1452,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1384,
+        "top": 324,
+        "right": 1438,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1452,
+        "top": 316,
+        "right": 1517,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1466,
+        "top": 324,
+        "right": 1503,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1517,
+        "top": 316,
+        "right": 1591,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1531,
+        "top": 324,
+        "right": 1577,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "Einstellungen",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Pane",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "GPU STATUS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 378,
+        "right": 1049,
+        "bottom": 391
+      }
+    },
+    {
+      "name": "GPU-Status aktualisieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1456,
+        "top": 374,
+        "right": 1482,
+        "bottom": 402
+      }
+    },
+    {
+      "name": "Inaktive GPU-Modelle entladen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1486,
+        "top": 374,
+        "right": 1557,
+        "bottom": 402
+      }
+    },
+    {
+      "name": "Cleanup",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1510,
+        "top": 382,
+        "right": 1551,
+        "bottom": 395
+      }
+    },
+    {
+      "name": "GPU",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 410,
+        "right": 1107,
+        "bottom": 426
+      }
+    },
+    {
+      "name": "AMD Radeon RX 7800 XT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 410,
+        "right": 1557,
+        "bottom": 426
+      }
+    },
+    {
+      "name": "Adapterindex",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 432,
+        "right": 1107,
+        "bottom": 447
+      }
+    },
+    {
+      "name": "0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 432,
+        "right": 1557,
+        "bottom": 447
+      }
+    },
+    {
+      "name": "LUID",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 453,
+        "right": 1107,
+        "bottom": 469
+      }
+    },
+    {
+      "name": "0x00000000_0x00010cb5",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 453,
+        "right": 1557,
+        "bottom": 469
+      }
+    },
+    {
+      "name": "Auswahl",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 475,
+        "right": 1107,
+        "bottom": 491
+      }
+    },
+    {
+      "name": "highest_vram_amd",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 475,
+        "right": 1557,
+        "bottom": 491
+      }
+    },
+    {
+      "name": "DirectML",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 497,
+        "right": 1107,
+        "bottom": 512
+      }
+    },
+    {
+      "name": "Aktiv auf ausgewähltem Adapter",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 497,
+        "right": 1557,
+        "bottom": 512
+      }
+    },
+    {
+      "name": "Monitoring",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 518,
+        "right": 1107,
+        "bottom": 534
+      }
+    },
+    {
+      "name": "Eingeschränkt",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 518,
+        "right": 1557,
+        "bottom": 534
+      }
+    },
+    {
+      "name": "VRAM Gesamt",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 540,
+        "right": 1107,
+        "bottom": 555
+      }
+    },
+    {
+      "name": "16177 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 540,
+        "right": 1557,
+        "bottom": 555
+      }
+    },
+    {
+      "name": "VRAM Belegt",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 561,
+        "right": 1107,
+        "bottom": 577
+      }
+    },
+    {
+      "name": "0 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 561,
+        "right": 1557,
+        "bottom": 577
+      }
+    },
+    {
+      "name": "Temperatur",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 583,
+        "right": 1107,
+        "bottom": 599
+      }
+    },
+    {
+      "name": "0 °C",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 583,
+        "right": 1557,
+        "bottom": 599
+      }
+    },
+    {
+      "name": "Treiber",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 605,
+        "right": 1107,
+        "bottom": 620
+      }
+    },
+    {
+      "name": "Unknown",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1107,
+        "top": 605,
+        "right": 1557,
+        "bottom": 620
+      }
+    },
+    {
+      "name": "LibreHardwareMonitor ist eingeschränkt; Details stehen im Backend-Log.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 628,
+        "right": 1557,
+        "bottom": 640
+      }
+    },
+    {
+      "name": "HARDWARE KONFIGURATION",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 678,
+        "right": 1557,
+        "bottom": 691
+      }
+    },
+    {
+      "name": "VRAM Limit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 703,
+        "right": 1044,
+        "bottom": 717
+      }
+    },
+    {
+      "name": "15872 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1495,
+        "top": 703,
+        "right": 1557,
+        "bottom": 719
+      }
+    },
+    {
+      "name": "VRAM-Limit",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 725,
+        "right": 1557,
+        "bottom": 745
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 725,
+        "right": 1235,
+        "bottom": 745
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 1253,
+        "top": 725,
+        "right": 1557,
+        "bottom": 745
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1235,
+        "top": 725,
+        "right": 1253,
+        "bottom": 745
+      }
+    },
+    {
+      "name": "Bestimmt wann der Arbiter Modelle auslagert oder Anfragen ablehnt.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 747,
+        "right": 1292,
+        "bottom": 759
+      }
+    },
+    {
+      "name": "echt: 16177 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1488,
+        "top": 747,
+        "right": 1557,
+        "bottom": 759
+      }
+    },
+    {
+      "name": "VRAM-Testwert erzwingen",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 775,
+        "right": 1232,
+        "bottom": 793
+      }
+    },
+    {
+      "name": "VRAM erzwingen (PB_STUDIO_FORCED_VRAM)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1009,
+        "top": 778,
+        "right": 1232,
+        "bottom": 792
+      }
+    },
+    {
+      "name": "14336 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1495,
+        "top": 775,
+        "right": 1557,
+        "bottom": 793
+      }
+    },
+    {
+      "name": "Simulierter VRAM",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 797,
+        "right": 1557,
+        "bottom": 817
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 797,
+        "right": 1207,
+        "bottom": 817
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 1225,
+        "top": 797,
+        "right": 1557,
+        "bottom": 817
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1207,
+        "top": 797,
+        "right": 1225,
+        "bottom": 817
+      }
+    },
+    {
+      "name": "Greift erst nach Backend-Restart. Nützlich für Tests auf kleineren GPUs.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 819,
+        "right": 1557,
+        "bottom": 831
+      }
+    },
+    {
+      "name": "Einstellungen speichern",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 847,
+        "right": 1557,
+        "bottom": 879
+      }
+    },
+    {
+      "name": "_Einstellungen übernehmen",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1186,
+        "top": 855,
+        "right": 1357,
+        "bottom": 871
+      }
+    },
+    {
+      "name": "KI-MODUS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 917,
+        "right": 1557,
+        "bottom": 930
+      }
+    },
+    {
+      "name": "Bestimmt welches Vision-Modell die App automatisch waehlt. Wirkt sich auf Captioning und kuenftige Audio/Pacing-Tracks aus.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 938,
+        "right": 1557,
+        "bottom": 965
+      }
+    },
+    {
+      "name": "Modus",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 975,
+        "right": 1020,
+        "bottom": 988
+      }
+    },
+    {
+      "name": "Balance",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1509,
+        "top": 975,
+        "right": 1557,
+        "bottom": 990
+      }
+    },
+    {
+      "name": "KI-Modus",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 994,
+        "right": 1557,
+        "bottom": 1020
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 994,
+        "right": 1263,
+        "bottom": 1014
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 1281,
+        "top": 994,
+        "right": 1557,
+        "bottom": 1014
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1263,
+        "top": 994,
+        "right": 1281,
+        "bottom": 1014
+      }
+    },
+    {
+      "name": "SPEED",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1022,
+        "right": 1015,
+        "bottom": 1034
+      }
+    },
+    {
+      "name": "BALANCE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1250,
+        "top": 1022,
+        "right": 1293,
+        "bottom": 1034
+      }
+    },
+    {
+      "name": "QUALITY",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1518,
+        "top": 1022,
+        "right": 1557,
+        "bottom": 1034
+      }
+    },
+    {
+      "name": "Mittlere Modellgroesse (z.B. gemma4:latest). Guter Kompromiss zwischen Speed und Qualitaet.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1042,
+        "right": 1557,
+        "bottom": 1055
+      }
+    },
+    {
+      "name": "Wird beim naechsten Captioning ermittelt.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1015,
+        "top": 1070,
+        "right": 1220,
+        "bottom": 1084
+      }
+    },
+    {
+      "name": "FFMPEG KONFIGURATION",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1129,
+        "right": 1557,
+        "bottom": 1142
+      }
+    },
+    {
+      "name": "Kanonische Projekt-Runtime (schreibgeschützt)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1150,
+        "right": 1557,
+        "bottom": 1163
+      }
+    },
+    {
+      "name": "FFmpeg-Runtime prüfen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1493,
+        "top": 1167,
+        "right": 1557,
+        "bottom": 1195
+      }
+    },
+    {
+      "name": "Probe",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1519,
+        "top": 1174,
+        "right": 1549,
+        "bottom": 1188
+      }
+    },
+    {
+      "name": "FFmpeg-Runtime-Pfad",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1167,
+        "right": 1489,
+        "bottom": 1195
+      }
+    },
+    {
+      "name": "Version: 6.1.1-essentials_build-www.gyan.dev",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1003,
+        "top": 1203,
+        "right": 1220,
+        "bottom": 1216
+      }
+    },
+    {
+      "name": "Manifest verifiziert · FFmpeg SHA-256 04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00 · FFprobe SHA-256 3A7E2DC003DC2CD1472827E4C7C4F056AE1AE0AE7C5BBC580C99B49827351BA4 · Quelle: https://github.com/GyanD/codexffmpeg/releases/download/6.1.1/ffmpeg-6.1.1-essentials_build.zip",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1218,
+        "right": 1557,
+        "bottom": 1254
+      }
+    },
+    {
+      "name": "Settings-Datei: C:\\Users\\david\\AppData\\Roaming\\PBStudio\\settings.json",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1003,
+        "top": 1289,
+        "right": 1322,
+        "bottom": 1301
+      }
+    },
+    {
+      "name": "BACKEND STATUS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1336,
+        "right": 1557,
+        "bottom": 1349
+      }
+    },
+    {
+      "name": "Online (Port 8765)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1005,
+        "top": 1357,
+        "right": 1108,
+        "bottom": 1373
+      }
+    },
+    {
+      "name": "VRAM-Limit live gedrosselt auf 15872 MB.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1379,
+        "right": 1557,
+        "bottom": 1392
+      }
+    },
+    {
+      "name": "PB STUDIO AMD EDITION",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1186,
+        "top": 1430,
+        "right": 1357,
+        "bottom": 1447
+      }
+    },
+    {
+      "name": "Audio-reaktiver Video-Editor mit AMD GPU-Beschleunigung",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1126,
+        "top": 1451,
+        "right": 1417,
+        "bottom": 1464
+      }
+    },
+    {
+      "name": "DirectML + AMF Encoding | .NET 9.0 + FastAPI",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1159,
+        "top": 1466,
+        "right": 1384,
+        "bottom": 1479
+      }
+    },
+    {
+      "name": "LIZENZEN & ATTRIBUTION",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1517,
+        "right": 1557,
+        "bottom": 1531
+      }
+    },
+    {
+      "name": "Audio-Embedding by  LAION CLAP  (laion/larger_clap_music) — CC-BY-4.0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1539,
+        "right": 1557,
+        "bottom": 1555
+      }
+    },
+    {
+      "name": "https://creativecommons.org/licenses/by/4.0/",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1559,
+        "right": 1557,
+        "bottom": 1573
+      }
+    },
+    {
+      "name": "Video-Embedding by  Google SigLIP SO400M  (google/siglip-so400m-patch14-384) — Apache 2.0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1581,
+        "right": 1557,
+        "bottom": 1614
+      }
+    },
+    {
+      "name": "https://www.apache.org/licenses/LICENSE-2.0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1618,
+        "right": 1557,
+        "bottom": 1631
+      }
+    },
+    {
+      "name": "Hardware Encoding by  FFmpeg  (LGPL/GPL, dynamisch verlinkt)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1639,
+        "right": 1557,
+        "bottom": 1656
+      }
+    },
+    {
+      "name": "Stem-Separation by  UVR-MDX-NET  — MIT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1660,
+        "right": 1557,
+        "bottom": 1677
+      }
+    },
+    {
+      "name": "Volle Lizenztexte: LICENSES.md im Projekt-Root.",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 987,
+        "top": 1689,
+        "right": 1557,
+        "bottom": 1702
+      }
+    },
+    {
+      "name": "",
+      "control_type": "ScrollBar",
+      "automation_id": "VerticalScrollBar",
+      "enabled": true,
+      "rectangle": {
+        "left": 1955,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PART_LineUpButton",
+      "enabled": false,
+      "rectangle": {
+        "left": 1955,
+        "top": 347,
+        "right": 1972,
+        "bottom": 367
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PageUp",
+      "enabled": false,
+      "rectangle": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PageDown",
+      "enabled": false,
+      "rectangle": {
+        "left": 1955,
+        "top": 768,
+        "right": 1972,
+        "bottom": 1097
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": false,
+      "rectangle": {
+        "left": 1955,
+        "top": 364,
+        "right": 1972,
+        "bottom": 768
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PART_LineDownButton",
+      "enabled": false,
+      "rectangle": {
+        "left": 1955,
+        "top": 1097,
+        "right": 1972,
+        "bottom": 1117
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 598,
+        "top": 1121,
+        "right": 1962,
+        "bottom": 1133
+      }
+    }
+  ],
+  "tab": "SETTINGS",
+  "selected": true
+}

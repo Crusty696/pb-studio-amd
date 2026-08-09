@@ -1,144 +1,279 @@
-# PB Studio Tiefenaudit — 2026-08-08
+# PB Studio Full-Stack-Tiefenaudit — 2026-08-08/09
 
-## Status
+## 1. Scope und Urteil
 
-**OBJ-74: ACTIVE / NICHT RELEASE-FERTIG**
+**Objective:** OBJ-74 — vollständiges Funktionsinventar, verlustfreies
+Analyse-Resume, nachvollziehbare Clip-Auswahl und Konvergenz aller Branches.
 
-Der vollständige Funktionskatalog umfasst 14 WPF-Views, 16 ViewModels und den
-aktuellen REST-/SSE-/Core-Pfadbestand. Die vom Nutzer nachträglich angeordnete
-Testreduktion wurde umgesetzt: ein vorhandener Gesamtlauf dient als Baseline;
-danach liefen nur kombinierte, direkt betroffene Vertragscluster.
+**Geprüfte Schichten:** 14 WPF-Tabs, 16 ViewModels, REST/SSE, FastAPI-Router,
+Audio-/Video-/Pacing-Core, SQLite/Cache/FAISS, Projekt-Lifecycle, Branch-Historie
+und Build-/Testverträge. Ausgeschlossen blieben Datenmigrationen, neue
+Dependencies, Produktionsdeployment und Änderungen an der gesperrten Datei
+`src/pb_studio/audio/separator.py`.
 
-## Inventar
+**Urteil:** Alle im Audit gefundenen CRITICAL-/HIGH-Produktfehler wurden im
+aktuellen Arbeitsstand repariert und verifiziert. Ein vollständiger
+Python-Lauf deckte drei Regressionen an derselben neuen Lifecycle/HTTP-Grenze
+auf; nach Minimalfix bestanden der exakte 11-Test-Cluster, der OpenAPI-Vertrag
+4/4 und der finale vollständige Post-fix-Lauf mit 1371 PASS/13 SKIP/0 FAIL.
 
-| Bereich | Bestand | Prüfung | Ergebnis |
+Primärquellen: [Spezifikation](specs/00019-deep-app-audit-resume-pacing/spec.md),
+[Plan](specs/00019-deep-app-audit-resume-pacing/plan.md),
+[Tasks](specs/00019-deep-app-audit-resume-pacing/tasks.md) und
+[Funktionskatalog](test-report/function-catalog.md).
+
+## 2. Systemverständnis und Datenfluss
+
+```text
+WPF View → ViewModel → ApiClient → FastAPI Router
+         → project_operation/epoch → Analyzer/Selector/DirectML
+         → DB-first Partial Update + Cache/FAISS
+         → SSE Event-ID/Replay → ViewModel → sichtbarer Status
+
+Director → Pacing-Preflight → PacingService → AdvancedPacingEngine
+         → ClipSelector → SelectionProvenance → Cut-Metadaten/Timeline
+
+Long Mix → StreamingAudioAnalyzer → validierter Chunk
+         → Checkpoint-Callback → project_commit → gezieltes Chunk-Resume
+```
+
+Entscheidende Invariante: Eine Analyse schreibt nur tatsächlich ausgeführte
+Stages/Chunks. `completed` wird nur mit gültigem Payload wiederverwendet;
+`partial`, `failed` und `interrupted` bleiben retrybar. Projekt-Epoch und
+Commit-Guard verhindern Cross-Project-Writes. Vertrag:
+[analysis-stage-contract.md](specs/00019-deep-app-audit-resume-pacing/evidence/analysis-stage-contract.md).
+
+## 3. Inventar und Prüftiefe
+
+| Bereich | Bestand | Frischer Nachweis | Ergebnis |
 |---|---|---|---|
-| Project Overview | Projekt create/open/save/close, Persistenz | statisch + Baseline | kein neuer P1-Befund |
-| Media Ingest | Audio-/Videoimport, Hash-/Reuse-Pfade | statisch + Baseline | kein neuer P1-Befund |
-| Audio Library | Import, Analyse, Beats, Onsets, Struktur, Spektral, Stems | tief + Regression | Stage-Resume repariert; Chunk-Hard-Interrupt offen |
-| Video Library | Import, Scenes, Motion, Farben, Tags, Embedding, Key | tief + Regression + WPF | Resume/Statusanzeige repariert |
-| Director/Pacing | Preflight, Trigger, Struktur, Motion, Semantic, Key, Brain, Anchors | tief + Regression | fehlende Voraussetzungen blockieren vor Worker |
-| Timeline | Mehrspur, Sync, Preview | statisch + Baseline | Baseline-RAM-Fehler offen |
-| Production | AMF-Render, Jobstatus, Export | statisch + Baseline | Live-AMF-Abnahme offen |
-| Brain | Reranking, Feedback, Explain, Lernstatus | statisch + Baseline | optionale Achsen dürfen degradieren |
-| Chat | LM-Studio, Streaming, Tools | statisch + Baseline | Live-Modellabnahme offen |
-| Model Manager | Registry, Auswahl, Downloadstatus | statisch + Baseline | Live-Runtime-Abnahme offen |
-| Settings | Config, Verbindungen, Preferences | statisch + Baseline | Live-Persistenz-Abnahme offen |
-| Terminal | Log-SSE, Filter, Anzeige | statisch + Baseline | GUI-Smoke offen |
-| Anchor | Projektanker, Persistenz, Pacing-Übergabe | statisch + Baseline | kein neuer P1-Befund |
-| VRAM Telemetry | DirectML-Budget, Monitoring, Cleanup | statisch + Baseline | Hardware-Live-Abnahme offen |
+| Projekt/Ingest | create/open/save/close, Import, Hash-/Reuse-Pfade | Python-Verträge + echter Projektwechsel | PASS |
+| Audio | Beats, Struktur, Spektral, Key, Trigger, Waveform, Long-Mix, Stems | Resume-/Chunk-Tests + echte Teilanalyse | PASS; Stem-Artefakte nur stageweise |
+| Video | Scenes, Motion, SigLIP, Farben, Captions, Audio-Key | Resume-Tests + Shutdown/Restart mit Realmedium | PASS |
+| KI-Regie/Pacing | Preflight, Trigger, Struktur, Motion, Semantic, Key, Brain, Anchor, Diversität | Preflight-/Provenienztests + GUI-Zustände | PASS |
+| Timeline/Export | Mehrspur, Preview, Validierung, AMF-Verträge | Python-Suite + C# + Release-Build + UIA | PASS im automatisierten Scope |
+| Brain/Modelle/Chat | Lernen, Registry, Provider, Streaming, Tools | Python-Suite + 14-Tab-UIA | PASS im automatisierten Scope |
+| Settings/Performance/Terminal | Config, DirectML/VRAM, Log-SSE | Python/C# + 14-Tab-UIA | PASS im automatisierten Scope |
+| Anchor | Beat-Waveform, CRUD, Pacing-Übergabe | UIA/Keyboard/Sichtprüfung | PASS |
 
-Detailkatalog: `test-report/function-catalog.md`.
+GUI-Nachweis: exakt 14/14 Tabs selektiert, kompletter `Ctrl+Tab`-Zyklus,
+0 UIA-Fehler, je Tab Screenshot und UIA-Baum. Details:
+[T023-summary.md](specs/00019-deep-app-audit-resume-pacing/evidence/gui/T023-summary.md)
+und [Maschinenergebnis](specs/00019-deep-app-audit-resume-pacing/evidence/gui/obj74-t023-result.json).
 
-## Baseline
+## 4. Findings und Reparaturen
 
-- Main-Ausgang: `3be700d4214ba427567b63fe80d79f7f8dcf5284`.
-- Python: 1320 Tests, 2 Failures, 13 Skips, 890.552 Sekunden.
-- Failure 1: NSwag-mtime-Fehlalarm trotz erfolgreicher unveränderter Ausgabe;
-  durch expliziten Build-Stamp repariert und mit 4 OpenAPI-Tests bestätigt.
-- Failure 2: `test_auto_pacing_pipeline_chronological_no_violations` scheiterte
-  nach rund 5 GiB Prozessspeicher an einer weiteren 2.52-MiB-NumPy-Allokation.
-- WPF Release-Build: 0 Fehler, 0 Warnungen.
-- Kombinierter Claude-Port-Cluster: 24/24 bestanden.
-- Kombinierter Audio-/Video-Resume-Cluster: 5/5 bestanden.
-- Pacing-Preflight: 8/8 bestanden.
-- WPF Transport/UI-Vertrag: 5/5 bestanden; OpenAPI-Drift: 4/4 bestanden.
+### C-01 — Video-Teilretry löschte gültige Analyse
 
-JUnit: `specs/00019-deep-app-audit-resume-pacing/evidence/pytest-full.xml`.
+**Schwere:** CRITICAL, behoben.
 
-## Kritische Befunde und Maßnahmen
+**Ursache/Impact:** Default-Leerwerte nicht angeforderter Video-Stages konnten
+Scenes, Motion, Farben, Tags oder Embedding überschreiben. Missing-File- und
+Teilretry-Pfade gefährdeten damit bereits bezahlte Analysearbeit.
 
-### F-74-01 — Video-Teilretry löschte vorhandene Analyse
+**Reparatur:** Stage-Plan `requested AND (force OR NOT valid_completed)`,
+merge-only Ergebnis, Payloadvalidierung, DB-first Persistenz und
+Embedding-Kompensation bei verworfenem Commit. Unterbruch markiert nur aktive
+Stages `interrupted` ([video_router.py](backend/routers/video_router.py#L1238)).
+Verlustbeweise liegen in `Tests/test_video_analysis_resume.py`.
 
-**Schwere:** CRITICAL — behoben.
+### H-01 — Audio-Teilretry und Long-Mix verloren Arbeit
 
-`backend/routers/video_router.py` startete jeden Lauf mit Default-Leerwerten und
-persistierte sie auch für deaktivierte Stages. Ein Embedding-Retry konnte Scenes,
-Motion, Farben und Tags löschen; eine fehlende Quelldatei überschrieb gute Daten.
+**Schwere:** HIGH, behoben.
 
-Maßnahme: merge-only Resume-Basis, Payloadvalidierung, Stage-Planer,
-`force`, Missing-File ohne Write und fokussierte Regressionsbeweise.
+**Ursache/Impact:** Deaktivierte Audio-Pfade lieferten Leerwerte; Key und teure
+Long-Mix-Fenster konnten unnötig neu laufen. Ein Prozessabbruch verlor bereits
+fertige Chunks.
 
-### F-74-02 — Audio-Teilretry löschte Beats/Struktur/Trigger
+**Reparatur:** Der Planer überspringt nur `completed` plus gültigen Payload
+([audio_router.py](backend/routers/audio_router.py#L681)). Stage- und
+schema-v2-Chunk-Checkpoints werden merge-only unter Projekt-Commit-Guard
+persistiert ([audio_router.py](backend/routers/audio_router.py#L897)). Quelle,
+Konfiguration, Dauer, Fensterzahl, Grenzen und Payload werden vor Reuse geprüft
+([streaming_analyzer.py](src/pb_studio/audio/streaming_analyzer.py#L460)).
+Primär- und Mix-Energy-Pass bleiben getrennt; private Chunk-Payloads erscheinen
+nicht in öffentlicher Evidenz. Neun Long-Mix-Tests inklusive ungültigem Payload,
+geänderter Quelle, Guard-Abbruch und Mix-Energy-Fehler bestehen.
 
-**Schwere:** HIGH — behoben.
+### H-02 — Lifecycle-Abbruch erzeugte HTTP 500 oder falsche Wahrheit
 
-Deaktivierte Analysepfade lieferten `[]`, `0` oder `None`; der Router persistierte
-diese Werte über bereits gültige Beats, Energie, Struktur, Spektral- und
-Drumtriggerdaten. Key lief immer erneut.
+**Schwere:** HIGH, behoben.
 
-Maßnahme: kanonische Audio-Stages, Payloadvalidierung, merge-only Ergebnis,
-`detect_key`, `force` und automatische Planung `requested - valid completed`.
+**Ursache/Impact:** Projektwechsel cancelte den Request nach Epoch-Wechsel.
+`CancelledError` verließ den HTTP-Pfad ohne Response; Starlette meldete
+`500 No response returned`. Gleichzeitig durfte ein veralteter Worker weder in
+das neue Projekt schreiben noch einen späten Erfolg melden.
 
-### F-74-03 — Pacing nutzte still fehlende Analysewerte
+**Reparatur:** Nur FastAPI-injizierte Requests mit inzwischen ungültigem
+Projektkontext werden zu HTTP 409 übersetzt; direkte Coroutine-Aufrufe,
+Shutdown- und externe Cancellation propagieren weiter `CancelledError`
+([video_router.py](backend/routers/video_router.py#L951), analog Audio).
+`POST /shutdown` drainiert Projektoperationen vor dem Exit-Timer
+([main.py](backend/main.py#L565)). Der Live-Projektwechsel liefert Analyse 409
+und Close 200.
 
-**Schwere:** HIGH — behoben.
+### H-03 — SSE konnte terminale Zustände verlieren
 
-Nur Motion/Brain luden Videoanalyse; Semantic und Key konnten ohne Embedding bzw.
-Video-Key starten. Fehlende Beats erreichten den Worker und endeten spät als 500.
+**Schwere:** HIGH, behoben.
 
-Maßnahme: modeabhängiger Preflight für Audio-Beats/Struktur/Key und
-Video-Motion/Embedding/Audio-Key; HTTP 422 enthält Clip-IDs, Status und
-Payloadgültigkeit. Der Director zeigt den Backend-Grund.
+**Ursache/Impact:** Ein `interrupted`-Event konnte im 100-ms-Filter verschwinden.
+Wurde eine Event-ID vor erfolgreichem JSON-/Subscriber-Dispatch bestätigt,
+übersprang Reconnect genau das nicht verarbeitete Terminalevent.
 
-### F-74-04 — WPF versteckte partielle Videoanalyse
+**Reparatur:** `interrupted` ist terminal und umgeht Throttling
+([SSEClient.cs](PBStudio.UI/Services/SSEClient.cs#L417)). Die ID wird erst nach
+erfolgreichem Dispatch gespeichert; ein fehlgeschlagener Dispatch erzwingt
+Reconnect/Replay ([SSEClient.cs](PBStudio.UI/Services/SSEClient.cs#L188),
+[SSEClient.cs](PBStudio.UI/Services/SSEClient.cs#L327)). Native C#-Verträge
+prüfen Batchfortsetzung, Terminalstatus, Replay und Dispose.
 
-**Schwere:** HIGH — behoben.
+### H-04 — Pacing wählte mit fehlenden Daten und ohne Erklärung
 
-Der Backend-Listenvertrag enthielt Analyse-/Stagezustände, der handgeschriebene
-WPF-DTO und das Model nicht. Partiell analysierte Clips erschienen nur als
-„nicht analysiert“; Audio-Batch zählte Nullantworten als Erfolg.
+**Schwere:** HIGH, behoben.
 
-Maßnahme: Status-/Fehlertransport, sichtbare Teilanalyse-/Unterbruchzustände,
-Resume über vorhandene Buttons und Batchfortsetzung mit ehrlicher Zählung.
+**Ursache/Impact:** Semantic-, Motion- oder Key-Matching konnte ohne gültiges
+Embedding, Motion oder Audio-Key starten; fehlende Beats scheiterten erst im
+Worker. Auswahlgewichtung und adaptive Wiederholungsvermeidung waren im Ergebnis
+nicht vollständig nachvollziehbar.
 
-### F-74-05 — Echte Unterbrechung checkpointete nicht jede Stage
+**Reparatur:** Pacing prüft vor Worker für aktive Modi Stage-Status und Payload;
+HTTP 422 nennt Clip, Stage, Status und `payload_valid`
+([pacing_router.py](backend/routers/pacing_router.py#L209)). Jede Auswahl erhält
+JSON-stabile Provenienz mit Kandidatenpool, Unique-LRU-Ausschlüssen,
+Fallbackgrund und Scorekomponenten
+([pacing_models.py](src/pb_studio/pacing/pacing_models.py#L43),
+[clip_selector.py](src/pb_studio/pacing/clip_selector.py#L340)). Brain-,
+Semantic-/FAISS-, direkter Embedding-, Motion-, Key- und Anchor-Pfad sind durch
+11 Provenienztests abgedeckt; Ranking und adaptive Diversität bleiben
+unverändert.
 
-**Schwere:** HIGH — auf Stage-Ebene behoben.
+### H-05 — WPF zeigte Teilanalyse und Batchfehler falsch
 
-`asyncio.to_thread` beendet den nativen Audio-Worker nicht. Ohne Stage-Checkpoint
-gehen Ergebnisse verloren, die im aktuellen Lauf bereits fertig, aber noch nicht
-final persistiert waren. Video besitzt getrennte Stages, persistierte sie bei
-`CancelledError` jedoch bisher ebenfalls nicht.
+**Schwere:** HIGH, behoben.
 
-Maßnahme: kooperative Audio-Stage-Checkpoints, Stop-Signal gegen späte
-Worker-Commits, Video-Interrupted-Persistenz und terminale SSE-Zustände. Fertige
-Stages bleiben erhalten; nur offene Stages werden `interrupted`. Keine
-DB-Migration und keine Änderung an der gesperrten Separator-Datei.
+**Ursache/Impact:** Backend-Stagezustände erreichten DTO/Model nicht vollständig;
+partielle Clips erschienen als „nicht analysiert“. Audio-Batch konnte
+Nullantwort oder Einzelfehler als Erfolg zählen beziehungsweise spätere Clips
+nicht fortsetzen.
 
-### F-74-06 — Long-Mix-Chunk-Resume
+**Reparatur:** Status/Fehler/Stages laufen durch API-DTO und Models bis in Audio-,
+Video- und Director-ViewModels. Batch verarbeitet verbleibende Clips und fordert
+nur fehlende Stages an. GUI zeigt `ANALYSIERT`, `TEILANALYSE` und
+`NICHT ANALYSIERT`; C#-Vertrag und UIA-Screenshots belegen den Pfad.
 
-**Schwere:** HIGH — offen.
+## 5. Branch-Konvergenz
 
-Chunk-Evidenz wird erst nach Rückkehr des kompletten Audio-Workers persistiert.
-Ein Prozess-Kill innerhalb eines langen Mixes kann deshalb abgeschlossene Chunks
-nicht zuverlässig wiederverwenden. Eine ehrliche Lösung benötigt atomare
-Chunk-Checkpoints außerhalb `separator.py`; dies ist nicht durch den Stage-Fix
-vorgetäuscht.
+24 lokale/Remote-Refs wurden per Ancestry, Patchidentität, Treevergleich,
+Funktionsvergleich und Merge-Risiko geprüft. Bereits enthaltene Claude-Tips
+blieben unverändert. Veraltete Trees mit Konfliktmarkern, lokalen Settings,
+Test-Symlinks oder massiven Rückschritten wurden nicht blind eingespielt.
 
-## Claude-Branches
-
-- `claude/competent-shaw` war bereits exakter Main-Ancestor.
-- `claude/upbeat-liskov` und die lokalen veralteten Tips sind über den neueren
-  Remote-Tip abgedeckt.
-- `origin/claude/nifty-sammet` und `origin/claude/cranky-hodgkin` sind als
-  geprüfte Merge-Eltern erfasst; ihre Trees wurden wegen Konfliktmarkern,
-  lokalen Settings, Test-Symlinks und 498 neueren Main-Commits nicht eingespielt.
-- Gültig portiert: Windows-hidden Video-Subprozesse und direkter echter
+- Sinnvoll portiert: `PRAGMA synchronous=NORMAL`, eine korrelierte
+  FK-Auditabfrage, Windows-hidden Video-Subprozesse und aktueller echter
   Clip-Embedding-Fallback.
-- Verworfen: alter Checkerboard-Vektorhunk; er änderte ungerade Kernel und konnte
-  rund 154 MiB zusätzlichen temporären Speicher materialisieren.
+- Verworfen: 32-Zeilen-Flask-Dummy statt aktueller Video-Pipeline,
+  verhaltensändernde Checkerboard-Vektorisierung, obsolete
+  `semantic_matcher.py`-Änderung, schwächere CORS-Policy und bereits stärkere
+  heutige Implementierungen.
+- Abgelehnte Branch-Trees wurden nur als geprüfte Historie mit identischem
+  Tree-Hash verbunden. PR #25 und #26 brachten Konvergenz und Cleanup nach
+  `main`; 8 lokale plus 16 Remote-Historienrefs wurden nach expliziter Freigabe
+  entfernt.
 
-Vollständige Matrix:
-`specs/00019-deep-app-audit-resume-pacing/evidence/claude-branch-integration.md`.
+Belege:
+[Claude-Matrix](specs/00019-deep-app-audit-resume-pacing/evidence/claude-branch-integration.md)
+und [All-Branch-Konvergenz](specs/00019-deep-app-audit-resume-pacing/evidence/all-branch-convergence.md).
 
-## Offene Abnahme
+## 6. Dynamische Verifikation
 
-- Long-Mix-Chunk-Checkpointing und Kill/Restart-Beweis.
-- echte Medienanalyse aus `C:\Users\david\Videos\test_data\audio` und `video`.
-- Live-REST/SSE, AMF-Render und DirectML-Hardwarepfade.
-- GUI-/Keyboard-/UIA-Smoke aller 14 Views.
-- erneuter Gesamt-QC-Lauf erst auf ausdrückliche Anforderung; Caveman-Minimalmodus
-  bleibt aktiv.
+| Gate | Tatsächliches Ergebnis |
+|---|---|
+| Python-Gesamtsuite final | 1383 gesammelt, 1 Collection-Skip; 1371 bestanden, 13 übersprungen, 0 Fehler |
+| Erster Gesamtlauf | 1368 bestanden, 13 übersprungen, 3 Lifecycle-Regressionen; als Vor-Fix-JUnit bewahrt |
+| Exakter Fehlercluster nach Minimalfix | 11/11 bestanden |
+| OpenAPI-Snapshot | 4/4 bestanden |
+| Native C#-Tests | 54/54 bestanden |
+| WPF Release-Build | 0 Warnungen, 0 Fehler |
+| Live Audio | Beats-only → Vollretry ohne `force`; Beats/BPM wertgleich bewahrt, alle vier Stages completed |
+| Live Video | Shutdown nach 3 s → `scenes=completed`, offene Stages `interrupted`; Restart setzt nur fehlende Stages fort |
+| Live Projektwechsel | Analyse HTTP 409, Close HTTP 200 |
+| GUI/UIA | 14/14 Tabs, kompletter Keyboard-Zyklus, 0 Fehler |
 
-`.completed` und `.qc-passed` wurden nicht erzeugt.
+Unveränderte Zahlen und Artefakte:
+[T021](specs/00019-deep-app-audit-resume-pacing/evidence/T021-full-test-convergence.md),
+[Finales JUnit](specs/00019-deep-app-audit-resume-pacing/evidence/pytest-full-final.xml),
+[Vor-Fix-JUnit](specs/00019-deep-app-audit-resume-pacing/evidence/pytest-full.xml),
+[TRX](specs/00019-deep-app-audit-resume-pacing/evidence/dotnet-full.trx) und
+[T022 Live-Resume](specs/00019-deep-app-audit-resume-pacing/evidence/live/T022-live-resume.md).
+
+Ein erster Lauf mit `test_20s.mp4` wurde bei einem SigLIP-Frame-Read-Fehler
+ehrlich als `partial` ausgewiesen, nicht als Erfolg; für diesen Clip wird kein
+erfolgreicher Retry behauptet. Der gesonderte Shutdown/Restart-Beweis nutzt
+`test_12s.mp4` und endete nach gezieltem Retry mit Motion,
+1152-dimensionalem SigLIP, Farben und Audio-Key `completed`.
+
+## 7. Restliche Risiken und Grenzen
+
+1. **Stem-Separation:** Stage-Level-Resume vermeidet Wiederholung eines gültig
+   abgeschlossenen Stem-Laufs. Einzelne Stem-Artefakte innerhalb eines
+   abgebrochenen Separationslaufs besitzen keinen eigenen Partial-Checkpoint;
+   `separator.py` blieb regelkonform unverändert.
+2. **Externe Live-Systeme:** UIA belegt Erreichbarkeit, Darstellung und
+   Zustandswahrheit aller Tabs, nicht jeden kosten-/hardwareabhängigen
+   LM-Studio-, Modell-Download- oder Codecpfad mit jeder Konfiguration.
+3. **Testprojekt:** Das isolierte Live-Projekt wurde absichtlich nicht gelöscht;
+   keine Nutzerdaten wurden verändert.
+
+Keine offene bekannte CRITICAL-/HIGH-Regression verbleibt im OBJ-74-Diff.
+Verbleibende Grenzen sind Verifikationsbreite oder bewusst ausgeschlossener
+Artefakt-Resume, keine als abgeschlossen versteckte Funktion.
+
+## 8. Quellenbelegte Reparaturblöcke
+
+### R-C01/H01 — Idempotentes Resume und atomare Wahrheit
+
+**Entscheidung:** Validierte Stage-/Chunk-Ergebnisse wiederverwenden; nur neue
+Ergebnisse merge-persistieren; Commit an Projekt-Epoch binden. Interne Belege:
+`Tests/test_audio_analysis_resume.py`, `Tests/test_video_analysis_resume.py` und
+`Tests/test_audio_long_mix_chunk_resume.py`. Das folgt dem Projektvertrag und
+SQLites dokumentierter Transaktions-/WAL-Semantik: [SQLite Transactions](https://www.sqlite.org/lang_transaction.html),
+[SQLite WAL](https://www.sqlite.org/wal.html). Risiko: mittel; Payloadvalidatoren
+müssen bei Schemaänderung mitgeführt werden.
+
+### R-H02 — Cancellation an der HTTP-Grenze
+
+**Entscheidung:** Cancellation intern nicht verschlucken; nur den eindeutig
+erkannten Projektkonflikt an der Request-Grenze als 409 darstellen. Quellen:
+[Python 3.11 Task Cancellation](https://docs.python.org/3.11/library/asyncio-task.html#task-cancellation),
+[RFC 9110, 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.10)
+und [Starlette Exceptions](https://www.starlette.io/exceptions/). Risiko:
+niedrig; direkte/externe Cancellation ist durch getrennte Tests geschützt.
+
+### R-H03 — SSE-Replay erst nach Verarbeitung bestätigen
+
+**Entscheidung:** `Last-Event-ID` nur für erfolgreich verarbeitete Events
+fortschreiben und terminale Events nie throtteln. Quelle:
+[WHATWG Server-Sent Events — Last-Event-ID](https://html.spec.whatwg.org/multipage/server-sent-events.html#last-event-id).
+Risiko: niedrig; malformed Event löst Replay statt stillen Verlust aus.
+
+### R-H04/H05 — Vertragswahrheit vor kreativer Auswahl
+
+**Entscheidung:** Pacing vor Worker gegen explizite, validierte Anforderungen
+sperren; Auswahlentscheidung als stabiles Metadatum bis Timeline transportieren;
+UI zeigt Backendstatus unverfälscht. Quellen:
+[RFC 9110, 422 Unprocessable Content](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.21)
+und die empirischen Projektverträge `Tests/test_pacing_*.py`,
+`Tests/test_clip_selector_provenance.py` sowie
+`PBStudio.UI.Tests/AnalysisResumeContractTests.cs`. Risiko: niedrig; neue
+Matching-Modi müssen ihre benötigten Stages im Preflight registrieren.
+
+## 9. Kennzahlen
+
+- Inventar: 14 WPF-Tabs, 16 ViewModels, 60 API-Pfade, 65 Operationen.
+- Branches: 24 Nebenrefs geprüft; 8 lokale und 16 Remote-Historienrefs bereinigt.
+- Findings dieses Audits: CRITICAL/HIGH/MEDIUM/LOW = 1/5/0/0; alle sechs
+  Produktfindings behoben und fokussiert verifiziert.
+- Dynamik: final 1371 Python-Tests bestanden/13 übersprungen/0 fehlgeschlagen;
+  54 C#-Tests bestanden; 14/14 Tabs UIA.
+- Schutzregeln: Python 3.11, NumPy 1.26.4, DirectML-only, AMF-only und
+  `separator.py`-Lock blieben unangetastet.

@@ -13,6 +13,10 @@ import time
 from pathlib import Path
 from typing import Optional
 from pb_studio.config_manager import ConfigManager
+from pb_studio.storage.recovery_barrier import (
+    RecoveryBusyError,
+    recovery_write_operation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -376,6 +380,7 @@ class VectorStore:
         self.metadata = {}
         logger.info(f"Created new FAISS index (Dim: {self.dimension})")
 
+    @recovery_write_operation("vector")
     def add_embedding(self, embedding: np.ndarray, meta_info: dict) -> int:
         """
         Adds a vector embedding and its metadata (thread-safe).
@@ -429,6 +434,7 @@ class VectorStore:
 
             return faiss_id
 
+    @recovery_write_operation("vector")
     def add_embedding_with_media_link(
         self,
         embedding: np.ndarray,
@@ -487,6 +493,7 @@ class VectorStore:
             raise
         return faiss_id
 
+    @recovery_write_operation("vector")
     def mark_tombstoned(self, faiss_ids) -> None:
         """Y6 / L-STATE-2: Markiert FAISS-IDs als "weggeloescht" — werden in
         search() ausgefiltert. Wird von delete_audio_clip/delete_video_clip
@@ -510,6 +517,7 @@ class VectorStore:
                 # B-7 FIX / BUGFIX C1: Zustand nach Tombstoning speichern (coalesced).
                 self._request_save()
 
+    @recovery_write_operation("vector")
     def clean_tombstones(self) -> None:
         """Physische Bereinigung des FAISS-Indexes (Re-Indexing) mit Thread-Sicherung."""
         with self._lock:
@@ -610,6 +618,7 @@ class VectorStore:
 
             return results
 
+    @recovery_write_operation("vector")
     def save(self):
         """Thread-safe save."""
         with self._lock:
@@ -753,13 +762,17 @@ class VectorStore:
                     return
                 continue
 
-            persisted = self._write_snapshot(snap_index, snap_meta, snap_tomb)
+            try:
+                persisted = self._write_snapshot(snap_index, snap_meta, snap_tomb)
+            except RecoveryBusyError:
+                persisted = False
             with self._save_cv:
                 if persisted and generation == self._save_generation:
                     self._save_dirty = False
                 if self._writer_stop and (persisted or not self._save_dirty):
                     return
 
+    @recovery_write_operation("vector")
     def _write_snapshot(self, cloned_index, cloned_metadata, cloned_tombstones) -> bool:
         """Atomically persist a snapshot (temp file + os.replace). Serialized
         against the synchronous save() via _write_lock."""

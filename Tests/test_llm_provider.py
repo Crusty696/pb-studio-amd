@@ -114,6 +114,20 @@ def test_load_config_handles_missing_file(tmp_path, monkeypatch):
     assert isinstance(cfg, dict)
 
 
+def test_load_config_uses_canonical_config_manager(monkeypatch):
+    from pb_studio.ai import llm_provider
+    import pb_studio.config_manager as config_manager
+
+    class Config:
+        def get(self, key):
+            assert key == "ai"
+            return {"provider": "ollama"}
+
+    monkeypatch.setattr(config_manager, "ConfigManager", lambda: Config())
+
+    assert llm_provider._load_config() == {"provider": "ollama"}
+
+
 def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
     started: list[str] = []
     both_started = asyncio.Event()

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pb_studio.config_manager import ConfigManager
-from pb_studio.data.database_core import DatabaseCore
+from pb_studio.data.database_core import DatabaseCore, legacy_project_uuid
 from pb_studio.data.repositories import media_repository as media_repository_module
 from pb_studio.data.repositories.media_repository import MediaRepository
 from pb_studio.services.media_service import MediaService
@@ -172,7 +172,15 @@ def test_existing_db_is_migrated_and_guard_backfilled(tmp_path, monkeypatch):
         row["version"]
         for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
     ]
-    assert versions == [1, 2, 3]
+    assert versions == [1, 2, 3, 4]
+
+    project_identity = conn.execute(
+        "SELECT id, created_at, project_uuid FROM projects WHERE id = 1"
+    ).fetchone()
+    assert project_identity["project_uuid"] == legacy_project_uuid(
+        project_identity["id"],
+        project_identity["created_at"],
+    )
 
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(

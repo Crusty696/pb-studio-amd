@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import threading
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 from pathlib import Path
 from typing import Any, Dict
 
@@ -89,6 +90,7 @@ class ConfigManager:
                 self._config = copy.deepcopy(self.DEFAULTS)
                 self.save_config()
 
+    @recovery_write_operation("config")
     def save_config(self):
         temp_path: Path | None = None
         try:
@@ -140,7 +142,7 @@ class ConfigManager:
         if p.is_absolute():
             return p.resolve()
         # Entferne fuehrende ./ aber NICHT fuehrende /
-        cleaned = relative_path
+        cleaned = str(relative_path)
         while cleaned.startswith("./") or cleaned.startswith(".\\"):
             cleaned = cleaned[2:]
         return (_PROJECT_ROOT / cleaned).resolve()

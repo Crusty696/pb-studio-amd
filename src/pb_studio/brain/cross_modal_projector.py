@@ -15,11 +15,17 @@ IRON RULES: AMD DirectML only (NumPy CPU), NumPy 1.x kompatibel, pathlib.
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+import os
+import shutil
 import threading
+import uuid
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
+from pb_studio.storage.recovery_barrier import recovery_write_operation
 
 from pb_studio.audio.audio_embedder import (
     CURRENT_MODEL_NAME as _AUDIO_MODEL_NAME,
@@ -45,6 +51,7 @@ DEFAULT_VIDEO_MODEL_NAME = _VIDEO_MODEL_NAME
 DEFAULT_VIDEO_MODEL_VERSION = _VIDEO_MODEL_VERSION
 DEFAULT_SEED = 42
 WEIGHTS_FILENAME = "cross_modal_projector.npz"
+PROJECTOR_ARTIFACT_VERSION = 2
 
 
 class CrossModalProjector:
@@ -72,6 +79,13 @@ class CrossModalProjector:
         self.audio_model_version = str(audio_model_version)
         self.video_model_name = str(video_model_name)
         self.video_model_version = str(video_model_version)
+        self.artifact_version = 1
+        self.generation_uuid = ""
+        self.parent_generation_uuid = ""
+        self.applied_event_uuids: tuple[str, ...] = ()
+        self.pending_events: dict[str, dict] = {}
+        self.project_checkpoints: dict[str, dict] = {}
+        self.inventory_digest = ""
 
         self._init_random_matrices()
         # R-Brain-08
@@ -222,29 +236,155 @@ class CrossModalProjector:
             "n_steps": int(steps),
         }
 
+    @recovery_write_operation("brain-projector")
     def save(self) -> bool:
         """Persist matrices to weights_path. Returns False when path not set."""
         if self.weights_path is None:
             return False
         try:
             self.weights_path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(
-                self.weights_path,
-                W_audio=self.W_audio,
-                W_video=self.W_video,
-                common_dim=np.int32(self.common_dim),
-                audio_dim=np.int32(self.audio_dim),
-                video_dim=np.int32(self.video_dim),
-                seed=np.int32(self.seed),
-                audio_model_name=np.str_(self.audio_model_name),
-                audio_model_version=np.str_(self.audio_model_version),
-                video_model_name=np.str_(self.video_model_name),
-                video_model_version=np.str_(self.video_model_version),
-            )
+            np.savez(self.weights_path, **self._artifact_payload(include_v2=False))
             return True
         except Exception as e:
             logger.warning("CrossModalProjector save failed: %s", e)
             return False
+
+    def clone(self) -> "CrossModalProjector":
+        """Return a private matrix snapshot safe for copy-on-write training."""
+        clone = CrossModalProjector(
+            common_dim=self.common_dim,
+            audio_dim=self.audio_dim,
+            video_dim=self.video_dim,
+            seed=self.seed,
+            weights_path=None,
+            audio_model_name=self.audio_model_name,
+            audio_model_version=self.audio_model_version,
+            video_model_name=self.video_model_name,
+            video_model_version=self.video_model_version,
+        )
+        clone.W_audio = self.W_audio.copy()
+        clone.W_video = self.W_video.copy()
+        clone.weights_path = self.weights_path
+        clone.artifact_version = self.artifact_version
+        clone.generation_uuid = self.generation_uuid
+        clone.parent_generation_uuid = self.parent_generation_uuid
+        clone.applied_event_uuids = tuple(self.applied_event_uuids)
+        clone.pending_events = json.loads(json.dumps(self.pending_events))
+        clone.project_checkpoints = json.loads(json.dumps(self.project_checkpoints))
+        clone.inventory_digest = self.inventory_digest
+        clone.clear_projection_cache()
+        return clone
+
+    @recovery_write_operation("brain-projector")
+    def save_v2_atomic(self) -> None:
+        """Durably publish one validated V2 artifact without touching V1 on failure."""
+        if self.weights_path is None:
+            raise RuntimeError("Projector V2 requires a weights_path")
+        self.artifact_version = PROJECTOR_ARTIFACT_VERSION
+        if not self.generation_uuid:
+            self.generation_uuid = str(uuid.uuid4())
+        self._validate_v2_metadata()
+        self.weights_path.parent.mkdir(parents=True, exist_ok=True)
+        staging = self.weights_path.with_name(
+            f".{self.weights_path.name}.{uuid.uuid4().hex}.tmp"
+        )
+        try:
+            with staging.open("wb") as handle:
+                np.savez(handle, **self._artifact_payload(include_v2=True))
+                handle.flush()
+                os.fsync(handle.fileno())
+            validated = CrossModalProjector(
+                common_dim=self.common_dim,
+                audio_dim=self.audio_dim,
+                video_dim=self.video_dim,
+                seed=self.seed,
+                weights_path=staging,
+                audio_model_name=self.audio_model_name,
+                audio_model_version=self.audio_model_version,
+                video_model_name=self.video_model_name,
+                video_model_version=self.video_model_version,
+            )
+            if validated.artifact_version != PROJECTOR_ARTIFACT_VERSION:
+                raise RuntimeError("Projector staging artifact is not V2")
+            if validated.generation_uuid != self.generation_uuid:
+                raise RuntimeError("Projector staging generation mismatch")
+            self._archive_v1_if_needed()
+            os.replace(staging, self.weights_path)
+        finally:
+            staging.unlink(missing_ok=True)
+
+    def _archive_v1_if_needed(self) -> Optional[Path]:
+        if self.weights_path is None or not self.weights_path.is_file():
+            return None
+        with np.load(self.weights_path, allow_pickle=False) as current:
+            version = (
+                int(current["format_version"])
+                if "format_version" in current.files else 1
+            )
+        if version != 1:
+            return None
+        digest = hashlib.sha256(self.weights_path.read_bytes()).hexdigest()
+        archive = self.weights_path.with_name(
+            f"{self.weights_path.stem}.v1.{digest[:16]}.npz"
+        )
+        if archive.is_file():
+            if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+                raise RuntimeError("Existing Projector V1 archive hash mismatch")
+            return archive
+        staging = archive.with_name(f".{archive.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            shutil.copyfile(self.weights_path, staging)
+            with staging.open("r+b") as handle:
+                os.fsync(handle.fileno())
+            os.replace(staging, archive)
+        finally:
+            staging.unlink(missing_ok=True)
+        return archive
+
+    def _artifact_payload(self, *, include_v2: bool) -> dict:
+        payload = {
+            "W_audio": self.W_audio,
+            "W_video": self.W_video,
+            "common_dim": np.int32(self.common_dim),
+            "audio_dim": np.int32(self.audio_dim),
+            "video_dim": np.int32(self.video_dim),
+            "seed": np.int32(self.seed),
+            "audio_model_name": np.str_(self.audio_model_name),
+            "audio_model_version": np.str_(self.audio_model_version),
+            "video_model_name": np.str_(self.video_model_name),
+            "video_model_version": np.str_(self.video_model_version),
+        }
+        if include_v2:
+            payload.update({
+                "format_version": np.int32(PROJECTOR_ARTIFACT_VERSION),
+                "generation_uuid": np.str_(self.generation_uuid),
+                "parent_generation_uuid": np.str_(self.parent_generation_uuid),
+                "applied_event_uuids": np.asarray(
+                    sorted(self.applied_event_uuids), dtype=np.str_
+                ),
+                "pending_events_json": np.str_(json.dumps(
+                    self.pending_events, sort_keys=True, separators=(",", ":")
+                )),
+                "project_checkpoints_json": np.str_(json.dumps(
+                    self.project_checkpoints, sort_keys=True, separators=(",", ":")
+                )),
+                "inventory_digest": np.str_(self.inventory_digest),
+            })
+        return payload
+
+    def _validate_v2_metadata(self) -> None:
+        applied = [str(uuid.UUID(value)) for value in self.applied_event_uuids]
+        if len(applied) != len(set(applied)):
+            raise ValueError("Projector applied_event_uuids contain duplicates")
+        pending = {str(uuid.UUID(value)) for value in self.pending_events}
+        if set(applied) & pending:
+            raise ValueError("Projector event cannot be applied and pending")
+        for project_uuid in self.project_checkpoints:
+            uuid.UUID(str(project_uuid))
+        if self.generation_uuid:
+            uuid.UUID(str(self.generation_uuid))
+        if self.parent_generation_uuid:
+            uuid.UUID(str(self.parent_generation_uuid))
 
     # ---------- internals ----------
 
@@ -291,12 +431,52 @@ class CrossModalProjector:
                     )
                 wa = np.asarray(data["W_audio"], dtype=np.float32)
                 wv = np.asarray(data["W_video"], dtype=np.float32)
+                artifact_version = (
+                    int(data["format_version"])
+                    if "format_version" in data.files
+                    else 1
+                )
+                if artifact_version == PROJECTOR_ARTIFACT_VERSION:
+                    generation_uuid = str(data["generation_uuid"].item())
+                    parent_generation_uuid = str(
+                        data["parent_generation_uuid"].item()
+                    )
+                    applied_event_uuids = tuple(
+                        str(value) for value in data["applied_event_uuids"].tolist()
+                    )
+                    pending_events = json.loads(
+                        str(data["pending_events_json"].item())
+                    )
+                    project_checkpoints = json.loads(
+                        str(data["project_checkpoints_json"].item())
+                    )
+                    inventory_digest = str(data["inventory_digest"].item())
+                elif artifact_version == 1:
+                    generation_uuid = ""
+                    parent_generation_uuid = ""
+                    applied_event_uuids = ()
+                    pending_events = {}
+                    project_checkpoints = {}
+                    inventory_digest = ""
+                else:
+                    raise ValueError(
+                        f"Unsupported Projector artifact version {artifact_version}"
+                    )
             if wa.shape != (self.audio_dim, self.common_dim):
                 raise ValueError(f"W_audio shape mismatch: {wa.shape}")
             if wv.shape != (self.video_dim, self.common_dim):
                 raise ValueError(f"W_video shape mismatch: {wv.shape}")
             self.W_audio = wa
             self.W_video = wv
+            self.artifact_version = artifact_version
+            self.generation_uuid = generation_uuid
+            self.parent_generation_uuid = parent_generation_uuid
+            self.applied_event_uuids = applied_event_uuids
+            self.pending_events = pending_events
+            self.project_checkpoints = project_checkpoints
+            self.inventory_digest = inventory_digest
+            if artifact_version == PROJECTOR_ARTIFACT_VERSION:
+                self._validate_v2_metadata()
             self._projection_cache.clear()
             self._proj_cache_hits = 0
             self._proj_cache_misses = 0
@@ -446,6 +626,38 @@ def get_default_projector(
                 weights_path=weights_path,
             )
         return _singleton
+
+
+def publish_default_projector(candidate: CrossModalProjector) -> None:
+    """Publish a validated file and immutable in-memory snapshot together."""
+    global _singleton
+    candidate.save_v2_atomic()
+    with _singleton_lock:
+        _singleton = candidate
+
+
+def restore_v1_projector(archive: Path, weights_path: Path) -> CrossModalProjector:
+    """Restore an immutable V1 archive through a validated atomic replacement."""
+    archive = Path(archive)
+    weights_path = Path(weights_path)
+    restored = CrossModalProjector(weights_path=archive)
+    if restored.artifact_version != 1:
+        raise ValueError("Projector rollback source is not V1")
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
+    staging = weights_path.with_name(f".{weights_path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        shutil.copyfile(archive, staging)
+        with staging.open("r+b") as handle:
+            os.fsync(handle.fileno())
+        CrossModalProjector(weights_path=staging)
+        os.replace(staging, weights_path)
+    finally:
+        staging.unlink(missing_ok=True)
+    active = CrossModalProjector(weights_path=weights_path)
+    global _singleton
+    with _singleton_lock:
+        _singleton = active
+    return active
 
 
 def reset_default_projector() -> None:

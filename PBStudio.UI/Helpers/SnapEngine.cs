@@ -17,12 +17,12 @@ public record SnapPoint(double Time, SnapPointType Type);
 public class SnapEngine
 {
     private readonly double _pixelThreshold;
-    private readonly double _pixelsPerSecond;
+    public double PixelsPerSecond { private get; set; }
 
     public SnapEngine(double pixelThreshold, double pixelsPerSecond)
     {
         _pixelThreshold = pixelThreshold;
-        _pixelsPerSecond = pixelsPerSecond;
+        PixelsPerSecond = pixelsPerSecond;
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public class SnapEngine
     /// </summary>
     public SnapPoint? FindSnapPoint(double time, IEnumerable<SnapPoint> availablePoints)
     {
-        double timeThreshold = _pixelThreshold / _pixelsPerSecond;
+        double timeThreshold = _pixelThreshold / Math.Max(PixelsPerSecond, 0.001);
         
         var candidates = availablePoints
             .Select(p => new { Point = p, Distance = Math.Abs(p.Time - time) })

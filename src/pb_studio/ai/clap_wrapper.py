@@ -100,13 +100,27 @@ class CLAPAnalyzer:
 
             self.combined_session = loader.load_model("clap_combined", force=True)
             if self.combined_session is not None:
+                loader.register_session_owner(
+                    "clap_combined",
+                    self._release_loader_session,
+                )
                 self._validate_dml_session(self.combined_session)
                 self._active_provider = "DmlExecutionProvider"
                 self._initialized = True
                 return True
 
             self.audio_encoder_session = loader.load_model("clap_audio", force=True)
+            if self.audio_encoder_session is not None:
+                loader.register_session_owner(
+                    "clap_audio",
+                    self._release_loader_session,
+                )
             self.text_encoder_session = loader.load_model("clap_text", force=True)
+            if self.text_encoder_session is not None:
+                loader.register_session_owner(
+                    "clap_text",
+                    self._release_loader_session,
+                )
             if self.audio_encoder_session is not None and self.text_encoder_session is not None:
                 self._validate_dml_session(self.audio_encoder_session)
                 self._validate_dml_session(self.text_encoder_session)
@@ -347,6 +361,21 @@ class CLAPAnalyzer:
     @property
     def active_provider(self) -> str:
         return self._active_provider
+
+    def _release_loader_session(self, model_id: str) -> None:
+        if model_id == "clap_combined":
+            self.combined_session = None
+        elif model_id == "clap_audio":
+            self.audio_encoder_session = None
+        elif model_id == "clap_text":
+            self.text_encoder_session = None
+        if self.combined_session is None and (
+            self.audio_encoder_session is None
+            or self.text_encoder_session is None
+        ):
+            self._initialized = False
+            self._classification_available = False
+            self._active_provider = "Unknown"
 
     def unload(self):
         try:

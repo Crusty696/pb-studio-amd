@@ -19,6 +19,7 @@ from typing import Optional
 import numpy as np
 
 from .sqlite_init import init_connection
+from .recovery_barrier import recovery_write_operation
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ class EmbeddingCache:
                 file_size_bytes=row[6],
             )
 
+    @recovery_write_operation("brain-embedding-cache")
     def store(
         self,
         *,
@@ -174,6 +176,7 @@ class EmbeddingCache:
         ).fetchone()
         return int(row[0] or 0)
 
+    @recovery_write_operation("brain-embedding-cache")
     def enforce_size_limit(self, max_bytes: int) -> int:
         """Loescht aelteste Embeddings (LRU via computed_at) bis Gesamtgroesse <= max_bytes.
 

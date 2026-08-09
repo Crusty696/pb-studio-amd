@@ -13,13 +13,14 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Optional, TypeVar
 
 from ..storage.brain_store import BrainStore, default_brain_dir
-from ..storage.migration_runner import migrate
+from ..storage.migration_runner import migrate, migrate_project_state
 from ..storage.sqlite_init import init_connection
 from .feedback_logger import FeedbackLogger
 from .reranker import BrainReranker
@@ -46,6 +47,7 @@ class BrainProjectIdentity:
     state_db_path: Path
     epoch: int
     project_id: Optional[int] = None
+    project_uuid: Optional[str] = None
 
 
 @dataclass(eq=False)
@@ -106,6 +108,10 @@ class BrainStateLease:
     @property
     def project_id(self) -> Optional[int]:
         return self.identity.project_id
+
+    @property
+    def project_uuid(self) -> Optional[str]:
+        return self.identity.project_uuid
 
     @property
     def is_current(self) -> bool:
@@ -197,6 +203,7 @@ class BrainService:
         *,
         project_epoch: Optional[int] = None,
         project_id: Optional[int] = None,
+        project_uuid: Optional[str] = None,
     ) -> BrainProjectIdentity:
         """Open and atomically publish a project-store state connection.
 
@@ -210,7 +217,25 @@ class BrainService:
             Path(__file__).parent.parent
             / "storage" / "migrations" / "state"
         )
-        migrate(path, mig)
+        normalized_project_uuid = (
+            str(uuid.UUID(str(project_uuid)))
+            if project_uuid is not None
+            else str(uuid.uuid5(uuid.NAMESPACE_URL, path.as_uri()))
+        )
+        if project_uuid is None:
+            logger.warning(
+                "Brain state %s was bound without catalog project_uuid; "
+                "using deterministic standalone identity",
+                path,
+            )
+        if project_uuid is None:
+            migrate(path, mig)
+        else:
+            migrate_project_state(
+                path,
+                mig,
+                project_uuid=normalized_project_uuid,
+            )
 
         new_connection: Optional[sqlite3.Connection] = None
         try:
@@ -250,6 +275,7 @@ class BrainService:
                     project_id=(
                         int(project_id) if project_id is not None else None
                     ),
+                    project_uuid=normalized_project_uuid,
                 )
                 new_slot = _ProjectConnectionSlot(new_connection, identity)
                 self._state_slots.append(new_slot)

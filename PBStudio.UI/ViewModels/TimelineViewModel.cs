@@ -17,6 +17,7 @@ namespace PBStudio.UI.ViewModels;
 /// <summary>ViewModel für die Timeline-Vorschau.</summary>
 public partial class TimelineViewModel : ObservableObject, IDisposable
 {
+    private static readonly SemaphoreSlim TimelinePersistenceGate = new(1, 1);
     private readonly TimelineStateService _timelineState;
     private readonly AudioLibraryStateService _audioLibraryState;
     private readonly ProjectService _projectService;
@@ -25,6 +26,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     // eigenem Shutdown-Token, die BeginShutdown() der Singleton-Instanz nie erreichte.
     private readonly IApiClient _api;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
     private int _loadVersion;
     private int _waveformSequence;
     private volatile bool _reloadQueued;
@@ -39,8 +41,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     private int _syncTimelineSequence;
     private int _previewSequence;
     private bool _timelineReadyForMutation;
+    private long _editVersion;
+    private long _savedEditVersion;
+    private double _viewportWidth = 1920.0;
+    private readonly HashSet<TimelineEntryModel> _assetWindowEntries = [];
     private const double MinClipDuration = 0.1;
     private const double TimelineEditEpsilon = 0.0001;
+    private const int MaxAssetClipCount = 24;
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private double _totalDuration;
@@ -77,6 +84,12 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(TimelineWidth));
         UpdateSpectralPoints();
+        UpdateViewportEntries();
+    }
+
+    partial void OnHorizontalOffsetChanged(double value)
+    {
+        UpdateViewportEntries();
     }
 
     /// <summary>
@@ -134,6 +147,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<TimelineEntryModel> TimelineEntries { get; } = [];
+    public ObservableCollection<TimelineEntryModel> VisibleTimelineEntries { get; } = [];
     public ObservableCollection<WaveformBarModel> WaveformBars { get; } = [];
     public ObservableCollection<double> BeatMarkers { get; } = [];
     public ObservableCollection<BeatMarkerViewModel> UIBeatMarkers { get; } = [];
@@ -212,6 +226,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             SelectedTimelinePosition = value?.StartTime ?? 0;
             _isSyncingSelection = false;
         }
+        _timelineState.RememberSelection(value?.ClipId, value?.StartTime ?? 0);
 
         OnPropertyChanged(nameof(SelectedClipName));
         OnPropertyChanged(nameof(SelectedTrigger));
@@ -238,10 +253,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             MotionCurve = null;
         }
 
-        if (value != null && !value.IsAssetsLoaded)
-        {
-            _ = QueueClipAssetLoad(value);
-        }
+        UpdateViewportEntries();
     }
 
     /// <summary>
@@ -387,6 +399,101 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         _isSyncingSelection = true;
         SelectedEntry = nearestEntry;
         _isSyncingSelection = false;
+    }
+
+    public void MarkTimelineDirty()
+    {
+        if (_timelineReadyForMutation)
+            Interlocked.Increment(ref _editVersion);
+    }
+
+    public void UpdateViewport(double horizontalOffset, double viewportWidth)
+    {
+        _viewportWidth = Math.Max(1.0, viewportWidth);
+        HorizontalOffset = Math.Max(0.0, horizontalOffset);
+        UpdateViewportEntries();
+    }
+
+    private void UpdateViewportEntries()
+    {
+        if (_disposed)
+            return;
+
+        var pixelsPerSecond = Math.Max(1.0, PixelsPerSecond);
+        var visibleStart = Math.Max(0.0, HorizontalOffset / pixelsPerSecond);
+        var visibleDuration = Math.Max(1.0, _viewportWidth / pixelsPerSecond);
+        var visibleEnd = visibleStart + visibleDuration;
+        var overscan = Math.Max(2.0, visibleDuration * 0.5);
+        var viewportCenter = visibleStart + (visibleDuration / 2.0);
+
+        var desiredVisible = EntriesInRange(
+            visibleStart - overscan,
+            visibleEnd + overscan);
+
+        if (SelectedEntry != null && !desiredVisible.Contains(SelectedEntry))
+            desiredVisible.Add(SelectedEntry);
+
+        if (VisibleTimelineEntries.Count != desiredVisible.Count
+            || !VisibleTimelineEntries.SequenceEqual(desiredVisible))
+        {
+            VisibleTimelineEntries.Clear();
+            foreach (var entry in desiredVisible)
+                VisibleTimelineEntries.Add(entry);
+        }
+
+        var desiredAssets = desiredVisible
+            .Where(entry => entry.EndTime >= visibleStart
+                && entry.StartTime <= visibleEnd)
+            .OrderBy(entry => Math.Abs(
+                ((entry.StartTime + entry.EndTime) / 2.0) - viewportCenter))
+            .Take(MaxAssetClipCount)
+            .ToHashSet();
+
+        if (_assetWindowEntries.SetEquals(desiredAssets))
+            return;
+
+        ResetAssetLoads();
+        foreach (var entry in _assetWindowEntries)
+        {
+            if (desiredAssets.Contains(entry))
+                continue;
+            entry.ThumbnailFrames = null;
+            entry.AudioPeaks = null;
+            entry.IsAssetsLoaded = false;
+        }
+
+        _assetWindowEntries.Clear();
+        foreach (var entry in desiredAssets)
+        {
+            _assetWindowEntries.Add(entry);
+            if (!entry.IsAssetsLoaded)
+                _ = QueueClipAssetLoad(entry);
+        }
+    }
+
+    private List<TimelineEntryModel> EntriesInRange(double startTime, double endTime)
+    {
+        var low = 0;
+        var high = TimelineEntries.Count;
+        while (low < high)
+        {
+            var middle = low + ((high - low) / 2);
+            if (TimelineEntries[middle].EndTime < startTime)
+                low = middle + 1;
+            else
+                high = middle;
+        }
+
+        var entries = new List<TimelineEntryModel>();
+        for (var index = low; index < TimelineEntries.Count; index++)
+        {
+            var entry = TimelineEntries[index];
+            if (entry.StartTime > endTime)
+                break;
+            if (entry.EndTime >= startTime)
+                entries.Add(entry);
+        }
+        return entries;
     }
 
     private bool CanSelectPreviousCut() =>
@@ -590,9 +697,17 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         return Math.Clamp(rounded, minimum, maximum);
     }
 
+    public Task ActivateAsync() => RefreshTimelineAsync();
+
     [RelayCommand]
     private async Task RefreshTimelineAsync()
     {
+        if (Interlocked.Read(ref _editVersion) != Interlocked.Read(ref _savedEditVersion))
+        {
+            await SyncTimelineAsync();
+            return;
+        }
+
         _reloadQueued = false;
         _timelineReadyForMutation = false;
         var version = Interlocked.Increment(ref _loadVersion);
@@ -618,10 +733,20 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             }
 
             ResetAssetLoads();
+            _assetWindowEntries.Clear();
             IsLoading = true;
             StatusText = "Timeline wird geladen...";
 
-            var timeline = await _timelineState.RefreshAsync();
+            TimelineResponse? timeline;
+            await TimelinePersistenceGate.WaitAsync(operation.CancellationToken);
+            try
+            {
+                timeline = await _timelineState.RefreshAsync();
+            }
+            finally
+            {
+                TimelinePersistenceGate.Release();
+            }
             if (timeline == null)
             {
                 if (version == Volatile.Read(ref _loadVersion)
@@ -640,6 +765,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                     || !_projectService.IsCurrent(operation))
                     return;
 
+                var rememberedSelection = _timelineState.GetRememberedSelection();
                 TimelineEntries.Clear();
                 foreach (var entry in timeline.Entries)
                 {
@@ -667,14 +793,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
                 TotalDuration = timeline.TotalDuration;
                 AudioPath = timeline.AudioPath;
-                SelectedEntry = TimelineEntries.FirstOrDefault();
+                SelectedEntry = TimelineEntries
+                    .Where(entry => entry.ClipId == rememberedSelection.ClipId)
+                    .OrderBy(entry => Math.Abs(
+                        entry.StartTime - rememberedSelection.StartTime))
+                    .FirstOrDefault()
+                    ?? TimelineEntries.FirstOrDefault();
                 SelectedTimelinePosition = SelectedEntry?.StartTime ?? 0;
-
-                // Eagerly load assets for the first N visible clips (rest load on-demand).
-                foreach (var e in TimelineEntries.Take(20))
-                {
-                    _ = QueueClipAssetLoad(e);
-                }
 
                 StatusText = TimelineEntries.Count == 0
                     ? "Timeline ist leer"
@@ -686,12 +811,19 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 PreviousCutCommand.NotifyCanExecuteChanged();
                 NextCutCommand.NotifyCanExecuteChanged();
                 _timelineReadyForMutation = true;
+                var cleanVersion = Interlocked.Increment(ref _editVersion);
+                Interlocked.Exchange(ref _savedEditVersion, cleanVersion);
+                UpdateViewportEntries();
 
                 if (!string.IsNullOrEmpty(AudioPath))
                 {
                     _ = LoadWaveformAsync(AudioPath);
                 }
             });
+        }
+        catch (OperationCanceledException)
+        {
+            // Projektwechsel/Dispose: ein neuer Projektkontext besitzt den UI-State.
         }
         finally
         {
@@ -771,11 +903,18 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SyncTimelineAsync()
     {
+        await _syncGate.WaitAsync();
+        try
+        {
         if (!_timelineReadyForMutation)
         {
             StatusText = "Speichern übersprungen — Timeline wird noch geladen.";
             return;
         }
+
+        var editVersion = Interlocked.Read(ref _editVersion);
+        if (editVersion == Interlocked.Read(ref _savedEditVersion))
+            return;
 
         ProjectOperationContext operation;
         try
@@ -789,16 +928,28 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }
 
         var entries = SnapshotTimelineEntries();
+        var refreshCanonicalTimeline = false;
         var (sequence, operationCts) = BeginSyncOperation(operation);
         try
         {
             StatusText = "Speichere Änderungen...";
-            var response = await _api.UpdateTimelineAsync(entries, operationCts.Token);
+            await TimelinePersistenceGate.WaitAsync(operationCts.Token);
+            StatusResponse? response;
+            try
+            {
+                response = await _api.UpdateTimelineAsync(entries, operationCts.Token);
+            }
+            finally
+            {
+                TimelinePersistenceGate.Release();
+            }
             if (!IsCurrentSync(sequence, operationCts, operation))
                 return;
 
             if (response?.Success == true)
             {
+                Interlocked.Exchange(ref _savedEditVersion, editVersion);
+                refreshCanonicalTimeline = editVersion == Interlocked.Read(ref _editVersion);
                 StatusText = "Änderungen gespeichert";
             }
             else
@@ -818,6 +969,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         finally
         {
             CompleteSyncOperation(sequence, operationCts);
+        }
+        if (refreshCanonicalTimeline)
+            await RefreshTimelineAsync();
+        }
+        finally
+        {
+            _syncGate.Release();
         }
     }
 
@@ -1301,6 +1459,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectionIndexText));
         PreviousCutCommand.NotifyCanExecuteChanged();
         NextCutCommand.NotifyCanExecuteChanged();
+        UpdateViewportEntries();
     }
 
     private void ResetTimelineState()
@@ -1312,6 +1471,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _motionLoadSequence);
         _reloadQueued = false;
         TimelineEntries.Clear();
+        VisibleTimelineEntries.Clear();
+        _assetWindowEntries.Clear();
         WaveformBars.Clear();
         BeatMarkers.Clear();
         UIBeatMarkers.Clear();
@@ -1327,6 +1488,8 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         IsLoading = false;
         IsLoadingWaveform = false;
         StatusText = "Kein Projekt geöffnet";
+        var resetVersion = Interlocked.Increment(ref _editVersion);
+        Interlocked.Exchange(ref _savedEditVersion, resetVersion);
         OnPropertyChanged(nameof(HasTimeline));
         OnPropertyChanged(nameof(CanPreviewSelectedClip));
         OnPropertyChanged(nameof(SelectedPreviewRange));

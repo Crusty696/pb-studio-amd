@@ -1,0 +1,1009 @@
+{
+  "visible_texts": [
+    "Systemmenü",
+    "Minimieren",
+    "Maximieren",
+    "Schließen",
+    "PB STUDIO",
+    "•",
+    "obj74_qc_20260809_001",
+    "GPU: 0/0 MB",
+    "Backend: Online",
+    "LLM: Keines (Moondream-Fallback)",
+    "Lokal (GPU)",
+    "Bereit",
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR",
+    "Produktion und Export",
+    "RENDER SETTINGS",
+    "Ausgabe-Pfad",
+    "Ausgabe-Datei wählen",
+    "Qualität",
+    "Render-Qualität",
+    "Auflösung",
+    "Ausgabe-Breite",
+    "x",
+    "Ausgabe-Höhe",
+    "@",
+    "Bilder pro Sekunde",
+    "fps",
+    "Encoder",
+    "auto",
+    "AMD-AMF-Encoder",
+    "Bitrate",
+    "12 Mbps",
+    "Video-Bitrate",
+    "RENDER CONTROL",
+    "Render starten",
+    "Render-Log leeren",
+    "Log leeren",
+    "Render-Status",
+    "RENDER LOG",
+    "0 Einträge",
+    "Render-Protokoll"
+  ],
+  "visible_controls": [
+    {
+      "name": "",
+      "control_type": "TitleBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 249,
+        "right": 1972,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuBar",
+      "automation_id": "MenuBar",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Minimieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1833,
+        "top": 247,
+        "right": 1880,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Maximieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1880,
+        "top": 247,
+        "right": 1926,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Schließen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1926,
+        "top": 247,
+        "right": 1973,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "PB STUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 600,
+        "top": 287,
+        "right": 660,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "•",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 660,
+        "top": 287,
+        "right": 681,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "obj74_qc_20260809_001",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 681,
+        "top": 287,
+        "right": 799,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "GPU: 0/0 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1792,
+        "top": 288,
+        "right": 1854,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Backend: Online",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1882,
+        "top": 288,
+        "right": 1960,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "",
+      "control_type": "ProgressBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1093,
+        "top": 283,
+        "right": 1493,
+        "bottom": 307
+      }
+    },
+    {
+      "name": "LLM: Keines (Moondream-Fallback)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1120,
+        "top": 288,
+        "right": 1386,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Lokal (GPU)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1396,
+        "top": 290,
+        "right": 1446,
+        "bottom": 300
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1456,
+        "top": 289,
+        "right": 1484,
+        "bottom": 301
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Tab",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 314,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 590,
+        "top": 316,
+        "right": 662,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 324,
+        "right": 648,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 662,
+        "top": 316,
+        "right": 725,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 676,
+        "top": 324,
+        "right": 711,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 316,
+        "right": 785,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 739,
+        "top": 324,
+        "right": 771,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 785,
+        "top": 316,
+        "right": 856,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 799,
+        "top": 324,
+        "right": 842,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 856,
+        "top": 316,
+        "right": 932,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 870,
+        "top": 324,
+        "right": 918,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 932,
+        "top": 316,
+        "right": 1000,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 946,
+        "top": 324,
+        "right": 986,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1000,
+        "top": 316,
+        "right": 1055,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1014,
+        "top": 324,
+        "right": 1041,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1055,
+        "top": 316,
+        "right": 1132,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1069,
+        "top": 324,
+        "right": 1118,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1132,
+        "top": 316,
+        "right": 1238,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1146,
+        "top": 324,
+        "right": 1224,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1238,
+        "top": 316,
+        "right": 1315,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1252,
+        "top": 324,
+        "right": 1301,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1315,
+        "top": 316,
+        "right": 1370,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1329,
+        "top": 324,
+        "right": 1356,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1370,
+        "top": 316,
+        "right": 1452,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1384,
+        "top": 324,
+        "right": 1438,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1452,
+        "top": 316,
+        "right": 1517,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1466,
+        "top": 324,
+        "right": 1503,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1517,
+        "top": 316,
+        "right": 1591,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1531,
+        "top": 324,
+        "right": 1577,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "Produktion und Export",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "RENDER SETTINGS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 374,
+        "right": 1945,
+        "bottom": 387
+      }
+    },
+    {
+      "name": "Ausgabe-Pfad",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 395,
+        "right": 1945,
+        "bottom": 409
+      }
+    },
+    {
+      "name": "Ausgabe-Datei wählen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1913,
+        "top": 413,
+        "right": 1945,
+        "bottom": 443
+      }
+    },
+    {
+      "name": "Ausgabe-Pfad",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 413,
+        "right": 1907,
+        "bottom": 443
+      }
+    },
+    {
+      "name": "Qualität",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 453,
+        "right": 735,
+        "bottom": 466
+      }
+    },
+    {
+      "name": "Render-Qualität",
+      "control_type": "ComboBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 470,
+        "right": 735,
+        "bottom": 495
+      }
+    },
+    {
+      "name": "Auflösung",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 755,
+        "top": 453,
+        "right": 1945,
+        "bottom": 466
+      }
+    },
+    {
+      "name": "Ausgabe-Breite",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 755,
+        "top": 470,
+        "right": 820,
+        "bottom": 495
+      }
+    },
+    {
+      "name": "x",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 826,
+        "top": 475,
+        "right": 832,
+        "bottom": 490
+      }
+    },
+    {
+      "name": "Ausgabe-Höhe",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 838,
+        "top": 470,
+        "right": 903,
+        "bottom": 495
+      }
+    },
+    {
+      "name": "@",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 909,
+        "top": 475,
+        "right": 920,
+        "bottom": 490
+      }
+    },
+    {
+      "name": "Bilder pro Sekunde",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 926,
+        "top": 470,
+        "right": 976,
+        "bottom": 495
+      }
+    },
+    {
+      "name": "fps",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 982,
+        "top": 476,
+        "right": 997,
+        "bottom": 489
+      }
+    },
+    {
+      "name": "Encoder",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 507,
+        "right": 654,
+        "bottom": 520
+      }
+    },
+    {
+      "name": "auto",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1917,
+        "top": 507,
+        "right": 1945,
+        "bottom": 522
+      }
+    },
+    {
+      "name": "AMD-AMF-Encoder",
+      "control_type": "ComboBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 526,
+        "right": 1945,
+        "bottom": 551
+      }
+    },
+    {
+      "name": "Bitrate",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 563,
+        "right": 647,
+        "bottom": 577
+      }
+    },
+    {
+      "name": "12 Mbps",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1892,
+        "top": 563,
+        "right": 1945,
+        "bottom": 579
+      }
+    },
+    {
+      "name": "Video-Bitrate",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 581,
+        "right": 1945,
+        "bottom": 601
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 581,
+        "right": 843,
+        "bottom": 601
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 861,
+        "top": 581,
+        "right": 1945,
+        "bottom": 601
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 843,
+        "top": 581,
+        "right": 861,
+        "bottom": 601
+      }
+    },
+    {
+      "name": "RENDER CONTROL",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 639,
+        "right": 1945,
+        "bottom": 652
+      }
+    },
+    {
+      "name": "Render starten",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 660,
+        "right": 739,
+        "bottom": 694
+      }
+    },
+    {
+      "name": "Render starten",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 647,
+        "top": 670,
+        "right": 727,
+        "bottom": 684
+      }
+    },
+    {
+      "name": "Render-Log leeren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 739,
+        "top": 662,
+        "right": 1945,
+        "bottom": 692
+      }
+    },
+    {
+      "name": "Log leeren",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1325,
+        "top": 671,
+        "right": 1377,
+        "bottom": 684
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "name": "Render-Status",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 615,
+        "top": 710,
+        "right": 1945,
+        "bottom": 734
+      }
+    },
+    {
+      "name": "RENDER LOG",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 611,
+        "top": 768,
+        "right": 676,
+        "bottom": 781
+      }
+    },
+    {
+      "name": "0 Einträge",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1900,
+        "top": 772,
+        "right": 1949,
+        "bottom": 785
+      }
+    },
+    {
+      "name": "Render-Protokoll",
+      "control_type": "List",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 602,
+        "top": 795,
+        "right": 1958,
+        "bottom": 1100
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 598,
+        "top": 1121,
+        "right": 1962,
+        "bottom": 1133
+      }
+    }
+  ],
+  "tab": "EXPORT",
+  "selected": true
+}

@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -68,10 +70,19 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _stepAnalyzeMotion = true;
     [ObservableProperty] private bool _stepGenerateEmbeddings = true;
     [ObservableProperty] private bool _stepGenerateCaptions = true;
+    [ObservableProperty] private string _selectedSortOption = "Neueste zuerst";
 
     public ObservableCollection<VideoClipModel> VideoClips { get; } = [];
+    public ICollectionView VideoClipsView { get; }
     public ObservableCollection<SceneInfo> SelectedClipScenes { get; } = [];
     public ObservableCollection<VideoClipModel> SelectedClips { get; } = [];
+    public IReadOnlyList<string> SortOptions { get; } =
+    [
+        "Neueste zuerst",
+        "Name A-Z",
+        "Status: offen zuerst",
+        "Dauer: lang zuerst",
+    ];
 
     public VideoLibraryViewModel(
         IApiClient api,
@@ -85,6 +96,8 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         _projectService = projectService;
         _sseClient = sseClient;
         _dialogService = dialogService;
+        VideoClipsView = CollectionViewSource.GetDefaultView(VideoClips);
+        ApplyCurrentSort();
 
         _sseClient.ProgressReceived += OnSseProgressReceived;
 
@@ -120,6 +133,12 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             _ = LoadScenesAsync(value.Id);
         }
     }
+
+    partial void OnIsDeletingChanged(bool value)
+        => DeleteSelectedCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsAnalyzingChanged(bool value)
+        => AnalyzeMarkedCommand.NotifyCanExecuteChanged();
 
     private async Task LoadScenesAsync(int clipId)
     {
@@ -289,14 +308,70 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    partial void OnSelectedSortOptionChanged(string value)
+        => ApplyCurrentSort();
+
+    private void ApplyCurrentSort()
+    {
+        using var deferRefresh = VideoClipsView.DeferRefresh();
+        VideoClipsView.SortDescriptions.Clear();
+        switch (SelectedSortOption)
+        {
+            case "Name A-Z":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Id), ListSortDirection.Ascending));
+                break;
+            case "Status: offen zuerst":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.IsAnalyzed), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.AnalysisStatus), ListSortDirection.Ascending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                break;
+            case "Dauer: lang zuerst":
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.DurationSeconds), ListSortDirection.Descending));
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Name), ListSortDirection.Ascending));
+                break;
+            default:
+                VideoClipsView.SortDescriptions.Add(
+                    new SortDescription(nameof(VideoClipModel.Id), ListSortDirection.Descending));
+                break;
+        }
+
+        if (VideoClipsView is ICollectionViewLiveShaping liveSorting)
+        {
+            liveSorting.LiveSortingProperties.Clear();
+            foreach (var sort in VideoClipsView.SortDescriptions)
+                liveSorting.LiveSortingProperties.Add(sort.PropertyName);
+            if (liveSorting.CanChangeLiveSorting)
+                liveSorting.IsLiveSorting = true;
+        }
+    }
+
+    private List<VideoClipModel> GetBatchActionClips()
+    {
+        var selectedClips = SelectedClips.ToHashSet();
+        return VideoClips
+            .Where(clip => clip.IsMarked || selectedClips.Contains(clip))
+            .ToList();
+    }
+
+    private bool CanDeleteSelected()
+        => !IsDeleting && GetBatchActionClips().Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanDeleteSelected))]
     private async Task DeleteSelectedAsync()
     {
-        var markedClips = VideoClips.Where(c => c.IsMarked).ToList();
-        if (markedClips.Count == 0 || IsDeleting) return;
-        var confirmationMessage = markedClips.Count == 1
-            ? $"Video-Clip \"{markedClips[0].Name}\" (ID {markedClips[0].Id}) dauerhaft löschen?"
-            : $"{markedClips.Count} ausgewählte Video-Clips dauerhaft löschen?";
+        var actionClips = GetBatchActionClips();
+        if (actionClips.Count == 0 || IsDeleting) return;
+        var confirmationMessage = actionClips.Count == 1
+            ? $"Video-Clip \"{actionClips[0].Name}\" (ID {actionClips[0].Id}) dauerhaft löschen?"
+            : $"{actionClips.Count} ausgewählte Video-Clips dauerhaft löschen?";
         if (!_dialogService.ConfirmDestructiveAction("Video-Clips löschen", confirmationMessage))
             return;
 
@@ -314,7 +389,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         IsDeleting = true;
         try
         {
-            var ids = markedClips.Select(c => c.Id).ToList();
+            var ids = actionClips.Select(c => c.Id).ToList();
             StatusText = $"Loesche {ids.Count} Video-Clips...";
             var resp = ids.Count == 1
                 ? await _api.DeleteVideoClipAsync(ids[0], projectContext.CancellationToken)
@@ -582,6 +657,11 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         clip.StageStatus = result.StageStatus;
         clip.StageErrors = result.StageErrors;
         ApplyMotionResult(clip, result);
+        if (SelectedSortOption == "Status: offen zuerst"
+            && VideoClipsView is not ICollectionViewLiveShaping { IsLiveSorting: true })
+        {
+            VideoClipsView.Refresh();
+        }
         return true;
     }
 
@@ -603,11 +683,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    private bool CanAnalyzeMarked()
+        => !IsAnalyzing && GetBatchActionClips().Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanAnalyzeMarked))]
     private async Task AnalyzeMarkedAsync()
     {
-        var markedClips = VideoClips
-            .Where(c => c.IsMarked)
+        var markedClips = GetBatchActionClips()
             .Select(CaptureAnalysisTarget)
             .ToList();
         if (markedClips.Count == 0 || IsAnalyzing) return;
@@ -617,15 +699,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             var done = 0;
             var succeeded = 0;
             var failed = 0;
-            var skipped = 0;
             var failures = new List<string>();
+            AnalyzeAllProgress = 0.0;
             foreach (var target in markedClips)
             {
                 scope.Cancellation.Token.ThrowIfCancellationRequested();
-                var currentClip = ResolveAnalysisTarget(scope, target);
-                if (currentClip == null)
+                if (ResolveAnalysisTarget(scope, target) == null)
                     return;
-                if (currentClip.IsAnalyzed) { skipped++; done++; continue; }
                 if (!SetActiveAnalysisClip(scope, target.Id))
                     return;
                 StatusText = $"Markierte: Analysiere {done + 1}/{total}: {target.Name}...";
@@ -691,7 +771,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100.0;
-            StatusText = $"Markierte fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+            StatusText = $"Markierte fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
                 + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             UpdateAnalyzedCounts();
         });
@@ -857,6 +937,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 // Review-Fix MEDIUM (2026-07-09): Selektion + Markierungen
                 // ueberleben den Self-Refresh nach Analyse (L-M6-Erhalt).
                 var previousSelectedId = SelectedClip?.Id;
+                var previousSelectedIds = SelectedClips.Select(c => c.Id).ToHashSet();
+                if (previousSelectedId is { } focusedId)
+                    previousSelectedIds.Add(focusedId);
                 var previousMarked = VideoClips.Where(c => c.IsMarked).Select(c => c.Id).ToHashSet();
 
                 VideoClips.Clear();
@@ -904,6 +987,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
                     VideoClips.Add(clip);
                 }
+
+                ApplyCurrentSort();
+
+                SelectedClips.Clear();
+                foreach (var clip in VideoClips.Where(c => previousSelectedIds.Contains(c.Id)))
+                    SelectedClips.Add(clip);
+                DeleteSelectedCommand.NotifyCanExecuteChanged();
+                AnalyzeMarkedCommand.NotifyCanExecuteChanged();
 
                 if (previousSelectedId != null)
                 {
@@ -1009,16 +1100,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             var done = 0;
             var succeeded = 0;
             var failed = 0;
-            var skipped = 0;
             var failures = new List<string>();
+            AnalyzeAllProgress = 0.0;
 
             foreach (var target in targets)
             {
                 scope.Cancellation.Token.ThrowIfCancellationRequested();
-                var currentClip = ResolveAnalysisTarget(scope, target);
-                if (currentClip == null)
+                if (ResolveAnalysisTarget(scope, target) == null)
                     return;
-                if (currentClip.IsAnalyzed) { skipped++; done++; continue; }
                 if (!SetActiveAnalysisClip(scope, target.Id))
                     return;
 
@@ -1087,7 +1176,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
             WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
             AnalyzeAllProgress = 100;
-            StatusText = $"Batch fertig: {succeeded} erfolgreich, {failed} fehlgeschlagen, {skipped} übersprungen."
+            StatusText = $"Batch fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
                 + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
             UpdateAnalyzedCounts();
         });
@@ -1167,8 +1256,13 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         _videoLibraryState.Clear();
         _thumbnailFailureCache.Clear();
         _thumbnailCache.Clear();
+        foreach (var clip in VideoClips)
+            clip.IsMarked = false;
+        SelectedClips.Clear();
         VideoClips.Clear();
         SelectedClip = null;
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        AnalyzeMarkedCommand.NotifyCanExecuteChanged();
         StatusText = "Kein Projekt geöffnet";
         IsLoadingClips = false;
         IsLoadingThumbnails = false;

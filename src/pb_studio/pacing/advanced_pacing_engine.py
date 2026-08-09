@@ -51,6 +51,9 @@ ENERGY_PHASE_MULTIPLIERS = {
 }
 
 STRONG_BEAT_THRESHOLD = 0.75
+DEFAULT_ONSET_SENSITIVITY = 0.5
+ONSET_DELTA_MIN = 0.02
+ONSET_DELTA_MAX = 0.12
 
 # =============================================================================
 # Audit E1: Camelot-Wheel Key Compatibility (Tonart-Matching)
@@ -1037,7 +1040,17 @@ class AdvancedPacingEngine:
         # Trigger im normalen (pre-cached) Pacing-Pfad komplett wirkungslos waren.
         # Jetzt: echte, von `pacing_service._inject_cached_into_engine` injizierte
         # Werte aus der Audio-Analyse (`/audio/analyze`).
-        onset_times = getattr(self, "_pre_cached_onset_times", None) or []
+        ts = self.trigger_settings
+        cached_onset_times = getattr(self, "_pre_cached_onset_times", None) or []
+        use_cached_onsets = (
+            abs(float(ts.onset_sensitivity) - DEFAULT_ONSET_SENSITIVITY) < 1e-9
+        )
+        onset_times = cached_onset_times if use_cached_onsets else []
+        if cached_onset_times and not use_cached_onsets and ts.onset_weight > 0:
+            logger.info(
+                "Custom onset_sensitivity %.2f: Onsets werden aus Audio neu erkannt",
+                ts.onset_sensitivity,
+            )
         kick_times = getattr(self, "_pre_cached_kick_times", None) or []
         snare_times = getattr(self, "_pre_cached_snare_times", None) or []
         hihat_times = getattr(self, "_pre_cached_hihat_times", None) or []
@@ -1151,8 +1164,6 @@ class AdvancedPacingEngine:
 
         # --- Triggers sammeln ---
         triggers: List[PacingCut] = []
-        ts = self.trigger_settings
-
         if ts.beat_weight > 0:
             triggers.extend(self._build_beat_triggers(beats, downbeats))
 
@@ -1195,19 +1206,20 @@ class AdvancedPacingEngine:
         if filtered and filtered[-1].time < duration:
             filtered.append(PacingCut(time=duration, trigger_type="end", strength=1.0))
 
+        # Subtrack boundaries must enter the trigger pool before clip-length
+        # enforcement; snapping afterwards could recreate too-short intervals.
+        filtered = self._snap_cuts_to_subtrack_boundaries(filtered)
+
         # Clip-Längen erzwingen — durchlauf-Emit pro Iteration (alle ~5%) damit
         # bei sehr langen Mixen UI nicht 20s blockt.
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
             min_length=ts.min_clip_length,
-            max_length=ts.max_clip_length,
+            max_length=self._effective_max_cut_interval(),
             audio_duration=duration,
             variation=ts.clip_length_variation,
             on_progress=lambda local_pct: _emit(80.0 + (local_pct / 100.0) * 20.0),
         )
-
-        # Audit E3: Snap cuts an Subtrack-Boundaries wenn injiziert (no-op sonst).
-        filtered = self._snap_cuts_to_subtrack_boundaries(filtered)
 
         # Audit L-M7: Generation komplett -> 100%
         _emit(100.0, force=True)
@@ -1638,7 +1650,7 @@ class AdvancedPacingEngine:
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
             min_length=ts.min_clip_length,
-            max_length=ts.max_clip_length,
+            max_length=self._effective_max_cut_interval(),
             audio_duration=duration,
             variation=ts.clip_length_variation,
             on_progress=lambda local_pct: _emit(85.0 + (local_pct / 100.0) * 15.0),
@@ -1820,6 +1832,24 @@ class AdvancedPacingEngine:
     # INTERNE HELPER (NV-portiert)
     # =========================================================================
 
+    def _onset_detection_delta(self) -> float:
+        """Map 0..1 sensitivity to librosa's inverse peak-pick threshold."""
+        sensitivity = max(
+            0.0,
+            min(1.0, float(self.trigger_settings.onset_sensitivity)),
+        )
+        return ONSET_DELTA_MAX - sensitivity * (
+            ONSET_DELTA_MAX - ONSET_DELTA_MIN
+        )
+
+    def _effective_max_cut_interval(self) -> float:
+        """Resolve both upper cut-spacing constraints without violating min length."""
+        ts = self.trigger_settings
+        return max(
+            float(ts.min_clip_length),
+            min(float(ts.max_clip_length), float(ts.max_cut_interval)),
+        )
+
     def _extract_drum_triggers_from_stem(self, stem_path: str) -> List["PacingCut"]:
         """Extrahiert Kick/Snare/HiHat aus Drums-Stem (Librosa-basiert)."""
         from .pacing_models import PacingCut
@@ -1836,7 +1866,8 @@ class AdvancedPacingEngine:
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
                                                    aggregate=np.median, fmax=150)
                 frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr,
-                                                    hop_length=hop_length, backtrack=True)
+                                                    hop_length=hop_length, backtrack=True,
+                                                    delta=self._onset_detection_delta())
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="kick",
                                               strength=ts.kick_weight * 0.95))
@@ -1845,14 +1876,18 @@ class AdvancedPacingEngine:
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
                                                    fmin=200, fmax=400)
                 frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr,
-                                                    hop_length=hop_length, backtrack=True)
+                                                    hop_length=hop_length, backtrack=True,
+                                                    delta=self._onset_detection_delta())
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="snare",
                                               strength=ts.snare_weight * 0.9))
 
             if ts.hihat_weight > 0:
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length, fmin=5000)
-                frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop_length)
+                frames = librosa.onset.onset_detect(
+                    onset_envelope=env, sr=sr, hop_length=hop_length,
+                    delta=self._onset_detection_delta(),
+                )
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="hihat",
                                               strength=ts.hihat_weight * 0.5))
@@ -1873,7 +1908,10 @@ class AdvancedPacingEngine:
 
         try:
             y, sr = librosa.load(stem_path, sr=22050)
-            frames = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length, units="frames")
+            frames = librosa.onset.onset_detect(
+                y=y, sr=sr, hop_length=hop_length, units="frames",
+                delta=self._onset_detection_delta(),
+            )
             times = librosa.frames_to_time(frames, sr=sr, hop_length=hop_length)
             # Audit A2 follow-up: prefer injected cached energy if available
             # (skip redundant librosa.feature.rms recompute, ~150-200ms overhead).
@@ -2034,9 +2072,12 @@ class AdvancedPacingEngine:
         triggers: List[PacingCut] = []
         ts = self.trigger_settings
         hop_length = 512
+        onset_delta = self._onset_detection_delta()
 
         if ts.onset_weight > 0:
-            frames = librosa.onset.onset_detect(y=y, sr=sr, units="frames")
+            frames = librosa.onset.onset_detect(
+                y=y, sr=sr, units="frames", delta=onset_delta,
+            )
             for t in librosa.frames_to_time(frames, sr=sr):
                 triggers.append(PacingCut(time=float(t), trigger_type="onset",
                                           strength=ts.onset_weight * 0.5))
@@ -2046,7 +2087,10 @@ class AdvancedPacingEngine:
                 env = librosa.onset.onset_strength(y=librosa.effects.preemphasis(y), sr=sr,
                                                    hop_length=hop_length, aggregate=np.median,
                                                    fmax=150, n_mels=64)
-                frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop_length)
+                frames = librosa.onset.onset_detect(
+                    onset_envelope=env, sr=sr, hop_length=hop_length,
+                    delta=onset_delta,
+                )
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="kick",
                                               strength=ts.kick_weight * 0.9))
@@ -2054,7 +2098,10 @@ class AdvancedPacingEngine:
             if ts.snare_weight > 0:
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
                                                    fmin=200, fmax=400, n_mels=64)
-                frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop_length)
+                frames = librosa.onset.onset_detect(
+                    onset_envelope=env, sr=sr, hop_length=hop_length,
+                    delta=onset_delta,
+                )
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="snare",
                                               strength=ts.snare_weight * 0.85))
@@ -2062,7 +2109,10 @@ class AdvancedPacingEngine:
             if ts.hihat_weight > 0:
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
                                                    fmin=5000, n_mels=64)
-                frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop_length)
+                frames = librosa.onset.onset_detect(
+                    onset_envelope=env, sr=sr, hop_length=hop_length,
+                    delta=onset_delta,
+                )
                 for t in librosa.frames_to_time(frames, sr=sr, hop_length=hop_length):
                     triggers.append(PacingCut(time=float(t), trigger_type="hihat",
                                               strength=ts.hihat_weight * 0.4))

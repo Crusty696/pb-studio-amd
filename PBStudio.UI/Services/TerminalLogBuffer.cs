@@ -8,6 +8,9 @@ public sealed record TerminalLogEntry(
 public sealed class TerminalLogBuffer
 {
     private const int MaxCharacters = 100_000;
+    private const int MaxMessageCharacters = 20_000;
+    private const int MaxLevelCharacters = 32;
+    private const string TruncationMarker = "\n… [Logeintrag gekürzt]";
     private readonly object _lock = new();
     private readonly Queue<TerminalLogEntry> _entries = new();
     private int _characterCount;
@@ -15,10 +18,21 @@ public sealed class TerminalLogBuffer
 
     public void Append(string level, string message)
     {
+        var normalizedLevel = string.IsNullOrWhiteSpace(level)
+            ? "INFO"
+            : level.ToUpperInvariant();
+        if (normalizedLevel.Length > MaxLevelCharacters)
+            normalizedLevel = normalizedLevel[..MaxLevelCharacters];
+        var redacted = TerminalLogRedactor.Redact(message);
+        if (redacted.Length > MaxMessageCharacters)
+        {
+            redacted = redacted[..(MaxMessageCharacters - TruncationMarker.Length)]
+                + TruncationMarker;
+        }
         var entry = new TerminalLogEntry(
             DateTime.Now,
-            string.IsNullOrWhiteSpace(level) ? "INFO" : level.ToUpperInvariant(),
-            TerminalLogRedactor.Redact(message));
+            normalizedLevel,
+            redacted);
         Action<TerminalLogEntry>? handlers;
 
         lock (_lock)

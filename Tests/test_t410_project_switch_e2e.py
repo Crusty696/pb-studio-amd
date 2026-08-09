@@ -23,7 +23,7 @@ from backend.schemas.pacing_schemas import (
 )
 from backend.schemas.video_schemas import VideoAnalyzeRequest
 from pb_studio.brain.brain_service import BrainService, StaleBrainProjectLeaseError
-from pb_studio.storage.migration_runner import migrate
+from pb_studio.storage.migration_runner import migrate_project_state
 
 
 audio_router = importlib.import_module("backend.routers.audio_router")
@@ -106,6 +106,8 @@ def _runtime_snapshot(state: AppState) -> dict[str, Any]:
 
 
 def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, AppState, Path, dict]:
+    project_a_uuid = "72d810d2-70b1-4a33-9daf-1cd991e2bb8d"
+    project_b_uuid = "4ab90a42-8826-4910-900f-32fe3c9d0100"
     project_a = tmp_path / "project-a"
     project_b = tmp_path / "project-b"
     project_a.mkdir()
@@ -128,8 +130,16 @@ def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, Ap
     migrations = Path(__file__).resolve().parents[1] / "src" / "pb_studio" / "storage" / "migrations" / "state"
     state_a_path = project_a / "state.db"
     state_b_path = project_b / "state.db"
-    migrate(state_a_path, migrations)
-    migrate(state_b_path, migrations)
+    migrate_project_state(
+        state_a_path,
+        migrations,
+        project_uuid=project_a_uuid,
+    )
+    migrate_project_state(
+        state_b_path,
+        migrations,
+        project_uuid=project_b_uuid,
+    )
     with sqlite3.connect(state_a_path) as connection:
         connection.execute(
             "INSERT INTO timelines(id, name, audio_clip_id, created_at, is_current) "
@@ -174,7 +184,12 @@ def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, Ap
         connection.commit()
 
     state = AppState(
-        current_project={"db_project_id": 101, "path": str(project_a), "name": "A"},
+        current_project={
+            "db_project_id": 101,
+            "path": str(project_a),
+            "name": "A",
+            "project_uuid": project_a_uuid,
+        },
         audio_clips={
             1: {
                 "id": 1,
@@ -241,7 +256,12 @@ def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, Ap
         ],
         current_audio_path=str(audio_b),
     )
-    project_data_b = {"db_project_id": 202, "path": str(project_b), "name": "B"}
+    project_data_b = {
+        "db_project_id": 202,
+        "path": str(project_b),
+        "name": "B",
+        "project_uuid": project_b_uuid,
+    }
     return state, candidate_b, project_b, project_data_b
 
 
@@ -338,6 +358,7 @@ def test_project_switch_cancels_a_job_without_mutating_b(
                 tmp_path / "project-a" / "state.db",
                 project_epoch=state.project_epoch,
                 project_id=101,
+                project_uuid=str(state.current_project["project_uuid"]),
             )
             monkeypatch.setattr(
                 BrainService,

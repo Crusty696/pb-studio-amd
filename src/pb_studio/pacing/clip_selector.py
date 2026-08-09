@@ -15,13 +15,13 @@ from __future__ import annotations
 import logging
 import random
 from collections import OrderedDict, deque
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
 
-from .pacing_models import SelectedClip
+from .pacing_models import SelectedClip, SelectionProvenance
 from .constants import (
     EMBEDDING_CACHE_SIZE,
     MOTION_TOLERANCE,
@@ -89,6 +89,14 @@ TRIGGER_PROMPTS: Dict[str, str] = {
 }
 
 DEFAULT_PROMPT = "dynamic movement action visual interest"
+
+# Existing hybrid-ranking contract, shared by select_hybrid() and the live
+# semantic path so similarity cannot be discarded after candidate retrieval.
+HYBRID_SELECTION_WEIGHTS = {
+    "similarity": 0.5,
+    "energy": 0.3,
+    "motion": 0.2,
+}
 
 
 # =============================================================================
@@ -245,6 +253,7 @@ class ClipSelector:
         # L-TI-1: Per-call prompt override (set by select_clip), consumed
         # by _select_semantic. None = use TRIGGER_PROMPTS default.
         self._current_prompt_override: Optional[str] = None
+        self._selection_details: Dict[str, Any] = {}
 
         # --- Für Audio-Heuristik (Stufe 2) ---
         self.bass_curve: Optional[np.ndarray] = None
@@ -323,6 +332,48 @@ class ClipSelector:
             ),
         )
 
+    def _record_selection_details(
+        self,
+        selection_path: str,
+        *,
+        score_components: Optional[Dict[str, Any]] = None,
+        fallback_reason: Optional[str] = None,
+    ) -> None:
+        self._selection_details = {
+            "selection_path": selection_path,
+            "score_components": dict(score_components or {}),
+            "fallback_reason": fallback_reason,
+        }
+
+    def _attach_selection_provenance(
+        self,
+        selected: SelectedClip,
+        *,
+        trigger_type: str,
+        trigger_strength: float,
+        candidate_ids: List[str],
+        eligible_candidate_ids: List[str],
+        excluded_recent_clip_ids: List[str],
+        recent_clip_ids: List[str],
+        diversity_relaxed: bool,
+    ) -> SelectedClip:
+        details = self._selection_details
+        provenance = SelectionProvenance(
+            selection_path=str(details.get("selection_path", "unknown")),
+            requested_strategy=self.strategy,
+            trigger_type=trigger_type,
+            trigger_strength=float(trigger_strength),
+            candidate_ids=candidate_ids,
+            eligible_candidate_ids=eligible_candidate_ids,
+            excluded_recent_clip_ids=excluded_recent_clip_ids,
+            recent_clip_ids=recent_clip_ids,
+            blacklist_size=self._blacklist_size,
+            diversity_relaxed=diversity_relaxed,
+            fallback_reason=details.get("fallback_reason"),
+            score_components=details.get("score_components", {}),
+        )
+        return selected.attach_selection_provenance(provenance)
+
     def select_clip(
         self,
         available_clips: List[dict],
@@ -355,9 +406,26 @@ class ClipSelector:
         Returns:
             SelectedClip mit dem gewählten Clip
         """
+        self._selection_details = {}
+        candidate_ids = [str(clip.get("id", "")) for clip in available_clips]
         if not available_clips:
             logger.warning("Keine Clips verfügbar")
-            return SelectedClip(clip_id="none", clip_path="", score=0.0)
+            self._blacklist_size = 0
+            self._record_selection_details(
+                "no_candidates",
+                score_components={"base_score": 0.0},
+                fallback_reason="empty_candidate_pool",
+            )
+            return self._attach_selection_provenance(
+                SelectedClip(clip_id="none", clip_path="", score=0.0),
+                trigger_type=trigger_type,
+                trigger_strength=trigger_strength,
+                candidate_ids=candidate_ids,
+                eligible_candidate_ids=[],
+                excluded_recent_clip_ids=[],
+                recent_clip_ids=[],
+                diversity_relaxed=False,
+            )
 
         # Stufe 3: Aktives Thema sichern
         if active_theme is not None:
@@ -388,13 +456,24 @@ class ClipSelector:
         while len(self._recently_used) > self._blacklist_size:
             self._recently_used.popleft()
 
+        recent_clip_ids = list(self._recently_used)
+        recent_clip_id_set = set(recent_clip_ids)
+        excluded_recent_clip_ids = [
+            clip_id for clip_id in candidate_ids
+            if clip_id in recent_clip_id_set
+        ]
+
         # Blacklist anwenden
         candidates = [
             clip for clip in available_clips
             if str(clip.get("id", "")) not in self._recently_used
         ]
+        diversity_relaxed = not candidates
         if not candidates:
             candidates = available_clips
+        eligible_candidate_ids = [
+            str(clip.get("id", "")) for clip in candidates
+        ]
 
         # Audio-Zustand für Stufe 2 Audio-Heuristik berechnen
         audio_state = "normal"
@@ -419,10 +498,30 @@ class ClipSelector:
                 selected = self._fallback_select(
                     candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
                 )
+                fallback_details = dict(self._selection_details)
+                self._record_selection_details(
+                    f"brain_fallback_{fallback_details.get('selection_path', 'unknown')}",
+                    score_components={
+                        "brain": {"status": "error"},
+                        "fallback": fallback_details,
+                    },
+                    fallback_reason=f"brain_error:{type(e).__name__}",
+                )
         else:
             selected = self._fallback_select(
                 candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
             )
+
+        selected = self._attach_selection_provenance(
+            selected,
+            trigger_type=trigger_type,
+            trigger_strength=trigger_strength,
+            candidate_ids=candidate_ids,
+            eligible_candidate_ids=eligible_candidate_ids,
+            excluded_recent_clip_ids=excluded_recent_clip_ids,
+            recent_clip_ids=recent_clip_ids,
+            diversity_relaxed=diversity_relaxed,
+        )
 
         # Blacklist aktualisieren — R18/MEDIUM-018-3: popleft() is O(1) on deque.
         try:
@@ -501,12 +600,39 @@ class ClipSelector:
             min_confidence=self.brain_min_confidence,
         )
         if not scored:
-            return self._fallback_select(candidates, trigger_strength, trigger_type)
+            selected = self._fallback_select(
+                candidates,
+                trigger_strength,
+                trigger_type,
+            )
+            fallback_details = dict(self._selection_details)
+            self._record_selection_details(
+                f"brain_fallback_{fallback_details.get('selection_path', 'unknown')}",
+                score_components={
+                    "brain": {
+                        "status": "no_scored_candidates",
+                        "minimum_confidence": self.brain_min_confidence,
+                    },
+                    "fallback": fallback_details,
+                },
+                fallback_reason="brain_no_scored_candidates",
+            )
+            return selected
 
         top = scored[0]
         clip = top.candidate
         clip_path = str(clip.get("file_path", ""))
         clip_id = str(clip.get("id", ""))
+
+        self._record_selection_details(
+            "brain",
+            score_components={
+                "brain_final_score": float(top.final_score),
+                "brain_axis_scores": dict(sorted(top.brain_scores.items())),
+                "feature_confidence": float(top.features.confidence),
+                "minimum_confidence": self.brain_min_confidence,
+            },
+        )
 
         return SelectedClip(
             clip_id=clip_id,
@@ -582,6 +708,10 @@ class ClipSelector:
     def _select_random(self, clips: List[dict]) -> SelectedClip:
         """Zufällige Auswahl."""
         clip = random.choice(clips)
+        self._record_selection_details(
+            "random",
+            score_components={"base_score": 1.0},
+        )
         return SelectedClip(
             clip_id=str(clip.get("id", "unknown")),
             clip_path=clip.get("file_path", clip.get("path", "")),
@@ -591,8 +721,16 @@ class ClipSelector:
 
     def _select_round_robin(self, clips: List[dict]) -> SelectedClip:
         """Sequentielle Auswahl."""
-        clip = clips[self._rr_index % len(clips)]
+        selected_index = self._rr_index % len(clips)
+        clip = clips[selected_index]
         self._rr_index += 1
+        self._record_selection_details(
+            "round_robin",
+            score_components={
+                "base_score": 1.0,
+                "round_robin_index": selected_index,
+            },
+        )
         return SelectedClip(
             clip_id=str(clip.get("id", "unknown")),
             clip_path=clip.get("file_path", clip.get("path", "")),
@@ -730,6 +868,7 @@ class ClipSelector:
         trigger_type: str,
         current_time: Optional[float] = None,
         audio_state: str = "normal",
+        semantic_scores: Optional[Dict[str, float]] = None,
     ) -> SelectedClip:
         """
         Motion-basierte Auswahl mit Roter-Faden-Continuity.
@@ -747,6 +886,7 @@ class ClipSelector:
 
         best_clip = None
         best_score = -9999.0
+        best_components: Dict[str, Any] = {}
 
         # L-K4: Lazy-Import um Zirkular-Import zu vermeiden.
         _key_score_fn = None
@@ -761,6 +901,7 @@ class ClipSelector:
             clip_motion = clip.get("motion_score", 0.5)
             motion_diff = abs(target_motion - clip_motion)
             motion_score = 1.0 - min(motion_diff / (self.motion_tolerance + 0.01), 1.0)
+            motion_curve_match_score = None
 
             # L-M3: motion_curve-aware boost. trigger_strength dient als Proxy für
             # die aktuelle Audio-Intensität (energy-curve nicht direkt im Selector
@@ -772,6 +913,7 @@ class ClipSelector:
                     float(clip.get("duration", 1.0) or 1.0),
                     float(target_motion),
                 )
+                motion_curve_match_score = motion_curve_boost
                 motion_score = (motion_score + motion_curve_boost) / 2.0
 
             # Roter Faden: Continuity-Bonus für ähnliche Motion zum letzten Clip
@@ -782,24 +924,48 @@ class ClipSelector:
                 continuity_bonus = motion_continuity * self._continuity_weight * 0.5
 
             total_score = motion_score + continuity_bonus
+            audio_state_adjustment = 0.0
 
             # Stufe 2: Audio-Heuristik Scoring-Verstärker
             if audio_state == "break":
                 if clip_motion < 0.3:
                     total_score += 0.25
+                    audio_state_adjustment += 0.25
                 elif clip_motion < 0.6:
                     total_score += 0.15
+                    audio_state_adjustment += 0.15
                 else:
                     total_score -= 0.50
+                    audio_state_adjustment -= 0.50
             elif audio_state == "drop":
                 if clip_motion >= 0.6:
                     total_score += 0.40
+                    audio_state_adjustment += 0.40
+
+            semantic_score = None
+            semantic_contribution = None
+            motion_contribution = None
+            if semantic_scores is not None:
+                path_key = self._normalized_path_key(self._metadata_path(clip))
+                raw_semantic_score = semantic_scores.get(path_key)
+                if raw_semantic_score is not None:
+                    semantic_score = float(raw_semantic_score)
+                    semantic_contribution = (
+                        semantic_score * HYBRID_SELECTION_WEIGHTS["similarity"]
+                    )
+                    motion_contribution = (
+                        total_score * HYBRID_SELECTION_WEIGHTS["motion"]
+                    )
+                    total_score = semantic_contribution + motion_contribution
 
             # Stufe 3: Style-Persistenz / Narrative Kapitel-Themen
+            theme_bonus = 0.0
             if self.active_theme and belongs_to_theme(clip, self.active_theme):
                 total_score += 1000.0
+                theme_bonus = 1000.0
 
             # Stufe 4: Bridge-Übergänge für manuelle Storyboard-Anker
+            anchor_in_bonus = 0.0
             if self.bridging_in_to:
                 target_path = self.bridging_in_to.get("file_path", self.bridging_in_to.get("path", ""))
                 if target_path:
@@ -807,7 +973,9 @@ class ClipSelector:
                     current_path = clip.get("file_path", clip.get("path", ""))
                     if current_path and any(str(Path(current_path).absolute()) == str(Path(nb).absolute()) for nb in neighbors):
                         total_score += 400.0
+                        anchor_in_bonus = 400.0
 
+            anchor_out_bonus = 0.0
             if self.bridging_out_of:
                 target_path = self.bridging_out_of.get("file_path", self.bridging_out_of.get("path", ""))
                 if target_path:
@@ -815,10 +983,13 @@ class ClipSelector:
                     current_path = clip.get("file_path", clip.get("path", ""))
                     if current_path and any(str(Path(current_path).absolute()) == str(Path(nb).absolute()) for nb in neighbors):
                         total_score += 400.0
+                        anchor_out_bonus = 400.0
 
             # L-K4: Tonart-Bonus (Camelot-Wheel). Multiplicativer Faktor 0.3..1.0
             # auf die Motion-Selektion. Clips ohne audio_key (None) ergeben 0.5
             # (neutral) — kein Penalty wenn Detection fehlgeschlagen ist.
+            key_score = None
+            pre_key_score = total_score
             if _key_score_fn is not None:
                 clip_id = clip.get("id")
                 video_key = self.video_keys.get(clip_id) if clip_id is not None else None
@@ -831,9 +1002,37 @@ class ClipSelector:
             if total_score > best_score:
                 best_score = total_score
                 best_clip = clip
+                best_components = {
+                    "target_motion": target_motion,
+                    "clip_motion": clip_motion,
+                    "motion_match_score": motion_score,
+                    "motion_curve_match_score": motion_curve_match_score,
+                    "continuity_bonus": continuity_bonus,
+                    "audio_state": audio_state,
+                    "audio_state_adjustment": audio_state_adjustment,
+                    "semantic_similarity_score": semantic_score,
+                    "semantic_similarity_contribution": semantic_contribution,
+                    "motion_contribution": motion_contribution,
+                    "theme_bonus": theme_bonus,
+                    "anchor_in_bonus": anchor_in_bonus,
+                    "anchor_out_bonus": anchor_out_bonus,
+                    "pre_key_score": pre_key_score,
+                    "key_compatibility_multiplier": key_score,
+                    "total_score": total_score,
+                }
 
         if best_clip is None:
             best_clip = random.choice(clips)
+            self._record_selection_details(
+                "motion_random_fallback",
+                score_components={"total_score": best_score},
+                fallback_reason="no_finite_motion_score",
+            )
+        else:
+            self._record_selection_details(
+                "motion",
+                score_components=best_components,
+            )
 
         return SelectedClip(
             clip_id=str(best_clip.get("id", "unknown")),
@@ -866,22 +1065,44 @@ class ClipSelector:
 
         query_embedding = self._get_text_embedding(prompt)
         if query_embedding is None:
-            return self._select_by_motion(
+            selected = self._select_by_motion(
                 clips,
                 trigger_strength,
                 trigger_type,
                 current_time=current_time,
                 audio_state=audio_state,
             )
+            fallback_details = dict(self._selection_details)
+            self._record_selection_details(
+                "semantic_fallback_motion",
+                score_components={
+                    "semantic": {
+                        "status": "unavailable",
+                        "reason": "query_embedding_unavailable",
+                        "prompt": prompt,
+                    },
+                    "fallback": fallback_details,
+                },
+                fallback_reason="semantic_query_embedding_unavailable",
+            )
+            return selected
 
         # 1. FAISS bleibt der bevorzugte Pfad. Ein leerer oder defekter Store
         # darf den direkten, bereits analysierten Clip-Vektor aber nicht verdecken.
+        faiss_status = "unavailable"
         if self._vector_store_has_embeddings():
             try:
                 results = self.vector_store.search(
                     query_embedding,
                     k=min(10, len(clips)),
                 )
+                faiss_status = "searched"
+                faiss_scores = {
+                    self._normalized_path_key(self._metadata_path(meta)): float(score)
+                    for meta, score in results
+                    if isinstance(meta, dict)
+                    and self._normalized_path_key(self._metadata_path(meta))
+                }
                 faiss_paths = {
                     self._normalized_path_key(self._metadata_path(meta))
                     for meta, _score in results
@@ -895,14 +1116,34 @@ class ClipSelector:
                     in faiss_paths
                 ]
                 if semantic_candidates:
-                    return self._select_by_motion(
+                    selected = self._select_by_motion(
                         semantic_candidates,
                         trigger_strength,
                         trigger_type,
                         current_time=current_time,
                         audio_state=audio_state,
+                        semantic_scores=faiss_scores,
                     )
+                    ranking_details = dict(self._selection_details)
+                    selected_path_key = self._normalized_path_key(
+                        selected.clip_path
+                    )
+                    self._record_selection_details(
+                        "semantic_faiss",
+                        score_components={
+                            "semantic": {
+                                "status": "matched",
+                                "source": "faiss",
+                                "prompt": prompt,
+                                "score": faiss_scores.get(selected_path_key),
+                            },
+                            "ranking": ranking_details,
+                        },
+                    )
+                    return selected
+                faiss_status = "no_candidate_match"
             except Exception as exc:
+                faiss_status = f"error:{type(exc).__name__}"
                 logger.warning(
                     "FAISS-Semantik fehlgeschlagen: %s — direkte Embeddings werden versucht",
                     exc,
@@ -937,15 +1178,66 @@ class ClipSelector:
             semantic_candidates = [
                 clip for clip, _score in scored_candidates[:10]
             ]
-            return self._select_by_motion(
+            direct_scores = {
+                self._normalized_path_key(self._metadata_path(clip)): float(score)
+                for clip, score in scored_candidates[:10]
+            }
+            selected = self._select_by_motion(
                 semantic_candidates,
                 trigger_strength,
                 trigger_type,
                 current_time=current_time,
                 audio_state=audio_state,
+                semantic_scores=direct_scores,
             )
+            ranking_details = dict(self._selection_details)
+            selected_path_key = self._normalized_path_key(selected.clip_path)
+            selected_similarity = next(
+                (
+                    float(score)
+                    for clip, score in scored_candidates
+                    if self._normalized_path_key(self._metadata_path(clip))
+                    == selected_path_key
+                ),
+                None,
+            )
+            self._record_selection_details(
+                "semantic_direct_embedding",
+                score_components={
+                    "semantic": {
+                        "status": "matched",
+                        "source": "direct_embedding",
+                        "prompt": prompt,
+                        "score": selected_similarity,
+                        "faiss_status": faiss_status,
+                    },
+                    "ranking": ranking_details,
+                },
+            )
+            return selected
 
-        return self._select_by_motion(clips, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+        selected = self._select_by_motion(
+            clips,
+            trigger_strength,
+            trigger_type,
+            current_time=current_time,
+            audio_state=audio_state,
+        )
+        fallback_details = dict(self._selection_details)
+        self._record_selection_details(
+            "semantic_fallback_motion",
+            score_components={
+                "semantic": {
+                    "status": "unavailable",
+                    "reason": "no_semantic_candidate",
+                    "prompt": prompt,
+                    "faiss_status": faiss_status,
+                },
+                "fallback": fallback_details,
+            },
+            fallback_reason="semantic_no_candidate",
+        )
+        return selected
 
     def _vector_store_has_embeddings(self) -> bool:
         """Prüft defensiv, ob der injizierte Store durchsuchbare Vektoren hat."""
@@ -1199,7 +1491,7 @@ class ClipSelector:
     ) -> List[Tuple[ClipMetadata, float]]:
         """Hybrid-Auswahl mit gewichteten Kriterien (FAISS-Architektur)."""
         if weights is None:
-            weights = {"similarity": 0.5, "energy": 0.3, "motion": 0.2}
+            weights = dict(HYBRID_SELECTION_WEIGHTS)
 
         candidates = list(self.clip_cache.values())
 

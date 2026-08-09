@@ -108,8 +108,8 @@ def test_color_analysis_runs_when_captions_are_disabled(monkeypatch):
 
     monkeypatch.setattr("cv2.VideoCapture", lambda _: FakeCapture())
     monkeypatch.setattr(
-        "pb_studio.video.moondream_wrapper.extract_dominant_colors",
-        lambda frame, k=5: ["#112233"],
+        "pb_studio.video.moondream_wrapper.extract_dominant_colors_with_weights",
+        lambda frame, k=5: (["#112233"], [1.0]),
     )
 
     result = asyncio.run(
@@ -123,6 +123,73 @@ def test_color_analysis_runs_when_captions_are_disabled(monkeypatch):
     assert result["dominant_colors"] == ["#112233"]
     assert result["tags"] == []
     assert result["tag_source"] == "skipped"
+
+
+def test_caption_deadline_budget_is_shared_with_moondream(monkeypatch):
+    video_router = _video_module()
+
+    class FakeCapture:
+        def get(self, prop):
+            import cv2
+
+            return 12 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+        def set(self, prop, value):
+            return True
+
+        def read(self):
+            return True, np.zeros((16, 16, 3), dtype=np.uint8)
+
+        def release(self):
+            pass
+
+    async def no_lm_tags(frame, mode):
+        await asyncio.sleep(0.01)
+        return [], "none"
+
+    gpu_timeouts = []
+
+    async def fake_gpu_task(
+        func,
+        frames,
+        *,
+        model_id,
+        timeout_seconds,
+        worker_started_event,
+    ):
+        gpu_timeouts.append(timeout_seconds)
+        worker_started_event.set()
+        return [[f"fallback-{index}"] for index, _ in enumerate(frames, start=1)]
+
+    async def ignore_event(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("cv2.VideoCapture", lambda _: FakeCapture())
+    monkeypatch.setattr(
+        "pb_studio.video.lmstudio_vision_wrapper.extract_tags_and_model_via_lmstudio_async",
+        no_lm_tags,
+    )
+    monkeypatch.setattr(
+        "pb_studio.video.moondream.onnx_models_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(video_router, "with_gpu_task", fake_gpu_task)
+    monkeypatch.setattr(video_router, "publish_event", ignore_event)
+    monkeypatch.setattr(video_router, "CAPTION_STAGE_TIMEOUT_SECONDS", 0.2)
+
+    result = asyncio.run(
+        video_router._run_color_and_caption_analysis(
+            "clip.mp4",
+            4,
+            generate_captions=True,
+            analyze_colors=False,
+        )
+    )
+
+    assert result["stage_status"]["captions"] == "completed"
+    assert result["tags"] == ["fallback-1", "fallback-2", "fallback-3"]
+    assert len(gpu_timeouts) == 1
+    assert 0.0 < gpu_timeouts[0] < 0.2
 
 
 def test_representative_indices_are_bounded_and_span_video():
