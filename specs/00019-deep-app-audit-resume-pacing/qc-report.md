@@ -2,26 +2,43 @@
 
 ## Authoritative OBJ-74 Gate
 
-- **Overall result:** **REOPENED / NOT RELEASE-READY**.
-- T001–T031 sind teilweise geschlossen; Long-Mix-Chunk-Resume, echte Medien,
-  Live-Hardware, 14-View-GUI-Smoke und finale Konvergenz bleiben offen.
-- `.completed` und `.qc-passed` fehlen absichtlich.
-- Bestehende OBJ-72/OBJ-73-Release-Evidenz bleibt historisch gültig, beweist aber
-  nicht den neuen Analyse-Resume- und Pacing-Vertrag.
+- **Overall result:** **PASSED / RELEASE-READY**.
+- T001–T035 geschlossen; unabhängiger Diff-Review ohne CRITICAL/HIGH/MEDIUM-
+  Codebefund.
+- Resume, Long-Mix-Checkpoint, Pacing-Provenienz, Branch-Konvergenz, Live-API,
+  14-Tab-GUI und Build-/Testverträge sind belegt.
+- Keine Migration, Dependency-Änderung, Nutzerdateilöschung oder Änderung an
+  `src/pb_studio/audio/separator.py`.
 
-## Aktuelle Evidenz
+## QC-Matrix
 
-- Python-Baseline: 1320 Tests, 2 Failures, 13 Skips; JUnit archiviert.
-- Claude-Integration: alle Tips Ancestors; Merge-Trees unverändert.
-- Selektive Claude-Ports: kombinierter Cluster 24/24 PASS.
-- Audio-/Video-Resume + Interrupted + Pacing-Preflight: 15/15 PASS.
-- WPF Transport/UI-Vertrag: 5/5 PASS; Release-Build 0 Fehler/0 Warnungen.
-- OpenAPI Snapshot/Generated-DTO-Drift: 4/4 PASS.
+| Gate | Ergebnis |
+|---|---:|
+| Python 3.11 Full-Pytest final | 1371 PASS, 13 SKIP, 0 FAIL |
+| Lifecycle-Fixcluster | 11/11 PASS |
+| OpenAPI-Snapshot | 4/4 PASS |
+| Native C# | 54/54 PASS |
+| WPF Release-Build | 0 Warnungen, 0 Fehler |
+| Live API Resume/Unterbruch | PASS |
+| GUI/UIA/Keyboard | 14/14 PASS |
+| Branch-Ancestry | nur `main`, `origin/main`, Delivery-Branch; keine Altrefs |
+| Diff-/IRON-Review | PASS |
 
-## Offene Gate-Gründe
+## Restgrenzen
 
-- Long-Mix besitzt Stage-, aber noch keinen atomaren per-Chunk-Checkpoint.
-- Gesamtbaseline enthält einen nicht erneut ausgeführten RAM-Fehler im
-  Timeline-Integritätstest; erneute Gesamtsuite wurde im Caveman-Minimalmodus
-  auf Nutzerwunsch ausgelassen.
-- Live-API/SSE/AMF/DirectML und GUI-Abnahme wurden nicht als PASS belegt.
+- Einzelne Stem-Dateien innerhalb eines abgebrochenen Separationslaufs besitzen
+  keinen eigenen Partial-Checkpoint; gültige komplette Stem-Stages werden
+  wiederverwendet. LOCKED Separator blieb unverändert.
+- `test_20s.mp4` dokumentiert ehrlich einen SigLIP-Frame-Read-Fehler als
+  `partial`; erfolgreicher Shutdown/Retry-Beleg nutzt `test_12s.mp4`.
+- Isoliertes Testprojekt und zwei Pre-Fix-Rohlogs wurden nicht gelöscht.
+
+## Belege
+
+- `evidence/T021-full-test-convergence.md`
+- `evidence/pytest-full-final.xml`
+- `evidence/dotnet-full.trx`
+- `evidence/live/T022-live-resume.md`
+- `evidence/gui/T023-summary.md`
+- `evidence/T025-independent-diff-review.md`
+- `FULLSTACK_AUDIT_PB_STUDIO_2026-08-08.md`

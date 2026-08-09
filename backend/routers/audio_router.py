@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..app_state import (
     AppState,
@@ -702,6 +702,67 @@ def _audio_plan_has_work(request: AudioAnalyzeRequest) -> bool:
     )
 
 
+def _audio_stream_resume_checkpoints(analysis: dict[str, Any]) -> dict[str, dict]:
+    """Extract only structurally eligible per-pass checkpoints from cache."""
+    evidence = analysis.get("_chunk_evidence")
+    if not isinstance(evidence, dict):
+        evidence = analysis.get("chunk_evidence")
+    if not isinstance(evidence, dict) or evidence.get("schema_version") != 2:
+        return {}
+
+    checkpoints: dict[str, dict] = {}
+    for pass_name in ("primary", "mix_energy"):
+        pass_evidence = evidence.get(pass_name)
+        if not isinstance(pass_evidence, dict):
+            continue
+        checkpoint = pass_evidence.get("checkpoint")
+        if (
+            isinstance(checkpoint, dict)
+            and checkpoint.get("schema_version") == 2
+            and isinstance(checkpoint.get("chunks"), list)
+        ):
+            checkpoints[pass_name] = checkpoint
+    return checkpoints
+
+
+def _merge_audio_chunk_checkpoint_evidence(
+    *,
+    cached: dict[str, Any] | None,
+    pass_name: str,
+    source_role: str,
+    checkpoint: dict,
+) -> dict[str, Any]:
+    """Merge one durable pass snapshot without deleting sibling evidence."""
+    import copy
+
+    if (
+        pass_name not in {"primary", "mix_energy"}
+        or not isinstance(source_role, str)
+        or not isinstance(checkpoint, dict)
+        or checkpoint.get("schema_version") != 2
+        or not isinstance(checkpoint.get("window_count"), int)
+        or not isinstance(checkpoint.get("chunks"), list)
+    ):
+        raise ValueError("Invalid streaming chunk checkpoint")
+    evidence = copy.deepcopy(cached) if isinstance(cached, dict) else {}
+    evidence["schema_version"] = 2
+    evidence[pass_name] = {
+        "source_role": source_role,
+        "window_count": int(checkpoint["window_count"]),
+        "chunks": [
+            {
+                key: value
+                for key, value in row.items()
+                if key != "payload"
+            }
+            for row in checkpoint["chunks"]
+            if isinstance(row, dict)
+        ],
+        "checkpoint": copy.deepcopy(checkpoint),
+    }
+    return evidence
+
+
 def _merge_audio_analysis_result(
     *,
     cached: dict[str, Any],
@@ -774,11 +835,22 @@ def _merge_audio_analysis_result(
 async def analyze_audio(
     request: AudioAnalyzeRequest,
     state: AppState = Depends(get_app_state),
+    http_request: Request = None,
 ) -> AudioAnalysisResult:
+    context: ProjectOperationContext | None = None
     try:
         async with state.project_operation() as context:
             return await _analyze_audio_in_context(request, state, context)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as exc:
+        if (
+            http_request is not None
+            and context is not None
+            and not state.is_project_context_current(context)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Audio-Analyse durch Projektwechsel unterbrochen",
+            ) from exc
         raise
     except ProjectContextChangedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -866,7 +938,43 @@ async def _analyze_audio_in_context(
                     downbeat_provenance=snapshot.get("downbeat_provenance"),
                 )
 
+        def _checkpoint_stream_chunk(fresh: dict[str, Any]) -> None:
+            if _checkpoint_cancel_event.is_set():
+                raise _AudioAnalysisInterrupted("Audio analysis cancelled")
+            pass_name = fresh.get("_stream_pass")
+            source_role = fresh.get("_source_role")
+            checkpoint = fresh.get("_checkpoint")
+            with _checkpoint_lock:
+                if _checkpoint_cancel_event.is_set():
+                    raise _AudioAnalysisInterrupted("Audio analysis cancelled")
+                snapshot = dict(_checkpoint_state)
+                evidence = _merge_audio_chunk_checkpoint_evidence(
+                    cached=(
+                        snapshot.get("_chunk_evidence")
+                        or snapshot.get("chunk_evidence")
+                    ),
+                    pass_name=pass_name,
+                    source_role=source_role,
+                    checkpoint=checkpoint,
+                )
+                snapshot["duration_seconds"] = float(
+                    fresh.get("duration_seconds", 0.0) or 0.0
+                )
+                snapshot["_chunk_evidence"] = evidence
+                snapshot["_analysis_status"] = "partial"
+                _persist_checkpoint_snapshot(snapshot)
+                _checkpoint_state.clear()
+                _checkpoint_state.update(snapshot)
+
         def _checkpoint_stage(stage: str, fresh: dict[str, Any]) -> None:
+            if stage == "__stream_guard__":
+                if _checkpoint_cancel_event.is_set():
+                    raise _AudioAnalysisInterrupted("Audio analysis cancelled")
+                state.require_project_context_current(context)
+                return
+            if stage == "__stream_chunk__":
+                _checkpoint_stream_chunk(fresh)
+                return
             if _checkpoint_cancel_event.is_set():
                 raise _AudioAnalysisInterrupted("Audio analysis cancelled")
             plan_updates = {
@@ -897,6 +1005,16 @@ async def _analyze_audio_in_context(
             except Exception:
                 stems_paths = {}
         if _audio_plan_has_work(planned_request):
+            stream_resume = (
+                {}
+                if request.force
+                else _audio_stream_resume_checkpoints(_pre_cached)
+            )
+            worker_kwargs: dict[str, Any] = {
+                "on_stage_checkpoint": _checkpoint_stage,
+            }
+            if stream_resume:
+                worker_kwargs["stream_resume"] = stream_resume
             fresh_result = await asyncio.to_thread(
                 _run_audio_analysis,
                 audio_path,
@@ -904,7 +1022,7 @@ async def _analyze_audio_in_context(
                 planned_request,
                 stems_paths,
                 _loop,
-                on_stage_checkpoint=_checkpoint_stage,
+                **worker_kwargs,
             )
         else:
             fresh_result = {
@@ -1407,6 +1525,7 @@ def _run_audio_analysis(
     stems_paths: dict[str, str] = None,
     _loop=None,
     on_stage_checkpoint=None,
+    stream_resume: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
@@ -1449,6 +1568,35 @@ def _run_audio_analysis(
     _stream_chunk_evidence: dict = {}
     _stage_status: dict[str, str] = {}
     _stage_errors: dict[str, str] = {}
+
+    def _stream_guard() -> None:
+        if on_stage_checkpoint is not None:
+            on_stage_checkpoint("__stream_guard__", {})
+
+    def _stream_checkpoint(
+        pass_name: str,
+        source_role: str,
+        checkpoint: dict,
+    ) -> None:
+        nonlocal _stream_chunk_evidence
+        if on_stage_checkpoint is None:
+            return
+        _stream_chunk_evidence = _merge_audio_chunk_checkpoint_evidence(
+            cached=_stream_chunk_evidence,
+            pass_name=pass_name,
+            source_role=source_role,
+            checkpoint=checkpoint,
+        )
+        on_stage_checkpoint(
+            "__stream_chunk__",
+            {
+                "clip_id": clip_id,
+                "duration_seconds": _probe_dur,
+                "_stream_pass": pass_name,
+                "_source_role": source_role,
+                "_checkpoint": checkpoint,
+            },
+        )
 
     def _checkpoint(stage: str, payload: dict[str, Any]) -> None:
         if on_stage_checkpoint is None:
@@ -1494,12 +1642,43 @@ def _run_audio_analysis(
             # Verwende Drums-Spur für Beat-Tracking falls vorhanden und valide (>0 Bytes), sonst Instrumental, sonst Original
             analysis_path = drums_path if drums_path and Path(drums_path).exists() and Path(drums_path).stat().st_size > 0 else (instrumental_path if instrumental_path and Path(instrumental_path).exists() else audio_path)
             logger.info(f"Streaming-Analyse verwendet Pfad für Beats: {analysis_path}")
+            primary_source_role = (
+                "original_mix" if analysis_path == audio_path else "beat_source"
+            )
             try:
-                _stream_res = StreamingAudioAnalyzer().analyze(analysis_path, on_progress=_stream_progress)
+                _stream_res = StreamingAudioAnalyzer().analyze(
+                    analysis_path,
+                    on_progress=_stream_progress,
+                    resume_checkpoint=(stream_resume or {}).get("primary"),
+                    on_chunk_checkpoint=lambda checkpoint: _stream_checkpoint(
+                        "primary",
+                        primary_source_role,
+                        checkpoint,
+                    ),
+                    checkpoint_guard=_stream_guard,
+                )
+            except (
+                _AudioAnalysisInterrupted,
+                ProjectContextChangedError,
+                PersistenceError,
+            ):
+                raise
             except Exception as e:
                 if analysis_path != audio_path:
                     logger.warning(f"Streaming-Analyse mit {analysis_path} fehlgeschlagen: {e}. Versuche Fallback auf Original-Mix...")
-                    _stream_res = StreamingAudioAnalyzer().analyze(audio_path, on_progress=_stream_progress)
+                    primary_source_role = "original_mix"
+                    analysis_path = audio_path
+                    _stream_res = StreamingAudioAnalyzer().analyze(
+                        audio_path,
+                        on_progress=_stream_progress,
+                        resume_checkpoint=(stream_resume or {}).get("primary"),
+                        on_chunk_checkpoint=lambda checkpoint: _stream_checkpoint(
+                            "primary",
+                            primary_source_role,
+                            checkpoint,
+                        ),
+                        checkpoint_guard=_stream_guard,
+                    )
                 else:
                     raise
 
@@ -1516,15 +1695,12 @@ def _run_audio_analysis(
             _stream_features = _stream_res
             _stream_stage_errors = dict(_stream_res.stage_errors)
             _stream_chunk_evidence = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "primary": {
-                    "source_role": (
-                        "original_mix"
-                        if analysis_path == audio_path
-                        else "beat_source"
-                    ),
+                    "source_role": primary_source_role,
                     "window_count": _stream_res.window_count,
                     "chunks": list(_stream_res.chunk_evidence),
+                    "checkpoint": dict(_stream_res.resume_checkpoint),
                 },
             }
 
@@ -1535,19 +1711,39 @@ def _run_audio_analysis(
             if analysis_path != audio_path:
                 try:
                     _emit_analysis_progress(_loop, "energy_mix", 45.0, "Energy-Kurve vom Original-Mix…")
-                    _energy_res = StreamingAudioAnalyzer().analyze(audio_path, energy_only=True)
+                    _energy_res = StreamingAudioAnalyzer().analyze(
+                        audio_path,
+                        energy_only=True,
+                        resume_checkpoint=(stream_resume or {}).get("mix_energy"),
+                        on_chunk_checkpoint=lambda checkpoint: _stream_checkpoint(
+                            "mix_energy",
+                            "original_mix_energy",
+                            checkpoint,
+                        ),
+                        checkpoint_guard=_stream_guard,
+                    )
                     _stream_energy = list(_energy_res.energy_curve)
                     _stream_features = _energy_res
                     _stream_chunk_evidence["mix_energy"] = {
                         "source_role": "original_mix_energy",
                         "window_count": _energy_res.window_count,
                         "chunks": list(_energy_res.chunk_evidence),
+                        "checkpoint": dict(_energy_res.resume_checkpoint),
                     }
                     for stage_name, errors in _energy_res.stage_errors.items():
                         _stream_stage_errors.setdefault(stage_name, []).extend(errors)
+                except (
+                    _AudioAnalysisInterrupted,
+                    ProjectContextChangedError,
+                    PersistenceError,
+                ):
+                    raise
                 except Exception as energy_e:
                     logger.warning(
                         f"Mix-Energy-Pass fehlgeschlagen ({energy_e}) — verwende Stem-Energy als Fallback"
+                    )
+                    _stream_stage_errors.setdefault("energy", []).append(
+                        f"mix_energy: {energy_e}"
                     )
 
             # y/sr Snapshot fuer Structure/Spectral/Key — max 600s ab Anfang (Mix-Header).
@@ -1557,6 +1753,12 @@ def _run_audio_analysis(
                 mono=True,
                 duration=600.0,
             )
+        except (
+            _AudioAnalysisInterrupted,
+            ProjectContextChangedError,
+            PersistenceError,
+        ):
+            raise
         except Exception as e:
             raise RuntimeError(
                 f"Streaming-Audioanalyse fehlgeschlagen; Full-Load ist gesperrt: {e}"

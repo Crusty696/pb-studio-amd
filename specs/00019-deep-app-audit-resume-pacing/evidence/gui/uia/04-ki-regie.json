@@ -1,0 +1,2766 @@
+{
+  "visible_texts": [
+    "Systemmenü",
+    "Minimieren",
+    "Maximieren",
+    "Schließen",
+    "PB STUDIO",
+    "•",
+    "obj74_qc_20260809_001",
+    "GPU: 0/0 MB",
+    "Backend: Online",
+    "LLM: Keines (Moondream-Fallback)",
+    "Lokal (GPU)",
+    "Bereit",
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR",
+    "KI-Regie",
+    "AUDIO-QUELLE",
+    "Audio-Quelle",
+    "VIDEO-CLIPS",
+    "Alle Video-Clips auswählen",
+    "ALLE",
+    "Video-Auswahl aufheben",
+    "KEINE",
+    "3 ausgewählt",
+    "Video-Clips für Cut-Liste",
+    "PBStudio.UI.ViewModels.SelectableVideoClip",
+    "test_12s",
+    "00:12",
+    "(analysiert)",
+    "test_20s",
+    "00:20",
+    "(teilweise)",
+    "test_10s",
+    "00:10",
+    "(offen)",
+    "PACING",
+    "BPM",
+    "Erwartete BPM",
+    "Beat-Gewichtung:",
+    "1.0",
+    "Beat-Gewichtung",
+    "Kick-Gewichtung:",
+    "1.2",
+    "Kick-Gewichtung",
+    "Energie-Gewichtung:",
+    "0.8",
+    "Energie-Gewichtung",
+    "Energie-Schwelle:",
+    "0.60",
+    "Energie-Schwelle",
+    "Onset-Gewichtung:",
+    "0.50",
+    "Onset-Gewichtung",
+    "Snare-Gewichtung:",
+    "1.00",
+    "Snare-Gewichtung",
+    "HiHat-Gewichtung:",
+    "0.30",
+    "HiHat-Gewichtung",
+    "Onset-Empfindlichkeit:",
+    "Onset-Empfindlichkeit",
+    "Min. Clip-Länge:",
+    "1.0s",
+    "Minimale Clip-Länge",
+    "Max. Clip-Länge:",
+    "8.0s",
+    "Maximale Clip-Länge",
+    "Clip-Längen-Variation:",
+    "0.00",
+    "Clip-Längen-Variation",
+    "Max. Schnittabstand:",
+    "10.0s",
+    "Maximaler Schnittabstand",
+    "Beat-Trigger-Modus:",
+    "Beat-Trigger-Modus",
+    "Min. Schnittabstand:",
+    "0.5s",
+    "Minimaler Schnittabstand",
+    "Dauer-Limit (Sek.)",
+    "Dauer-Limit in Sekunden",
+    "Storyboard Canvas (.canvas)",
+    "Storyboard-Canvas-Pfad",
+    "OPTIONEN",
+    "Motion Matching",
+    "Semantisches Matching",
+    "Struktur-Erkennung",
+    "Tonart-Matching",
+    "Stem-basiertes Pacing",
+    "Brain (Lern-Modus)",
+    "Cut-Liste generieren",
+    "CUT-LISTE",
+    "Cuts:  0",
+    "Dauer:  0",
+    "Generierte Cut-Liste",
+    "CLIP",
+    "ZEITRAUM",
+    "DAUER",
+    "TRIGGER",
+    "KI-VORSCHLÄGE (TOP-N)",
+    "Top-N:",
+    "Anzahl KI-Vorschläge",
+    "KI-Vorschläge laden",
+    "↻ Vorschläge laden",
+    "KI-Vorschläge",
+    "CUT",
+    "SCORE",
+    "3 Video / 2 Audio Clips geladen"
+  ],
+  "visible_controls": [
+    {
+      "name": "",
+      "control_type": "TitleBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 249,
+        "right": 1972,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuBar",
+      "automation_id": "MenuBar",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Systemmenü",
+      "control_type": "MenuItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 254,
+        "right": 610,
+        "bottom": 276
+      }
+    },
+    {
+      "name": "Minimieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1833,
+        "top": 247,
+        "right": 1880,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Maximieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1880,
+        "top": 247,
+        "right": 1926,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "Schließen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1926,
+        "top": 247,
+        "right": 1973,
+        "bottom": 277
+      }
+    },
+    {
+      "name": "PB STUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 600,
+        "top": 287,
+        "right": 660,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "•",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 660,
+        "top": 287,
+        "right": 681,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "obj74_qc_20260809_001",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 681,
+        "top": 287,
+        "right": 799,
+        "bottom": 303
+      }
+    },
+    {
+      "name": "GPU: 0/0 MB",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1792,
+        "top": 288,
+        "right": 1854,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Backend: Online",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1882,
+        "top": 288,
+        "right": 1960,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "",
+      "control_type": "ProgressBar",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1093,
+        "top": 283,
+        "right": 1493,
+        "bottom": 307
+      }
+    },
+    {
+      "name": "LLM: Keines (Moondream-Fallback)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1120,
+        "top": 288,
+        "right": 1386,
+        "bottom": 302
+      }
+    },
+    {
+      "name": "Lokal (GPU)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1396,
+        "top": 290,
+        "right": 1446,
+        "bottom": 300
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1456,
+        "top": 289,
+        "right": 1484,
+        "bottom": 301
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Tab",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 314,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 590,
+        "top": 316,
+        "right": 662,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PROJEKT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 604,
+        "top": 324,
+        "right": 648,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 662,
+        "top": 316,
+        "right": 725,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "AUDIO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 676,
+        "top": 324,
+        "right": 711,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 316,
+        "right": 785,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "VIDEO",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 739,
+        "top": 324,
+        "right": 771,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 785,
+        "top": 316,
+        "right": 856,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "KI-REGIE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 799,
+        "top": 324,
+        "right": 842,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 856,
+        "top": 316,
+        "right": 932,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TIMELINE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 870,
+        "top": 324,
+        "right": 918,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 932,
+        "top": 316,
+        "right": 1000,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "EXPORT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 946,
+        "top": 324,
+        "right": 986,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1000,
+        "top": 316,
+        "right": 1055,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "HIRN",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1014,
+        "top": 324,
+        "right": 1041,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1055,
+        "top": 316,
+        "right": 1132,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "SETTINGS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1069,
+        "top": 324,
+        "right": 1118,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1132,
+        "top": 316,
+        "right": 1238,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "PERFORMANCE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1146,
+        "top": 324,
+        "right": 1224,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1238,
+        "top": 316,
+        "right": 1315,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "MODELLE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1252,
+        "top": 324,
+        "right": 1301,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1315,
+        "top": 316,
+        "right": 1370,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "CHAT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1329,
+        "top": 324,
+        "right": 1356,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1370,
+        "top": 316,
+        "right": 1452,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "TERMINAL",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1384,
+        "top": 324,
+        "right": 1438,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1452,
+        "top": 316,
+        "right": 1517,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "INGEST",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1466,
+        "top": 324,
+        "right": 1503,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "TabItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1517,
+        "top": 316,
+        "right": 1591,
+        "bottom": 347
+      }
+    },
+    {
+      "name": "ANCHOR",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1531,
+        "top": 324,
+        "right": 1577,
+        "bottom": 337
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "KI-Regie",
+      "control_type": "Custom",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 1972,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Pane",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 588,
+        "top": 347,
+        "right": 868,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "AUDIO-QUELLE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 366,
+        "right": 830,
+        "bottom": 379
+      }
+    },
+    {
+      "name": "Audio-Quelle",
+      "control_type": "ComboBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 387,
+        "right": 830,
+        "bottom": 417
+      }
+    },
+    {
+      "name": "VIDEO-CLIPS",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 441,
+        "right": 830,
+        "bottom": 455
+      }
+    },
+    {
+      "name": "Alle Video-Clips auswählen",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 461,
+        "right": 648,
+        "bottom": 483
+      }
+    },
+    {
+      "name": "ALLE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 618,
+        "top": 466,
+        "right": 639,
+        "bottom": 478
+      }
+    },
+    {
+      "name": "Video-Auswahl aufheben",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 652,
+        "top": 461,
+        "right": 696,
+        "bottom": 483
+      }
+    },
+    {
+      "name": "KEINE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 661,
+        "top": 466,
+        "right": 687,
+        "bottom": 478
+      }
+    },
+    {
+      "name": "3 ausgewählt",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 766,
+        "top": 465,
+        "right": 830,
+        "bottom": 478
+      }
+    },
+    {
+      "name": "Video-Clips für Cut-Liste",
+      "control_type": "List",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 489,
+        "right": 830,
+        "bottom": 558
+      }
+    },
+    {
+      "name": "PBStudio.UI.ViewModels.SelectableVideoClip",
+      "control_type": "ListItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 612,
+        "top": 492,
+        "right": 827,
+        "bottom": 513
+      }
+    },
+    {
+      "name": "",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 617,
+        "top": 495,
+        "right": 822,
+        "bottom": 510
+      }
+    },
+    {
+      "name": "test_12s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 637,
+        "top": 494,
+        "right": 676,
+        "bottom": 507
+      }
+    },
+    {
+      "name": "00:12",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 682,
+        "top": 494,
+        "right": 706,
+        "bottom": 506
+      }
+    },
+    {
+      "name": "(analysiert)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 712,
+        "top": 494,
+        "right": 760,
+        "bottom": 506
+      }
+    },
+    {
+      "name": "PBStudio.UI.ViewModels.SelectableVideoClip",
+      "control_type": "ListItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 612,
+        "top": 513,
+        "right": 827,
+        "bottom": 534
+      }
+    },
+    {
+      "name": "",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 617,
+        "top": 516,
+        "right": 822,
+        "bottom": 531
+      }
+    },
+    {
+      "name": "test_20s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 637,
+        "top": 515,
+        "right": 676,
+        "bottom": 528
+      }
+    },
+    {
+      "name": "00:20",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 682,
+        "top": 515,
+        "right": 706,
+        "bottom": 527
+      }
+    },
+    {
+      "name": "(teilweise)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 712,
+        "top": 515,
+        "right": 756,
+        "bottom": 527
+      }
+    },
+    {
+      "name": "PBStudio.UI.ViewModels.SelectableVideoClip",
+      "control_type": "ListItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 612,
+        "top": 534,
+        "right": 827,
+        "bottom": 555
+      }
+    },
+    {
+      "name": "",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 617,
+        "top": 537,
+        "right": 822,
+        "bottom": 552
+      }
+    },
+    {
+      "name": "test_10s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 637,
+        "top": 536,
+        "right": 676,
+        "bottom": 549
+      }
+    },
+    {
+      "name": "00:10",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 682,
+        "top": 536,
+        "right": 706,
+        "bottom": 548
+      }
+    },
+    {
+      "name": "(offen)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 712,
+        "top": 536,
+        "right": 741,
+        "bottom": 548
+      }
+    },
+    {
+      "name": "PACING",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 587,
+        "right": 830,
+        "bottom": 600
+      }
+    },
+    {
+      "name": "BPM",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 608,
+        "right": 830,
+        "bottom": 621
+      }
+    },
+    {
+      "name": "Erwartete BPM",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 625,
+        "right": 830,
+        "bottom": 653
+      }
+    },
+    {
+      "name": "Beat-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 661,
+        "right": 695,
+        "bottom": 675
+      }
+    },
+    {
+      "name": "1.0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 812,
+        "top": 661,
+        "right": 830,
+        "bottom": 677
+      }
+    },
+    {
+      "name": "Beat-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 679,
+        "right": 830,
+        "bottom": 699
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 679,
+        "right": 714,
+        "bottom": 697
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 679,
+        "right": 830,
+        "bottom": 697
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 714,
+        "top": 679,
+        "right": 725,
+        "bottom": 697
+      }
+    },
+    {
+      "name": "Kick-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 705,
+        "right": 693,
+        "bottom": 718
+      }
+    },
+    {
+      "name": "1.2",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 812,
+        "top": 705,
+        "right": 830,
+        "bottom": 720
+      }
+    },
+    {
+      "name": "Kick-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 722,
+        "right": 830,
+        "bottom": 742
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 722,
+        "right": 735,
+        "bottom": 740
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 746,
+        "top": 722,
+        "right": 830,
+        "bottom": 740
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 735,
+        "top": 722,
+        "right": 746,
+        "bottom": 740
+      }
+    },
+    {
+      "name": "Energie-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 748,
+        "right": 710,
+        "bottom": 762
+      }
+    },
+    {
+      "name": "0.8",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 812,
+        "top": 748,
+        "right": 830,
+        "bottom": 764
+      }
+    },
+    {
+      "name": "Energie-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 766,
+        "right": 830,
+        "bottom": 786
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 766,
+        "right": 693,
+        "bottom": 784
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 704,
+        "top": 766,
+        "right": 830,
+        "bottom": 784
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 693,
+        "top": 766,
+        "right": 704,
+        "bottom": 784
+      }
+    },
+    {
+      "name": "Energie-Schwelle:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 792,
+        "right": 694,
+        "bottom": 806
+      }
+    },
+    {
+      "name": "0.60",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 792,
+        "right": 830,
+        "bottom": 808
+      }
+    },
+    {
+      "name": "Energie-Schwelle",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 810,
+        "right": 830,
+        "bottom": 830
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 810,
+        "right": 735,
+        "bottom": 828
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 746,
+        "top": 810,
+        "right": 830,
+        "bottom": 828
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 735,
+        "top": 810,
+        "right": 746,
+        "bottom": 828
+      }
+    },
+    {
+      "name": "Onset-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 836,
+        "right": 702,
+        "bottom": 849
+      }
+    },
+    {
+      "name": "0.50",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 836,
+        "right": 830,
+        "bottom": 851
+      }
+    },
+    {
+      "name": "Onset-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 853,
+        "right": 830,
+        "bottom": 873
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 853,
+        "right": 662,
+        "bottom": 871
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 673,
+        "top": 853,
+        "right": 830,
+        "bottom": 871
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 662,
+        "top": 853,
+        "right": 673,
+        "bottom": 871
+      }
+    },
+    {
+      "name": "Snare-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 879,
+        "right": 701,
+        "bottom": 893
+      }
+    },
+    {
+      "name": "1.00",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 879,
+        "right": 830,
+        "bottom": 895
+      }
+    },
+    {
+      "name": "Snare-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 897,
+        "right": 830,
+        "bottom": 917
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 897,
+        "right": 714,
+        "bottom": 915
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 897,
+        "right": 830,
+        "bottom": 915
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 714,
+        "top": 897,
+        "right": 725,
+        "bottom": 915
+      }
+    },
+    {
+      "name": "HiHat-Gewichtung:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 923,
+        "right": 701,
+        "bottom": 936
+      }
+    },
+    {
+      "name": "0.30",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 923,
+        "right": 830,
+        "bottom": 938
+      }
+    },
+    {
+      "name": "HiHat-Gewichtung",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 940,
+        "right": 830,
+        "bottom": 960
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 940,
+        "right": 641,
+        "bottom": 958
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 652,
+        "top": 940,
+        "right": 830,
+        "bottom": 958
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 641,
+        "top": 940,
+        "right": 652,
+        "bottom": 958
+      }
+    },
+    {
+      "name": "Onset-Empfindlichkeit:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 966,
+        "right": 719,
+        "bottom": 980
+      }
+    },
+    {
+      "name": "0.50",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 966,
+        "right": 830,
+        "bottom": 982
+      }
+    },
+    {
+      "name": "Onset-Empfindlichkeit",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 984,
+        "right": 830,
+        "bottom": 1004
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 984,
+        "right": 714,
+        "bottom": 1002
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 725,
+        "top": 984,
+        "right": 830,
+        "bottom": 1002
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 714,
+        "top": 984,
+        "right": 725,
+        "bottom": 1002
+      }
+    },
+    {
+      "name": "Min. Clip-Länge:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1021,
+        "right": 688,
+        "bottom": 1035
+      }
+    },
+    {
+      "name": "1.0s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 806,
+        "top": 1021,
+        "right": 830,
+        "bottom": 1037
+      }
+    },
+    {
+      "name": "Minimale Clip-Länge",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1039,
+        "right": 830,
+        "bottom": 1059
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1039,
+        "right": 628,
+        "bottom": 1057
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 639,
+        "top": 1039,
+        "right": 830,
+        "bottom": 1057
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 628,
+        "top": 1039,
+        "right": 639,
+        "bottom": 1057
+      }
+    },
+    {
+      "name": "Max. Clip-Länge:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1065,
+        "right": 690,
+        "bottom": 1078
+      }
+    },
+    {
+      "name": "8.0s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 806,
+        "top": 1065,
+        "right": 830,
+        "bottom": 1080
+      }
+    },
+    {
+      "name": "Maximale Clip-Länge",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1082,
+        "right": 830,
+        "bottom": 1102
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1082,
+        "right": 662,
+        "bottom": 1100
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 673,
+        "top": 1082,
+        "right": 830,
+        "bottom": 1100
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 662,
+        "top": 1082,
+        "right": 673,
+        "bottom": 1100
+      }
+    },
+    {
+      "name": "Clip-Längen-Variation:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1108,
+        "right": 717,
+        "bottom": 1122
+      }
+    },
+    {
+      "name": "0.00",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 804,
+        "top": 1108,
+        "right": 830,
+        "bottom": 1124
+      }
+    },
+    {
+      "name": "Clip-Längen-Variation",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1126,
+        "right": 830,
+        "bottom": 1146
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 620,
+        "top": 1126,
+        "right": 830,
+        "bottom": 1144
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1126,
+        "right": 620,
+        "bottom": 1144
+      }
+    },
+    {
+      "name": "Max. Schnittabstand:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1152,
+        "right": 710,
+        "bottom": 1165
+      }
+    },
+    {
+      "name": "10.0s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 798,
+        "top": 1152,
+        "right": 830,
+        "bottom": 1167
+      }
+    },
+    {
+      "name": "Maximaler Schnittabstand",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1169,
+        "right": 830,
+        "bottom": 1189
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1169,
+        "right": 674,
+        "bottom": 1187
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 685,
+        "top": 1169,
+        "right": 830,
+        "bottom": 1187
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "Thumb",
+      "enabled": true,
+      "rectangle": {
+        "left": 674,
+        "top": 1169,
+        "right": 685,
+        "bottom": 1187
+      }
+    },
+    {
+      "name": "Beat-Trigger-Modus:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1197,
+        "right": 830,
+        "bottom": 1211
+      }
+    },
+    {
+      "name": "Beat-Trigger-Modus",
+      "control_type": "ComboBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1215,
+        "right": 830,
+        "bottom": 1240
+      }
+    },
+    {
+      "name": "Min. Schnittabstand:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1257,
+        "right": 708,
+        "bottom": 1271
+      }
+    },
+    {
+      "name": "0.5s",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 806,
+        "top": 1257,
+        "right": 830,
+        "bottom": 1273
+      }
+    },
+    {
+      "name": "Minimaler Schnittabstand",
+      "control_type": "Slider",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1275,
+        "right": 830,
+        "bottom": 1295
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "DecreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1275,
+        "right": 626,
+        "bottom": 1295
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "IncreaseLarge",
+      "enabled": true,
+      "rectangle": {
+        "left": 644,
+        "top": 1275,
+        "right": 830,
+        "bottom": 1295
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 626,
+        "top": 1275,
+        "right": 644,
+        "bottom": 1295
+      }
+    },
+    {
+      "name": "Dauer-Limit (Sek.)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1301,
+        "right": 830,
+        "bottom": 1314
+      }
+    },
+    {
+      "name": "Dauer-Limit in Sekunden",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1318,
+        "right": 830,
+        "bottom": 1346
+      }
+    },
+    {
+      "name": "Storyboard Canvas (.canvas)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1350,
+        "right": 830,
+        "bottom": 1363
+      }
+    },
+    {
+      "name": "Storyboard-Canvas-Pfad",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1365,
+        "right": 830,
+        "bottom": 1393
+      }
+    },
+    {
+      "name": "OPTIONEN",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1426,
+        "right": 830,
+        "bottom": 1440
+      }
+    },
+    {
+      "name": "Motion Matching",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1451,
+        "right": 830,
+        "bottom": 1466
+      }
+    },
+    {
+      "name": "Motion Matching",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1450,
+        "right": 721,
+        "bottom": 1464
+      }
+    },
+    {
+      "name": "Semantisches Matching",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1472,
+        "right": 830,
+        "bottom": 1487
+      }
+    },
+    {
+      "name": "Semantisches Matching",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1471,
+        "right": 754,
+        "bottom": 1485
+      }
+    },
+    {
+      "name": "Struktur-Erkennung",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1493,
+        "right": 830,
+        "bottom": 1508
+      }
+    },
+    {
+      "name": "Struktur-Erkennung",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1492,
+        "right": 732,
+        "bottom": 1506
+      }
+    },
+    {
+      "name": "Tonart-Matching",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1514,
+        "right": 830,
+        "bottom": 1529
+      }
+    },
+    {
+      "name": "Tonart-Matching",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1513,
+        "right": 717,
+        "bottom": 1527
+      }
+    },
+    {
+      "name": "Stem-basiertes Pacing",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1535,
+        "right": 830,
+        "bottom": 1550
+      }
+    },
+    {
+      "name": "Stem-basiertes Pacing",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1534,
+        "right": 745,
+        "bottom": 1548
+      }
+    },
+    {
+      "name": "Brain (Lern-Modus)",
+      "control_type": "CheckBox",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 609,
+        "top": 1556,
+        "right": 830,
+        "bottom": 1571
+      }
+    },
+    {
+      "name": "Brain (Lern-Modus)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 629,
+        "top": 1555,
+        "right": 731,
+        "bottom": 1570
+      }
+    },
+    {
+      "name": "Cut-Liste generieren",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 598,
+        "top": 1598,
+        "right": 841,
+        "bottom": 1638
+      }
+    },
+    {
+      "name": "",
+      "control_type": "ScrollBar",
+      "automation_id": "VerticalScrollBar",
+      "enabled": true,
+      "rectangle": {
+        "left": 851,
+        "top": 347,
+        "right": 868,
+        "bottom": 1114
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PART_LineUpButton",
+      "enabled": false,
+      "rectangle": {
+        "left": 851,
+        "top": 347,
+        "right": 868,
+        "bottom": 367
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PageUp",
+      "enabled": false,
+      "rectangle": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PageDown",
+      "enabled": false,
+      "rectangle": {
+        "left": 851,
+        "top": 795,
+        "right": 868,
+        "bottom": 1097
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "",
+      "enabled": false,
+      "rectangle": {
+        "left": 851,
+        "top": 364,
+        "right": 868,
+        "bottom": 795
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Button",
+      "automation_id": "PART_LineDownButton",
+      "enabled": false,
+      "rectangle": {
+        "left": 851,
+        "top": 1097,
+        "right": 868,
+        "bottom": 1117
+      }
+    },
+    {
+      "name": "CUT-LISTE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 883,
+        "top": 357,
+        "right": 934,
+        "bottom": 370
+      }
+    },
+    {
+      "name": "Cuts:  0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1864,
+        "top": 361,
+        "right": 1900,
+        "bottom": 374
+      }
+    },
+    {
+      "name": "Dauer:  0",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1914,
+        "top": 361,
+        "right": 1958,
+        "bottom": 374
+      }
+    },
+    {
+      "name": "Generierte Cut-Liste",
+      "control_type": "DataGrid",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 389,
+        "right": 1972,
+        "bottom": 714
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Header",
+      "automation_id": "PART_GridViewHeaderRowPresenter",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 389,
+        "right": 1411,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "CLIP",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 389,
+        "right": 1029,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "CLIP",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 939,
+        "top": 395,
+        "right": 959,
+        "bottom": 407
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1020,
+        "top": 389,
+        "right": 1038,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "ZEITRAUM",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1029,
+        "top": 389,
+        "right": 1209,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "ZEITRAUM",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1095,
+        "top": 395,
+        "right": 1143,
+        "bottom": 407
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1200,
+        "top": 389,
+        "right": 1218,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "DAUER",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1209,
+        "top": 389,
+        "right": 1289,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "DAUER",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1233,
+        "top": 395,
+        "right": 1265,
+        "bottom": 407
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1280,
+        "top": 389,
+        "right": 1298,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "TRIGGER",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1289,
+        "top": 389,
+        "right": 1409,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "TRIGGER",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1329,
+        "top": 395,
+        "right": 1369,
+        "bottom": 407
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1400,
+        "top": 389,
+        "right": 1418,
+        "bottom": 414
+      }
+    },
+    {
+      "name": "KI-VORSCHLÄGE (TOP-N)",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 883,
+        "top": 728,
+        "right": 1010,
+        "bottom": 741
+      }
+    },
+    {
+      "name": "Top-N:",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1721,
+        "top": 732,
+        "right": 1754,
+        "bottom": 745
+      }
+    },
+    {
+      "name": "Anzahl KI-Vorschläge",
+      "control_type": "Edit",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1758,
+        "top": 725,
+        "right": 1806,
+        "bottom": 753
+      }
+    },
+    {
+      "name": "KI-Vorschläge laden",
+      "control_type": "Button",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1814,
+        "top": 723,
+        "right": 1958,
+        "bottom": 755
+      }
+    },
+    {
+      "name": "↻ Vorschläge laden",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1824,
+        "top": 730,
+        "right": 1948,
+        "bottom": 747
+      }
+    },
+    {
+      "name": "KI-Vorschläge",
+      "control_type": "DataGrid",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 764,
+        "right": 1972,
+        "bottom": 1088
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Header",
+      "automation_id": "PART_GridViewHeaderRowPresenter",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 764,
+        "right": 1431,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "CUT",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 869,
+        "top": 764,
+        "right": 929,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "CUT",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 890,
+        "top": 770,
+        "right": 908,
+        "bottom": 782
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 920,
+        "top": 764,
+        "right": 938,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "CLIP",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 929,
+        "top": 764,
+        "right": 1089,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "CLIP",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 999,
+        "top": 770,
+        "right": 1019,
+        "bottom": 782
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1080,
+        "top": 764,
+        "right": 1098,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "ZEITRAUM",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1089,
+        "top": 764,
+        "right": 1269,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "ZEITRAUM",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1155,
+        "top": 770,
+        "right": 1203,
+        "bottom": 782
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1260,
+        "top": 764,
+        "right": 1278,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "DAUER",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1269,
+        "top": 764,
+        "right": 1349,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "DAUER",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1293,
+        "top": 770,
+        "right": 1325,
+        "bottom": 782
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1340,
+        "top": 764,
+        "right": 1358,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "SCORE",
+      "control_type": "HeaderItem",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1349,
+        "top": 764,
+        "right": 1429,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "SCORE",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 1374,
+        "top": 770,
+        "right": 1404,
+        "bottom": 782
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Thumb",
+      "automation_id": "PART_HeaderGripper",
+      "enabled": true,
+      "rectangle": {
+        "left": 1420,
+        "top": 764,
+        "right": 1438,
+        "bottom": 789
+      }
+    },
+    {
+      "name": "3 Video / 2 Audio Clips geladen",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 883,
+        "top": 1095,
+        "right": 1037,
+        "bottom": 1108
+      }
+    },
+    {
+      "name": "",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "name": "Bereit",
+      "control_type": "Text",
+      "automation_id": "",
+      "enabled": true,
+      "rectangle": {
+        "left": 598,
+        "top": 1121,
+        "right": 1962,
+        "bottom": 1133
+      }
+    }
+  ],
+  "tab": "KI-REGIE",
+  "selected": true
+}

@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from ..app_state import (
@@ -951,12 +951,23 @@ async def delete_clips_batch(
 async def analyze_video(
     request: VideoAnalyzeRequest,
     state: AppState = Depends(get_app_state),
+    http_request: Request = None,
 ) -> VideoAnalysisResult:
     """Analysiert einen Video-Clip (GPU-Lock via Middleware)."""
+    context: ProjectOperationContext | None = None
     try:
         async with state.project_operation() as context:
             return await _analyze_video_in_project(request, state, context)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as exc:
+        if (
+            http_request is not None
+            and context is not None
+            and not state.is_project_context_current(context)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Video-Analyse durch Projektwechsel unterbrochen",
+            ) from exc
         raise
     except ProjectContextChangedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

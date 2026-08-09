@@ -570,6 +570,16 @@ async def shutdown(
 ) -> dict[str, str]:
     """Owner-authorized graceful shutdown called by the WPF launcher."""
     authorize_owner(owner_capability, operation="Backend-Shutdown")
+    from .app_state import get_app_state
+
+    completed, pending = await get_app_state().cancel_and_drain_project_tasks()
+    if completed or pending:
+        logger.info(
+            "Shutdown unterbrach %d Projektoperation(en); %d Task(s) laufen "
+            "bis zum Epoch-/Prozess-Guard weiter",
+            completed,
+            pending,
+        )
     logger.info("Shutdown-Request erhalten, fahre in 2s herunter...")
     # Windows/Uvicorn: loop.call_later() hat hier im detached Launcher-Pfad
     # nicht zuverlässig ausgelöst, wodurch der alte Prozess Port 8765 belegt hielt.

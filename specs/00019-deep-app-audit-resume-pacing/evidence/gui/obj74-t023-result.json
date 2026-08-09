@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "ticket": "OBJ-74/T023",
+  "output_dir": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\specs\\00019-deep-app-audit-resume-pacing\\evidence\\gui",
+  "expected_tabs": [
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR"
+  ],
+  "actual_tabs": [
+    "PROJEKT",
+    "AUDIO",
+    "VIDEO",
+    "KI-REGIE",
+    "TIMELINE",
+    "EXPORT",
+    "HIRN",
+    "SETTINGS",
+    "PERFORMANCE",
+    "MODELLE",
+    "CHAT",
+    "TERMINAL",
+    "INGEST",
+    "ANCHOR"
+  ],
+  "tab_tree_exact": true,
+  "tabs": [
+    {
+      "name": "PROJEKT",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\01-projekt.png",
+      "uia_evidence": "uia\\01-projekt.json",
+      "visible_text_count": 52,
+      "visible_control_count": 76
+    },
+    {
+      "name": "AUDIO",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\02-audio.png",
+      "uia_evidence": "uia\\02-audio.json",
+      "visible_text_count": 60,
+      "visible_control_count": 84
+    },
+    {
+      "name": "VIDEO",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\03-video.png",
+      "uia_evidence": "uia\\03-video.json",
+      "visible_text_count": 69,
+      "visible_control_count": 106
+    },
+    {
+      "name": "KI-REGIE",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\04-ki-regie.png",
+      "uia_evidence": "uia\\04-ki-regie.json",
+      "visible_text_count": 118,
+      "visible_control_count": 220
+    },
+    {
+      "name": "TIMELINE",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\05-timeline.png",
+      "uia_evidence": "uia\\05-timeline.json",
+      "visible_text_count": 74,
+      "visible_control_count": 125
+    },
+    {
+      "name": "EXPORT",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\06-export.png",
+      "uia_evidence": "uia\\06-export.json",
+      "visible_text_count": 53,
+      "visible_control_count": 79
+    },
+    {
+      "name": "HIRN",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\07-hirn.png",
+      "uia_evidence": "uia\\07-hirn.json",
+      "visible_text_count": 82,
+      "visible_control_count": 121
+    },
+    {
+      "name": "SETTINGS",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\08-settings.png",
+      "uia_evidence": "uia\\08-settings.json",
+      "visible_text_count": 97,
+      "visible_control_count": 133
+    },
+    {
+      "name": "PERFORMANCE",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\09-performance.png",
+      "uia_evidence": "uia\\09-performance.json",
+      "visible_text_count": 94,
+      "visible_control_count": 140
+    },
+    {
+      "name": "MODELLE",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\10-modelle.png",
+      "uia_evidence": "uia\\10-modelle.json",
+      "visible_text_count": 39,
+      "visible_control_count": 61
+    },
+    {
+      "name": "CHAT",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\11-chat.png",
+      "uia_evidence": "uia\\11-chat.json",
+      "visible_text_count": 41,
+      "visible_control_count": 63
+    },
+    {
+      "name": "TERMINAL",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\12-terminal.png",
+      "uia_evidence": "uia\\12-terminal.json",
+      "visible_text_count": 31,
+      "visible_control_count": 52
+    },
+    {
+      "name": "INGEST",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\13-ingest.png",
+      "uia_evidence": "uia\\13-ingest.json",
+      "visible_text_count": 45,
+      "visible_control_count": 81
+    },
+    {
+      "name": "ANCHOR",
+      "selected": true,
+      "errors": [],
+      "screenshot": "screenshots\\14-anchor.png",
+      "uia_evidence": "uia\\14-anchor.json",
+      "visible_text_count": 44,
+      "visible_control_count": 329
+    }
+  ],
+  "keyboard": {
+    "shortcut": "Ctrl+Tab",
+    "expected": [
+      "AUDIO",
+      "VIDEO",
+      "KI-REGIE",
+      "TIMELINE",
+      "EXPORT",
+      "HIRN",
+      "SETTINGS",
+      "PERFORMANCE",
+      "MODELLE",
+      "CHAT",
+      "TERMINAL",
+      "INGEST",
+      "ANCHOR",
+      "PROJEKT"
+    ],
+    "actual": [
+      "AUDIO",
+      "VIDEO",
+      "KI-REGIE",
+      "TIMELINE",
+      "EXPORT",
+      "HIRN",
+      "SETTINGS",
+      "PERFORMANCE",
+      "MODELLE",
+      "CHAT",
+      "TERMINAL",
+      "INGEST",
+      "ANCHOR",
+      "PROJEKT"
+    ],
+    "passed": true
+  },
+  "failures": [],
+  "passed": true,
+  "window": {
+    "title": "PB Studio AMD",
+    "handle": 8258594
+  }
+}
