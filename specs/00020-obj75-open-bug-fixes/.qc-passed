@@ -3,10 +3,10 @@
   "objective": "OBJ-75",
   "phase": "qc",
   "task_range": "T001-T053",
-  "task_digest_sha256": "8f7a0268a6212c293b849c2a3869c645a193eebf07cb237e12a6009dd8363150",
-  "completed_marker_sha256": "1a3247585a79c9ce1ac092b10b35bc1423eeed76e5c571cbbf3db1bd0bf75125",
+  "task_digest_sha256": "530e42eaf3ccc42a54ecc4aa62136f0b8b8e77c55e32195c380087f9ad25ae36",
+  "completed_marker_sha256": "989e33df8ed698c7573666ce4bd6114aedd7c5868e9b76941536eb3358702c8d",
   "qc_report_sha256": "ab1fdb08677f11f58e78fb1d4cfd85bfb78fde2904c2c73045e15b6103561202",
   "evidence_manifest": "evidence/T053-qc-manifest.json",
-  "evidence_manifest_sha256": "d7f4a4b9f2a8c4d0ee4024a64dc75981eb260bb82f775380d42a7497080f7900",
-  "commit_sha": "28a9feb41525845bc6ea6e492f57ce6218b33d4b"
+  "evidence_manifest_sha256": "351e14c9d169a688a0b7d8544d4805101c9af18f1b5dd3f4c8f39fe9fdbffae5",
+  "commit_sha": "73e9e68ed82fa6368c7c4ad923cddee8a51387ae"
 }
