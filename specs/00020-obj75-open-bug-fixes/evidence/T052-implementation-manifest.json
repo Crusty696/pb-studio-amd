@@ -2,7 +2,7 @@
   "schema_version": 1,
   "objective": "OBJ-75",
   "task_range": "T001-T053",
-  "commit_sha": "4d9b3176e6d463d616fb78fcee389bc2f69d4422",
+  "commit_sha": "c4178a37d19981bad0bc82a0eb4dd0e64b4819e2",
   "receipts": [
     { "task_id": "T001", "path": "evidence/final-qc.md", "sha256": "6c96d922a296edc04c6cc600c8d5a20b14cef6cd2b11dd90df0392846511db0c" },
     { "task_id": "T002", "path": "evidence/final-qc.md", "sha256": "6c96d922a296edc04c6cc600c8d5a20b14cef6cd2b11dd90df0392846511db0c" },
@@ -59,7 +59,7 @@
     { "task_id": "T053", "path": "evidence/final-qc.md", "sha256": "6c96d922a296edc04c6cc600c8d5a20b14cef6cd2b11dd90df0392846511db0c" }
   ],
   "artifact_hashes": [
-    { "path": "tasks.md", "sha256": "53e8763d8153cd30ec69e0d689d2ffbdd1da4a334a45b586cc2cd64ce31a4838" }
+    { "path": "tasks.md", "sha256": "d2fe60c90ab2c6956f6f3fb9dd63b9df617c70e3c5b0e59090be2f232ef69163" }
   ],
   "review_status": "PASS",
   "open_blockers": []
