@@ -1,0 +1,1997 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-77",
+  "audit_sha256": "d77f233535bd3e13f6dccb9f7fee34589fd4fe56acd6dc355d369e4c208016ea",
+  "finding_count": 80,
+  "allowed_statuses": [
+    "open",
+    "reproduced",
+    "in_progress",
+    "fixed",
+    "verified",
+    "blocked"
+  ],
+  "findings": [
+    {
+      "finding_id": "A-01",
+      "task_id": "T001",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-403"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Downbeats im Livepfad berechnen, in `src/pb_studio/audio/` persistieren und Nichtverfuegbarkeit begruenden",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t001"
+      ]
+    },
+    {
+      "finding_id": "A-02",
+      "task_id": "T002",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Fortlaufende bar_number erzeugen und in `PBStudio.UI/` als BAR 1, BAR 2 und folgende darstellen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t002"
+      ]
+    },
+    {
+      "finding_id": "A-03",
+      "task_id": "T003",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-403",
+        "00022/OBJ-77/TR-385"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Versionierte Audio-StageReceipts mit Fingerprints, Artefaktvaliditaet und Zeiten in `backend/routers/audio_router.py` umsetzen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t003"
+      ]
+    },
+    {
+      "finding_id": "A-04",
+      "task_id": "T004",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Startup-Recovery laufender Audio-Stages in `backend/app_state.py` atomar auf interrupted setzen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t004"
+      ]
+    },
+    {
+      "finding_id": "A-05",
+      "task_id": "T005",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-403",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Fruehe und globale Audiofehler vor terminalem SSE in `backend/routers/audio_router.py` pro Clip und Stage persistieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t005"
+      ]
+    },
+    {
+      "finding_id": "A-06",
+      "task_id": "T006",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-403",
+        "00022/OBJ-77/TR-387"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Audio-Status und Fehler in `PBStudio.UI/ViewModels/` vollstaendig und retry-faehig anzeigen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t006"
+      ]
+    },
+    {
+      "finding_id": "A-07",
+      "task_id": "T007",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-07; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Mel-Spektrogramm durch Producer, Persistenz, API und `PBStudio.UI/` verdrahten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-07",
+        "specs/00022-complete-requirements-remediation/tasks.md#t007"
+      ]
+    },
+    {
+      "finding_id": "A-08",
+      "task_id": "T008",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-08; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Depth-Toggle, No Depth Data und gezielte Reanalyse in `PBStudio.UI/` und Audio-API implementieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-08",
+        "specs/00022-complete-requirements-remediation/tasks.md#t008"
+      ]
+    },
+    {
+      "finding_id": "A-09",
+      "task_id": "T009",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-09; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Long-Mix-Sektionen Intro, Verse, Chorus, Bridge, Outro und Drop in `src/pb_studio/audio/` erzeugen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-09",
+        "specs/00022-complete-requirements-remediation/tasks.md#t009"
+      ]
+    },
+    {
+      "finding_id": "A-10",
+      "task_id": "T010",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-10; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Key-Ermittlung in `src/pb_studio/audio/` auf Originalmix oder Instrumental beschraenken und Drums ausschliessen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-10",
+        "specs/00022-complete-requirements-remediation/tasks.md#t010"
+      ]
+    },
+    {
+      "finding_id": "A-11",
+      "task_id": "T011",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-11; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Clip-Spektrum aus Originalmix und getrennte Stem-Spektren in `src/pb_studio/audio/` sicherstellen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-11",
+        "specs/00022-complete-requirements-remediation/tasks.md#t011"
+      ]
+    },
+    {
+      "finding_id": "A-12",
+      "task_id": "T012",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-12; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Audioimport und Invalidierung in `backend/routers/audio_router.py` an Inhalts- und Config-Hash binden",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-12",
+        "specs/00022-complete-requirements-remediation/tasks.md#t012"
+      ]
+    },
+    {
+      "finding_id": "A-13",
+      "task_id": "T013",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-13; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "sub_bpm und sub_key pro Subtrack in `src/pb_studio/audio/` produzieren und persistieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-13",
+        "specs/00022-complete-requirements-remediation/tasks.md#t013"
+      ]
+    },
+    {
+      "finding_id": "A-14",
+      "task_id": "T014",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-14; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Subtrack-F1 und 2h-Lauf mit realen annotierten Medien unter `specs/00022-complete-requirements-remediation/evidence/` belegen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-14",
+        "specs/00022-complete-requirements-remediation/tasks.md#t014"
+      ]
+    },
+    {
+      "finding_id": "A-15",
+      "task_id": "T015",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-15; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Reale 1-4h-Mixe unter 0,5x Echtzeit ohne Freeze messen und unter `specs/00022-complete-requirements-remediation/evidence/` belegen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-15",
+        "specs/00022-complete-requirements-remediation/tasks.md#t015"
+      ]
+    },
+    {
+      "finding_id": "A-16",
+      "task_id": "T016",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-16; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Section-Alignment und Depth-Latenz/FPS unter `specs/00022-complete-requirements-remediation/evidence/` messen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-16",
+        "specs/00022-complete-requirements-remediation/tasks.md#t016"
+      ]
+    },
+    {
+      "finding_id": "A-17",
+      "task_id": "T017",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/TR-386"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-17; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Atomare komprimierte Depth-Sidecars in `src/pb_studio/storage/` speichern und migrieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-17",
+        "specs/00022-complete-requirements-remediation/tasks.md#t017"
+      ]
+    },
+    {
+      "finding_id": "A-18",
+      "task_id": "T018",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-18; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "has_audio_embedding nach Write und Reload in `backend/app_state.py` und `PBStudio.UI/` aktualisieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-18",
+        "specs/00022-complete-requirements-remediation/tasks.md#t018"
+      ]
+    },
+    {
+      "finding_id": "A-19",
+      "task_id": "T019",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-19; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Waveformfehler in `backend/routers/audio_router.py` von legitimer Leere unterscheiden und Retrygrund liefern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-19",
+        "specs/00022-complete-requirements-remediation/tasks.md#t019"
+      ]
+    },
+    {
+      "finding_id": "A-20",
+      "task_id": "T020",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-20; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Waveformvertrag fuer ein bis acht erzeugte Baender in `src/pb_studio/audio/` und API erfuellen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-20",
+        "specs/00022-complete-requirements-remediation/tasks.md#t020"
+      ]
+    },
+    {
+      "finding_id": "A-21",
+      "task_id": "T021",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-412"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-21; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "SDD-Dokumente unter `specs/` auf produktive structure-, spectral- und analyze-Vertraege korrigieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-21",
+        "specs/00022-complete-requirements-remediation/tasks.md#t021"
+      ]
+    },
+    {
+      "finding_id": "A-22",
+      "task_id": "T022",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-412"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-22; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Architekturkarte unter `docs/` auf direkten Routerpfad und 600s-Streaming-Schwelle korrigieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-22",
+        "specs/00022-complete-requirements-remediation/tasks.md#t022"
+      ]
+    },
+    {
+      "finding_id": "A-23",
+      "task_id": "T023",
+      "domain": "audio",
+      "qualified_requirement_id": "00022/OBJ-77/FR-406",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-406",
+        "00022/OBJ-77/FR-412"
+      ],
+      "primary_wave": 2,
+      "code_zone": "Z-AUDIO",
+      "reproduction": "Audit-Baseline A-23; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Supersedete CPU-Retry- und madmom-Aussagen unter `docs/` entfernen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#a-23",
+        "specs/00022-complete-requirements-remediation/tasks.md#t023"
+      ]
+    },
+    {
+      "finding_id": "V-01",
+      "task_id": "T024",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-403",
+        "00022/OBJ-77/TR-385"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Video-Receipts mit Provider, Modell, Attempts, Zeiten und Clip-Korrelation in `backend/routers/video_router.py` persistieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t024"
+      ]
+    },
+    {
+      "finding_id": "V-02",
+      "task_id": "T025",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Persistierte Tags und tag_source nach Reload in `backend/routers/video_router.py` und `PBStudio.UI/` liefern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t025"
+      ]
+    },
+    {
+      "finding_id": "V-03",
+      "task_id": "T026",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Angeforderte unavailable-Stages mit Grund als Partialstatus in `backend/routers/video_router.py` ableiten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t026"
+      ]
+    },
+    {
+      "finding_id": "V-04",
+      "task_id": "T027",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Valide Partial-Stages nach Restart in `backend/app_state.py` laden und Pacing-DB-Fallback liefern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t027"
+      ]
+    },
+    {
+      "finding_id": "V-05",
+      "task_id": "T028",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Lokale FAISS-1152-Content-Suche in `backend/routers/video_router.py` und `PBStudio.UI/` verdrahten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t028"
+      ]
+    },
+    {
+      "finding_id": "V-06",
+      "task_id": "T029",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-411"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "10k-Library mit Paging, Recycling und Viewport-Thumbnails in `backend/` und `PBStudio.UI/` skalieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t029"
+      ]
+    },
+    {
+      "finding_id": "V-07",
+      "task_id": "T030",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-07; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Random-Seeks aus produktiven Extraktionsloops in `backend/routers/video_router.py` und `src/pb_studio/video/` entfernen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-07",
+        "specs/00022-complete-requirements-remediation/tasks.md#t030"
+      ]
+    },
+    {
+      "finding_id": "V-08",
+      "task_id": "T031",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/TR-384"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-08; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "RAFT-DirectML-Framevergleich in `src/pb_studio/video/scene_detect.py` produktiv integrieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-08",
+        "specs/00022-complete-requirements-remediation/tasks.md#t031"
+      ]
+    },
+    {
+      "finding_id": "V-09",
+      "task_id": "T032",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-09; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Neu angeforderte Stages trotz IsAnalyzed in `PBStudio.UI/ViewModels/VideoLibraryViewModel.cs` ergaenzen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-09",
+        "specs/00022-complete-requirements-remediation/tasks.md#t032"
+      ]
+    },
+    {
+      "finding_id": "V-10",
+      "task_id": "T033",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-10; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Reales Tagging, Degradation, Shutdown und Resume unter `specs/00022-complete-requirements-remediation/evidence/` belegen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-10",
+        "specs/00022-complete-requirements-remediation/tasks.md#t033"
+      ]
+    },
+    {
+      "finding_id": "V-11",
+      "task_id": "T034",
+      "domain": "video",
+      "qualified_requirement_id": "00022/OBJ-77/FR-407",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-407",
+        "00022/OBJ-77/OR-364"
+      ],
+      "primary_wave": 3,
+      "code_zone": "Z-VIDEO",
+      "reproduction": "Audit-Baseline V-11; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Nach eigenem Go zehn Clips mit 10/10 Receipts und stabilen Hashes unter `specs/00022-complete-requirements-remediation/evidence/` pruefen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#v-11",
+        "specs/00022-complete-requirements-remediation/tasks.md#t034"
+      ]
+    },
+    {
+      "finding_id": "P-01",
+      "task_id": "T035",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Used-, Excluded- und Rejected-Clips samt Gruenden in `backend/routers/pacing_router.py` und `PBStudio.UI/` zeigen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t035"
+      ]
+    },
+    {
+      "finding_id": "P-02",
+      "task_id": "T036",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Fehlende Stems in `backend/routers/pacing_router.py` als explizite Degradation melden",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t036"
+      ]
+    },
+    {
+      "finding_id": "P-03",
+      "task_id": "T037",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "min_cut_interval in `backend/schemas/pacing_schemas.py` kanonisieren und Konflikte mit 422 ablehnen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t037"
+      ]
+    },
+    {
+      "finding_id": "P-04",
+      "task_id": "T038",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-411"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Timeline-Collections in `PBStudio.UI/` viewport- und pixelbasiert begrenzen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t038"
+      ]
+    },
+    {
+      "finding_id": "P-05",
+      "task_id": "T039",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-411"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Ruler in `PBStudio.UI/` nach Viewport, Zoom und DPI cachen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t039"
+      ]
+    },
+    {
+      "finding_id": "P-06",
+      "task_id": "T040",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "UI-Massenupdates in `PBStudio.UI/ViewModels/` auslagern und real messen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t040"
+      ]
+    },
+    {
+      "finding_id": "P-07",
+      "task_id": "T041",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-412"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-07; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Dokumentation unter `docs/` ausschliesslich auf TriggerSettings und generate_cut_list ausrichten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-07",
+        "specs/00022-complete-requirements-remediation/tasks.md#t041"
+      ]
+    },
+    {
+      "finding_id": "P-08",
+      "task_id": "T042",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-08; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Pending Timeline-Writes vor Save, Close, Wechsel und Exit in `PBStudio.UI/` awaiten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-08",
+        "specs/00022-complete-requirements-remediation/tasks.md#t042"
+      ]
+    },
+    {
+      "finding_id": "P-09",
+      "task_id": "T043",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-09; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Drag, Trim, Snap, Playhead, Preview, Persistenz und Reload in `PBStudio.UI/` abnehmen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-09",
+        "specs/00022-complete-requirements-remediation/tasks.md#t043"
+      ]
+    },
+    {
+      "finding_id": "P-10",
+      "task_id": "T044",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-10; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Cut-Accuracy ueber 98 Prozent unter `specs/00022-complete-requirements-remediation/evidence/` messen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-10",
+        "specs/00022-complete-requirements-remediation/tasks.md#t044"
+      ]
+    },
+    {
+      "finding_id": "P-11",
+      "task_id": "T045",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-11; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Preview- und Export-Sync-Drift unter 10 ms unter `specs/00022-complete-requirements-remediation/evidence/` messen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-11",
+        "specs/00022-complete-requirements-remediation/tasks.md#t045"
+      ]
+    },
+    {
+      "finding_id": "P-12",
+      "task_id": "T046",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/TR-388",
+        "00022/OBJ-77/TR-389"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-12; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Onset-, Kick-, Snare- und HiHat-Regler auf realem DJ-Mix unter `specs/00022-complete-requirements-remediation/evidence/` belegen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-12",
+        "specs/00022-complete-requirements-remediation/tasks.md#t046"
+      ]
+    },
+    {
+      "finding_id": "K-01",
+      "task_id": "T047",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Captioning und Modellkarten aus demselben Resolver in `src/pb_studio/ai/` und `PBStudio.UI/` speisen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t047"
+      ]
+    },
+    {
+      "finding_id": "K-02",
+      "task_id": "T048",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "KI-Modus debounced in `PBStudio.UI/` synchronisieren und bei Fehler zurueckrollen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t048"
+      ]
+    },
+    {
+      "finding_id": "K-03",
+      "task_id": "T049",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Modellkarten in `PBStudio.UI/ViewModels/` nach erfolgreicher Synchronisierung aktualisieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t049"
+      ]
+    },
+    {
+      "finding_id": "K-04",
+      "task_id": "T050",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/FR-412"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Status von Workspace 00014 additiv unter `specs/00022-complete-requirements-remediation/` aufloesen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t050"
+      ]
+    },
+    {
+      "finding_id": "K-05",
+      "task_id": "T051",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Manifest- und Hashbindung in `config/directml-model-assets.json` im konvergierten Stand sichern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t051"
+      ]
+    },
+    {
+      "finding_id": "K-06",
+      "task_id": "T052",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Live-Inventar, Capabilities, Overrides und verwendete Modelle unter `specs/00022-complete-requirements-remediation/evidence/` pruefen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t052"
+      ]
+    },
+    {
+      "finding_id": "K-07",
+      "task_id": "T053",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-07; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Brain-Deep-Hook mit real geaenderter Clipauswahl unter `specs/00022-complete-requirements-remediation/evidence/` belegen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-07",
+        "specs/00022-complete-requirements-remediation/tasks.md#t053"
+      ]
+    },
+    {
+      "finding_id": "K-08",
+      "task_id": "T054",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-08; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Feedback-Operation-ID und Achsenvertrag in `src/pb_studio/brain/` regressionssichern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-08",
+        "specs/00022-complete-requirements-remediation/tasks.md#t054"
+      ]
+    },
+    {
+      "finding_id": "K-09",
+      "task_id": "T055",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-09; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Projektgebundene Chat-History und typisierte Streamfehler in `backend/routers/` regressionssichern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-09",
+        "specs/00022-complete-requirements-remediation/tasks.md#t055"
+      ]
+    },
+    {
+      "finding_id": "K-10",
+      "task_id": "T056",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-10; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Projector-Generation, Pending Events, Checkpoint und Copy-on-write in `src/pb_studio/brain/` pruefen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-10",
+        "specs/00022-complete-requirements-remediation/tasks.md#t056"
+      ]
+    },
+    {
+      "finding_id": "K-11",
+      "task_id": "T057",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/OR-365"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-11; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Dormante PyTorch-Loader erst nach separater Freigabe in `src/pb_studio/` entfernen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-11",
+        "specs/00022-complete-requirements-remediation/tasks.md#t057"
+      ]
+    },
+    {
+      "finding_id": "K-12",
+      "task_id": "T058",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-12; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "llm_status fuer Chat und Brain-Explain real in `PBStudio.UI/` beobachten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-12",
+        "specs/00022-complete-requirements-remediation/tasks.md#t058"
+      ]
+    },
+    {
+      "finding_id": "K-13",
+      "task_id": "T059",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-13; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Toten PauseCommand in `PBStudio.UI/` entfernen und Play/Pause-Vertrag testen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-13",
+        "specs/00022-complete-requirements-remediation/tasks.md#t059"
+      ]
+    },
+    {
+      "finding_id": "K-14",
+      "task_id": "T060",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-14; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "200-Prozent-DPI-Groesse und KI-Modus-Slider in `PBStudio.UI/` reparieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-14",
+        "specs/00022-complete-requirements-remediation/tasks.md#t060"
+      ]
+    },
+    {
+      "finding_id": "K-15",
+      "task_id": "T061",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-15; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "P95-UI-Latenz unter zwei Sekunden unter `specs/00022-complete-requirements-remediation/evidence/` messen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-15",
+        "specs/00022-complete-requirements-remediation/tasks.md#t061"
+      ]
+    },
+    {
+      "finding_id": "K-16",
+      "task_id": "T062",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-384",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-16; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "DirectML-Matrix auf realer AMD-, Intel- und NVIDIA-Hardware unter `specs/00022-complete-requirements-remediation/evidence/` ausfuehren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-16",
+        "specs/00022-complete-requirements-remediation/tasks.md#t062"
+      ]
+    },
+    {
+      "finding_id": "K-17",
+      "task_id": "T063",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-17; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Gemeinsame Portkonfiguration und ConfigureAwait-Regeln in `PBStudio.UI/` umsetzen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-17",
+        "specs/00022-complete-requirements-remediation/tasks.md#t063"
+      ]
+    },
+    {
+      "finding_id": "K-18",
+      "task_id": "T064",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-18; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Binding-Guard pro View und ViewModel in `Tests/` implementieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-18",
+        "specs/00022-complete-requirements-remediation/tasks.md#t064"
+      ]
+    },
+    {
+      "finding_id": "K-19",
+      "task_id": "T065",
+      "domain": "ki",
+      "qualified_requirement_id": "00022/OBJ-77/FR-409",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-409",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 5,
+      "code_zone": "Z-BRAIN",
+      "reproduction": "Audit-Baseline K-19; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Alle 14 Views in Normal, Loading, Empty, Error und High Contrast unter `specs/00022-complete-requirements-remediation/evidence/` pruefen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#k-19",
+        "specs/00022-complete-requirements-remediation/tasks.md#t065"
+      ]
+    },
+    {
+      "finding_id": "D-01",
+      "task_id": "T066",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/FR-405",
+        "00022/OBJ-77/TR-386"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "sqlite-vec in `src/pb_studio/storage/` produktiv an Brain-KNN verdrahten und FAISS beibehalten",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t066"
+      ]
+    },
+    {
+      "finding_id": "D-02",
+      "task_id": "T067",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/FR-405"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Manifestdimension, dtype, Finite- und Nullvektorpruefung in `src/pb_studio/storage/` erzwingen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t067"
+      ]
+    },
+    {
+      "finding_id": "D-03",
+      "task_id": "T068",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/FR-405",
+        "00022/OBJ-77/OR-366"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Vector-Writer in `src/pb_studio/storage/` owner-, media- und recovery-gebunden machen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t068"
+      ]
+    },
+    {
+      "finding_id": "D-04",
+      "task_id": "T069",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Videoanalysefelder in `backend/app_state.py` vollstaendig aus SQLite rekonstruieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t069"
+      ]
+    },
+    {
+      "finding_id": "D-05",
+      "task_id": "T070",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/FR-404"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Partial- und Failed-Analysen mit validen Stages in `backend/app_state.py` und UI laden",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t070"
+      ]
+    },
+    {
+      "finding_id": "D-06",
+      "task_id": "T071",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Projekt-ID zu Operationsbeginn in `backend/` erfassen und Fallback auf Projekt 1 entfernen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t071"
+      ]
+    },
+    {
+      "finding_id": "D-07",
+      "task_id": "T072",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410"
+      ],
+      "primary_wave": 1,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-07; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "busy_timeout 5000 in allen Stores unter `src/pb_studio/storage/` vereinheitlichen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-07",
+        "specs/00022-complete-requirements-remediation/tasks.md#t072"
+      ]
+    },
+    {
+      "finding_id": "D-08",
+      "task_id": "T073",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/TR-388"
+      ],
+      "primary_wave": 6,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-08; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Versionierten 4h-Worker mit 4096-MB-Zwang unter `scripts/` implementieren und real ausfuehren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-08",
+        "specs/00022-complete-requirements-remediation/tasks.md#t073"
+      ]
+    },
+    {
+      "finding_id": "D-09",
+      "task_id": "T074",
+      "domain": "database",
+      "qualified_requirement_id": "00022/OBJ-77/FR-410",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-410",
+        "00022/OBJ-77/OR-366"
+      ],
+      "primary_wave": 6,
+      "code_zone": "Z-DATA",
+      "reproduction": "Audit-Baseline D-09; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Suite-Kontamination in `Tests/` beseitigen und Recovery-Owner-Tests deterministisch machen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#d-09",
+        "specs/00022-complete-requirements-remediation/tasks.md#t074"
+      ]
+    },
+    {
+      "finding_id": "P-B01",
+      "task_id": "T075",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B01; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Sensitivity in `src/pb_studio/pacing/` auf Onset-Neuberechnung wirken lassen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b01",
+        "specs/00022-complete-requirements-remediation/tasks.md#t075"
+      ]
+    },
+    {
+      "finding_id": "P-B02",
+      "task_id": "T076",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B02; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "max_cut_interval in beiden Pacing-Pfaden unter `src/pb_studio/pacing/` als harte Obergrenze erzwingen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b02",
+        "specs/00022-complete-requirements-remediation/tasks.md#t076"
+      ]
+    },
+    {
+      "finding_id": "P-B03",
+      "task_id": "T077",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B03; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Mindestlaenge nach Subtrack-Snap in `src/pb_studio/pacing/` erneut validieren",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b03",
+        "specs/00022-complete-requirements-remediation/tasks.md#t077"
+      ]
+    },
+    {
+      "finding_id": "P-B04",
+      "task_id": "T078",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-405"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B04; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "FAISS-Similarity in `src/pb_studio/pacing/` in den finalen Hybridscore aufnehmen",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b04",
+        "specs/00022-complete-requirements-remediation/tasks.md#t078"
+      ]
+    },
+    {
+      "finding_id": "P-B05",
+      "task_id": "T079",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B05; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Anker in `backend/routers/pacing_router.py` mit realer clip_id und sicherem Advanced-Pfad verwenden",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b05",
+        "specs/00022-complete-requirements-remediation/tasks.md#t079"
+      ]
+    },
+    {
+      "finding_id": "P-B06",
+      "task_id": "T080",
+      "domain": "pacing",
+      "qualified_requirement_id": "00022/OBJ-77/FR-408",
+      "requirement_ids": [
+        "00022/OBJ-77/FR-408",
+        "00022/OBJ-77/FR-411"
+      ],
+      "primary_wave": 4,
+      "code_zone": "Z-PACING",
+      "reproduction": "Audit-Baseline P-B06; vor Implementierung gegen den aktuellen Wave-SHA reproduzieren.",
+      "expected_contract": "Lifecycle, State-Version und Viewport-Fensterung im konvergierten `PBStudio.UI/`-Tree sichern",
+      "test": {
+        "status": "pending",
+        "command": null
+      },
+      "evidence": [],
+      "commit_sha": null,
+      "status": "open",
+      "source_refs": [
+        "REQUIREMENTS_GAP_AUDIT_2026-08-11.md#p-b06",
+        "specs/00022-complete-requirements-remediation/tasks.md#t080"
+      ]
+    }
+  ]
+}

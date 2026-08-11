@@ -1,0 +1,2731 @@
+{
+  "collision_group_count": 33,
+  "collisions": {
+    "FR-001": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-001",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-001",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-001",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-001",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-001"
+    ],
+    "FR-002": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-002",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-002",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-002",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-002",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-002"
+    ],
+    "FR-003": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-003",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-003",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-003",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-003",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-003"
+    ],
+    "FR-004": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-004",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-004",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-004",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-004",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-004"
+    ],
+    "FR-005": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-005",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-005",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-005"
+    ],
+    "FR-006": [
+      "00005-power-timeline/OBJ-UNRESOLVED/FR-006",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-006"
+    ],
+    "FR-354": [
+      "00018-release-gate-remediation/OBJ-73/FR-354",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-354"
+    ],
+    "FR-355": [
+      "00018-release-gate-remediation/OBJ-73/FR-355",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-355"
+    ],
+    "FR-356": [
+      "00018-release-gate-remediation/OBJ-73/FR-356",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-356"
+    ],
+    "FR-357": [
+      "00018-release-gate-remediation/OBJ-73/FR-357",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-357"
+    ],
+    "FR-358": [
+      "00018-release-gate-remediation/OBJ-73/FR-358",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-358"
+    ],
+    "FR-359": [
+      "00018-release-gate-remediation/OBJ-73/FR-359",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/FR-359"
+    ],
+    "OR-338": [
+      "00018-release-gate-remediation/OBJ-73/OR-338",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/OR-338"
+    ],
+    "OR-339": [
+      "00018-release-gate-remediation/OBJ-73/OR-339",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/OR-339"
+    ],
+    "OR-340": [
+      "00018-release-gate-remediation/OBJ-73/OR-340",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/OR-340"
+    ],
+    "SC-001": [
+      "00005-power-timeline/OBJ-UNRESOLVED/SC-001",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/SC-001",
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/SC-001",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-001",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-001",
+      "00010-resilience-edge-cases/OBJ-UNRESOLVED/SC-001",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-001",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-001"
+    ],
+    "SC-002": [
+      "00005-power-timeline/OBJ-UNRESOLVED/SC-002",
+      "00006-amd-export-pipeline/OBJ-UNRESOLVED/SC-002",
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/SC-002",
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-002",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-002",
+      "00010-resilience-edge-cases/OBJ-UNRESOLVED/SC-002",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-002",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-002"
+    ],
+    "SC-003": [
+      "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-003",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-003",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-003",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-003"
+    ],
+    "SC-004": [
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-004",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-004",
+      "00015-fix-full-audit/OBJ-UNRESOLVED/SC-004"
+    ],
+    "SC-084": [
+      "00018-release-gate-remediation/OBJ-73/SC-084",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/SC-084"
+    ],
+    "SC-085": [
+      "00018-release-gate-remediation/OBJ-73/SC-085",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/SC-085"
+    ],
+    "SC-086": [
+      "00018-release-gate-remediation/OBJ-73/SC-086",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/SC-086"
+    ],
+    "TR-001": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-001",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-001",
+      "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-001",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-001"
+    ],
+    "TR-002": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-002",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-002",
+      "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-002",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-002"
+    ],
+    "TR-003": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-003",
+      "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-003",
+      "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-003",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-003"
+    ],
+    "TR-004": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-004",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-004"
+    ],
+    "TR-005": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-005",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-005",
+      "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/TR-005"
+    ],
+    "TR-006": [
+      "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-006",
+      "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-006"
+    ],
+    "TR-356": [
+      "00018-release-gate-remediation/OBJ-73/TR-356",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/TR-356"
+    ],
+    "TR-357": [
+      "00018-release-gate-remediation/OBJ-73/TR-357",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/TR-357"
+    ],
+    "TR-358": [
+      "00018-release-gate-remediation/OBJ-73/TR-358",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/TR-358"
+    ],
+    "TR-359": [
+      "00018-release-gate-remediation/OBJ-73/TR-359",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/TR-359"
+    ],
+    "TR-360": [
+      "00018-release-gate-remediation/OBJ-73/TR-360",
+      "00019-deep-app-audit-resume-pacing/OBJ-74/TR-360"
+    ]
+  },
+  "entries": [
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-001",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-002",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-003",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-004",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-005",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-006",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/FR-006",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": "US1",
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": "US2",
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00005-power-timeline/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00005-power-timeline/spec.md",
+      "spec_sha256": "fcd64b8d91b60cddbc388f4c2f813cf738955e98cf1994cef6d5871ccff6eef2",
+      "workspace": "00005-power-timeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-001",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-002",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-003",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/FR-004",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00006-amd-export-pipeline/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00006-amd-export-pipeline/spec.md",
+      "spec_sha256": "6bccd3f2df121406baabb11ca7be6655564ca8934ae5e3a8ba79a1cc127c74e7",
+      "workspace": "00006-amd-export-pipeline"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-001",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-002",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-003",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-004",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-005",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-006",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/TR-006",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": "OBJ1",
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": "OBJ2",
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00007-release-hardening-ux-polish/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00007-release-hardening-ux-polish/spec.md",
+      "spec_sha256": "924bc861161f03ae4210aa53bab32d24a66d517ce8ec8016dc39248a9fbdbc56",
+      "workspace": "00007-release-hardening-ux-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-001",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-002",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-003",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-004",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-005",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-006",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-006",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-007",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-007",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-008",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/FR-008",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": "US1",
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": "US2",
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": "US3",
+      "local_id": "SC-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00008-deeper-ux-timeline-polish/OBJ-UNRESOLVED/SC-003",
+      "spec_path": "specs/00008-deeper-ux-timeline-polish/spec.md",
+      "spec_sha256": "a9e50e0cf3bef950ef60c8bbae9af864d8b301b061c763a0c07d7a863858731b",
+      "workspace": "00008-deeper-ux-timeline-polish"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-001",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-002",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-003",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-004",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/FR-005",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-001",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-002",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/TR-003",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": "US1",
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": "US2",
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00009-data-depth-visualization/OBJ-UNRESOLVED/SC-003",
+      "spec_path": "specs/00009-data-depth-visualization/spec.md",
+      "spec_sha256": "52f282e6189640966081baf81a3e8416e581b4c475aaaababfa574519e018620",
+      "workspace": "00009-data-depth-visualization"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-001",
+      "spec_path": "specs/00010-resilience-edge-cases/spec.md",
+      "spec_sha256": "350a82cff8e3fab0e368d7dd86a566e9586f5e04571b61fbc98c7a74f5c2ab3c",
+      "workspace": "00010-resilience-edge-cases"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-002",
+      "spec_path": "specs/00010-resilience-edge-cases/spec.md",
+      "spec_sha256": "350a82cff8e3fab0e368d7dd86a566e9586f5e04571b61fbc98c7a74f5c2ab3c",
+      "workspace": "00010-resilience-edge-cases"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00010-resilience-edge-cases/OBJ-UNRESOLVED/TR-003",
+      "spec_path": "specs/00010-resilience-edge-cases/spec.md",
+      "spec_sha256": "350a82cff8e3fab0e368d7dd86a566e9586f5e04571b61fbc98c7a74f5c2ab3c",
+      "workspace": "00010-resilience-edge-cases"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00010-resilience-edge-cases/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00010-resilience-edge-cases/spec.md",
+      "spec_sha256": "350a82cff8e3fab0e368d7dd86a566e9586f5e04571b61fbc98c7a74f5c2ab3c",
+      "workspace": "00010-resilience-edge-cases"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00010-resilience-edge-cases/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00010-resilience-edge-cases/spec.md",
+      "spec_sha256": "350a82cff8e3fab0e368d7dd86a566e9586f5e04571b61fbc98c7a74f5c2ab3c",
+      "workspace": "00010-resilience-edge-cases"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-001",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-002",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-003",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-004",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-005",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-006",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-006",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-007",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/TR-007",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-003",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00011-critical-system-hardening/OBJ-UNRESOLVED/SC-004",
+      "spec_path": "specs/00011-critical-system-hardening/spec.md",
+      "spec_sha256": "fa4fbe69dcb0aae69a2fce57721705a505b755396c413e0915eafbfd34fa0fef",
+      "workspace": "00011-critical-system-hardening"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-001",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-002",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-003",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/FR-004",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/TR-005",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": "OBJ-2",
+      "local_id": "SC-001",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-001",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": "OBJ-1",
+      "local_id": "SC-002",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-002",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": "OBJ-3",
+      "local_id": "SC-003",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-003",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": "OBJ-4",
+      "local_id": "SC-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00012-timeline-high-fidelity-playback-beatgrid/OBJ-UNRESOLVED/SC-004",
+      "spec_path": "specs/00012-timeline-high-fidelity-playback-beatgrid/spec.md",
+      "spec_sha256": "b3f4c0dbe5619a7fbd1a4ad0854412f20d30032c55886552055df47513a7c040",
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-335",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/OR-335",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-336",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/OR-336",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-337",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/OR-337",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-337",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-337",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-338",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-338",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-339",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-339",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-340",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-340",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-341",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-341",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-342",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-342",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-343",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-343",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-344",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-344",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-345",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-345",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-346",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-346",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-347",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-347",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-348",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-348",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-349",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-349",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-350",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-350",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-351",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-351",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-352",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-352",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-353",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/FR-353",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "RR-237",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/RR-237",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-346",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-346",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-347",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-347",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-348",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-348",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-349",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-349",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-350",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-350",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-351",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-351",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-352",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-352",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-353",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-353",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-354",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-354",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-355",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/TR-355",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-076",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-076",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-077",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-077",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-078",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-078",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-079",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-079",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-080",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-080",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-081",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-081",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-082",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-082",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": "OBJ-72",
+      "local_id": "SC-083",
+      "objective": "OBJ-72",
+      "qualified_id": "00013-system-wide-bug-hunting-audit/OBJ-72/SC-083",
+      "spec_path": "specs/00013-system-wide-bug-hunting-audit/spec.md",
+      "spec_sha256": "11536c69447613be8d942c6faf2165be728de58ef4cdc05e83097de2b27f171a",
+      "workspace": "00013-system-wide-bug-hunting-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-004",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00015-fix-full-audit/OBJ-UNRESOLVED/SC-004",
+      "spec_path": "specs/00015-fix-full-audit/spec.md",
+      "spec_sha256": "daf462d3503e19a8d3f1954601401ae3c16556677402d661da258ecbec0c1bee",
+      "workspace": "00015-fix-full-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-005",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00015-fix-full-audit/OBJ-UNRESOLVED/SC-005",
+      "spec_path": "specs/00015-fix-full-audit/spec.md",
+      "spec_sha256": "daf462d3503e19a8d3f1954601401ae3c16556677402d661da258ecbec0c1bee",
+      "workspace": "00015-fix-full-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-006",
+      "objective": "OBJ-UNRESOLVED",
+      "qualified_id": "00015-fix-full-audit/OBJ-UNRESOLVED/SC-006",
+      "spec_path": "specs/00015-fix-full-audit/spec.md",
+      "spec_sha256": "daf462d3503e19a8d3f1954601401ae3c16556677402d661da258ecbec0c1bee",
+      "workspace": "00015-fix-full-audit"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-354",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-354",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-355",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-355",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-356",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-356",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-357",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-357",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-358",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-358",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-359",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/FR-359",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-356",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/TR-356",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-357",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/TR-357",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-358",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/TR-358",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-359",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/TR-359",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-360",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/TR-360",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-338",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/OR-338",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-339",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/OR-339",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-340",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/OR-340",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-084",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/SC-084",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-085",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/SC-085",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-086",
+      "objective": "OBJ-73",
+      "qualified_id": "00018-release-gate-remediation/OBJ-73/SC-086",
+      "spec_path": "specs/00018-release-gate-remediation/spec.md",
+      "spec_sha256": "ae60725ddf479c1a367a2b61f26a70731dc99471691872fddc8b5a7ad29fa8b5",
+      "workspace": "00018-release-gate-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-354",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-354",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-355",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-355",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-356",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-356",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-357",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-357",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-358",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-358",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-359",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-359",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-360",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-360",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-361",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-361",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-362",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-362",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-363",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-363",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-364",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-364",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-365",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-365",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-366",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-366",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-367",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/FR-367",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-338",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/OR-338",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-339",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/OR-339",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-340",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/OR-340",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-341",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/OR-341",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-342",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/OR-342",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-356",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-356",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-357",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-357",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-358",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-358",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-359",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-359",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-360",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-360",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-361",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-361",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-362",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-362",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-363",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-363",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-364",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-364",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-365",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-365",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-366",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/TR-366",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-084",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-084",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-085",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-085",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-086",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-086",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-087",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-087",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-088",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-088",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-089",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-089",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-090",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-090",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": "OBJ-74",
+      "local_id": "SC-091",
+      "objective": "OBJ-74",
+      "qualified_id": "00019-deep-app-audit-resume-pacing/OBJ-74/SC-091",
+      "spec_path": "specs/00019-deep-app-audit-resume-pacing/spec.md",
+      "spec_sha256": "22627febd7eb3f2fec3166bb3a8371e89f937651b823296276e6d0345ef0a029",
+      "workspace": "00019-deep-app-audit-resume-pacing"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-368",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-368",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-369",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-369",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-370",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-370",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-371",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-371",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-372",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-372",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-373",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-373",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-374",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-374",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-375",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-375",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-376",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-376",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-377",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-377",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-378",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-378",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-379",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-379",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-380",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-380",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-381",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-381",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-382",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-382",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-383",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-383",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-384",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-384",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-385",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-385",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-386",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-386",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-387",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-387",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-388",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-388",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-389",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-389",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-390",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-390",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-391",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/FR-391",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-343",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-343",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-344",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-344",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-345",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-345",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-346",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-346",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-347",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-347",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-348",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-348",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-349",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-349",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-350",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-350",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-351",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-351",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-352",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-352",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-353",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-353",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-354",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/OR-354",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-367",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-367",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-368",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-368",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-369",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-369",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-370",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-370",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-371",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-371",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-372",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-372",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-373",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-373",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-374",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-374",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-375",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-375",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-376",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-376",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-377",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/TR-377",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-092",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-092",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-093",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-093",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-094",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-094",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-095",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-095",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-096",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-096",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-097",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-097",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-098",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-098",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-099",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-099",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-100",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-100",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-101",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-101",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": "OBJ-75",
+      "local_id": "SC-102",
+      "objective": "OBJ-75",
+      "qualified_id": "00020-obj75-open-bug-fixes/OBJ-75/SC-102",
+      "spec_path": "specs/00020-obj75-open-bug-fixes/spec.md",
+      "spec_sha256": "295c49bfe10eeea9591eecf9a85d3d37426d1c1b910cda1ab035935660abce01",
+      "workspace": "00020-obj75-open-bug-fixes"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-392",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-392",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-393",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-393",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-394",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-394",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-395",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-395",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-396",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-396",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-397",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-397",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-398",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-398",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-399",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-399",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-400",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-400",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-401",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/FR-401",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-355",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-355",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-356",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-356",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-357",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-357",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-358",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-358",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-359",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-359",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-360",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/OR-360",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-378",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-378",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-379",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-379",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-380",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-380",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-381",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-381",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-382",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-382",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-383",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/TR-383",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-103",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-103",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-104",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-104",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-105",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-105",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-106",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-106",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-107",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-107",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-108",
+      "objective": "OBJ-76",
+      "qualified_id": "00021-live-runtime-truth-and-observability/OBJ-76/SC-108",
+      "spec_path": "specs/00021-live-runtime-truth-and-observability/spec.md",
+      "spec_sha256": "5f4a39381bfb4a9f627e165d58bb16c907c9e287ee9e42b9f5d710c7b3a8e453",
+      "workspace": "00021-live-runtime-truth-and-observability"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-402",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-402",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-403",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-403",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-404",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-404",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-405",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-405",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-406",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-406",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-407",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-407",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-408",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-408",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-409",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-409",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-410",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-410",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-411",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-411",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "FR-412",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/FR-412",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-384",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-384",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-385",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-385",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-386",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-386",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-387",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-387",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-388",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-388",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-389",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-389",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-390",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-390",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "TR-391",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/TR-391",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-361",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-361",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-362",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-362",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-363",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-363",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-364",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-364",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-365",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-365",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "OR-366",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/OR-366",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-109",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-109",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-110",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-110",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-111",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-111",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-112",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-112",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-113",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-113",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    },
+    {
+      "definition_qualifier": null,
+      "local_id": "SC-114",
+      "objective": "OBJ-77",
+      "qualified_id": "00022-complete-requirements-remediation/OBJ-77/SC-114",
+      "spec_path": "specs/00022-complete-requirements-remediation/spec.md",
+      "spec_sha256": "c8e7d33a7aa9e8c3dc8a18b9650b0523e8060715d5c40b9a86086246e927d9d0",
+      "workspace": "00022-complete-requirements-remediation"
+    }
+  ],
+  "entry_count": 283,
+  "missing_spec_workspaces": [
+    "00017-fix-audit-block-c"
+  ],
+  "naked_cross_workspace_references_allowed": false,
+  "qualification_format": "workspace/objective/requirement",
+  "same_workspace_duplicate_group_count": 0,
+  "same_workspace_duplicates": {},
+  "schema_version": 1,
+  "unique_local_id_count": 215
+}

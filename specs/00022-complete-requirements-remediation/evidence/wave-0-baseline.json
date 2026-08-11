@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-11T22:35:49.7087775Z",
+  "git_sha": "8328d492f8b128b02ae1ce92a0e6e14d999b2af2",
+  "runtime_check": {
+    "command": ".agents/skills/run-pb-studio/driver.ps1 -Command check",
+    "status": "passed",
+    "python": "3.11.9",
+    "numpy": "1.26.4",
+    "gpu": "AMD Radeon RX 7800 XT",
+    "gpu_device_id": 1,
+    "gpu_luid": "0x00000000_0x00010718",
+    "lhm_status": "ready",
+    "ffmpeg_amf": true
+  },
+  "python_full_suite": {
+    "command": ".venv/Scripts/python.exe -m pytest Tests -q --tb=short",
+    "duration_seconds": 1513.11,
+    "passed": 1490,
+    "skipped": 17,
+    "failed": 8,
+    "warnings": 57,
+    "initial_failures": [
+      "Tests/test_audit_sdd_gate.py::test_current_feature_workspace_passes_fail_closed_sdd_gate",
+      "Tests/test_obj77_directml_contract.py::test_central_directml_options_require_sequential_execution",
+      "Tests/test_obj77_directml_contract.py::test_enforcer_rejects_parallel_execution_mode",
+      "Tests/test_obj77_directml_contract.py::test_enforcer_rejects_registered_cpu_execution_provider",
+      "Tests/test_runtime_contract.py::test_lhm_runtime_manifest_binds_the_active_files_by_sha256",
+      "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_lhm_runtime_contract_hashes_bundle_and_bridge_forwards_trust_anchors",
+      "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_lhm_backup_restore_copy_reproduces_exact_file_set_and_hashes",
+      "Tests/test_t413_mcp_lock.py::test_runtime_verifier_rejects_range_compatible_installed_drift"
+    ],
+    "post_provision_classification": {
+      "existing_product_or_test_failures": [
+        {
+          "test": "Tests/test_audit_sdd_gate.py::test_current_feature_workspace_passes_fail_closed_sdd_gate",
+          "reason": "00019 QC_GATE_COMMIT is stale for the current descendant HEAD"
+        },
+        {
+          "test": "Tests/test_t413_mcp_lock.py::test_runtime_verifier_rejects_range_compatible_installed_drift",
+          "reason": "fresh unique basetemp still lacks the expected generated SDK package.json"
+        }
+      ],
+      "new_red_contract_tests": [
+        "explicit ORT_SEQUENTIAL assignment missing",
+        "enforcer accepts ORT_PARALLEL",
+        "enforcer accepts registered CPUExecutionProvider"
+      ],
+      "resolved_runtime_provisioning_failures": 3
+    }
+  },
+  "lhm_runtime": {
+    "provisioned_from_existing_checkout": true,
+    "manifest_sha256": "AF9C9CF981F92A0BD6EA5CC80FDDF0822DAAE76E60F42636AA5B65757CC5B001",
+    "library_sha256": "6EBC194316536BA61AF5BE24508AD9FCBB2ECC685E716C12E787C79530F66BF0",
+    "hashes_match_contract": true,
+    "focused_tests_passed": 3
+  },
+  "directml_contract": {
+    "command": ".venv/Scripts/python.exe -m pytest Tests/test_obj77_directml_contract.py -q",
+    "passed": 4,
+    "failed": 3,
+    "status": "red_as_expected_before_product_fix"
+  },
+  "requirement_registry": {
+    "focused_tests_passed": 3,
+    "definition_occurrences": 283,
+    "unique_local_ids": 215,
+    "cross_workspace_collision_groups": 33,
+    "same_workspace_duplicate_groups": 0
+  },
+  "native_csharp": {
+    "command": "dotnet test PBStudio.UI.Tests/PBStudio.UI.Tests.csproj -c Release --nologo --verbosity minimal",
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0
+  },
+  "wpf_release": {
+    "command": "dotnet build PBStudio.UI/PBStudio.UI.csproj -c Release --nologo --verbosity minimal",
+    "errors": 0,
+    "warnings": 0,
+    "status": "passed"
+  },
+  "openapi_and_dto": {
+    "tests_passed": 5,
+    "tests_failed": 0,
+    "status": "passed"
+  },
+  "store_recovery_owner": {
+    "tests_passed": 110,
+    "tests_failed": 0,
+    "basetemp": "unique_external_temp",
+    "status": "passed"
+  },
+  "gui_matrix": {
+    "result": "specs/00022-complete-requirements-remediation/evidence/gui-wave-0/gui-release-gate.json",
+    "screenshots": 84,
+    "views": 14,
+    "effective_sizes": [
+      "1280x720",
+      "1400x900"
+    ],
+    "dpis": [
+      96,
+      144,
+      192
+    ],
+    "passed": false,
+    "failures": [
+      "dpi 192 physical request 2800x1800 was constrained to 2580x1460",
+      "dpi 192 1400x900 SETTINGS clips the KI-Modus slider"
+    ]
+  },
+  "gui_cli_help": {
+    "command": ".venv/Scripts/python.exe scripts/run_gui_release_gate.py --help",
+    "status": "failed",
+    "error": "ValueError: incomplete format"
+  },
+  "sdd": {
+    "workspace": "specs/00022-complete-requirements-remediation",
+    "phase": "open",
+    "valid": true
+  },
+  "original_dirty_worktree_changed": false,
+  "product_code_changed_in_wave_0": false,
+  "overall_status": "blocked",
+  "blocking_items": [
+    "real ground-truth manifests missing",
+    "Intel DirectML hardware missing",
+    "NVIDIA DirectML hardware missing",
+    "LM Studio unavailable",
+    "runnable four-hour 4096 MB stress worker missing",
+    "two existing Python baseline failures",
+    "three red DirectML contract tests",
+    "two GUI baseline failures"
+  ]
+}

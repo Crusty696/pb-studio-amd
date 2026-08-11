@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "source_commit": "8328d492f8b128b02ae1ce92a0e6e14d999b2af2",
+  "workspace_count": 17,
+  "archive_valid_definition": "hash and manifest integrity only; not SDD release validity",
+  "workspaces": [
+    {
+      "workspace": "00005-power-timeline",
+      "content_tree_sha256": "afe22e77f099bc629eb4f4c2873e4ced72316655a7264deba56b5e9a3bc859f8",
+      "file_count": 8,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00006-amd-export-pipeline",
+      "content_tree_sha256": "741620c5f5b0df26149dd7525c1c093fe80fd07a6b460eadfe8d3a60494da925",
+      "file_count": 6,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00007-release-hardening-ux-polish",
+      "content_tree_sha256": "c19775683bf89117dc2073c938ab91ac0cb8d388eb343a0f394eb03ec7d4b0c2",
+      "file_count": 5,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "OBJECTIVE_COUNT",
+        "QC_REPORT_MISSING",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00008-deeper-ux-timeline-polish",
+      "content_tree_sha256": "786a0c8896752c30275004c28bb25e9cd152a67918050c35c793f132648eb9a8",
+      "file_count": 13,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00009-data-depth-visualization",
+      "content_tree_sha256": "146a94621c93f8f8bc316bcbf5f48263fa4db4fc05607bdc60bc39176365d217",
+      "file_count": 11,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "OBJECTIVE_COUNT",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00010-resilience-edge-cases",
+      "content_tree_sha256": "a546b96ead2c335bab2ad3487f56bee851bf62899cfe5898eff91c12269d223c",
+      "file_count": 9,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00011-critical-system-hardening",
+      "content_tree_sha256": "daa746d06fcec3a2292a4292408894cdf57ec70fcc7c586592f3a341c6b51da1",
+      "file_count": 6,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00012-timeline-high-fidelity-playback-beatgrid",
+      "content_tree_sha256": "9577e0c7ab5af2d8f7c187593a32ba6dd55ada38cdac3ea8e8d5cd32751ffb34",
+      "file_count": 7,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00013-system-wide-bug-hunting-audit",
+      "content_tree_sha256": "a3a33b8aeb788e8f6172a1da0d07b636ba295a3c2bb94d7c7a2aa71a43cd8ec7",
+      "file_count": 506,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "OPEN_MARKER",
+        "OPEN_TASKS",
+        "QC_GATE_COMMIT"
+      ]
+    },
+    {
+      "workspace": "00014-ki-mode-sync-and-fallbacks",
+      "content_tree_sha256": "a80bc1315e2717655b1cd41544b14c8de178ca5126a334a65cdde56c9d1dc892",
+      "file_count": 6,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00015-fix-full-audit",
+      "content_tree_sha256": "2034e0fdfe7c4fd2a6e6f7dbe68e4c70ace6634b14111c07310e5a45f307a8d1",
+      "file_count": 6,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_FIELDS",
+        "OBJECTIVE_COUNT",
+        "QC_FIELDS",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00016-fix-audit-block-b",
+      "content_tree_sha256": "09470586f895f32416cab0ae8393479b13b1694808ba03638c78dcd33d073ecc",
+      "file_count": 6,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "CHECKLIST_MISSING",
+        "COMPLETED_JSON",
+        "OBJECTIVE_COUNT",
+        "QC_JSON",
+        "QC_STATUS_ORDER",
+        "TASK_FORMAT",
+        "TASK_RANGE_MISSING"
+      ]
+    },
+    {
+      "workspace": "00017-fix-audit-block-c",
+      "content_tree_sha256": "51d433ad1cbd43d9283164cd45f3504fc0e43bd3fdb727030113694dd1b9dfa3",
+      "file_count": 5,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "REQUIRED_FILE"
+      ]
+    },
+    {
+      "workspace": "00018-release-gate-remediation",
+      "content_tree_sha256": "73f76969cf8f3fad55ae73cd848593d1ee5fd98b993520088926ec14261440b2",
+      "file_count": 8,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "COMPLETED_FIELDS",
+        "OPEN_MARKER",
+        "OPEN_TASKS",
+        "QC_FIELDS",
+        "QC_STATUS_ORDER"
+      ]
+    },
+    {
+      "workspace": "00019-deep-app-audit-resume-pacing",
+      "content_tree_sha256": "da4a2b75f96dc2b9d1aa4a36295de97d5f5d0e881e01d53521644cabbbfa1387",
+      "file_count": 50,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "OPEN_MARKER",
+        "OPEN_TASKS",
+        "QC_GATE_COMMIT"
+      ]
+    },
+    {
+      "workspace": "00020-obj75-open-bug-fixes",
+      "content_tree_sha256": "9c2fe0ff34df8b6bdfe4c10280a9a2282ba2fc34f87bdeb2d1ce425730689a39",
+      "file_count": 31,
+      "compliance_status": "archived",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": false,
+      "validator_codes": [
+        "OPEN_MARKER",
+        "OPEN_TASKS",
+        "QC_GATE_COMMIT"
+      ]
+    },
+    {
+      "workspace": "00021-live-runtime-truth-and-observability",
+      "content_tree_sha256": "b525026cd0e84b82953fa3fa4b17876f248aca3cc839d4bcccc4f3c1b0e535bd",
+      "file_count": 20,
+      "compliance_status": "active",
+      "successor_workspace": "00022-complete-requirements-remediation",
+      "validator_phase": "open",
+      "validator_valid": true,
+      "validator_codes": []
+    }
+  ]
+}

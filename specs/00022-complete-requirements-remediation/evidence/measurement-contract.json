@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-77",
+  "required_fields": [
+    "media_sha256",
+    "git_sha",
+    "config_sha256",
+    "asset_manifest_sha256",
+    "gpu_name",
+    "gpu_luid",
+    "gpu_driver",
+    "dedicated_vram_bytes",
+    "python_version",
+    "numpy_version",
+    "onnxruntime_version",
+    "ffmpeg_version",
+    "thermal_state",
+    "cold_or_warm",
+    "repeat_count",
+    "raw_samples",
+    "calculation_formula",
+    "median",
+    "p95",
+    "minimum",
+    "maximum",
+    "started_at_utc",
+    "finished_at_utc",
+    "error_journal"
+  ],
+  "default_repeat_count": 5,
+  "single_run_exceptions": [
+    "four_hour_stress"
+  ],
+  "media_policy": {
+    "audio_root": "C:\\Users\\david\\Videos\\test_data\\audio",
+    "video_root": "C:\\Users\\david\\Videos\\test_data\\video",
+    "synthetic_substitution_allowed": false
+  }
+}
