@@ -57,10 +57,10 @@ nicht erneut als offene Ursache vorausgesetzt werden.
 
 - Ob die aktuellen Analysewahrheits- und Resume-Verträge im normalen realen
   Tagging-Erfolgsfall vollständig greifen.
-- Warum LM Studios Engine-Protokoll-Start sowohl für das konfigurierte
-  qwen3.6-VLM als auch die qwen2.5-VL-Kontrollprobe abbricht. Der korrigierte
-  Lauf belegt den externen Runtime-Blocker, aber keine OOM-, ABI- oder
-  Treiberursache.
+- Warum der reale App-Pfad trotz direkt erfolgreichem Engine-/SSE-Transport
+  keinen Tag-Commit erzeugt: qwen3.6 verbraucht das 64-Token-Budget im
+  Reasoning-Pfad ohne nachgewiesenen finalen Content; die bounded Fallbackkette
+  endet unter paralleler Fremdmodell-Belegung ohne nutzbare Tags.
 
 ## Scope
 

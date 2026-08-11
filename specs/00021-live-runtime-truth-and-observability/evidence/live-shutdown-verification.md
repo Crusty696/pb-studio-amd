@@ -27,5 +27,6 @@
 - SHA-256: `7891bf3fe21b88be6b9c6a127b4b2d3ee5f305fb1dbe7d1f9bbfb70db0e5cae0`
 - 122 Records, eine Session, terminaler `monitor_stopped`, Drop-Count 0.
 - Drei fokussierte Deadline-/Cancellation-/Resume-Tests: 3 passed, 0 failed.
-- Ergebnis: T013–T015 bestanden. T003 bleibt offen, weil normaler Tagging-Erfolg
-  und realer Restart/Resume durch den externen LM-Studio-Fehler blockiert sind.
+- Ergebnis: T013–T015 bestanden. T003 bleibt offen, weil der direkte VLM-
+  Transport zwar grün ist, der reale App-Pfad aber noch keinen nutzbaren
+  Tag-Commit und damit keinen erfolgreichen Restart/Resume belegt.

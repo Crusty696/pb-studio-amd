@@ -22,6 +22,7 @@ CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LOAD_TIMEOUT_SECONDS = 180
 INFERENCE_TIMEOUT_SECONDS = 180
 POLL_SECONDS = 1.0
+MODEL_SETTLE_SECONDS = 10.0
 
 
 def _utc_now() -> str:
@@ -102,6 +103,83 @@ def _unload(lms: str, identifier: str) -> None:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
     _wait_loaded(lms, identifier, False)
+    # LM Studio can remove the identifier before the engine process and its GPU
+    # allocation are fully released. A bounded settle prevents the next load
+    # from racing that teardown.
+    time.sleep(MODEL_SETTLE_SECONDS)
+
+
+def _state_receipt(loaded: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "identifier": loaded.get("identifier"),
+        "model_key": loaded.get("modelKey"),
+        "status": loaded.get("status"),
+        "context_length": loaded.get("contextLength"),
+        "size_bytes": loaded.get("sizeBytes"),
+        "vision": loaded.get("vision"),
+    }
+
+
+def _validate_restored_state(
+    loaded: dict[str, Any],
+    model_key: str,
+    identifier: str,
+    context_length: int,
+) -> None:
+    actual = {
+        "identifier": loaded.get("identifier"),
+        "modelKey": loaded.get("modelKey", loaded.get("model_key")),
+        "contextLength": loaded.get(
+            "contextLength",
+            loaded.get("context_length"),
+        ),
+        "status": loaded.get("status"),
+    }
+    expected = {
+        "identifier": identifier,
+        "modelKey": model_key,
+        "contextLength": context_length,
+        "status": "idle",
+    }
+    mismatches = {
+        field: {"expected": value, "actual": actual[field]}
+        for field, value in expected.items()
+        if actual[field] != value
+    }
+    if mismatches:
+        raise RuntimeError(
+            f"LM Studio restore state mismatch for {identifier}: "
+            f"{json.dumps(mismatches, sort_keys=True)}"
+        )
+
+
+def _restore(lms: str, original: dict[str, Any]) -> dict[str, Any]:
+    identifier = str(original.get("identifier") or "")
+    model_key = str(original.get("modelKey") or "")
+    context_length = int(original.get("contextLength") or 8192)
+    current_matches = [
+        item
+        for item in _loaded_models(lms)
+        if item.get("identifier") == identifier
+    ]
+    if len(current_matches) > 1:
+        raise RuntimeError(
+            f"LM Studio restore found duplicate identifier {identifier}"
+        )
+    if current_matches:
+        current = current_matches[0]
+        _validate_restored_state(current, model_key, identifier, context_length)
+        return _state_receipt(current)
+
+    state = _load(
+        lms,
+        model_key,
+        identifier,
+        context_length,
+        int(original.get("parallel") or 1),
+    )["state"]
+    _validate_restored_state(state, model_key, identifier, context_length)
+    return state
 
 
 def _load(
@@ -133,14 +211,7 @@ def _load(
     loaded = _wait_loaded(lms, identifier, True)
     return {
         "cli_exit_code": result.returncode,
-        "state": {
-            "identifier": loaded.get("identifier"),
-            "model_key": loaded.get("modelKey"),
-            "status": loaded.get("status"),
-            "context_length": loaded.get("contextLength"),
-            "size_bytes": loaded.get("sizeBytes"),
-            "vision": loaded.get("vision"),
-        },
+        "state": _state_receipt(loaded),
     }
 
 
@@ -183,6 +254,9 @@ def _stream_inference(body: bytes) -> dict[str, Any]:
     response_id = None
     stream_error = None
     done = False
+    content_parts: list[str] = []
+    reasoning_parts: list[str] = []
+    finish_reasons: list[str] = []
     try:
         with urllib.request.urlopen(
             request,
@@ -208,6 +282,17 @@ def _stream_inference(body: bytes) -> dict[str, Any]:
                             chunk["error"],
                             separators=(",", ":"),
                         )
+                    for choice in chunk.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        content = delta.get("content")
+                        reasoning = delta.get("reasoning_content")
+                        finish_reason = choice.get("finish_reason")
+                        if isinstance(content, str):
+                            content_parts.append(content)
+                        if isinstance(reasoning, str):
+                            reasoning_parts.append(reasoning)
+                        if isinstance(finish_reason, str):
+                            finish_reasons.append(finish_reason)
                 except json.JSONDecodeError:
                     continue
     except urllib.error.HTTPError as exc:
@@ -222,11 +307,22 @@ def _stream_inference(body: bytes) -> dict[str, Any]:
         )
     if chunks == 0 or response_id is None:
         raise RuntimeError("LM Studio SSE returned no attributable response")
+    content_text = "".join(content_parts).strip()
+    reasoning_text = "".join(reasoning_parts)
     return {
         "http_status": status,
         "chunks": chunks,
         "done": done,
         "response_id": response_id,
+        "content_length": len(content_text),
+        "content_sha256": (
+            hashlib.sha256(content_text.encode("utf-8")).hexdigest()
+            if content_text
+            else None
+        ),
+        "content_nonempty": bool(content_text),
+        "reasoning_length": len(reasoning_text),
+        "finish_reason": finish_reasons[-1] if finish_reasons else None,
         "ttft_seconds": None if first_data is None else first_data - started,
         "elapsed_seconds": elapsed,
     }
@@ -333,15 +429,7 @@ def main() -> int:
                 if not identifier or not model_key:
                     continue
                 try:
-                    restored.append(
-                        _load(
-                            lms,
-                            model_key,
-                            identifier,
-                            int(item.get("contextLength") or 8192),
-                            int(item.get("parallel") or 1),
-                        )["state"]
-                    )
+                    restored.append(_restore(lms, item))
                 except Exception as exc:
                     restored.append(
                         {

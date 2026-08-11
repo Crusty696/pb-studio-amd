@@ -2,39 +2,49 @@
 
 ## Autoritativer Receipt
 
-- Zusammenfassung: `lmstudio-vlm-receipts-r3.json`.
+- Zusammenfassung: `lmstudio-vlm-receipts-r4.json`.
 - SHA-256:
-  `6a86be9f00816e9af95f7b30addbc7317c77bba32a68988a55701f000efbb679`.
-- Die früheren Receipts ohne Suffix und mit `-r2` sind durch die korrigierte
-  CLI-Warte- und SSE-Auswertung überholt und nicht autoritativ.
+  `4da6dcd32873466b8873165e210591b1bff16a557e7c26d090c2fe558159e8b5`.
+- Die Receipts ohne Suffix sowie `-r2` und `-r3` sind durch die korrigierte
+  CLI-Warte-, Settle- und SSE-Auswertung überholt und nicht autoritativ.
 - Offizielles privates Serverlog:
-  `logs/obj76_lmstudio_server_20260811_r7.jsonl`.
+  `logs/obj76_lmstudio_server_20260811_r8.jsonl`.
 - Serverlog SHA-256:
-  `f8f21adb40ceefe4aa09c8f5fea16fc5b61a13a786dbf6f0eaf0bc35d8b2bb6d`.
+  `e0ddc3059735c4ed94ed7baf745280bd017605bb6a6729fdf009150fe1b79c9b`.
 
 ## Ergebnis
 
-- Das korrigierte Werkzeug wartet zuerst auf das terminale Ergebnis von
-  `lms load` und prüft erst danach Prozess-/API-Wahrheit.
-- Konfiguriert: `qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive`; offizieller
-  Load scheiterte mit `Error: Engine protocol startup was aborted.`.
-- Kontrolle: `qwen2.5-vl-7b-instruct`; offizieller Load scheiterte mit
-  demselben Fehler.
-- Beide Load-Receipts sind `null`, beide Call-Listen leer. Es wurde keine
-  vermeintliche Bereitschaft aus einem Zwischenstatus abgeleitet.
-- Das zuvor geladene fremde Modell `agents-a1-uncensored-mtp-apex` wurde mit
-  Context 65536 wiederhergestellt und als `idle` bestätigt.
-- Keine erfolgreiche kalte oder warme Captioning-Antwort liegt vor. OOM, ABI
-  oder Treiberfehler sind nicht belegt und werden nicht behauptet.
+- Das Werkzeug wartet auf terminales `lms load`, bestätigt `lms ps idle` und
+  lässt nach jedem Unload zehn Sekunden für den Engine-/VRAM-Teardown.
+- Konfiguriert: `qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive`; Load PASS,
+  danach drei identische SSE-Aufrufe mit HTTP 200 und `[DONE]`. Kalt:
+  6,313 s/TTFT 4,672 s; warm: 1,547 s/0,109 s und 1,531 s/0,109 s.
+- Kontrolle: `qwen2.5-vl-7b-instruct`; Load PASS, ein SSE-Aufruf mit HTTP 200
+  und `[DONE]` in 2,313 s/TTFT 2,250 s.
+- Der qwen3.6-Lauf erzeugte dreimal 65 SSE-Datenchunks und erreichte jeweils
+  das 64-Token-Budget. Das Serverlog weist auf ein Reasoning-Template hin; der
+  Diagnosevertrag hat den finalen `message.content`-Text noch nicht erfasst.
+  HTTP 200/`[DONE]` ist daher kein Tagging-Erfolgsbeleg.
+- Der Follow-up-Vertrag erfasst deshalb für künftige Receipts getrennt
+  `content_length`, `content_sha256`, `content_nonempty`, `reasoning_length` und
+  `finish_reason`, ohne Reasoning als Tag-Payload umzudeuten.
+- Das zuvor geladene `agents-a1-uncensored-mtp-apex` ist nach dem Lauf wieder
+  exakt als `idle` mit Context 65536 vorhanden. Das `restore_error` im r4-JSON
+  war ein Diagnose-Fehlalarm für einen bereits identisch vorhandenen Zustand;
+  der Follow-up-Vertrag akzeptiert nur eine exakt passende Identität und
+  schlägt bei jeder Abweichung fail-closed fehl.
 
 ## Diagnosevertrag
 
 - `pytest Tests/test_lmstudio_diagnostic_contract.py -q`
-- Ergebnis: 2 passed, 0 failed in 15,04 s.
-- Belegt: CLI-Terminalerfolg muss vor einem akzeptierten `lms ps idle` liegen;
-  ein CLI-Loadfehler kann keinen Ready-Receipt erzeugen.
+- Ergebnis: dreimal 8 passed, 0 failed (14,85 s; 15,40 s; 15,71 s).
+- Belegt: CLI-Terminalerfolg vor Ready-Receipt, Settle nach Unload und
+  fail-closed exakte Wiederherstellung eines bereits vorhandenen Modells sowie
+  getrennte Content-/Reasoning-Wahrheit.
 
 ## Gate
 
-- T009: als bounded Diagnose mit Zustandswiederherstellung abgeschlossen.
-- Normaler Tagging-Erfolg, Restart/Resume, Canary und Bulk bleiben gesperrt.
+- T009: als bounded Engine-/Transportdiagnose abgeschlossen.
+- T003 bleibt offen: Der reale App-Pfad muss nutzbare Tags liefern und sie über
+  einen echten Backend-Neustart stage-aware wiederverwenden.
+- Canary und Bulk bleiben bis zu diesem Nachweis gesperrt.

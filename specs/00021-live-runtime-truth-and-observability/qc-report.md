@@ -7,7 +7,9 @@
 ## Scope
 
 QC beginnt erst nach Abschluss von T001–T020 und einem gültigen
-Implementierungsmarker. Die Implementierung läuft; mehrere Gates bleiben offen.
+Implementierungsmarker. 18/20 Tasks sind belegt; T003 (nutzbarer realer
+Tag-Commit plus Restart/Resume) und T019 (separat freizugebender 10-Clip-Canary)
+bleiben offen.
 
 ## Ergebnis
 

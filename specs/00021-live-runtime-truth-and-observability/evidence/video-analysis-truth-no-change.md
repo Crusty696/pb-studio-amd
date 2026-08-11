@@ -20,4 +20,5 @@ Produktpatch innerhalb T010/T011 rechtfertigt:
   `test_t357_gpu_wpf_nullability_contracts.py`.
 - Ergebnis: 5 passed, 0 failed in 13,26 s; vier Drittanbieterwarnungen.
 - Entscheidung: T010 und T011 NO-CHANGE bestanden. Der reale normale
-  Tagging-Erfolgsfall in T003 bleibt wegen LM Studios Engine-Abbruch offen.
+  Tagging-Erfolgsfall in T003 bleibt wegen fehlendem nutzbarem finalen
+  VLM-Tag-Inhalt und der erschöpften bounded Fallbackkette offen.

@@ -80,11 +80,12 @@ null Treffer für definierte Secret-, Nonce- und Benutzerpfad-Muster.
 
 ## Gate 3 — LM-Studio- und Analysewahrheit
 
-**Stand 2026-08-11:** Der korrigierte Load-/Serverlog-Lauf wartet auf das
-terminale CLI-Ergebnis und belegt für das konfigurierte qwen3.6-VLM sowie die
-qwen2.5-VL-Kontrolle jeweils `Engine protocol startup was aborted`. Das zuvor
-geladene fremde Modell wurde mit Context 65536 wiederhergestellt. T009 ist als
-Diagnose abgeschlossen; ein normaler Tagging-Erfolgsbeleg fehlt weiterhin.
+**Stand 2026-08-11:** Der autoritative r4-Lauf belegt erfolgreichen Load und
+SSE-Transport für qwen3.6 (kalt plus zwei warm) sowie qwen2.5-VL (Kontrolle).
+qwen3.6 verbrauchte jedoch jeweils das vollständige 64-Token-Budget, ohne dass
+der Diagnosevertrag finalen Tag-Inhalt belegte. Der reale PB-Studio-Lauf endete
+nach drei bounded Kandidaten ohne Tags; T009 ist abgeschlossen, T003 bleibt bis
+zum nutzbaren App-Tag-Commit und echten Restart/Resume offen.
 
 1. Vor einer Codeänderung LM Studio mit offiziellen Werkzeugen beobachten:
    `lms ps`, `lms log stream --source server --json` und ein expliziter Load-
@@ -120,8 +121,8 @@ Quellen: [LM Studio Server Settings](https://lmstudio.ai/docs/developer/core/ser
 Ein echter Shutdown während Captioning endete ohne ASGI-Traceback, mit
 persistierten `interrupted`-Stages und Exitcode 0 für WPF, Supervisor und
 Backend. Die gemeinsame Cancellation-/Resume-Logik ist zusätzlich fokussiert
-testgrün; ein realer erfolgreicher Restart/Resume-Lauf bleibt wegen des externen
-LM-Studio-Fehlers offen.
+testgrün; ein realer erfolgreicher Restart/Resume-Lauf bleibt wegen des noch
+fehlenden nutzbaren App-Tag-Commits offen.
 
 1. Einen realen Shutdown während Captioning reproduzieren und die gemeinsame
    Cancellation-/Interrupted-Logik für andere aktive Stages durch fokussierte
@@ -169,8 +170,8 @@ Receipt statt Ableitung aus der Warnungszahl.
 **Stand 2026-08-11:** Live-Recovery-Control-Plane read-only konsistent,
 Restore-Vertrag gegen eine isolierte temporäre Kopie bestanden und Dry-Run ohne
 Mutation abgeschlossen. 465 taglose Videos würden Captioning wiederholen. Der
-Canary bleibt ohne separates Go und mit rotem LM-Studio-VLM gesperrt; Bulk ist
-NO-GO.
+Canary bleibt ohne separates Go und ohne erfolgreichen PB-Studio-Tag-Commit
+gesperrt; Bulk ist NO-GO.
 
 1. Validierte Recovery-Generation und Restore-Probe erstellen.
 2. Dry-Run inventarisiert taglose Clips und zeigt, welche Stages wiederholt
@@ -211,8 +212,9 @@ bereits validen Stages; 0 ungeklärte Providerfehler; Restore-Probe grün.
 
 - **Falschpositive Altbefunde:** altes Log gegen neuen Code. Rückweg: Gate 0 vor
   jeder Änderung.
-- **LM-Studio-SPOF:** externer Engine-Crash. Rückweg: partial Receipt,
-  Quarantäne, kein Bulk.
+- **LM-Studio-/Prompt-SPOF:** Transporterfolg ohne nutzbaren finalen
+  Captioning-Inhalt oder konkurrierende Modellbelegung. Rückweg: partial
+  Receipt, bounded Fallback/Quarantäne, kein Bulk.
 - **Shutdown hängt am nativen Worker:** bounded Drain, atomarer Interrupted-
   Zustand, danach kontrollierter Prozessabschluss.
 - **LHM liefert trotz korrekter Bindung keine Sensoren:** unavailable statt
