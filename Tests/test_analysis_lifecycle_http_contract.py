@@ -124,6 +124,16 @@ def test_shutdown_drains_project_operations_before_starting_timer(monkeypatch) -
     calls: list[str] = []
 
     class _State:
+        def __init__(self) -> None:
+            self.shutdown_started = False
+
+        def begin_shutdown(self):
+            calls.append("begin")
+            if self.shutdown_started:
+                return False
+            self.shutdown_started = True
+            return True
+
         async def cancel_and_drain_project_tasks(self):
             calls.append("drain")
             return 2, 0
@@ -135,11 +145,14 @@ def test_shutdown_drains_project_operations_before_starting_timer(monkeypatch) -
         def start(self) -> None:
             calls.append("timer")
 
+    state = _State()
     monkeypatch.setattr(main, "authorize_owner", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(app_state, "get_app_state", lambda: _State())
+    monkeypatch.setattr(app_state, "get_app_state", lambda: state)
     monkeypatch.setattr(main.threading, "Timer", _Timer)
 
     response = asyncio.run(main.shutdown("test-owner"))
+    duplicate = asyncio.run(main.shutdown("test-owner"))
 
     assert response == {"status": "shutting_down"}
-    assert calls == ["drain", "timer"]
+    assert duplicate == {"status": "shutting_down"}
+    assert calls == ["begin", "drain", "timer", "begin"]

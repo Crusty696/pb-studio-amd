@@ -184,6 +184,7 @@ class AppState:
     _video_next_id: int = field(default=1)
     _lock: threading.RLock = field(default_factory=threading.RLock)
     _state_lock: threading.RLock = field(default_factory=threading.RLock)
+    _shutdown_started: bool = field(default=False, repr=False)
     _project_epoch: int = field(default=0)
     _project_lifecycle_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
@@ -206,6 +207,23 @@ class AppState:
     @property
     def project_lifecycle_lock(self) -> asyncio.Lock:
         return self._project_lifecycle_lock
+
+    def begin_shutdown(self) -> bool:
+        """Stop accepting protected API work once graceful shutdown begins."""
+        with self._state_lock:
+            if self._shutdown_started:
+                return False
+            self._shutdown_started = True
+            return True
+
+    def is_shutdown_started(self) -> bool:
+        with self._state_lock:
+            return self._shutdown_started
+
+    def start_accepting_requests(self) -> None:
+        """Reset the process-local intake gate at application startup."""
+        with self._state_lock:
+            self._shutdown_started = False
 
     def capture_project_context(self) -> ProjectOperationContext:
         """Erfasst Projekt-ID, Root und Epoch atomar oder bricht ohne Projekt ab."""

@@ -130,6 +130,9 @@ def get_uptime() -> float:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup und Shutdown Events."""
+    from .app_state import get_app_state
+
+    get_app_state().start_accepting_requests()
     logger.info("=" * 60)
     logger.info("PB Studio AMD Backend startet...")
     logger.info(f"  Host: {config.host}:{config.port}")
@@ -648,7 +651,11 @@ async def shutdown(
     authorize_owner(owner_capability, operation="Backend-Shutdown")
     from .app_state import get_app_state
 
-    completed, pending = await get_app_state().cancel_and_drain_project_tasks()
+    state = get_app_state()
+    if not state.begin_shutdown():
+        return {"status": "shutting_down"}
+
+    completed, pending = await state.cancel_and_drain_project_tasks()
     if completed or pending:
         logger.info(
             "Shutdown unterbrach %d Projektoperation(en); %d Task(s) laufen "

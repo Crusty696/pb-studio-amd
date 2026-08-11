@@ -15,6 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from backend.app_state import get_app_state
+
 logger = logging.getLogger(__name__)
 
 # Pfade die GPU-Lock benötigen
@@ -40,6 +42,19 @@ class GPULockMiddleware(BaseHTTPMiddleware):
             try:
                 response = await call_next(request)
             except Exception as e:
+                if (
+                    isinstance(e, RuntimeError)
+                    and str(e) == "No response returned."
+                    and get_app_state().is_shutdown_started()
+                ):
+                    logger.info("GPU-Request durch Backend-Shutdown beendet: %s", path)
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "detail": "Backend wird heruntergefahren",
+                            "code": "backend_shutting_down",
+                        },
+                    )
                 logger.error(f"GPU-Request fehlgeschlagen: {path}: {e}")
                 return JSONResponse(
                     status_code=503,
