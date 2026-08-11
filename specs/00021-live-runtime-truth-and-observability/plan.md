@@ -87,6 +87,11 @@ der Diagnosevertrag finalen Tag-Inhalt belegte. Der reale PB-Studio-Lauf endete
 nach drei bounded Kandidaten ohne Tags; T009 ist abgeschlossen, T003 bleibt bis
 zum nutzbaren App-Tag-Commit und echten Restart/Resume offen.
 
+Der isolierte Wiederholungslauf ist zusätzlich durch einen externen Dienst
+gesperrt: Hermes Research lädt sein 14,27-GB-Modell per Watchdog alle zehn
+Sekunden erneut. Dieser fremde Dienst wird nur nach eigener Freigabe kurz
+pausiert und danach exakt wiederhergestellt; OBJ-76 stoppt ihn nicht implizit.
+
 1. Vor einer Codeänderung LM Studio mit offiziellen Werkzeugen beobachten:
    `lms ps`, `lms log stream --source server --json` und ein expliziter Load-
    Smoke des bevorzugten VLM. Offizielle JIT-/Load-Ereignisse liefern die

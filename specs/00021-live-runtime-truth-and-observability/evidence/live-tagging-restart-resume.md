@@ -34,8 +34,12 @@
 
 - Drei Versuche, ausschließlich das vorbestehende Modell
   `agents-a1-uncensored-mtp-apex` vor der App-Probe kontrolliert zu entladen,
-  wurden vor jedem Projektschreibzugriff abgebrochen: Ein anderer `lms-cli`-
-  Client lud dieselbe Identität während der zehnsekündigen Settle-Phase erneut.
+  wurden vor jedem Projektschreibzugriff abgebrochen: Der externe
+  Hermes-Research-Watchdog prüft alle zehn Sekunden genau diese Identität und
+  startet bei Abwesenheit `research-services.ps1`, das sie per `lms-cli` erneut
+  lädt. Der Vertrag ist in
+  `%LOCALAPPDATA%\hermes\profiles\research\workspace\bin\research-watchdog.ps1`
+  read-only bestätigt.
 - Vorher/Nachher blieb die Identität exakt `idle`, Context 65536; es wurde kein
   fremder Prozess beendet und kein Modellzustand erzwungen.
 
@@ -45,4 +49,7 @@
   Videoanalyse-Zone: Captioning muss bei Reasoning-VLMs einen nutzbaren finalen
   Content erzeugen oder bounded auf ein nachweislich taglieferndes Vision-Modell
   wechseln. Danach ist genau diese App-Probe einmal zu wiederholen.
+- Für einen isolierten Lauf muss der Hermes-Research-Watchdog mit eigener
+  Freigabe kurz pausiert und anschließend mit identischem Skript/Argument wieder
+  gestartet werden. OBJ-76 verändert oder beendet diesen fremden Dienst nicht.
 - T019 und Bulk bleiben NO-GO.
