@@ -45,6 +45,9 @@ Stage-Zustand und Neustartnachweis. Kein ASGI-Traceback.
 **Stand 2026-08-11:** implementiert und fokussiert geprüft. Der Live-Lauf
 meldete manifestgebundene LHM-Sensoren für dieselbe live ausgewählte RX 7800 XT;
 der frühere fehlende Trust-Anker ist damit für den aktuellen Lauf aufgelöst.
+Ein später eigenständig gestarteter `health`-Befehl prüft den öffentlichen
+Status, überspringt aber geschützte Probes ehrlich, wenn diese Driver-Sitzung
+den bereits laufenden Backendprozess nicht besitzt.
 
 1. `.agents/skills/run-pb-studio/driver.ps1` vor jedem Start den bestehenden
    `Get-PBStudioRuntimeContract -ApplyEnvironment` aufrufen lassen.

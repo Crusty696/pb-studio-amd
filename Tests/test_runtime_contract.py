@@ -42,6 +42,8 @@ def test_agent_driver_uses_canonical_runtime_and_owner_scripts():
     assert "owner_capability.ps1" in source
     assert "RandomNumberGenerator" not in source
     assert 'Log "Owner capability' not in source
+    assert "$script:BackendStartedByDriver = $false" in source
+    assert "current driver session does not own backend" in source
 
 
 def test_agent_driver_checks_locked_runtime_and_adapter_identity():

@@ -44,6 +44,7 @@ $BackendStartupDeadlineSeconds = 90
 $OwnerCapabilityHeader = 'X-PBStudio-Owner-Capability'
 $ScriptsDir = Join-Path $ProjectRoot 'scripts'
 $script:Runtime = $null
+$script:BackendStartedByDriver = $false
 $LogsDir = Join-Path $ProjectRoot 'logs'
 if (-not (Test-Path $LogsDir)) { New-Item -ItemType Directory -Path $LogsDir -Force | Out-Null }
 
@@ -246,6 +247,7 @@ function Invoke-StartBackend {
         -RedirectStandardOutput $stdout `
         -RedirectStandardError $stderr `
         -PassThru
+    $script:BackendStartedByDriver = $true
     Log "Backend PID: $($p.Id) | logs: $stdout"
     $deadline = (Get-Date).AddSeconds($BackendStartupDeadlineSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -288,6 +290,10 @@ function Invoke-Health {
     if (-not (Test-Health)) { Log "Backend not reachable" 'Red'; exit 4 }
     $h = Invoke-RestMethod -Uri "$BaseUrl/health"
     Log "health: $($h | ConvertTo-Json -Compress)" 'Green'
+    if (-not $script:BackendStartedByDriver) {
+        Log "protected probes skipped: current driver session does not own backend" 'DarkGray'
+        return
+    }
     $ownerHeaders = @{ $OwnerCapabilityHeader = $env:PBSTUDIO_OWNER_CAPABILITY }
     try { $g = Invoke-RestMethod -Uri "$BaseUrl/gpu/status" -Headers $ownerHeaders -TimeoutSec 5; Log "gpu: $($g | ConvertTo-Json -Compress -Depth 4)" 'Green' } catch { Log "gpu/status: $($_.Exception.Message)" 'Yellow' }
     try { $b = Invoke-RestMethod -Uri "$BaseUrl/brain/stats" -Headers $ownerHeaders -TimeoutSec 5; Log "brain.stats keys: $($b.PSObject.Properties.Name -join ',')" 'Green' } catch { Log "brain/stats: $($_.Exception.Message)" 'Yellow' }

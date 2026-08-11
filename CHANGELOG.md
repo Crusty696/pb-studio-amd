@@ -17,6 +17,10 @@
 - LM-Studio-r4 trennt Engine-/SSE-Transporterfolg von nutzbarem finalen
   Captioning-Inhalt und stellt vorbestehende Modellidentitäten fail-closed nur
   bei exakt passendem Modell, Kontext und Idle-Status wieder her.
+- Der eigenständige Launcher-Healthcheck meldet geschützte GPU-/Brain-Probes
+  nicht mehr fälschlich als 403-Fehler, wenn die aktuelle Driver-Sitzung den
+  bereits laufenden Backendprozess nicht besitzt; der öffentliche Healthstatus
+  bleibt weiterhin geprüft.
 
 ### Verified
 - Reale Captioning-Unterbrechung: WPF, Supervisor und Backend Exitcode 0,
