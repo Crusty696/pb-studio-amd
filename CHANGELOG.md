@@ -3,6 +3,26 @@
 
 ---
 
+## 2026-08-11 - OBJ-76 Runtime-Wahrheit und Shutdown-Härtung
+
+### Fixed
+- Geschützte API-Aufnahme beim Shutdown atomar gesperrt, aktive
+  Projektoperationen begrenzt drainiert und erwartete Cancellation ohne
+  ASGI-`No response returned` normalisiert.
+- SigLIP-Text-Capability an freigegebenes Manifest, Bundle und SHA-256 gebunden;
+  unregistrierte Assets bleiben fail-closed und Warnungen werden pro
+  Capability-Generation dedupliziert.
+- Diagnosemitschnitt sitzungsgebunden und sanitisiert; LM-Studio-VLM-Probe
+  akzeptiert Modellbereitschaft erst nach terminal erfolgreichem `lms load`.
+
+### Verified
+- Reale Captioning-Unterbrechung: WPF, Supervisor und Backend Exitcode 0,
+  aktive Stages dauerhaft `interrupted`, kein ASGI-Traceback.
+- Scene-Detection 12/12 reale Läufe gegen sechs deterministische Fixtures;
+  Recovery-Restore isoliert 1/1; Dry-Run 465 taglose Videos ohne Mutation.
+- LM Studio bleibt externer Blocker: qwen3.6 und qwen2.5-VL brechen den
+  Engine-Protokollstart ab. Canary und Bulk bleiben gesperrt.
+
 ## 2026-08-08 - OBJ-73 Release-Gate-Remediation
 
 ### Fixed
