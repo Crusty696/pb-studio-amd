@@ -28,9 +28,9 @@
 - Scene-Detection 12/12 reale Läufe gegen sechs deterministische Fixtures;
   Recovery-Restore isoliert 1/1; Dry-Run 465 taglose Videos ohne Mutation.
 - qwen3.6 und qwen2.5-VL laden isoliert und schließen SSE korrekt ab. Der reale
-  PB-Studio-Pfad bleibt dennoch `partial`, weil qwen3.6 keinen nachgewiesenen
-  finalen Tag-Inhalt liefert und die bounded Fallbackkette ohne Tag-Commit endet;
-  T003, Canary und Bulk bleiben gesperrt.
+  PB-Studio-Pfad blieb unter paralleler 14,27-GB-Fremdmodell-Belegung `partial`;
+  der 64-Token-Diagnose-Request gilt ausdrücklich nicht als Produktfehlerbeweis.
+  T003, Canary und Bulk bleiben bis zum isolierten App-Lauf gesperrt.
 
 ## 2026-08-08 - OBJ-73 Release-Gate-Remediation
 

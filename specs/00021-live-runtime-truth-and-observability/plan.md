@@ -90,6 +90,10 @@ der Diagnosevertrag finalen Tag-Inhalt belegte. Der reale PB-Studio-Lauf endete
 nach drei bounded Kandidaten ohne Tags; T009 ist abgeschlossen, T003 bleibt bis
 zum nutzbaren App-Tag-Commit und echten Restart/Resume offen.
 
+Das 64-Token-Limit gehört nur zum Diagnose-Request. PB Studio setzt dieses
+Limit im Produktaufruf nicht; daher wird vor jeder Video-Codeänderung zuerst der
+isolierte reale App-Lauf wiederholt.
+
 Der isolierte Wiederholungslauf ist zusätzlich durch einen externen Dienst
 gesperrt: Hermes Research lädt sein 14,27-GB-Modell per Watchdog alle zehn
 Sekunden erneut. Dieser fremde Dienst wird nur nach eigener Freigabe kurz
@@ -220,9 +224,10 @@ bereits validen Stages; 0 ungeklärte Providerfehler; Restore-Probe grün.
 
 - **Falschpositive Altbefunde:** altes Log gegen neuen Code. Rückweg: Gate 0 vor
   jeder Änderung.
-- **LM-Studio-/Prompt-SPOF:** Transporterfolg ohne nutzbaren finalen
-  Captioning-Inhalt oder konkurrierende Modellbelegung. Rückweg: partial
-  Receipt, bounded Fallback/Quarantäne, kein Bulk.
+- **LM-Studio-/Prompt-SPOF:** Diagnose-Transporterfolg ohne belegten finalen
+  Inhalt oder konkurrierende Modellbelegung. Rückweg: zuerst isolierter
+  Produktlauf, danach nur bei reproduziertem Produktfehler minimaler Fix;
+  weiterhin partial Receipt, bounded Fallback/Quarantäne und kein Bulk.
 - **Shutdown hängt am nativen Worker:** bounded Drain, atomarer Interrupted-
   Zustand, danach kontrollierter Prozessabschluss.
 - **LHM liefert trotz korrekter Bindung keine Sensoren:** unavailable statt

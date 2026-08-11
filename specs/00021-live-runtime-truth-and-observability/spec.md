@@ -57,10 +57,10 @@ nicht erneut als offene Ursache vorausgesetzt werden.
 
 - Ob die aktuellen Analysewahrheits- und Resume-Verträge im normalen realen
   Tagging-Erfolgsfall vollständig greifen.
-- Warum der reale App-Pfad trotz direkt erfolgreichem Engine-/SSE-Transport
-  keinen Tag-Commit erzeugt: qwen3.6 verbraucht das 64-Token-Budget im
-  Reasoning-Pfad ohne nachgewiesenen finalen Content; die bounded Fallbackkette
-  endet unter paralleler Fremdmodell-Belegung ohne nutzbare Tags.
+- Ob der reale App-Pfad unter stabil isoliertem Modellzustand einen Tag-Commit
+  erzeugt. Der 64-Token-Direkttest und der echte App-Request besitzen nicht
+  denselben Generationsvertrag; der bisherige App-Lauf endete unter paralleler
+  Fremdmodell-Belegung ohne nutzbare Tags.
 
 ## Scope
 

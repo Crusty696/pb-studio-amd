@@ -45,10 +45,11 @@
 
 ## Gate
 
-- T003 bleibt offen. Zuständiger Produktfix liegt in der separat reservierten
-  Videoanalyse-Zone: Captioning muss bei Reasoning-VLMs einen nutzbaren finalen
-  Content erzeugen oder bounded auf ein nachweislich taglieferndes Vision-Modell
-  wechseln. Danach ist genau diese App-Probe einmal zu wiederholen.
+- T003 bleibt offen. Der direkte r4-Request war auf 64 Tokens begrenzt, der
+  echte PB-Studio-Request dagegen nicht; daraus folgt noch kein belegter
+  Produktfehler. Zuerst ist genau diese App-Probe unter stabil isoliertem
+  Modellzustand einmal zu wiederholen. Nur bei erneut fehlendem Tag-Commit wird
+  die separat reservierte Videoanalyse-Zone geändert.
 - Für einen isolierten Lauf muss der Hermes-Research-Watchdog mit eigener
   Freigabe kurz pausiert und anschließend mit identischem Skript/Argument wieder
   gestartet werden. OBJ-76 verändert oder beendet diesen fremden Dienst nicht.
