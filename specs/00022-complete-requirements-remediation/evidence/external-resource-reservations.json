@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-77",
+  "captured_at_utc": "2026-08-11T22:35:49.7087775Z",
+  "ground_truth": {
+    "status": "missing",
+    "owner": "No ground-truth annotation owner has been identified.",
+    "start_utc": "2026-08-11T21:52:09.8914756Z",
+    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "machine_or_provider_identity": "C:\\Users\\david\\Videos\\test_data\\audio and C:\\Users\\david\\Videos\\test_data\\video",
+    "approval_identity": "No user approval identity has been supplied.",
+    "approval_scope": "Ground-truth annotation manifests for OBJ-77 real-media gates.",
+    "blocking_reason": "The Wave 0 prerequisite receipt records zero annotation files."
+  },
+  "intel": {
+    "status": "missing",
+    "owner": "No Intel DirectML machine owner has been identified.",
+    "start_utc": "2026-08-11T21:52:09.8914756Z",
+    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "machine_or_provider_identity": "No Intel DirectML machine is available in the Wave 0 prerequisite receipt.",
+    "approval_identity": "No user authorization for an Intel DirectML machine has been supplied.",
+    "approval_scope": "OBJ-77 K-16 Intel DirectML hardware matrix.",
+    "blocking_reason": "The Wave 0 prerequisite receipt records Intel hardware as missing."
+  },
+  "nvidia": {
+    "status": "missing",
+    "owner": "No NVIDIA DirectML machine owner has been identified.",
+    "start_utc": "2026-08-11T21:52:09.8914756Z",
+    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "machine_or_provider_identity": "No NVIDIA DirectML machine is available in the Wave 0 prerequisite receipt.",
+    "approval_identity": "No user authorization for an NVIDIA DirectML machine has been supplied.",
+    "approval_scope": "OBJ-77 K-16 NVIDIA DirectML hardware matrix.",
+    "blocking_reason": "The Wave 0 prerequisite receipt records NVIDIA hardware as missing."
+  },
+  "lm_window": {
+    "status": "not_authorized",
+    "owner": "No LM Studio maintenance-window owner has been identified.",
+    "start_utc": "2026-08-11T21:52:09.8914756Z",
+    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "machine_or_provider_identity": "LM Studio endpoint http://127.0.0.1:1234/v1",
+    "approval_identity": "No user authorization to schedule or change the LM Studio window has been supplied.",
+    "approval_scope": "OBJ-77 V-10, V-11, K-06 and K-12 LM Studio gates.",
+    "blocking_reason": "The Wave 0 prerequisite receipt records the endpoint as unreachable."
+  },
+  "stress_window": {
+    "status": "not_reserved",
+    "owner": "No four-and-a-half-hour stress-window owner has been identified.",
+    "start_utc": "2026-08-11T21:52:09.8914756Z",
+    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "machine_or_provider_identity": "PB Studio local environment with required forced VRAM target of 4096 MB.",
+    "approval_identity": "No user authorization for a four-and-a-half-hour stress window has been supplied.",
+    "approval_scope": "OBJ-77 D-08 four-hour worker and 4096 MB stress gate.",
+    "blocking_reason": "The Wave 0 prerequisite receipt records no runnable worker or stress assets."
+  }
+}
