@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "task_id": "T088",
+  "scope": "fixture_copies_only",
+  "real_target_migration_authorized": false,
+  "commit_sha": "d8b2d27",
+  "result": "pass",
+  "contracts": {
+    "approval_receipt_bound": true,
+    "dry_run_non_mutating": true,
+    "legacy_768_archived_without_padding": true,
+    "active_video_dimension": 1152,
+    "brain_dimension": 256,
+    "brain_distance_metric": "cosine",
+    "catalog_legacy_rows_unverified": true,
+    "backup_verified": true,
+    "rollback_byte_identical": true,
+    "hardkill_restart_converges": true,
+    "wal_mode_verified": true,
+    "parallel_lock_verified": true,
+    "recovery_generation_verified": true,
+    "real_data_unchanged": true
+  },
+  "verification": [
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest Tests\\test_obj77_migration_approval.py Tests\\test_embedding_migration_recovery.py Tests\\test_recovery_owner_adapters.py Tests\\test_recovery_generation.py Tests\\test_vector_operation_outbox.py Tests\\test_recovery_bootstrap.py Tests\\test_wave1_sqlite_connection_contract.py Tests\\test_embedding_contract.py Tests\\test_storage_layer.py Tests\\test_sqlite_parallel_contention.py -q",
+      "result": "127 passed, 4 warnings",
+      "duration_seconds": 128.39
+    },
+    {
+      "command": "python -m py_compile <Task-12 Python files>",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "review": {
+    "verdict": "APPROVE",
+    "critical_open": 0,
+    "important_open": 0
+  },
+  "protected_source": {
+    "catalog_path": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version\\data\\pb_studio.db",
+    "sha256": "89de42a65b4b3cc1f4db3abb8221d84cd97c461a8f774f01973b09ceac7f9c11",
+    "embeddings_db_count": 0,
+    "mutated": false
+  },
+  "next_gate": "A separate explicit approval is required before any real target migration."
+}

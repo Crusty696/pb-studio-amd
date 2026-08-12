@@ -111,7 +111,7 @@
 - [X] T085 [P] [OBJ-77] {(TR-384)} Wave 0: Vollstaendigen DirectML-Session- und Run-Contracttest unter `Tests/` erstellen
 - [X] T086 [OBJ-77] {(FR-412)} Wave 0: Historische SDD-Artefakte hashgebunden unter `specs/00022-complete-requirements-remediation/evidence/` inventarisieren
 - [ ] T087 [OBJ-77] {(TR-387)} Wave 1: OpenAPI-, Pydantic-, C#-DTO- und Persistenzparitaet in `Tests/` beweisen
-- [ ] T088 [OBJ-77] {(TR-386)} Wave 1: Backup, Dry-run, Crash-Injection, Restore und Rollback unter `specs/00022-complete-requirements-remediation/evidence/` beweisen
+- [X] T088 [OBJ-77] {(TR-386)} Wave 1: Backup, Dry-run, Crash-Injection, Restore und Rollback unter `specs/00022-complete-requirements-remediation/evidence/` beweisen
 - [ ] T089 [OBJ-77] {(OR-362)} {(TR-390)} Wave 1 bis 6: Jedes gruene Wave-Gate und Merge-SHA unter `specs/00022-complete-requirements-remediation/evidence/` registrieren
 - [ ] T090 [P] [OBJ-77] {(FR-412)} Wave 6: Compliance- und qualifizierten Requirement-Registry-Validator unter `scripts/` implementieren
 - [ ] T091 [P] [OBJ-77] {(FR-409)} {(FR-412)} Wave 6: GUI-CLI-Hilfe, README-Smokes und Brain-Status in `scripts/` und Dokumentation synchronisieren
