@@ -27,6 +27,7 @@ SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 REGISTRATION_REQUIRED = {"schema_version", "objective", "mode", "audio_root", "video_root", "entries", "registration_sha256"}
 REGISTRATION_ALLOWED = REGISTRATION_REQUIRED | {"registered_at_utc"}
 ENTRY_REQUIRED = {"media_id", "media_type", "absolute_path", "size_bytes", "media_sha256", "duration_seconds", "stream", "annotation_version", "verification_status"}
+ENTRY_OPTIONAL = {"annotation_path", "annotation_sha256"}
 ANNOTATION_REQUIRED = {"schema_version", "media_id", "media_sha256", "annotation_version", "verification_status", "downbeats", "subtracks", "song_sections", "scene_boundaries", "tags", "pacing_cases"}
 IGNORED_LEGACY_FIELDS = {"rights_evidence", "reviewer_id", "annotator_id", "independent_labeling", "kpi_definitions"}
 
@@ -95,6 +96,10 @@ def build_registration_payload(
     *,
     probe: Callable[[Path, str], tuple[float, dict[str, str]]] = _probe_media,
 ) -> dict:
+    if audio_root.resolve() != DEFAULT_AUDIO_ROOT.resolve():
+        raise ValueError(f"registration requires approved audio root: {DEFAULT_AUDIO_ROOT}")
+    if video_root.resolve() != DEFAULT_VIDEO_ROOT.resolve():
+        raise ValueError(f"registration requires approved video root: {DEFAULT_VIDEO_ROOT}")
     entries: list[dict[str, object]] = []
     for media_type, root in (("audio", audio_root), ("video", video_root)):
         if not root.is_dir():
@@ -128,7 +133,7 @@ def build_registration_payload(
 
 
 def _entry_errors(entry: object, index: int, audio_root: Path, video_root: Path, strict: bool) -> list[str]:
-    errors = _object_errors(entry, f"entries[{index}]", ENTRY_REQUIRED, ENTRY_REQUIRED | IGNORED_LEGACY_FIELDS)
+    errors = _object_errors(entry, f"entries[{index}]", ENTRY_REQUIRED, ENTRY_REQUIRED | ENTRY_OPTIONAL | IGNORED_LEGACY_FIELDS)
     if not isinstance(entry, dict):
         return errors
     media_id = entry.get("media_id")
@@ -166,6 +171,45 @@ def _entry_errors(entry: object, index: int, audio_root: Path, video_root: Path,
         errors.append(f"{display} verification_status must be verified for strict KPI validation")
     if strict and not _is_semver(annotation_version):
         errors.append(f"{display} annotation_version must be semantic version for strict KPI validation")
+    annotation_path = entry.get("annotation_path")
+    annotation_sha256 = entry.get("annotation_sha256")
+    if annotation_path is not None and (not isinstance(annotation_path, str) or not annotation_path or not Path(annotation_path).is_absolute()):
+        errors.append(f"{display} annotation_path is invalid")
+    if annotation_sha256 is not None and not _is_sha256(annotation_sha256):
+        errors.append(f"{display} annotation_sha256 must be SHA-256")
+    if strict and not isinstance(annotation_path, str):
+        errors.append(f"{display} annotation_path is required for strict KPI validation")
+    if strict and not _is_sha256(annotation_sha256):
+        errors.append(f"{display} annotation_sha256 is required for strict KPI validation")
+    return errors
+
+
+def _validate_entry_annotation(entry: dict[str, Any], duration_seconds: float) -> list[str]:
+    media_id = entry.get("media_id", "entry")
+    path_value = entry.get("annotation_path")
+    expected_sha256 = entry.get("annotation_sha256")
+    if not isinstance(path_value, str) or not _is_sha256(expected_sha256):
+        return []
+    path = Path(path_value)
+    if not path.is_file():
+        return [f"{media_id} annotation file is missing"]
+    try:
+        annotation_bytes = path.read_bytes()
+    except OSError as error:
+        return [f"{media_id} annotation file is unreadable: {error}"]
+    if hashlib.sha256(annotation_bytes).hexdigest() != expected_sha256:
+        return [f"{media_id} annotation hash drift"]
+    try:
+        annotation = json.loads(annotation_bytes)
+    except json.JSONDecodeError:
+        return [f"{media_id} annotation JSON is invalid"]
+    if not isinstance(annotation, dict):
+        return [f"{media_id} annotation must be an object"]
+    errors: list[str] = []
+    for field in ("media_id", "media_sha256", "annotation_version", "verification_status"):
+        if annotation.get(field) != entry.get(field):
+            errors.append(f"{media_id} annotation {field} does not bind to registration")
+    errors.extend(f"{media_id} {error}" for error in validate_annotation(annotation, duration_seconds, strict=True))
     return errors
 
 
@@ -224,11 +268,24 @@ def validate_registration_payload(payload: object, *, strict: bool, verify_files
                     errors.append(f"{media_id} stream drift")
             except RuntimeError as error:
                 errors.append(f"{media_id} {error}")
+        if strict and isinstance(entry, dict) and _is_number(entry.get("duration_seconds")):
+            errors.extend(_validate_entry_annotation(entry, float(entry["duration_seconds"])))
     for label, values in (("media_id", media_ids), ("absolute_path", paths), ("media_sha256", hashes)):
         duplicates = sorted(value for value, count in Counter(values).items() if count > 1)
         for value in duplicates:
             errors.append(f"duplicate {label}: {value}" if label != "media_sha256" else "duplicate media_sha256")
     return errors
+
+
+def _current_inventory(audio_root: Path, video_root: Path) -> tuple[set[str], list[str]]:
+    inventory: set[str] = set()
+    errors: list[str] = []
+    for media_type, root in (("audio", audio_root), ("video", video_root)):
+        if not root.is_dir():
+            errors.append(f"approved {media_type} root is missing: {root}")
+            continue
+        inventory.update(str(path.resolve()).casefold() for path in root.rglob("*") if path.is_file())
+    return inventory, errors
 
 
 def validate_registration(receipt_path: Path, audio_root: Path, video_root: Path, *, strict: bool) -> list[str]:
@@ -238,7 +295,29 @@ def validate_registration(receipt_path: Path, audio_root: Path, video_root: Path
         payload = json.loads(receipt_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         return [f"registration JSON is invalid: {error}"]
-    return validate_registration_payload(payload, strict=strict, verify_files=True, audio_root=audio_root, video_root=video_root)
+    errors: list[str] = []
+    if audio_root.resolve() != DEFAULT_AUDIO_ROOT.resolve():
+        errors.append(f"receipt verification requires approved audio root: {DEFAULT_AUDIO_ROOT}")
+    if video_root.resolve() != DEFAULT_VIDEO_ROOT.resolve():
+        errors.append(f"receipt verification requires approved video root: {DEFAULT_VIDEO_ROOT}")
+    if not isinstance(payload, dict) or payload.get("audio_root") != str(DEFAULT_AUDIO_ROOT.resolve()):
+        errors.append(f"receipt audio_root must equal approved root: {DEFAULT_AUDIO_ROOT}")
+    if not isinstance(payload, dict) or payload.get("video_root") != str(DEFAULT_VIDEO_ROOT.resolve()):
+        errors.append(f"receipt video_root must equal approved root: {DEFAULT_VIDEO_ROOT}")
+    inventory, inventory_errors = _current_inventory(DEFAULT_AUDIO_ROOT, DEFAULT_VIDEO_ROOT)
+    errors.extend(inventory_errors)
+    if isinstance(payload, dict) and isinstance(payload.get("entries"), list):
+        receipt_paths = {
+            str(Path(entry["absolute_path"]).resolve()).casefold()
+            for entry in payload["entries"]
+            if isinstance(entry, dict) and isinstance(entry.get("absolute_path"), str)
+        }
+        for path in sorted(inventory - receipt_paths):
+            errors.append(f"current media missing from receipt: {path}")
+        for path in sorted(receipt_paths - inventory):
+            errors.append(f"receipt media is not in current inventory: {path}")
+    errors.extend(validate_registration_payload(payload, strict=strict, verify_files=True, audio_root=DEFAULT_AUDIO_ROOT, video_root=DEFAULT_VIDEO_ROOT))
+    return errors
 
 
 def validate_time(value: object, duration_seconds: float, field: str) -> str | None:
@@ -344,19 +423,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.register:
         if args.strict:
             parser.error("--register and --strict cannot be combined")
+        if args.audio_root.resolve() != DEFAULT_AUDIO_ROOT.resolve():
+            print(f"OBJ-77 registration blocked: registration requires approved audio root: {DEFAULT_AUDIO_ROOT}", file=sys.stderr)
+            return 1
+        if args.video_root.resolve() != DEFAULT_VIDEO_ROOT.resolve():
+            print(f"OBJ-77 registration blocked: registration requires approved video root: {DEFAULT_VIDEO_ROOT}", file=sys.stderr)
+            return 1
         try:
-            payload = build_registration_payload(args.audio_root, args.video_root)
+            payload = build_registration_payload(DEFAULT_AUDIO_ROOT, DEFAULT_VIDEO_ROOT)
             args.receipt.parent.mkdir(parents=True, exist_ok=True)
             args.receipt.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         except (OSError, RuntimeError, ValueError) as error:
             print(f"OBJ-77 registration blocked: {error}", file=sys.stderr)
             return 1
     errors: list[str] = []
-    if args.strict:
-        if args.audio_root.resolve() != DEFAULT_AUDIO_ROOT.resolve():
-            errors.append(f"--strict requires approved audio root: {DEFAULT_AUDIO_ROOT}")
-        if args.video_root.resolve() != DEFAULT_VIDEO_ROOT.resolve():
-            errors.append(f"--strict requires approved video root: {DEFAULT_VIDEO_ROOT}")
+    if args.audio_root.resolve() != DEFAULT_AUDIO_ROOT.resolve():
+        errors.append(f"receipt verification requires approved audio root: {DEFAULT_AUDIO_ROOT}")
+    if args.video_root.resolve() != DEFAULT_VIDEO_ROOT.resolve():
+        errors.append(f"receipt verification requires approved video root: {DEFAULT_VIDEO_ROOT}")
     errors.extend(validate_registration(args.receipt, args.audio_root, args.video_root, strict=args.strict))
     if errors:
         print("OBJ-77 ground truth blocked:", file=sys.stderr)

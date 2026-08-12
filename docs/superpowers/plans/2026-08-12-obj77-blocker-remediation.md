@@ -28,10 +28,8 @@ Wave 0, including its path, size, media SHA-256, stream, duration, annotation
 version and `verification_status`. `pending` is an honest, valid registration
 state; it is rejected only by the later strict KPI validator. Wave 0 has no
 five-mix or ten-clip count gate. Those quantities remain A-14 (Wave 2) and
-V-11/T019 (Wave 3) gates. Rights, provenance approvals, separate
-annotator/reviewer identities, independent-labeling attestations and
-user-supplied KPI formulas/owners are not Task-2 contracts. The authoritative
-ruling is `.superpowers/sdd/2026-08-12-obj77-blocker-remediation/task-2-scope-correction.md`.
+V-11/T019 (Wave 3) gates. The authoritative ruling is
+`.superpowers/sdd/2026-08-12-obj77-blocker-remediation/task-2-scope-correction.md`.
 
 ---
 
@@ -43,7 +41,7 @@ ruling is `.superpowers/sdd/2026-08-12-obj77-blocker-remediation/task-2-scope-co
 - `specs/00022-complete-requirements-remediation/contracts/ground-truth-corpus.schema.json` — corpus metadata contract.
 - `specs/00022-complete-requirements-remediation/contracts/ground-truth-annotation.schema.json` — per-medium annotation contract.
 - `scripts/requirements/validate_obj77_reservations.py` — fail-closed reservation validator.
-- `scripts/validate_obj77_ground_truth.py` — real-media, hash, annotation and reviewer validator.
+- `scripts/validate_obj77_ground_truth.py` — real-media, hash and annotation validator.
 - `scripts/directml_matrix/probe.py` — vendor-neutral DirectML hardware and inference probe.
 - `scripts/directml_matrix/run.ps1` — portable AMD/Intel/NVIDIA matrix entry point.
 - `scripts/directml_matrix/evidence.schema.json` — matrix receipt contract.
@@ -175,7 +173,6 @@ git commit -m "test(infra): enforce obj77 external reservation gates"
 - Create: `specs/00022-complete-requirements-remediation/contracts/ground-truth-annotation.schema.json`
 - Create: `scripts/validate_obj77_ground_truth.py`
 - Create: `Tests/test_obj77_ground_truth_contract.py`
-- External evidence: `C:\Users\david\Videos\test_data\ground_truth\corpus.json`
 - Evidence: `specs/00022-complete-requirements-remediation/evidence/ground-truth-registration.json`
 
 **Interfaces:**
@@ -183,116 +180,33 @@ git commit -m "test(infra): enforce obj77 external reservation gates"
 - Produces: a hash-bound registration receipt and registration/strict validation.
 
 **Scope:** This task follows the authoritative Task-2 Scope Correction above.
-Registration records current entries as `pending` when no annotation exists; no
-annotation, label, identity, rights decision or KPI formula is invented. Later
-strict KPI validation accepts only `verification_status=verified` entries.
+Registration records every currently present file from exactly the two approved
+roots. Pending entries are valid Wave-0 facts and carry no invented annotation
+or external approval data. A later strict KPI check requires a
+hash-bound, verified annotation document.
 
-- [ ] **Step 1: Freeze the annotation policy before labeling media**
+- [ ] **Step 1: Write focused registration contract tests**
 
-Record exact formulas for section alignment, cut accuracy and `<10 ms` drift; the controlled section/tag vocabularies; annotator and reviewer identities; and media-rights approver. The same person cannot be both annotator and reviewer.
+Cover the approved-root-only builder, current-file inventory equality, file
+drift, pending acceptance, and strict annotation binding.
 
-- [ ] **Step 2: Write failing contract tests**
-
-```python
-import pytest
-
-from scripts.validate_obj77_ground_truth import validate_annotation
-
-
-@pytest.fixture
-def valid_annotation() -> dict:
-    return {
-        "schema_version": 1,
-        "media_id": "audio-mix-001",
-        "media_sha256": "a" * 64,
-        "annotation_version": "1.0.0",
-        "annotation_status": "approved",
-        "annotator_id": "annotator-a",
-        "reviewer_id": "reviewer-b",
-        "downbeats": [{"time": 0.0, "bar_number": 1}],
-        "subtracks": [],
-        "song_sections": [],
-        "scene_boundaries": [],
-        "tags": {"required": [], "allowed": [], "forbidden": []},
-        "pacing_cases": [],
-    }
-
-
-def test_rejects_same_annotator_and_reviewer(valid_annotation: dict) -> None:
-    valid_annotation["reviewer_id"] = valid_annotation["annotator_id"]
-    assert validate_annotation(valid_annotation, duration_seconds=3600.0) == [
-        "annotator_id and reviewer_id must differ"
-    ]
-
-
-def test_rejects_non_contiguous_bar_numbers(valid_annotation: dict) -> None:
-    valid_annotation["downbeats"] = [
-        {"time": 0.0, "bar_number": 1},
-        {"time": 1.875, "bar_number": 3},
-    ]
-    assert validate_annotation(valid_annotation, duration_seconds=3600.0) == [
-        "bar_number must increase contiguously"
-    ]
-```
-
-- [ ] **Step 3: Run tests and verify failure**
+- [ ] **Step 2: Implement and run Wave-0 registration**
 
 ```powershell
 $env:PYTHONPATH = "src;."
+.\.venv\Scripts\python.exe scripts\validate_obj77_ground_truth.py --receipt specs\00022-complete-requirements-remediation\evidence\ground-truth-registration.json --register
+.\.venv\Scripts\python.exe scripts\validate_obj77_ground_truth.py --receipt specs\00022-complete-requirements-remediation\evidence\ground-truth-registration.json
 .\.venv\Scripts\python.exe -m pytest Tests\test_obj77_ground_truth_contract.py -q
 ```
 
-Expected: collection fails because the validator is absent.
+Expected: registration validation and tests exit 0; `--strict` remains
+nonzero until a later KPI supplies verified, hash-bound annotations.
 
-- [ ] **Step 4: Implement schema and semantic validation**
+- [ ] **Step 3: Record T083 after hash-bound registration**
 
-```python
-ALLOWED_SECTION_LABELS = {
-    "intro", "verse", "chorus", "bridge", "outro", "drop"
-}
-ALLOWED_SCENE_TYPES = {"cut", "fade", "dissolve"}
-
-
-def validate_time(value: object, duration_seconds: float, field: str) -> str | None:
-    if not isinstance(value, (int, float)) or not math.isfinite(value):
-        return f"{field} must be finite"
-    if value < 0.0 or value > duration_seconds:
-        return f"{field} outside media duration"
-    return None
-
-
-def validate_annotation(payload: dict, duration_seconds: float) -> list[str]:
-    errors: list[str] = []
-    if payload.get("annotator_id") == payload.get("reviewer_id"):
-        errors.append("annotator_id and reviewer_id must differ")
-    bars = [item.get("bar_number") for item in payload.get("downbeats", [])]
-    if bars and bars != list(range(1, len(bars) + 1)):
-        errors.append("bar_number must increase contiguously")
-    return errors
-```
-
-The validator must reject paths outside the two approved roots, hash/duration/stream drift, NaN/Inf, out-of-range times, unsorted or overlapping segments, noncontiguous bars, unknown labels, unapproved annotations, missing rights evidence, missing KPI roles and annotation mutation without a version increase.
-
-- [ ] **Step 5: Acquire and annotate the real corpus independently**
-
-Required minimum: five DJ mixes approximately 1h/2h/2h/3h/4h and ten real videos covering continuous footage, cuts, fades and dissolves. Freeze media hashes before annotation. Annotator A labels without PB Studio output; Reviewer B reviews the complete media; only `annotation_status=approved` is eligible.
-
-- [ ] **Step 6: Run strict validation against real media**
-
-```powershell
-$env:PYTHONPATH = "src;."
-.\.venv\Scripts\python.exe scripts\validate_obj77_ground_truth.py --corpus C:\Users\david\Videos\test_data\ground_truth\corpus.json --strict
-.\.venv\Scripts\python.exe -m pytest Tests\test_obj77_ground_truth_contract.py -q
-```
-
-Expected: both commands exit 0; the live command prints the corpus SHA-256 and annotation SHA-256 values.
-
-- [ ] **Step 7: Register evidence and complete T083 only after live PASS**
-
-```powershell
-git add specs/00022-complete-requirements-remediation/contracts/ground-truth-corpus.schema.json specs/00022-complete-requirements-remediation/contracts/ground-truth-annotation.schema.json scripts/validate_obj77_ground_truth.py Tests/test_obj77_ground_truth_contract.py specs/00022-complete-requirements-remediation/evidence/ground-truth-registration.json specs/00022-complete-requirements-remediation/tasks.md
-git commit -m "test(data): register independent obj77 ground truth"
-```
+Commit the schemas, validator, tests and receipt; update only T083 after the
+registration receipt validates. Five annotated mixes are A-14 Wave 2 work; ten
+clips are V-11/T019 Wave 3 work, not Wave-0 requirements.
 
 ---
 
@@ -320,11 +234,13 @@ Expected: no output. Changes under `specs/`, `docs/`, `scripts/requirements/` an
 ```powershell
 $env:PYTHONPATH = "src;."
 .\.venv\Scripts\python.exe scripts\requirements\validate_obj77_reservations.py specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json
-.\.venv\Scripts\python.exe scripts\validate_obj77_ground_truth.py --corpus C:\Users\david\Videos\test_data\ground_truth\corpus.json --strict
+.\.venv\Scripts\python.exe scripts\validate_obj77_ground_truth.py --receipt specs\00022-complete-requirements-remediation\evidence\ground-truth-registration.json
 .\.venv\Scripts\python.exe -m pytest Tests\test_obj77_external_reservations.py Tests\test_obj77_ground_truth_contract.py -q
 ```
 
-Expected: all commands exit 0. Reservation does not count as final K-16, T003 or D-08 evidence.
+Expected: all commands exit 0. The Wave-0 registration receipt is sufficient
+here; strict KPI validation remains a later annotation gate. Reservation does
+not count as final K-16, T003 or D-08 evidence.
 
 - [ ] **Step 3: Revalidate the saved Wave-0 baseline and SDD state**
 
@@ -809,7 +725,8 @@ Do not merge this branch independently. The master remediation plan merges the W
 
 ## Consulting Gates Applied
 
-1. **Ground Truth:** Human-authored, independently reviewed and frozen before PB Studio output; otherwise T083 remains open.
+1. **Ground Truth:** T083 requires the hash-bound Wave-0 registration receipt;
+   later strict KPI use requires hash-bound verified annotations.
 2. **K-16 scope:** Vendor-neutral ONNX-DirectML contract on AMD/Intel/NVIDIA; full PB Studio remains AMD-only.
 3. **LM Studio:** Exact-process maintenance window with complete Hermes restoration; no wildcard process termination and no `lms server status` healthcheck.
 4. **Stress:** Tracked worker under `scripts/qa`, exact 4096 MB, 14,400 measured seconds and fail-closed receipt; no started flag as evidence.
@@ -817,7 +734,9 @@ Do not merge this branch independently. The master remediation plan merges the W
 
 ## Execution Stop Conditions
 
-- Stop before Task 2 live registration if real media, rights, annotator, reviewer or KPI formulas are absent.
+- Stop before Task 2 registration if either approved media root is unavailable;
+  do not invent annotations. Strict KPI validation stops until verified,
+  hash-bound annotation documents exist.
 - Stop before Task 5 external execution if Intel hardware or NVIDIA budget/quota is not approved.
 - Stop before Task 6 `Pause` if the Hermes maintenance receipt is not authorized.
 - Stop before T019 if T003 has not passed or the separate Canary approval is missing.

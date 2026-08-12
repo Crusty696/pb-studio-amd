@@ -31,6 +31,8 @@
         "stream": {"type": "object", "additionalProperties": false, "required": ["codec_type", "codec_name"], "properties": {"codec_type": {"enum": ["audio", "video"]}, "codec_name": {"type": "string", "minLength": 1}}},
         "annotation_version": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/semver"}]},
         "verification_status": {"enum": ["pending", "verified", "rejected"]},
+        "annotation_path": {"type": "string", "minLength": 1},
+        "annotation_sha256": {"$ref": "#/$defs/sha256"},
         "rights_evidence": {}, "reviewer_id": {}, "annotator_id": {}, "independent_labeling": {}, "kpi_definitions": {}
       }
     }
