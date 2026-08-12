@@ -312,7 +312,11 @@ def _validate_policy(payload: dict) -> list[str]:
     errors.extend(_validate_object_keys(coverage, name="corpus_policy.video_coverage", required=required_coverage, allowed=required_coverage))
     if isinstance(coverage, dict):
         markers = coverage.get("required_markers")
-        if not isinstance(markers, list) or set(markers) != REQUIRED_VIDEO_MARKERS:
+        if not isinstance(markers, list):
+            errors.append("corpus_policy.video_coverage required_markers must be a list")
+        elif not all(isinstance(marker, str) for marker in markers):
+            errors.append("corpus_policy.video_coverage required_markers must contain strings")
+        elif set(markers) != REQUIRED_VIDEO_MARKERS:
             errors.append("corpus_policy.video_coverage markers must be continuous, cut, fade and dissolve")
         if not _is_nonempty_string(coverage.get("approval_id")) or _canonical_identity(coverage.get("approver_id")) is None:
             errors.append("corpus_policy.video_coverage approval is incomplete")
@@ -401,7 +405,12 @@ def validate_corpus_metadata(payload: dict, prior_registration: dict | None = No
             errors.append(f"{media_id} profile_slot is required")
         if entry.get("media_type") == "video":
             coverage = entry.get("coverage_markers")
-            if not isinstance(coverage, list) or not coverage or not set(coverage).issubset(REQUIRED_VIDEO_MARKERS):
+            if (
+                not isinstance(coverage, list)
+                or not coverage
+                or not all(isinstance(marker, str) for marker in coverage)
+                or not set(coverage).issubset(REQUIRED_VIDEO_MARKERS)
+            ):
                 errors.append(f"{media_id} coverage_markers are invalid")
     for label, values in (("media_id", media_ids), ("media relative_path", paths), ("media sha256", hashes)):
         for value, count in Counter(values).items():
@@ -441,7 +450,13 @@ def validate_corpus_metadata(payload: dict, prior_registration: dict | None = No
                     errors.append(f"{entry.get('media_id', 'media')} duration is outside its frozen profile slot")
         coverage = policy.get("video_coverage")
         if isinstance(coverage, dict) and isinstance(coverage.get("required_markers"), list):
-            observed_markers = {marker for entry in media if isinstance(entry, dict) and entry.get("media_type") == "video" for marker in entry.get("coverage_markers", []) if isinstance(marker, str)}
+            observed_markers = {
+                marker
+                for entry in media
+                if isinstance(entry, dict) and entry.get("media_type") == "video"
+                for marker in (entry.get("coverage_markers") if isinstance(entry.get("coverage_markers"), list) else [])
+                if isinstance(marker, str)
+            }
             if not REQUIRED_VIDEO_MARKERS.issubset(observed_markers):
                 errors.append("video coverage markers are incomplete")
 
@@ -454,12 +469,62 @@ def validate_corpus_metadata(payload: dict, prior_registration: dict | None = No
     return errors
 
 
+def _validate_prior_registration(prior_registration: object) -> tuple[list[str], dict[str, dict]]:
+    required = {"schema_version", "registration_kind", "corpus_sha256", "corpus_version", "annotations"}
+    errors = _validate_object_keys(
+        prior_registration,
+        name="prior registration",
+        required=required,
+        allowed=required,
+    )
+    if not isinstance(prior_registration, dict):
+        return errors, {}
+    if prior_registration.get("schema_version") != 1:
+        errors.append("prior registration schema_version must be 1")
+    if prior_registration.get("registration_kind") != "OBJ-77-ground-truth-prior":
+        errors.append("prior registration kind is invalid")
+    if not _is_sha256(prior_registration.get("corpus_sha256")):
+        errors.append("prior registration corpus_sha256 must be SHA-256")
+    if _version_tuple(prior_registration.get("corpus_version")) is None:
+        errors.append("prior registration corpus_version must be semantic version")
+    annotations = prior_registration.get("annotations")
+    if not isinstance(annotations, list):
+        errors.append("prior registration annotations must be a list")
+        return errors, {}
+    previous: dict[str, dict] = {}
+    media_ids: list[str] = []
+    for index, entry in enumerate(annotations):
+        entry_required = {"media_id", "sha256", "annotation_version"}
+        errors.extend(
+            _validate_object_keys(
+                entry,
+                name=f"prior registration annotations[{index}]",
+                required=entry_required,
+                allowed=entry_required,
+            )
+        )
+        if not isinstance(entry, dict):
+            continue
+        media_id = entry.get("media_id")
+        if not _is_nonempty_string(media_id):
+            errors.append(f"prior registration annotations[{index}].media_id is invalid")
+            continue
+        media_ids.append(media_id)
+        if not _is_sha256(entry.get("sha256")):
+            errors.append(f"prior registration annotations[{index}].sha256 must be SHA-256")
+        if _version_tuple(entry.get("annotation_version")) is None:
+            errors.append(f"prior registration annotations[{index}].annotation_version must be semantic version")
+        previous[media_id] = entry
+    if len(media_ids) != len(set(media_ids)):
+        errors.append("prior registration annotation media_id values must be unique")
+    return errors, previous
+
+
 def _validate_update_metadata(payload: dict, registrations: list[object], prior_registration: dict | None) -> list[str]:
     if prior_registration is None:
         return ["update mode requires --prior-registration"]
-    required = {"schema_version", "registration_kind", "corpus_sha256", "corpus_version", "annotations"}
-    errors = _validate_object_keys(prior_registration, name="prior registration", required=required, allowed=required)
-    if prior_registration.get("schema_version") != 1 or prior_registration.get("registration_kind") != "OBJ-77-ground-truth-prior" or not _is_sha256(prior_registration.get("corpus_sha256")) or _version_tuple(prior_registration.get("corpus_version")) is None or not isinstance(prior_registration.get("annotations"), list):
+    errors, previous = _validate_prior_registration(prior_registration)
+    if errors:
         errors.append("prior registration is invalid")
         return errors
     if payload.get("previous_corpus_sha256") != prior_registration.get("corpus_sha256") or payload.get("previous_corpus_version") != prior_registration.get("corpus_version"):
@@ -468,7 +533,6 @@ def _validate_update_metadata(payload: dict, registrations: list[object], prior_
     prior_version = _version_tuple(prior_registration.get("corpus_version"))
     if current_version is not None and prior_version is not None and current_version <= prior_version:
         errors.append("update corpus_version must increase")
-    previous = {item.get("media_id"): item for item in prior_registration["annotations"] if isinstance(item, dict)}
     for record in registrations:
         if not isinstance(record, dict):
             continue

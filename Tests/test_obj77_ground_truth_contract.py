@@ -364,6 +364,68 @@ def test_validate_corpus_update_requires_separate_prior_registration(tmp_path: P
     assert "update mode requires --prior-registration" in errors
 
 
+@pytest.mark.parametrize("marker", [{}, [], None])
+def test_coverage_policy_rejects_malformed_marker_without_exception(marker: object) -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["video_coverage"]["required_markers"] = [marker]
+    errors = validate_corpus_metadata(payload)
+    assert "corpus_policy.video_coverage required_markers must contain strings" in errors
+
+
+def test_video_coverage_rejects_malformed_marker_without_exception() -> None:
+    payload = _valid_corpus()
+    payload["media"][5]["coverage_markers"] = [{}]
+    errors = validate_corpus_metadata(payload)
+    assert "video-001 coverage_markers are invalid" in errors
+
+
+@pytest.mark.parametrize(
+    "prior_annotation",
+    [
+        None,
+        {"media_id": "audio-mix-001", "sha256": "a" * 64},
+        {"media_id": {}, "sha256": "a" * 64, "annotation_version": "1.0.0"},
+        {"media_id": "audio-mix-001", "sha256": "invalid", "annotation_version": "1.0.0"},
+        {"media_id": "audio-mix-001", "sha256": "a" * 64, "annotation_version": "invalid"},
+    ],
+)
+def test_update_rejects_malformed_prior_annotation_without_exception(prior_annotation: object) -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["mode"] = "update"
+    payload["corpus_version"] = "1.1.0"
+    payload["previous_corpus_sha256"] = "b" * 64
+    payload["previous_corpus_version"] = "1.0.0"
+    prior = {
+        "schema_version": 1,
+        "registration_kind": "OBJ-77-ground-truth-prior",
+        "corpus_sha256": "b" * 64,
+        "corpus_version": "1.0.0",
+        "annotations": [prior_annotation],
+    }
+    errors = validate_corpus_metadata(payload, prior)
+    assert "prior registration is invalid" in errors
+
+
+def test_update_rejects_duplicate_prior_annotation_media_ids_without_exception() -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["mode"] = "update"
+    payload["corpus_version"] = "1.1.0"
+    payload["previous_corpus_sha256"] = "b" * 64
+    payload["previous_corpus_version"] = "1.0.0"
+    prior = {
+        "schema_version": 1,
+        "registration_kind": "OBJ-77-ground-truth-prior",
+        "corpus_sha256": "b" * 64,
+        "corpus_version": "1.0.0",
+        "annotations": [
+            {"media_id": "audio-mix-001", "sha256": "a" * 64, "annotation_version": "1.0.0"},
+            {"media_id": "audio-mix-001", "sha256": "c" * 64, "annotation_version": "1.0.0"},
+        ],
+    }
+    errors = validate_corpus_metadata(payload, prior)
+    assert "prior registration annotation media_id values must be unique" in errors
+
+
 def test_strict_cli_rejects_approved_root_override(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(
         [
