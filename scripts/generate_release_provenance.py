@@ -252,6 +252,37 @@ def _dotnet_state(root: Path) -> dict[str, object]:
     }
 
 
+def _parse_dotnet_sdk_version(value: str) -> tuple[int, int, int, str | None]:
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?", value)
+    if match is None:
+        raise ValueError(f"Invalid .NET SDK version: {value}")
+    major, minor, patch = (int(match.group(index)) for index in range(1, 4))
+    return major, minor, patch, match.group(4)
+
+
+def _dotnet_sdk_matches_policy(selected: str, policy: dict[str, object]) -> bool:
+    try:
+        selected_major, selected_minor, selected_patch, selected_suffix = (
+            _parse_dotnet_sdk_version(selected)
+        )
+        required_major, required_minor, required_patch, required_suffix = (
+            _parse_dotnet_sdk_version(str(policy["version"]))
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+
+    if policy.get("rollForward") != "latestFeature":
+        return False
+    if policy.get("allowPrerelease") is not False:
+        return False
+    if required_suffix is not None or selected_suffix is not None:
+        return False
+    return (
+        (selected_major, selected_minor) == (required_major, required_minor)
+        and selected_patch >= required_patch
+    )
+
+
 def _artifact_records(
     root: Path,
     artifacts: list[tuple[str, str]],
@@ -409,13 +440,15 @@ def main() -> int:
             raise ValueError("DirectML release archive does not match its manifest")
 
     dotnet_state = _dotnet_state(root)
-    expected_dotnet = json.loads(
+    dotnet_policy = json.loads(
         (root / "global.json").read_text(encoding="utf-8")
-    )["sdk"]["version"]
-    if dotnet_state["selected_sdk"] != expected_dotnet:
+    )["sdk"]
+    if not _dotnet_sdk_matches_policy(
+        str(dotnet_state["selected_sdk"]), dotnet_policy
+    ):
         raise ValueError(
-            "Selected .NET SDK does not match global.json: "
-            f"{dotnet_state['selected_sdk']} != {expected_dotnet}"
+            "Selected .NET SDK does not satisfy global.json policy: "
+            f"selected={dotnet_state['selected_sdk']}, policy={dotnet_policy}"
         )
     if sys.version_info[:2] != (3, 11):
         raise ValueError(f"Release provenance requires Python 3.11, got {sys.version}")

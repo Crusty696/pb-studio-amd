@@ -6,7 +6,7 @@
 
 **Architecture:** Add a versioned, additive StageReceipt contract shared by audio and video; persist every requested stage before terminal SSE; recover running receipts atomically on project load; reconstruct partial analysis truth after restart; bind sqlite-vec to the existing project-scoped Brain embedding lifecycle while FAISS remains the 1152-D media-search index; enforce one immutable project identity and one SQLite timeout; flush timeline writes before lifecycle transitions; and source every backend endpoint from one checked-in `appsettings.json`. Legacy status/error fields remain readable and writable throughout this remediation.
 
-**Tech Stack:** Python 3.11.x, NumPy 1.26.4, FastAPI/Pydantic, SQLite/sqlite-vec 0.1.9, FAISS-CPU 1.7.4, WPF/net9.0-windows on .NET SDK 9.0.316, System.Text.Json, pytest, the existing C# test project, OpenAPI/NSwag.
+**Tech Stack:** Python 3.11.x, NumPy 1.26.4, FastAPI/Pydantic, SQLite/sqlite-vec 0.1.9, FAISS-CPU 1.7.4, WPF/net9.0-windows on stable .NET 9 SDK 9.0.300 or newer with `latestFeature` roll-forward, System.Text.Json, pytest, the existing C# test project, OpenAPI/NSwag.
 
 ---
 
