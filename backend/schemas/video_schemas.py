@@ -105,7 +105,7 @@ class VideoAnalysisResult(BaseModel):
     avg_brightness: float = 0.5
     avg_saturation: float = 0.5
     avg_color_temp: float = 0.0
-    status: Literal["completed", "partial", "failed"] = "completed"
+    status: Literal["unavailable", "completed", "partial", "failed"] = "completed"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
     stage_receipts: dict[str, StageReceipt] = Field(default_factory=dict)

@@ -16,7 +16,8 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -41,6 +42,19 @@ from ..schemas.video_schemas import (
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 from pb_studio.storage.recovery_barrier import recovery_write_operation
+from pb_studio.core.stage_receipts import (
+    StageReceipt as CoreStageReceipt,
+    build_config_fingerprint,
+    build_input_fingerprint,
+    canonical_sha256,
+    create_stage_receipt,
+    derive_analysis_status,
+    project_legacy_stage_receipts,
+    receipt_to_dict,
+    transition_stage_receipt,
+    utc_now_rfc3339,
+    validate_receipt_map,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/video", tags=["Video"])
@@ -56,7 +70,9 @@ CAPTION_PRIMARY_PROGRESS_END_PERCENT = 75.0
 CAPTION_PROGRESS_END_PERCENT = 85.0
 CAPTION_PROGRESS_TERMINAL_MARGIN = 0.1
 SIGLIP_EMBEDDING_DIM = 1152
-VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
+VIDEO_ANALYSIS_STATES = {
+    "unavailable", "running", "completed", "partial", "failed"
+}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
     "scenes": ("scene_count", "scenes"),
     "motion": ("avg_motion", "motion"),
@@ -70,6 +86,30 @@ VIDEO_ANALYSIS_STAGE_FIELDS = {
     ),
     "captions": ("tags", "tag_source"),
     "audio_key": ("audio_key",),
+}
+VIDEO_STAGE_REQUEST_FIELDS = {
+    "scenes": "detect_scenes",
+    "motion": "analyze_motion",
+    "embedding": "generate_embeddings",
+    "colors": "analyze_colors",
+    "captions": "generate_captions",
+    "audio_key": "analyze_audio_key",
+}
+VIDEO_STAGE_CONFIG_IDENTITIES = {
+    "scenes": {"pipeline": "pyscenedetect"},
+    "motion": {"pipeline": "raft_onnx", "provider": "DmlExecutionProvider"},
+    "embedding": {
+        "pipeline": "siglip_so400m_onnx",
+        "provider": "DmlExecutionProvider",
+        "dimension": SIGLIP_EMBEDDING_DIM,
+        "store": "faiss_cpu",
+    },
+    "colors": {"pipeline": "dominant_color_kmeans", "clusters": 5},
+    "captions": {
+        "pipeline": "lmstudio_vision_then_moondream_onnx",
+        "max_attempts_per_frame": 3,
+    },
+    "audio_key": {"pipeline": "video_audio_key_detector"},
 }
 
 
@@ -94,7 +134,295 @@ def _empty_video_analysis_result(clip_id: int) -> dict[str, Any]:
         "status": "failed",
         "stage_status": {},
         "stage_errors": {},
+        "stage_receipts": {},
+        "stage_artifacts": {},
     }
+
+
+def _capture_video_project_identity(
+    state: AppState,
+    context: ProjectOperationContext,
+) -> tuple[str, int, int]:
+    """Capture the immutable project identity before any asynchronous work."""
+
+    with state.project_commit(context):
+        project = state.current_project
+        if not isinstance(project, dict):
+            raise ProjectContextUnavailableError("Kein Projekt geoeffnet")
+        try:
+            project_uuid = str(UUID(str(project.get("project_uuid"))))
+            project_id = int(project.get("db_project_id"))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ProjectContextUnavailableError(
+                "Aktiver Projektkontext besitzt keine gueltige project_uuid"
+            ) from exc
+        if project_id != int(context.project_id):
+            raise ProjectContextChangedError(
+                "Projekt-ID aenderte sich waehrend der Video-Analyse"
+            )
+        return project_uuid, project_id, int(context.epoch)
+
+
+def _video_media_sha256(clip: dict[str, Any]) -> str | None:
+    stored = str(clip.get("video_hash") or "").strip().lower()
+    if len(stored) == 64 and all(char in "0123456789abcdef" for char in stored):
+        return stored
+    path = Path(str(clip.get("path") or ""))
+    if not path.is_file():
+        return None
+    from pb_studio.core.media_hash import media_hash
+
+    return media_hash(path)
+
+
+def _video_stage_artifact(
+    stage: str,
+    result: dict[str, Any],
+) -> tuple[str, dict[str, Any]] | None:
+    """Build one canonical composite artifact for a video analysis stage."""
+
+    fields = VIDEO_ANALYSIS_STAGE_FIELDS.get(stage)
+    if fields is None or any(field not in result for field in fields):
+        return None
+    artifact = {field: deepcopy(result[field]) for field in fields}
+    if stage == "embedding":
+        pending = result.get("_pending_embedding") or {}
+        persisted_locator = (
+            (result.get("stage_artifacts") or {}).get("embedding") or {}
+        )
+        artifact.update({
+            "store": "faiss_cpu",
+            "media_id": result.get(
+                "_new_embedding_media_id",
+                pending.get("media_id", persisted_locator.get("media_id")),
+            ),
+            "faiss_id": result.get(
+                "_new_embedding_faiss_id",
+                persisted_locator.get("faiss_id"),
+            ),
+            "media_sha256": result.get("media_sha256"),
+        })
+    return f"ai_data_json.stage_artifacts.{stage}", artifact
+
+
+def _video_receipts_from_cache(
+    cached: dict[str, Any],
+) -> dict[str, CoreStageReceipt]:
+    raw = cached.get("_stage_receipts")
+    if not isinstance(raw, dict):
+        raw = cached.get("stage_receipts")
+    if isinstance(raw, dict) and raw:
+        try:
+            return validate_receipt_map(raw)
+        except (TypeError, ValueError):
+            logger.warning("Ungueltige Video-StageReceipts werden als Legacy gelesen")
+    return project_legacy_stage_receipts(
+        stage_status=cached.get("stage_status") or {},
+        stage_errors=cached.get("stage_errors") or {},
+    )
+
+
+def _video_cached_receipt_artifact_is_valid(
+    stage: str,
+    receipt: CoreStageReceipt,
+    cached: dict[str, Any],
+    *,
+    expected_input_fingerprint: str | None,
+    expected_config_fingerprint: str,
+) -> bool:
+    if receipt.receipt_version == 0:
+        return _video_stage_data_is_valid(stage, cached)
+    reconstructed = _video_stage_artifact(stage, cached)
+    stage_artifacts = cached.get("stage_artifacts")
+    referenced_payload = (
+        stage_artifacts.get(stage)
+        if isinstance(stage_artifacts, dict)
+        else None
+    )
+    if (
+        reconstructed is None
+        or not isinstance(referenced_payload, dict)
+        or not _video_stage_data_is_valid(stage, cached)
+    ):
+        return False
+    expected_ref, canonical_payload = reconstructed
+    referenced_sha256 = canonical_sha256(referenced_payload)
+    return bool(
+        receipt.status == "completed"
+        and receipt.artifact_valid is True
+        and receipt.artifact_ref == expected_ref
+        and receipt.artifact_sha256 == referenced_sha256
+        and referenced_sha256 == canonical_sha256(canonical_payload)
+        and receipt.input_fingerprint == expected_input_fingerprint
+        and receipt.config_fingerprint == expected_config_fingerprint
+    )
+
+
+def _video_stage_fingerprints(
+    *,
+    request: VideoAnalyzeRequest,
+    project_uuid: str,
+    project_id: int,
+    project_epoch: int,
+    media_sha256: str | None,
+) -> dict[str, tuple[str | None, str]]:
+    request_flags = {
+        request_field: bool(getattr(request, request_field))
+        for request_field in VIDEO_STAGE_REQUEST_FIELDS.values()
+    }
+    request_flags["force"] = bool(request.force)
+    fingerprints: dict[str, tuple[str | None, str]] = {}
+    for stage in VIDEO_STAGE_REQUEST_FIELDS:
+        input_fingerprint = None
+        if media_sha256 is not None:
+            input_fingerprint = build_input_fingerprint(
+                project_uuid=project_uuid,
+                catalog_project_id=project_id,
+                project_epoch=project_epoch,
+                clip_id=int(request.clip_id),
+                media_sha256=media_sha256,
+                stage_input_identity={"stage_id": stage},
+            )
+        fingerprints[stage] = (
+            input_fingerprint,
+            build_config_fingerprint(
+                stage_request_flags=request_flags,
+                effective_config_identity=VIDEO_STAGE_CONFIG_IDENTITIES[stage],
+            ),
+        )
+    return fingerprints
+
+
+def _build_video_request_receipts(
+    *,
+    request: VideoAnalyzeRequest,
+    run_stage: dict[str, bool],
+    cached: dict[str, Any],
+    fingerprints: dict[str, tuple[str | None, str]],
+    correlation_id: str,
+) -> dict[str, CoreStageReceipt]:
+    cached_receipts = _video_receipts_from_cache(cached)
+    receipts: dict[str, CoreStageReceipt] = {}
+    for stage, request_field in VIDEO_STAGE_REQUEST_FIELDS.items():
+        requested = bool(getattr(request, request_field))
+        input_fingerprint, config_fingerprint = fingerprints[stage]
+        receipt = create_stage_receipt(
+            stage,
+            requested=requested,
+            input_fingerprint=input_fingerprint,
+            config_fingerprint=config_fingerprint,
+            correlation_id=correlation_id,
+        )
+        if requested:
+            receipt = transition_stage_receipt(receipt, "running")
+            if not run_stage.get(stage, False):
+                artifact = _video_stage_artifact(stage, cached)
+                if artifact is None or not _video_stage_data_is_valid(stage, cached):
+                    raise ValueError(f"Reusable Video-Stage {stage} has no valid artifact")
+                artifact_ref, artifact_payload = artifact
+                receipt = transition_stage_receipt(
+                    receipt,
+                    "completed",
+                    artifact_ref=artifact_ref,
+                    artifact=artifact_payload,
+                )
+        receipts[stage] = receipt
+    return receipts
+
+
+def _video_receipt_truth(
+    receipts: dict[str, CoreStageReceipt],
+    *,
+    requested_stage_ids: frozenset[str],
+) -> tuple[str, dict[str, str], dict[str, str]]:
+    current = {
+        stage: receipt
+        for stage, receipt in receipts.items()
+        if stage in requested_stage_ids
+    }
+    return (
+        derive_analysis_status(current),
+        {stage: receipt.status for stage, receipt in receipts.items()},
+        {
+            stage: str(receipt.error_message)
+            for stage, receipt in receipts.items()
+            if receipt.error_message
+        },
+    )
+
+
+def _serialize_video_receipts(
+    receipts: dict[str, CoreStageReceipt],
+) -> dict[str, dict[str, Any]]:
+    return {stage: receipt_to_dict(receipt) for stage, receipt in receipts.items()}
+
+
+def _terminalize_video_stage_receipt(
+    receipts: dict[str, CoreStageReceipt],
+    stage: str,
+    snapshot: dict[str, Any],
+    status: str,
+    error_message: str | None,
+    *,
+    error_code: str | None = None,
+) -> None:
+    receipt = receipts[stage]
+    if receipt.status not in {"pending", "running"}:
+        return
+    terminal_status = status if status in {
+        "completed", "partial", "failed", "interrupted", "unavailable"
+    } else "failed"
+    artifact = _video_stage_artifact(stage, snapshot)
+    if terminal_status in {"completed", "partial"} and (
+        artifact is None or not _video_stage_data_is_valid(stage, snapshot)
+    ):
+        terminal_status = "failed"
+        error_code = "stage_artifact_invalid"
+        error_message = error_message or f"Video stage {stage} artifact is invalid"
+    kwargs: dict[str, Any] = {}
+    if terminal_status in {"completed", "partial"} and artifact is not None:
+        kwargs["artifact_ref"], artifact_payload = artifact
+        kwargs["artifact"] = artifact_payload
+    if terminal_status != "completed":
+        kwargs["error_code"] = error_code or (
+            "capability_unavailable"
+            if terminal_status == "unavailable"
+            else f"stage_{terminal_status}"
+        )
+        kwargs["error_message"] = error_message or f"Video stage {stage} {terminal_status}"
+    if stage == "captions":
+        kwargs["provider"] = snapshot.get("caption_provider")
+        kwargs["model_id"] = snapshot.get("caption_model_id")
+        kwargs["attempts"] = snapshot.get("caption_attempts") or ()
+    receipts[stage] = transition_stage_receipt(
+        receipt,
+        terminal_status,
+        **kwargs,
+    )
+
+
+def _apply_video_receipt_truth(
+    result: dict[str, Any],
+    receipts: dict[str, CoreStageReceipt],
+    requested_stage_ids: frozenset[str],
+) -> None:
+    status, stage_status, stage_errors = _video_receipt_truth(
+        receipts,
+        requested_stage_ids=requested_stage_ids,
+    )
+    result["status"] = status
+    result["stage_status"] = stage_status
+    result["stage_errors"] = stage_errors
+    result["stage_receipts"] = _serialize_video_receipts(receipts)
+    artifacts = dict(result.get("stage_artifacts") or {})
+    for stage, receipt in receipts.items():
+        if receipt.status not in {"completed", "partial"}:
+            continue
+        artifact = _video_stage_artifact(stage, result)
+        if artifact is not None and receipt.artifact_valid is True:
+            _artifact_ref, artifact_payload = artifact
+            artifacts[stage] = artifact_payload
+    result["stage_artifacts"] = artifacts
 
 
 def _video_stage_data_is_valid(stage: str, result: dict[str, Any]) -> bool:
@@ -176,6 +504,8 @@ def _video_analysis_resume_base(
             result[field] = deepcopy(existing[field])
     result["stage_status"] = dict(existing.get("stage_status") or {})
     result["stage_errors"] = dict(existing.get("stage_errors") or {})
+    result["stage_receipts"] = dict(existing.get("stage_receipts") or {})
+    result["stage_artifacts"] = dict(existing.get("stage_artifacts") or {})
     result["status"] = _video_analysis_status(
         existing,
         legacy_is_analyzed=bool(clip.get("is_analyzed", False)),
@@ -278,6 +608,8 @@ def _persist_video_analysis_outcome(
 
     stage_status = dict(result.get("stage_status") or {})
     stage_errors = dict(result.get("stage_errors") or {})
+    stage_receipts = dict(result.get("stage_receipts") or {})
+    stage_artifacts = dict(result.get("stage_artifacts") or {})
     is_analyzed = status == "completed"
     repo = MediaRepository()
     row = repo.find_by_project_and_path(
@@ -314,6 +646,7 @@ def _persist_video_analysis_outcome(
         "avg_saturation",
         "avg_color_temp",
         "mood_tags",
+        "media_sha256",
     ):
         if field in result:
             persisted[field] = result[field]
@@ -321,6 +654,8 @@ def _persist_video_analysis_outcome(
         "analysis_status": status,
         "stage_status": stage_status,
         "stage_errors": stage_errors,
+        "stage_receipts": stage_receipts,
+        "stage_artifacts": stage_artifacts,
         "is_analyzed": is_analyzed,
     })
 
@@ -343,6 +678,8 @@ def _persist_video_analysis_outcome(
         "analysis_status": status,
         "stage_status": stage_status,
         "stage_errors": stage_errors,
+        "stage_receipts": stage_receipts,
+        "stage_artifacts": stage_artifacts,
         "is_analyzed": is_analyzed,
     })
     state.set_video_analysis(int(result["clip_id"]), cache_result)
@@ -352,6 +689,7 @@ def _persist_video_analysis_outcome(
         analysis_status=status,
         stage_status=stage_status,
         stage_errors=stage_errors,
+        stage_receipts=stage_receipts,
     )
 
 
@@ -699,6 +1037,7 @@ async def list_clips(
         is_analyzed = analysis_status == "completed"
         stage_status = dict((va or {}).get("stage_status") or {})
         stage_errors = dict((va or {}).get("stage_errors") or {})
+        stage_receipts = dict((va or {}).get("stage_receipts") or {})
         # L-N3: video_hash aus in-memory state (None falls Hashing fehlgeschlagen
         # oder Clip aus aelterer DB-Persistenz ohne Hash-Spalte geladen wurde).
         # UI rendert daraus einen "CACHED"-Badge auf der VideoClip-Card.
@@ -759,6 +1098,7 @@ async def list_clips(
             "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
             "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
             "analysis_status", "stage_status", "stage_errors",
+            "stage_receipts",
         }
         c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
@@ -776,6 +1116,7 @@ async def list_clips(
                 analysis_status=analysis_status,
                 stage_status=stage_status,
                 stage_errors=stage_errors,
+                stage_receipts=stage_receipts,
             )
         )
     return result
@@ -1006,40 +1347,19 @@ async def _analyze_video_in_project(
     # R15/C-02: Datei-Existenz VOR GPU-Lock prüfen — fehlendes File würde sonst als
     # leeres Analyse-Ergebnis (scene_count=0, avg_motion=0.0) in die DB geschrieben
     # und vorherige Analysen überschreiben (Silent Data Corruption).
-    if not Path(clip["path"]).exists():
-        raise HTTPException(status_code=422, detail=f"Video-Datei nicht gefunden: {clip['path']!r}")
-
-    logger.info(f"Starte Video-Analyse: {clip['name']}")
-    await publish_log(
-        f"Video-Analyse gestartet: {clip['name']}",
-        level="info",
-        source="video.analyze",
-        detail=f"clip_id={request.clip_id}",
+    correlation_id = str(uuid4())
+    project_uuid, project_id, project_epoch = _capture_video_project_identity(
+        state, context
     )
+    media_path_exists = Path(clip["path"]).is_file()
+    media_sha256 = _video_media_sha256(clip)
 
     # BUG-204/Feature-3: Multi-step SSE events fuer fein-granularen UI-Fortschritt.
     # 4 coarse Phasen (init/scenes/motion+embed/finalize). _run_video_analysis ist
     # via _loop + RAFT on_progress callback bereits per-frame instrumentiert
     # (siehe _motion_progress -> 'analysis_progress' SSE event), Audit C1.
-    await publish_event("analysis_progress", {
-        "clip_id": request.clip_id,
-        "step": "init",
-        "step_index": 1,
-        "step_total": 4,
-        "percent": 1.0,
-        "message": f"Starte Video-Analyse: {clip['name']}",
-    })
-
-    await publish_event("analysis_progress", {
-        "clip_id": request.clip_id,
-        "step": "scenes",
-        "step_index": 2,
-        "step_total": 4,
-        "percent": 15.0,
-        "message": f"Scene-Detection laeuft: {clip['name']}",
-    })
-
     result = _video_analysis_resume_base(state, clip, context.project_id)
+    result["media_sha256"] = media_sha256
     requested_stages = {
         "scenes": request.detect_scenes,
         "motion": request.analyze_motion,
@@ -1048,18 +1368,109 @@ async def _analyze_video_in_project(
         "captions": request.generate_captions,
         "audio_key": request.analyze_audio_key,
     }
-    run_stage = {
-        stage: _video_stage_should_run(
-            stage,
-            requested,
-            request.force,
-            result,
-        )
-        for stage, requested in requested_stages.items()
-    }
+    requested_stage_ids = frozenset(
+        stage for stage, requested in requested_stages.items() if requested
+    )
+    fingerprints = _video_stage_fingerprints(
+        request=request,
+        project_uuid=project_uuid,
+        project_id=project_id,
+        project_epoch=project_epoch,
+        media_sha256=media_sha256,
+    )
+    cached_receipts = _video_receipts_from_cache(result)
+    run_stage: dict[str, bool] = {}
     for stage, requested in requested_stages.items():
-        if not requested and stage not in result["stage_status"]:
-            result["stage_status"][stage] = "skipped"
+        reusable = False
+        cached_receipt = cached_receipts.get(stage)
+        if requested and not request.force and cached_receipt is not None:
+            expected_input, expected_config = fingerprints[stage]
+            reusable = _video_cached_receipt_artifact_is_valid(
+                stage,
+                cached_receipt,
+                result,
+                expected_input_fingerprint=expected_input,
+                expected_config_fingerprint=expected_config,
+            )
+        run_stage[stage] = bool(requested and not reusable)
+
+    receipts = _build_video_request_receipts(
+        request=request,
+        run_stage=(
+            run_stage
+            if media_path_exists
+            else {stage: requested for stage, requested in requested_stages.items()}
+        ),
+        cached=result,
+        fingerprints=fingerprints,
+        correlation_id=correlation_id,
+    )
+
+    if not media_path_exists:
+        missing_message = f"Video-Datei nicht gefunden: {clip['path']!r}"
+        for stage in requested_stage_ids:
+            _terminalize_video_stage_receipt(
+                receipts,
+                stage,
+                result,
+                "failed",
+                missing_message,
+                error_code="media_missing",
+            )
+        _apply_video_receipt_truth(result, receipts, requested_stage_ids)
+        with state.project_commit(context):
+            _persist_video_analysis_outcome(state, context, clip, result)
+        await publish_event("analysis_progress", {
+            "clip_id": request.clip_id,
+            "correlation_id": correlation_id,
+            "step": "error",
+            "percent": 0.0,
+            "status": result["status"],
+            "stage_status": result["stage_status"],
+            "stage_errors": result["stage_errors"],
+            "stage_receipts": result["stage_receipts"],
+            "message": missing_message,
+        })
+        raise HTTPException(status_code=422, detail=missing_message)
+
+    _apply_video_receipt_truth(result, receipts, requested_stage_ids)
+    with state.project_commit(context):
+        _persist_video_analysis_outcome(state, context, clip, result)
+
+    logger.info(f"Starte Video-Analyse: {clip['name']}")
+    await publish_log(
+        f"Video-Analyse gestartet: {clip['name']}",
+        level="info",
+        source="video.analyze",
+        detail=f"clip_id={request.clip_id} correlation_id={correlation_id}",
+    )
+    await publish_event("analysis_progress", {
+        "clip_id": request.clip_id,
+        "correlation_id": correlation_id,
+        "step": "init",
+        "step_index": 1,
+        "step_total": 4,
+        "percent": 1.0,
+        "status": "running",
+        "stage_status": result["stage_status"],
+        "stage_receipts": result["stage_receipts"],
+        "message": f"Starte Video-Analyse: {clip['name']}",
+    })
+    await publish_event("analysis_progress", {
+        "clip_id": request.clip_id,
+        "correlation_id": correlation_id,
+        "step": "scenes",
+        "step_index": 2,
+        "step_total": 4,
+        "percent": 15.0,
+        "status": "running",
+        "message": f"Scene-Detection laeuft: {clip['name']}",
+    })
+
+    def persist_receipt_checkpoint() -> None:
+        _apply_video_receipt_truth(result, receipts, requested_stage_ids)
+        with state.project_commit(context):
+            _persist_video_analysis_outcome(state, context, clip, result)
     resume_base = deepcopy(result)
     active_stages: tuple[str, ...] = ()
     outcome_persisted = False
@@ -1078,6 +1489,12 @@ async def _analyze_video_in_project(
                 clip.get("duration_seconds"),
             )
             _merge_video_stage_outcome(result, scene_res, "scenes")
+            _terminalize_video_stage_receipt(
+                receipts, "scenes", result,
+                result["stage_status"].get("scenes", "failed"),
+                result["stage_errors"].get("scenes"),
+            )
+            persist_receipt_checkpoint()
             active_stages = ()
 
         await publish_event("analysis_progress", {
@@ -1119,8 +1536,15 @@ async def _analyze_video_in_project(
                 # Task braucht nur globalen GPU-Lock und gemeinsame Telemetrie.
                 manage_vram=False,
             )
+            gpu_stage_status = dict(gpu_res.get("stage_status") or {})
+            gpu_stage_errors = dict(gpu_res.get("stage_errors") or {})
             if run_stage["motion"]:
                 _merge_video_stage_outcome(result, gpu_res, "motion")
+                _terminalize_video_stage_receipt(
+                    receipts, "motion", result,
+                    result["stage_status"].get("motion", "failed"),
+                    result["stage_errors"].get("motion"),
+                )
             if run_stage["embedding"]:
                 _merge_video_stage_outcome(result, gpu_res, "embedding")
                 if (
@@ -1128,6 +1552,13 @@ async def _analyze_video_in_project(
                     and gpu_res.get("_pending_embedding") is not None
                 ):
                     result["_pending_embedding"] = gpu_res["_pending_embedding"]
+                elif result["stage_status"].get("embedding") != "completed":
+                    _terminalize_video_stage_receipt(
+                        receipts, "embedding", result,
+                        result["stage_status"].get("embedding", "failed"),
+                        result["stage_errors"].get("embedding"),
+                    )
+            persist_receipt_checkpoint()
             active_stages = ()
 
         # Step 3: Color + Caption (CPU/HTTP & optional Moondream GPU Fallback)
@@ -1139,26 +1570,88 @@ async def _analyze_video_in_project(
                 for stage in ("colors", "captions")
                 if run_stage[stage]
             )
+            def checkpoint_completed_colors(stage_result: dict[str, Any]) -> None:
+                nonlocal active_stages
+                if not run_stage["colors"]:
+                    return
+                _merge_video_stage_outcome(result, stage_result, "colors")
+                _terminalize_video_stage_receipt(
+                    receipts, "colors", result,
+                    result["stage_status"].get("colors", "failed"),
+                    result["stage_errors"].get("colors"),
+                )
+                persist_receipt_checkpoint()
+                active_stages = tuple(
+                    stage for stage in active_stages if stage != "colors"
+                )
+
+            def checkpoint_caption_attempt(stage_result: dict[str, Any]) -> None:
+                result["caption_attempts"] = deepcopy(
+                    stage_result.get("caption_attempts") or []
+                )
+
+            import inspect
+            color_caption_kwargs: dict[str, Any] = {}
+            if "on_colors_completed" in inspect.signature(
+                _run_color_and_caption_analysis
+            ).parameters:
+                color_caption_kwargs["on_colors_completed"] = (
+                    checkpoint_completed_colors
+                )
+            if "on_caption_attempted" in inspect.signature(
+                _run_color_and_caption_analysis
+            ).parameters:
+                color_caption_kwargs["on_caption_attempted"] = (
+                    checkpoint_caption_attempt
+                )
             color_caption_res = await _run_color_and_caption_analysis(
                 clip["path"],
                 request.clip_id,
                 run_stage["captions"],
                 run_stage["colors"],
+                **color_caption_kwargs,
             )
             if run_stage["colors"]:
                 _merge_video_stage_outcome(result, color_caption_res, "colors")
+                _terminalize_video_stage_receipt(
+                    receipts, "colors", result,
+                    result["stage_status"].get("colors", "failed"),
+                    result["stage_errors"].get("colors"),
+                )
+                persist_receipt_checkpoint()
             if run_stage["captions"]:
                 _merge_video_stage_outcome(result, color_caption_res, "captions")
+                _terminalize_video_stage_receipt(
+                    receipts, "captions", result,
+                    result["stage_status"].get("captions", "failed"),
+                    result["stage_errors"].get("captions"),
+                    error_code=color_caption_res.get("caption_error_code"),
+                )
+                persist_receipt_checkpoint()
+                caption_status = result["stage_status"]["captions"]
+                await _publish_caption_progress(
+                    request.clip_id,
+                    step=(
+                        "captions_complete"
+                        if caption_status == "completed"
+                        else "captions_partial"
+                        if caption_status == "partial"
+                        else "captions_error"
+                    ),
+                    percent=CAPTION_PROGRESS_END_PERCENT,
+                    status=caption_status,
+                    message=f"Vision-Analyse {caption_status}",
+                    correlation_id=correlation_id,
+                    stage_receipts=result["stage_receipts"],
+                )
             active_stages = ()
 
+        _apply_video_receipt_truth(result, receipts, requested_stage_ids)
         stage_status = dict(result["stage_status"])
         stage_errors = dict(result["stage_errors"])
-        analysis_status = _derive_video_analysis_status(stage_status)
+        analysis_status = result["status"]
 
         # Zusammenführen der Ergebnisse
-        result["status"] = analysis_status
-        result["stage_status"] = stage_status
-        result["stage_errors"] = stage_errors
 
         # Audit-Fix 2026-07-10 (Sweep-Finding HIGH-10): Brightness/Saturation/
         # Color-Temp/Mood-Tags aus den bereits berechneten dominanten Farben
@@ -1200,19 +1693,41 @@ async def _analyze_video_in_project(
                     logger.info(f"L-K4: Video-Audio-Key fuer clip {request.clip_id}: {audio_key_val}")
                 else:
                     result["stage_status"]["audio_key"] = "unavailable"
+                    result["stage_errors"]["audio_key"] = (
+                        "Video besitzt keinen erkennbaren Audio-Key"
+                    )
             except Exception as e:
                 logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
                 result["stage_status"]["audio_key"] = "unavailable"
                 result["stage_errors"]["audio_key"] = str(e)
+            _terminalize_video_stage_receipt(
+                receipts, "audio_key", result,
+                result["stage_status"].get("audio_key", "unavailable"),
+                result["stage_errors"].get("audio_key"),
+                error_code="audio_key_unavailable",
+            )
+            persist_receipt_checkpoint()
             active_stages = ()
 
         stage_status = dict(result["stage_status"])
         stage_errors = dict(result["stage_errors"])
-        analysis_status = _derive_video_analysis_status(stage_status)
-        result["status"] = analysis_status
+        _apply_video_receipt_truth(result, receipts, requested_stage_ids)
+        stage_status = dict(result["stage_status"])
+        stage_errors = dict(result["stage_errors"])
+        analysis_status = result["status"]
         current_stage = "persistence"
         with state.project_commit(context):
             _commit_pending_video_embedding(result)
+            if run_stage["embedding"]:
+                _terminalize_video_stage_receipt(
+                    receipts, "embedding", result,
+                    gpu_stage_status.get("embedding", "failed"),
+                    gpu_stage_errors.get("embedding"),
+                )
+                _apply_video_receipt_truth(result, receipts, requested_stage_ids)
+                stage_status = dict(result["stage_status"])
+                stage_errors = dict(result["stage_errors"])
+                analysis_status = result["status"]
             _persist_video_analysis_outcome(state, context, clip, result)
         outcome_persisted = True
         try:
@@ -1238,6 +1753,7 @@ async def _analyze_video_in_project(
         try:
             await publish_event("analysis_progress", {
                 "clip_id": request.clip_id,
+                "correlation_id": correlation_id,
                 "step": "finalize",
                 "step_index": 4,
                 "step_total": 4,
@@ -1251,6 +1767,7 @@ async def _analyze_video_in_project(
         try:
             await publish_event("analysis_progress", {
                 "clip_id": request.clip_id,
+                "correlation_id": correlation_id,
                 "step": "complete",
                 "step_index": 4,
                 "step_total": 4,
@@ -1258,6 +1775,7 @@ async def _analyze_video_in_project(
                 "status": analysis_status,
                 "stage_status": stage_status,
                 "stage_errors": stage_errors,
+                "stage_receipts": result["stage_receipts"],
                 "message": (
                     f"Video-Analyse {analysis_status}: {int(result.get('scene_count', 0) or 0)} Szenen, "
                     f"Motion {float(result.get('avg_motion', 0.0) or 0.0):.1f}"
@@ -1285,9 +1803,14 @@ async def _analyze_video_in_project(
             for stage in active_stages:
                 result["stage_status"][stage] = "interrupted"
                 result["stage_errors"][stage] = "Video-Analyse unterbrochen"
-            result["status"] = _derive_video_analysis_status(
-                result["stage_status"]
-            )
+            for stage, receipt in tuple(receipts.items()):
+                if stage in requested_stage_ids and receipt.status in {"pending", "running"}:
+                    _terminalize_video_stage_receipt(
+                        receipts, stage, result, "interrupted",
+                        "Video-Analyse unterbrochen",
+                        error_code="analysis_interrupted",
+                    )
+            _apply_video_receipt_truth(result, receipts, requested_stage_ids)
             try:
                 with state.project_commit(context):
                     _persist_video_analysis_outcome(
@@ -1311,11 +1834,13 @@ async def _analyze_video_in_project(
         try:
             await publish_event("analysis_progress", {
                 "clip_id": request.clip_id,
+                "correlation_id": correlation_id,
                 "step": terminal_step,
                 "percent": 100.0 if outcome_persisted else 0.0,
                 "status": result["status"],
                 "stage_status": dict(result["stage_status"]),
                 "stage_errors": dict(result["stage_errors"]),
+                "stage_receipts": dict(result["stage_receipts"]),
                 "message": (
                     f"Video-Analyse {result['status']}: {clip['name']}"
                     if outcome_persisted
@@ -1334,9 +1859,13 @@ async def _analyze_video_in_project(
         _compensate_new_video_embedding(result)
         raise
     except Exception as e:
-        result["status"] = "failed"
-        result["stage_status"][current_stage] = "failed"
-        result["stage_errors"][current_stage] = str(e)
+        for stage, receipt in tuple(receipts.items()):
+            if stage in requested_stage_ids and receipt.status in {"pending", "running"}:
+                _terminalize_video_stage_receipt(
+                    receipts, stage, result, "failed", str(e),
+                    error_code="analysis_worker_failed",
+                )
+        _apply_video_receipt_truth(result, receipts, requested_stage_ids)
         try:
             _compensate_new_video_embedding(result)
         except Exception as compensation_exc:
@@ -1369,11 +1898,13 @@ async def _analyze_video_in_project(
         # BUG-204 Fix: Error-Event so UI nicht ewig im "Loading" haengt
         await publish_event("analysis_progress", {
             "clip_id": request.clip_id,
+            "correlation_id": correlation_id,
             "step": "error",
             "percent": 0.0,
-            "status": "failed",
+            "status": result["status"],
             "stage_status": result["stage_status"],
             "stage_errors": result["stage_errors"],
+            "stage_receipts": result["stage_receipts"],
             "message": f"Video-Analyse fehlgeschlagen: {clip['name']} ({type(e).__name__})",
         })
         raise HTTPException(status_code=500, detail=f"Analyse fehlgeschlagen: {e}")
@@ -2138,10 +2669,12 @@ async def _publish_caption_progress(
     percent: float,
     message: str,
     status: str,
+    correlation_id: str | None = None,
+    stage_receipts: dict[str, Any] | None = None,
 ) -> None:
     """Publish caption progress without letting cosmetic SSE break analysis."""
     try:
-        await publish_event("analysis_progress", {
+        payload = {
             "clip_id": clip_id,
             "step": step,
             "step_index": 3,
@@ -2149,7 +2682,12 @@ async def _publish_caption_progress(
             "percent": percent,
             "status": status,
             "message": message,
-        })
+        }
+        if correlation_id is not None:
+            payload["correlation_id"] = correlation_id
+        if stage_receipts is not None:
+            payload["stage_receipts"] = stage_receipts
+        await publish_event("analysis_progress", payload)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -2216,6 +2754,8 @@ async def _run_color_and_caption_analysis(
     clip_id: int,
     generate_captions: bool,
     analyze_colors: bool = True,
+    on_colors_completed: Optional[Callable[[dict[str, Any]], None]] = None,
+    on_caption_attempted: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
     """Extrahiert Farben und Tags (KMeans auf CPU, LM-Studio über HTTP, Moondream als GPU-Fallback)."""
     result = {
@@ -2227,6 +2767,10 @@ async def _run_color_and_caption_analysis(
             "captions": "failed" if generate_captions else "skipped",
         },
         "stage_errors": {},
+        "caption_provider": None,
+        "caption_model_id": None,
+        "caption_attempts": [],
+        "caption_error_code": None,
     }
     if not generate_captions:
         result["tag_source"] = "skipped"
@@ -2268,6 +2812,8 @@ async def _run_color_and_caption_analysis(
                 result["dominant_colors"] = dominant_colors
                 result.update(compute_color_features(dominant_colors, color_weights))
                 result["stage_status"]["colors"] = "completed"
+                if on_colors_completed is not None:
+                    on_colors_completed(deepcopy(result))
 
             if not generate_captions:
                 logger.info(
@@ -2281,12 +2827,17 @@ async def _run_color_and_caption_analysis(
             all_tags = []
             seen_tags = set()
             tag_sources = []
+            caption_attempts = []
+            first_contributor = None
+            caption_error_code: Optional[str] = None
+            caption_error_message: Optional[str] = None
 
             from pb_studio.config_manager import ConfigManager
             current_mode = ConfigManager().get("ai", {}).get("default_mode", "balance")
 
             from pb_studio.video.lmstudio_vision_wrapper import (
-                extract_tags_and_model_via_lmstudio_async,
+                VisionTagExtractionResult,
+                extract_tag_result_via_lmstudio_async,
             )
             from pb_studio.video.moondream import onnx_models_available as moondream_onnx_models_available
 
@@ -2312,22 +2863,38 @@ async def _run_color_and_caption_analysis(
                 return max(0.0, caption_deadline - caption_loop.time())
 
             async def run_lm_studio_frames() -> None:
+                nonlocal first_contributor, caption_error_code, caption_error_message
                 for frame_number, f_rgb in enumerate(frames_rgb, start=1):
                     caption_progress["phase_active_frame"] = frame_number
-                    tags, used_model = (
-                        await extract_tags_and_model_via_lmstudio_async(
-                            f_rgb,
-                            mode=current_mode,
-                        )
+                    extraction = await extract_tag_result_via_lmstudio_async(
+                        f_rgb,
+                        mode=current_mode,
                     )
+                    if isinstance(extraction, VisionTagExtractionResult):
+                        tags = list(extraction.tags)
+                        selection = extraction.selection_receipt
+                        caption_attempts.extend(extraction.attempts)
+                        if extraction.error_code:
+                            caption_error_code = extraction.error_code
+                            caption_error_message = extraction.error_message
+                    else:
+                        tags, used_model = extraction
+                        selection = None
                     caption_progress["phase_completed_frames"] = frame_number
                     if tags:
                         for tag in tags:
                             if tag not in seen_tags:
                                 all_tags.append(tag)
                                 seen_tags.add(tag)
-                        if used_model not in tag_sources:
-                            tag_sources.append(used_model)
+                        if selection is not None:
+                            contributor = (selection.provider, selection.model_id)
+                            if first_contributor is None:
+                                first_contributor = contributor
+                            source_label = f"{selection.provider}:{selection.model_id}"
+                        else:
+                            source_label = str(used_model)
+                        if source_label not in tag_sources:
+                            tag_sources.append(source_label)
                     else:
                         moondream_frames_to_run.append(f_rgb)
 
@@ -2431,6 +2998,20 @@ async def _run_color_and_caption_analysis(
                     remaining = caption_remaining_seconds()
                     if remaining <= 0.0:
                         raise asyncio.TimeoutError
+                    caption_attempts.append({
+                        "provider": "directml",
+                        "model_id": "moondream_fp16",
+                        "task": "video_captioning",
+                        "mode": current_mode,
+                        "required_capabilities": ["vision"],
+                        "verified_capabilities": ["vision", "directml"],
+                        "source": "moondream_onnx_fallback",
+                        "reason": "LM Studio produced no retained tags",
+                        "selected_at": utc_now_rfc3339(),
+                    })
+                    result["caption_attempts"] = deepcopy(caption_attempts)
+                    if on_caption_attempted is not None:
+                        on_caption_attempted(deepcopy(result))
                     moondream_tags_list = await asyncio.wait_for(
                         with_gpu_task(
                             _run_moondream_inference_on_frames,
@@ -2467,6 +3048,8 @@ async def _run_color_and_caption_analysis(
                                     seen_tags.add(tag)
                             if used_model not in tag_sources:
                                 tag_sources.append(used_model)
+                            if first_contributor is None:
+                                first_contributor = ("directml", "moondream_fp16")
                 except asyncio.CancelledError:
                     # with_gpu_task may keep the physical worker alive until its
                     # protected cleanup finishes. Do not claim idle meanwhile.
@@ -2523,6 +3106,9 @@ async def _run_color_and_caption_analysis(
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
+            if first_contributor is not None:
+                result["caption_provider"], result["caption_model_id"] = first_contributor
+            result["caption_attempts"] = caption_attempts
             if result["tags"] and caption_timeout_error is None:
                 result["stage_status"]["captions"] = "completed"
                 result["stage_errors"].pop("captions", None)
@@ -2530,30 +3116,23 @@ async def _run_color_and_caption_analysis(
                 result["stage_status"]["captions"] = "partial"
                 result["stage_errors"]["captions"] = caption_timeout_error
             else:
+                result["stage_status"]["captions"] = (
+                    "unavailable"
+                    if caption_error_code in {
+                        "model_failover_exhausted", "provider_cooldown"
+                    }
+                    else "failed"
+                )
+                result["caption_error_code"] = (
+                    "caption_provider_unavailable"
+                    if result["stage_status"]["captions"] == "unavailable"
+                    else "caption_generation_failed"
+                )
                 result["stage_errors"]["captions"] = (
                     caption_timeout_error
+                    or caption_error_message
                     or "Keine Tags von verfuegbarem Vision-Provider erzeugt"
                 )
-
-            caption_status = result["stage_status"]["captions"]
-            if caption_status == "completed":
-                caption_step = "captions_complete"
-            elif caption_status == "partial":
-                caption_step = "captions_partial"
-            else:
-                caption_step = "captions_error"
-            await _publish_caption_progress(
-                clip_id,
-                step=caption_step,
-                percent=CAPTION_PROGRESS_END_PERCENT,
-                status=caption_status,
-                message=(
-                    f"Vision-Analyse {caption_status}: "
-                    f"{caption_progress['phase_completed_frames']}/"
-                    f"{caption_progress['phase_total_frames']} "
-                    "Frames"
-                ),
-            )
 
             # Review-Fix MEDIUM (2026-07-09): Terminal-State auch fuer den
             # reinen LM-Studio-Pfad (Wrapper endet mit "active").
@@ -2585,13 +3164,6 @@ async def _run_color_and_caption_analysis(
                 result["stage_errors"]["captions"] = (
                     "Keine lesbaren Frames fuer Captioning"
                 )
-                await _publish_caption_progress(
-                    clip_id,
-                    step="captions_error",
-                    percent=CAPTION_PROGRESS_END_PERCENT,
-                    status="failed",
-                    message="Vision-Analyse fehlgeschlagen: keine lesbaren Frames",
-                )
 
     except asyncio.CancelledError:
         heartbeat_task = locals().get("heartbeat_task")
@@ -2619,13 +3191,6 @@ async def _run_color_and_caption_analysis(
         if generate_captions:
             result["stage_status"]["captions"] = "failed"
             result["stage_errors"]["captions"] = str(e)
-            await _publish_caption_progress(
-                clip_id,
-                step="captions_error",
-                percent=CAPTION_PROGRESS_END_PERCENT,
-                status="failed",
-                message=f"Vision-Analyse fehlgeschlagen: {type(e).__name__}",
-            )
 
     return result
 

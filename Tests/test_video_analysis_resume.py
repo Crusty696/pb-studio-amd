@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+import numpy as np
 
 from backend.schemas.video_schemas import VideoAnalyzeRequest
 
@@ -62,6 +63,10 @@ def _existing_analysis() -> dict:
 
 class _State:
     def __init__(self, path, analysis=None):
+        self.current_project = {
+            "project_uuid": "018f6ca2-b3e1-7b42-8f13-a0f4a954d03e",
+            "db_project_id": 1,
+        }
         self.clip = {
             "id": 7,
             "name": "resume",
@@ -84,6 +89,45 @@ class _State:
 
 async def _noop(*_args, **_kwargs):
     return None
+
+
+def _prepare_moondream_fallback(monkeypatch, video_router):
+    import cv2
+    from pb_studio.video.lmstudio_vision_wrapper import VisionTagExtractionResult
+
+    class FakeCapture:
+        def get(self, _property):
+            return 4
+
+        def set(self, _property, _value):
+            return True
+
+        def read(self):
+            return True, np.zeros((2, 2, 3), dtype=np.uint8)
+
+        def release(self):
+            return None
+
+    async def no_lmstudio_tags(*_args, **_kwargs):
+        return VisionTagExtractionResult(
+            tags=(),
+            selection_receipt=None,
+            attempts=(),
+            error_code="model_failover_exhausted",
+            error_message="LM Studio unavailable",
+        )
+
+    monkeypatch.setattr(cv2, "VideoCapture", lambda _path: FakeCapture())
+    monkeypatch.setattr(
+        "pb_studio.video.lmstudio_vision_wrapper.extract_tag_result_via_lmstudio_async",
+        no_lmstudio_tags,
+    )
+    monkeypatch.setattr(
+        "pb_studio.video.moondream.onnx_models_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(video_router, "publish_event", _noop)
+    monkeypatch.setattr(video_router, "_publish_caption_progress", _noop)
 
 
 def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
@@ -116,6 +160,7 @@ def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
             "has_embedding": True,
             "stage_status": {"motion": "skipped", "embedding": "completed"},
             "stage_errors": {},
+            "_pending_embedding": {"media_id": 41},
         }
 
     async def color_stage(*_args, **_kwargs):
@@ -131,11 +176,16 @@ def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
     def persist(_state, _context, _clip, result):
         calls["persisted"] = deepcopy(result)
 
+    def commit_embedding(result):
+        result.pop("_pending_embedding")
+        result["_new_embedding_media_id"] = 41
+        result["_new_embedding_faiss_id"] = 99
+
     monkeypatch.setattr(video_router, "_run_scene_detection", scene_stage)
     monkeypatch.setattr(video_router, "with_gpu_task", gpu_stage)
     monkeypatch.setattr(video_router, "_run_color_and_caption_analysis", color_stage)
     monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", persist)
-    monkeypatch.setattr(video_router, "_commit_pending_video_embedding", lambda _result: None)
+    monkeypatch.setattr(video_router, "_commit_pending_video_embedding", commit_embedding)
     monkeypatch.setattr(video_router, "_dedupe_old_video_embeddings", lambda _result: None)
     monkeypatch.setattr(video_router, "publish_event", _noop)
     monkeypatch.setattr(video_router, "publish_log", _noop)
@@ -155,7 +205,7 @@ def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
                 analyze_colors=False,
             ),
             state,
-            SimpleNamespace(project_id=1),
+            SimpleNamespace(project_id=1, epoch=1),
         )
     )
 
@@ -172,13 +222,139 @@ def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
     assert result.embedding_dim == 1152
     assert result.embedding_samples == 3
     assert result.has_embedding is True
-    assert result.stage_status["scenes"] == "completed"
-    assert result.stage_status["motion"] == "completed"
-    assert result.stage_status["colors"] == "completed"
-    assert result.stage_status["captions"] == "completed"
+    assert result.stage_status["scenes"] == "skipped"
+    assert result.stage_status["motion"] == "skipped"
+    assert result.stage_status["colors"] == "skipped"
+    assert result.stage_status["captions"] == "skipped"
     assert result.stage_status["embedding"] == "completed"
     assert "embedding" not in result.stage_errors
     assert calls["persisted"]["scenes"] == _existing_analysis()["scenes"]
+    embedding_receipt = calls["persisted"]["stage_receipts"]["embedding"]
+    assert embedding_receipt["status"] == "completed"
+    assert embedding_receipt["artifact_valid"] is True
+    assert calls["persisted"]["status"] == "completed"
+    assert calls["persisted"]["stage_artifacts"]["embedding"]["media_id"] == 41
+    assert calls["persisted"]["stage_artifacts"]["embedding"]["faiss_id"] == 99
+
+
+def test_caption_helper_defers_terminal_error_event_until_outer_checkpoint(
+    monkeypatch,
+    tmp_path,
+):
+    video_router = importlib.import_module("backend.routers.video_router")
+    events = []
+
+    async def capture_caption_progress(*_args, **kwargs):
+        events.append(deepcopy(kwargs))
+
+    monkeypatch.setattr(
+        video_router,
+        "_publish_caption_progress",
+        capture_caption_progress,
+    )
+
+    result = asyncio.run(
+        video_router._run_color_and_caption_analysis(
+            str(tmp_path / "unreadable.mp4"),
+            7,
+            True,
+            False,
+        )
+    )
+
+    assert result["stage_status"]["captions"] == "failed"
+    assert events == []
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("inference failed"), asyncio.TimeoutError()])
+def test_executed_moondream_failure_preserves_attempt(monkeypatch, failure):
+    video_router = importlib.import_module("backend.routers.video_router")
+    _prepare_moondream_fallback(monkeypatch, video_router)
+
+    async def fail_gpu(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(video_router, "with_gpu_task", fail_gpu)
+    result = asyncio.run(
+        video_router._run_color_and_caption_analysis("clip.mp4", 7, True, False)
+    )
+
+    assert [attempt["model_id"] for attempt in result["caption_attempts"]] == [
+        "moondream_fp16"
+    ]
+
+
+def test_cancelled_moondream_preserves_started_attempt_for_outer_checkpoint(
+    monkeypatch,
+):
+    video_router = importlib.import_module("backend.routers.video_router")
+    _prepare_moondream_fallback(monkeypatch, video_router)
+    observed_attempts = []
+
+    async def cancel_gpu(*_args, **_kwargs):
+        raise asyncio.CancelledError
+
+    def capture_attempt(stage_result):
+        observed_attempts[:] = deepcopy(stage_result["caption_attempts"])
+
+    monkeypatch.setattr(video_router, "with_gpu_task", cancel_gpu)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            video_router._run_color_and_caption_analysis(
+                "clip.mp4",
+                7,
+                True,
+                False,
+                on_caption_attempted=capture_attempt,
+            )
+        )
+
+    assert [attempt["model_id"] for attempt in observed_attempts] == [
+        "moondream_fp16"
+    ]
+
+
+def test_all_disabled_request_persists_and_returns_unavailable(
+    monkeypatch,
+    tmp_path,
+):
+    video_router = importlib.import_module("backend.routers.video_router")
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"video")
+    state = _State(media, _existing_analysis())
+    persisted = []
+
+    def capture_persist(_state, _context, _clip, result):
+        persisted.append(deepcopy(result))
+
+    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", capture_persist)
+    monkeypatch.setattr(video_router, "_dedupe_old_video_embeddings", lambda _result: None)
+    monkeypatch.setattr(video_router, "publish_event", _noop)
+    monkeypatch.setattr(video_router, "publish_log", _noop)
+
+    result = asyncio.run(
+        video_router._analyze_video_in_project(
+            VideoAnalyzeRequest(
+                clip_id=7,
+                detect_scenes=False,
+                generate_embeddings=False,
+                analyze_motion=False,
+                generate_captions=False,
+                analyze_colors=False,
+                analyze_audio_key=False,
+            ),
+            state,
+            SimpleNamespace(project_id=1, epoch=1),
+        )
+    )
+
+    assert result.status == "unavailable"
+    assert persisted[-1]["status"] == "unavailable"
+    assert len(result.stage_receipts) == 6
+    assert all(
+        not receipt.requested and receipt.status == "skipped"
+        for receipt in result.stage_receipts.values()
+    )
 
 
 def test_force_recomputes_requested_completed_stage(monkeypatch, tmp_path):
@@ -237,7 +413,7 @@ def test_force_recomputes_requested_completed_stage(monkeypatch, tmp_path):
                 force=True,
             ),
             state,
-            SimpleNamespace(project_id=1),
+            SimpleNamespace(project_id=1, epoch=1),
         )
     )
 
@@ -305,7 +481,7 @@ def test_force_caption_retry_persists_new_partial_tags(monkeypatch, tmp_path):
                 force=True,
             ),
             state,
-            SimpleNamespace(project_id=1),
+            SimpleNamespace(project_id=1, epoch=1),
         )
     )
 
@@ -316,27 +492,40 @@ def test_force_caption_retry_persists_new_partial_tags(monkeypatch, tmp_path):
     assert captured["persisted"]["tag_source"] == "lmstudio:new-model"
 
 
-def test_missing_file_does_not_persist_defaults(monkeypatch, tmp_path):
+def test_missing_file_persists_fresh_requested_failures(monkeypatch, tmp_path):
     video_router = importlib.import_module("backend.routers.video_router")
 
     state = _State(tmp_path / "missing.mp4", _existing_analysis())
 
-    def must_not_persist(*_args, **_kwargs):
-        raise AssertionError("missing input must not overwrite prior analysis")
+    persisted = []
 
-    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", must_not_persist)
+    def capture_persist(_state, _context, _clip, result):
+        persisted.append(deepcopy(result))
+
+    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", capture_persist)
+    monkeypatch.setattr(video_router, "publish_event", _noop)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             video_router._analyze_video_in_project(
                 VideoAnalyzeRequest(clip_id=7),
                 state,
-                SimpleNamespace(project_id=1),
+                SimpleNamespace(project_id=1, epoch=1),
             )
         )
 
     assert exc_info.value.status_code == 422
-    assert state.analysis == _existing_analysis()
+    assert persisted[-1]["status"] == "failed"
+    assert all(
+        receipt["status"] == "failed"
+        for receipt in persisted[-1]["stage_receipts"].values()
+        if receipt["requested"]
+    )
+    assert all(
+        receipt["error_code"] == "media_missing"
+        for receipt in persisted[-1]["stage_receipts"].values()
+        if receipt["requested"]
+    )
 
 
 def test_cancellation_persists_completed_stages_and_interrupts_active_stage(
@@ -411,7 +600,7 @@ def test_cancellation_persists_completed_stages_and_interrupts_active_stage(
                     force=True,
                 ),
                 state,
-                SimpleNamespace(project_id=1),
+                SimpleNamespace(project_id=1, epoch=1),
             )
         )
 
@@ -424,7 +613,7 @@ def test_cancellation_persists_completed_stages_and_interrupts_active_stage(
     assert persisted["embedding_dim"] == 0
     assert persisted["stage_status"]["embedding"] == "interrupted"
     assert persisted["stage_status"]["captions"] == "interrupted"
-    assert persisted["stage_status"]["colors"] == "completed"
+    assert persisted["stage_status"]["colors"] == "skipped"
     assert persisted["status"] == "partial"
     assert "_pending_embedding" not in persisted
     assert captured["events"][-1][1]["step"] == "interrupted"

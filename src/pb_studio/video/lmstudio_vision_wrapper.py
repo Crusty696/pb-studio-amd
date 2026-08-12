@@ -24,10 +24,12 @@ import re
 import threading
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import numpy as np
 from pb_studio.ai.config_loader import load_ai_config as _load_ai_config
+from pb_studio.ai.model_registry import ModelSelectionReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +72,29 @@ _WARM_WINDOW_SECONDS = 600.0
 _WARM_MODELS: dict[tuple[str, str], float] = {}
 _LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
 _TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+_TASK_UNAVAILABLE_RESULTS: dict[str, "VisionTagExtractionResult"] = {}
 _COLD_START_STATE_LOCK = threading.RLock()
 _COLD_START_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 _COLD_START_LOCK_POLL_SECONDS = 0.05
+
+
+@dataclass(frozen=True, slots=True)
+class VisionTagExtractionResult:
+    """Detailed provider-bound result used by durable caption receipts."""
+
+    tags: tuple[str, ...]
+    selection_receipt: ModelSelectionReceipt | None
+    attempts: tuple[ModelSelectionReceipt, ...]
+    error_code: str | None = None
+    error_message: str | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.attempts) > 3:
+            raise ValueError("Vision failover attempts must be bounded to three")
+        if self.selection_receipt is not None and self.selection_receipt not in self.attempts:
+            raise ValueError("Successful selection receipt must be present in attempts")
+        if self.tags and self.selection_receipt is None:
+            raise ValueError("Vision tags require a successful selection receipt")
 
 
 def _ist_warm_unlocked(model_key: tuple[str, str]) -> bool:
@@ -320,7 +342,7 @@ async def _async_extract_tags(
     model_override: Optional[str],
     timeout_seconds: float,
     load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
-) -> tuple[list[str], str]:
+) -> VisionTagExtractionResult:
     from pb_studio.ai.model_registry import (
         ModelFailoverExhaustedError,
         ModelRegistry,
@@ -339,12 +361,28 @@ async def _async_extract_tags(
         task_blocked = blocked_until is not None and now < blocked_until
         if blocked_until is not None and not task_blocked:
             _TASK_UNAVAILABLE_UNTIL.pop(task, None)
+            _TASK_UNAVAILABLE_RESULTS.pop(task, None)
     if blocked_until is not None:
         if task_blocked:
             # Kein erneuter Failover-Durchlauf — der letzte hat bewiesen, dass
             # kein Kandidat liefert. Sonst zahlt jeder Frame denselben Preis.
             _publish_status("none", "LLM", "unavailable", 0.0)
-            return [], "none"
+            previous = _TASK_UNAVAILABLE_RESULTS.get(task)
+            if previous is not None:
+                return VisionTagExtractionResult(
+                    tags=(),
+                    selection_receipt=None,
+                    attempts=(),
+                    error_code="provider_cooldown",
+                    error_message=previous.error_message,
+                )
+            return VisionTagExtractionResult(
+                tags=(),
+                selection_receipt=None,
+                attempts=(),
+                error_code="provider_cooldown",
+                error_message=f"Vision provider cooldown active for task {task!r}",
+            )
 
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
@@ -463,7 +501,7 @@ async def _async_extract_tags(
                 held_cold_start_lock.release()
 
     try:
-        tags, receipt, _attempts = await execute_with_model_failover(
+        tags, receipt, attempts = await execute_with_model_failover(
             registry,
             task,
             mode,
@@ -475,7 +513,11 @@ async def _async_extract_tags(
             is_provider_failure=is_provider_failure,
             explicit_model=model_override,
         )
-        return tags, receipt.model_id
+        return VisionTagExtractionResult(
+            tags=tuple(tags),
+            selection_receipt=receipt,
+            attempts=tuple(attempts),
+        )
     except ModelFailoverExhaustedError as exc:
         with _COLD_START_STATE_LOCK:
             _TASK_UNAVAILABLE_UNTIL[task] = (
@@ -489,7 +531,69 @@ async def _async_extract_tags(
             _UNAVAILABLE_COOLDOWN_SECONDS,
         )
         _publish_status("none", "LLM", "unavailable", 0.0)
-        return [], "none"
+        result = VisionTagExtractionResult(
+            tags=(),
+            selection_receipt=None,
+            attempts=tuple(exc.receipts),
+            error_code="model_failover_exhausted",
+            error_message=str(exc),
+        )
+        with _COLD_START_STATE_LOCK:
+            _TASK_UNAVAILABLE_RESULTS[task] = result
+        return result
+
+
+async def extract_tag_result_via_lmstudio_async(
+    frame_rgb: Optional[np.ndarray],
+    *,
+    mode: str = DEFAULT_MODE,
+    task: str = DEFAULT_TASK,
+    prompt: str = DEFAULT_PROMPT,
+    model_override: Optional[str] = None,
+    timeout_seconds: float = 45.0,
+    load_timeout_seconds: float = DEFAULT_LOAD_TIMEOUT_SECONDS,
+) -> VisionTagExtractionResult:
+    """Return tags with the exact successful selection and bounded attempts."""
+
+    invalid_message: str | None = None
+    if frame_rgb is None:
+        invalid_message = "Vision frame is missing"
+    else:
+        try:
+            if frame_rgb.size == 0:
+                invalid_message = "Vision frame is empty"
+        except AttributeError:
+            invalid_message = "Vision frame is not a numpy array"
+    if invalid_message is not None:
+        return VisionTagExtractionResult(
+            tags=(),
+            selection_receipt=None,
+            attempts=(),
+            error_code="invalid_frame",
+            error_message=invalid_message,
+        )
+
+    try:
+        return await _async_extract_tags(
+            frame_rgb,
+            mode=mode,
+            task=task,
+            prompt=prompt,
+            model_override=model_override,
+            timeout_seconds=timeout_seconds,
+            load_timeout_seconds=load_timeout_seconds,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("LM Studio tag extraction failed: %s", exc)
+        return VisionTagExtractionResult(
+            tags=(),
+            selection_receipt=None,
+            attempts=(),
+            error_code="vision_provider_error",
+            error_message=str(exc) or type(exc).__name__,
+        )
 
 
 async def extract_tags_and_model_via_lmstudio_async(
@@ -529,29 +633,21 @@ async def extract_tags_and_model_via_lmstudio_async(
             - Liste von max 10 Tags (lowercased, Stopwords gefiltert)
             - Name des benutzten Modells (z.B. "qwen3-vl-8b" oder "none")
     """
-    if frame_rgb is None:
-        return [], "none"
-    try:
-        if frame_rgb.size == 0:
-            return [], "none"
-    except AttributeError:
-        return [], "none"
-
-    try:
-        return await _async_extract_tags(
-            frame_rgb,
-            mode=mode,
-            task=task,
-            prompt=prompt,
-            model_override=model_override,
-            timeout_seconds=timeout_seconds,
-            load_timeout_seconds=load_timeout_seconds,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.warning("LM Studio tag extraction failed: %s", exc)
-        return [], "none"
+    detailed = await extract_tag_result_via_lmstudio_async(
+        frame_rgb,
+        mode=mode,
+        task=task,
+        prompt=prompt,
+        model_override=model_override,
+        timeout_seconds=timeout_seconds,
+        load_timeout_seconds=load_timeout_seconds,
+    )
+    model_id = (
+        detailed.selection_receipt.model_id
+        if detailed.selection_receipt is not None
+        else "none"
+    )
+    return list(detailed.tags), model_id
 
 
 def extract_tags_and_model_via_lmstudio(
@@ -633,6 +729,7 @@ def clear_tag_cache() -> None:
         _WARM_MODELS.clear()
         _LOAD_BUDGET_SPENT.clear()
         _TASK_UNAVAILABLE_UNTIL.clear()
+        _TASK_UNAVAILABLE_RESULTS.clear()
         _COLD_START_LOCKS.clear()
 
 
@@ -642,6 +739,8 @@ extract_tags_via_ollama = extract_tags_via_lmstudio
 
 
 __all__ = [
+    "VisionTagExtractionResult",
+    "extract_tag_result_via_lmstudio_async",
     "extract_tags_and_model_via_lmstudio_async",
     "extract_tags_and_model_via_lmstudio",
     "extract_tags_via_lmstudio",

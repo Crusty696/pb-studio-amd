@@ -16,6 +16,7 @@ import pytest
 from pb_studio.video.lmstudio_vision_wrapper import (
     _parse_tags,
     clear_tag_cache,
+    extract_tag_result_via_lmstudio_async,
     extract_tags_via_lmstudio,
     set_status_publisher,
 )
@@ -656,3 +657,93 @@ def test_failed_candidate_lock_does_not_self_block_next_frame(monkeypatch):
 
     assert first == (["tag-vlm-b"], "vlm-b")
     assert second == (["tag-vlm-a"], "vlm-a")
+
+
+def test_detailed_result_preserves_success_receipt_and_all_bounded_attempts(monkeypatch):
+    import pb_studio.ai.model_registry as registry_module
+    from pb_studio.ai.model_registry import ModelSelectionReceipt
+
+    attempts = tuple(
+        ModelSelectionReceipt(
+            provider="lmstudio",
+            model_id=model_id,
+            task="video_captioning",
+            mode="balance",
+            required_capabilities=("vision",),
+            verified_capabilities=("vision",),
+            source="test",
+            reason=f"attempt-{index}",
+            selected_at=f"2026-08-12T10:00:0{index}Z",
+        )
+        for index, model_id in enumerate(("vlm-a", "vlm-b"), start=1)
+    )
+
+    async def fake_failover(_registry, _task, _mode, operation, **_kwargs):
+        class Client:
+            async def chat(self, **_chat_kwargs):
+                return {"message": {"content": "tanzen, neonlicht"}}
+
+        value = await operation(Client(), attempts[-1])
+        return value, attempts[-1], attempts
+
+    monkeypatch.setattr(
+        registry_module,
+        "execute_with_model_failover",
+        fake_failover,
+    )
+
+    result = asyncio.run(
+        extract_tag_result_via_lmstudio_async(
+            np.zeros((8, 8, 3), dtype=np.uint8),
+        )
+    )
+
+    assert list(result.tags) == ["tanzen", "neonlicht"]
+    assert result.selection_receipt == attempts[-1]
+    assert result.attempts == attempts
+    assert result.error_code is None
+    assert len(result.attempts) <= 3
+
+
+def test_detailed_result_preserves_unavailable_reason_and_failed_attempts(monkeypatch):
+    import pb_studio.ai.model_registry as registry_module
+    from pb_studio.ai.model_registry import (
+        ModelFailoverExhaustedError,
+        ModelSelectionReceipt,
+    )
+
+    attempt = ModelSelectionReceipt(
+        provider="lmstudio",
+        model_id="vlm-unavailable",
+        task="video_captioning",
+        mode="balance",
+        required_capabilities=("vision",),
+        verified_capabilities=("vision",),
+        source="test",
+        reason="only candidate",
+        selected_at="2026-08-12T10:00:00Z",
+    )
+
+    async def exhausted(*_args, **_kwargs):
+        raise ModelFailoverExhaustedError(
+            "LM Studio unavailable",
+            receipts=[attempt],
+        )
+
+    monkeypatch.setattr(
+        registry_module,
+        "execute_with_model_failover",
+        exhausted,
+    )
+
+    result = asyncio.run(
+        extract_tag_result_via_lmstudio_async(
+            np.zeros((8, 8, 3), dtype=np.uint8),
+        )
+    )
+
+    assert result.tags == ()
+    assert result.selection_receipt is None
+    assert result.attempts == (attempt,)
+    assert result.error_code == "model_failover_exhausted"
+    assert "LM Studio unavailable" in result.error_message
