@@ -8,7 +8,9 @@ Endpoints:
 """
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -42,6 +44,21 @@ logger = logging.getLogger(__name__)
 # retains that documented product scope with complete entry metadata while
 # placing a finite bound before FastAPI constructs Pydantic models.
 TIMELINE_UPDATE_MAX_BODY_BYTES = 128 * 1024 * 1024
+
+PACING_VIDEO_STAGE_FIELDS: dict[str, tuple[str, ...]] = {
+    "scenes": ("scene_count", "scenes"),
+    "motion": ("avg_motion", "motion"),
+    "embedding": ("embedding_dim", "embedding_samples", "has_embedding"),
+    "colors": (
+        "dominant_colors",
+        "mood_tags",
+        "avg_brightness",
+        "avg_saturation",
+        "avg_color_temp",
+    ),
+    "captions": ("tags", "tag_source"),
+    "audio_key": ("audio_key",),
+}
 
 
 class TimelineUpdateBodyLimitRoute(APIRoute):
@@ -151,6 +168,225 @@ def _requires_video_analysis(config: PacingConfigSchema) -> bool:
     )
 
 
+def _required_pacing_video_stages(config: PacingConfigSchema) -> list[str]:
+    required: list[str] = []
+    if config.use_motion_matching:
+        required.append("motion")
+    if config.use_semantic_matching:
+        required.append("embedding")
+    if config.use_key_matching:
+        required.append("audio_key")
+    return required
+
+
+def _degraded_persisted_video_analysis(
+    required_stages: list[str],
+    *,
+    reason: str,
+    status: str = "unavailable",
+) -> dict[str, Any]:
+    """Return stage truth only; never invent analysis-domain payloads."""
+
+    return {
+        "analysis_status": "partial",
+        "stage_status": {stage: status for stage in required_stages},
+        "stage_errors": {stage: reason for stage in required_stages},
+        "stage_receipts": {},
+        "stage_artifacts": {},
+        "is_analyzed": False,
+    }
+
+
+def _same_media_reference(left: Any, right: Any) -> bool:
+    try:
+        return str(Path(str(left)).resolve()).casefold() == str(
+            Path(str(right)).resolve()
+        ).casefold()
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _validated_persisted_video_analysis(
+    row: dict[str, Any],
+    *,
+    project_id: int,
+    clip_id: int,
+    file_path: str,
+    required_stages: list[str],
+) -> dict[str, Any]:
+    """Validate row ownership plus completed V1 receipts before consumption."""
+
+    try:
+        row_project_id = int(row.get("project_id"))
+        metadata = json.loads(row.get("metadata_json") or "{}")
+        row_clip_id = int(metadata.get("clip_id"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _degraded_persisted_video_analysis(
+            required_stages,
+            reason="persisted_project_media_mismatch",
+        )
+    if (
+        row_project_id != project_id
+        or metadata.get("clip_type") != "video"
+        or row_clip_id != clip_id
+        or not _same_media_reference(row.get("file_path"), file_path)
+    ):
+        return _degraded_persisted_video_analysis(
+            required_stages,
+            reason="persisted_project_media_mismatch",
+        )
+
+    try:
+        raw_payload = json.loads(row.get("ai_data_json") or "{}")
+        if not isinstance(raw_payload, dict):
+            raise TypeError("ai_data_json must be an object")
+
+        from pb_studio.core.stage_receipts import (
+            RECEIPT_VERSION,
+            utc_now_rfc3339,
+            validate_receipt_artifact,
+            validate_receipt_map,
+        )
+        from pb_studio.data.schemas.media_json_schema import (
+            normalize_analysis_ai_data,
+        )
+
+        normalized, _ = normalize_analysis_ai_data(
+            raw_payload,
+            is_video=True,
+            recovered_at_utc=utc_now_rfc3339(),
+        )
+        receipts = validate_receipt_map(normalized.get("stage_receipts") or {})
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _degraded_persisted_video_analysis(
+            required_stages,
+            reason="persisted_receipt_or_artifact_invalid",
+            status="failed",
+        )
+
+    valid_stages: set[str] = set()
+    safe_artifacts: dict[str, Any] = {}
+    persisted_artifacts = normalized.get("stage_artifacts")
+    for stage, receipt in receipts.items():
+        expected_ref = f"ai_data_json.stage_artifacts.{stage}"
+        if (
+            receipt.receipt_version == RECEIPT_VERSION
+            and receipt.requested
+            and receipt.status == "completed"
+            and receipt.artifact_valid is True
+            and receipt.artifact_ref == expected_ref
+            and validate_receipt_artifact(receipt, normalized)
+        ):
+            fields = PACING_VIDEO_STAGE_FIELDS.get(stage)
+            artifact = (
+                persisted_artifacts.get(stage)
+                if isinstance(persisted_artifacts, dict)
+                else None
+            )
+            if fields and isinstance(artifact, dict) and all(
+                field in normalized for field in fields
+            ):
+                valid_stages.add(stage)
+                safe_artifacts[stage] = artifact
+
+    safe_payload: dict[str, Any] = {
+        "analysis_status": normalized.get("analysis_status", "partial"),
+        "stage_status": dict(normalized.get("stage_status") or {}),
+        "stage_errors": dict(normalized.get("stage_errors") or {}),
+        "stage_receipts": {
+            stage: value
+            for stage, value in (normalized.get("stage_receipts") or {}).items()
+            if stage in valid_stages
+        },
+        "stage_artifacts": safe_artifacts,
+        "media_sha256": normalized.get("media_sha256"),
+        "is_analyzed": bool(normalized.get("is_analyzed", False)),
+    }
+    for stage in valid_stages:
+        for field in PACING_VIDEO_STAGE_FIELDS[stage]:
+            safe_payload[field] = normalized[field]
+
+    for stage in required_stages:
+        if stage in valid_stages:
+            continue
+        receipt = receipts.get(stage)
+        safe_payload["stage_status"][stage] = (
+            receipt.status if receipt is not None else "failed"
+        )
+        safe_payload["stage_errors"][stage] = (
+            "persisted_receipt_or_artifact_invalid"
+        )
+    return safe_payload
+
+
+def _resolve_pacing_video_analysis(
+    config: PacingConfigSchema,
+    state: AppState,
+    context: ProjectOperationContext,
+    video_clips_snapshot: dict[int, dict[str, Any]],
+) -> dict[int, dict[str, Any]]:
+    """Resolve project RAM first, then validated rows from the same project."""
+
+    if not _requires_video_analysis(config):
+        return {}
+
+    state.require_project_context_current(context)
+    cached_snapshot = state.get_video_analysis_snapshot()
+    resolved: dict[int, dict[str, Any]] = {}
+    missing_ids: list[int] = []
+    for clip_id in config.video_clip_ids:
+        cached = cached_snapshot.get(clip_id)
+        if cached is None:
+            cached = cached_snapshot.get(str(clip_id))
+        if isinstance(cached, dict):
+            resolved[clip_id] = cached
+        else:
+            missing_ids.append(clip_id)
+
+    if missing_ids:
+        from pb_studio.data.repositories.media_repository import MediaRepository
+
+        repository = MediaRepository()
+        required_stages = _required_pacing_video_stages(config)
+        for clip_id in missing_ids:
+            clip = video_clips_snapshot.get(clip_id) or {}
+            file_path = clip.get("path")
+            if not file_path:
+                resolved[clip_id] = _degraded_persisted_video_analysis(
+                    required_stages,
+                    reason="persisted_media_row_missing",
+                )
+                continue
+            try:
+                row = repository.find_by_project_and_path(
+                    project_id=context.project_id,
+                    file_path=file_path,
+                )
+            except Exception as exc:  # noqa: BLE001 - degrade, never synthesize
+                logger.warning(
+                    "Pacing-DB-Fallback fuer Video-Clip %s fehlgeschlagen: %s",
+                    clip_id,
+                    type(exc).__name__,
+                )
+                row = None
+            if row is None:
+                resolved[clip_id] = _degraded_persisted_video_analysis(
+                    required_stages,
+                    reason="persisted_media_row_missing",
+                )
+                continue
+            resolved[clip_id] = _validated_persisted_video_analysis(
+                row,
+                project_id=context.project_id,
+                clip_id=clip_id,
+                file_path=str(file_path),
+                required_stages=required_stages,
+            )
+
+    state.require_project_context_current(context)
+    return resolved
+
+
 def _pacing_stage_payload_is_valid(
     domain: str,
     stage: str,
@@ -214,18 +450,23 @@ def _missing_pacing_stages(
     status_map = payload.get("_stage_status") or payload.get("stage_status") or {}
     if not isinstance(status_map, dict):
         status_map = {}
+    error_map = payload.get("_stage_errors") or payload.get("stage_errors") or {}
+    if not isinstance(error_map, dict):
+        error_map = {}
     missing = []
     for stage in required_stages:
         status = str(status_map.get(stage) or "missing")
         payload_valid = _pacing_stage_payload_is_valid(domain, stage, payload)
         if status != "completed" or not payload_valid:
-            missing.append(
-                {
-                    "stage": stage,
-                    "status": status,
-                    "payload_valid": payload_valid,
-                }
-            )
+            item = {
+                "stage": stage,
+                "status": status,
+                "payload_valid": payload_valid,
+            }
+            reason = error_map.get(stage)
+            if reason:
+                item["reason"] = str(reason)
+            missing.append(item)
     return missing
 
 
@@ -241,13 +482,7 @@ def _validate_pacing_analysis_preflight(
     if config.use_key_matching:
         required_audio.append("key")
 
-    required_video = []
-    if config.use_motion_matching:
-        required_video.append("motion")
-    if config.use_semantic_matching:
-        required_video.append("embedding")
-    if config.use_key_matching:
-        required_video.append("audio_key")
+    required_video = _required_pacing_video_stages(config)
 
     missing_audio = _missing_pacing_stages(
         "audio",
@@ -351,10 +586,11 @@ async def _generate_cut_list_for_project(
     cached_analysis = state.get_audio_analysis(config.audio_clip_id) or {}
 
     # Motion matching and Brain reranking both consume the persisted video analysis.
-    video_analysis_snapshot = (
-        state.get_video_analysis_snapshot()
-        if _requires_video_analysis(config)
-        else {}
+    video_analysis_snapshot = _resolve_pacing_video_analysis(
+        config,
+        state,
+        context,
+        video_clips_snapshot,
     )
     _validate_pacing_analysis_preflight(
         config,
