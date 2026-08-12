@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OBJ-77 independent real-media ground-truth corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "objective", "kpi_definitions", "media", "annotations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "objective": {"const": "OBJ-77"},
+    "kpi_definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_alignment", "cut_accuracy", "sync_drift_under_10ms"],
+      "properties": {
+        "section_alignment": {"$ref": "#/$defs/kpi_definition"},
+        "cut_accuracy": {"$ref": "#/$defs/kpi_definition"},
+        "sync_drift_under_10ms": {"$ref": "#/$defs/kpi_definition"}
+      }
+    },
+    "media": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/media"}
+    },
+    "annotations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/annotation_registration"}
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "media": {
+          "contains": {"properties": {"media_type": {"const": "audio"}}, "required": ["media_type"]},
+          "minContains": 5
+        }
+      }
+    },
+    {
+      "properties": {
+        "media": {
+          "contains": {"properties": {"media_type": {"const": "video"}}, "required": ["media_type"]},
+          "minContains": 10
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+    "nonempty": {"type": "string", "minLength": 1},
+    "semver": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "kpi_definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formula", "owner_id", "reviewer_id"],
+      "properties": {
+        "formula": {"$ref": "#/$defs/nonempty"},
+        "owner_id": {"$ref": "#/$defs/nonempty"},
+        "reviewer_id": {"$ref": "#/$defs/nonempty"}
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_id", "media_type", "relative_path", "sha256", "duration_seconds", "stream", "rights_evidence"],
+      "properties": {
+        "media_id": {"$ref": "#/$defs/nonempty"},
+        "media_type": {"enum": ["audio", "video"]},
+        "relative_path": {"$ref": "#/$defs/nonempty"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "stream": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["codec_type", "codec_name"],
+          "properties": {
+            "codec_type": {"enum": ["audio", "video"]},
+            "codec_name": {"$ref": "#/$defs/nonempty"}
+          }
+        },
+        "rights_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approval_id", "approver_id", "approved"],
+          "properties": {
+            "approval_id": {"$ref": "#/$defs/nonempty"},
+            "approver_id": {"$ref": "#/$defs/nonempty"},
+            "approved": {"const": true}
+          }
+        }
+      }
+    },
+    "annotation_registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_id", "relative_path", "sha256", "annotation_version", "registered_sha256", "registered_annotation_version"],
+      "properties": {
+        "media_id": {"$ref": "#/$defs/nonempty"},
+        "relative_path": {"$ref": "#/$defs/nonempty"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "annotation_version": {"$ref": "#/$defs/semver"},
+        "registered_sha256": {"$ref": "#/$defs/sha256"},
+        "registered_annotation_version": {"$ref": "#/$defs/semver"}
+      }
+    }
+  }
+}
