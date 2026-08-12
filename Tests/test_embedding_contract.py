@@ -8,6 +8,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_UUID = "98cbb214-5438-4701-a96b-5c1220901ce4"
 
 
 def test_manifest_declares_all_embedding_contracts():
@@ -103,22 +104,23 @@ def test_vector_validation_returns_normalized_copy():
     assert np.linalg.norm(normalized) == pytest.approx(1.0)
 
 
-def test_legacy_video_vec_schema_is_migration_required(tmp_path: Path):
-    from pb_studio.storage.embedding_contract import EmbeddingMigrationRequiredError
+def test_new_video_vec_schema_matches_manifest_dimension(tmp_path: Path):
     from pb_studio.storage.embedding_repository import EmbeddingRepository, VIDEO_DIM
 
-    repo = EmbeddingRepository(tmp_path / "embeddings.db")
+    repo = EmbeddingRepository(
+        tmp_path / "embeddings.db", project_uuid=PROJECT_UUID
+    )
     try:
         vector = np.ones(VIDEO_DIM, dtype=np.float32)
-        with pytest.raises(EmbeddingMigrationRequiredError, match=r"FLOAT\[768\]"):
-            repo.add_video_unit(
-                parent_id=None,
-                level="clip",
-                media_id=1,
-                media_hash="a" * 64,
-                start_time=0.0,
-                end_time=1.0,
-                embedding=vector,
-            )
+        unit_id = repo.add_video_unit(
+            parent_id=None,
+            level="clip",
+            media_id=1,
+            media_hash="a" * 64,
+            start_time=0.0,
+            end_time=1.0,
+            embedding=vector,
+        )
+        assert repo.search_video(vector, limit=1)[0].unit_id == unit_id
     finally:
         repo.close()

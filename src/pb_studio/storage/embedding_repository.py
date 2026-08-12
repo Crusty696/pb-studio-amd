@@ -7,13 +7,16 @@ KNN search via vec0 virtual tables. WAL-mode connection.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import re
 import sqlite3
 import threading
+import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import numpy as np
 
@@ -73,9 +76,34 @@ def _migrations_root() -> Path:
 class EmbeddingRepository:
     """Project-store repository for audio + video embeddings."""
 
-    def __init__(self, db_path: str | Path):
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        project_uuid: str | None = None,
+        owner_uuid: str | None = None,
+        _migration_fault_injector: Callable[[str], None] | None = None,
+    ):
         self.db_path = Path(db_path)
-        self._ensure_schema()
+        existed_nonempty = self.db_path.is_file() and self.db_path.stat().st_size > 0
+        self.project_uuid = self._optional_uuid(project_uuid, "project_uuid")
+        self.owner_uuid = self._optional_uuid(owner_uuid, "owner_uuid")
+        if not existed_nonempty and self.project_uuid is None:
+            raise ValueError("New embeddings.db requires immutable project_uuid")
+        if self.project_uuid is not None and self.owner_uuid is None:
+            self.owner_uuid = self.project_uuid
+        self._ensure_schema(
+            project_uuid=self.project_uuid,
+            owner_uuid=self.owner_uuid,
+            fault_injector=_migration_fault_injector,
+        )
+        stored_project, stored_owner = self._read_store_identity()
+        if self.project_uuid is not None and stored_project != self.project_uuid:
+            raise EmbeddingMigrationRequiredError("Embedding project identity mismatch")
+        if self.owner_uuid is not None and stored_owner != self.owner_uuid:
+            raise EmbeddingMigrationRequiredError("Embedding owner identity mismatch")
+        self.project_uuid = stored_project
+        self.owner_uuid = stored_owner
         self._vec_dimensions = self._read_vec_dimensions()
         self._local = threading.local()
         # Review-Fix MEDIUM (2026-07-09): (thread_ident, conn)-Paare, damit
@@ -120,13 +148,90 @@ class EmbeddingRepository:
         finally:
             conn.enable_load_extension(False)
 
-    def _ensure_schema(self) -> None:
+    @staticmethod
+    def _optional_uuid(value: str | None, field: str) -> str | None:
+        if value is None:
+            return None
+        try:
+            return str(uuid.UUID(str(value)))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError(f"{field} must be a UUID") from exc
+
+    def _ensure_schema(
+        self,
+        *,
+        project_uuid: str | None,
+        owner_uuid: str | None,
+        fault_injector: Callable[[str], None] | None,
+    ) -> None:
         """Run combined embeddings migrations (audio+video share embeddings.db)."""
+        existed_nonempty = self.db_path.is_file() and self.db_path.stat().st_size > 0
+        safe_empty = False
+        if existed_nonempty:
+            safe_empty = self._preflight_existing_schema_read_only()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._migrate_with_vec(_migrations_root() / "embeddings")
+        self._migrate_with_vec(
+            _migrations_root() / "embeddings",
+            allow_obj77_migration=not existed_nonempty or safe_empty,
+            project_uuid=project_uuid,
+            owner_uuid=owner_uuid,
+            fault_injector=fault_injector,
+        )
+
+    def _read_store_identity(self) -> tuple[str, str]:
+        connection = sqlite3.connect(str(self.db_path), isolation_level=None)
+        connection.execute("PRAGMA busy_timeout=5000")
+        try:
+            rows = connection.execute(
+                "SELECT project_uuid,owner_uuid FROM embedding_store_identity"
+            ).fetchall()
+        finally:
+            connection.close()
+        if len(rows) != 1:
+            raise EmbeddingMigrationRequiredError(
+                "Embedding store identity is missing or ambiguous; migration_required"
+            )
+        try:
+            return str(uuid.UUID(str(rows[0][0]))), str(uuid.UUID(str(rows[0][1])))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise EmbeddingMigrationRequiredError(
+                "Embedding store identity is invalid; migration_required"
+            ) from exc
+
+    def _preflight_existing_schema_read_only(self) -> bool:
+        """Reject pending OBJ77 migrations before WAL/DDL or directory writes."""
+        migrations = _migrations_root() / "embeddings"
+        versions = [
+            int(match.group(1))
+            for path in migrations.glob("*.sql")
+            if (match := re.match(r"^(\d+)", path.name))
+        ]
+        latest = max(versions, default=0)
+        uri = self.db_path.resolve().as_uri() + "?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, isolation_level=None)
+        connection.execute("PRAGMA busy_timeout=5000")
+        try:
+            current = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            product_tables = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') "
+                    "AND name NOT LIKE 'sqlite_%'"
+                ).fetchone()[0]
+            )
+        finally:
+            connection.close()
+        if current == 0 and product_tables == 0:
+            return True
+        if current < latest:
+            raise EmbeddingMigrationRequiredError(
+                f"Existing embeddings.db schema {current} requires approved "
+                f"schema {latest}; migration_required"
+            )
+        return False
 
     def _read_vec_dimensions(self) -> dict[str, int]:
         conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        conn.execute("PRAGMA busy_timeout=5000")
         init_connection(conn)
         try:
             dimensions: dict[str, int] = {}
@@ -162,13 +267,21 @@ class EmbeddingRepository:
                 f"FLOAT[{expected_dimension}]; migration_required"
             )
 
-    def _migrate_with_vec(self, migrations_dir: Path) -> None:
+    def _migrate_with_vec(
+        self,
+        migrations_dir: Path,
+        *,
+        allow_obj77_migration: bool = False,
+        project_uuid: str | None = None,
+        owner_uuid: str | None = None,
+        fault_injector: Callable[[str], None] | None = None,
+    ) -> None:
         """Like migration_runner.migrate but loads sqlite-vec first."""
         import sqlite_vec
         from .migration_runner import split_sql_statements
         # B-9 FIX: isolation_level=None
         conn = sqlite3.connect(str(self.db_path), isolation_level=None)
-        init_connection(conn)
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.enable_load_extension(True)
         try:
             sqlite_vec.load(conn)
@@ -199,27 +312,65 @@ class EmbeddingRepository:
                 parsed_scripts.append((version, script))
             parsed_scripts.sort(key=lambda x: x[0])
 
-            for version, script in parsed_scripts:
-                if version <= current:
-                    continue
-                sql = script.read_text(encoding="utf-8")
-                statements = split_sql_statements(sql)
-                try:
+            pending_obj77 = any(version >= 2 and version > current for version, _ in parsed_scripts)
+            if pending_obj77 and not allow_obj77_migration:
+                raise EmbeddingMigrationRequiredError(
+                    "Existing embeddings.db requires explicit OBJ77 migration; "
+                    "migration_required"
+                )
+            init_connection(conn)
+            conn.create_function(
+                "sha256_blob",
+                1,
+                lambda value: hashlib.sha256(bytes(value)).hexdigest(),
+            )
+            conn.create_function(
+                "obj77_utc_now",
+                0,
+                lambda: datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+            )
+
+            atomic_initialization = current == 0 and allow_obj77_migration
+            try:
+                if atomic_initialization:
                     conn.execute("BEGIN")
+                for version, script in parsed_scripts:
+                    if version <= current:
+                        continue
+                    sql = script.read_text(encoding="utf-8")
+                    statements = split_sql_statements(sql)
+                    if not atomic_initialization:
+                        conn.execute("BEGIN")
                     for stmt in statements:
                         conn.execute(stmt)
+                    if version == 2:
+                        if project_uuid is None or owner_uuid is None:
+                            raise ValueError(
+                                "Schema v2 creation requires project and owner UUID"
+                            )
+                        conn.execute(
+                            "INSERT INTO embedding_store_identity "
+                            "(singleton_id,project_uuid,owner_uuid,schema_version) "
+                            "VALUES (1,?,?,2)",
+                            (project_uuid, owner_uuid),
+                        )
                     conn.execute(f"PRAGMA user_version = {version}")
-                    conn.execute("COMMIT")
+                    if fault_injector is not None:
+                        fault_injector(f"after_schema:{version}")
+                    if not atomic_initialization:
+                        conn.execute("COMMIT")
                     logger.info(
                         "Applied migration %s in %s -> %d",
                         script.name, migrations_dir.name, version,
                     )
-                except Exception:
-                    try:
-                        conn.execute("ROLLBACK")
-                    except sqlite3.OperationalError:
-                        pass
-                    raise
+                if atomic_initialization:
+                    conn.execute("COMMIT")
+            except Exception:
+                try:
+                    conn.execute("ROLLBACK")
+                except sqlite3.OperationalError:
+                    pass
+                raise
         finally:
             conn.close()
 

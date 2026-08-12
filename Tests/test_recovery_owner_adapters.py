@@ -524,12 +524,15 @@ def test_restore_older_generation_removes_later_optional_owner_files(tmp_path):
     foreign = Path(paths["project_root"]) / "user-notes.txt"
     foreign.write_text("preserve me", encoding="utf-8")
     _snapshot(paths, control_root)
+    later_embeddings = Path(paths["project_root"]) / "embeddings.db"
+    later_embeddings.write_bytes(b"later uncommitted vector store")
     request_restore_generation(old.generation_id, control_root=control_root)
 
     result = ensure_recovery_ready(control_root)
 
     assert result.status == "recovered"
     assert all(not path.exists() for path in optional)
+    assert not later_embeddings.exists()
     assert foreign.read_text(encoding="utf-8") == "preserve me"
 
 

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from pb_studio.config_manager import ConfigManager
+from pb_studio.storage.migration_authorization import DatabaseMigrationRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,25 @@ SCHEMA_MIGRATIONS = (
         WHERE project_uuid IS NOT NULL;
         """,
     ),
+    (
+        5,
+        "vector_owner_receipts",
+        """
+        ALTER TABLE vector_map ADD COLUMN project_id INTEGER;
+        ALTER TABLE vector_map ADD COLUMN project_uuid TEXT;
+        ALTER TABLE vector_map ADD COLUMN owner_uuid TEXT;
+        ALTER TABLE vector_map ADD COLUMN media_hash TEXT;
+        ALTER TABLE vector_map ADD COLUMN recovery_generation TEXT;
+        ALTER TABLE vector_map ADD COLUMN write_receipt_json TEXT;
+        ALTER TABLE vector_map ADD COLUMN verification_status TEXT NOT NULL
+            DEFAULT 'legacy_unverified'
+            CHECK(verification_status IN ('verified_backfill', 'legacy_unverified'));
+        ALTER TABLE vector_map ADD COLUMN verification_reason TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_vector_map_project_owner
+        ON vector_map(project_id, project_uuid, media_id);
+        """,
+    ),
 )
 
 
@@ -215,6 +235,10 @@ class DatabaseCore:
         db_path_str = config.get("paths", {}).get("db_path", "./data/pb_studio.db")
         # Relative Pfade werden ueber ConfigManager aufgeloest
         self.db_path = config.resolve_path(db_path_str)
+
+        existed_nonempty = self.db_path.is_file() and self.db_path.stat().st_size > 0
+        if existed_nonempty:
+            self._preflight_existing_schema_read_only()
         
         # Ensure directory exists
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -225,7 +249,7 @@ class DatabaseCore:
             init_conn = sqlite3.connect(str(self.db_path), check_same_thread=True, timeout=30.0)
             self._configure_connection(init_conn)
 
-            self._create_schema(init_conn)
+            self._create_schema(init_conn, allow_obj77_migration=not existed_nonempty)
 
             self._initialized = True
             logger.info(f"Database initialized at: {self.db_path}")
@@ -237,8 +261,31 @@ class DatabaseCore:
             if init_conn is not None:
                 init_conn.close()
 
-    def _create_schema(self, conn):
-        self._apply_migrations(conn)
+    def _preflight_existing_schema_read_only(self) -> None:
+        """Reject a pending OBJ77 catalog migration before any RW connection."""
+        uri = self.db_path.resolve().as_uri() + "?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, isolation_level=None)
+        connection.execute("PRAGMA busy_timeout=5000")
+        try:
+            has_migrations = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+            ).fetchone()
+            current = 0
+            if has_migrations:
+                row = connection.execute(
+                    "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+                ).fetchone()
+                current = int(row[0])
+        finally:
+            connection.close()
+        if current < SCHEMA_MIGRATIONS[-1][0]:
+            raise DatabaseMigrationRequiredError(
+                f"Existing catalog schema {current} requires approved schema "
+                f"{SCHEMA_MIGRATIONS[-1][0]}; migration_required"
+            )
+
+    def _create_schema(self, conn, *, allow_obj77_migration: bool = False):
+        self._apply_migrations(conn, allow_obj77_migration=allow_obj77_migration)
         conn.commit()
 
         cursor = conn.cursor()
@@ -277,7 +324,21 @@ class DatabaseCore:
             )
         """)
 
-    def _apply_migrations(self, conn):
+    def _apply_migrations(self, conn, *, allow_obj77_migration: bool = False):
+        has_migrations = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+        ).fetchone()
+        current = 0
+        if has_migrations:
+            current = int(
+                conn.execute(
+                    "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+                ).fetchone()[0]
+            )
+        if current > 0 and current < 5 and not allow_obj77_migration:
+            raise DatabaseMigrationRequiredError(
+                "Existing catalog requires explicit OBJ77 migration; migration_required"
+            )
         self._ensure_migration_table(conn)
         applied_versions = {
             row["version"]
@@ -301,11 +362,70 @@ class DatabaseCore:
                     self._backfill_media_import_guard(conn)
                 elif version == 4:
                     self._backfill_project_uuids(conn)
+                elif version == 5:
+                    self._backfill_vector_ownership(conn)
                 conn.execute(
                     "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                     (version, name),
                 )
             logger.info("Applied schema migration %s (%s)", version, name)
+
+    def _backfill_vector_ownership(self, conn):
+        """Bind only legacy vectors with complete, unique catalog evidence."""
+        rows = conn.execute(
+            """
+            SELECT vm.faiss_id, vm.media_id, m.project_id, m.file_hash,
+                   p.project_uuid
+            FROM vector_map AS vm
+            LEFT JOIN media AS m ON m.id = vm.media_id
+            LEFT JOIN projects AS p ON p.id = m.project_id
+            ORDER BY vm.faiss_id
+            """
+        ).fetchall()
+        for row in rows:
+            project_id = row["project_id"]
+            project_uuid = row["project_uuid"]
+            media_hash = row["file_hash"]
+            verified = False
+            if type(project_id) is int and project_id > 0 and media_hash:
+                try:
+                    normalized_uuid = str(uuid.UUID(str(project_uuid)))
+                    verified = True
+                except (TypeError, ValueError, AttributeError):
+                    normalized_uuid = None
+            else:
+                normalized_uuid = None
+
+            if verified and len(str(media_hash).strip()) >= 8:
+                conn.execute(
+                    """
+                    UPDATE vector_map
+                    SET project_id=?, project_uuid=?, owner_uuid=NULL, media_hash=?,
+                        recovery_generation=NULL, write_receipt_json=NULL,
+                        verification_status='legacy_unverified',
+                        verification_reason='missing_owner_write_receipt_and_recovery_generation'
+                    WHERE faiss_id=?
+                    """,
+                    (
+                        project_id,
+                        normalized_uuid,
+                        str(media_hash),
+                        int(row["faiss_id"]),
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE vector_map
+                    SET project_id=NULL, project_uuid=NULL, owner_uuid=NULL,
+                        media_hash=NULL, recovery_generation=NULL,
+                        write_receipt_json=NULL,
+                        verification_status='legacy_unverified',
+                        verification_reason='insufficient_owner_evidence'
+                    WHERE faiss_id=?
+                    """,
+                    (int(row["faiss_id"]),),
+                )
 
     def _backfill_media_import_guard(self, conn):
         """Backfill canonical media rows without touching existing duplicate rows."""

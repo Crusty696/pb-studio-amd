@@ -24,7 +24,10 @@ from pb_studio.storage.embedding_repository import (
 def test_sqlite_parallel_write_read_contention(tmp_path: Path):
     """Verifiziert die absolute Blockierungsfreiheit des EmbeddingRepository unter Last."""
     db_path = tmp_path / "contention_test.db"
-    repo = EmbeddingRepository(db_path)
+    repo = EmbeddingRepository(
+        db_path,
+        project_uuid="98cbb214-5438-4701-a96b-5c1220901ce4",
+    )
     
     # Zustandsspeicherung für Threads
     errors: list[Exception] = []

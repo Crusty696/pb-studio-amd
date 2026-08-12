@@ -205,7 +205,9 @@ def _validate_delete_scope(artifact: dict[str, Any], target: Path) -> None:
     name = target.name
     allowed = False
     if owner == "ProjectLifecycle":
-        allowed = name in {"timeline.json", "anchors.json", "chat_history.json"} or (
+        allowed = name in {
+            "timeline.json", "anchors.json", "chat_history.json", "embeddings.db"
+        } or (
             name.endswith(".brain-feedback-outbox.json")
         )
     elif owner == "BrainStore":
@@ -291,6 +293,23 @@ def _artifact_target_matches(target: Path, artifact: dict[str, Any]) -> bool:
     return target.is_file() and _sha256(target) == str(artifact.get("sha256", ""))
 
 
+def _validate_restored_artifact(target: Path, artifact: dict[str, Any]) -> None:
+    if artifact.get("adapter") != "sqlite_vec_backup":
+        return
+    try:
+        from pb_studio.storage.recovery_generation import validate_sqlite_vec_database
+
+        actual = validate_sqlite_vec_database(target)
+    except Exception as exc:
+        raise RecoveryBootstrapError(
+            f"Restored sqlite-vec target failed validation: {target}"
+        ) from exc
+    if actual != artifact.get("sqlite_vec_receipt"):
+        raise RecoveryBootstrapError(
+            f"Restored sqlite-vec receipt mismatch: {target}"
+        )
+
+
 def _apply_generation(
     control_root: Path,
     generation_id: str,
@@ -314,6 +333,7 @@ def _apply_generation(
             expected_hash = str(artifact["sha256"])
             if not _artifact_target_matches(target, artifact):
                 _replace_target(source, target, expected_hash)
+            _validate_restored_artifact(target, artifact)
         if logical_id not in applied:
             applied.add(logical_id)
             journal["applied"] = sorted(applied)
@@ -325,6 +345,8 @@ def _apply_generation(
         _source, target = _validate_artifact_record(generation_dir, artifact)
         if not _artifact_target_matches(target, artifact):
             raise RecoveryBootstrapError(f"Restored target failed validation: {target}")
+        if str(artifact.get("restore_policy", "replace")) != DELETE_IF_PRESENT:
+            _validate_restored_artifact(target, artifact)
     return manifest, degraded
 
 

@@ -15,6 +15,7 @@ from .recovery_generation import (
     RecoveryGenerationWriter,
     load_current_generation,
     validate_generation,
+    validate_sqlite_vec_database,
 )
 
 
@@ -84,6 +85,20 @@ def _sqlite_connection(path: Path) -> sqlite3.Connection:
     except Exception:
         connection.close()
         raise
+    return connection
+
+
+def _sqlite_vec_connection(path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(str(path), timeout=30.0)
+    connection.execute("PRAGMA busy_timeout = 5000")
+    connection.row_factory = sqlite3.Row
+    import sqlite_vec
+
+    connection.enable_load_extension(True)
+    try:
+        sqlite_vec.load(connection)
+    finally:
+        connection.enable_load_extension(False)
     return connection
 
 
@@ -330,6 +345,21 @@ def _project_files(project_uuid: str, root: Path) -> tuple[Path, ...]:
     finally:
         connection.close()
     files.append(state)
+    embeddings = root / "embeddings.db"
+    if embeddings.is_file():
+        validate_sqlite_vec_database(embeddings)
+        connection = _sqlite_vec_connection(embeddings)
+        try:
+            row = connection.execute(
+                "SELECT project_uuid FROM embedding_store_identity WHERE singleton_id=1"
+            ).fetchone()
+            if row is None or str(row[0]) != project_uuid:
+                raise RecoveryOwnerAdapterError(
+                    "Embedding store project UUID mismatch"
+                )
+        finally:
+            connection.close()
+        files.append(embeddings)
     sidecars = sorted(root.glob("*.brain-feedback-outbox.json"))
     for sidecar in sidecars:
         _validate_empty_outbox(sidecar)
@@ -458,8 +488,9 @@ def _add_previous_inventory_tombstones(
         owner = str(record.get("owner", ""))
         scope: Path | None = None
         group = str(record.get("group", ""))
-        if owner == "ProjectLifecycle" and target.name.endswith(
-            ".brain-feedback-outbox.json"
+        if owner == "ProjectLifecycle" and (
+            target.name.endswith(".brain-feedback-outbox.json")
+            or target.name == "embeddings.db"
         ):
             scope = next(
                 (root for root in safe_project_roots if target.is_relative_to(root)),
@@ -580,7 +611,13 @@ def add_owner_snapshot(
     for project_uuid, root in projects:
         project_files = _project_files(project_uuid, root)
         for path in project_files:
-            if path.suffix.casefold() == ".db":
+            if path.name.casefold() == "embeddings.db":
+                writer.add_sqlite_vec(
+                    _logical_id(f"project:{project_uuid}", path), path,
+                    group="project", owner="ProjectLifecycle",
+                    owner_scope=root,
+                )
+            elif path.suffix.casefold() == ".db":
                 writer.add_sqlite(
                     _logical_id(f"project:{project_uuid}", path), path,
                     group="project", owner="ProjectLifecycle",
@@ -598,6 +635,7 @@ def add_owner_snapshot(
             root / "anchors.json",
             root / "chat_history.json",
             root / "state.db.brain-feedback-outbox.json",
+            root / "embeddings.db",
         ):
             if path.resolve() not in present_project_paths:
                 _add_absence_tombstone(

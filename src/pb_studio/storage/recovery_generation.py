@@ -103,7 +103,7 @@ class _ArtifactSpec:
     source_path: Path
     absolute_target: Path
     required: bool
-    adapter: Literal["file", "sqlite_backup"]
+    adapter: Literal["file", "sqlite_backup", "sqlite_vec_backup"]
     restore_policy: str
     schema_version: int | None
     owner_scope: Path | None
@@ -237,7 +237,158 @@ def _copy_file_durable(source: Path, destination: Path) -> None:
     _fsync_parent(destination)
 
 
-def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
+def _load_sqlite_vec(connection: sqlite3.Connection) -> None:
+    import sqlite_vec
+
+    connection.enable_load_extension(True)
+    try:
+        sqlite_vec.load(connection)
+    finally:
+        connection.enable_load_extension(False)
+
+
+def validate_sqlite_vec_database(path: str | Path) -> dict[str, Any]:
+    """Validate the full OBJ77 sqlite-vec store, including KNN readability."""
+    database = Path(path).resolve()
+    connection = sqlite3.connect(str(database), timeout=30.0)
+    connection.execute("PRAGMA busy_timeout = 5000")
+    _load_sqlite_vec(connection)
+    try:
+        quick_check = str(connection.execute("PRAGMA quick_check").fetchone()[0])
+        if quick_check != "ok":
+            raise RecoveryGenerationValidationError(
+                f"sqlite-vec quick_check failed: {database}"
+            )
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        if version != 2:
+            raise RecoveryGenerationValidationError(
+                f"sqlite-vec schema must be v2: {database}"
+            )
+        dimensions: dict[str, int] = {}
+        counts: dict[str, int] = {}
+        for table, unit_table, expected in (
+            ("video_embeddings", "video_units", 1152),
+            ("brain_embeddings", "brain_units", 256),
+        ):
+            row = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            match = re.search(r"FLOAT\s*\[\s*(\d+)\s*\]", str(row[0]) if row else "", re.I)
+            actual = int(match.group(1)) if match else -1
+            if actual != expected:
+                raise RecoveryGenerationValidationError(
+                    f"sqlite-vec dimension mismatch for {table}: {actual}"
+                )
+            dimensions[table] = actual
+            if table == "brain_embeddings" and not re.search(
+                r"distance_metric\s*=\s*cosine", str(row[0]), re.I
+            ):
+                raise RecoveryGenerationValidationError(
+                    "Brain sqlite-vec table must use cosine distance"
+                )
+            vector_count = int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            unit_count = int(connection.execute(f"SELECT COUNT(*) FROM {unit_table}").fetchone()[0])
+            if vector_count != unit_count:
+                raise RecoveryGenerationValidationError(
+                    f"sqlite-vec unit/vector count mismatch for {table}"
+                )
+            counts[table] = vector_count
+            missing_vectors = connection.execute(
+                f"SELECT id FROM {unit_table} EXCEPT SELECT rowid FROM {table} LIMIT 1"
+            ).fetchone()
+            orphan_vectors = connection.execute(
+                f"SELECT rowid FROM {table} EXCEPT SELECT id FROM {unit_table} LIMIT 1"
+            ).fetchone()
+            if missing_vectors is not None or orphan_vectors is not None:
+                raise RecoveryGenerationValidationError(
+                    f"sqlite-vec row identity mismatch for {table}"
+                )
+            if vector_count:
+                sample = connection.execute(
+                    f"SELECT rowid, embedding FROM {table} ORDER BY rowid LIMIT 1"
+                ).fetchone()
+                hit = connection.execute(
+                    f"SELECT rowid,distance FROM {table} "
+                    "WHERE embedding MATCH ? AND k=1",
+                    (bytes(sample[1]),),
+                ).fetchone()
+                valid_ids = {
+                    int(row[0])
+                    for row in connection.execute(
+                        f"SELECT id FROM {unit_table}"
+                    ).fetchall()
+                }
+                if (
+                    hit is None
+                    or int(hit[0]) not in valid_ids
+                    or not __import__("math").isfinite(float(hit[1]))
+                    or float(hit[1]) < 0.0
+                ):
+                    raise RecoveryGenerationValidationError(
+                        f"sqlite-vec KNN validation failed for {table}"
+                    )
+        archive_units = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM video_units_legacy_768_archive"
+            ).fetchone()[0]
+        )
+        archive_rows = connection.execute(
+            "SELECT rowid,embedding,embedding_sha256 "
+            "FROM video_embeddings_legacy_768_archive"
+        ).fetchall()
+        if len(archive_rows) > archive_units or any(
+            hashlib.sha256(bytes(blob)).hexdigest() != expected
+            for _rowid, blob, expected in archive_rows
+        ):
+            raise RecoveryGenerationValidationError(
+                "sqlite-vec legacy archive validation failed"
+            )
+        archive_orphans = connection.execute(
+            "SELECT rowid FROM video_embeddings_legacy_768_archive "
+            "EXCEPT SELECT id FROM video_units_legacy_768_archive LIMIT 1"
+        ).fetchone()
+        if archive_orphans is not None:
+            raise RecoveryGenerationValidationError(
+                "sqlite-vec legacy archive row identity mismatch"
+            )
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise RecoveryGenerationValidationError("sqlite-vec foreign key check failed")
+        identities = connection.execute(
+            "SELECT singleton_id,project_uuid,owner_uuid,schema_version "
+            "FROM embedding_store_identity"
+        ).fetchall()
+        if len(identities) != 1 or int(identities[0][0]) != 1 or int(identities[0][3]) != 2:
+            raise RecoveryGenerationValidationError(
+                "sqlite-vec store identity is missing or ambiguous"
+            )
+        try:
+            project_uuid = str(uuid.UUID(str(identities[0][1])))
+            owner_uuid = str(uuid.UUID(str(identities[0][2])))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise RecoveryGenerationValidationError(
+                "sqlite-vec store identity is invalid"
+            ) from exc
+        return {
+            "quick_check": quick_check,
+            "user_version": version,
+            "dimensions": dimensions,
+            "counts": counts,
+            "legacy_archive_units": archive_units,
+            "legacy_archive_vectors": len(archive_rows),
+            "project_uuid": project_uuid,
+            "owner_uuid": owner_uuid,
+        }
+    finally:
+        connection.close()
+
+
+def _backup_sqlite(
+    source: Path,
+    destination: Path,
+    *,
+    sqlite_vec_aware: bool = False,
+) -> tuple[int, str, dict[str, Any] | None]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     source_connection: sqlite3.Connection | None = None
     destination_connection: sqlite3.Connection | None = None
@@ -246,6 +397,9 @@ def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
         source_connection.execute("PRAGMA busy_timeout = 5000")
         destination_connection = sqlite3.connect(str(destination), timeout=30.0)
         destination_connection.execute("PRAGMA busy_timeout = 5000")
+        if sqlite_vec_aware:
+            _load_sqlite_vec(source_connection)
+            _load_sqlite_vec(destination_connection)
         source_connection.backup(destination_connection)
         destination_connection.commit()
         quick_check = str(
@@ -268,7 +422,8 @@ def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
     with destination.open("r+b") as handle:
         os.fsync(handle.fileno())
     _fsync_parent(destination)
-    return user_version, quick_check
+    vec_receipt = validate_sqlite_vec_database(destination) if sqlite_vec_aware else None
+    return user_version, quick_check, vec_receipt
 
 
 def validate_generation(
@@ -316,7 +471,7 @@ def validate_generation(
         logical_ids.add(logical_id)
         if artifact.get("class") != "owned":
             raise RecoveryGenerationValidationError("Artifact must be owned")
-        if artifact.get("adapter") not in {"file", "sqlite_backup"}:
+        if artifact.get("adapter") not in {"file", "sqlite_backup", "sqlite_vec_backup"}:
             raise RecoveryGenerationValidationError("Unknown artifact adapter")
         restore_policy = str(artifact.get("restore_policy", "replace"))
         if restore_policy not in {"replace", "delete_if_present"}:
@@ -344,9 +499,11 @@ def validate_generation(
             raise RecoveryGenerationValidationError("Generation artifact size mismatch")
         if _sha256(staged) != artifact.get("sha256"):
             raise RecoveryGenerationValidationError("Generation artifact hash mismatch")
-        if artifact.get("adapter") == "sqlite_backup":
+        if artifact.get("adapter") in {"sqlite_backup", "sqlite_vec_backup"}:
             connection = sqlite3.connect(str(staged))
             connection.execute("PRAGMA busy_timeout = 5000")
+            if artifact.get("adapter") == "sqlite_vec_backup":
+                _load_sqlite_vec(connection)
             try:
                 quick_check = str(connection.execute("PRAGMA quick_check").fetchone()[0])
                 user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -354,6 +511,12 @@ def validate_generation(
                 connection.close()
             if quick_check != "ok" or user_version != int(artifact["user_version"]):
                 raise RecoveryGenerationValidationError("SQLite receipt mismatch")
+            if artifact.get("adapter") == "sqlite_vec_backup":
+                receipt = validate_sqlite_vec_database(staged)
+                if receipt != artifact.get("sqlite_vec_receipt"):
+                    raise RecoveryGenerationValidationError(
+                        "sqlite-vec semantic receipt mismatch"
+                    )
 
     for reference in references:
         if not isinstance(reference, dict):
@@ -514,6 +677,31 @@ class RecoveryGenerationWriter:
             owner_scope=owner_scope,
         )
 
+    def add_sqlite_vec(
+        self,
+        logical_id: str,
+        source_path: str | Path,
+        *,
+        group: str,
+        owner: str,
+        absolute_target: str | Path | None = None,
+        required: bool = True,
+        restore_policy: str = "replace",
+        owner_scope: str | Path | None = None,
+    ) -> None:
+        self._add_artifact(
+            logical_id,
+            source_path,
+            group=group,
+            owner=owner,
+            absolute_target=absolute_target,
+            required=required,
+            adapter="sqlite_vec_backup",
+            restore_policy=restore_policy,
+            schema_version=2,
+            owner_scope=owner_scope,
+        )
+
     def _add_artifact(
         self,
         logical_id: str,
@@ -523,7 +711,7 @@ class RecoveryGenerationWriter:
         owner: str,
         absolute_target: str | Path | None,
         required: bool,
-        adapter: Literal["file", "sqlite_backup"],
+        adapter: Literal["file", "sqlite_backup", "sqlite_vec_backup"],
         restore_policy: str,
         schema_version: int | None,
         owner_scope: str | Path | None,
@@ -710,10 +898,12 @@ class RecoveryGenerationWriter:
         destination = staging_dir / relative
         user_version: int | None = None
         quick_check: str | None = None
-        if artifact.adapter == "sqlite_backup":
-            user_version, quick_check = _backup_sqlite(
+        vec_receipt: dict[str, Any] | None = None
+        if artifact.adapter in {"sqlite_backup", "sqlite_vec_backup"}:
+            user_version, quick_check, vec_receipt = _backup_sqlite(
                 artifact.source_path,
                 destination,
+                sqlite_vec_aware=artifact.adapter == "sqlite_vec_backup",
             )
         else:
             _copy_file_durable(artifact.source_path, destination)
@@ -737,9 +927,11 @@ class RecoveryGenerationWriter:
                 else None
             ),
         }
-        if artifact.adapter == "sqlite_backup":
+        if artifact.adapter in {"sqlite_backup", "sqlite_vec_backup"}:
             record["user_version"] = user_version
             record["quick_check"] = quick_check
+        if artifact.adapter == "sqlite_vec_backup":
+            record["sqlite_vec_receipt"] = vec_receipt
         self._inject_fault(f"after_artifact:{artifact.logical_id}")
         return record
 
@@ -805,9 +997,11 @@ class RecoveryGenerationWriter:
                 raise RecoveryGenerationError(
                     "Optional owned artifacts must be omitted by their owner adapter"
                 )
-            if artifact.adapter == "sqlite_backup":
+            if artifact.adapter in {"sqlite_backup", "sqlite_vec_backup"}:
                 connection = sqlite3.connect(str(artifact.source_path))
                 connection.execute("PRAGMA busy_timeout = 5000")
+                if artifact.adapter == "sqlite_vec_backup":
+                    _load_sqlite_vec(connection)
                 try:
                     if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                         raise RecoveryGenerationValidationError(
@@ -815,6 +1009,8 @@ class RecoveryGenerationWriter:
                         )
                 finally:
                     connection.close()
+                if artifact.adapter == "sqlite_vec_backup":
+                    validate_sqlite_vec_database(artifact.source_path)
         for reference in self._external_references:
             if reference.required and not reference.absolute_path.is_file():
                 raise RecoveryGenerationError(
