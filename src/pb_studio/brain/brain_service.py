@@ -298,12 +298,18 @@ class BrainService:
         state_db_path: Optional[str | Path] = None,
         project_epoch: Optional[int] = None,
         project_id: Optional[int] = None,
+        project_uuid: Optional[str] = None,
     ) -> BrainStateLease:
         """Acquire the current connection with optional identity checks."""
         self._ensure_state_lease_runtime()
         expected_path = (
             self._canonical_state_path(state_db_path)
             if state_db_path is not None
+            else None
+        )
+        expected_uuid = (
+            str(uuid.UUID(str(project_uuid)))
+            if project_uuid is not None
             else None
         )
         with self._state_binding_lock:
@@ -324,6 +330,7 @@ class BrainService:
                 (expected_path is not None and identity.state_db_path != expected_path)
                 or (project_epoch is not None and identity.epoch != int(project_epoch))
                 or (project_id is not None and identity.project_id != int(project_id))
+                or (expected_uuid is not None and identity.project_uuid != expected_uuid)
             ):
                 raise StaleBrainProjectLeaseError(
                     "Brain project identity does not match the active project"

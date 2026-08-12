@@ -2,6 +2,7 @@ import copy
 import importlib
 import json
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -12,6 +13,10 @@ from fastapi.testclient import TestClient
 from backend.app_state import AppState, get_app_state
 from backend.main import app
 from pb_studio.data.repositories.project_repository import ProjectRepository
+
+
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+OTHER_PROJECT_UUID = "0e736c32-948c-4323-b9ba-0f9d50fa193f"
 
 
 @pytest.fixture
@@ -49,6 +54,8 @@ class TestProjectLifecyclePersistence:
             records[project_id] = {
                 "path": str(project_path.resolve()),
                 "owner_token": None,
+                "project_uuid": (meta or {}).get("project_uuid")
+                or str(uuid.uuid5(uuid.NAMESPACE_URL, str(project_path.resolve()))),
             }
             return project_id
 
@@ -58,6 +65,7 @@ class TestProjectLifecyclePersistence:
             records[project_id] = {
                 "path": str(Path(data["path"]).resolve()),
                 "owner_token": owner_token,
+                "project_uuid": data["project_uuid"],
             }
             return project_id
 
@@ -76,12 +84,31 @@ class TestProjectLifecyclePersistence:
             if data and data.get("path"):
                 records[project_id]["path"] = str(Path(data["path"]).resolve())
 
+        def fake_get_by_id(_repo, project_id: int):
+            record = records.get(project_id)
+            if record is None:
+                return None
+            return {
+                "id": project_id,
+                "project_uuid": record["project_uuid"],
+                "data": {
+                    "path": record["path"],
+                    "project_uuid": record["project_uuid"],
+                },
+            }
+
         project_router_module = importlib.import_module("backend.routers.project_router")
+        monkeypatch.setattr(
+            project_router_module,
+            "_bind_brain_to_project",
+            lambda *_args, **_kwargs: None,
+        )
         monkeypatch.setattr(project_router_module, "_find_or_create_project_db_record", fake_find_or_create)
         monkeypatch.setattr(project_router_module, "_find_project_db_record_id", fake_find)
         monkeypatch.setattr(ProjectRepository, "create_owned_project", fake_create_owned)
         monkeypatch.setattr(ProjectRepository, "delete_owned_project", fake_delete_owned)
         monkeypatch.setattr(ProjectRepository, "update_project", fake_update)
+        monkeypatch.setattr(ProjectRepository, "get_by_id", fake_get_by_id)
         return records
 
     def test_create_save_open_roundtrip_persists_timeline_metadata(self, client, tmp_path, fresh_state, monkeypatch):
@@ -224,6 +251,51 @@ class TestProjectLifecyclePersistence:
         assert response.json()["detail"] == "Projektdateien/DB konnten nicht konsistent gespeichert werden"
         assert (project_path / "project.json").read_bytes() == meta_before
         assert not (project_path / "timeline.json").exists()
+
+    def test_save_rolls_files_back_and_returns_409_when_context_turns_stale(
+        self,
+        client,
+        tmp_path,
+        fresh_state,
+        monkeypatch,
+    ):
+        from backend.app_state import ProjectContextChangedError
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        assert client.post(
+            "/project/create",
+            json={"name": "StaleSave", "path": str(tmp_path)},
+        ).status_code == 200
+        project_path = tmp_path / "StaleSave"
+        fresh_state.set_timeline([
+            {
+                "clip_id": "clip-1",
+                "start_time": 0.0,
+                "end_time": 1.0,
+                "metadata": {},
+            }
+        ])
+        assert client.post("/project/save").status_code == 200
+        meta_before = (project_path / "project.json").read_bytes()
+        timeline_before = (project_path / "timeline.json").read_bytes()
+        project_before = copy.deepcopy(fresh_state.current_project)
+
+        def fail_stale_sync(_project_data, *, context):
+            assert context.project_uuid == project_before["project_uuid"]
+            fresh_state.invalidate_project_context()
+            raise ProjectContextChangedError("Projekt wurde waehrend Save gewechselt")
+
+        monkeypatch.setattr(fresh_state, "sync_project_db_record", fail_stale_sync)
+        fresh_state.current_project["modified_at"] = "unsaved-change"
+
+        response = client.post("/project/save")
+
+        assert response.status_code == 409
+        assert "waehrend Save gewechselt" in response.json()["detail"]
+        assert (project_path / "project.json").read_bytes() == meta_before
+        assert (project_path / "timeline.json").read_bytes() == timeline_before
+        assert fresh_state.current_project["project_uuid"] == project_before["project_uuid"]
 
     def test_create_project_resets_stale_in_memory_state(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
@@ -395,11 +467,42 @@ class TestProjectLifecyclePersistence:
         response = client.post("/project/open", json={"path": str(project_dir)})
 
         assert response.status_code == 200
-        assert captured == [-1]
+        assert captured == [100]
         assert fresh_state.current_project["db_project_id"] == 100
         assert fresh_state.audio_clips == {
             8: {"id": 8, "path": str(restored_audio)}
         }
+
+    @pytest.mark.parametrize("catalog_uuid", [None, "not-a-uuid"])
+    def test_open_rejects_missing_catalog_uuid_without_installing_path_owner(
+        self,
+        client,
+        tmp_path,
+        fresh_state,
+        stub_project_db_lookup,
+        monkeypatch,
+        catalog_uuid,
+    ):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        project_dir = tmp_path / "LegacyProject"
+        project_dir.mkdir()
+        (project_dir / "project.json").write_text(
+            json.dumps({"name": "LegacyProject"}),
+            encoding="utf-8",
+        )
+        stub_project_db_lookup[100] = {
+            "path": str(project_dir.resolve()),
+            "owner_token": None,
+            "project_uuid": catalog_uuid,
+        }
+
+        response = client.post("/project/open", json={"path": str(project_dir)})
+
+        assert response.status_code == 409
+        assert "project_uuid" in response.json()["detail"]
+        assert fresh_state.current_project is None
 
     def test_load_from_db_replaces_old_in_memory_catalog_instead_of_merging(self, monkeypatch, tmp_path):
         existing_audio = tmp_path / "real.wav"
@@ -431,7 +534,11 @@ class TestProjectLifecyclePersistence:
 
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
-        state = AppState()
+        state = AppState(current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        })
         state.audio_clips[999] = {"id": 999, "path": str(tmp_path / "stale.wav")}
         state.video_clips[777] = {"id": 777, "path": str(tmp_path / "stale.mp4")}
         state._audio_next_id = 1000

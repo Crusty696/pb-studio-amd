@@ -8,13 +8,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BUSY_TIMEOUT_MS = 5000
 
-PRODUCTIVE_CONNECTION_SOURCES = (
-    "src/pb_studio/data/database_core.py",
-    "src/pb_studio/storage/backup.py",
-    "src/pb_studio/storage/recovery_adapters.py",
-    "src/pb_studio/storage/recovery_generation.py",
-    "backend/routers/brain_router.py",
-)
+def _productive_connection_sources() -> tuple[str, ...]:
+    discovered: list[str] = []
+    for root_name in ("backend", "src"):
+        for path in sorted((ROOT / root_name).rglob("*.py")):
+            source = path.read_text(encoding="utf-8-sig")
+            tree = ast.parse(source, filename=str(path))
+            if any(
+                isinstance(node, ast.Call) and _is_sqlite_connect(node)
+                for node in ast.walk(tree)
+            ):
+                discovered.append(path.relative_to(ROOT).as_posix())
+    return tuple(discovered)
 
 
 def _is_sqlite_connect(call: ast.Call) -> bool:
@@ -40,7 +45,9 @@ def _connection_is_initialized(lines: list[str], call: ast.Call) -> bool:
 
 def test_every_productive_sqlite_factory_applies_the_common_timeout_after_open():
     offenders: list[str] = []
-    for relative in PRODUCTIVE_CONNECTION_SOURCES:
+    sources = _productive_connection_sources()
+    assert len(sources) >= 13, "SQLite connection inventory unexpectedly shrank"
+    for relative in sources:
         path = ROOT / relative
         source = path.read_text(encoding="utf-8-sig")
         tree = ast.parse(source, filename=str(path))

@@ -40,6 +40,9 @@ from pb_studio.rendering.render_queue import (
 )
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -158,6 +161,7 @@ def test_startup_reconstructs_and_schedules_render_payload(
         timeline_snapshot=timeline,
         project_root=tmp_path,
         project_db_id=1,
+        project_uuid=PROJECT_UUID,
     )
     job = queue.enqueue("resume-hash", str(output), settings)
     queue.update_status(job.job_id, STATE_RUNNING)
@@ -169,6 +173,7 @@ def test_startup_reconstructs_and_schedules_render_payload(
         restored_request,
         state,
         restored_timeline,
+        context,
         queue_job_id,
     ):
         scheduled.append((
@@ -176,11 +181,17 @@ def test_startup_reconstructs_and_schedules_render_payload(
             restored_request,
             state,
             restored_timeline,
+            context,
             queue_job_id,
         ))
 
     monkeypatch.setattr(render_router, "_run_render_task", fake_run)
     media_state = AppState(
+        current_project={
+            "path": str(tmp_path),
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+        },
         audio_clips={1: {"path": str(audio)}},
         video_clips={1: {"path": str(video)}},
     )
@@ -201,9 +212,11 @@ def test_startup_reconstructs_and_schedules_render_payload(
         restored_request,
         restored_state,
         restored_timeline,
+        restored_context,
         queue_job_id,
     ) = scheduled[0]
     assert restored_state is state
+    assert restored_context.project_uuid == PROJECT_UUID
     assert restored_request.audio_path == str(audio)
     assert restored_request.output_path == str(output)
     assert restored_timeline == timeline
@@ -268,6 +281,7 @@ def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
             timeline_snapshot=timeline,
             project_root=tmp_path,
             project_db_id=1,
+            project_uuid=PROJECT_UUID,
         ),
     )
     queue.update_status(job.job_id, STATE_RUNNING)
@@ -277,6 +291,11 @@ def test_shutdown_cancellation_of_resumed_job_remains_interrupted(
 
     monkeypatch.setattr(render_router, "_run_render_task", stubborn_render)
     media_state = AppState(
+        current_project={
+            "path": str(tmp_path),
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+        },
         audio_clips={1: {"path": str(audio)}},
         video_clips={1: {"path": str(video)}},
     )

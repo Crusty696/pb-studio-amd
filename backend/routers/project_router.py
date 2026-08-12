@@ -32,6 +32,7 @@ from ..app_state import (
     ProjectContextUnavailableError,
     ProjectOperationContext,
     get_app_state,
+    parse_positive_project_id,
     persistence_error,
     resolve_project_db_id,
 )
@@ -189,15 +190,14 @@ def _find_or_create_project_db_record(project_path: Path, project_name: str, met
             if row.get("name") != project_name or not data.get("path"):
                 updated = dict(data)
                 updated["path"] = normalized_path
-                repo.update_project(int(row["id"]), name=project_name, data=updated)
-            return int(row["id"])
+                row_id = parse_positive_project_id(row.get("id"), label="Katalog-Projekt-ID")
+                repo.update_project(row_id, name=project_name, data=updated)
+            return parse_positive_project_id(row.get("id"), label="Katalog-Projekt-ID")
 
     payload = dict(meta or {})
     payload["path"] = normalized_path
     project_id = repo.create_project(project_name, payload)
-    if project_id <= 0:
-        raise RuntimeError(f"Projekt-DB-Record konnte nicht erstellt werden: {project_name}")
-    return int(project_id)
+    return parse_positive_project_id(project_id, label="Erstellte Katalog-Projekt-ID")
 
 
 def _find_project_db_record_id(project_path: Path) -> int | None:
@@ -205,32 +205,24 @@ def _find_project_db_record_id(project_path: Path) -> int | None:
     for row in ProjectRepository().get_all():
         data = row.get("data") or {}
         if data.get("path") == normalized_path:
-            return int(row["id"])
+            return parse_positive_project_id(row.get("id"), label="Katalog-Projekt-ID")
     return None
 
 
-def _catalog_project_uuid(
-    project_id: int,
-    project_path: Path,
-    *,
-    fallback_uuid: str | None = None,
-) -> str:
-    row = ProjectRepository().get_by_id(int(project_id))
-    if row is not None:
-        value = row.get("project_uuid") or (row.get("data") or {}).get(
-            "project_uuid"
+def _catalog_project_uuid(project_id: int) -> str:
+    strict_project_id = parse_positive_project_id(project_id, label="Katalog-Projekt-ID")
+    row = ProjectRepository().get_by_id(strict_project_id)
+    if row is None:
+        raise ProjectContextUnavailableError(
+            f"Projekt {project_id} ist nicht im Katalog registriert"
         )
-        if value:
-            return str(uuid.UUID(str(value)))
-    if fallback_uuid:
-        return str(uuid.UUID(str(fallback_uuid)))
-    fallback = str(uuid.uuid5(uuid.NAMESPACE_URL, project_path.resolve().as_uri()))
-    logger.warning(
-        "Project %s has no catalog project_uuid; using standalone identity %s",
-        project_id,
-        fallback,
-    )
-    return fallback
+    value = row.get("project_uuid") or (row.get("data") or {}).get("project_uuid")
+    try:
+        return str(uuid.UUID(str(value)))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ProjectContextUnavailableError(
+            f"Projekt {project_id} besitzt keine gültige Katalog-project_uuid"
+        ) from exc
 
 
 def _read_project_meta(project_path: Path) -> dict:
@@ -358,6 +350,16 @@ async def _activate_project(
     candidate_state: AppState | None = None,
 ) -> None:
     """Serialisiert Brain-Bind, Epoch-Wechsel, Task-Drain und State-Swap."""
+    candidate_project_id = parse_positive_project_id(
+        project_data.get("db_project_id"),
+        label="Aktivierungs-Projekt-ID",
+    )
+    try:
+        candidate_project_uuid = str(uuid.UUID(str(project_data.get("project_uuid"))))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ProjectContextUnavailableError(
+            "Projektaktivierung erfordert eine gueltige Katalog-project_uuid"
+        ) from exc
     async with state.project_lifecycle_lock:
         # The lifecycle lock blocks new project operations. Drain first so
         # cancellation handlers can persist terminal receipts to the old project.
@@ -369,11 +371,8 @@ async def _activate_project(
         _bind_brain_to_project(
             project_path,
             project_epoch=state.project_epoch,
-            project_id=int(project_data["db_project_id"]),
-            project_uuid=str(
-                project_data.get("project_uuid")
-                or uuid.uuid5(uuid.NAMESPACE_URL, project_path.resolve().as_uri())
-            ),
+            project_id=candidate_project_id,
+            project_uuid=candidate_project_uuid,
         )
         state.reset(invalidate_context=False)
         state.install_project_state(project_data, candidate_state)
@@ -540,15 +539,29 @@ async def open_project(
 
     meta = _read_project_meta(project_path)
     existing_project_id = _find_project_db_record_id(project_path)
+    created_project_record = existing_project_id is None
     candidate_project_id = (
-        existing_project_id if existing_project_id is not None else -1
+        existing_project_id
+        if existing_project_id is not None
+        else _find_or_create_project_db_record(
+            project_path,
+            meta.get("name", project_path.name),
+            meta,
+        )
     )
+    try:
+        candidate_project_uuid = _catalog_project_uuid(candidate_project_id)
+    except ProjectContextUnavailableError as exc:
+        if created_project_record:
+            ProjectRepository().delete_project(candidate_project_id)
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     # Medienkatalog isoliert vorladen. DB-/Schemafehler dürfen weder das aktive
     # Runtime-Projekt leeren noch Brain auf das neue Projekt umbiegen.
     candidate_project = {
         "path": str(project_path),
         "db_project_id": candidate_project_id,
+        "project_uuid": candidate_project_uuid,
     }
     candidate_state = AppState(current_project=candidate_project)
     catalog_loaded = await asyncio.to_thread(
@@ -556,6 +569,8 @@ async def open_project(
         project_id=candidate_project_id,
     )
     if not catalog_loaded:
+        if created_project_record:
+            ProjectRepository().delete_project(candidate_project_id)
         raise HTTPException(
             status_code=500,
             detail="Projekt-Medienkatalog konnte nicht aus der Datenbank geladen werden",
@@ -571,13 +586,20 @@ async def open_project(
             label="Video-Katalog",
         )
     except MediaPathPolicyError as exc:
+        if created_project_record:
+            ProjectRepository().delete_project(candidate_project_id)
         raise HTTPException(
             status_code=400,
             detail=f"Projekt-Medienkatalog enthaelt unsichere Pfade: {exc}",
         ) from exc
 
     meta = _read_project_meta(project_path)
-    has_timeline = _load_timeline_into_state(project_path, candidate_state)
+    try:
+        has_timeline = _load_timeline_into_state(project_path, candidate_state)
+    except BaseException:
+        if created_project_record:
+            ProjectRepository().delete_project(candidate_project_id)
+        raise
 
     # Fallback: lokale Projektordner zählen, falls keine Metadaten vorhanden.
     audio_count = int(meta.get("audio_count") or 0)
@@ -587,24 +609,12 @@ async def open_project(
     if video_count == 0 and (project_path / "video").exists():
         video_count = sum(1 for f in (project_path / "video").glob("*") if f.is_file())
 
-    db_project_id = (
-        existing_project_id
-        if existing_project_id is not None
-        else _find_or_create_project_db_record(
-            project_path,
-            meta.get("name", project_path.name),
-            meta,
-        )
-    )
+    db_project_id = candidate_project_id
     project_data = {
         "name": meta.get("name", project_path.name),
         "path": str(project_path),
         "db_project_id": db_project_id,
-        "project_uuid": _catalog_project_uuid(
-            db_project_id,
-            project_path,
-            fallback_uuid=meta.get("project_uuid"),
-        ),
+        "project_uuid": candidate_project_uuid,
         "audio_count": audio_count,
         "video_count": video_count,
         "has_timeline": bool(meta.get("has_timeline", has_timeline)),
@@ -619,7 +629,7 @@ async def open_project(
             candidate_state,
         )
     except BaseException:
-        if existing_project_id is None:
+        if created_project_record:
             try:
                 ProjectRepository().delete_project(db_project_id)
             except Exception as compensation_error:
@@ -667,9 +677,7 @@ def _save_project_in_context(
         "name": current_project.get("name", project_path.name),
         "path": str(project_path),
         "db_project_id": context.project_id,
-        "project_uuid": current_project.get("project_uuid")
-        or existing_meta.get("project_uuid")
-        or _catalog_project_uuid(context.project_id, project_path),
+        "project_uuid": context.project_uuid,
         "audio_count": len(state.get_audio_clips_snapshot()),
         "video_count": len(state.get_video_clips_snapshot()),
         "has_timeline": bool(timeline),
@@ -723,7 +731,7 @@ def _save_project_in_context(
         durable_mutated = True
 
         # SQLite commits last. Any failure restores both files byte-for-byte.
-        if not state.sync_project_db_record(project_data):
+        if not state.sync_project_db_record(project_data, context=context):
             raise RuntimeError("Projekt-DB-Sync meldete keinen erfolgreichen Commit")
     except Exception as exc:
         rollback_errors: list[str] = []
@@ -740,6 +748,11 @@ def _save_project_in_context(
         if rollback_errors:
             detail += "; Rollback unvollstaendig: " + "; ".join(rollback_errors)
             logger.critical("%s", detail, exc_info=True)
+        if isinstance(
+            exc,
+            (ProjectContextChangedError, ProjectContextUnavailableError),
+        ):
+            raise
         raise persistence_error(
             "project_save",
             detail,

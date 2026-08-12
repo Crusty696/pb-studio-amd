@@ -10,6 +10,9 @@ from pb_studio.core.stage_receipts import (
 )
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 def _completed_receipt(stage: str, artifact: dict) -> dict:
     receipt = create_stage_receipt(
         stage,
@@ -101,7 +104,11 @@ def test_load_from_db_restores_full_partial_video_truth(monkeypatch, tmp_path):
         "pb_studio.data.repositories.media_repository.MediaRepository",
         FakeRepo,
     )
-    state = AppState(current_project={"db_project_id": 42, "path": str(tmp_path)})
+    state = AppState(current_project={
+        "db_project_id": 42,
+        "project_uuid": PROJECT_UUID,
+        "path": str(tmp_path),
+    })
 
     assert state.load_from_db() is True
 
@@ -146,7 +153,11 @@ def test_load_from_db_failure_preserves_complete_old_generation(monkeypatch, tmp
         FakeRepo,
     )
     state = AppState(
-        current_project={"db_project_id": 8, "path": str(tmp_path)},
+        current_project={
+            "db_project_id": 8,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        },
         audio_clips={9: {"id": 9, "name": "old"}},
         audio_analysis_cache={9: {"bpm": 123.0}},
         video_clips={10: {"id": 10, "name": "old-video"}},
@@ -206,7 +217,11 @@ def test_load_from_db_never_publishes_quarantined_caption_payload(monkeypatch, t
         "pb_studio.data.repositories.media_repository.MediaRepository",
         FakeRepo,
     )
-    state = AppState(current_project={"db_project_id": 5, "path": str(tmp_path)})
+    state = AppState(current_project={
+        "db_project_id": 5,
+        "project_uuid": PROJECT_UUID,
+        "path": str(tmp_path),
+    })
 
     assert state.load_from_db() is True
     assert state.video_clips[8]["tags"] == []

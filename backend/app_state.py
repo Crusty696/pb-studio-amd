@@ -16,9 +16,11 @@ Einschränkungen (akzeptabel für Single-User Desktop-App):
 
 import asyncio
 import json
+import re
 import logging
 import secrets
 import threading
+from uuid import UUID
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -121,22 +123,38 @@ def resolve_active_project_root(state: "AppState", fallback_root: str | Path) ->
     return Path(fallback_root).resolve()
 
 
+def parse_positive_project_id(raw: Any, *, label: str = "Projekt-ID") -> int:
+    """Accept only a positive int or canonical unsigned decimal string."""
+    if type(raw) is int:
+        project_id = raw
+    elif isinstance(raw, str) and re.fullmatch(r"[1-9][0-9]*", raw):
+        project_id = int(raw)
+    else:
+        raise ProjectContextUnavailableError(
+            f"{label} ist keine kanonische positive Ganzzahl"
+        )
+    if project_id <= 0:
+        raise ProjectContextUnavailableError(
+            f"{label} muss positiv sein"
+        )
+    return project_id
+
+
 def resolve_project_db_id(project_data: Optional[dict]) -> int:
-    """Extrahiert die DB-Projekt-ID aus current_project; Fallback bleibt 1 für Legacy-Fälle."""
-    if isinstance(project_data, dict):
-        raw = project_data.get("db_project_id")
-        if raw not in (None, ""):
-            try:
-                return int(raw)
-            except (TypeError, ValueError):
-                logger.warning("Ungültige db_project_id im AppState: %r", raw)
-    return 1
+    """Return a positive catalog ID or fail closed without a fallback owner."""
+    if not isinstance(project_data, dict):
+        raise ProjectContextUnavailableError("Kein Projekt geöffnet")
+    return parse_positive_project_id(
+        project_data.get("db_project_id"),
+        label="Aktive DB-Projekt-ID",
+    )
 
 
 @dataclass(frozen=True)
 class ProjectOperationContext:
     """Unveränderliche Projektidentität einer asynchronen Operation."""
 
+    project_uuid: str
     project_id: int
     project_root: Path
     epoch: int
@@ -226,30 +244,61 @@ class AppState:
             self._shutdown_started = False
 
     def capture_project_context(self) -> ProjectOperationContext:
-        """Erfasst Projekt-ID, Root und Epoch atomar oder bricht ohne Projekt ab."""
+        """Capture immutable UUID, catalog ID, root and epoch atomically."""
         with self._state_lock:
             project = self.current_project
             if not isinstance(project, dict):
                 raise ProjectContextUnavailableError("Kein Projekt geöffnet")
             raw_project_id = project.get("db_project_id")
+            raw_project_uuid = project.get("project_uuid")
             raw_project_root = project.get("path")
             epoch = self._project_epoch
-        if raw_project_id in (None, ""):
-            raise ProjectContextUnavailableError(
-                "Aktives Projekt besitzt keine DB-Projekt-ID"
+            project_id = resolve_project_db_id({"db_project_id": raw_project_id})
+            if raw_project_uuid in (None, ""):
+                raise ProjectContextUnavailableError(
+                    "Aktiver Projektkontext besitzt keine project_uuid"
+                )
+            if raw_project_root in (None, ""):
+                raise ProjectContextUnavailableError(
+                    "Aktives Projekt besitzt keinen Projektpfad"
+                )
+            try:
+                project_uuid = str(UUID(str(raw_project_uuid)))
+                project_root = Path(str(raw_project_root)).resolve()
+            except (TypeError, ValueError, OSError) as exc:
+                raise ProjectContextUnavailableError(
+                    "Aktiver Projektkontext besitzt eine ungültige project_uuid "
+                    "oder Projektwurzel"
+                ) from exc
+            return ProjectOperationContext(
+                project_uuid=project_uuid,
+                project_id=project_id,
+                project_root=project_root,
+                epoch=epoch,
             )
-        if raw_project_root in (None, ""):
-            raise ProjectContextUnavailableError(
-                "Aktives Projekt besitzt keinen Projektpfad"
-            )
-        try:
-            project_id = int(raw_project_id)
-            project_root = Path(str(raw_project_root)).resolve()
-        except (TypeError, ValueError, OSError) as exc:
-            raise ProjectContextUnavailableError(
-                "Aktiver Projektkontext ist ungültig"
-            ) from exc
-        return ProjectOperationContext(project_id, project_root, epoch)
+
+    def resolve_operation_context(
+        self,
+        *,
+        project_id: Optional[int] = None,
+    ) -> ProjectOperationContext:
+        """Capture active identity and verify an optional caller-bound ID."""
+        context = self.capture_project_context()
+        if project_id is not None:
+            try:
+                supplied = parse_positive_project_id(
+                    project_id,
+                    label="Übergebene Projekt-ID",
+                )
+            except ProjectContextUnavailableError as exc:
+                raise ProjectContextChangedError(
+                    "Projekt-ID stimmt nicht überein"
+                ) from exc
+            if supplied != context.project_id:
+                raise ProjectContextChangedError(
+                    "Projekt-ID stimmt nicht mit dem aktiven Projekt überein"
+                )
+        return context
 
     def is_project_context_current(self, context: ProjectOperationContext) -> bool:
         with self._state_lock:
@@ -263,13 +312,20 @@ class AppState:
         if not isinstance(project, dict) or self._project_epoch != context.epoch:
             return False
         raw_project_id = project.get("db_project_id")
+        raw_project_uuid = project.get("project_uuid")
         raw_project_root = project.get("path")
         try:
+            project_id = parse_positive_project_id(
+                raw_project_id,
+                label="Aktive DB-Projekt-ID",
+            )
             return (
-                int(raw_project_id) == context.project_id
+                str(UUID(str(raw_project_uuid))) == context.project_uuid
+                and project_id == context.project_id
+                and raw_project_root not in (None, "")
                 and Path(str(raw_project_root)).resolve() == context.project_root
             )
-        except (TypeError, ValueError, OSError):
+        except (ProjectContextUnavailableError, TypeError, ValueError, OSError):
             return False
 
     def require_project_context_current(
@@ -349,6 +405,41 @@ class AppState:
                 raise ProjectContextChangedError(
                     "Projekt-Capability stimmt nicht mit dem aktiven Projekt überein"
                 )
+            with self._state_lock:
+                registered = self._project_tasks.get(task)
+                if registered is None:
+                    self._project_tasks[task] = (context, 1)
+                elif registered[0] == context:
+                    self._project_tasks[task] = (context, registered[1] + 1)
+                else:
+                    raise RuntimeError(
+                        "Task ist bereits an einen anderen Projektkontext gebunden"
+                    )
+        context_token = _required_project_context.set(context)
+        try:
+            yield context
+        finally:
+            _required_project_context.reset(context_token)
+            with self._state_lock:
+                registered = self._project_tasks.get(task)
+                if registered is not None and registered[1] <= 1:
+                    self._project_tasks.pop(task, None)
+                elif registered is not None:
+                    self._project_tasks[task] = (
+                        registered[0],
+                        registered[1] - 1,
+                    )
+
+    @asynccontextmanager
+    async def project_owner_operation(
+        self,
+        context: ProjectOperationContext,
+    ) -> AsyncIterator[ProjectOperationContext]:
+        """Register an immutable persisted owner for lifecycle drain on startup."""
+        task = asyncio.current_task()
+        if task is None:
+            raise RuntimeError("Projektoperation benötigt eine asyncio.Task")
+        async with self._project_lifecycle_lock:
             with self._state_lock:
                 registered = self._project_tasks.get(task)
                 if registered is None:
@@ -542,25 +633,35 @@ class AppState:
             # BUG-063 FIX: Deep copy
             return {k: dict(v) for k, v in self.video_clips.items()}
 
-    def delete_audio_clip(self, clip_id: int) -> bool:
+    def delete_audio_clip(
+        self,
+        clip_id: int,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> bool:
         """Loescht Audio-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht.
 
         Cleanup: audio_clips, audio_analysis_cache, MediaRepository row.
         Foreign-Key-Cascade entfernt vector_map-Eintraege automatisch.
         """
-        with self._state_lock:
-            clip = self.audio_clips.get(clip_id)
-        if clip is None:
-            return False
+        context = context or self.resolve_operation_context()
         try:
-            from pb_studio.data.repositories.media_repository import MediaRepository
-            repo = MediaRepository()
-            row = repo.find_by_project_and_path(
-                project_id=self.get_current_project_db_id(),
-                file_path=clip["path"],
-            )
-            if row:
-                repo.delete_media(row["id"])
+            with self.project_commit(context):
+                clip = self.audio_clips.get(clip_id)
+                if clip is None:
+                    return False
+                from pb_studio.data.repositories.media_repository import MediaRepository
+                repo = MediaRepository()
+                row = repo.find_by_project_and_path(
+                    project_id=context.project_id,
+                    file_path=clip["path"],
+                )
+                if row:
+                    repo.delete_media(row["id"])
+                self.audio_clips.pop(clip_id, None)
+                self.audio_analysis_cache.pop(clip_id, None)
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error("Audio-Clip DB-Delete fehlgeschlagen: %s", e, exc_info=True)
             raise _persistence_error(
@@ -568,33 +669,40 @@ class AppState:
                 f"Audio-Clip {clip_id} konnte nicht gelöscht werden",
                 e,
             ) from e
-        with self._state_lock:
-            self.audio_clips.pop(clip_id, None)
-            self.audio_analysis_cache.pop(clip_id, None)
         return True
 
-    def delete_video_clip(self, clip_id: int) -> bool:
+    def delete_video_clip(
+        self,
+        clip_id: int,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> bool:
         """Loescht Video-Clip aus In-Memory + SQLite. Returns True wenn gefunden+geloescht.
 
         SQLite-/FAISS-Mutationen laufen ueber eine durable, idempotente Outbox.
         Bei einem Fehler bleibt der Runtime-Clip erhalten; die vorbereitete
         Operation kann beim naechsten Projekt-Load sicher fortgesetzt werden.
         """
-        with self._state_lock:
-            clip = self.video_clips.get(clip_id)
-        if clip is None:
-            return False
+        context = context or self.resolve_operation_context()
         try:
-            from pb_studio.data.repositories.media_repository import MediaRepository
-            repo = MediaRepository()
-            row = repo.find_by_project_and_path(
-                project_id=self.get_current_project_db_id(),
-                file_path=clip["path"],
-            )
-            if row:
-                from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
+            with self.project_commit(context):
+                clip = self.video_clips.get(clip_id)
+                if clip is None:
+                    return False
+                from pb_studio.data.repositories.media_repository import MediaRepository
+                repo = MediaRepository()
+                row = repo.find_by_project_and_path(
+                    project_id=context.project_id,
+                    file_path=clip["path"],
+                )
+                if row:
+                    from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
 
-                VectorOperationOutbox().delete_media(row["id"])
+                    VectorOperationOutbox().delete_media(row["id"])
+                self.video_clips.pop(clip_id, None)
+                self.video_analysis_cache.pop(clip_id, None)
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error("Video-Clip Persistenz-Delete fehlgeschlagen: %s", e, exc_info=True)
             raise _persistence_error(
@@ -602,9 +710,6 @@ class AppState:
                 f"Video-Clip {clip_id} konnte nicht gelöscht werden",
                 e,
             ) from e
-        with self._state_lock:
-            self.video_clips.pop(clip_id, None)
-            self.video_analysis_cache.pop(clip_id, None)
         return True
 
     def get_audio_analysis(self, clip_id: int) -> Optional[dict]:
@@ -723,25 +828,20 @@ class AppState:
     # =========================================================================
 
     def get_current_project_db_id(self) -> int:
-        """Aktive DB-Projekt-ID; 1 bleibt Legacy-Fallback wenn kein Projekt geöffnet ist."""
+        """Return the positive active catalog ID without a legacy fallback."""
         with self._state_lock:
             return resolve_project_db_id(self.current_project)
 
     def require_current_project_db_id(self) -> int:
-        """Liefert die aktive DB-Projekt-ID oder bricht ohne Projekt explizit ab."""
-        with self._state_lock:
-            project = self.current_project
-            if not isinstance(project, dict):
-                raise RuntimeError("Kein Projekt geöffnet")
-            raw_project_id = project.get("db_project_id")
-        if raw_project_id in (None, ""):
-            raise RuntimeError("Aktives Projekt besitzt keine DB-Projekt-ID")
-        try:
-            return int(raw_project_id)
-        except (TypeError, ValueError) as exc:
-            raise RuntimeError("Aktive DB-Projekt-ID ist ungültig") from exc
+        """Compatibility alias for the fail-closed active catalog lookup."""
+        return self.get_current_project_db_id()
 
-    def sync_project_db_record(self, project_data: Optional[dict] = None) -> bool:
+    def sync_project_db_record(
+        self,
+        project_data: Optional[dict] = None,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> bool:
         """Persist project metadata or raise instead of returning false success."""
         with self._state_lock:
             project = (
@@ -756,6 +856,7 @@ class AppState:
             return False
 
         project_id = resolve_project_db_id(project)
+        context = context or self.resolve_operation_context(project_id=project_id)
         project_data = {
             "path": project.get("path"),
             "db_project_id": project_id,
@@ -766,8 +867,15 @@ class AppState:
             "modified_at": project.get("modified_at"),
         }
         try:
-            ProjectRepository().update_project(project_id, name=project.get("name"), data=project_data)
+            with self.project_commit(context):
+                ProjectRepository().update_project(
+                    project_id,
+                    name=project.get("name"),
+                    data=project_data,
+                )
             return True
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error("Projekt-DB-Sync fehlgeschlagen: %s", e, exc_info=True)
             raise _persistence_error(
@@ -931,6 +1039,7 @@ class AppState:
         stage_receipts=None,
         downbeats=None,
         downbeat_provenance=None,
+        context: ProjectOperationContext | None = None,
     ) -> None:
         """
         Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
@@ -953,16 +1062,8 @@ class AppState:
                     "audio_analysis",
                     f"Audio-Clip {clip_id} fehlt im Projektzustand",
                 )
-            effective_project_id = (
-                int(project_id)
-                if project_id is not None
-                else self.get_current_project_db_id()
-            )
-            if effective_project_id <= 0:
-                raise _persistence_error(
-                    "audio_analysis",
-                    f"Ungueltige Projekt-ID {effective_project_id}",
-                )
+            context = context or self.resolve_operation_context(project_id=project_id)
+            effective_project_id = context.project_id
             row = repo.find_by_project_and_path(
                 project_id=effective_project_id,
                 file_path=clip["path"],
@@ -1036,7 +1137,8 @@ class AppState:
             if downbeat_provenance is not None:
                 ai_data["downbeat_provenance"] = downbeat_provenance
 
-            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            with self.project_commit(context):
+                repo.update_status(row["id"], "analyzed", ai_data=ai_data)
 
             # Diff dictionary fuer den In-Memory-Cache (nur tatsaechlich gesetzte Felder).
             cache_update: dict = {}
@@ -1088,7 +1190,7 @@ class AppState:
             # direkt aus audio_clips lesen (z.B. GET /audio/clips), inkonsistente
             # Werte zum cache. Vor dem Fix: cache hatte bpm=128, audio_clips
             # noch bpm=0.0 bis zum naechsten load_from_db.
-            with self._state_lock:
+            with self.project_commit(context):
                 if clip_id in self.audio_analysis_cache:
                     self.audio_analysis_cache[clip_id].update(cache_update)
                 else:
@@ -1106,6 +1208,8 @@ class AppState:
                 f"Audio-Analyse für Clip {clip_id} in DB persistiert "
                 f"(bpm={bpm_str}, key={key}, subtracks={'yes' if subtrack_segments is not None else '—'})"
             )
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error(f"Audio-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
             if isinstance(e, PersistenceError):
@@ -1135,6 +1239,8 @@ class AppState:
         avg_saturation: Optional[float] = None,   # Audit-Fix 2026-07-10
         avg_color_temp: Optional[float] = None,   # Audit-Fix 2026-07-10
         mood_tags=None,                            # Audit-Fix 2026-07-10
+        project_id: Optional[int] = None,
+        context: ProjectOperationContext | None = None,
     ) -> None:
         """
         Persistiert Video-Analyse-Ergebnisse in der ai_data_json-Spalte des
@@ -1162,8 +1268,9 @@ class AppState:
                     "video_analysis",
                     f"Video-Clip {clip_id} fehlt im Projektzustand",
                 )
+            context = context or self.resolve_operation_context(project_id=project_id)
             row = repo.find_by_project_and_path(
-                project_id=self.get_current_project_db_id(),
+                project_id=context.project_id,
                 file_path=clip["path"],
             )
 
@@ -1224,7 +1331,8 @@ class AppState:
             if mood_tags is not None:
                 ai_data["mood_tags"] = mood_tags
 
-            repo.update_status(row["id"], "analyzed", ai_data=ai_data)
+            with self.project_commit(context):
+                repo.update_status(row["id"], "analyzed", ai_data=ai_data)
 
             # Diff-Dictionary fuer den In-Memory-Cache (nur tatsaechlich gesetzte Felder).
             cache_update: dict = {}
@@ -1265,7 +1373,7 @@ class AppState:
 
             # C3-Fix (D-C1, 2026-05-19): cache + video_clips synchron halten
             # (Truth-Source-Konsolidierung analog Audio-Pfad).
-            with self._state_lock:
+            with self.project_commit(context):
                 if clip_id in self.video_analysis_cache:
                     self.video_analysis_cache[clip_id].update(cache_update)
                 else:
@@ -1284,6 +1392,8 @@ class AppState:
                 f"(scenes={scene_count}, motion={motion_str}, "
                 f"emb_dim={embedding_dim}, emb_samples={embedding_samples})"
             )
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error(f"Video-Analyse DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
             if isinstance(e, PersistenceError):
@@ -1294,17 +1404,20 @@ class AppState:
                 e,
             ) from e
 
-    def persist_audio_clip(self, clip: dict, project_id: Optional[int] = None) -> None:
+    def persist_audio_clip(
+        self,
+        clip: dict,
+        project_id: Optional[int] = None,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> None:
         """
         Persistiert einen Audio-Clip in SQLite für das aktuell aktive Projekt.
         Persistenzfehler werden typisiert geworfen.
         """
         try:
-            active_project_id = (
-                int(project_id)
-                if project_id is not None
-                else self.require_current_project_db_id()
-            )
+            context = context or self.resolve_operation_context(project_id=project_id)
+            active_project_id = context.project_id
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
             meta = {
@@ -1322,14 +1435,17 @@ class AppState:
                 # (Demucs ist 10min GPU-Aufwand pro Track).
                 "stems_paths": clip.get("stems_paths"),
             }
-            repo.add_media(
-                project_id=active_project_id,
-                file_path=clip["path"],
-                file_hash=clip.get("audio_hash") or "",
-                duration=clip.get("duration_seconds", 0.0),
-                meta=meta,
-            )
+            with self.project_commit(context):
+                repo.add_media(
+                    project_id=active_project_id,
+                    file_path=clip["path"],
+                    file_hash=clip.get("audio_hash") or "",
+                    duration=clip.get("duration_seconds", 0.0),
+                    meta=meta,
+                )
             logger.debug(f"Audio Clip {clip['id']} in DB persistiert")
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error(f"Audio-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
             raise _persistence_error(
@@ -1338,17 +1454,20 @@ class AppState:
                 e,
             ) from e
 
-    def persist_video_clip(self, clip: dict, project_id: Optional[int] = None) -> None:
+    def persist_video_clip(
+        self,
+        clip: dict,
+        project_id: Optional[int] = None,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> None:
         """
         Persistiert einen Video-Clip in SQLite für das aktuell aktive Projekt.
         Persistenzfehler werden typisiert geworfen.
         """
         try:
-            active_project_id = (
-                int(project_id)
-                if project_id is not None
-                else self.require_current_project_db_id()
-            )
+            context = context or self.resolve_operation_context(project_id=project_id)
+            active_project_id = context.project_id
             from pb_studio.data.repositories.media_repository import MediaRepository
             repo = MediaRepository()
             meta = {
@@ -1363,16 +1482,19 @@ class AppState:
                 # L-N2 audio_hash. Wird vom EmbeddingCache + CACHED-Badge gelesen.
                 "video_hash": clip.get("video_hash"),
             }
-            repo.add_media(
-                project_id=active_project_id,
-                file_path=clip["path"],
-                # L-VIDEO-3: file_hash explizit setzen (vorher hardcoded "").
-                # Erlaubt EmbeddingCache-Hit nach Restart.
-                file_hash=clip.get("video_hash") or "",
-                duration=clip.get("duration_seconds", 0.0),
-                meta=meta,
-            )
+            with self.project_commit(context):
+                repo.add_media(
+                    project_id=active_project_id,
+                    file_path=clip["path"],
+                    # L-VIDEO-3: file_hash explizit setzen (vorher hardcoded "").
+                    # Erlaubt EmbeddingCache-Hit nach Restart.
+                    file_hash=clip.get("video_hash") or "",
+                    duration=clip.get("duration_seconds", 0.0),
+                    meta=meta,
+                )
             logger.debug(f"Video Clip {clip['id']} in DB persistiert")
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.error(f"Video-Clip DB-Persistenz fehlgeschlagen: {e}", exc_info=True)
             raise _persistence_error(
@@ -1381,7 +1503,12 @@ class AppState:
                 e,
             ) from e
 
-    def load_from_db(self, project_id: Optional[int] = None) -> bool:
+    def load_from_db(
+        self,
+        project_id: Optional[int] = None,
+        *,
+        context: ProjectOperationContext | None = None,
+    ) -> bool:
         """
         Lädt alle persistierten Clips aus SQLite für das aktive bzw. übergebene Projekt.
         Stellt audio_clips, video_clips und ID-Counter wieder her.
@@ -1394,19 +1521,15 @@ class AppState:
             from pb_studio.data.repositories.media_repository import MediaRepository
             from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
 
+            context = context or self.resolve_operation_context(project_id=project_id)
+            project_id = context.project_id
             repo = MediaRepository()
-            project_id = int(
-                self.require_current_project_db_id()
-                if project_id is None
-                else project_id
-            )
-            if project_id <= 0:
-                raise ValueError(f"Ungueltige Projekt-ID fuer DB-Load: {project_id}")
             repository_db = getattr(repo, "db", None)
             if repository_db is not None:
-                recovered = VectorOperationOutbox(db=repository_db).recover_pending(
-                    project_id=project_id
-                )
+                with self.project_commit(context):
+                    recovered = VectorOperationOutbox(db=repository_db).recover_pending(
+                        project_id=project_id
+                    )
                 if recovered:
                     logger.info(
                         "Vector-Outbox-Recovery fuer Projekt %s: %s Operation(en)",
@@ -1415,7 +1538,8 @@ class AppState:
                     )
             recovery_method = getattr(repo, "recover_analysis_receipts", None)
             if callable(recovery_method):
-                interrupted = int(recovery_method(project_id=project_id) or 0)
+                with self.project_commit(context):
+                    interrupted = int(recovery_method(project_id=project_id) or 0)
                 if interrupted:
                     logger.info(
                         "Analyse-Receipt-Recovery fuer Projekt %s: %s Stage(s)",
@@ -1438,7 +1562,14 @@ class AppState:
 
             for row in rows:
                 row_project_id = row.get("project_id")
-                if row_project_id is not None and int(row_project_id) != project_id:
+                if (
+                    row_project_id is not None
+                    and parse_positive_project_id(
+                        row_project_id,
+                        label="Media-Projekt-ID",
+                    )
+                    != project_id
+                ):
                     raise ValueError(
                         f"Projektfremder Media-Eintrag {row.get('id')}: "
                         f"{row_project_id} != {project_id}"
@@ -1692,7 +1823,7 @@ class AppState:
                         }
 
             # Unter Lock alle Clips und Caches atomar leeren und zuweisen (R-2 Fix)
-            with self._state_lock:
+            with self.project_commit(context):
                 with self._lock:
                     self.audio_clips.clear()
                     self.audio_clips.update(tmp_audio)
@@ -1712,6 +1843,8 @@ class AppState:
             )
             return True
 
+        except (ProjectContextChangedError, ProjectContextUnavailableError):
+            raise
         except Exception as e:
             logger.warning(f"DB-Load fehlgeschlagen (unkritisch — leerer State): {e}")
             return False

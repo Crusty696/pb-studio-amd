@@ -22,6 +22,7 @@ from pb_studio.rendering.render_queue import (
 render_router = importlib.import_module("backend.routers.render_router")
 
 _PROCESS_SYNC_TIMEOUT_SECONDS = 60.0
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
 
 
 class _StandaloneRenderDb:
@@ -140,6 +141,7 @@ def test_content_identity_hashes_missing_catalog_hashes_and_detects_changes(
         state,
         project_root=tmp_path,
         project_db_id=7,
+        project_uuid=PROJECT_UUID,
     )
     assert first_snapshot["media_content_hashes"]["audio"]["content_hash"] == (
         hashlib.sha256(b"audio-v1").hexdigest()
@@ -156,6 +158,7 @@ def test_content_identity_hashes_missing_catalog_hashes_and_detects_changes(
         state,
         project_root=tmp_path,
         project_db_id=7,
+        project_uuid=PROJECT_UUID,
     )
     assert second_digest != first_digest
 
@@ -178,7 +181,11 @@ def test_resume_runs_interrupted_attempt_to_completion(
     }]
     request = RenderRequest(output_path=str(output), audio_path=str(audio))
     media_state = AppState(
-        current_project={"path": str(tmp_path), "db_project_id": 1},
+        current_project={
+            "path": str(tmp_path),
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+        },
         audio_clips={1: {"path": str(audio), "audio_hash": "audio-hash"}},
         video_clips={1: {"path": str(video), "video_hash": "video-hash"}},
     )
@@ -188,6 +195,7 @@ def test_resume_runs_interrupted_attempt_to_completion(
         media_state,
         project_root=tmp_path,
         project_db_id=1,
+        project_uuid=PROJECT_UUID,
     )
     job = queue.enqueue(
         media_digest,
@@ -197,6 +205,7 @@ def test_resume_runs_interrupted_attempt_to_completion(
             timeline_snapshot=timeline,
             project_root=tmp_path,
             project_db_id=1,
+            project_uuid=PROJECT_UUID,
             identity_snapshot=identity_snapshot,
         ),
     )

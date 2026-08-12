@@ -256,7 +256,7 @@ class DatabaseCore:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
-        conn.execute("PRAGMA busy_timeout=30000;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         self._register_sql_functions(conn)
 
     def _register_sql_functions(self, conn):

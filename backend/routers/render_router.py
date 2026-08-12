@@ -27,6 +27,7 @@ from ..app_state import (
     ProjectContextUnavailableError,
     ProjectOperationContext,
     get_app_state,
+    parse_positive_project_id,
     persistence_error,
     resolve_project_db_id,
 )
@@ -151,8 +152,8 @@ async def _shutdown_active_renders(
     }
 
 
-_RENDER_RESUME_PAYLOAD_VERSION = 1
-_RENDER_IDENTITY_VERSION = 1
+_RENDER_RESUME_PAYLOAD_VERSION = 2
+_RENDER_IDENTITY_VERSION = 2
 
 
 def _canonical_identity_path(raw_path: str | Path) -> str:
@@ -237,6 +238,7 @@ def _compute_render_media_hash(
     render_settings: Optional[dict[str, Any]] = None,
     project_root: Optional[Path] = None,
     project_db_id: Optional[int] = None,
+    project_uuid: Optional[str] = None,
     media_content_hashes: Optional[dict[str, Any]] = None,
 ) -> str:
     """Stable request/content identity for active render deduplication."""
@@ -252,7 +254,12 @@ def _compute_render_media_hash(
                     if project_root is not None
                     else None
                 ),
-                "db_id": int(project_db_id) if project_db_id is not None else None,
+                "db_id": (
+                    parse_positive_project_id(project_db_id, label="Render-Projekt-ID")
+                    if project_db_id is not None
+                    else None
+                ),
+                "uuid": project_uuid,
             },
             "media_content_hashes": media_content_hashes or {},
         },
@@ -270,7 +277,12 @@ def _build_render_identity(
     *,
     project_root: Path,
     project_db_id: int,
+    project_uuid: str,
 ) -> tuple[str, dict[str, Any]]:
+    try:
+        canonical_project_uuid = str(uuid.UUID(str(project_uuid)))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError("Render-Identitaet benoetigt eine gueltige project_uuid") from exc
     media_content_hashes = _stored_render_media_hashes(request, timeline, state)
     digest = _compute_render_media_hash(
         request.audio_path,
@@ -278,6 +290,7 @@ def _build_render_identity(
         render_settings=_request_settings_dict(request),
         project_root=project_root,
         project_db_id=project_db_id,
+        project_uuid=canonical_project_uuid,
         media_content_hashes=media_content_hashes,
     )
     return digest, {
@@ -293,6 +306,7 @@ def _request_settings_dict(
     timeline_snapshot: Optional[list[dict[str, Any]]] = None,
     project_root: Optional[Path] = None,
     project_db_id: Optional[int] = None,
+    project_uuid: Optional[str] = None,
     identity_snapshot: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Render-Settings als reines Dict für die Queue-Persistenz."""
@@ -305,11 +319,30 @@ def _request_settings_dict(
         "include_audio": request.include_audio,
         "quality": request.quality.value if request.quality is not None else None,
     }
-    if (
-        timeline_snapshot is not None
-        and project_root is not None
-        and project_db_id is not None
+    resume_values = (
+        timeline_snapshot,
+        project_root,
+        project_db_id,
+        project_uuid,
+    )
+    if any(value is not None for value in resume_values) and not all(
+        value is not None for value in resume_values
     ):
+        raise ValueError(
+            "Persistierbare Render-Settings benoetigen Timeline, Root, Projekt-ID und UUID"
+        )
+    if all(value is not None for value in resume_values):
+        try:
+            canonical_project_uuid = str(uuid.UUID(str(project_uuid)))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError("Render-Resume benoetigt eine gueltige project_uuid") from exc
+        try:
+            canonical_project_id = parse_positive_project_id(
+                project_db_id,
+                label="Render-Resume-Projekt-ID",
+            )
+        except ProjectContextUnavailableError as exc:
+            raise ValueError("Render-Resume benoetigt eine positive Projekt-ID") from exc
         request_snapshot = request.model_dump(mode="json")
         request_snapshot["output_path"] = str(Path(request.output_path).resolve())
         request_snapshot["audio_path"] = (
@@ -320,7 +353,8 @@ def _request_settings_dict(
             "request": request_snapshot,
             "timeline_snapshot": timeline_snapshot,
             "project_root": str(Path(project_root).resolve()),
-            "project_db_id": int(project_db_id),
+            "project_db_id": canonical_project_id,
+            "project_uuid": canonical_project_uuid,
         }
     if identity_snapshot is not None:
         settings["_identity"] = identity_snapshot
@@ -430,6 +464,7 @@ def _validate_render_media_contract(
 def _load_resume_media_state(
     project_root_raw: str,
     project_db_id_raw: Any,
+    project_uuid_raw: Any = None,
 ) -> tuple[AppState, Path]:
     """Restore only the persisted project's validated media catalogue for resume."""
     try:
@@ -452,8 +487,11 @@ def _load_resume_media_state(
     project_record = None
     if project_db_id_raw not in (None, ""):
         try:
-            project_db_id = int(project_db_id_raw)
-        except (TypeError, ValueError) as exc:
+            project_db_id = parse_positive_project_id(
+                project_db_id_raw,
+                label="Resume-Projekt-ID",
+            )
+        except ProjectContextUnavailableError as exc:
             raise ValueError("Resume-Payload enthaelt keine gueltige Projekt-ID") from exc
         project_record = project_repo.get_by_id(project_db_id)
     else:
@@ -474,10 +512,27 @@ def _load_resume_media_state(
                 str(project_root)
             ):
                 project_record = candidate
-                project_db_id = int(candidate["id"])
+                project_db_id = parse_positive_project_id(
+                    candidate.get("id"),
+                    label="Katalog-Projekt-ID",
+                )
                 break
     if not project_record:
         raise ValueError("Resume-Projekt ist nicht mehr registriert")
+    catalog_uuid_raw = project_record.get("project_uuid") or (
+        project_record.get("data") or {}
+    ).get("project_uuid")
+    try:
+        catalog_uuid = str(uuid.UUID(str(catalog_uuid_raw)))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError("Resume-Projekt besitzt keine gültige project_uuid") from exc
+    if project_uuid_raw not in (None, ""):
+        try:
+            requested_uuid = str(uuid.UUID(str(project_uuid_raw)))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError("Resume-Payload enthält keine gültige project_uuid") from exc
+        if requested_uuid != catalog_uuid:
+            raise ValueError("Resume-project_uuid stimmt nicht mit dem Katalog überein")
     registered_root_raw = (project_record.get("data") or {}).get("path")
     try:
         registered_root = canonical_local_media_reference(
@@ -493,6 +548,7 @@ def _load_resume_media_state(
         current_project={
             "path": str(project_root),
             "db_project_id": project_db_id,
+            "project_uuid": catalog_uuid,
         }
     )
     if not resume_state.load_from_db(project_id=project_db_id):
@@ -532,18 +588,25 @@ async def _resume_render_queue_on_startup(
             timeline_snapshot = payload.get("timeline_snapshot")
             project_root_raw = payload.get("project_root")
             project_db_id_raw = payload.get("project_db_id")
+            project_uuid_raw = payload.get("project_uuid")
             if not isinstance(request_data, dict):
                 raise ValueError("Resume-Payload enthält keinen RenderRequest")
             if not isinstance(timeline_snapshot, list) or not timeline_snapshot:
                 raise ValueError("Resume-Payload enthält keine Timeline")
             if not project_root_raw:
                 raise ValueError("Resume-Payload enthält keine Projektwurzel")
+            if project_db_id_raw in (None, ""):
+                raise ValueError("Resume-Payload enthält keine Projekt-ID")
+            if not project_uuid_raw:
+                raise ValueError("Resume-Payload enthält keine project_uuid")
 
             resume_media_state, project_root = await asyncio.to_thread(
                 _load_resume_media_state,
                 str(project_root_raw),
                 project_db_id_raw,
+                project_uuid_raw,
             )
+            resume_context = resume_media_state.capture_project_context()
             request = RenderRequest.model_validate(request_data)
             request, timeline_snapshot = _validate_render_media_contract(
                 request,
@@ -575,6 +638,7 @@ async def _resume_render_queue_on_startup(
                     project_db_id=resolve_project_db_id(
                         resume_media_state.current_project
                     ),
+                    project_uuid=resume_context.project_uuid,
                 )
                 if current_digest != identity_snapshot["digest"]:
                     raise ValueError(
@@ -609,6 +673,9 @@ async def _resume_render_queue_on_startup(
                 "output_path": request.output_path,
                 "error": None,
                 "queue_job_id": job.job_id,
+                "project_uuid": resume_context.project_uuid,
+                "project_db_id": resume_context.project_id,
+                "project_root": str(resume_context.project_root),
             }
             updated_job = render_queue.update_status(
                 job.job_id,
@@ -625,11 +692,12 @@ async def _resume_render_queue_on_startup(
             state.set_cancel_flag(task_id, False)
 
             task = asyncio.create_task(
-                _run_render_task(
+                _run_resumed_render_task_bound(
                     task_id,
                     request,
                     state,
                     timeline_snapshot,
+                    resume_context,
                     job.job_id,
                 )
             )
@@ -640,6 +708,7 @@ async def _resume_render_queue_on_startup(
                 *,
                 runtime_task_id: str = task_id,
                 queue_job_id: str = job.job_id,
+                owner_context: ProjectOperationContext = resume_context,
             ) -> None:
                 if finished.cancelled():
                     _safe_queue_update(
@@ -663,10 +732,18 @@ async def _resume_render_queue_on_startup(
                         runtime_task_id,
                         exc,
                     )
-                    state.update_render_task(runtime_task_id, {
-                        "status": TaskStatus.FAILED.value,
-                        "error": str(exc),
-                    })
+                    try:
+                        _update_render_task_for_owner(
+                            state,
+                            runtime_task_id,
+                            owner_context,
+                            {
+                                "status": TaskStatus.FAILED.value,
+                                "error": str(exc),
+                            },
+                        )
+                    except ProjectContextChangedError:
+                        pass
                     _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
 
             task.add_done_callback(_on_resumed_done)
@@ -724,6 +801,95 @@ async def start_render(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+def _register_render_task_for_context(
+    *,
+    request: RenderRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+    timeline_snapshot: list[dict[str, Any]],
+    media_hash: str,
+    identity_snapshot: dict[str, Any],
+) -> tuple[str, str, dict[str, Any]]:
+    """Atomically validate the owner, enqueue, and publish one runtime task."""
+    timeline_total_seconds = 0.0
+    for entry in timeline_snapshot:
+        try:
+            timeline_total_seconds += max(
+                float(entry.get("end_time", 0.0))
+                - float(entry.get("start_time", 0.0)),
+                0.0,
+            )
+        except (TypeError, ValueError):
+            continue
+    estimated_total_frames = max(
+        int(round(timeline_total_seconds * max(request.fps, 0.0))),
+        0,
+    )
+
+    with state.project_commit(context):
+        _cleanup_old_render_tasks(state)
+        try:
+            candidate_queue_job_id = str(uuid.uuid4())
+            queue_job = _get_render_queue().enqueue(
+                media_hash=media_hash,
+                output_path=request.output_path,
+                settings=_request_settings_dict(
+                    request,
+                    timeline_snapshot=timeline_snapshot,
+                    project_root=context.project_root,
+                    project_db_id=context.project_id,
+                    project_uuid=context.project_uuid,
+                    identity_snapshot=identity_snapshot,
+                ),
+                job_id=candidate_queue_job_id,
+            )
+            queue_job_id = queue_job.job_id
+            if queue_job_id != candidate_queue_job_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Identischer Render-Job existiert bereits "
+                        f"(queue_job_id={queue_job_id}, status={queue_job.status})"
+                    ),
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("RenderQueue.enqueue fehlgeschlagen: %s", exc, exc_info=True)
+            raise persistence_error(
+                "render_queue",
+                "Render-Job konnte nicht dauerhaft registriert werden",
+                exc,
+            ) from exc
+
+        while True:
+            task_id = str(uuid.uuid4())[:8]
+            if state.get_render_task(task_id) is None:
+                break
+        task_data = {
+            "task_id": task_id,
+            "status": TaskStatus.PENDING.value,
+            "percent": 0.0,
+            "current_frame": 0,
+            "total_frames": estimated_total_frames,
+            "fps": 0.0,
+            "elapsed_seconds": 0.0,
+            "eta_seconds": 0.0,
+            "output_path": request.output_path,
+            "error": None,
+            "message": "Render-Task registriert",
+            "queue_job_id": queue_job_id,
+            "project_uuid": context.project_uuid,
+            "project_db_id": context.project_id,
+            "project_root": str(context.project_root),
+            "progress_end": False,
+            "validation_status": None,
+        }
+        state.set_render_task(task_id, task_data)
+        state.set_cancel_flag(task_id, False)
+    return task_id, queue_job_id, task_data
+
+
 async def _start_render_for_project(
     request: RenderRequest,
     state: AppState,
@@ -775,84 +941,20 @@ async def _start_render_for_project(
         state,
         project_root=allowed_render,
         project_db_id=project_db_id,
+        project_uuid=context.project_uuid,
     )
 
     await _preflight_render_request(request, timeline_snapshot)
     state.require_project_context_current(context)
 
-    # Render-Task Cleanup: alte abgeschlossene Tasks entfernen (max 50)
-    _cleanup_old_render_tasks(state)
-
-    timeline_total_seconds = 0.0
-    for entry in timeline_snapshot:
-        try:
-            timeline_total_seconds += max(float(entry.get("end_time", 0.0)) - float(entry.get("start_time", 0.0)), 0.0)
-        except (TypeError, ValueError):
-            continue
-    estimated_total_seconds = max(timeline_total_seconds, 0.0)
-    estimated_total_frames = max(int(round(estimated_total_seconds * max(request.fps, 0.0))), 0)
-
-    # Aufgabe I: Job in der persistenten Queue idempotent registrieren.
-    # Bei Crash bleibt der Eintrag erhalten; Resume-on-Startup im Lifespan
-    # überführt 'running' → 'interrupted'. Fehler hier werden nicht hochgereicht
-    # (in-memory Render-Lifecycle ist die Source-of-Truth für die HTTP-Antwort).
-    queue_job_id: Optional[str] = None
-    try:
-        candidate_queue_job_id = str(uuid.uuid4())
-        queue_job = _get_render_queue().enqueue(
-            media_hash=media_hash,
-            output_path=request.output_path,
-            settings=_request_settings_dict(
-                request,
-                timeline_snapshot=timeline_snapshot,
-                project_root=allowed_render,
-                project_db_id=project_db_id,
-                identity_snapshot=identity_snapshot,
-            ),
-            job_id=candidate_queue_job_id,
-        )
-        queue_job_id = queue_job.job_id
-        if queue_job_id != candidate_queue_job_id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Identischer Render-Job existiert bereits "
-                    f"(queue_job_id={queue_job_id}, status={queue_job.status})"
-                ),
-            )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("RenderQueue.enqueue fehlgeschlagen: %s", exc, exc_info=True)
-        raise persistence_error(
-            "render_queue",
-            "Render-Job konnte nicht dauerhaft registriert werden",
-            exc,
-        ) from exc
-
-    while True:
-        task_id = str(uuid.uuid4())[:8]
-        if state.get_render_task(task_id) is None:
-            break
-
-    task_data = {
-        "task_id": task_id,
-        "status": TaskStatus.PENDING.value,
-        "percent": 0.0,
-        "current_frame": 0,
-        "total_frames": estimated_total_frames,
-        "fps": 0.0,
-        "elapsed_seconds": 0.0,
-        "eta_seconds": 0.0,
-        "output_path": request.output_path,
-        "error": None,
-        "message": "Render-Task registriert",
-        "queue_job_id": queue_job_id,
-        "progress_end": False,
-        "validation_status": None,
-    }
-    state.set_render_task(task_id, task_data)
-    state.set_cancel_flag(task_id, False)
+    task_id, queue_job_id, task_data = _register_render_task_for_context(
+        request=request,
+        state=state,
+        context=context,
+        timeline_snapshot=timeline_snapshot,
+        media_hash=media_hash,
+        identity_snapshot=identity_snapshot,
+    )
 
     # R14/HIGH-004: Snapshot beim Start übergeben — _run_render_task darf den State nicht
     # erneut lesen, damit kein Stale-Timeline-Race zwischen start_render und Task-Ausführung entsteht.
@@ -875,12 +977,15 @@ async def _start_render_for_project(
         if exc is not None:
             logger.error(f"Render-Task {task_id} unerwartete Exception: {exc}", exc_info=exc)
             try:
-                state.update_render_task(task_id, {
-                    "status": "failed",
-                    "error": str(exc),
+                _update_render_task_for_owner(state, task_id, context, {
+                        "status": "failed",
+                        "error": str(exc),
                 })
-            except Exception:
-                pass
+            except (ProjectContextChangedError, ProjectContextUnavailableError):
+                logger.info(
+                    "Render-Task %s Fehlerstatus nicht in gewechselten Projektzustand geschrieben",
+                    task_id,
+                )
             # Auch in der persistenten Queue als failed markieren.
             _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
 
@@ -910,10 +1015,14 @@ async def render_status(
     state: AppState = Depends(get_app_state),
 ) -> RenderProgress:
     """Gibt den aktuellen Render-Fortschritt zurück."""
-    task = state.get_render_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail=f"Render-Task {task_id} nicht gefunden")
-    return RenderProgress(**task)
+    try:
+        async with state.project_operation() as context:
+            task = _get_render_task_for_owner(state, task_id, context)
+            return RenderProgress(**task)
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=404, detail=f"Render-Task {task_id} nicht gefunden") from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _cleanup_old_render_tasks(state: AppState, max_tasks: int = 50) -> None:
@@ -1001,15 +1110,19 @@ async def cancel_render(
     state: AppState = Depends(get_app_state),
 ) -> dict[str, Any]:
     """Bricht ein laufendes Rendering ab."""
-    task = state.get_render_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail=f"Render-Task {task_id} nicht gefunden")
+    try:
+        async with state.project_operation() as context:
+            task = _get_render_task_for_owner(state, task_id, context)
 
-    terminal_statuses = {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
-    if task.get("status") in terminal_statuses:
-        return {"cancelled": False, "task_id": task_id, "status": task.get("status")}
+            terminal_statuses = {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
+            if task.get("status") in terminal_statuses:
+                return {"cancelled": False, "task_id": task_id, "status": task.get("status")}
 
-    state.set_cancel_flag(task_id, True)
+            _set_render_cancel_for_owner(state, task_id, context, True)
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=404, detail=f"Render-Task {task_id} nicht gefunden") from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     logger.info(f"Render-Task Cancel angefordert: {task_id}")
     return {"cancelled": True, "task_id": task_id}
 
@@ -1034,10 +1147,14 @@ async def _run_render_task_bound(
                 request,
                 state,
                 timeline_snapshot,
+                context,
                 queue_job_id,
             )
     except asyncio.CancelledError:
-        state.set_cancel_flag(task_id, True)
+        try:
+            _set_render_cancel_for_owner(state, task_id, context, True)
+        except ProjectContextChangedError:
+            pass
         _safe_queue_update(
             queue_job_id,
             _RQ_INTERRUPTED,
@@ -1049,15 +1166,177 @@ async def _run_render_task_bound(
         ProjectContextUnavailableError,
     ) as exc:
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
-        state.update_render_task(
-            task_id,
-            {
-                "status": TaskStatus.FAILED.value,
-                "error": str(exc),
-                "message": "Render-Projektkontext ist nicht mehr aktuell",
-                "finished_at": time.monotonic(),
-            },
+        try:
+            _update_render_task_for_owner(
+                state,
+                task_id,
+                context,
+                {
+                    "status": TaskStatus.FAILED.value,
+                    "error": str(exc),
+                    "message": "Render-Projektkontext ist nicht mehr aktuell",
+                    "finished_at": time.monotonic(),
+                },
+            )
+        except ProjectContextChangedError:
+            pass
+
+
+def _require_render_task_identity(
+    task_data: dict[str, Any],
+    context: ProjectOperationContext,
+) -> None:
+    """Reject a resumed task unless its persisted owner equals the captured owner."""
+    try:
+        task_uuid = str(uuid.UUID(str(task_data.get("project_uuid"))))
+        task_project_id = parse_positive_project_id(
+            task_data.get("project_db_id"),
+            label="Render-Task-Projekt-ID",
         )
+        task_root = Path(str(task_data.get("project_root"))).resolve()
+    except (
+        TypeError,
+        ValueError,
+        AttributeError,
+        OSError,
+        ProjectContextUnavailableError,
+    ) as exc:
+        raise ProjectContextUnavailableError(
+            "Render-Task besitzt keine vollstaendige Projektidentitaet"
+        ) from exc
+    if (
+        task_uuid != context.project_uuid
+        or task_project_id != context.project_id
+        or task_root != context.project_root
+    ):
+        raise ProjectContextChangedError(
+            "Render-Task stimmt nicht mit dem Resume-Projektkontext ueberein"
+        )
+
+
+def _render_owner_is_current_locked(
+    state: AppState,
+    context: ProjectOperationContext,
+) -> bool:
+    if state.current_project is None:
+        return state._project_epoch == context.epoch
+    return state._is_project_context_current_locked(context)
+
+
+def _get_render_task_for_owner(
+    state: AppState,
+    task_id: str,
+    context: ProjectOperationContext,
+) -> dict[str, Any]:
+    with state._state_lock:
+        if not _render_owner_is_current_locked(state, context):
+            raise ProjectContextChangedError(
+                "Render-Projektkontext ist nicht mehr aktuell"
+            )
+        task_data = state.render_tasks.get(task_id)
+        if not isinstance(task_data, dict):
+            raise ProjectContextChangedError("Render-Task gehört nicht mehr zum Owner")
+        _require_render_task_identity(task_data, context)
+        return dict(task_data)
+
+
+def _update_render_task_for_owner(
+    state: AppState,
+    task_id: str,
+    context: ProjectOperationContext,
+    updates: dict[str, Any],
+) -> None:
+    with state._state_lock:
+        _get_render_task_for_owner(state, task_id, context)
+        state.update_render_task(task_id, updates)
+
+
+def _set_render_cancel_for_owner(
+    state: AppState,
+    task_id: str,
+    context: ProjectOperationContext,
+    value: bool,
+) -> None:
+    with state._state_lock:
+        _get_render_task_for_owner(state, task_id, context)
+        state.set_cancel_flag(task_id, value)
+
+
+def _get_render_cancel_for_owner(
+    state: AppState,
+    task_id: str,
+    context: ProjectOperationContext,
+) -> bool:
+    with state._state_lock:
+        _get_render_task_for_owner(state, task_id, context)
+        return state.get_cancel_flag(task_id)
+
+
+async def _publish_render_event_for_owner(
+    state: AppState,
+    task_id: str,
+    context: ProjectOperationContext,
+    payload: dict[str, Any],
+) -> None:
+    _get_render_task_for_owner(state, task_id, context)
+    await publish_event("render_progress", payload)
+
+
+async def _run_resumed_render_task_bound(
+    task_id: str,
+    request: RenderRequest,
+    state: AppState,
+    timeline_snapshot: list[dict[str, Any]],
+    context: ProjectOperationContext,
+    queue_job_id: Optional[str],
+) -> None:
+    """Run a startup-resumed render only under its persisted immutable owner."""
+    task_data = state.get_render_task(task_id)
+    if task_data is None:
+        _safe_queue_update(
+            queue_job_id,
+            _RQ_FAILED,
+            error="Resume-Render-Task fehlt vor Kontextbindung",
+        )
+        return
+    try:
+        async with state.project_owner_operation(context):
+            _require_render_task_identity(task_data, context)
+            await _run_render_task(
+                task_id,
+                request,
+                state,
+                timeline_snapshot,
+                context,
+                queue_job_id,
+            )
+    except asyncio.CancelledError:
+        try:
+            _set_render_cancel_for_owner(state, task_id, context, True)
+        except ProjectContextChangedError:
+            pass
+        _safe_queue_update(
+            queue_job_id,
+            _RQ_INTERRUPTED,
+            error="Resume-Render-Task abgebrochen",
+        )
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        try:
+            _update_render_task_for_owner(
+                state,
+                task_id,
+                context,
+                {
+                    "status": TaskStatus.FAILED.value,
+                    "error": str(exc),
+                    "message": "Resume-Projektkontext ist ungueltig",
+                    "finished_at": time.monotonic(),
+                },
+            )
+        except ProjectContextChangedError:
+            pass
+        _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(exc))
 
 
 async def _run_render_task(
@@ -1065,6 +1344,7 @@ async def _run_render_task(
     request: RenderRequest,
     state: AppState,
     timeline_snapshot: list[dict[str, Any]],
+    context: ProjectOperationContext,
     queue_job_id: Optional[str],
 ) -> None:
     """Background-Task für Rendering mit Cancel-Support.
@@ -1076,14 +1356,16 @@ async def _run_render_task(
 
     try:
         _queue_update_or_raise(queue_job_id, _RQ_RUNNING)
-        state.update_render_task(task_id, {"status": TaskStatus.RUNNING.value})
-        if state.get_cancel_flag(task_id):
+        _update_render_task_for_owner(
+            state, task_id, context, {"status": TaskStatus.RUNNING.value}
+        )
+        if _get_render_cancel_for_owner(state, task_id, context):
             raise _RenderCancelled()
-        await _acquire_gpu_lock_or_cancel(task_id, state)
+        await _acquire_gpu_lock_or_cancel(task_id, state, context)
         try:
             logger.info(f"GPU-Lock erworben für Render {task_id}")
 
-            if state.get_cancel_flag(task_id):
+            if _get_render_cancel_for_owner(state, task_id, context):
                 raise _RenderCancelled()
 
             render_worker = asyncio.create_task(
@@ -1094,6 +1376,7 @@ async def _run_render_task(
                     state,
                     timeline_snapshot,
                     asyncio.get_running_loop(),
+                    context,
                 )
             )
             try:
@@ -1102,7 +1385,10 @@ async def _run_render_task(
                 # Ein Projektwechsel cancelt die asyncio-Task. Der physische
                 # Thread muss sein Cancel-Flag sehen und enden, bevor GPU-Lock
                 # und Projekt-Lifecycle freigegeben werden.
-                state.set_cancel_flag(task_id, True)
+                try:
+                    _set_render_cancel_for_owner(state, task_id, context, True)
+                except ProjectContextChangedError:
+                    pass
                 try:
                     await asyncio.shield(render_worker)
                 except _RenderCancelled as exc:
@@ -1113,7 +1399,7 @@ async def _run_render_task(
 
         elapsed = time.monotonic() - start_time
         _queue_update_or_raise(queue_job_id, _RQ_COMPLETED)
-        state.update_render_task(task_id, {
+        _update_render_task_for_owner(state, task_id, context, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
             "elapsed_seconds": round(elapsed, 1),
@@ -1127,7 +1413,7 @@ async def _run_render_task(
             "finished_at": time.monotonic(),  # P-H1: enable time-gated cancel_flag cleanup
         })
 
-        await publish_event("render_progress", {
+        await _publish_render_event_for_owner(state, task_id, context, {
             "task_id": task_id,
             "percent": 100.0,
             "status": "completed",
@@ -1151,7 +1437,15 @@ async def _run_render_task(
     except _RenderCancelled as exc:
         elapsed = time.monotonic() - start_time
         shutdown_interrupted = task_id in _shutdown_cancelled_task_ids
-        task_snapshot = state.get_render_task(task_id) or {}
+        try:
+            task_snapshot = _get_render_task_for_owner(state, task_id, context)
+        except ProjectContextChangedError:
+            _safe_queue_update(
+                queue_job_id,
+                _RQ_INTERRUPTED,
+                error="Render owner changed during cancellation",
+            )
+            return
         target_queue_status = (
             _RQ_INTERRUPTED if shutdown_interrupted else _RQ_CANCELLED
         )
@@ -1165,7 +1459,7 @@ async def _run_render_task(
                 error=target_queue_error,
             )
         except PersistenceError as persist_exc:
-            state.update_render_task(task_id, {
+            _update_render_task_for_owner(state, task_id, context, {
                 "status": TaskStatus.FAILED.value,
                 "error": str(persist_exc),
                 "message": "Render-Abbruch konnte nicht gespeichert werden",
@@ -1175,7 +1469,7 @@ async def _run_render_task(
                 "validation_status": "failed",
                 "finished_at": time.monotonic(),
             })
-            await publish_event("render_progress", {
+            await _publish_render_event_for_owner(state, task_id, context, {
                 "task_id": task_id,
                 "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
                 "status": "failed",
@@ -1187,7 +1481,7 @@ async def _run_render_task(
             })
             return
 
-        state.update_render_task(task_id, {
+        _update_render_task_for_owner(state, task_id, context, {
             "status": TaskStatus.CANCELLED.value,
             "message": "Rendering abgebrochen",
             "elapsed_seconds": round(elapsed, 1),
@@ -1201,7 +1495,7 @@ async def _run_render_task(
         })
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
-        await publish_event("render_progress", {
+        await _publish_render_event_for_owner(state, task_id, context, {
             "task_id": task_id,
             "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
             "status": "cancelled",
@@ -1220,13 +1514,25 @@ async def _run_render_task(
             detail=f"elapsed={elapsed:.1f}s",
         )
 
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as e:
+        _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
+        logger.info(
+            "Render %s owner became stale; active state/SSE suppressed: %s",
+            task_id,
+            e,
+        )
+
     except Exception as e:
         elapsed = time.monotonic() - start_time
-        task_snapshot = state.get_render_task(task_id) or {}
+        try:
+            task_snapshot = _get_render_task_for_owner(state, task_id, context)
+        except ProjectContextChangedError:
+            _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
+            return
         run_id = getattr(e, "run_id", None)
         evidence_path = getattr(e, "evidence_path", None)
         validation_path = getattr(e, "validation_path", None)
-        state.update_render_task(task_id, {
+        _update_render_task_for_owner(state, task_id, context, {
             "status": TaskStatus.FAILED.value,
             "error": str(e),
             "message": "Rendering fehlgeschlagen",
@@ -1242,7 +1548,7 @@ async def _run_render_task(
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
         logger.error(f"Render {task_id} fehlgeschlagen: {e}", exc_info=True)
 
-        await publish_event("render_progress", {
+        await _publish_render_event_for_owner(state, task_id, context, {
             "task_id": task_id,
             "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
             "status": "failed",
@@ -1282,12 +1588,13 @@ class _RenderCancelled(Exception):
 async def _acquire_gpu_lock_or_cancel(
     task_id: str,
     state: AppState,
+    context: ProjectOperationContext,
     *,
     poll_seconds: float = 0.1,
 ) -> None:
     """Erwirbt den GPU-Lock kooperativ abbrechbar."""
     while True:
-        if state.get_cancel_flag(task_id):
+        if _get_render_cancel_for_owner(state, task_id, context):
             raise _RenderCancelled()
         try:
             await asyncio.wait_for(gpu_lock.acquire(), timeout=poll_seconds)
@@ -1302,6 +1609,7 @@ def _execute_render(
     state: "AppState",
     timeline: list[dict[str, Any]],
     event_loop: asyncio.AbstractEventLoop,
+    context: ProjectOperationContext,
 ) -> dict[str, Any]:
     """Führt das Rendering durch (blockierend, GPU).
 
@@ -1321,7 +1629,7 @@ def _execute_render(
     output_p = _Path(request.output_path)
     # R01/FIX-4: Encoder-Override als Konstruktor-Parameter übergeben (kein GlobalSeiteneffekt)
     encoder_override = request.encoder.value if request.encoder is not None else None
-    task_meta = state.get_render_task(task_id) or {}
+    task_meta = _get_render_task_for_owner(state, task_id, context)
     render_job_id = str(task_meta.get("queue_job_id") or task_id)
     service = RenderService(
         output_dir=str(output_p.parent),
@@ -1335,10 +1643,13 @@ def _execute_render(
     progress_state = {"percent": -1.0, "message": "", "at": 0.0}
 
     def is_cancelled() -> bool:
-        return state.get_cancel_flag(task_id)
+        try:
+            return _get_render_cancel_for_owner(state, task_id, context)
+        except ProjectContextChangedError:
+            return True
 
     def publish_progress_event(message: str, percent: float) -> None:
-        task_snapshot = state.get_render_task(task_id) or {}
+        task_snapshot = _get_render_task_for_owner(state, task_id, context)
         payload = {
             "task_id": task_id,
             "percent": round(percent, 1),
@@ -1352,7 +1663,12 @@ def _execute_render(
             "eta_seconds": task_snapshot.get("eta_seconds", 0.0),
         }
         future = asyncio.run_coroutine_threadsafe(
-            publish_event("render_progress", payload),
+            _publish_render_event_for_owner(
+                state,
+                task_id,
+                context,
+                payload,
+            ),
             event_loop,
         )
 
@@ -1385,7 +1701,7 @@ def _execute_render(
             "eta_seconds": round(float(telemetry.get("eta_seconds", 0.0) or 0.0), 1),
             "output_path": str(output_p),
         }
-        state.update_render_task(task_id, updates)
+        _update_render_task_for_owner(state, task_id, context, updates)
 
         now = time.monotonic()
         with progress_publish_lock:
@@ -1481,7 +1797,7 @@ def _execute_render(
         # Realtest-Härtung: Status direkt im synchronen Worker auf completed setzen,
         # damit /render/status nicht auf "running" hängen bleibt, falls der Async-
         # Wrapper den finalen State erst verzögert nachzieht.
-        state.update_render_task(task_id, {
+        _update_render_task_for_owner(state, task_id, context, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
             "eta_seconds": 0.0,

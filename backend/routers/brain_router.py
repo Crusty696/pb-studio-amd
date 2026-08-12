@@ -42,6 +42,7 @@ from pb_studio.brain.brain_service import (
     BrainProjectNotBoundError,
     StaleBrainProjectLeaseError,
 )
+from pb_studio.storage.sqlite_init import init_connection
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ def _acquire_project_state_lease(
             state_db_path=context.project_root / "state.db",
             project_epoch=context.epoch,
             project_id=context.project_id,
+            project_uuid=context.project_uuid,
         )
     except BrainProjectNotBoundError as exc:
         raise HTTPException(status_code=409, detail="No project bound") from exc
@@ -409,6 +411,7 @@ def _fit_projector_v2(svc) -> dict:
             conn = sqlite3.connect(
                 str(state_path), isolation_level=None, check_same_thread=False
             )
+            init_connection(conn)
             opened.append(conn)
 
             def _audio_hash(clip_id: int, values=hashes):

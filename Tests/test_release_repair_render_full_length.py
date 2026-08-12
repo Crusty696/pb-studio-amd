@@ -22,6 +22,7 @@ FULL_LENGTH_SECONDS = 6335.027
 FULL_LENGTH_FPS = 30.0
 FULL_LENGTH_FRAMES = 190_051
 SOURCE_END_SILENCE_SECONDS = 58.222062
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
 
 
 def _probe_result(
@@ -585,6 +586,7 @@ def test_resume_payload_and_owned_process_shutdown_contract(
         timeline_snapshot=timeline,
         project_root=tmp_path,
         project_db_id=1,
+        project_uuid=PROJECT_UUID,
     )
     resume = settings["_resume"]
     assert resume["version"] == render_router._RENDER_RESUME_PAYLOAD_VERSION
@@ -592,6 +594,7 @@ def test_resume_payload_and_owned_process_shutdown_contract(
     assert resume["timeline_snapshot"] == timeline
     assert Path(resume["project_root"]) == tmp_path.resolve()
     assert resume["project_db_id"] == 1
+    assert resume["project_uuid"] == PROJECT_UUID
 
     render_source = inspect.getsource(RenderService.render_timeline)
     assert "self.run_id = uuid.uuid4().hex" in render_source

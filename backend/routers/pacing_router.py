@@ -649,6 +649,7 @@ async def _generate_cut_list_for_project(
                         path=context.project_root / "state.db",
                         project_epoch=context.epoch,
                         project_id=context.project_id,
+                        project_uuid=context.project_uuid,
                     ) as lease:
                         return lease.run_write(
                             lambda connection: annotate_cuts_with_brain(
@@ -699,6 +700,7 @@ async def _generate_cut_list_for_project(
                         path=context.project_root / "state.db",
                         project_epoch=context.epoch,
                         project_id=context.project_id,
+                        project_uuid=context.project_uuid,
                     ) as lease:
                         with state.project_commit(context):
                             lease.run_write(

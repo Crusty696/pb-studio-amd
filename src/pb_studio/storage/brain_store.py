@@ -102,6 +102,7 @@ class BrainStore:
                     continue
                 try:
                     verify = sqlite3.connect(str(candidate))
+                    verify.execute("PRAGMA busy_timeout = 5000")
                     try:
                         if verify.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                             continue

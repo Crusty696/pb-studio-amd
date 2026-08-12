@@ -76,6 +76,7 @@ def _sqlite_connection(path: Path) -> sqlite3.Connection:
     if not path.is_file():
         raise RecoveryOwnerAdapterError(f"Required SQLite owner missing: {path}")
     connection = sqlite3.connect(str(path), timeout=30.0)
+    connection.execute("PRAGMA busy_timeout = 5000")
     connection.row_factory = sqlite3.Row
     try:
         if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":

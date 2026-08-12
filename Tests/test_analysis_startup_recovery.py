@@ -16,6 +16,7 @@ from pb_studio.data.repositories.media_repository import MediaRepository
 
 
 RECOVERED_AT = "2026-08-12T14:30:00Z"
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
 
 
 class _TempConfig:
@@ -437,7 +438,11 @@ def test_recovery_rejects_corrupt_partial_audio_artifact(repository, tmp_path):
     from backend.app_state import AppState
 
     state = AppState(
-        current_project={"db_project_id": 1, "path": str(tmp_path)},
+        current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        },
     )
     assert state.load_from_db(project_id=1) is True
     clip = state.audio_clips[1]
@@ -509,7 +514,11 @@ def test_recovery_rejects_corrupt_partial_video_artifact(repository, tmp_path):
     from backend.app_state import AppState
 
     state = AppState(
-        current_project={"db_project_id": 1, "path": str(tmp_path)},
+        current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        },
     )
     assert state.load_from_db(project_id=1) is True
     clip = state.video_clips[1]

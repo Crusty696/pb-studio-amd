@@ -15,6 +15,9 @@ import pytest
 from backend.app_state import AppState
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 @pytest.fixture
 def state():
     AppState._instance = None  # reset singleton
@@ -23,6 +26,11 @@ def state():
     s.audio_analysis_cache.clear()
     s.video_clips.clear()
     s.video_analysis_cache.clear()
+    s.current_project = {
+        "db_project_id": 1,
+        "project_uuid": PROJECT_UUID,
+        "path": r"C:\PBStudioTests\TruthSource",
+    }
     yield s
 
 
@@ -146,8 +154,9 @@ def test_update_audio_analysis_uses_captured_project_id(state):
     """An explicit operation project ID must win over later active-project state."""
     clip_id = 4
     state.current_project = {
-        "db_project_id": 999,
-        "path": "later-project",
+        "db_project_id": 17,
+        "project_uuid": PROJECT_UUID,
+        "path": r"C:\PBStudioTests\CapturedProject",
     }
     state.audio_clips[clip_id] = {
         "id": clip_id,

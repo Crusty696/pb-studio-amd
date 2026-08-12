@@ -243,7 +243,9 @@ def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
     destination_connection: sqlite3.Connection | None = None
     try:
         source_connection = sqlite3.connect(str(source), timeout=30.0)
+        source_connection.execute("PRAGMA busy_timeout = 5000")
         destination_connection = sqlite3.connect(str(destination), timeout=30.0)
+        destination_connection.execute("PRAGMA busy_timeout = 5000")
         source_connection.backup(destination_connection)
         destination_connection.commit()
         quick_check = str(
@@ -344,6 +346,7 @@ def validate_generation(
             raise RecoveryGenerationValidationError("Generation artifact hash mismatch")
         if artifact.get("adapter") == "sqlite_backup":
             connection = sqlite3.connect(str(staged))
+            connection.execute("PRAGMA busy_timeout = 5000")
             try:
                 quick_check = str(connection.execute("PRAGMA quick_check").fetchone()[0])
                 user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -804,6 +807,7 @@ class RecoveryGenerationWriter:
                 )
             if artifact.adapter == "sqlite_backup":
                 connection = sqlite3.connect(str(artifact.source_path))
+                connection.execute("PRAGMA busy_timeout = 5000")
                 try:
                     if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                         raise RecoveryGenerationValidationError(

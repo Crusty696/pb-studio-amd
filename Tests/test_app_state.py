@@ -14,6 +14,9 @@ import pytest
 from backend.app_state import AppState, PersistenceError, get_app_state
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 class TestAppStateInit:
     """AppState Initialzustand prüfen."""
 
@@ -208,7 +211,11 @@ class TestLoadFromDb:
 
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
-        state = AppState()
+        state = AppState(current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        })
         state.load_from_db(project_id=1)
 
         assert 12 not in state.audio_clips
@@ -245,7 +252,11 @@ class TestLoadFromDb:
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
         state = AppState()
-        state.current_project = {"db_project_id": 42, "path": str(tmp_path)}
+        state.current_project = {
+            "db_project_id": 42,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        }
         state.load_from_db()
 
         assert captured_project_ids == [42]
@@ -282,7 +293,11 @@ class TestLoadFromDb:
 
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
-        state = AppState()
+        state = AppState(current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        })
         state.load_from_db(project_id=1)
 
         assert list(state.video_clips) == [12]
@@ -291,8 +306,12 @@ class TestLoadFromDb:
 
 
 class TestDeletePersistence:
-    def test_audio_db_failure_preserves_memory_and_cache(self, monkeypatch):
-        state = AppState()
+    def test_audio_db_failure_preserves_memory_and_cache(self, monkeypatch, tmp_path):
+        state = AppState(current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        })
         state.audio_clips[7] = {"id": 7, "path": r"C:\media\track.wav"}
         state.audio_analysis_cache[7] = {"bpm": 128.0}
 
@@ -315,8 +334,12 @@ class TestDeletePersistence:
         assert state.audio_clips[7]["path"] == r"C:\media\track.wav"
         assert state.audio_analysis_cache[7] == {"bpm": 128.0}
 
-    def test_video_outbox_failure_preserves_memory_cache_and_db(self, monkeypatch):
-        state = AppState()
+    def test_video_outbox_failure_preserves_memory_cache_and_db(self, monkeypatch, tmp_path):
+        state = AppState(current_project={
+            "db_project_id": 1,
+            "project_uuid": PROJECT_UUID,
+            "path": str(tmp_path),
+        })
         state.video_clips[9] = {"id": 9, "path": r"C:\media\clip.mp4"}
         state.video_analysis_cache[9] = {"scene_count": 3}
         deleted_media_ids = []

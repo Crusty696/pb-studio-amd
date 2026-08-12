@@ -18,6 +18,6 @@ def test_configure_connection_enables_normal_synchronous_after_wal() -> None:
         call("PRAGMA journal_mode=WAL;"),
         call("PRAGMA synchronous=NORMAL;"),
         call("PRAGMA foreign_keys=ON;"),
-        call("PRAGMA busy_timeout=30000;"),
+        call("PRAGMA busy_timeout=5000;"),
     ]
     database._register_sql_functions.assert_called_once_with(connection)

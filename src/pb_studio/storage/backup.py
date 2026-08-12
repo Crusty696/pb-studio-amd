@@ -43,11 +43,13 @@ def backup_brain_store(
                 continue
             dst = staging / db_file
             conn = sqlite3.connect(str(src))
+            conn.execute("PRAGMA busy_timeout = 5000")
             try:
                 conn.execute("VACUUM INTO ?", (str(dst),))
             finally:
                 conn.close()
             verify = sqlite3.connect(str(dst))
+            verify.execute("PRAGMA busy_timeout = 5000")
             try:
                 if verify.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise sqlite3.DatabaseError(f"Backup-Integritätsprüfung fehlgeschlagen: {db_file}")

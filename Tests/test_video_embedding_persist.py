@@ -8,6 +8,9 @@ persistiert. Reload zeigte 0.
 import pytest
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 def _state_with_video(tmp_path, clip_id: int):
     from backend.app_state import AppState
 
@@ -17,6 +20,7 @@ def _state_with_video(tmp_path, clip_id: int):
         "name": "EmbeddingTest",
         "path": str(tmp_path),
         "db_project_id": 1,
+        "project_uuid": PROJECT_UUID,
     })
     clip = {
         "id": clip_id,

@@ -11,13 +11,20 @@ load_from_db liest meta.video_hash (oder fallback row.file_hash) zurueck.
 import pytest
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 def test_persist_video_clip_meta_contains_video_hash(monkeypatch):
     """Unit: persist_video_clip baut meta-dict mit video_hash + ruft add_media
     mit file_hash=video_hash auf (statt hardcoded "")."""
     from backend.app_state import AppState
 
     state = AppState()
-    state.current_project = {"db_project_id": 1, "path": r"C:\PBStudioTests\Hash"}
+    state.current_project = {
+        "db_project_id": 1,
+        "project_uuid": PROJECT_UUID,
+        "path": r"C:\PBStudioTests\Hash",
+    }
     captured = {}
 
     class FakeRepo:
@@ -50,6 +57,11 @@ def test_load_from_db_restores_video_hash(monkeypatch, tmp_path):
 
     state = AppState()
     state.reset()
+    state.current_project = {
+        "db_project_id": 1,
+        "project_uuid": PROJECT_UUID,
+        "path": str(tmp_path),
+    }
 
     # Fake video file path (Path.exists() check muss True liefern)
     fake_video = tmp_path / "test.mp4"

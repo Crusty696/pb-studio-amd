@@ -48,12 +48,14 @@ def project_state_lease(
     path: Optional[str | Path] = None,
     project_epoch: Optional[int] = None,
     project_id: Optional[int] = None,
+    project_uuid: Optional[str] = None,
 ) -> BrainStateLease:
     """Lease the active Brain state connection for one project operation."""
     return BrainService.get().project_state_lease(
         state_db_path=path,
         project_epoch=project_epoch,
         project_id=project_id,
+        project_uuid=project_uuid,
     )
 
 

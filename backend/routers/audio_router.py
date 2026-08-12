@@ -752,10 +752,14 @@ async def delete_clip(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Loescht einen einzelnen Audio-Clip aus In-Memory + SQLite."""
-    if state.delete_audio_clip(clip_id):
-        await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
-        return DeleteResponse(deleted_count=1, not_found_ids=[])
-    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    try:
+        async with state.project_operation() as context:
+            if state.delete_audio_clip(clip_id, context=context):
+                await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
+                return DeleteResponse(deleted_count=1, not_found_ids=[])
+            return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -769,19 +773,23 @@ async def delete_clips_batch(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Batch-Delete: loescht alle in clip_ids aufgefuehrten Audio-Clips."""
-    deleted = 0
-    not_found = []
-    for cid in request.clip_ids:
-        if state.delete_audio_clip(cid):
-            deleted += 1
-        else:
-            not_found.append(cid)
-    if deleted:
-        await publish_log(
-            f"{deleted} Audio-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
-            level="info", source="audio.delete",
-        )
-    return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
+    try:
+        async with state.project_operation() as context:
+            deleted = 0
+            not_found = []
+            for cid in request.clip_ids:
+                if state.delete_audio_clip(cid, context=context):
+                    deleted += 1
+                else:
+                    not_found.append(cid)
+            if deleted:
+                await publish_log(
+                    f"{deleted} Audio-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
+                    level="info", source="audio.delete",
+                )
+            return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _band_stft_params(

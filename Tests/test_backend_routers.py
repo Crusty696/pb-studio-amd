@@ -25,6 +25,9 @@ from backend.main import app
 from backend.app_state import AppState
 
 
+PROJECT_UUID = "75efc170-823d-4874-962e-5e472becaf8f"
+
+
 # ─────────────────────────────────────────────────────────────────
 # Hilfsfunktion: Modul per importlib holen (umgeht __init__ Shadowing)
 # ─────────────────────────────────────────────────────────────────
@@ -65,6 +68,7 @@ def fresh_state():
         "name": "RouterTests",
         "path": r"C:\PBStudioTests\RouterTests",
         "db_project_id": 1,
+        "project_uuid": PROJECT_UUID,
     }
     app.dependency_overrides[get_app_state] = lambda: state
     yield state
@@ -367,7 +371,7 @@ class TestVideoRouter:
         r = client.post("/video/analyze", json={"clip_id": 999})
         assert r.status_code == 404
 
-    def test_analyse_liefert_motion_mit_clip_id(self, client, fresh_state):
+    def test_analyse_liefert_motion_mit_clip_id(self, client, fresh_state, tmp_path):
         video_mod = _get_module("backend.routers.video_router")
         orig_scene = video_mod._run_scene_detection
         orig_gpu = video_mod._run_video_gpu_analysis
@@ -421,21 +425,20 @@ class TestVideoRouter:
         video_mod._run_video_gpu_analysis = fake_gpu
         video_mod._run_color_and_caption_analysis = fake_color
 
+        video_file = tmp_path / "clip.mp4"
+        video_file.write_bytes(b"video")
         clip = {
-            "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+            "id": 1, "name": "clip_1", "path": str(video_file),
             "duration_seconds": 10.0, "width": 1920, "height": 1080,
             "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
         }
         fresh_state.persist_video_clip(clip, project_id=1)
         fresh_state.set_video_clip(1, clip)
 
-        # R15/C-02: Patch Path.exists so the new file-existence guard passes in tests.
-        from pathlib import Path as _Path
         from unittest.mock import patch as _patch
 
         try:
-            with _patch.object(_Path, "exists", return_value=True), \
-                 _patch("pb_studio.video.audio_key_detector.detect_video_audio_key", return_value="C Major"):
+            with _patch("pb_studio.video.audio_key_detector.detect_video_audio_key", return_value="C Major"):
                 r = client.post("/video/analyze", json={
                     "clip_id": 1,
                     "detect_scenes": True,
@@ -629,11 +632,15 @@ class TestRenderRouter:
     def test_cancel_setzt_flag(self, client, fresh_state):
         """POST /render/cancel/{id} setzt cancel_flag auf True."""
         task_id = "test_abc"
+        context = fresh_state.capture_project_context()
         fresh_state.render_tasks[task_id] = {
             "task_id": task_id, "status": "running",
             "percent": 50.0, "current_frame": 100, "total_frames": 200,
             "fps": 30.0, "elapsed_seconds": 5.0, "eta_seconds": 5.0,
-            "output_path": None, "error": None
+            "output_path": None, "error": None,
+            "project_uuid": context.project_uuid,
+            "project_db_id": context.project_id,
+            "project_root": str(context.project_root),
         }
         fresh_state.cancel_flags[task_id] = False
 
@@ -647,11 +654,15 @@ class TestRenderRouter:
     def test_status_existierender_task(self, client, fresh_state):
         """GET /render/status/{id} gibt RenderProgress zurück."""
         task_id = "status_test"
+        context = fresh_state.capture_project_context()
         fresh_state.render_tasks[task_id] = {
             "task_id": task_id, "status": "running",
             "percent": 42.0, "current_frame": 300, "total_frames": 900,
             "fps": 29.5, "elapsed_seconds": 10.0, "eta_seconds": 14.0,
-            "output_path": None, "error": None
+            "output_path": None, "error": None,
+            "project_uuid": context.project_uuid,
+            "project_db_id": context.project_id,
+            "project_root": str(context.project_root),
         }
 
         r = client.get(f"/render/status/{task_id}")
