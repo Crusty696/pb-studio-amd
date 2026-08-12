@@ -209,7 +209,7 @@ class TestLoadFromDb:
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
         state = AppState()
-        state.load_from_db()
+        state.load_from_db(project_id=1)
 
         assert 12 not in state.audio_clips
         assert state.audio_clips[8]["path"] == str(existing_audio)
@@ -283,7 +283,7 @@ class TestLoadFromDb:
         monkeypatch.setattr("pb_studio.data.repositories.media_repository.MediaRepository", FakeRepo)
 
         state = AppState()
-        state.load_from_db()
+        state.load_from_db(project_id=1)
 
         assert list(state.video_clips) == [12]
         assert state.video_clips[12]["path"] == str(existing_video)

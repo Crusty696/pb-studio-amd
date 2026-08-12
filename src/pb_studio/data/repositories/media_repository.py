@@ -428,3 +428,75 @@ class MediaRepository:
         except Exception as e:
             logger.error(f"Bulk update failed: {e}", exc_info=True)
             raise
+
+    @_retry_on_database_lock
+    def recover_project_analysis(
+        self,
+        project_id: int,
+        *,
+        recovered_at_utc: Optional[str] = None,
+    ) -> List[int]:
+        """Atomically normalize analysis truth for one explicit project.
+
+        The operation is intentionally repository-owned so startup cannot
+        publish stale ``running`` receipts to RAM between reading and writing.
+        Any invalid JSON/receipt rolls back every update in the project batch.
+        """
+
+        if type(project_id) is not int or project_id <= 0:
+            raise ValueError("project_id must be a positive exact integer")
+
+        from pb_studio.core.stage_receipts import utc_now_rfc3339
+        from pb_studio.data.schemas.media_json_schema import (
+            normalize_analysis_ai_data,
+        )
+
+        terminal_time = recovered_at_utc or utc_now_rfc3339()
+        changed_ids: List[int] = []
+        with self.db.transaction(immediate=True) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, file_path, ai_data_json
+                FROM media
+                WHERE project_id = ?
+                  AND ai_data_json IS NOT NULL
+                  AND trim(ai_data_json) <> ''
+                ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+            for row in rows:
+                media_id = int(row["id"])
+                try:
+                    parsed = json.loads(row["ai_data_json"])
+                except (json.JSONDecodeError, TypeError) as exc:
+                    raise ValueError(
+                        f"Invalid ai_data_json for media {media_id}"
+                    ) from exc
+                try:
+                    normalized, changed = normalize_analysis_ai_data(
+                        parsed,
+                        is_video=_is_video_path(row["file_path"]),
+                        recovered_at_utc=terminal_time,
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Invalid analysis truth for media {media_id}: {exc}"
+                    ) from exc
+                if not changed:
+                    continue
+                cursor = conn.execute(
+                    "UPDATE media SET ai_data_json = ? WHERE id = ? AND project_id = ?",
+                    (json.dumps(normalized), media_id, project_id),
+                )
+                if cursor.rowcount != 1:
+                    raise LookupError(
+                        f"Media {media_id} left project {project_id} during recovery"
+                    )
+                changed_ids.append(media_id)
+        return changed_ids
+
+    def recover_analysis_receipts(self, project_id: int) -> int:
+        """Compatibility entry point used by ``AppState.load_from_db``."""
+
+        return len(self.recover_project_analysis(project_id))

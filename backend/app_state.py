@@ -1395,7 +1395,13 @@ class AppState:
             from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
 
             repo = MediaRepository()
-            project_id = int(project_id or self.get_current_project_db_id())
+            project_id = int(
+                self.require_current_project_db_id()
+                if project_id is None
+                else project_id
+            )
+            if project_id <= 0:
+                raise ValueError(f"Ungueltige Projekt-ID fuer DB-Load: {project_id}")
             repository_db = getattr(repo, "db", None)
             if repository_db is not None:
                 recovered = VectorOperationOutbox(db=repository_db).recover_pending(
@@ -1406,6 +1412,15 @@ class AppState:
                         "Vector-Outbox-Recovery fuer Projekt %s: %s Operation(en)",
                         project_id,
                         recovered,
+                    )
+            recovery_method = getattr(repo, "recover_analysis_receipts", None)
+            if callable(recovery_method):
+                interrupted = int(recovery_method(project_id=project_id) or 0)
+                if interrupted:
+                    logger.info(
+                        "Analyse-Receipt-Recovery fuer Projekt %s: %s Stage(s)",
+                        project_id,
+                        interrupted,
                     )
             rows = repo.get_by_project(project_id=project_id)
 
@@ -1422,37 +1437,50 @@ class AppState:
             tmp_video_analysis: dict[int, dict] = {}
 
             for row in rows:
+                row_project_id = row.get("project_id")
+                if row_project_id is not None and int(row_project_id) != project_id:
+                    raise ValueError(
+                        f"Projektfremder Media-Eintrag {row.get('id')}: "
+                        f"{row_project_id} != {project_id}"
+                    )
                 raw_meta = row.get("metadata_json") or "{}"
                 try:
                     meta = json.loads(raw_meta)
-                except json.JSONDecodeError:
-                    logger.warning(f"Ungültige metadata_json in DB-Row: {raw_meta[:80]}")
-                    continue
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Ungültige metadata_json in DB-Row {row.get('id')}"
+                    ) from exc
 
                 clip_type = meta.get("clip_type")
                 clip_id = meta.get("clip_id")
 
                 # Sicherheitsprüfung: clip_id und clip_type müssen vorhanden sein
                 if not clip_type or clip_id is None:
-                    continue
+                    raise ValueError(
+                        f"Media-Eintrag {row.get('id')} ohne clip_type/clip_id"
+                    )
 
                 try:
                     clip_id = int(clip_id)
-                except (TypeError, ValueError):
-                    logger.warning("Ungültige clip_id in Media-DB-Eintrag: %r", clip_id)
-                    continue
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Ungültige clip_id in Media-DB-Eintrag {row.get('id')}: {clip_id!r}"
+                    ) from exc
 
                 if clip_type == "audio":
                     max_audio_id = max(max_audio_id, clip_id)
                 elif clip_type == "video":
                     max_video_id = max(max_video_id, clip_id)
                 else:
-                    logger.warning(
-                        "Ungültiger clip_type in Media-DB-Eintrag %r: %r",
-                        row.get("id"),
-                        clip_type,
+                    raise ValueError(
+                        f"Ungültiger clip_type in Media-DB-Eintrag "
+                        f"{row.get('id')}: {clip_type!r}"
                     )
-                    continue
+                target = tmp_audio if clip_type == "audio" else tmp_video
+                if clip_id in target:
+                    raise ValueError(
+                        f"Doppelte {clip_type}-clip_id {clip_id} fuer Projekt {project_id}"
+                    )
 
                 file_path = row.get("file_path")
                 if not file_path:
@@ -1496,8 +1524,14 @@ class AppState:
                 raw_ai = row.get("ai_data_json") or "{}"
                 try:
                     ai_data = json.loads(raw_ai)
-                except json.JSONDecodeError:
-                    ai_data = {}
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Ungültige ai_data_json in DB-Row {row.get('id')}"
+                    ) from exc
+                if not isinstance(ai_data, dict):
+                    raise ValueError(
+                        f"ai_data_json in DB-Row {row.get('id')} ist kein Objekt"
+                    )
 
                 # C4-Fix (S-C1, 2026-05-19): Schema-Drift abfangen — legacy-Blobs
                 # ohne __schema_version werden on-the-fly migriert (audio_hash,
@@ -1574,6 +1608,7 @@ class AppState:
                             ),
                             "_stage_status": ai_data.get("stage_status", {}),
                             "_stage_errors": ai_data.get("stage_errors", {}),
+                            "_stage_receipts": ai_data.get("stage_receipts", {}),
                             "downbeats": ai_data.get("downbeats", []),
                             "downbeat_provenance": ai_data.get(
                                 "downbeat_provenance",
@@ -1606,7 +1641,15 @@ class AppState:
                         "thumbnail_available": _thumbnail_exists_for_clip(
                             clip_id, self.current_project, file_path
                         ),
-                        "tags": [],
+                        "tags": ai_data.get("tags", []),
+                        "tag_source": ai_data.get("tag_source", "none"),
+                        "analysis_status": ai_data.get(
+                            "analysis_status",
+                            "completed" if is_analyzed else "unavailable",
+                        ),
+                        "stage_status": ai_data.get("stage_status", {}),
+                        "stage_errors": ai_data.get("stage_errors", {}),
+                        "stage_receipts": ai_data.get("stage_receipts", {}),
                         # L-VIDEO-3 (CD-3): video_hash aus Meta (oder Legacy
                         # file_hash) zurueck ins In-Memory-Dict damit
                         # UI-CACHED-Badge + EmbeddingCache-Lookup funktionieren.
@@ -1616,7 +1659,7 @@ class AppState:
                     video_count += 1
 
                     # Video-Analyse-Cache wiederherstellen
-                    if is_analyzed and ai_data:
+                    if ai_data:
                         tmp_video_analysis[clip_id] = {
                             "clip_id": clip_id,
                             "scene_count": int(ai_data.get("scene_count", 0) or 0),
@@ -1635,28 +1678,32 @@ class AppState:
                             "avg_saturation": float(ai_data.get("avg_saturation", 0.5) or 0.5),
                             "avg_color_temp": float(ai_data.get("avg_color_temp", 0.0) or 0.0),
                             "mood_tags": ai_data.get("mood_tags", []),
+                            "tag_source": ai_data.get("tag_source", "none"),
+                            "analysis_status": ai_data.get(
+                                "analysis_status",
+                                "completed" if is_analyzed else "unavailable",
+                            ),
+                            "stage_status": ai_data.get("stage_status", {}),
+                            "stage_errors": ai_data.get("stage_errors", {}),
+                            "stage_receipts": ai_data.get("stage_receipts", {}),
+                            "stage_artifacts": ai_data.get("stage_artifacts", {}),
+                            "media_sha256": ai_data.get("media_sha256"),
+                            "is_analyzed": is_analyzed,
                         }
 
             # Unter Lock alle Clips und Caches atomar leeren und zuweisen (R-2 Fix)
             with self._state_lock:
-                self.audio_clips.clear()
-                self.audio_clips.update(tmp_audio)
-                
-                self.video_clips.clear()
-                self.video_clips.update(tmp_video)
-                
-                self.audio_analysis_cache.clear()
-                if tmp_audio_analysis:
+                with self._lock:
+                    self.audio_clips.clear()
+                    self.audio_clips.update(tmp_audio)
+                    self.video_clips.clear()
+                    self.video_clips.update(tmp_video)
+                    self.audio_analysis_cache.clear()
                     self.audio_analysis_cache.update(tmp_audio_analysis)
-                    
-                self.video_analysis_cache.clear()
-                if tmp_video_analysis:
+                    self.video_analysis_cache.clear()
                     self.video_analysis_cache.update(tmp_video_analysis)
-
-            # ID-Counter nach dem Load atomar anpassen
-            with self._lock:
-                self._audio_next_id = max_audio_id + 1 if max_audio_id > 0 else 1
-                self._video_next_id = max_video_id + 1 if max_video_id > 0 else 1
+                    self._audio_next_id = max_audio_id + 1 if max_audio_id > 0 else 1
+                    self._video_next_id = max_video_id + 1 if max_video_id > 0 else 1
 
             logger.info(
                 f"DB-Load OK für Projekt {project_id}: {audio_count} Audio-Clips, {video_count} Video-Clips wiederhergestellt"

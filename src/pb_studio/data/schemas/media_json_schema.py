@@ -25,11 +25,18 @@ API:
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from typing import Any, Callable
 
 from pb_studio.core.stage_receipts import (
+    RECEIPT_VERSION,
+    canonical_sha256,
+    derive_analysis_status,
     project_legacy_stage_receipts,
     receipt_to_dict,
+    transition_stage_receipt,
+    validate_receipt_artifact,
+    validate_receipt_map,
 )
 
 # Aktuelle Schema-Version. Bei Neuanlegen eines Feldes:
@@ -232,3 +239,267 @@ def migrate_video_metadata(blob: dict[str, Any]) -> dict[str, Any]:
 
 def migrate_video_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
     return _ensure_stage_receipts(_migrate_with_chain(blob, VIDEO_AI_DATA_CHAIN))
+
+
+_AUDIO_STAGE_ARTIFACT_REFS = {
+    "beats": "ai_data_json.beats_json",
+    "structure": "ai_data_json.structure_segments",
+    "spectral": "ai_data_json.spectral_data",
+    "key": "ai_data_json.key",
+}
+
+_AUDIO_STAGE_FIELDS = {
+    "beats": (
+        "bpm",
+        "beat_count",
+        "beats_json",
+        "energy_curve",
+        "downbeats",
+        "downbeat_provenance",
+        "onset_times",
+        "kick_times",
+        "snare_times",
+        "hihat_times",
+        "chunk_evidence",
+    ),
+    "structure": ("structure_segments",),
+    "spectral": ("spectral_data",),
+    "key": ("key",),
+}
+
+_VIDEO_STAGE_FIELDS = {
+    "scenes": ("scene_count", "scenes"),
+    "motion": ("avg_motion", "motion"),
+    "embedding": ("embedding_dim", "embedding_samples", "has_embedding"),
+    "colors": (
+        "dominant_colors",
+        "mood_tags",
+        "avg_brightness",
+        "avg_saturation",
+        "avg_color_temp",
+    ),
+    "captions": ("tags", "tag_source"),
+    "audio_key": ("audio_key",),
+}
+
+
+def _video_canonical_stage_artifact(
+    stage_id: str,
+    blob: dict[str, Any],
+) -> dict[str, Any] | None:
+    fields = _VIDEO_STAGE_FIELDS.get(stage_id)
+    if fields is None or any(field not in blob for field in fields):
+        return None
+    artifact = {field: deepcopy(blob[field]) for field in fields}
+    if stage_id == "embedding":
+        stage_artifacts = blob.get("stage_artifacts")
+        locator = (
+            stage_artifacts.get("embedding")
+            if isinstance(stage_artifacts, dict)
+            else None
+        )
+        if not isinstance(locator, dict):
+            return None
+        artifact.update(
+            {
+                "store": "faiss_cpu",
+                "media_id": locator.get("media_id"),
+                "faiss_id": locator.get("faiss_id"),
+                "media_sha256": blob.get("media_sha256"),
+            }
+        )
+    return artifact
+
+
+def _completed_artifact_is_valid(
+    stage_id: str,
+    receipt,
+    blob: dict[str, Any],
+    *,
+    is_video: bool,
+) -> bool:
+    if not validate_receipt_artifact(receipt, blob):
+        return False
+
+    if not is_video:
+        expected_ref = _AUDIO_STAGE_ARTIFACT_REFS.get(stage_id)
+        return expected_ref is None or receipt.artifact_ref == expected_ref
+
+    if stage_id not in _VIDEO_STAGE_FIELDS:
+        return True
+    expected_ref = f"ai_data_json.stage_artifacts.{stage_id}"
+    if receipt.artifact_ref != expected_ref:
+        return False
+    stage_artifacts = blob.get("stage_artifacts")
+    persisted = (
+        stage_artifacts.get(stage_id)
+        if isinstance(stage_artifacts, dict)
+        else None
+    )
+    canonical = _video_canonical_stage_artifact(stage_id, blob)
+    if not isinstance(persisted, dict) or canonical is None:
+        return False
+    return (
+        canonical_sha256(persisted) == receipt.artifact_sha256
+        and canonical_sha256(canonical) == receipt.artifact_sha256
+    )
+
+
+def _quarantine_stage_payload(
+    blob: dict[str, Any],
+    stage_id: str,
+    *,
+    is_video: bool,
+) -> None:
+    """Remove only one invalid stage's canonical persisted payload."""
+
+    fields = (
+        _VIDEO_STAGE_FIELDS.get(stage_id, ())
+        if is_video
+        else _AUDIO_STAGE_FIELDS.get(stage_id, ())
+    )
+    for field in fields:
+        blob.pop(field, None)
+
+    stage_artifacts = blob.get("stage_artifacts")
+    if isinstance(stage_artifacts, dict) and stage_id in stage_artifacts:
+        retained = dict(stage_artifacts)
+        retained.pop(stage_id, None)
+        blob["stage_artifacts"] = retained
+
+
+def normalize_analysis_ai_data(
+    blob: dict[str, Any],
+    *,
+    is_video: bool,
+    recovered_at_utc: str,
+) -> tuple[dict[str, Any], bool]:
+    """Return startup-safe analysis truth without mutating ``blob``.
+
+    V1 requested stages left ``running`` by a dead backend are terminalized as
+    ``interrupted``. Completed V1 receipts are accepted only when their
+    persisted artifact still matches the receipt hash and, for known video
+    stages, the canonical top-level fields. Legacy V0 and unrequested receipts
+    remain unchanged.
+    """
+
+    if not isinstance(blob, dict):
+        raise TypeError("analysis ai_data_json must decode to an object")
+    migrated = (
+        migrate_video_ai_data(blob)
+        if is_video
+        else migrate_audio_ai_data(blob)
+    )
+    raw_receipts = migrated.get("stage_receipts")
+    if not isinstance(raw_receipts, dict):
+        raise TypeError("stage_receipts must be an object")
+    receipts = validate_receipt_map(raw_receipts)
+
+    if not receipts:
+        normalized = dict(migrated)
+        legacy_status = str(normalized.get("analysis_status") or "").strip().lower()
+        if legacy_status not in {
+            "unavailable",
+            "running",
+            "completed",
+            "partial",
+            "failed",
+        }:
+            legacy_status = (
+                "completed" if bool(normalized.get("is_analyzed")) else "unavailable"
+            )
+        normalized["analysis_status"] = legacy_status
+        normalized["stage_status"] = (
+            dict(normalized["stage_status"])
+            if isinstance(normalized.get("stage_status"), dict)
+            else {}
+        )
+        normalized["stage_errors"] = (
+            dict(normalized["stage_errors"])
+            if isinstance(normalized.get("stage_errors"), dict)
+            else {}
+        )
+        normalized["is_analyzed"] = legacy_status == "completed"
+        return normalized, normalized != blob
+
+    recovered = {}
+    for stage_id, receipt in receipts.items():
+        next_receipt = receipt
+        if (
+            receipt.receipt_version == RECEIPT_VERSION
+            and receipt.requested
+            and receipt.status == "running"
+        ):
+            next_receipt = transition_stage_receipt(
+                receipt,
+                "interrupted",
+                error_code="startup_interrupted",
+                error_message="Analysis interrupted by backend restart",
+                timestamp_utc=recovered_at_utc,
+            )
+        elif (
+            receipt.receipt_version != RECEIPT_VERSION
+            and receipt.requested
+            and receipt.status == "running"
+        ):
+            next_receipt = project_legacy_stage_receipts(
+                stage_status={stage_id: "interrupted"},
+                stage_errors={
+                    stage_id: "Analysis interrupted by backend restart"
+                },
+            )[stage_id]
+        elif (
+            receipt.artifact_valid is True
+            and not _completed_artifact_is_valid(
+                stage_id,
+                receipt,
+                migrated,
+                is_video=is_video,
+            )
+        ):
+            _quarantine_stage_payload(
+                migrated,
+                stage_id,
+                is_video=is_video,
+            )
+            if receipt.receipt_version == RECEIPT_VERSION and not receipt.requested:
+                next_receipt = replace(
+                    receipt,
+                    status="unavailable",
+                    artifact_valid=False,
+                    finished_at_utc=recovered_at_utc,
+                    error_code="artifact_invalid",
+                    error_message=(
+                        f"Persisted artifact for stage {stage_id} failed validation"
+                    ),
+                )
+            else:
+                next_receipt = replace(
+                    receipt,
+                    status="failed",
+                    artifact_valid=False,
+                    finished_at_utc=recovered_at_utc,
+                    error_code="artifact_invalid",
+                    error_message=(
+                        f"Persisted artifact for stage {stage_id} failed validation"
+                    ),
+                )
+        recovered[stage_id] = next_receipt
+
+    normalized = dict(migrated)
+    normalized["stage_receipts"] = {
+        stage_id: receipt_to_dict(receipt)
+        for stage_id, receipt in recovered.items()
+    }
+    normalized["analysis_status"] = derive_analysis_status(recovered)
+    normalized["stage_status"] = {
+        stage_id: receipt.status
+        for stage_id, receipt in recovered.items()
+    }
+    normalized["stage_errors"] = {
+        stage_id: receipt.error_message
+        for stage_id, receipt in recovered.items()
+        if receipt.error_message
+    }
+    normalized["is_analyzed"] = normalized["analysis_status"] == "completed"
+    return normalized, normalized != blob

@@ -437,7 +437,7 @@ class TestProjectLifecyclePersistence:
         state._audio_next_id = 1000
         state._video_next_id = 778
 
-        state.load_from_db()
+        state.load_from_db(project_id=1)
 
         assert list(state.audio_clips) == [8]
         assert state.audio_clips[8]["path"] == str(existing_audio)

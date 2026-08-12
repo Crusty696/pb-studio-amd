@@ -15,6 +15,13 @@ from pb_studio.data.schemas.media_json_schema import (
     migrate_audio_metadata,
     migrate_video_ai_data,
     migrate_video_metadata,
+    normalize_analysis_ai_data,
+)
+
+from pb_studio.core.stage_receipts import (
+    create_stage_receipt,
+    receipt_to_dict,
+    transition_stage_receipt,
 )
 
 
@@ -119,3 +126,51 @@ def test_partial_legacy_blob_keeps_existing_audio_hash():
     assert migrated["audio_hash"] == "sha256:xyz", \
         "setdefault muss existierende Werte respektieren"
     assert migrated["stems_paths"] == {}, "Fehlende Felder defaulten"
+
+
+def test_normalize_analysis_ai_data_is_pure_and_terminalizes_running_v1_receipt():
+    receipt = create_stage_receipt("beats", requested=True)
+    receipt = transition_stage_receipt(
+        receipt,
+        "running",
+        timestamp_utc="2026-08-12T14:00:00Z",
+    )
+    source = {
+        "stage_receipts": {"beats": receipt_to_dict(receipt)},
+        "analysis_status": "running",
+        "stage_status": {"beats": "running"},
+        "stage_errors": {},
+        "is_analyzed": False,
+    }
+
+    normalized, changed = normalize_analysis_ai_data(
+        source,
+        is_video=False,
+        recovered_at_utc="2026-08-12T14:30:00Z",
+    )
+
+    assert changed is True
+    assert source["stage_receipts"]["beats"]["status"] == "running"
+    assert normalized["stage_receipts"]["beats"]["status"] == "interrupted"
+    assert normalized["analysis_status"] == "failed"
+    assert normalized["stage_status"] == {"beats": "interrupted"}
+    assert normalized["is_analyzed"] is False
+
+
+def test_normalize_analysis_ai_data_preserves_legacy_completed_truth_without_receipts():
+    source = {
+        "bpm": 128.0,
+        "is_analyzed": True,
+    }
+
+    normalized, changed = normalize_analysis_ai_data(
+        source,
+        is_video=False,
+        recovered_at_utc="2026-08-12T14:30:00Z",
+    )
+
+    assert changed is True
+    assert normalized["analysis_status"] == "completed"
+    assert normalized["stage_status"] == {}
+    assert normalized["stage_errors"] == {}
+    assert normalized["is_analyzed"] is True
