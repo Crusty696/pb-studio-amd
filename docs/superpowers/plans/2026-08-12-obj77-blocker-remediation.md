@@ -153,7 +153,7 @@ $env:PYTHONPATH = "src;."
 .\.venv\Scripts\python.exe scripts\requirements\validate_obj77_reservations.py specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json
 ```
 
-Expected: unit tests pass; live validation remains nonzero until all five reservations are genuine.
+Expected: unit tests pass; live validation remains nonzero until all four external reservations are genuine.
 
 - [ ] **Step 6: Commit validator and honest blocked receipt**
 
