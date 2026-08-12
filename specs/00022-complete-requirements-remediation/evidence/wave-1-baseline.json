@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "evidence_type": "obj77_wave_1_red_contract_baseline",
+  "captured_at_utc": "2026-08-12T12:50:12.632Z",
+  "scope": [
+    "T087",
+    "T089",
+    "A-03",
+    "V-01",
+    "K-17",
+    "D-07"
+  ],
+  "source": {
+    "worktree": "C:\\Users\\david\\Documents\\Pb_studio_AMD_version-remediation",
+    "branch": "codex/obj77-wave1-shared-contracts",
+    "git_sha": "83702a16531c0a5f0eb3a443f777511c672ba3ae",
+    "initial_git_status_porcelain": [],
+    "initial_worktree_clean": true,
+    "original_dirty_worktree_touched": false
+  },
+  "runtime": {
+    "python": "3.11.9",
+    "numpy": "1.26.4",
+    "onnxruntime": "1.19.2",
+    "onnxruntime_available_providers": [
+      "DmlExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "sqlite_vec": "0.1.9",
+    "faiss": "1.7.4",
+    "dotnet_global_json_requested_sdk": "9.0.316",
+    "dotnet_installed_sdks": [
+      "9.0.317",
+      "10.0.400-preview.0.26322.102"
+    ],
+    "dotnet_version_exit_code": -2147450725,
+    "dotnet_version_status": "configured_sdk_9.0.316_missing"
+  },
+  "file_sha256": {
+    "global.json": "9C69EBF15E08F944921F34B4CADF50E879D3467BB847D609B6AE079FC120D192",
+    "pytest.ini": "433908704F565148FA2C8A9BA82C10149677EEFD6BCCB80526E87DF8C6A99CF2",
+    "config.json": "80AC1719E6C73DD31633C120D3496A90D23A10A61E2B7DA47D73994397DF2E9E",
+    "config/directml-model-assets.json": "7EEC95F7A0B345FB97B5ADFB8F82D66E060E094F2B3652C3FD835A4A4282C6EA",
+    "requirements.txt": "EF9AF8A33677724B36A4A22E8A78C1BD5D034DC673D75BA1B9F2C0FAECF693F0"
+  },
+  "commands": [
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m py_compile Tests\\test_stage_receipt_contract.py Tests\\test_wave1_status_derivation.py Tests\\test_wave1_endpoint_configuration_contract.py Tests\\test_wave1_sqlite_connection_contract.py",
+      "exit_code": 0,
+      "result": "pass"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest Tests\\test_stage_receipt_contract.py Tests\\test_wave1_status_derivation.py Tests\\test_wave1_endpoint_configuration_contract.py Tests\\test_wave1_sqlite_connection_contract.py -q",
+      "exit_code": 1,
+      "result": "expected_red",
+      "collected": 20,
+      "passed": 0,
+      "failed": 20,
+      "collection_errors": 0,
+      "warnings": 4,
+      "duration_seconds": 20.36
+    }
+  ],
+  "red_failures": [
+    "Tests/test_stage_receipt_contract.py::test_stage_receipt_and_attempt_models_have_exact_additive_fields",
+    "Tests/test_stage_receipt_contract.py::test_audio_and_video_transport_models_expose_stage_receipts[backend.schemas.audio_schemas-AudioClipInfo]",
+    "Tests/test_stage_receipt_contract.py::test_audio_and_video_transport_models_expose_stage_receipts[backend.schemas.audio_schemas-AudioAnalysisResult]",
+    "Tests/test_stage_receipt_contract.py::test_audio_and_video_transport_models_expose_stage_receipts[backend.schemas.video_schemas-VideoClipInfo]",
+    "Tests/test_stage_receipt_contract.py::test_audio_and_video_transport_models_expose_stage_receipts[backend.schemas.video_schemas-VideoAnalysisResult]",
+    "Tests/test_stage_receipt_contract.py::test_legacy_projection_is_v0_and_preserves_requested_truth",
+    "Tests/test_stage_receipt_contract.py::test_json_blob_reader_adds_empty_receipt_map_without_mutating_legacy_input[migrate_audio_ai_data]",
+    "Tests/test_stage_receipt_contract.py::test_json_blob_reader_adds_empty_receipt_map_without_mutating_legacy_input[migrate_video_ai_data]",
+    "Tests/test_wave1_status_derivation.py::test_requested_only_aggregate_status[receipts0-completed]",
+    "Tests/test_wave1_status_derivation.py::test_requested_only_aggregate_status[receipts1-partial]",
+    "Tests/test_wave1_status_derivation.py::test_requested_only_aggregate_status[receipts2-failed]",
+    "Tests/test_wave1_status_derivation.py::test_requested_only_aggregate_status[receipts3-completed]",
+    "Tests/test_wave1_status_derivation.py::test_requested_unavailable_requires_typed_reason",
+    "Tests/test_wave1_status_derivation.py::test_retry_selects_only_missing_failed_interrupted_and_new_unavailable",
+    "Tests/test_wave1_status_derivation.py::test_receipt_dictionary_key_must_match_stage_id",
+    "Tests/test_wave1_endpoint_configuration_contract.py::test_root_appsettings_is_the_single_loopback_endpoint_contract",
+    "Tests/test_wave1_endpoint_configuration_contract.py::test_active_runtime_sources_have_no_hardcoded_default_endpoint",
+    "Tests/test_wave1_endpoint_configuration_contract.py::test_ui_bound_namespaces_do_not_suppress_dispatcher_context",
+    "Tests/test_wave1_sqlite_connection_contract.py::test_every_productive_sqlite_factory_applies_the_common_timeout_after_open",
+    "Tests/test_wave1_sqlite_connection_contract.py::test_common_initializer_and_database_core_use_exactly_5000_ms"
+  ],
+  "observed_missing_contracts": {
+    "stage_receipt": [
+      "backend.schemas.stage_receipt module",
+      "pb_studio.core.stage_receipts module",
+      "17-field StageReceipt",
+      "typed StageAttemptReceipt",
+      "audio/video schema transport fields",
+      "non-mutating V0 JSON projection"
+    ],
+    "status_retry": [
+      "requested-only aggregate derivation",
+      "unavailable reason validation",
+      "missing/failed/interrupted/new-unavailable retry selection",
+      "stage dictionary key validation"
+    ],
+    "endpoint_dispatcher": {
+      "root_appsettings_missing": true,
+      "hardcoded_runtime_sources": [
+        "PBStudio.UI/App.xaml.cs",
+        "PBStudio.UI/Services/OwnerCapabilityRequestHandler.cs",
+        "PBStudio.UI/Services/PythonBridgeService.cs",
+        "PBStudio.UI/Services/SSEClient.cs",
+        "PBStudio.UI/Views/SettingsView.xaml",
+        "PBStudio.UI/run.ps1",
+        "src/pb_studio/ai/tool_registry.py",
+        "launch.ps1",
+        "scripts/diagnostics/verify_video_resume_live.ps1",
+        "scripts/owned_runtime_process.ps1",
+        "scripts/qa/check_stress.bat",
+        "scripts/qa/stress_4h.bat",
+        "scripts/qa/verify_model_manager.bat",
+        "scripts/qa/verify_model_manager_to_file.bat"
+      ],
+      "ui_configure_await_false_sources": [
+        "PBStudio.UI/ViewModels/MainViewModel.cs",
+        "PBStudio.UI/ViewModels/TimelineViewModel.cs",
+        "PBStudio.UI/ViewModels/VramTelemetryViewModel.cs"
+      ]
+    },
+    "sqlite_timeout": {
+      "required_busy_timeout_ms": 5000,
+      "uninitialized_factories": [
+        "src/pb_studio/storage/backup.py:45",
+        "src/pb_studio/storage/backup.py:50",
+        "src/pb_studio/storage/recovery_adapters.py:78",
+        "src/pb_studio/storage/recovery_generation.py:245",
+        "src/pb_studio/storage/recovery_generation.py:246",
+        "src/pb_studio/storage/recovery_generation.py:346",
+        "src/pb_studio/storage/recovery_generation.py:806",
+        "backend/routers/brain_router.py:409"
+      ],
+      "database_core_observed_busy_timeout_ms": 30000
+    }
+  },
+  "gate": {
+    "expected_red": true,
+    "syntax_valid": true,
+    "collection_valid": true,
+    "product_code_changed": false,
+    "ready_for_task_2": true
+  }
+}
