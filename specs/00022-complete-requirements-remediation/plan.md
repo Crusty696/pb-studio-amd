@@ -79,6 +79,9 @@ sowie A-14..A-16 sind gruen. LOCKED Separator-Dateien bleiben unveraendert.
    absichern; das Hermes-Wartungsfenster bleibt bis zur Endabnahme deferred.
 5. Canary-Vertrag und Bulk-Sperre implementieren; die wartungsfenstergebundene
    Live-Ausfuehrung folgt erst nach allen lokalen AMD-Gates.
+6. Den reversiblen LM-Studio/Hermes-Harness samt Unit-/Safety-Tests und
+   nicht-invasivem Snapshot vollstaendig implementieren und committen; nach dem
+   Candidate-Freeze darf sich dieser Code nicht mehr aendern.
 
 **Lokales AMD-Gate:** Suche/Reload, 10k-Library, Scene-Ground-Truth sowie alle
 nicht-invasiv lokal pruefbaren Video- und Resume-Vertraege sind gruen. T003 und
@@ -107,8 +110,10 @@ Freezes, kein Persistenzverlust und P-10..P-12 bestanden.
    schliessen.
 4. 14 Views bei 100/150/200 Prozent, High Contrast, Keyboard, Fokus und UIA
    pruefen; P95-Latenz messen.
-5. DirectML und die vollstaendige KI-/UI-Kette auf der vorhandenen RX 7800 XT
-   ausfuehren; Intel und NVIDIA werden erst in der Endabnahme geprueft.
+5. Den portablen DirectML-Matrixrunner implementieren, mit Unit-Tests absichern
+   und DirectML samt vollstaendiger KI-/UI-Kette auf der vorhandenen RX 7800 XT
+   ausfuehren; Intel und NVIDIA folgen erst in der Endabnahme. Der Runner ist
+   vor dem AMD-Lauf commitgebunden, das Receipt folgt im finalen Evidence-Commit.
 
 **Lokales AMD-Gate:** keine verbotenen Fallbacks, korrekte lokale
 Provider-/Modellreceipts, GUI-Matrix und RX-7800-XT-Nachweis gruen.
@@ -117,9 +122,11 @@ abschliessenden Intel-/NVIDIA-Matrix offen.
 
 ## Wave 6 - Resilienz, Governance und Release
 
-1. Nicht-externe Resilienzvertraege auf der RX 7800 XT schliessen. Der echte
-   4h-Worker samt Canary, Soak und Release-Lauf ist nicht Teil dieses lokalen
-   Gates und beginnt erst in der externen Endabnahme.
+1. Den versionierten fail-closed 4096-MB-Stressworker implementieren, mit
+   Unit-Tests absichern und den 15-Minuten-Canary sowie 60-Minuten-Soak auf der
+   RX 7800 XT erst nach dem Tooling-Commit ausfuehren. Canary/Soak-Receipts
+   bleiben bis zum finalen Evidence-Commit unveraendert. Nur der echte
+   14.400-Sekunden-Lauf bleibt bis zur externen Endabnahme deferred.
 2. Recovery-/Owner-Testkontamination beseitigen und Reihenfolgevarianten testen.
 3. Additive compliance.json-Dateien mit historischen Hashes erzeugen und
    qualifizierte Requirement-IDs repo-weit validieren.
@@ -130,22 +137,36 @@ abschliessenden Intel-/NVIDIA-Matrix offen.
 
 **Lokales AMD-Gate:** alle nicht-externen Ledgerzeilen sind geschlossen; aktive
 Workspaces sind fuer die externe Endabnahme valid, historische archive-valid;
-lokale Tests, Reviews und der Produktpfad auf der RX 7800 XT sind gruen. Ein
-Release bleibt bis zur nachfolgenden externen Endabnahme gesperrt.
+lokale Tests, Reviews und Matrix-/LM-/Stress-Tooling sind commitgebunden;
+AMD-Matrix, Canary, Soak und der Produktpfad auf der RX 7800 XT sind gruen und
+an denselben Candidate gebunden. Ein Release bleibt bis zur nachfolgenden
+externen Endabnahme gesperrt.
 
-## Abschliessende externe Release-Abnahme
+## Candidate-Freeze und abschliessende externe Release-Abnahme
 
-Diese Phase startet erst, wenn alle Wave-1-bis-Wave-6-Gates fuer nicht-externe
-Arbeit und die lokale RX-7800-XT-Produktkette gruen sind.
+Nach allen gruenen Wave-1-bis-Wave-6-Gates fuer nicht-externe Arbeit und die
+lokale RX-7800-XT-Produktkette muessen saemtliches Matrix-/LM-/Stress-Tooling
+commitgebunden sein und ein in allen Code-/Config-Pfaden sauberer
+`tested_candidate_sha` eingefroren werden.
+Die externe Live-Ausfuehrung beginnt erst nach dem folgenden Exit-0-Startgate.
 
-1. Den identischen Candidate-SHA auf realer AMD-, Intel- und
-   NVIDIA-DirectML-Hardware pruefen.
-2. Das autorisierte LM-Studio/Hermes-Wartungsfenster reversibel ausfuehren,
-   T003 belegen und T019 erst nach seinem separaten Go starten.
-3. Canary und Soak des versionierten 4096-MB-Stressworkers ausfuehren und
-   danach den echten mindestens 14.400 Sekunden dauernden Lauf abschliessen.
-4. Alle externen Receipts commit-, config-, asset-, medien- und
-   hardwaregebunden validieren und im finalen Closure-Manifest einzeln listen.
+1. Einen frischen External-Acceptance-Receipt erzeugen und **vor Start der
+   externen Live-Ausfuehrung** fuer Intel, NVIDIA, LM-Fenster und Stressfenster einen
+   Reservierungsvalidator-Exit 0 verlangen. Ein Fehler blockiert nur diese
+   Endphase, nicht Wave 0 oder die abgeschlossenen lokalen AMD-Waves.
+2. Den identischen `tested_candidate_sha` ohne Code-/Config-Aenderung auf realer
+   Intel- und NVIDIA-DirectML-Hardware pruefen; der AMD-Nachweis stammt aus dem
+   lokalen Gate desselben Candidates.
+3. Das autorisierte LM-Studio/Hermes-Wartungsfenster auf genau diesem Candidate
+   reversibel ausfuehren und T003 belegen.
+4. Nach T003 PASS und einem separaten Go T019 als eigenen 10-Clip-Schritt mit
+   10/10 stabilen Receipts abschliessen; vorher kein Bulk.
+5. Danach den echten mindestens 14.400 Sekunden dauernden 4096-MB-Lauf mit dem
+   unveraenderten Candidate abschliessen.
+6. Alle externen Receipts gegen `tested_candidate_sha`, Config, Assets, Medien
+   und Hardware validieren und erst danach in einem spaeteren Evidence-Commit
+   samt finalem Closure-Manifest eintragen. Der Evidence-Commit darf eine neue
+   SHA haben, darf aber den getesteten Candidate nicht umdeuten.
 
 **Finales Release-Gate:** Intel-/NVIDIA-Matrix, LM-Studio-Live-Nachweise,
 Hermes-Restore und echter 4h-Stress sind gruen; OR-363 ist damit erfuellt; kein

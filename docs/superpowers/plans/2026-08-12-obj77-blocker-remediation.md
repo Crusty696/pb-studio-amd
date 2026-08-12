@@ -4,7 +4,7 @@
 
 **Goal:** Complete every non-external repair and prove the full local product chain on the existing RX 7800 XT first. Only after that local AMD completion may the Intel/NVIDIA DirectML matrix, LM-Studio maintenance window and real four-hour stress run execute as final release gates. OR-363 remains unchanged and must be fulfilled before release.
 
-**Architecture:** Wave 0 records the truthful current external-resource status and registered, hash-bound pending-or-verified real-media manifests without changing product code, then merges into the integration branch even while the reservation validator truthfully exits 1. Waves 1-6 first complete all non-external implementation and local RX 7800 XT verification. Only after every local AMD gate is green do three deferred fail-closed tracks execute: an isolated vendor-neutral Intel/NVIDIA ONNX-DirectML matrix, a reversible LM-Studio/Hermes maintenance window and the versioned 4096-MB four-hour stress run. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
+**Architecture:** Wave 0 records the truthful current external-resource status and registered, hash-bound pending-or-verified real-media manifests without changing product code, then merges into the integration branch even while the reservation validator truthfully exits 1. Waves 1-6 complete all non-external implementation and local RX 7800 XT verification. Tasks 5-7 also implement and commit the matrix runner, LM harness and stress worker, prove the local AMD matrix, and pass stress Canary/Soak before the candidate SHA is frozen. A fresh four-resource receipt with reservation-validator exit 0 then opens the final external phase. Tasks 9-12 make no code changes and execute exactly the frozen `tested_candidate_sha`; the later evidence commit references that unchanged SHA. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
 
 **Tech Stack:** Python 3.11.9, NumPy 1.26.4, ONNX Runtime DirectML 1.19.2, PowerShell 5.1, Windows batch, pytest, FastAPI, DXGI, LibreHardwareMonitor, LM Studio HTTP API, JSON/SHA-256 evidence.
 
@@ -21,7 +21,7 @@
 - Historical evidence files are immutable. New observations go into new timestamped receipts.
 - T003 must pass before requesting T019; no bulk analysis before the ten-clip Canary receives separate approval.
 - Wave 0 and Waves 1-6 local-AMD work are not blocked by missing Intel/NVIDIA access, an unauthorized LM-Studio maintenance window or an unreserved four-hour stress window. Those four states remain truthfully failed and deferred until final external release acceptance.
-- Tasks 5, 6 and 7 must not start until every master-plan non-external and local RX 7800 XT gate has passed. Task 8 remains the final release-convergence gate.
+- Tasks 5, 6 and 7 are local AMD preparation and must finish before Candidate-Freeze. Tasks 9-12 are the deferred external executions. Task 13 remains the final release-convergence gate.
 
 ## Authoritative Task-2 Scope Correction
 
@@ -350,7 +350,7 @@ Expected scan: no new prohibited runtime inference path.
 
 ---
 
-### Task 5: Final AMD/Intel/NVIDIA DirectML release matrix
+### Task 5: Implement and unit-test the matrix runner before Candidate-Freeze
 
 **Files:**
 - Create: `scripts/directml_matrix/probe.py`
@@ -363,7 +363,7 @@ Expected scan: no new prohibited runtime inference path.
 - Consumes: `enumerate_dxgi_adapters()`, expected vendor, expected Git SHA, model manifest and real media manifest.
 - Produces: `select_expected_adapter(adapters, expected_vendor) -> DirectMLAdapter` and one hash-bound evidence bundle per vendor.
 
-Do not start this task during the local implementation waves. Start it only after every master-plan non-external gate and every local RX 7800 XT functional gate is green, using the exact resulting candidate SHA. The local AMD receipt confirms the already-working candidate; Intel and NVIDIA then close the deferred K-16 external release gate. A Wave-0 reservation status is never hardware evidence.
+Execute this task in the local AMD preparation wave. Commit its code and unit tests before any matrix execution. The local RX 7800 XT execution occurs in Task 7 only after all three live-gate toolsets are committed; Intel/NVIDIA execution is Task 9. A Wave-0 reservation status is never hardware evidence.
 
 - [ ] **Step 1: Write failing vendor-selection tests**
 
@@ -429,27 +429,7 @@ def select_expected_adapter(adapters: Sequence[DirectMLAdapter], vendor: str) ->
 
 The runner must create RAFT, SigLIP, Moondream and MDX sessions with the shared session options, run five cold/warm repetitions on real manifest-bound media, verify the provider list after session creation, and write `machine.json`, `runtime.json`, `assets.json`, `session-contract.json`, `runs.jsonl`, `errors.jsonl` and a SHA-256 `manifest.json`.
 
-- [ ] **Step 4: Prove the local AMD runner**
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor AMD -ExpectedGitSha (git rev-parse HEAD)
-```
-
-Expected: RX 7800 XT receipt, exact DML provider, five cold/warm runs and zero errors.
-
-- [ ] **Step 5: Execute the same commit on real Intel and NVIDIA Windows systems**
-
-Use a physical Intel Arc/Core-Ultra Windows system and either a physical NVIDIA Windows system or an approved Azure `NVadsA10_v5` Windows VM. A self-hosted runner label is routing metadata only; `probe.py` must independently verify PCI vendor ID, LUID, driver and non-software status.
-
-```powershell
-$matrixSha = git rev-parse HEAD
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor Intel -ExpectedGitSha $matrixSha
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor NVIDIA -ExpectedGitSha $matrixSha
-```
-
-Copy the exact `$matrixSha` value and the matching source tree to both machines; mismatches must exit nonzero.
-
-- [ ] **Step 6: Validate and commit the runner; commit hardware receipts only after real execution**
+- [ ] **Step 4: Validate and commit the runner**
 
 ```powershell
 $env:PYTHONPATH = "src;."
@@ -458,9 +438,13 @@ git add scripts/directml_matrix Tests/test_obj77_directml_matrix.py
 git commit -m "test(core): add portable directml hardware matrix"
 ```
 
+The commit must contain every runner file used by later local and external
+execution. No matrix code may change after this commit without invalidating
+the later local receipt and repeating Task 7.
+
 ---
 
-### Task 6: Final reversible LM-Studio/Hermes maintenance window
+### Task 6: Implement and dry-verify the LM-Studio/Hermes harness before Candidate-Freeze
 
 **Files:**
 - Create: `scripts/diagnostics/obj77_lmstudio_window.ps1`
@@ -469,10 +453,10 @@ git commit -m "test(core): add portable directml hardware matrix"
 - Evidence: `specs/00022-complete-requirements-remediation/evidence/lmstudio-live/`
 
 **Interfaces:**
-- Consumes: exact watchdog PID/start time/path, approved maintenance receipt, QC project path and real clip ID.
-- Produces: pre-state, T003 product receipt, post-restart receipt and restored Hermes receipt.
+- Consumes: exact watchdog PID/start time/path and the existing live-resume contract.
+- Produces: committed, statically tested `Snapshot/Pause/Verify/Restore` tooling; no live maintenance evidence yet.
 
-Do not start this task until every master-plan non-external gate and every local RX 7800 XT functional gate is green. Then develop and execute the harness on the exact final external-acceptance candidate SHA to close the deferred LM-Studio live gates. Do not backport later evidence into historical wave receipts.
+Execute this task in the local AMD preparation wave. Implement and commit every harness and verifier change before Candidate-Freeze. `Snapshot` is the only allowed runtime operation here; the authorized `Pause/Verify/Restore` sequence is Task 10.
 
 - [ ] **Step 1: Write static safety tests before process-control code**
 
@@ -526,27 +510,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj7
 
 Snapshot must not stop, load or unload anything.
 
-- [ ] **Step 6: Execute the approved live window and restore Hermes**
+- [ ] **Step 6: Commit the dry-verified harness before Candidate-Freeze**
 
 ```powershell
-$reservation = Get-Content -Raw specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json | ConvertFrom-Json
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Pause -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Verify -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json -ProjectPath $reservation.lm_window.qc_project_path -ClipId $reservation.lm_window.real_clip_id
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Restore -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json
+git add scripts/diagnostics/obj77_lmstudio_window.ps1 scripts/diagnostics/verify_video_resume_live.ps1 Tests/test_obj77_lmstudio_window_contract.py
+git commit -m "test(video): add reversible lm studio live harness"
 ```
 
-Use the exact approved QC project and real clip recorded in the authorization receipt. After T003 passes, request a separate T019 approval; do not include the ten-clip run in this task.
-
-- [ ] **Step 7: Commit code and immutable live receipts**
-
-```powershell
-git add scripts/diagnostics/obj77_lmstudio_window.ps1 scripts/diagnostics/verify_video_resume_live.ps1 Tests/test_obj77_lmstudio_window_contract.py specs/00022-complete-requirements-remediation/evidence/lmstudio-live
-git commit -m "test(video): prove reversible lm studio live resume"
-```
+No LM process may be stopped and no live receipt may be claimed in this local
+task. No harness code may change after Candidate-Freeze.
 
 ---
 
-### Task 7: Final versioned fail-closed 4096-MB four-hour stress gate
+### Task 7: Implement the stress worker and pass local Canary/Soak before Candidate-Freeze
 
 **Files:**
 - Create: `scripts/qa/stress_receipt.py`
@@ -559,22 +535,34 @@ git commit -m "test(video): prove reversible lm studio live resume"
 - Evidence: `specs/00022-complete-requirements-remediation/evidence/stress-4h/`
 
 **Interfaces:**
-- Consumes: duration, real-media manifest, receipt path, backend URL and the enforced VRAM environment.
+- Consumes: duration, expected Git SHA, real-media manifest, receipt path, backend URL and the enforced VRAM environment.
 - Produces: atomic version-1 stress receipt; process exit 0 only when all release invariants pass.
 
-Do not start this task until every master-plan non-external gate and every local RX 7800 XT functional gate is green. Execute its unit guards, canaries, soak and real four-hour run on the exact final external-acceptance candidate SHA. The final receipt must bind to that candidate; no Wave-0 reservation was required.
+Execute this task in the local AMD preparation wave. First implement, test and commit the worker and launchers; then execute the 15-minute Canary, 60-minute Soak and local AMD matrix against that unchanged committed HEAD before Candidate-Freeze. The real 14,400-second run is Task 12 and cannot start here.
 
 - [ ] **Step 1: Write guard tests**
 
 ```python
 def test_release_config_requires_exact_4096_mb() -> None:
-    config = StressConfig(duration_seconds=14400, forced_vram_mb=4000)
+    config = StressConfig(
+        duration_seconds=14400,
+        forced_vram_mb=4000,
+        expected_git_sha="a" * 40,
+        media_manifest=Path("media.json"),
+        receipt_path=Path("receipt.json"),
+    )
     with pytest.raises(StressContractError, match="exactly 4096"):
         validate_release_config(config)
 
 
 def test_release_config_requires_four_hours() -> None:
-    config = StressConfig(duration_seconds=14399, forced_vram_mb=4096)
+    config = StressConfig(
+        duration_seconds=14399,
+        forced_vram_mb=4096,
+        expected_git_sha="a" * 40,
+        media_manifest=Path("media.json"),
+        receipt_path=Path("receipt.json"),
+    )
     with pytest.raises(StressContractError, match="at least 14400"):
         validate_release_config(config)
 ```
@@ -595,6 +583,7 @@ $env:PYTHONPATH = "src;."
 class StressConfig:
     duration_seconds: int
     forced_vram_mb: int
+    expected_git_sha: str
     media_manifest: Path
     receipt_path: Path
     backend_url: str = "http://127.0.0.1:8765"
@@ -608,6 +597,8 @@ def validate_release_config(config: StressConfig) -> None:
 ```
 
 The worker must verify `/health/vram` reports 4096 before work, use a monotonic deadline, emit a heartbeat at least every 60 seconds, run only productive APIs on manifest-bound real media, capture provider/stage/artifact receipts and LHM/RSS/VRAM samples, perform periodic controlled backend restart/resume, and fail immediately on every guarded condition.
+`run_4h_stress.ps1` must require `-ExpectedGitSha` and fail before work if the
+current Git SHA or any tracked code/config path differs from it.
 
 - [ ] **Step 4: Implement atomic receipt validation**
 
@@ -615,38 +606,206 @@ Write to `receipt_path.with_suffix(receipt_path.suffix + ".tmp")`, flush and `os
 
 - [ ] **Step 5: Replace the ignored worker path and false-success launchers**
 
-Change `scripts/owned_runtime_process.ps1` from `src\tools\execute_4h_stress_test.py` to `scripts\qa\execute_4h_stress_test.py`. `stress_4h.bat` must set `PB_STUDIO_FORCED_VRAM=4096`, call `run_4h_stress.ps1` synchronously and propagate its exit code. `check_stress.bat` must validate the final receipt; process presence and a started flag are not PASS conditions.
+Change `scripts/owned_runtime_process.ps1` from `src\tools\execute_4h_stress_test.py` to `scripts\qa\execute_4h_stress_test.py`. `stress_4h.bat` must require the expected Git SHA as `%1`, set `PB_STUDIO_FORCED_VRAM=4096`, pass that SHA to `run_4h_stress.ps1` synchronously and propagate its exit code. `check_stress.bat` must validate the final receipt against the same expected SHA; process presence and a started flag are not PASS conditions.
 
-- [ ] **Step 6: Run unit tests and two canaries**
+- [ ] **Step 6: Run the worker unit tests**
 
 ```powershell
 $env:PYTHONPATH = "src;."
 .\.venv\Scripts\python.exe -m pytest Tests\test_obj77_stress_worker.py -q
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\qa\run_4h_stress.ps1 -DurationSeconds 900 -Mode Canary
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\qa\run_4h_stress.ps1 -DurationSeconds 3600 -Mode Soak
 ```
 
-Expected: unit tests, 15-minute Canary and 60-minute Soak pass with valid receipts before the release run is allowed.
+Expected: unit tests pass before the worker is committed.
 
-- [ ] **Step 7: Run the reserved four-hour gate**
+- [ ] **Step 7: Commit worker, launchers and tests**
 
 ```powershell
-scripts\qa\stress_4h.bat
-scripts\qa\check_stress.bat
+git add scripts/qa/stress_receipt.py scripts/qa/execute_4h_stress_test.py scripts/qa/run_4h_stress.ps1 scripts/qa/stress_4h.bat scripts/qa/check_stress.bat scripts/owned_runtime_process.ps1 Tests/test_obj77_stress_worker.py
+git commit -m "test(infra): prepare four-hour 4096mb stress gate"
 ```
 
-Expected: measured duration at least 14,400 seconds, forced VRAM exactly 4096 MB, no OOM/deadlock/data loss/silent fallback, integrity hashes unchanged or transactionally advanced, and a valid final receipt.
+No stress code may change after this commit without repeating the following
+local executions.
 
-- [ ] **Step 8: Commit worker, launchers, tests and receipt**
+- [ ] **Step 8: Run all pre-freeze local live gates on the committed HEAD**
 
 ```powershell
-git add scripts/qa/stress_receipt.py scripts/qa/execute_4h_stress_test.py scripts/qa/run_4h_stress.ps1 scripts/qa/stress_4h.bat scripts/qa/check_stress.bat scripts/owned_runtime_process.ps1 Tests/test_obj77_stress_worker.py specs/00022-complete-requirements-remediation/evidence/stress-4h
-git commit -m "test(infra): enforce real four-hour 4096mb stress gate"
+$localCandidateSha = git rev-parse HEAD
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor AMD -ExpectedGitSha $localCandidateSha
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\qa\run_4h_stress.ps1 -DurationSeconds 900 -Mode Canary -ExpectedGitSha $localCandidateSha
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\qa\run_4h_stress.ps1 -DurationSeconds 3600 -Mode Soak -ExpectedGitSha $localCandidateSha
 ```
+
+Expected: RX 7800 XT matrix, 15-minute Canary and 60-minute Soak pass with
+receipts referencing `$localCandidateSha`. Keep those receipts uncommitted for
+Task 13. Any code/config change requires repeating this step.
 
 ---
 
-### Task 8: Final blocker-evidence convergence
+### Task 8: Freeze the tested AMD candidate and open external acceptance
+
+**Files:**
+- Create: `specs/00022-complete-requirements-remediation/evidence/external-acceptance-reservations.json`
+- Create: `specs/00022-complete-requirements-remediation/evidence/external-acceptance-preflight.json`
+
+**Interfaces:**
+- Consumes: every green master-plan non-external/local-AMD gate, committed tooling from Tasks 5-7 and green uncommitted AMD/Canary/Soak receipts from Task 7.
+- Produces: immutable `tested_candidate_sha` and a fresh OR-363 preflight whose reservation validator exits 0 for exactly Intel, NVIDIA, LM window and stress window.
+
+- [ ] **Step 1: Prove the local AMD candidate is complete and clean**
+
+Run the complete local Python, C#, WPF, OpenAPI, GUI, KPI, store, SDD and RX
+7800 XT gates required by the master plan. Verify that all matrix, LM-harness
+and stress-worker files are committed and that every remaining diff is limited
+to immutable Task-7 evidence paths.
+
+- [ ] **Step 2: Freeze the exact tested candidate SHA**
+
+```powershell
+$testedCandidateSha = git rev-parse HEAD
+git diff --name-only
+git show --format=fuller --no-patch $testedCandidateSha
+```
+
+Expected: `$testedCandidateSha` equals the SHA in all Task-7 AMD/Canary/Soak
+receipts, and diff output contains evidence paths only. Record that SHA plus
+config, asset and media-manifest hashes. From this point through Task 12,
+product, runner, harness, worker, tests and configuration are immutable.
+
+- [ ] **Step 3: Create a fresh external-acceptance reservation receipt**
+
+The new receipt must contain current, concrete owner, machine/provider,
+approval scope and UTC window data for all four resources. It does not rewrite
+the Wave-0 deferred receipt.
+
+```powershell
+$env:PYTHONPATH = "src;."
+.\.venv\Scripts\python.exe scripts\requirements\validate_obj77_reservations.py specs\00022-complete-requirements-remediation\evidence\external-acceptance-reservations.json
+```
+
+Expected: exit 0 before the external phase starts. Any other exit code blocks
+Tasks 9-12 only; it never invalidates Wave 0 or completed local AMD work.
+
+- [ ] **Step 4: Create and validate the external-acceptance preflight**
+
+Record `tested_candidate_sha`, the fresh receipt path/hash, validator exit 0,
+all local gate receipt hashes, start/end UTC and
+`overall_status: ready_for_external_acceptance`. Keep these new evidence files
+uncommitted until Task 13 so `HEAD` remains exactly `tested_candidate_sha`.
+
+---
+
+### Task 9: Execute Intel and NVIDIA DirectML on the frozen candidate
+
+**Files:**
+- Evidence only: `specs/00022-complete-requirements-remediation/evidence/directml-matrix/intel/`
+- Evidence only: `specs/00022-complete-requirements-remediation/evidence/directml-matrix/nvidia/`
+
+**Interfaces:**
+- Consumes: Task-8 preflight and the committed runner from Task 5.
+- Produces: real Intel and NVIDIA receipts bound to `tested_candidate_sha`; no code change.
+
+- [ ] **Step 1: Export and verify the frozen source tree**
+
+Transport an archive produced from `tested_candidate_sha` to a physical Intel
+Windows system and either a physical NVIDIA Windows system or an approved
+Azure `NVadsA10_v5` Windows VM. Each machine must independently verify the Git
+SHA, PCI vendor ID, LUID, driver and non-software adapter status.
+
+- [ ] **Step 2: Run the unchanged matrix runner**
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor Intel -ExpectedGitSha $testedCandidateSha
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\directml_matrix\run.ps1 -ExpectedVendor NVIDIA -ExpectedGitSha $testedCandidateSha
+```
+
+Expected: exact DML provider, five cold/warm runs and zero errors per vendor.
+Copy receipts back without committing or changing code.
+
+---
+
+### Task 10: Execute T003 in the authorized LM-Studio window
+
+**Files:**
+- Evidence only: `specs/00022-complete-requirements-remediation/evidence/lmstudio-live/t003/`
+
+**Interfaces:**
+- Consumes: Task-8 preflight, committed Task-6 harness, approved QC project and real clip.
+- Produces: T003 product, restart/resume and Hermes-restore receipts bound to `tested_candidate_sha`; no code change.
+
+- [ ] **Step 1: Reconfirm the frozen candidate and approved window**
+
+Require `git rev-parse HEAD == tested_candidate_sha`, no diff under `src/`,
+`backend/`, `PBStudio.UI/`, `scripts/` or `Tests/`, and a still-current LM
+window in the Task-8 receipt.
+
+- [ ] **Step 2: Execute Pause, Verify and Restore**
+
+```powershell
+$reservation = Get-Content -Raw specs\00022-complete-requirements-remediation\evidence\external-acceptance-reservations.json | ConvertFrom-Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Pause -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-acceptance-reservations.json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Verify -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-acceptance-reservations.json -ProjectPath $reservation.lm_window.qc_project_path -ClipId $reservation.lm_window.real_clip_id
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diagnostics\obj77_lmstudio_window.ps1 -Operation Restore -ApprovalReceipt specs\00022-complete-requirements-remediation\evidence\external-acceptance-reservations.json
+```
+
+Expected: T003 passes, persisted tags and truth hash survive restart without a
+second caption attempt, and Hermes/SearXNG/watchdog state is fully restored.
+Keep receipts uncommitted for Task 13.
+
+---
+
+### Task 11: Execute the separately approved T019 ten-clip Canary
+
+**Files:**
+- Evidence only: `specs/00022-complete-requirements-remediation/evidence/lmstudio-live/t019/`
+
+**Interfaces:**
+- Consumes: validated T003 PASS from Task 10 and a separate explicit T019 Go.
+- Produces: ten of ten clip receipts with stable stage hashes bound to `tested_candidate_sha`; no code change.
+
+- [ ] **Step 1: Validate T003 and obtain the separate Go**
+
+Do not infer approval from the LM maintenance receipt. Without both a valid
+T003 receipt and separate T019 Go, stop only this task and final convergence;
+completed local AMD work remains valid.
+
+- [ ] **Step 2: Run exactly the ten-clip Canary**
+
+Use only the ten manifest-bound real clips approved for T019. Require 10/10
+complete receipts, stable stage hashes, correct provider/model IDs, restart
+parity and zero silent fallback. No bulk reanalysis may begin before this PASS.
+
+---
+
+### Task 12: Execute the real 14,400-second 4096-MB stress gate
+
+**Files:**
+- Evidence only: `specs/00022-complete-requirements-remediation/evidence/stress-4h/release/`
+
+**Interfaces:**
+- Consumes: Task-8 preflight, committed Task-7 worker and its green Canary/Soak receipts.
+- Produces: real D-08 release receipt bound to `tested_candidate_sha`; no code change.
+
+- [ ] **Step 1: Reconfirm the frozen candidate and stress window**
+
+Require the exact candidate SHA, no code/config drift, valid Canary/Soak
+receipts and a still-current stress reservation from Task 8.
+
+- [ ] **Step 2: Run and validate the real release gate**
+
+```powershell
+scripts\qa\stress_4h.bat $testedCandidateSha
+scripts\qa\check_stress.bat $testedCandidateSha
+```
+
+Expected: measured duration at least 14,400 seconds, forced VRAM exactly 4096
+MB, no OOM/deadlock/data loss/silent fallback, integrity hashes unchanged or
+transactionally advanced, and a valid receipt referencing
+`tested_candidate_sha`. Keep it uncommitted for Task 13.
+
+---
+
+### Task 13: Final blocker-evidence convergence
 
 **Files:**
 - Modify: `specs/00022-complete-requirements-remediation/tasks.md`
@@ -654,14 +813,14 @@ git commit -m "test(infra): enforce real four-hour 4096mb stress gate"
 - Modify: `C:\Users\david\Brain\10_Projects\PB_studio\log.md`
 
 **Interfaces:**
-- Consumes: the Wave-0 merge receipt plus green hardware, LM-Studio and stress receipts from Tasks 5-7.
-- Produces: one hash manifest that closes only the blocker-related tasks whose full acceptance criteria passed.
+- Consumes: the Wave-0 receipt, Task-8 preflight and green live receipts from Tasks 9-12.
+- Produces: a later evidence commit and one hash manifest that close only the blocker-related tasks whose full acceptance criteria passed while preserving `tested_candidate_sha` as the executed code identity.
 
-Start Task 8 only after Tasks 5-7 have run at the end of the AMD-first sequence. Task 8 is the final release-convergence gate and cannot be used to bypass any unchanged OR-363 acceptance criterion.
+Start Task 13 only after Tasks 9-12 pass. It is the final release-convergence gate and cannot bypass any unchanged OR-363 acceptance criterion.
 
-- [ ] **Step 1: Verify every external receipt against the current commit**
+- [ ] **Step 1: Verify every external receipt against `tested_candidate_sha`**
 
-All Ground-Truth, DirectML, LM-Studio and stress evidence must reference the exact expected Git SHA, config hash and asset manifest hash. A receipt from another commit cannot close the gate.
+All Ground-Truth, DirectML, LM-Studio, T019 and stress evidence must reference the exact `tested_candidate_sha`, config hash and asset manifest hash recorded by Task 8. The later evidence-commit SHA is allowed to differ, but a receipt referencing any other tested code SHA cannot close the gate. Verify that no product, runner, harness, worker, test or config path differs from `tested_candidate_sha`.
 
 - [ ] **Step 2: Run focused contract tests**
 
@@ -682,15 +841,15 @@ git diff --check
 git status --short --branch
 ```
 
-Expected: Python and C# suites green, WPF Release 0 errors/0 warnings, SDD open-valid, no diff errors, and only intended remediation files changed.
+Expected: Python and C# suites green, WPF Release 0 errors/0 warnings, SDD open-valid, no diff errors, and only uncommitted Task-7-to-Task-12 evidence plus the intended task/manifest updates changed. No executed code or configuration differs from `tested_candidate_sha`.
 
 - [ ] **Step 4: Create the blocker-closure manifest**
 
-The manifest lists every source receipt path and SHA-256, exact command, exit code, start/end UTC, relevant wave merge SHA and an individual status for Ground Truth, AMD/Intel/NVIDIA DirectML, T003 live resume, Hermes restore and D-08 stress. It must not rewrite `wave-0-prerequisites.json` or hide an open item behind an aggregate PASS.
+The manifest lists every source receipt path and SHA-256, exact command, exit code, start/end UTC, `tested_candidate_sha`, later evidence-commit parent, relevant wave merge SHA and an individual status for Ground Truth, external preflight, AMD/Intel/NVIDIA DirectML, T003 live resume, Hermes restore, T019 10/10 and D-08 stress. It must not rewrite `wave-0-prerequisites.json` or hide an open item behind an aggregate PASS.
 
 - [ ] **Step 5: Update only genuinely completed task checkboxes**
 
-T062 changes to `[X]` only after all three real hardware receipts pass. T073 changes to `[X]` only after the real 14,400-second receipt passes. T094 remains open until every GUI, KPI, LM-Studio, DirectML and four-hour live gate from the master remediation plan passes; this blocker plan alone cannot close it.
+T062 changes to `[X]` only after all three real hardware receipts pass. T003 and T019 change only after their separate receipts pass in order. T073 changes to `[X]` only after the real 14,400-second receipt passes. T094 remains open until every GUI, KPI, LM-Studio, DirectML and four-hour live gate from the master remediation plan passes; this blocker plan alone cannot close it.
 
 - [ ] **Step 6: Append the Brain log after implementation**
 
@@ -699,9 +858,13 @@ Record the relevant wave SHAs, receipt paths, test totals, remaining master-plan
 - [ ] **Step 7: Commit the blocker-closure evidence on the final external-acceptance branch**
 
 ```powershell
-git add specs/00022-complete-requirements-remediation/tasks.md specs/00022-complete-requirements-remediation/evidence/blocker-closure-manifest.json
+git add specs/00022-complete-requirements-remediation/tasks.md specs/00022-complete-requirements-remediation/evidence/external-acceptance-reservations.json specs/00022-complete-requirements-remediation/evidence/external-acceptance-preflight.json specs/00022-complete-requirements-remediation/evidence/directml-matrix/amd specs/00022-complete-requirements-remediation/evidence/directml-matrix/intel specs/00022-complete-requirements-remediation/evidence/directml-matrix/nvidia specs/00022-complete-requirements-remediation/evidence/lmstudio-live/t003 specs/00022-complete-requirements-remediation/evidence/lmstudio-live/t019 specs/00022-complete-requirements-remediation/evidence/stress-4h specs/00022-complete-requirements-remediation/evidence/blocker-closure-manifest.json
 git commit -m "docs(sdd): register obj77 blocker closure evidence"
 ```
+
+The new commit is an evidence commit, not a new tested candidate. Its manifest
+must continue to identify the unchanged `tested_candidate_sha` executed by
+Tasks 9-12.
 
 - [ ] **Step 8: Verify the protected source worktree is unchanged**
 
@@ -736,8 +899,11 @@ Do not merge this branch independently. The master remediation plan merges the f
 2. **K-16 scope:** Vendor-neutral ONNX-DirectML contract on AMD/Intel/NVIDIA; full PB Studio remains AMD-only.
 3. **LM Studio:** Exact-process maintenance window with complete Hermes restoration; no wildcard process termination and no `lms server status` healthcheck.
 4. **Stress:** Tracked worker under `scripts/qa`, exact 4096 MB, 14,400 measured seconds and fail-closed receipt; no started flag as evidence.
-5. **AMD-first ordering:** The truthful reservation validator exit 1 is recorded in Wave 0 but does not block its merge or subsequent local RX 7800 XT remediation. Tasks 5-7 start only after all non-external and local-AMD gates pass.
-6. **Final release:** Intel/NVIDIA DirectML, the authorized LM-Studio maintenance window and the real four-hour stress receipt remain mandatory final release evidence. OR-363 is unchanged.
+5. **AMD-first ordering:** The truthful reservation validator exit 1 is recorded in Wave 0 but does not block its merge or subsequent local RX 7800 XT remediation. Tasks 5-7 commit all live-gate tooling, then complete SHA-bound local AMD proofs before Candidate-Freeze.
+6. **External preflight:** Task 8 creates a fresh receipt and requires reservation-validator exit 0 for all four OR-363 resources before any external execution starts.
+7. **Frozen execution:** Tasks 9-12 change no code and execute exactly `tested_candidate_sha`; a later evidence commit may differ only because it records the receipts.
+8. **T019 ordering:** Task 11 requires T003 PASS and a separate Go, and it must pass before Task 13.
+9. **Final release:** Intel/NVIDIA DirectML, the authorized LM-Studio maintenance window and the real four-hour stress receipt remain mandatory final release evidence. OR-363 is unchanged.
 
 ## Execution Stop Conditions
 
@@ -746,10 +912,10 @@ Do not merge this branch independently. The master remediation plan merges the f
   hash-bound annotation documents exist.
 - Do not stop Wave 0 or local RX 7800 XT remediation because the reservation
   validator exits 1; record the four deferred gates exactly and continue.
-- Stop before Tasks 5, 6 and 7 until every master-plan non-external and local
-  RX 7800 XT gate is green.
-- Stop before Task 5 external execution if Intel hardware or NVIDIA budget/quota is not approved; this blocks final release only.
-- Stop before Task 6 `Pause` if the Hermes maintenance receipt is not authorized; this blocks final release only.
-- Stop before T019 if T003 has not passed or the separate Canary approval is missing.
-- Stop before Task 7 release run if the 15-minute Canary or 60-minute Soak fails; this blocks final release only.
-- Stop before Task 8 convergence on any nonzero test, invalid receipt, Git-SHA mismatch or protected-worktree drift.
+- Stop before Candidate-Freeze until Task-5-to-Task-7 tooling is committed, the local AMD matrix and stress Canary/Soak have passed against that exact HEAD, and every master-plan non-external/local RX 7800 XT gate is green.
+- Stop before Task 9 unless Task 8 produced a fresh receipt and reservation-validator exit 0 for all four external resources.
+- Stop before Task 9 if Intel hardware or NVIDIA budget/quota is not approved; this blocks final release only.
+- Stop before Task 10 `Pause` if the Hermes maintenance receipt is not authorized; this blocks final release only.
+- Stop before Task 11 if T003 has not passed or the separate T019 approval is missing.
+- Stop before Task 12 if the 15-minute Canary or 60-minute Soak failed or the four-hour window is no longer current.
+- Stop before Task 13 convergence on any nonzero test, invalid receipt, `tested_candidate_sha` mismatch, code/config drift or protected-worktree drift.
