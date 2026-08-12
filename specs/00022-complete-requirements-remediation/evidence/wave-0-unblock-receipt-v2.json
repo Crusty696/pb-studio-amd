@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "objective": "OBJ-77",
+  "wave": 0,
+  "source_branch": "codex/obj77-wave0-foundation",
+  "source_git_sha": "b63e04c113846731f820c8ee2a6c3b76ea6dd70c",
+  "integration_merge_sha": "47825043e506ebf2e2ecb7c1a9767cf126a27ce8",
+  "corrected_at_utc": "2026-08-12T02:43:48.9117488Z",
+  "supersedes": {
+    "path": "specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json",
+    "sha256": "a3e9992bd3655d81325da39ca6a1cf5f0de2c47506419cd457cdafcaf928bdf2",
+    "status": "invalid_superseded"
+  },
+  "correction_reasons": [
+    "The v1 Ground-Truth source-receipt SHA-256 did not match the actual declared source file.",
+    "The v1 no-match rg pipeline recorded a normalized exit code without recording the raw exit code."
+  ],
+  "verification_started_at_utc": "2026-08-12T02:37:23.4290847Z",
+  "verification_finished_at_utc": "2026-08-12T02:37:50.0437872Z",
+  "source_receipts": [
+    {
+      "path": "specs/00022-complete-requirements-remediation/evidence/external-resource-reservations.json",
+      "sha256": "4cc06d93ebf18c3245ec3174924e0e1f00282c1d76d5f166e93f9b52140787f8"
+    },
+    {
+      "path": "specs/00022-complete-requirements-remediation/evidence/ground-truth-registration.json",
+      "sha256": "df15c34452c5a250268958eb6b10935a9f8574a4c88311409965a5a78092b0b0"
+    },
+    {
+      "path": "specs/00022-complete-requirements-remediation/evidence/wave-0-baseline.json",
+      "sha256": "15509371110ac85ea1fee729a1072170977bd787b171ef89cceaaa1cc6137621"
+    }
+  ],
+  "commands": [
+    {
+      "command": "$base = git merge-base codex/obj77-wave0-foundation 8328d492f8b128b02ae1ce92a0e6e14d999b2af2; git diff --name-only \"$base..HEAD\" | rg \"^(src|backend|PBStudio.UI)/\"",
+      "raw_exit_code": 1,
+      "result": "no product-code paths"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\requirements\\validate_obj77_reservations.py specs\\00022-complete-requirements-remediation\\evidence\\external-resource-reservations.json",
+      "exit_code": 1,
+      "result": "four external release gates truthfully deferred"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\validate_obj77_ground_truth.py --receipt specs\\00022-complete-requirements-remediation\\evidence\\ground-truth-registration.json",
+      "exit_code": 0,
+      "result": "registration valid"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest Tests\\test_obj77_external_reservations.py Tests\\test_obj77_ground_truth_contract.py -q",
+      "exit_code": 0,
+      "result": "14 passed"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\validate_sdd.py --feature specs\\00022-complete-requirements-remediation --phase open",
+      "exit_code": 0,
+      "result": "SDD VALID"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest Tests\\test_obj77_requirement_registry.py -q",
+      "exit_code": 0,
+      "result": "3 passed"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "result": "no whitespace errors"
+    }
+  ],
+  "resources_reserved": false,
+  "external_release_gates_deferred": true,
+  "deferred_external_release_gates": [
+    "intel_directml_system",
+    "nvidia_directml_system",
+    "lm_studio_maintenance_window",
+    "four_hour_stress_window"
+  ],
+  "reservation_validator_exit_code": 1,
+  "ground_truth_registered": true,
+  "product_code_changed": false,
+  "overall_status": "pass_for_wave_0_amd_first"
+}

@@ -213,11 +213,11 @@ clips are V-11/T019 Wave 3 work, not Wave-0 requirements.
 ### Task 3: Close documentation-only Wave 0 and merge it
 
 **Files:**
-- Create: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json`
+- Create: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt-v2.json`
 
 **Interfaces:**
 - Consumes: the truthful Task-1 reservation-status receipt, approved Task-2 Ground-Truth registration and the immutable saved baseline.
-- Produces: one Wave-0 gate decision and the integration merge SHA; no product-code change.
+- Produces: one Wave-0 gate decision and the integration merge SHA; no product-code change. Every downstream Wave-0 receipt consumer MUST use `wave-0-unblock-receipt-v2.json` and treat `wave-0-unblock-receipt.json` as invalid/superseded.
 
 - [ ] **Step 1: Verify the Wave-0 branch contains no product-code diff**
 
@@ -255,16 +255,16 @@ git diff --check
 
 Expected: SDD open-valid, requirement registry green and no whitespace errors. Previously captured baseline failures remain baseline evidence; Wave 0 does not rewrite product code to close them.
 
-- [ ] **Step 4: Create the immutable Wave-0 unblock receipt**
+- [ ] **Step 4: Create the immutable Wave-0 unblock receipt v2**
 
-The receipt must contain the current Git SHA, source receipt paths and hashes, exact commands and exit codes, start/end UTC and exactly these decision fields: `resources_reserved: false`, `external_release_gates_deferred: true`, `deferred_external_release_gates: ["intel_directml_system", "nvidia_directml_system", "lm_studio_maintenance_window", "four_hour_stress_window"]`, `reservation_validator_exit_code: 1`, `ground_truth_registered: true`, `product_code_changed: false` and `overall_status: pass_for_wave_0_amd_first`.
+The v2 receipt must contain the current Git SHA, source receipt paths and hashes, exact commands and exit codes, start/end UTC and exactly these decision fields: `resources_reserved: false`, `external_release_gates_deferred: true`, `deferred_external_release_gates: ["intel_directml_system", "nvidia_directml_system", "lm_studio_maintenance_window", "four_hour_stress_window"]`, `reservation_validator_exit_code: 1`, `ground_truth_registered: true`, `product_code_changed: false` and `overall_status: pass_for_wave_0_amd_first`. The immutable v1 receipt is invalid/superseded and MUST NOT be consumed downstream.
 
 - [ ] **Step 5: Commit Wave-0 evidence without changing completed T083**
 
 T083 was already completed by Task 2 and must not be edited again in this step.
 
 ```powershell
-git add specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json
+git add specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt-v2.json
 git commit -m "docs(sdd): close obj77 wave0 amd-first foundation"
 ```
 
