@@ -25,6 +25,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     // Transient-Registrierung erzeugte hier eine ZWEITE ApiClient-Instanz mit
     // eigenem Shutdown-Token, die BeginShutdown() der Singleton-Instanz nie erreichte.
     private readonly IApiClient _api;
+    private readonly IDisposable? _timelineFlushRegistration;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private int _loadVersion;
@@ -158,12 +159,21 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         TimelineStateService timelineState,
         AudioLibraryStateService audioLibraryState,
         IApiClient api,
-        ProjectService projectService)
+        ProjectService projectService,
+        ITimelineFlushCoordinator? timelineFlushCoordinator = null)
     {
         _timelineState = timelineState;
         _audioLibraryState = audioLibraryState;
         _api = api;
         _projectService = projectService;
+        if (timelineFlushCoordinator is not null)
+        {
+            var dispatcher = Application.Current?.Dispatcher
+                ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            _timelineFlushRegistration = timelineFlushCoordinator.Register(
+                dispatcher,
+                FlushPendingTimelineAsync);
+        }
         _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         WeakReferenceMessenger.Default.Register<TimelineRefreshMessage>(this, (_, _) => _ = RequestTimelineRefreshAsync());
@@ -759,7 +769,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 || !_projectService.IsCurrent(operation))
                 return;
 
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            void ApplyCanonicalTimeline()
             {
                 if (version != Volatile.Read(ref _loadVersion)
                     || !_projectService.IsCurrent(operation))
@@ -819,7 +829,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 {
                     _ = LoadWaveformAsync(AudioPath);
                 }
-            });
+            }
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess())
+                ApplyCanonicalTimeline();
+            else
+                await dispatcher.InvokeAsync(ApplyCanonicalTimeline);
         }
         catch (OperationCanceledException)
         {
@@ -903,80 +919,113 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task SyncTimelineAsync()
     {
-        await _syncGate.WaitAsync();
+        await FlushPendingTimelineAsync();
+    }
+
+    public async Task<TimelineFlushResult> FlushPendingTimelineAsync(
+        CancellationToken cancellationToken = default)
+    {
         try
         {
-        if (!_timelineReadyForMutation)
+            await _syncGate.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
         {
-            StatusText = "Speichern übersprungen — Timeline wird noch geladen.";
-            return;
+            return TimelineFlushResult.CancelledResult();
         }
 
-        var editVersion = Interlocked.Read(ref _editVersion);
-        if (editVersion == Interlocked.Read(ref _savedEditVersion))
-            return;
-
-        ProjectOperationContext operation;
-        try
-        {
-            operation = _projectService.CaptureOperationContext();
-        }
-        catch (InvalidOperationException)
-        {
-            StatusText = "Speichern abgebrochen — Projektwechsel läuft.";
-            return;
-        }
-
-        var entries = SnapshotTimelineEntries();
         var refreshCanonicalTimeline = false;
-        var (sequence, operationCts) = BeginSyncOperation(operation);
         try
         {
-            StatusText = "Speichere Änderungen...";
-            await TimelinePersistenceGate.WaitAsync(operationCts.Token);
-            StatusResponse? response;
-            try
+            while (true)
             {
-                response = await _api.UpdateTimelineAsync(entries, operationCts.Token);
-            }
-            finally
-            {
-                TimelinePersistenceGate.Release();
-            }
-            if (!IsCurrentSync(sequence, operationCts, operation))
-                return;
+                cancellationToken.ThrowIfCancellationRequested();
+                var editVersion = Interlocked.Read(ref _editVersion);
+                if (editVersion == Interlocked.Read(ref _savedEditVersion))
+                {
+                    if (!refreshCanonicalTimeline)
+                        return TimelineFlushResult.Succeeded;
+                    break;
+                }
 
-            if (response?.Success == true)
-            {
-                Interlocked.Exchange(ref _savedEditVersion, editVersion);
-                refreshCanonicalTimeline = editVersion == Interlocked.Read(ref _editVersion);
-                StatusText = "Änderungen gespeichert";
-            }
-            else
-            {
-                StatusText = "Speichern fehlgeschlagen: " + (response?.Message ?? "Unbekannter Fehler");
+                if (!_timelineReadyForMutation)
+                {
+                    const string message = "Timeline kann nicht gespeichert werden, solange sie noch geladen wird.";
+                    StatusText = message;
+                    return TimelineFlushResult.Failed(message);
+                }
+
+                ProjectOperationContext operation;
+                try
+                {
+                    operation = _projectService.CaptureOperationContext();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    StatusText = "Speichern abgebrochen - kein stabiler Projektkontext.";
+                    return TimelineFlushResult.Failed(ex.Message);
+                }
+
+                var entries = SnapshotTimelineEntries();
+                var (sequence, operationCts) = BeginSyncOperation(
+                    operation,
+                    cancellationToken);
+                try
+                {
+                    StatusText = "Speichere Änderungen...";
+                    await TimelinePersistenceGate.WaitAsync(operationCts.Token);
+                    StatusResponse? response;
+                    try
+                    {
+                        response = await _api.UpdateTimelineAsync(
+                            entries,
+                            operationCts.Token);
+                    }
+                    finally
+                    {
+                        TimelinePersistenceGate.Release();
+                    }
+
+                    if (!IsCurrentSync(sequence, operationCts, operation))
+                        return TimelineFlushResult.CancelledResult();
+                    if (response?.Success != true)
+                    {
+                        var message = response?.Message ?? "Unbekannter Fehler";
+                        StatusText = "Speichern fehlgeschlagen: " + message;
+                        return TimelineFlushResult.Failed(message);
+                    }
+
+                    Interlocked.Exchange(ref _savedEditVersion, editVersion);
+                    refreshCanonicalTimeline = true;
+                    StatusText = "Änderungen gespeichert";
+                }
+                catch (OperationCanceledException)
+                {
+                    return TimelineFlushResult.CancelledResult();
+                }
+                catch (Exception ex)
+                {
+                    if (IsCurrentSync(sequence, operationCts, operation))
+                        StatusText = "Fehler beim Synchronisieren: " + ex.Message;
+                    return TimelineFlushResult.Failed(ex.Message);
+                }
+                finally
+                {
+                    CompleteSyncOperation(sequence, operationCts);
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            // Projektwechsel oder neuerer Autosave besitzt den sichtbaren Zustand.
-        }
-        catch (Exception ex)
-        {
-            if (IsCurrentSync(sequence, operationCts, operation))
-                StatusText = "Fehler beim Synchronisieren: " + ex.Message;
-        }
-        finally
-        {
-            CompleteSyncOperation(sequence, operationCts);
-        }
-        if (refreshCanonicalTimeline)
-            await RefreshTimelineAsync();
+            return TimelineFlushResult.CancelledResult();
         }
         finally
         {
             _syncGate.Release();
         }
+
+        await RefreshTimelineAsync();
+        return TimelineFlushResult.Succeeded;
     }
 
     private List<TimelineEntryModel> SnapshotTimelineEntries() =>
@@ -1011,10 +1060,12 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }).ToList();
 
     private (int Sequence, CancellationTokenSource Cts) BeginSyncOperation(
-        ProjectOperationContext operation)
+        ProjectOperationContext operation,
+        CancellationToken cancellationToken)
     {
         var current = CancellationTokenSource.CreateLinkedTokenSource(
-            operation.CancellationToken);
+            operation.CancellationToken,
+            cancellationToken);
         CancellationTokenSource? previous;
         int sequence;
         lock (_projectOperationLock)
@@ -1504,6 +1555,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _timelineFlushRegistration?.Dispose();
         _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         CancelProjectOperations();
         Interlocked.Increment(ref _loadVersion);

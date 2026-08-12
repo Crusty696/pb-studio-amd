@@ -20,6 +20,9 @@ public partial class App : Application
     private ServiceProvider? _serviceProvider;
     private int _fatalShutdownStarted;
 
+    internal bool IsFatalShutdownStarted =>
+        Volatile.Read(ref _fatalShutdownStarted) != 0;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -161,7 +164,9 @@ public partial class App : Application
         services.AddSingleton<SSEClient>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<ITimelineFlushCoordinator, TimelineFlushCoordinator>();
         services.AddSingleton<ProjectService>();
+        services.AddSingleton<MainWindowCloseGate>();
         services.AddSingleton<TimelineStateService>();
         services.AddSingleton<AudioLibraryStateService>();
         services.AddSingleton<VideoLibraryStateService>();
@@ -213,22 +218,9 @@ public partial class App : Application
                     var api = sp.GetService<IApiClient>();
                     if (api != null)
                     {
-                        // Unknown UI failures may have left in-memory state inconsistent.
-                        // A normal user exit still saves before cancellation.
-                        if (Volatile.Read(ref _fatalShutdownStarted) == 0)
-                        {
-                            try
-                            {
-                                await api.SaveProjectAsync().WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-                            }
-                            catch (Exception saveEx)
-                            {
-                                System.Diagnostics.Debug.WriteLine(
-                                    $"[PBStudio] Project save on exit failed: {saveEx.Message}");
-                            }
-                        }
-
-                        // Jetzt laufende Background-Tasks canceln und uvicorn-Shutdown triggern
+                        // MainWindow hat Timeline und Projekt vor dem autorisierten
+                        // zweiten Close bereits gespeichert. OnExit beendet nur noch
+                        // die laufenden Backend-Ressourcen.
                         (api as ApiClient)?.BeginShutdown();
 
                         if (!externalBackendManaged)

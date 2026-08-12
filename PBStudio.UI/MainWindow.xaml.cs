@@ -14,30 +14,51 @@ namespace PBStudio.UI;
 public partial class MainWindow : Window
 {
     private readonly ILogger<MainWindow> _logger;
-    private bool _shutdownStarted;
+    private readonly MainWindowCloseGate _closeGate;
 
     // AP3.1: IApiClient-Parameter entfernt — wurde nur noch für das (entfernte)
     // verfrühte BeginShutdown() in OnClosing gebraucht.
-    public MainWindow(MainViewModel viewModel, ILogger<MainWindow> logger)
+    public MainWindow(
+        MainViewModel viewModel,
+        MainWindowCloseGate closeGate,
+        ILogger<MainWindow> logger)
     {
         _logger = logger;
+        _closeGate = closeGate;
         InitializeComponent();
         DataContext = viewModel;
         Closing += OnClosing;
         _logger.LogInformation("MainWindow initialisiert.");
     }
 
-    private void OnClosing(object? sender, CancelEventArgs e)
+    private async void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (_shutdownStarted)
+        if (_closeGate.IsAuthorized)
             return;
 
-        _shutdownStarted = true;
+        if (Application.Current is App app && app.IsFatalShutdownStarted)
+        {
+            _closeGate.AuthorizeWithoutSave();
+            WeakReferenceMessenger.Default.Send(new AppShutdownMessage());
+            return;
+        }
+
+        e.Cancel = true;
+        var result = await _closeGate.TryAuthorizeAsync();
+        if (result.InProgress)
+            return;
+        if (!result.Authorized)
+        {
+            _logger.LogError("Speichern vor dem Schließen fehlgeschlagen: {Reason}", result.ErrorMessage);
+            MessageBox.Show(
+                "PB Studio bleibt geöffnet: " + (result.ErrorMessage ?? "Speichern fehlgeschlagen."),
+                "Speichern fehlgeschlagen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
         WeakReferenceMessenger.Default.Send(new AppShutdownMessage());
-        // AP3.1/K7-Nachfix (Audit 2026-06-10): BeginShutdown() hier entfernt —
-        // OnClosing feuert VOR App.OnExit; der Cancel des Shutdown-Tokens hätte
-        // den SaveProjectAsync-Call in OnExit weiterhin sofort abgebrochen
-        // (Save-on-Exit wäre trotz K7-Fix tot geblieben). BeginShutdown läuft
-        // jetzt ausschließlich in App.OnExit NACH dem Projekt-Save.
+        Close();
     }
 }

@@ -162,7 +162,15 @@ public partial class TimelineView : UserControl
         PreviewPlayer.Source = null;
 
         if (unloadingViewModel != null)
-            await unloadingViewModel.SyncTimelineAsync();
+        {
+            var flush = await unloadingViewModel.FlushPendingTimelineAsync();
+            if (!flush.Success)
+            {
+                unloadingViewModel.StatusText =
+                    "Timeline bleibt geöffnet: " + (flush.ErrorMessage ?? "Speichern fehlgeschlagen.");
+                return;
+            }
+        }
 
         if (IsLoaded)
             return;

@@ -12,6 +12,7 @@ public class ProjectService : IDisposable
 {
     private readonly IApiClient _api;
     private readonly ILogger<ProjectService> _logger;
+    private readonly ITimelineFlushCoordinator? _timelineFlushCoordinator;
     private readonly SemaphoreSlim _projectTransitionGate = new(1, 1);
     private readonly object _projectLifetimeLock = new();
     private CancellationTokenSource _projectLifetimeCts = new();
@@ -23,14 +24,20 @@ public class ProjectService : IDisposable
     public string? CurrentProjectName => CurrentProject?.Name;
     public string? CurrentProjectPath => CurrentProject?.Path;
     public bool HasProject => CurrentProject != null;
+    public TimelineFlushResult LastTimelineFlushResult { get; private set; } =
+        TimelineFlushResult.Succeeded;
 
     public event EventHandler<ProjectInfo?>? ProjectChanged;
     public event EventHandler? ProjectTransitionStarted;
 
-    public ProjectService(IApiClient api, ILogger<ProjectService> logger)
+    public ProjectService(
+        IApiClient api,
+        ILogger<ProjectService> logger,
+        ITimelineFlushCoordinator? timelineFlushCoordinator = null)
     {
         _api = api;
         _logger = logger;
+        _timelineFlushCoordinator = timelineFlushCoordinator;
     }
 
     public async Task<bool> CreateProjectAsync(string name, string path)
@@ -38,9 +45,13 @@ public class ProjectService : IDisposable
         await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
         var stableProject = CurrentProject;
         var completed = false;
+        var transitionStarted = false;
         try
         {
+            if (!(await FlushTimelineAsync().ConfigureAwait(false)).Success)
+                return false;
             BeginProjectTransition();
+            transitionStarted = true;
             var project = await _api.CreateProjectAsync(name, path).ConfigureAwait(false);
             if (project == null)
                 return false;
@@ -54,7 +65,7 @@ public class ProjectService : IDisposable
         {
             try
             {
-                if (!completed)
+                if (!completed && transitionStarted)
                     RestoreStableProject(stableProject);
             }
             finally
@@ -69,9 +80,13 @@ public class ProjectService : IDisposable
         await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
         var stableProject = CurrentProject;
         var completed = false;
+        var transitionStarted = false;
         try
         {
+            if (!(await FlushTimelineAsync().ConfigureAwait(false)).Success)
+                return false;
             BeginProjectTransition();
+            transitionStarted = true;
             var project = await _api.OpenProjectAsync(path).ConfigureAwait(false);
             if (project == null)
                 return false;
@@ -85,7 +100,7 @@ public class ProjectService : IDisposable
         {
             try
             {
-                if (!completed)
+                if (!completed && transitionStarted)
                     RestoreStableProject(stableProject);
             }
             finally
@@ -97,18 +112,29 @@ public class ProjectService : IDisposable
 
     public async Task<bool> SaveProjectAsync()
     {
-        var result = await _api.SaveProjectAsync().ConfigureAwait(false);
-        if (result?.Success != true)
-            return false;
-
-        var refreshedProject = await _api.GetProjectInfoAsync().ConfigureAwait(false);
-        RunOnUiThread(() =>
+        await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            CurrentProject = refreshedProject ?? CurrentProject;
-            ProjectChanged?.Invoke(this, CurrentProject);
-        });
-        _logger.LogInformation("Projekt gespeichert: {Path}", CurrentProject?.Path);
-        return true;
+            if (!(await FlushTimelineAsync().ConfigureAwait(false)).Success)
+                return false;
+
+            var result = await _api.SaveProjectAsync().ConfigureAwait(false);
+            if (result?.Success != true)
+                return false;
+
+            var refreshedProject = await _api.GetProjectInfoAsync().ConfigureAwait(false);
+            RunOnUiThread(() =>
+            {
+                CurrentProject = refreshedProject ?? CurrentProject;
+                ProjectChanged?.Invoke(this, CurrentProject);
+            });
+            _logger.LogInformation("Projekt gespeichert: {Path}", CurrentProject?.Path);
+            return true;
+        }
+        finally
+        {
+            _projectTransitionGate.Release();
+        }
     }
 
     public async Task<bool> RefreshProjectInfoAsync()
@@ -126,9 +152,13 @@ public class ProjectService : IDisposable
         await _projectTransitionGate.WaitAsync().ConfigureAwait(false);
         var stableProject = CurrentProject;
         var completed = false;
+        var transitionStarted = false;
         try
         {
+            if (!(await FlushTimelineAsync().ConfigureAwait(false)).Success)
+                return false;
             BeginProjectTransition();
+            transitionStarted = true;
             var result = await _api.CloseProjectAsync().ConfigureAwait(false);
             if (result?.Success != true)
                 return false;
@@ -149,7 +179,7 @@ public class ProjectService : IDisposable
         {
             try
             {
-                if (!completed)
+                if (!completed && transitionStarted)
                     RestoreStableProject(stableProject);
             }
             finally
@@ -157,6 +187,28 @@ public class ProjectService : IDisposable
                 _projectTransitionGate.Release();
             }
         }
+    }
+
+    private async Task<TimelineFlushResult> FlushTimelineAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!HasProject || _timelineFlushCoordinator is null)
+        {
+            LastTimelineFlushResult = TimelineFlushResult.Succeeded;
+            return LastTimelineFlushResult;
+        }
+
+        LastTimelineFlushResult = await _timelineFlushCoordinator
+            .FlushAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (LastTimelineFlushResult.Success)
+            return LastTimelineFlushResult;
+
+        _logger.LogWarning(
+            "Projektaktion abgebrochen, weil Timeline-Flush fehlschlug (cancelled={Cancelled}): {Reason}",
+            LastTimelineFlushResult.Cancelled,
+            LastTimelineFlushResult.ErrorMessage ?? "unbekannter Fehler");
+        return LastTimelineFlushResult;
     }
 
     private void RestoreStableProject(ProjectInfo? stableProject)

@@ -32,7 +32,7 @@ def test_app_exit_preserves_externally_managed_backend():
     on_exit = app[app.index("protected override void OnExit") :]
 
     assert 'Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY")' in on_exit
-    assert on_exit.index("SaveProjectAsync()") < on_exit.index("BeginShutdown()")
+    assert "SaveProjectAsync()" not in on_exit
     assert on_exit.index("BeginShutdown()") < on_exit.index("if (!externalBackendManaged)")
     assert on_exit.count("if (!externalBackendManaged)") == 2
     assert on_exit.index("if (!externalBackendManaged)") < on_exit.index("ShutdownAsync()")
