@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,6 +15,253 @@ namespace PBStudio.UI.Tests;
 [DoNotParallelize]
 public sealed class AnalysisResumeContractTests
 {
+    [TestMethod]
+    public async Task AnalyzeAudio_HttpTransportDeserializesOwnedReceiptDto()
+    {
+        const string json = """
+            {
+              "clip_id": 17,
+              "duration_seconds": 42,
+              "bpm": 128,
+              "beat_count": 0,
+              "beats": [],
+              "analysis_status": "failed",
+              "stage_status": {"beats": "failed"},
+              "stage_errors": {"beats": "provider failed"},
+              "stage_receipts": {
+                "beats": {
+                  "receipt_version": 1,
+                  "stage_id": "beats",
+                  "requested": true,
+                  "status": "failed",
+                  "artifact_valid": false,
+                  "error_message": "provider failed",
+                  "attempts": [{
+                    "provider": "DmlExecutionProvider",
+                    "model_id": "beatnet",
+                    "task": "beat_detection",
+                    "mode": "balance",
+                    "required_capabilities": ["beats"],
+                    "verified_capabilities": ["beats"],
+                    "source": "manifest",
+                    "reason": "selected",
+                    "selected_at": "2026-08-12T10:00:00Z"
+                  }]
+                }
+              }
+            }
+            """;
+        using var http = new HttpClient(new AudioResponseHandler(json))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:8765"),
+        };
+        using var api = new ApiClient(http, NullLogger<ApiClient>.Instance);
+
+        var result = await api.AnalyzeAudioAsync(17);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("failed", result.AnalysisStatus);
+        var receipt = result.StageReceipts!["beats"];
+        Assert.AreEqual("provider failed", receipt.ErrorMessage);
+        Assert.AreEqual("DmlExecutionProvider", receipt.Attempts!.Single().Provider);
+    }
+
+    [TestMethod]
+    public void AudioStageTruth_RendersRequestedRowsAndUsesExactRetryEligibility()
+    {
+        static StageReceipt Receipt(
+            string stageId,
+            string status,
+            bool requested = true,
+            string? error = null) => new(
+                ReceiptVersion: 1,
+                StageId: stageId,
+                Requested: requested,
+                Status: status,
+                ErrorMessage: error);
+
+        var completed = new AudioClipModel
+        {
+            IsAnalyzed = true,
+            AnalysisStatus = "completed",
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["beats"] = Receipt("beats", "completed"),
+                ["structure"] = Receipt("structure", "completed"),
+                ["spectral"] = Receipt("spectral", "completed"),
+                ["key"] = Receipt("key", "completed"),
+            },
+        };
+        var partial = new AudioClipModel
+        {
+            IsAnalyzed = true,
+            AnalysisStatus = "partial",
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["beats"] = Receipt("beats", "completed"),
+                ["structure"] = Receipt("structure", "partial", error: "usable degradation"),
+                ["spectral"] = Receipt("spectral", "completed"),
+                ["key"] = Receipt("key", "completed"),
+            },
+        };
+        var newlyRequested = new AudioClipModel
+        {
+            AnalysisStatus = "partial",
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["beats"] = Receipt("beats", "completed"),
+                ["structure"] = Receipt("structure", "skipped", requested: false),
+            },
+        };
+        var failed = new AudioClipModel
+        {
+            IsAnalyzed = true,
+            AnalysisStatus = "failed",
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["beats"] = Receipt("beats", "failed", error: "provider failed"),
+            },
+        };
+        var interrupted = new AudioClipModel
+        {
+            IsAnalyzed = true,
+            AnalysisStatus = "partial",
+            StageErrors = new Dictionary<string, string>
+            {
+                ["key"] = "project switched",
+            },
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["key"] = Receipt("key", "interrupted"),
+            },
+        };
+        var unavailable = new AudioClipModel
+        {
+            IsAnalyzed = true,
+            AnalysisStatus = "failed",
+            StageReceipts = new Dictionary<string, StageReceipt>
+            {
+                ["spectral"] = Receipt("spectral", "unavailable", error: "capability missing"),
+            },
+        };
+        var pristine = new AudioClipModel();
+
+        Assert.IsFalse(completed.CanRetryAnalysis);
+        Assert.IsFalse(partial.CanRetryAnalysis);
+        Assert.IsTrue(newlyRequested.CanRetryAnalysis);
+        Assert.IsTrue(failed.CanRetryAnalysis);
+        Assert.IsTrue(interrupted.CanRetryAnalysis);
+        Assert.IsTrue(unavailable.CanRetryAnalysis);
+        Assert.IsFalse(pristine.CanRetryAnalysis);
+        Assert.AreEqual(0, pristine.StageItems.Count);
+        Assert.AreEqual(4, completed.StageItems.Count);
+        Assert.AreEqual(1, newlyRequested.StageItems.Count, "requested=false stage must stay hidden");
+        Assert.AreEqual("completed", completed.StageItems[0].Status);
+        Assert.AreEqual("provider failed", failed.StageItems.Single().Reason);
+        Assert.AreEqual("project switched", interrupted.StageItems.Single().Reason);
+        Assert.IsFalse(partial.IsAnalyzed);
+        Assert.IsFalse(failed.IsAnalyzed);
+        Assert.IsFalse(interrupted.IsAnalyzed);
+        Assert.IsFalse(unavailable.IsAnalyzed);
+
+        unavailable.AnalysisStatus = "completed";
+        unavailable.IsAnalyzed = true;
+        unavailable.AnalysisStatus = "unavailable";
+        Assert.IsFalse(unavailable.IsAnalyzed);
+    }
+
+    [TestMethod]
+    public async Task AudioTerminalSse_WhenIdle_ReloadsPersistedReceiptTruth()
+    {
+        var project = new ProjectInfo(
+            "Receipt Refresh",
+            @"C:\Projects\ReceiptRefresh",
+            1,
+            0,
+            false);
+        var listCalls = 0;
+        var persisted = new AudioClipInfo(
+            74,
+            "mix",
+            @"C:\Projects\ReceiptRefresh\mix.wav",
+            60.0,
+            44100,
+            2,
+            "wav",
+            AnalysisStatus: "partial",
+            StageStatus: new Dictionary<string, string>
+            {
+                ["structure"] = "interrupted",
+            },
+            StageErrors: new Dictionary<string, string>
+            {
+                ["structure"] = "backend restart",
+            },
+            StageReceipts: new Dictionary<string, StageReceipt>
+            {
+                ["structure"] = new StageReceipt(
+                    ReceiptVersion: 1,
+                    StageId: "structure",
+                    Requested: true,
+                    Status: "interrupted",
+                    ErrorMessage: "backend restart"),
+            });
+        var api = ApiClientHarness.Create()
+            .Handle(
+                nameof(IApiClient.OpenProjectAsync),
+                _ => Task.FromResult<ProjectInfo?>(project))
+            .Handle(nameof(IApiClient.GetAudioClipsAsync), _ =>
+            {
+                Interlocked.Increment(ref listCalls);
+                return Task.FromResult<List<AudioClipInfo>?>([persisted]);
+            });
+        using var projects = new ProjectService(
+            api.Client,
+            NullLogger<ProjectService>.Instance);
+        Assert.IsTrue(await projects.OpenProjectAsync(project.Path));
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        using var viewModel = new AudioLibraryViewModel(
+            api.Client,
+            new AudioLibraryStateService(
+                api.Client,
+                NullLogger<AudioLibraryStateService>.Instance),
+            sse,
+            new DialogServiceStub(),
+            projects);
+        WeakReferenceMessenger.Default.UnregisterAll(viewModel);
+        viewModel.AudioClips.Add(new AudioClipModel
+        {
+            Id = 74,
+            Name = "stale",
+            AnalysisStatus = "running",
+        });
+        Assert.IsFalse(viewModel.IsAnalyzing);
+
+        var streamKindType = typeof(SSEClient).GetNestedType(
+            "StreamKind",
+            BindingFlags.NonPublic)!;
+        var progressKind = Enum.Parse(streamKindType, "Progress");
+        var processEvent = typeof(SSEClient).GetMethod(
+            "ProcessEvent",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        processEvent.Invoke(
+            sse,
+            [
+                progressKind,
+                "analysis_progress",
+                """{"task_id":"74","clip_id":74,"status":"partial","percent":100}""",
+            ]);
+
+        await TestWait.UntilAsync(() =>
+            Volatile.Read(ref listCalls) > 0
+            && viewModel.AudioClips.Count == 1
+            && viewModel.AudioClips[0].StageReceipts?.ContainsKey("structure") == true);
+        Assert.AreEqual("partial", viewModel.AudioClips[0].AnalysisStatus);
+        Assert.AreEqual("backend restart", viewModel.AudioClips[0].StageItems.Single().Reason);
+    }
+
     [TestMethod]
     public async Task VideoBatch_CompletedClipStillReachesPlannerAndSortPreservesIdentity()
     {
@@ -288,5 +537,16 @@ public sealed class AnalysisResumeContractTests
         listenTasks.Add(Task.FromCanceled(cancellation.Token));
 
         sse.Dispose();
+    }
+
+    private sealed class AudioResponseHandler(string json) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            });
     }
 }

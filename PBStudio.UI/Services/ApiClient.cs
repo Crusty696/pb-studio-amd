@@ -226,13 +226,10 @@ public class ApiClient : IApiClient
     public async Task<AudioAnalysisResult?> AnalyzeAudioAsync(
         int clipId,
         CancellationToken cancellationToken = default)
-    {
-        var transport = await PostAsync<PBStudio.UI.Generated.AudioAnalysisResult>(
+        => await PostAsync<AudioAnalysisResult>(
             "/audio/analyze",
             new { clip_id = clipId },
             cancellationToken).ConfigureAwait(false);
-        return transport is null ? null : AudioAnalysisResult.FromTransport(transport);
-    }
 
     public async Task<List<BeatData>?> GetBeatsAsync(int clipId)
         => await GetAsync<List<BeatData>>($"/audio/beats/{clipId}").ConfigureAwait(false);
@@ -1331,7 +1328,8 @@ public record AudioClipInfo(
     Dictionary<string, string>? StemsPaths = null,
     string AnalysisStatus = "unavailable",
     Dictionary<string, string>? StageStatus = null,
-    Dictionary<string, string>? StageErrors = null);
+    Dictionary<string, string>? StageErrors = null,
+    Dictionary<string, StageReceipt>? StageReceipts = null);
 public record StructureSegment(double StartTime, double EndTime, string Label, double Confidence = 0.0, double EnergyScore = 0.0);
 public record SubtrackSegment(double StartTime, double EndTime, double Confidence = 0.0, double? SubBpm = null, string? SubKey = null);
 public record AudioAnalysisResult(
@@ -1355,72 +1353,8 @@ public record AudioAnalysisResult(
     Dictionary<string, string>? StageErrors = null,
     Dictionary<string, JsonElement>? ChunkEvidence = null,
     List<double>? Downbeats = null,
-    Dictionary<string, JsonElement>? DownbeatProvenance = null)
-{
-    public static AudioAnalysisResult FromTransport(
-        PBStudio.UI.Generated.AudioAnalysisResult value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-
-        var beats = value.Beats?.Select(beat => new BeatData(
-            beat.Time,
-            beat.Strength ?? 0.0,
-            beat.Beat_type ?? string.Empty)).ToList() ?? new List<BeatData>();
-
-        return new AudioAnalysisResult(
-            value.Clip_id,
-            value.Duration_seconds,
-            value.Bpm ?? 0.0,
-            value.Beat_count ?? beats.Count,
-            beats,
-            value.Key,
-            value.Energy_curve?.ToList(),
-            value.Structure_segments?.Select(segment => new StructureSegment(
-                segment.Start_time,
-                segment.End_time,
-                segment.Label,
-                segment.Confidence ?? 0.0,
-                segment.Energy_score ?? 0.0)).ToList(),
-            value.Spectral_data,
-            value.Subtrack_segments?.Select(segment => new SubtrackSegment(
-                segment.Start_time,
-                segment.End_time,
-                segment.Confidence ?? 0.0,
-                segment.Sub_bpm,
-                segment.Sub_key)).ToList(),
-            value.Tempo_curve?.ToList(),
-            value.Onset_times?.ToList(),
-            value.Kick_times?.ToList(),
-            value.Snare_times?.ToList(),
-            value.Hihat_times?.ToList(),
-            value.Analysis_status ?? "unavailable",
-            value.Stage_status is null
-                ? null
-                : new Dictionary<string, string>(value.Stage_status),
-            value.Stage_errors is null
-                ? null
-                : new Dictionary<string, string>(value.Stage_errors),
-            ToJsonDictionary(value.Chunk_evidence),
-            value.Downbeats?.ToList(),
-            ToJsonDictionary(value.Downbeat_provenance));
-    }
-
-    private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)
-    {
-        if (value is null)
-            return null;
-
-        var element = value is JsonElement json
-            ? json
-            : JsonSerializer.SerializeToElement(value);
-        if (element.ValueKind != JsonValueKind.Object)
-            return null;
-
-        return element.EnumerateObject().ToDictionary(
-            property => property.Name,
-            property => property.Value.Clone());
-    }
-}
+    Dictionary<string, JsonElement>? DownbeatProvenance = null,
+    Dictionary<string, StageReceipt>? StageReceipts = null);
 public record BeatData(double Time, double Strength, string BeatType);
 public record StemResult(int ClipId, string? VocalsPath, string? InstrumentalPath, string? DrumsPath, string? BassPath, string? OtherPath, string ModelUsed);
 public record VideoClipInfo(

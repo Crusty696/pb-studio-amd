@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -69,6 +70,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
     {
+        if (e.EventType == "analysis_progress"
+            && IsTerminalAnalysisStatus(e.Status)
+            && IsEventForKnownAudioClip(e, out var terminalClipId))
+        {
+            _ = RefreshClipFromPersistenceAsync(terminalClipId);
+        }
+
         var isActiveAnalysis = e.EventType == "analysis_progress"
             && IsAnalyzing
             && IsEventForClip(e, _activeAnalysisClipId);
@@ -111,6 +119,46 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return e.ClipId == activeClipId.Value;
         return int.TryParse(e.TaskId, out var taskClipId)
             && taskClipId == activeClipId.Value;
+    }
+
+    private bool IsEventForKnownAudioClip(ProgressEventArgs e, out int clipId)
+    {
+        clipId = e.ClipId;
+        if (clipId <= 0 && !int.TryParse(e.TaskId, out clipId))
+            return false;
+
+        var targetClipId = clipId;
+        var dispatcher = Application.Current?.Dispatcher;
+        return dispatcher is null || dispatcher.CheckAccess()
+            ? AudioClips.Any(clip => clip.Id == targetClipId)
+            : dispatcher.Invoke(() => AudioClips.Any(clip => clip.Id == targetClipId));
+    }
+
+    private static bool IsTerminalAnalysisStatus(string status) => status is
+        "completed" or "partial" or "failed" or "interrupted" or "unavailable";
+
+    private async Task RefreshClipFromPersistenceAsync(int clipId)
+    {
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        if (!_projectService.IsCurrent(operation))
+            return;
+        _audioLibraryState.Clear();
+        await LoadAudioClipsCoreAsync(operation);
+        if (!_projectService.IsCurrent(operation))
+            return;
+
+        var refreshed = AudioClips.FirstOrDefault(clip => clip.Id == clipId);
+        if (refreshed is not null && SelectedClip?.Id == clipId)
+            SelectedClip = refreshed;
     }
 
     [RelayCommand]
@@ -228,20 +276,35 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnSelectedClipChanged(AudioClipModel? value)
+    partial void OnSelectedClipChanged(AudioClipModel? oldValue, AudioClipModel? newValue)
     {
-        if (value == null) return;
-        Bpm = value.Bpm;
-        BeatCount = value.BeatCount;
-        Key = value.Key;
-        DurationSeconds = value.DurationSeconds;
+        if (oldValue is not null)
+            oldValue.PropertyChanged -= OnSelectedClipPropertyChanged;
+        if (newValue is not null)
+            newValue.PropertyChanged += OnSelectedClipPropertyChanged;
+
+        if (newValue is not null)
+        {
+            Bpm = newValue.Bpm;
+            BeatCount = newValue.BeatCount;
+            Key = newValue.Key;
+            DurationSeconds = newValue.DurationSeconds;
+        }
         AnalyzeSelectedCommand.NotifyCanExecuteChanged();
+        RetrySelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnSelectedClipPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AudioClipModel.CanRetryAnalysis))
+            RetrySelectedCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsAnalyzingChanged(bool value)
     {
         AnalyzeSelectedCommand.NotifyCanExecuteChanged();
         AnalyzeAllCommand.NotifyCanExecuteChanged();
+        RetrySelectedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -343,14 +406,20 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task LoadAudioClipsAsync()
+    private Task LoadAudioClipsAsync() => LoadAudioClipsCoreAsync();
+
+    private async Task LoadAudioClipsCoreAsync(ProjectOperationContext? operation = null)
     {
         var previousId = SelectedClip?.Id;
         var clips = await _audioLibraryState.RefreshAsync();
+        if (operation.HasValue && !_projectService.IsCurrent(operation.Value))
+            return;
         if (clips != null)
         {
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            void ApplyPersistedClips()
             {
+                if (operation.HasValue && !_projectService.IsCurrent(operation.Value))
+                    return;
                 AudioClips.Clear();
                 foreach (var clipInfo in clips)
                 {
@@ -368,7 +437,9 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         BeatCount = clipInfo.BeatCount,
                         IsAnalyzed = clipInfo.IsAnalyzed,
                         AnalysisStatus = clipInfo.AnalysisStatus,
+                        StageStatus = clipInfo.StageStatus,
                         StageErrors = clipInfo.StageErrors,
+                        StageReceipts = clipInfo.StageReceipts,
                         // L-N2: Content-Hash fuer CACHED-Badge auf der Card.
                         AudioHash = clipInfo.AudioHash,
                         // L-N4: Stem-Paths fuer STEMS-Badge + Open-Folder-Button.
@@ -379,7 +450,13 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                     SelectedClip = AudioClips.FirstOrDefault(c => c.Id == previousId.Value);
                 StatusText = $"{clips.Count} Audio-Clips geladen";
                 AnalyzeAllCommand.NotifyCanExecuteChanged();
-            });
+            }
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess())
+                ApplyPersistedClips();
+            else
+                await dispatcher.InvokeAsync(ApplyPersistedClips);
         }
         else
         {
@@ -448,7 +525,9 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                         clip.BeatCount = result.BeatCount;
                         clip.Key = result.Key ?? "";
                         clip.AnalysisStatus = result.AnalysisStatus;
+                        clip.StageStatus = result.StageStatus;
                         clip.StageErrors = result.StageErrors;
+                        clip.StageReceipts = result.StageReceipts;
                         clip.IsAnalyzed = result.AnalysisStatus == "completed";
                         if (result.AnalysisStatus == "partial")
                             partial++;
@@ -499,6 +578,17 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private bool CanAnalyzeSelected() => SelectedClip != null && !IsAnalyzing;
 
+    private bool CanRetrySelected() =>
+        SelectedClip?.CanRetryAnalysis == true && !IsAnalyzing;
+
+    [RelayCommand(CanExecute = nameof(CanRetrySelected))]
+    private async Task RetrySelectedAsync()
+    {
+        if (!CanRetrySelected())
+            return;
+        await AnalyzeSelectedAsync();
+    }
+
     [RelayCommand(CanExecute = nameof(CanAnalyzeSelected))]
     private async Task AnalyzeSelectedAsync()
     {
@@ -527,14 +617,19 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 clip.BeatCount = result.BeatCount;
                 clip.Key = result.Key ?? "";
                 clip.AnalysisStatus = result.AnalysisStatus;
+                clip.StageStatus = result.StageStatus;
                 clip.StageErrors = result.StageErrors;
+                clip.StageReceipts = result.StageReceipts;
                 clip.IsAnalyzed = result.AnalysisStatus == "completed";
                 Bpm = result.Bpm;
                 BeatCount = result.BeatCount;
                 Key = result.Key ?? "";
-                StatusText = result.AnalysisStatus == "partial"
-                    ? $"Analyse partiell: {FormatStageErrors(result.StageErrors)}"
-                    : $"Analyse vollständig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
+                StatusText = result.AnalysisStatus switch
+                {
+                    "completed" => $"Analyse vollständig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}",
+                    "partial" => $"Analyse partiell: {FormatStageErrors(result.StageErrors)}",
+                    _ => $"Analyse {result.AnalysisStatus}: {FormatStageErrors(result.StageErrors)}",
+                };
                 WeakReferenceMessenger.Default.Send(new AudioLibraryRefreshMessage());
             }
             else
@@ -670,6 +765,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     private void OnProjectTransitionStarted(object? sender, EventArgs e)
     {
+        _audioLibraryState.Clear();
         IsAnalyzing = false;
         IsSeparating = false;
         _activeAnalysisClipId = null;
@@ -682,6 +778,8 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        if (SelectedClip is not null)
+            SelectedClip.PropertyChanged -= OnSelectedClipPropertyChanged;
         _sseClient.ProgressReceived -= OnSseProgressReceived;
         _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);

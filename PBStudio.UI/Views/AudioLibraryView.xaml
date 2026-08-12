@@ -266,6 +266,18 @@
                         <TextBlock Text="Analysieren" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
+                <Button Command="{Binding RetrySelectedCommand}"
+                        Style="{StaticResource ActionBtn}"
+                        Margin="0,0,8,0"
+                        Visibility="{Binding SelectedClip.CanRetryAnalysis, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed, TargetNullValue=Collapsed}"
+                        AutomationProperties.Name="Fehlende oder fehlgeschlagene Analyse-Stufen erneut ausführen"
+                        AutomationProperties.HelpText="Fordert nur fehlende, fehlgeschlagene, unterbrochene oder erneut verfügbare Analyse-Stufen an; das Backend bestimmt die genaue Retry-Menge.">
+                    <StackPanel Orientation="Horizontal">
+                        <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"
+                                               Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Retry" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding SeparateStemsCommand}" Style="{StaticResource ActionBtn}"
                          IsEnabled="{Binding IsSeparating, Converter={StaticResource InverseBooleanConverter}}"
                          ToolTip="Stem-Separation (Demucs)&#x0a;• Was es macht: Teilt den ausgewählten Song mithilfe von KI in vier Spuren auf (Drums, Bass, Gesang, Sonstiges).&#x0a;• Wozu es dient: Ermöglicht das exakte Pacing (Cuts) auf einzelne Spuren wie z. B. nur Kicks oder Bässe.&#x0a;• Wann nutzen: Wenn Sie rhythmische Feinarbeit (Stem-basiertes Pacing) nutzen möchten. Der Prozess läuft intensiv auf der GPU."
@@ -341,6 +353,31 @@
             <!-- Section header -->
             <TextBlock DockPanel.Dock="Top" Text="ANALYSE-ERGEBNISSE"
                        Style="{StaticResource SectionHeader}" Margin="0,0,0,12"/>
+
+            <ItemsControl DockPanel.Dock="Top"
+                          ItemsSource="{Binding SelectedClip.StageItems}"
+                          Margin="0,0,0,12"
+                          AutomationProperties.Name="Status der angeforderten Audio-Analyse-Stufen">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding StageId}"
+                                       Foreground="{StaticResource AbletonText}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Status}"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource AbletonAccent}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Reason}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource AbletonTextDim}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Metric cards grid -->
             <Grid>

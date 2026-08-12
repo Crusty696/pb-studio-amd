@@ -16,45 +16,104 @@ public sealed class TransportContractTests
     };
 
     [TestMethod]
-    public void AudioAdapter_PreservesGeneratedPartialResultAndEvidence()
+    public void AudioDtos_DeserializeEveryReceiptAndAttemptFieldIncludingNullableV0()
     {
-        var evidence = JsonSerializer.Deserialize<JsonElement>(
-            """{"chunk_0":{"status":"completed"}}""");
-        var transport = new Generated.AudioAnalysisResult(
-            analysis_status: "partial",
-            beat_count: null,
-            beats: [new Generated.BeatData("kick", 0.75, 1.25)],
-            bpm: null,
-            chunk_evidence: evidence,
-            clip_id: 17,
-            downbeat_provenance: null,
-            downbeats: [0.5],
-            duration_seconds: 42.0,
-            energy_curve: [0.1, 0.9],
-            hihat_times: null,
-            key: "Am",
-            kick_times: [1.25],
-            onset_times: null,
-            snare_times: null,
-            spectral_data: null,
-            stage_errors: new Dictionary<string, string> { ["spectral"] = "unavailable" },
-            stage_status: new Dictionary<string, string> { ["beats"] = "completed" },
-            structure_segments: null,
-            subtrack_segments: null,
-            tempo_curve: [120.0]);
+        const string receipts = """
+            {
+              "beats": {
+                "receipt_version": 1,
+                "stage_id": "beats",
+                "requested": true,
+                "status": "failed",
+                "input_fingerprint": "input-sha",
+                "config_fingerprint": "config-sha",
+                "artifact_ref": "ai_data_json.beats_json",
+                "artifact_sha256": "artifact-sha",
+                "artifact_valid": false,
+                "started_at_utc": "2026-08-12T10:00:00Z",
+                "finished_at_utc": "2026-08-12T10:00:01Z",
+                "error_code": "beat_failed",
+                "error_message": "Beat provider failed",
+                "provider": "DmlExecutionProvider",
+                "model_id": "beatnet",
+                "attempts": [{
+                  "provider": "DmlExecutionProvider",
+                  "model_id": "beatnet",
+                  "task": "beat_detection",
+                  "mode": "balance",
+                  "required_capabilities": ["beats"],
+                  "verified_capabilities": ["beats"],
+                  "source": "manifest",
+                  "reason": "selected",
+                  "selected_at": "2026-08-12T10:00:00Z"
+                }],
+                "correlation_id": "corr-17"
+              },
+              "key": {
+                "receipt_version": 0,
+                "stage_id": "key",
+                "requested": true,
+                "status": "interrupted",
+                "input_fingerprint": null,
+                "config_fingerprint": null,
+                "artifact_ref": null,
+                "artifact_sha256": null,
+                "artifact_valid": null,
+                "started_at_utc": null,
+                "finished_at_utc": null,
+                "error_code": null,
+                "error_message": "legacy interruption",
+                "provider": null,
+                "model_id": null,
+                "attempts": [],
+                "correlation_id": null
+              }
+            }
+            """;
+        var analysisJson = $$"""
+            {"clip_id":17,"duration_seconds":42,"bpm":0,"beat_count":0,"beats":[],"analysis_status":"failed","stage_status":{"beats":"failed","key":"interrupted"},"stage_errors":{"beats":"Beat provider failed","key":"legacy interruption"},"stage_receipts":{{receipts}}}
+            """;
+        var clipJson = $$"""
+            {"id":17,"name":"mix","path":"C:\\media\\mix.wav","duration_seconds":42,"sample_rate":44100,"channels":2,"format":"wav","analysis_status":"failed","stage_status":{"beats":"failed","key":"interrupted"},"stage_errors":{"beats":"Beat provider failed","key":"legacy interruption"},"stage_receipts":{{receipts}}}
+            """;
 
-        var result = AudioAnalysisResult.FromTransport(transport);
+        var result = JsonSerializer.Deserialize<AudioAnalysisResult>(analysisJson, SnakeCaseJson);
+        var clip = JsonSerializer.Deserialize<AudioClipInfo>(clipJson, SnakeCaseJson);
 
-        Assert.AreEqual(17, result.ClipId);
-        Assert.AreEqual(0.0, result.Bpm);
-        Assert.AreEqual(1, result.BeatCount);
-        Assert.AreEqual("kick", result.Beats.Single().BeatType);
-        Assert.AreEqual("partial", result.AnalysisStatus);
-        Assert.AreEqual("completed", result.StageStatus!["beats"]);
-        Assert.AreEqual("unavailable", result.StageErrors!["spectral"]);
-        Assert.AreEqual(
-            "completed",
-            result.ChunkEvidence!["chunk_0"].GetProperty("status").GetString());
+        Assert.IsNotNull(result);
+        Assert.IsNotNull(clip);
+        var receipt = result.StageReceipts!["beats"];
+        Assert.AreEqual(1, receipt.ReceiptVersion);
+        Assert.AreEqual("beats", receipt.StageId);
+        Assert.IsTrue(receipt.Requested);
+        Assert.AreEqual("failed", receipt.Status);
+        Assert.AreEqual("input-sha", receipt.InputFingerprint);
+        Assert.AreEqual("config-sha", receipt.ConfigFingerprint);
+        Assert.AreEqual("ai_data_json.beats_json", receipt.ArtifactRef);
+        Assert.AreEqual("artifact-sha", receipt.ArtifactSha256);
+        Assert.IsFalse(receipt.ArtifactValid);
+        Assert.AreEqual("2026-08-12T10:00:00Z", receipt.StartedAtUtc);
+        Assert.AreEqual("2026-08-12T10:00:01Z", receipt.FinishedAtUtc);
+        Assert.AreEqual("beat_failed", receipt.ErrorCode);
+        Assert.AreEqual("Beat provider failed", receipt.ErrorMessage);
+        Assert.AreEqual("DmlExecutionProvider", receipt.Provider);
+        Assert.AreEqual("beatnet", receipt.ModelId);
+        Assert.AreEqual("corr-17", receipt.CorrelationId);
+        var attempt = receipt.Attempts!.Single();
+        Assert.AreEqual("DmlExecutionProvider", attempt.Provider);
+        Assert.AreEqual("beatnet", attempt.ModelId);
+        Assert.AreEqual("beat_detection", attempt.Task);
+        Assert.AreEqual("balance", attempt.Mode);
+        CollectionAssert.AreEqual(new[] { "beats" }, attempt.RequiredCapabilities!);
+        CollectionAssert.AreEqual(new[] { "beats" }, attempt.VerifiedCapabilities!);
+        Assert.AreEqual("manifest", attempt.Source);
+        Assert.AreEqual("selected", attempt.Reason);
+        Assert.AreEqual("2026-08-12T10:00:00Z", attempt.SelectedAt);
+        var legacy = clip.StageReceipts!["key"];
+        Assert.AreEqual(0, legacy.ReceiptVersion);
+        Assert.IsNull(legacy.ArtifactValid);
+        Assert.IsNull(legacy.Provider);
+        Assert.AreEqual("legacy interruption", legacy.ErrorMessage);
     }
 
     [TestMethod]
