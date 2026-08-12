@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-77",
+  "mode": "registration",
+  "registered_at_utc": "2026-08-12T01:38:32.589660Z",
+  "audio_root": "C:\\Users\\david\\Videos\\test_data\\audio",
+  "video_root": "C:\\Users\\david\\Videos\\test_data\\video",
+  "entries": [
+    {
+      "media_id": "audio-001",
+      "media_type": "audio",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\audio\\test_30s.wav",
+      "size_bytes": 5292078,
+      "media_sha256": "c500711c97af0c6403b6394b8d1b83ed13e02d7f3b25d4c0920c281b93aa380f",
+      "duration_seconds": 30.0,
+      "stream": {
+        "codec_type": "audio",
+        "codec_name": "pcm_s16le"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "audio-002",
+      "media_type": "audio",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\audio\\test_60s.wav",
+      "size_bytes": 10584078,
+      "media_sha256": "3608092f9f63aa20da120e09193e1c13b891aa7d9f586e8b5a37abf705e5b7f7",
+      "duration_seconds": 60.0,
+      "stream": {
+        "codec_type": "audio",
+        "codec_name": "pcm_s16le"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "video-001",
+      "media_type": "video",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\video\\test_10s.mp4",
+      "size_bytes": 9383115,
+      "media_sha256": "ddf2bb708b1f22fa9a2cc7a9e975b52be97adcccf4bcc9947c81d04ead18b0d4",
+      "duration_seconds": 10.008005,
+      "stream": {
+        "codec_type": "video",
+        "codec_name": "h264"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "video-002",
+      "media_type": "video",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\video\\test_12s.mp4",
+      "size_bytes": 4674174,
+      "media_sha256": "cc6b4324c77565037155f150a742d0688718c5df93d670512054a04481608ecf",
+      "duration_seconds": 12.0,
+      "stream": {
+        "codec_type": "video",
+        "codec_name": "h264"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "video-003",
+      "media_type": "video",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\video\\test_20s.mp4",
+      "size_bytes": 17253914,
+      "media_sha256": "6e62fbdda4a8098e0b9f413fdd29a12fe3408a85d24d08fe24d4e96316cc87fc",
+      "duration_seconds": 20.016009,
+      "stream": {
+        "codec_type": "video",
+        "codec_name": "h264"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "video-004",
+      "media_type": "video",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\video\\test_5s.mp4",
+      "size_bytes": 1884024,
+      "media_sha256": "2f4723d14bfaeb4abf3ad29b813a5ddfa1c03e703925834c96bdb2a40e6f818c",
+      "duration_seconds": 5.0,
+      "stream": {
+        "codec_type": "video",
+        "codec_name": "h264"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    },
+    {
+      "media_id": "video-005",
+      "media_type": "video",
+      "absolute_path": "C:\\Users\\david\\Videos\\test_data\\video\\test_8s.mp4",
+      "size_bytes": 3223531,
+      "media_sha256": "2124b0bffa8902fa23962840e2b033c5338eb9d33a793198364e57dfdac43e26",
+      "duration_seconds": 8.0,
+      "stream": {
+        "codec_type": "video",
+        "codec_name": "h264"
+      },
+      "annotation_version": null,
+      "verification_status": "pending"
+    }
+  ],
+  "registration_sha256": "9d7ac8d6a6ffbfc15d4af2a506b12fb7d63c0db33f417e6300488aac230c19db"
+}

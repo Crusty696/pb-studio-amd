@@ -106,7 +106,7 @@
 
 - [X] T081 [OBJ-77] {(FR-402)} {(OR-361)} Wave 0: Audit-Baseline und 80-zeiliges Ledger unter `specs/00022-complete-requirements-remediation/evidence/` registrieren
 - [X] T082 [P] [OBJ-77] {(OR-363)} Wave 0: Hardware, LM Studio, Testmedien und 4h-Fenster unter `specs/00022-complete-requirements-remediation/evidence/` inventarisieren
-- [ ] T083 [P] [OBJ-77] {(OR-363)} {(TR-389)} Wave 0: Reale Ground-Truth-Manifeste unter `specs/00022-complete-requirements-remediation/evidence/` registrieren und hashen
+- [X] T083 [P] [OBJ-77] {(OR-363)} {(TR-389)} Wave 0: Reale Ground-Truth-Manifeste unter `specs/00022-complete-requirements-remediation/evidence/` registrieren und hashen
 - [X] T084 [P] [OBJ-77] {(TR-390)} Wave 0: Python-, C#-, WPF-, OpenAPI-, GUI-, Store- und Recovery-Baselines unter `specs/00022-complete-requirements-remediation/evidence/` erfassen
 - [X] T085 [P] [OBJ-77] {(TR-384)} Wave 0: Vollstaendigen DirectML-Session- und Run-Contracttest unter `Tests/` erstellen
 - [X] T086 [OBJ-77] {(FR-412)} Wave 0: Historische SDD-Artefakte hashgebunden unter `specs/00022-complete-requirements-remediation/evidence/` inventarisieren

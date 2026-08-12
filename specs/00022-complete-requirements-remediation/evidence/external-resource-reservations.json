@@ -3,14 +3,14 @@
   "objective": "OBJ-77",
   "captured_at_utc": "2026-08-11T22:35:49.7087775Z",
   "ground_truth": {
-    "status": "missing",
-    "owner": "No ground-truth annotation owner has been identified.",
+    "status": "reserved",
+    "owner": "Wave-0 Ground-Truth registration tooling.",
     "start_utc": "2026-08-11T21:52:09.8914756Z",
-    "end_utc": "2026-08-11T22:35:49.7087775Z",
+    "end_utc": "2026-08-12T01:38:32.589660Z",
     "machine_or_provider_identity": "C:\\Users\\david\\Videos\\test_data\\audio and C:\\Users\\david\\Videos\\test_data\\video",
-    "approval_identity": "No user approval identity has been supplied.",
-    "approval_scope": "Ground-truth annotation manifests for OBJ-77 real-media gates.",
-    "blocking_reason": "The Wave 0 prerequisite receipt records zero annotation files."
+    "approval_identity": "Not required for Wave-0 registration by the authoritative Task-2 scope correction.",
+    "approval_scope": "Wave-0 real-media registration only; later strict KPI validation remains pending.",
+    "blocking_reason": "T083 registration receipt SHA-256 is 9d7ac8d6a6ffbfc15d4af2a506b12fb7d63c0db33f417e6300488aac230c19db; seven current entries are registered pending without invented annotations."
   },
   "intel": {
     "status": "missing",

@@ -21,6 +21,18 @@
 - Historical evidence files are immutable. New observations go into new timestamped receipts.
 - T003 must pass before requesting T019; no bulk analysis before the ten-clip Canary receives separate approval.
 
+## Authoritative Task-2 Scope Correction
+
+Task 2 registers every currently present file in the two approved media roots in
+Wave 0, including its path, size, media SHA-256, stream, duration, annotation
+version and `verification_status`. `pending` is an honest, valid registration
+state; it is rejected only by the later strict KPI validator. Wave 0 has no
+five-mix or ten-clip count gate. Those quantities remain A-14 (Wave 2) and
+V-11/T019 (Wave 3) gates. Rights, provenance approvals, separate
+annotator/reviewer identities, independent-labeling attestations and
+user-supplied KPI formulas/owners are not Task-2 contracts. The authoritative
+ruling is `.superpowers/sdd/2026-08-12-obj77-blocker-remediation/task-2-scope-correction.md`.
+
 ---
 
 ## File Map
@@ -156,7 +168,7 @@ git commit -m "test(infra): enforce obj77 external reservation gates"
 
 ---
 
-### Task 2: Independent real-media Ground Truth
+### Task 2: Wave-0 real-media Ground-Truth registration
 
 **Files:**
 - Create: `specs/00022-complete-requirements-remediation/contracts/ground-truth-corpus.schema.json`
@@ -167,8 +179,13 @@ git commit -m "test(infra): enforce obj77 external reservation gates"
 - Evidence: `specs/00022-complete-requirements-remediation/evidence/ground-truth-registration.json`
 
 **Interfaces:**
-- Consumes: five real DJ mixes, at least ten real videos, independent annotator/reviewer decisions and frozen KPI definitions.
-- Produces: `validate_corpus(corpus_path: Path, audio_root: Path, video_root: Path) -> list[str]` and a SHA-256 registration receipt.
+- Consumes: the current files under the two approved audio/video roots.
+- Produces: a hash-bound registration receipt and registration/strict validation.
+
+**Scope:** This task follows the authoritative Task-2 Scope Correction above.
+Registration records current entries as `pending` when no annotation exists; no
+annotation, label, identity, rights decision or KPI formula is invented. Later
+strict KPI validation accepts only `verification_status=verified` entries.
 
 - [ ] **Step 1: Freeze the annotation policy before labeling media**
 

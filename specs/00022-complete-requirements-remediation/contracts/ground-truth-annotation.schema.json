@@ -1,21 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "OBJ-77 independent real-media ground-truth annotation",
-  "type": "object", "additionalProperties": false,
-  "required": ["schema_version", "media_id", "media_sha256", "annotation_version", "annotation_status", "annotator_id", "reviewer_id", "independent_labeling", "downbeats", "subtracks", "song_sections", "scene_boundaries", "tags", "pacing_cases"],
+  "title": "OBJ-77 later KPI annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "media_id", "media_sha256", "annotation_version", "verification_status", "downbeats", "subtracks", "song_sections", "scene_boundaries", "tags", "pacing_cases"],
   "properties": {
-    "schema_version": {"const": 1}, "media_id": {"$ref": "#/$defs/identity"}, "media_sha256": {"$ref": "#/$defs/sha256"}, "annotation_version": {"$ref": "#/$defs/semver"}, "annotation_status": {"const": "approved"}, "annotator_id": {"$ref": "#/$defs/identity"}, "reviewer_id": {"$ref": "#/$defs/identity"},
-    "independent_labeling": {"type": "object", "additionalProperties": false, "required": ["attested", "annotator_attestor_id", "reviewer_attestor_id", "source_system"], "properties": {"attested": {"const": true}, "annotator_attestor_id": {"$ref": "#/$defs/identity"}, "reviewer_attestor_id": {"$ref": "#/$defs/identity"}, "source_system": {"const": "independent_of_pb_studio"}}},
-    "downbeats": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["time", "bar_number"], "properties": {"time": {"type": "number", "minimum": 0}, "bar_number": {"type": "integer", "minimum": 1}}}},
-    "subtracks": {"type": "array", "items": {"$ref": "#/$defs/segment"}},
-    "song_sections": {"type": "array", "items": {"allOf": [{"$ref": "#/$defs/segment"}, {"required": ["label"], "properties": {"label": {"enum": ["intro", "verse", "chorus", "bridge", "outro", "drop"]}}}]}},
-    "scene_boundaries": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["time", "transition_type"], "properties": {"time": {"type": "number", "minimum": 0}, "transition_type": {"enum": ["cut", "fade", "dissolve"]}}}},
-    "tags": {"type": "object", "additionalProperties": false, "required": ["required", "allowed", "forbidden"], "properties": {"required": {"$ref": "#/$defs/tags"}, "allowed": {"$ref": "#/$defs/tags"}, "forbidden": {"$ref": "#/$defs/tags"}}},
-    "pacing_cases": {"type": "array", "items": {"$ref": "#/$defs/segment"}}
-  },
-  "$defs": {
-    "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}, "identity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}, "semver": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
-    "segment": {"type": "object", "additionalProperties": false, "required": ["start_time", "end_time"], "properties": {"start_time": {"type": "number", "minimum": 0}, "end_time": {"type": "number", "minimum": 0}, "label": {"type": "string"}}},
-    "tags": {"type": "array", "items": {"enum": ["energy", "mood", "motion", "genre", "instrumental", "vocal", "dark", "uplifting", "calm", "intense"]}}
+    "schema_version": {"const": 1},
+    "media_id": {"type": "string", "minLength": 1},
+    "media_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "annotation_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "verification_status": {"enum": ["pending", "verified", "rejected"]},
+    "downbeats": {"type": "array"},
+    "subtracks": {"type": "array"},
+    "song_sections": {"type": "array"},
+    "scene_boundaries": {"type": "array"},
+    "tags": {"type": "object", "additionalProperties": false, "required": ["required", "allowed", "forbidden"], "properties": {"required": {"type": "array"}, "allowed": {"type": "array"}, "forbidden": {"type": "array"}}},
+    "pacing_cases": {"type": "array"},
+    "rights_evidence": {}, "reviewer_id": {}, "annotator_id": {}, "independent_labeling": {}, "kpi_definitions": {}
   }
 }
