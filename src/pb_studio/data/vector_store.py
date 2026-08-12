@@ -17,6 +17,11 @@ from pb_studio.storage.recovery_barrier import (
     RecoveryBusyError,
     recovery_write_operation,
 )
+from pb_studio.storage.embedding_contract import (
+    EmbeddingMigrationRequiredError,
+    get_embedding_contract,
+    validate_embedding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +122,6 @@ class VectorStore:
     def __init__(self, index_name: str = "main_index", dimension=None):
         if getattr(self, '_initialized', False):
             return
-        self._initialized = True
-
         self.config = ConfigManager()
         self.data_dir = Path(self.config.get("paths", {}).get("db_path", "./data")).parent
         self.index_path = self.data_dir / f"{index_name}.faiss"
@@ -146,10 +149,13 @@ class VectorStore:
             target=self._writer_loop, name=f"vs-writer-{index_name}", daemon=True
         )
 
-        # Dimension: Auto-detect from config or first embedding
-        # SigLIP SO400M = 1152, CLIP = 768, smaller models may use 512
-        # FIXED: Default changed from 768 to 1152 for SigLIP compatibility
-        self.dimension = dimension or self.config.get("vector_store", {}).get("dimension", 1152)
+        contract = get_embedding_contract("raw_video")
+        if dimension is not None and dimension != contract.dimension:
+            raise ValueError(
+                f"FAISS dimension {dimension} does not match manifested "
+                f"raw_video dimension {contract.dimension}"
+            )
+        self.dimension = contract.dimension
         self.index = None
         self.metadata = {} # Map faiss_id -> dict (media_id, desc, etc)
 
@@ -167,6 +173,7 @@ class VectorStore:
         if not _atexit_registered:
             atexit.register(VectorStore._save_active_on_exit)
             _atexit_registered = True
+        self._initialized = True
 
     @staticmethod
     def _save_active_on_exit(
@@ -313,9 +320,11 @@ class VectorStore:
         if self.index_path.exists():
             try:
                 self.index = faiss.read_index(str(self.index_path))
-                # FIXED: Update dimension from loaded index
-                if self.index:
-                    self.dimension = self.index.d
+                if self.index and self.index.d != self.dimension:
+                    raise EmbeddingMigrationRequiredError(
+                        f"FAISS index dimension {self.index.d} does not match "
+                        f"manifested raw_video dimension {self.dimension}"
+                    )
                 
                 # FIXED: Load metadata from JSON (or migrate from legacy pickle)
                 if self.meta_path.exists():
@@ -352,6 +361,8 @@ class VectorStore:
                         logger.warning(f"Failed to load tombstones: {e}")
 
                 logger.info(f"FAISS Index loaded. Size: {self.index.ntotal}, Dim: {self.dimension}")
+            except EmbeddingMigrationRequiredError:
+                raise
             except Exception as e:
                 logger.error(f"Failed to load FAISS index: {e}. Creating new.")
                 self._create_new_index()
@@ -387,40 +398,20 @@ class VectorStore:
         Returns the FAISS ID.
         Raises ValueError on dimension mismatch with existing non-empty index.
         """
+        emb_copy = validate_embedding(
+            embedding,
+            expected_dimension=self.dimension,
+            contract_name="faiss.raw_video",
+        ).reshape(1, -1)
         with self._lock:
             self._ensure_open()
-            # Flatten 2D arrays (batch of 1) zu 1D
-            if len(embedding.shape) == 2 and embedding.shape[0] == 1:
-                embedding = embedding.flatten()
-
-            # Auto-initialize index on first embedding
-            if self.index is None or self.index.ntotal == 0:
-                detected_dim = embedding.shape[0] if len(embedding.shape) == 1 else embedding.shape[-1]
-                if self.dimension != detected_dim:
-                    logger.warning(
-                        f"Dimension mismatch detected. Config: {self.dimension}, "
-                        f"Embedding: {detected_dim}. Recreating empty index with {detected_dim}."
-                    )
-                    self.dimension = detected_dim
-                    self._create_new_index()
-            else:
-                # Non-empty index: dimension mismatch is an error
-                detected_dim = embedding.shape[0] if len(embedding.shape) == 1 else embedding.shape[-1]
-                if self.dimension != detected_dim:
-                    raise ValueError(
-                        f"Embedding dimension {detected_dim} does not match existing index "
-                        f"dimension {self.dimension}. Cannot silently recreate index with "
-                        f"{self.index.ntotal} existing entries."
-                    )
-
-            # Ensure correct shape
-            expected_shape = (self.dimension,)
-            if embedding.shape != expected_shape:
-                raise ValueError(f"Embedding dim mismatch. Expected: {expected_shape}, Got: {embedding.shape}")
-
-            # BUG-072 FIX: Copy array before in-place normalization to avoid mutating caller data
-            emb_copy = embedding.copy().reshape(1, -1)
-            faiss.normalize_L2(emb_copy)
+            if self.index is None:
+                self._create_new_index()
+            if self.index.d != self.dimension:
+                raise EmbeddingMigrationRequiredError(
+                    f"FAISS index dimension {self.index.d} does not match "
+                    f"manifested raw_video dimension {self.dimension}"
+                )
 
             self.index.add(emb_copy)
             faiss_id = self.index.ntotal - 1
@@ -589,6 +580,11 @@ class VectorStore:
 
     def search(self, query_embedding: np.ndarray, k=5, nprobe: Optional[int] = None):
         """Returns list of (metadata, score). Thread-safe."""
+        q_copy = validate_embedding(
+            query_embedding,
+            expected_dimension=self.dimension,
+            contract_name="faiss.raw_video",
+        ).reshape(1, -1)
         with self._lock:
             self._ensure_open()
             if self.index is None or self.index.ntotal == 0:
@@ -598,9 +594,6 @@ class VectorStore:
             if hasattr(self.index, 'nprobe'):
                 self.index.nprobe = nprobe if nprobe is not None else 1
 
-            # BUG-101 FIX: Copy query_embedding before in-place normalization
-            q_copy = query_embedding.copy().reshape(1, -1)
-            faiss.normalize_L2(q_copy)
             tombstoned = getattr(self, "_tombstoned_ids", set())
             search_k = min(int(self.index.ntotal), max(int(k), int(k) + len(tombstoned)))
             D, I = self.index.search(q_copy, search_k)

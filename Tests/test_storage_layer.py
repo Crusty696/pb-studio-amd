@@ -15,6 +15,7 @@ from pb_studio.storage.embedding_repository import (
     VIDEO_DIM,
     EmbeddingRepository,
 )
+from pb_studio.storage.embedding_contract import EmbeddingMigrationRequiredError
 from pb_studio.storage.migration_runner import migrate
 from pb_studio.storage.sqlite_init import PRAGMA_INIT, init_connection
 
@@ -61,26 +62,25 @@ def test_embedding_repository_audio_roundtrip(tmp_path: Path):
         repo.close()
 
 
-def test_embedding_repository_video_roundtrip(tmp_path: Path):
+def test_embedding_repository_legacy_video_schema_fails_closed(tmp_path: Path):
     repo = EmbeddingRepository(tmp_path / "emb.db")
     try:
         rng = np.random.default_rng(7)
         emb = rng.standard_normal(VIDEO_DIM).astype(np.float32)
-        unit_id = repo.add_video_unit(
-            parent_id=None,
-            level="scene",
-            media_id=42,
-            media_hash="cafebabe",
-            start_time=0.0,
-            end_time=2.5,
-            embedding=emb,
-            motion_score=0.42,
-            brightness=0.6,
-            saturation=0.3,
-            color_temp=0.1,
-        )
-        hits = repo.search_video(emb, level="scene", limit=5)
-        assert hits and hits[0].unit_id == unit_id
+        with pytest.raises(EmbeddingMigrationRequiredError):
+            repo.add_video_unit(
+                parent_id=None,
+                level="scene",
+                media_id=42,
+                media_hash="cafebabe",
+                start_time=0.0,
+                end_time=2.5,
+                embedding=emb,
+                motion_score=0.42,
+                brightness=0.6,
+                saturation=0.3,
+                color_temp=0.1,
+            )
     finally:
         repo.close()
 

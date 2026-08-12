@@ -13,6 +13,26 @@
     "bundle_manifest": "config/directml-asset-bundle.json",
     "reason": "Every bundled target is bound to an immutable upstream revision or release-asset identity, exact source hash, license artifact and the SHA-256-verified 2026.08.01 release archive."
   },
+  "embedding_contracts": {
+    "raw_audio": {
+      "dimension": 512,
+      "dtype": "float32",
+      "normalization": "l2",
+      "producer": "clap-audio-directml"
+    },
+    "raw_video": {
+      "dimension": 1152,
+      "dtype": "float32",
+      "normalization": "l2",
+      "producer": "siglip-so400m-vision-static"
+    },
+    "brain_projected": {
+      "dimension": 256,
+      "dtype": "float32",
+      "normalization": "l2",
+      "producer": "cross-modal-projector-v2"
+    }
+  },
   "assets": [
     {
       "id": "raft-small-static",

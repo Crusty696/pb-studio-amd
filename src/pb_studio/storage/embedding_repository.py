@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -18,11 +19,16 @@ import numpy as np
 
 from .migration_runner import migrate
 from .sqlite_init import init_connection
+from .embedding_contract import (
+    EmbeddingMigrationRequiredError,
+    get_embedding_contract,
+    validate_embedding,
+)
 
 logger = logging.getLogger(__name__)
 
-AUDIO_DIM = 512
-VIDEO_DIM = 768
+AUDIO_DIM = get_embedding_contract("raw_audio").dimension
+VIDEO_DIM = get_embedding_contract("raw_video").dimension
 
 
 @dataclass
@@ -70,6 +76,7 @@ class EmbeddingRepository:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self._ensure_schema()
+        self._vec_dimensions = self._read_vec_dimensions()
         self._local = threading.local()
         # Review-Fix MEDIUM (2026-07-09): (thread_ident, conn)-Paare, damit
         # Conns toter Threads beim naechsten Zugriff geprunt werden koennen.
@@ -117,6 +124,43 @@ class EmbeddingRepository:
         """Run combined embeddings migrations (audio+video share embeddings.db)."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._migrate_with_vec(_migrations_root() / "embeddings")
+
+    def _read_vec_dimensions(self) -> dict[str, int]:
+        conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        init_connection(conn)
+        try:
+            dimensions: dict[str, int] = {}
+            for table in ("audio_embeddings", "video_embeddings"):
+                row = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                ).fetchone()
+                if row is None or not isinstance(row[0], str):
+                    raise EmbeddingMigrationRequiredError(
+                        f"Missing sqlite-vec table {table}"
+                    )
+                match = re.search(r"FLOAT\s*\[\s*(\d+)\s*\]", row[0], re.I)
+                if match is None:
+                    raise EmbeddingMigrationRequiredError(
+                        f"Cannot determine sqlite-vec dimension for {table}"
+                    )
+                dimensions[table] = int(match.group(1))
+            return dimensions
+        finally:
+            conn.close()
+
+    def _require_vec_dimension(
+        self,
+        table: str,
+        *,
+        expected_dimension: int,
+    ) -> None:
+        actual = self._vec_dimensions.get(table)
+        if actual != expected_dimension:
+            raise EmbeddingMigrationRequiredError(
+                f"{table} uses legacy FLOAT[{actual}], expected "
+                f"FLOAT[{expected_dimension}]; migration_required"
+            )
 
     def _migrate_with_vec(self, migrations_dir: Path) -> None:
         """Like migration_runner.migrate but loads sqlite-vec first."""
@@ -204,6 +248,10 @@ class EmbeddingRepository:
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         emb = self._coerce_embedding(embedding, AUDIO_DIM)
+        self._require_vec_dimension(
+            "audio_embeddings",
+            expected_dimension=AUDIO_DIM,
+        )
         try:
             self.conn.execute("BEGIN")
             cur = self.conn.execute(
@@ -234,6 +282,10 @@ class EmbeddingRepository:
         limit: int = 10,
     ) -> list[KnnHit]:
         emb = self._coerce_embedding(query, AUDIO_DIM)
+        self._require_vec_dimension(
+            "audio_embeddings",
+            expected_dimension=AUDIO_DIM,
+        )
         if level is None:
             sql = (
                 "SELECT u.id, u.media_id, e.distance "
@@ -273,6 +325,10 @@ class EmbeddingRepository:
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         emb = self._coerce_embedding(embedding, VIDEO_DIM)
+        self._require_vec_dimension(
+            "video_embeddings",
+            expected_dimension=VIDEO_DIM,
+        )
         try:
             self.conn.execute("BEGIN")
             cur = self.conn.execute(
@@ -305,6 +361,10 @@ class EmbeddingRepository:
         limit: int = 10,
     ) -> list[KnnHit]:
         emb = self._coerce_embedding(query, VIDEO_DIM)
+        self._require_vec_dimension(
+            "video_embeddings",
+            expected_dimension=VIDEO_DIM,
+        )
         if level is None:
             sql = (
                 "SELECT u.id, u.media_id, e.distance "
@@ -358,11 +418,18 @@ class EmbeddingRepository:
         units_data: list[dict[str, Any]],
     ) -> list[int]:
         """Insert multiple video units and their embeddings in a single transaction."""
+        prepared = [
+            (item, self._coerce_embedding(item["embedding"], VIDEO_DIM))
+            for item in units_data
+        ]
+        self._require_vec_dimension(
+            "video_embeddings",
+            expected_dimension=VIDEO_DIM,
+        )
         inserted_ids = []
         try:
             self.conn.execute("BEGIN")
-            for item in units_data:
-                emb = self._coerce_embedding(item["embedding"], VIDEO_DIM)
+            for item, emb in prepared:
                 cur = self.conn.execute(
                     "INSERT INTO video_units (parent_id, level, media_id, media_hash, "
                     "start_time, end_time, motion_score, brightness, saturation, "
@@ -392,11 +459,18 @@ class EmbeddingRepository:
         units_data: list[dict[str, Any]],
     ) -> list[int]:
         """Insert multiple audio units and their embeddings in a single transaction."""
+        prepared = [
+            (item, self._coerce_embedding(item["embedding"], AUDIO_DIM))
+            for item in units_data
+        ]
+        self._require_vec_dimension(
+            "audio_embeddings",
+            expected_dimension=AUDIO_DIM,
+        )
         inserted_ids = []
         try:
             self.conn.execute("BEGIN")
-            for item in units_data:
-                emb = self._coerce_embedding(item["embedding"], AUDIO_DIM)
+            for item, emb in prepared:
                 cur = self.conn.execute(
                     "INSERT INTO audio_units (parent_id, level, media_id, media_hash, "
                     "start_time, end_time, metadata_json) VALUES (?,?,?,?,?,?,?)",
@@ -420,10 +494,8 @@ class EmbeddingRepository:
 
     @staticmethod
     def _coerce_embedding(vec: np.ndarray, dim: int) -> np.ndarray:
-        arr = np.asarray(vec, dtype=np.float32).reshape(-1)
-        if arr.size != dim:
-            raise ValueError(f"Embedding-Dim {arr.size} != erwartet {dim}")
-        norm = np.linalg.norm(arr)
-        if norm > 1e-8:
-            arr = arr / norm
-        return arr
+        return validate_embedding(
+            vec,
+            expected_dimension=dim,
+            contract_name="sqlite-vec",
+        )

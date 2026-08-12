@@ -30,6 +30,7 @@ class TestVectorStoreEmbeddings:
         with patch("pb_studio.data.vector_store.faiss") as mock_faiss:
             mock_index = MagicMock()
             mock_index.ntotal = 5
+            mock_index.d = 768
             mock_faiss.IndexFlatIP.return_value = mock_index
 
             from pb_studio.data.vector_store import VectorStore
@@ -67,6 +68,44 @@ class TestVectorStoreEmbeddings:
 
         with pytest.raises(ValueError, match="dimension"):
             store.add_embedding(embedding, meta)
+
+    @pytest.mark.parametrize(
+        "embedding",
+        [
+            np.ones(768, dtype=np.float64),
+            np.zeros(768, dtype=np.float32),
+            np.full(768, np.nan, dtype=np.float32),
+        ],
+    )
+    def test_add_embedding_rejects_invalid_vector_before_index_write(
+        self,
+        embedding,
+    ):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.dimension = 768
+        store.index = MagicMock()
+        store.index.ntotal = 0
+        store.metadata = {}
+        store._lock = threading.Lock()
+
+        with pytest.raises((TypeError, ValueError)):
+            store.add_embedding(embedding, {})
+
+        store.index.add.assert_not_called()
+
+    def test_search_validates_query_even_when_index_is_empty(self):
+        from pb_studio.data.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store.dimension = 4
+        store.index = faiss.IndexFlatIP(4)
+        store.metadata = {}
+        store._lock = threading.Lock()
+
+        with pytest.raises(TypeError, match="float32"):
+            store.search(np.ones(4, dtype=np.float64))
 
     def test_linked_add_rejects_missing_media_before_index_write(self):
         from pb_studio.data.vector_store import VectorStore
@@ -203,9 +242,21 @@ class TestVectorStoreTombstones:
     def test_clean_tombstones_rebuilds_index(self, reset_config_singleton, tmp_path):
         """Verify that clean_tombstones removes tombstoned items and compacts index."""
         from pb_studio.data.vector_store import VectorStore
+        from pb_studio.storage.embedding_contract import EmbeddingContract
         
         # Neuen echten VectorStore mit Dimension 4 im tmp_path erstellen
-        store = VectorStore(index_name="test_tombstones_index", dimension=4)
+        test_contract = EmbeddingContract(
+            name="raw_video",
+            dimension=4,
+            dtype="float32",
+            normalization="l2",
+            producer="test",
+        )
+        with patch(
+            "pb_studio.data.vector_store.get_embedding_contract",
+            return_value=test_contract,
+        ):
+            store = VectorStore(index_name="test_tombstones_index", dimension=4)
         store.index_path = tmp_path / "test_tombstones_index.faiss"
         store.meta_path = tmp_path / "test_tombstones_index_meta.json"
         store.tombstone_path = tmp_path / "test_tombstones_index_tombstones.json"
@@ -531,6 +582,58 @@ class TestLegacyMetadataMigration:
 
 
 class TestVectorStoreLifecycle:
+    def test_failed_dimension_initialization_does_not_poison_singleton(self):
+        from pb_studio.data.vector_store import VectorStore
+        from pb_studio.storage.embedding_contract import EmbeddingContract
+
+        test_contract = EmbeddingContract(
+            name="raw_video",
+            dimension=4,
+            dtype="float32",
+            normalization="l2",
+            producer="test",
+        )
+        with patch(
+            "pb_studio.data.vector_store.get_embedding_contract",
+            return_value=test_contract,
+        ):
+            with pytest.raises(ValueError, match="manifested"):
+                VectorStore(index_name="failed_init", dimension=3)
+
+            recovered = VectorStore(index_name="failed_init", dimension=4)
+            try:
+                assert recovered._initialized is True
+                assert recovered.index.d == 4
+                assert recovered._writer_thread.is_alive()
+            finally:
+                recovered.close()
+
+    def test_loaded_dimension_mismatch_never_recreates_index(self, tmp_path):
+        from pb_studio.data.vector_store import VectorStore
+        from pb_studio.storage.embedding_contract import (
+            EmbeddingMigrationRequiredError,
+        )
+
+        store = object.__new__(VectorStore)
+        store.dimension = 1152
+        store.index_path = tmp_path / "legacy.faiss"
+        store.index_path.write_bytes(b"legacy-index-placeholder")
+        store.meta_path = tmp_path / "legacy_meta.json"
+        store.tombstone_path = tmp_path / "legacy_tombstones.json"
+        store._recover_incomplete_snapshot = MagicMock(return_value=False)
+        store._create_new_index = MagicMock()
+        legacy_index = MagicMock()
+        legacy_index.d = 768
+
+        with patch(
+            "pb_studio.data.vector_store.faiss.read_index",
+            return_value=legacy_index,
+        ):
+            with pytest.raises(EmbeddingMigrationRequiredError):
+                store._load_index()
+
+        store._create_new_index.assert_not_called()
+
     def test_writer_retries_failed_snapshot_without_clearing_dirty(self):
         from pb_studio.data.vector_store import VectorStore
 
@@ -573,24 +676,36 @@ class TestVectorStoreLifecycle:
 
     def test_index_switch_closes_old_writer_and_close_allows_reopen(self):
         from pb_studio.data.vector_store import VectorStore
+        from pb_studio.storage.embedding_contract import EmbeddingContract
 
-        first = VectorStore(index_name="lifecycle_a", dimension=4)
-        first_writer = first._writer_thread
-        assert first_writer.is_alive()
+        test_contract = EmbeddingContract(
+            name="raw_video",
+            dimension=4,
+            dtype="float32",
+            normalization="l2",
+            producer="test",
+        )
+        with patch(
+            "pb_studio.data.vector_store.get_embedding_contract",
+            return_value=test_contract,
+        ):
+            first = VectorStore(index_name="lifecycle_a", dimension=4)
+            first_writer = first._writer_thread
+            assert first_writer.is_alive()
 
-        second = VectorStore(index_name="lifecycle_b", dimension=4)
+            second = VectorStore(index_name="lifecycle_b", dimension=4)
 
-        assert first._closed is True
-        assert not first_writer.is_alive()
-        assert second is not first
-        assert second._writer_thread.is_alive()
+            assert first._closed is True
+            assert not first_writer.is_alive()
+            assert second is not first
+            assert second._writer_thread.is_alive()
 
-        second.close()
-        assert not second._writer_thread.is_alive()
+            second.close()
+            assert not second._writer_thread.is_alive()
 
-        reopened = VectorStore(index_name="lifecycle_b", dimension=4)
-        try:
-            assert reopened is not second
-            assert reopened._writer_thread.is_alive()
-        finally:
-            reopened.close()
+            reopened = VectorStore(index_name="lifecycle_b", dimension=4)
+            try:
+                assert reopened is not second
+                assert reopened._writer_thread.is_alive()
+            finally:
+                reopened.close()
