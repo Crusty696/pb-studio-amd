@@ -112,13 +112,14 @@ Freezes, kein Persistenzverlust und P-10..P-12 bestanden.
    pruefen; P95-Latenz messen.
 5. Den portablen DirectML-Matrixrunner implementieren, mit Unit-Tests absichern
    und DirectML samt vollstaendiger KI-/UI-Kette auf der vorhandenen RX 7800 XT
-   ausfuehren; Intel und NVIDIA folgen erst in der Endabnahme. Der Runner ist
-   vor dem AMD-Lauf commitgebunden, das Receipt folgt im finalen Evidence-Commit.
+   auf dem exakten `wave5_sha` ausfuehren; Intel und NVIDIA folgen erst in der
+   Endabnahme. Der Runner ist vor diesem AMD-Lauf commitgebunden. Das
+   vorlaeufige Receipt schliesst nur das sequenzielle Wave-5-Gate, nicht K-16.
 
 **Lokales AMD-Gate:** keine verbotenen Fallbacks, korrekte lokale
 Provider-/Modellreceipts, GUI-Matrix und RX-7800-XT-Nachweis gruen.
 K-11-Dateiloeschung wartet auf separate Freigabe; K-16 bleibt bis zur
-abschliessenden Intel-/NVIDIA-Matrix offen.
+abschliessenden AMD-/Intel-/NVIDIA-Matrix auf `tested_candidate_sha` offen.
 
 ## Wave 6 - Resilienz, Governance und Release
 
@@ -134,12 +135,16 @@ abschliessenden Intel-/NVIDIA-Matrix offen.
    Iron-Rule-Gates schliessen.
 5. Vollsuite, native C#-Tests, WPF Release, OpenAPI, GUI, lokale KPIs und
    Store-Integritaet auf der vorhandenen AMD-Hardware ausfuehren.
+6. Nach dem letzten Wave-6-Code-/Config-Commit `tested_candidate_sha`
+   einfrieren, die RX-7800-XT-Matrix auf diesem finalen SHA erneut ausfuehren
+   und Stress-Canary/Soak an denselben SHA binden.
 
 **Lokales AMD-Gate:** alle nicht-externen Ledgerzeilen sind geschlossen; aktive
 Workspaces sind fuer die externe Endabnahme valid, historische archive-valid;
 lokale Tests, Reviews und Matrix-/LM-/Stress-Tooling sind commitgebunden;
-AMD-Matrix, Canary, Soak und der Produktpfad auf der RX 7800 XT sind gruen und
-an denselben Candidate gebunden. Ein Release bleibt bis zur nachfolgenden
+der finale AMD-Rerun, Canary, Soak und der Produktpfad auf der RX 7800 XT sind
+gruen und an `tested_candidate_sha` gebunden. Der fruehere Wave-5-Receipt bleibt
+getrennte historische Gate-Evidence. Ein Release bleibt bis zur nachfolgenden
 externen Endabnahme gesperrt.
 
 ## Candidate-Freeze und abschliessende externe Release-Abnahme
@@ -155,8 +160,9 @@ Die externe Live-Ausfuehrung beginnt erst nach dem folgenden Exit-0-Startgate.
    Reservierungsvalidator-Exit 0 verlangen. Ein Fehler blockiert nur diese
    Endphase, nicht Wave 0 oder die abgeschlossenen lokalen AMD-Waves.
 2. Den identischen `tested_candidate_sha` ohne Code-/Config-Aenderung auf realer
-   Intel- und NVIDIA-DirectML-Hardware pruefen; der AMD-Nachweis stammt aus dem
-   lokalen Gate desselben Candidates.
+   Intel- und NVIDIA-DirectML-Hardware pruefen; der finale AMD-Nachweis stammt
+   aus dem Wave-6-Rerun desselben Candidates, nicht aus dem vorlaeufigen
+   `wave5_sha`-Receipt.
 3. Das autorisierte LM-Studio/Hermes-Wartungsfenster auf genau diesem Candidate
    reversibel ausfuehren und T003 belegen.
 4. Nach T003 PASS und einem separaten Go T019 als eigenen 10-Clip-Schritt mit
