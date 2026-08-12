@@ -24,13 +24,19 @@ API:
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, Callable
+
+from pb_studio.core.stage_receipts import (
+    project_legacy_stage_receipts,
+    receipt_to_dict,
+)
 
 # Aktuelle Schema-Version. Bei Neuanlegen eines Feldes:
 # 1. CURRENT_SCHEMA_VERSION inkrementieren
 # 2. migrate_{audio,video}_{metadata,ai_data}_v{X-1}_to_v{X} schreiben
 # 3. unten in der MIGRATION_CHAIN registrieren
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 SCHEMA_VERSION_KEY = "__schema_version"
 
@@ -62,6 +68,11 @@ def _migrate_with_chain(
     """
     if not isinstance(blob, dict):
         return bump_schema({}, CURRENT_SCHEMA_VERSION)
+
+    # Reading a row is a projection operation.  Keep the source object (and
+    # nested legacy payloads) byte-for-byte untouched until a caller performs
+    # an explicit persistence write.
+    blob = deepcopy(blob)
 
     # Legacy-Blob (kein __schema_version) -> als v0 behandeln
     current_v = blob.get(SCHEMA_VERSION_KEY, 0)
@@ -103,12 +114,45 @@ def _v0_to_v1_audio_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
     return blob
 
 
+def _v1_to_v2_metadata(blob: dict[str, Any]) -> dict[str, Any]:
+    """v2 adds no metadata fields; keep the chain explicit and idempotent."""
+
+    return blob
+
+
+def _ensure_stage_receipts(blob: dict[str, Any]) -> dict[str, Any]:
+    if "stage_receipts" in blob:
+        return blob
+    stage_status = blob.get("stage_status")
+    stage_errors = blob.get("stage_errors")
+    if not isinstance(stage_status, dict):
+        blob["stage_receipts"] = {}
+        return blob
+    projected = project_legacy_stage_receipts(
+        stage_status=stage_status,
+        stage_errors=stage_errors if isinstance(stage_errors, dict) else None,
+    )
+    blob["stage_receipts"] = {
+        stage_id: receipt_to_dict(receipt)
+        for stage_id, receipt in projected.items()
+    }
+    return blob
+
+
+def _v1_to_v2_audio_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
+    """Return-only V0 receipt projection for legacy audio stage truth."""
+
+    return _ensure_stage_receipts(blob)
+
+
 AUDIO_METADATA_CHAIN = {
     0: _v0_to_v1_audio_metadata,
+    1: _v1_to_v2_metadata,
 }
 
 AUDIO_AI_DATA_CHAIN = {
     0: _v0_to_v1_audio_ai_data,
+    1: _v1_to_v2_audio_ai_data,
 }
 
 
@@ -117,7 +161,7 @@ def migrate_audio_metadata(blob: dict[str, Any]) -> dict[str, Any]:
 
 
 def migrate_audio_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
-    return _migrate_with_chain(blob, AUDIO_AI_DATA_CHAIN)
+    return _ensure_stage_receipts(_migrate_with_chain(blob, AUDIO_AI_DATA_CHAIN))
 
 
 # -------------------------------------------------------------------------
@@ -165,12 +209,20 @@ def _v0_to_v1_video_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
     return blob
 
 
+def _v1_to_v2_video_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
+    """Return-only V0 receipt projection for legacy video stage truth."""
+
+    return _ensure_stage_receipts(blob)
+
+
 VIDEO_METADATA_CHAIN = {
     0: _v0_to_v1_video_metadata,
+    1: _v1_to_v2_metadata,
 }
 
 VIDEO_AI_DATA_CHAIN = {
     0: _v0_to_v1_video_ai_data,
+    1: _v1_to_v2_video_ai_data,
 }
 
 
@@ -179,4 +231,4 @@ def migrate_video_metadata(blob: dict[str, Any]) -> dict[str, Any]:
 
 
 def migrate_video_ai_data(blob: dict[str, Any]) -> dict[str, Any]:
-    return _migrate_with_chain(blob, VIDEO_AI_DATA_CHAIN)
+    return _ensure_stage_receipts(_migrate_with_chain(blob, VIDEO_AI_DATA_CHAIN))

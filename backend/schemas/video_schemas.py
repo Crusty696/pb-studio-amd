@@ -1,7 +1,12 @@
 """Video-bezogene Schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
+
+from backend.schemas.stage_receipt import (
+    StageReceipt,
+    validate_stage_receipt_mapping,
+)
 
 
 class VideoImportRequest(BaseModel):
@@ -38,9 +43,17 @@ class VideoClipInfo(BaseModel):
     embedding_samples: Optional[int] = None
     has_embedding: bool = False
     tag_source: Optional[str] = None
-    analysis_status: Literal["unavailable", "completed", "partial", "failed"] = "unavailable"
+    analysis_status: Literal["unavailable", "running", "completed", "partial", "failed"] = "unavailable"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
+    stage_receipts: dict[str, StageReceipt] = Field(default_factory=dict)
+
+    @field_validator("stage_receipts")
+    @classmethod
+    def validate_receipt_keys(
+        cls, receipts: dict[str, StageReceipt]
+    ) -> dict[str, StageReceipt]:
+        return validate_stage_receipt_mapping(receipts)
 
 
 class VideoAnalyzeRequest(BaseModel):
@@ -95,6 +108,14 @@ class VideoAnalysisResult(BaseModel):
     status: Literal["completed", "partial", "failed"] = "completed"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
+    stage_receipts: dict[str, StageReceipt] = Field(default_factory=dict)
+
+    @field_validator("stage_receipts")
+    @classmethod
+    def validate_receipt_keys(
+        cls, receipts: dict[str, StageReceipt]
+    ) -> dict[str, StageReceipt]:
+        return validate_stage_receipt_mapping(receipts)
 
 
 class SceneInfo(BaseModel):

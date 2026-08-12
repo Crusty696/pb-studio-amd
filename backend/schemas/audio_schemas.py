@@ -1,8 +1,13 @@
 """Audio-bezogene Schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Optional, Dict
 from enum import Enum
+
+from backend.schemas.stage_receipt import (
+    StageReceipt,
+    validate_stage_receipt_mapping,
+)
 
 
 class AudioImportRequest(BaseModel):
@@ -28,10 +33,18 @@ class AudioClipInfo(BaseModel):
     analysis_status: str = "unavailable"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
+    stage_receipts: dict[str, StageReceipt] = Field(default_factory=dict)
     # L-N4: Stem-Separation Outputs — gesetzt nach POST /audio/stems/separate.
     # Dict {vocals|instrumental|drums|bass|other -> file-path}. UI rendert
     # STEMS-Badge wenn nicht None und nicht-leer.
     stems_paths: Optional[Dict[str, str]] = None
+
+    @field_validator("stage_receipts")
+    @classmethod
+    def validate_receipt_keys(
+        cls, receipts: dict[str, StageReceipt]
+    ) -> dict[str, StageReceipt]:
+        return validate_stage_receipt_mapping(receipts)
 
 
 class SubtrackSegment(BaseModel):
@@ -83,9 +96,17 @@ class AudioAnalysisResult(BaseModel):
     analysis_status: str = "completed"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
+    stage_receipts: dict[str, StageReceipt] = Field(default_factory=dict)
     chunk_evidence: dict[str, Any] = Field(default_factory=dict)
     downbeats: list[float] = Field(default_factory=list)
     downbeat_provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("stage_receipts")
+    @classmethod
+    def validate_receipt_keys(
+        cls, receipts: dict[str, StageReceipt]
+    ) -> dict[str, StageReceipt]:
+        return validate_stage_receipt_mapping(receipts)
 
 
 class WaveformRequest(BaseModel):

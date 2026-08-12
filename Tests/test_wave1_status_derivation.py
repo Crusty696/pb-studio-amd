@@ -34,7 +34,9 @@ def _receipt(
         "artifact_sha256": "a" * 64 if artifact_valid else None,
         "artifact_valid": artifact_valid,
         "started_at_utc": "2026-08-12T10:00:00Z",
-        "finished_at_utc": None if status == "running" else "2026-08-12T10:00:01Z",
+        "finished_at_utc": (
+            None if status in {"pending", "running"} else "2026-08-12T10:00:01Z"
+        ),
         "error_code": error_code,
         "error_message": error_message,
         "provider": None,
@@ -156,3 +158,61 @@ def test_receipt_dictionary_key_must_match_stage_id():
 
     with pytest.raises(ValueError, match="stage_id|key"):
         derive({"beats": _receipt("motion", "completed", artifact_valid=True)})
+
+
+def test_empty_and_unrequested_only_receipts_are_unavailable():
+    derive = getattr(_contract(), "derive_analysis_status", None)
+
+    assert derive({}) == "unavailable"
+    assert (
+        derive({"colors": _receipt("colors", "skipped", requested=False)})
+        == "unavailable"
+    )
+
+
+def test_requested_running_is_running_and_not_retryable():
+    contract = _contract()
+    receipts = {"beats": _receipt("beats", "running")}
+
+    assert contract.derive_analysis_status(receipts) == "running"
+    assert (
+        contract.select_retry_stage_ids(
+            receipts,
+            requested_stage_ids={"beats"},
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    ("receipts", "expected"),
+    [
+        (
+            {
+                "beats": _receipt("beats", "completed", artifact_valid=True),
+                "motion": _receipt("motion", "running"),
+            },
+            "running",
+        ),
+        (
+            {
+                "beats": _receipt("beats", "completed", artifact_valid=True),
+                "motion": _receipt("motion", "pending"),
+            },
+            "running",
+        ),
+        (
+            {
+                "beats": _receipt("beats", "completed", artifact_valid=True),
+                "motion": _receipt("motion", "missing"),
+            },
+            "partial",
+        ),
+        ({"motion": _receipt("motion", "missing")}, "failed"),
+        ({"motion": _receipt("motion", "pending")}, "running"),
+    ],
+)
+def test_aggregate_distinguishes_in_progress_and_terminal_missing(
+    receipts: dict[str, dict], expected: str
+):
+    assert _contract().derive_analysis_status(receipts) == expected
