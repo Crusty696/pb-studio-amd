@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 REQUIRED_STATUS = {
-    "ground_truth": "reserved",
     "intel": "reserved",
     "nvidia": "reserved",
     "lm_window": "authorized",

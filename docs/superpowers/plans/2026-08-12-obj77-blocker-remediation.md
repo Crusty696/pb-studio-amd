@@ -4,7 +4,7 @@
 
 **Goal:** Resolve the five blocker classes without weakening OBJ-77 evidence rules: first close and merge documentation-only Wave 0, then implement and execute the DirectML, LM-Studio and four-hour gates in their prescribed later waves.
 
-**Architecture:** Wave 0 records genuine resource reservations and independently approved real-media manifests without changing product code, then merges into the integration branch. Four fail-closed verification tracks subsequently share the existing OBJ-77 measurement contract: independent Ground Truth, an isolated vendor-neutral ONNX-DirectML matrix runner, a reversible LM-Studio/Hermes maintenance harness, and a versioned 4096-MB four-hour stress runner. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
+**Architecture:** Wave 0 records genuine resource reservations and registered, hash-bound pending-or-verified real-media manifests without changing product code, then merges into the integration branch. Four fail-closed verification tracks subsequently share the existing OBJ-77 measurement contract: Ground Truth, an isolated vendor-neutral ONNX-DirectML matrix runner, a reversible LM-Studio/Hermes maintenance harness, and a versioned 4096-MB four-hour stress runner. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
 
 **Tech Stack:** Python 3.11.9, NumPy 1.26.4, ONNX Runtime DirectML 1.19.2, PowerShell 5.1, Windows batch, pytest, FastAPI, DXGI, LibreHardwareMonitor, LM Studio HTTP API, JSON/SHA-256 evidence.
 
@@ -91,8 +91,7 @@ from scripts.requirements.validate_obj77_reservations import validate_reservatio
 def test_missing_authorization_is_blocking(tmp_path: Path) -> None:
     receipt = tmp_path / "reservations.json"
     receipt.write_text(
-        '{"schema_version":1,"ground_truth":{"status":"reserved"},'
-        '"intel":{"status":"missing"},"nvidia":{"status":"missing"},'
+        '{"schema_version":1,"intel":{"status":"missing"},"nvidia":{"status":"missing"},'
         '"lm_window":{"status":"not_authorized"},'
         '"stress_window":{"status":"not_reserved"}}',
         encoding="utf-8",
@@ -121,7 +120,6 @@ Expected: collection fails because `validate_obj77_reservations` does not exist.
 
 ```python
 REQUIRED_STATUS = {
-    "ground_truth": "reserved",
     "intel": "reserved",
     "nvidia": "reserved",
     "lm_window": "authorized",
@@ -145,7 +143,7 @@ The JSON schema must additionally require owner, start/end UTC, machine or provi
 
 - [ ] **Step 4: Record the current blocked state without fabricating approvals**
 
-Create the receipt with real known data and explicit blocked values. The validator must exit nonzero until the user supplies Ground-Truth owners/media, Intel access, NVIDIA/Azure authorization, an LM maintenance window and a 4.5-hour stress window.
+Create the receipt with real known data and explicit blocked values. The validator must exit nonzero until Intel access, NVIDIA/Azure authorization, an LM maintenance window and a 4.5-hour stress window are supplied.
 
 - [ ] **Step 5: Run unit and live validation**
 

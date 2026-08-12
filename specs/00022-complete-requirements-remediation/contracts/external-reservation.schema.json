@@ -7,7 +7,6 @@
     "schema_version",
     "objective",
     "captured_at_utc",
-    "ground_truth",
     "intel",
     "nvidia",
     "lm_window",
@@ -23,9 +22,6 @@
     "captured_at_utc": {
       "type": "string",
       "format": "date-time"
-    },
-    "ground_truth": {
-      "$ref": "#/$defs/reservation"
     },
     "intel": {
       "$ref": "#/$defs/reservation"
