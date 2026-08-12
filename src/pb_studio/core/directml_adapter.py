@@ -9,6 +9,8 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+import onnxruntime as ort
+
 logger = logging.getLogger(__name__)
 
 _AMD_VENDOR_ID = 0x1002
@@ -427,6 +429,7 @@ def configure_directml_session_options(session_options: Any) -> Any:
 
     session_options.enable_mem_pattern = False
     session_options.enable_cpu_mem_arena = False
+    session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     session_options.add_session_config_entry(
         "session.disable_cpu_ep_fallback",
         "1",
@@ -462,6 +465,10 @@ def enforce_directml_session(session: Any) -> Any:
         raise DirectMLAdapterError(
             "ONNX Runtime DirectML memory flags are not disabled"
         )
+    if session_options.execution_mode != ort.ExecutionMode.ORT_SEQUENTIAL:
+        raise DirectMLAdapterError(
+            "ONNX Runtime DirectML execution mode must be ORT_SEQUENTIAL"
+        )
 
     disable_fallback = getattr(session, "disable_fallback", None)
     if not callable(disable_fallback):
@@ -471,18 +478,9 @@ def enforce_directml_session(session: Any) -> Any:
     disable_fallback()
 
     providers = list(session.get_providers())
-    if not providers or providers[0] != "DmlExecutionProvider":
+    if providers != ["DmlExecutionProvider"]:
         raise DirectMLAdapterError(
-            "ONNX Runtime session does not prioritize DirectML "
-            f"(registered providers: {providers})"
-        )
-    unexpected = set(providers) - {
-        "DmlExecutionProvider",
-        "CPUExecutionProvider",
-    }
-    if unexpected:
-        raise DirectMLAdapterError(
-            "ONNX Runtime session registered an unexpected provider "
+            "ONNX Runtime session must use exclusively DirectML "
             f"(registered providers: {providers})"
         )
     return session

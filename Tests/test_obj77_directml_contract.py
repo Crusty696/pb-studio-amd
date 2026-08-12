@@ -90,6 +90,13 @@ def test_enforcer_rejects_registered_cpu_execution_provider() -> None:
         enforce_directml_session(session)
 
 
+def test_enforcer_accepts_exact_directml_provider() -> None:
+    session = _Session(["DmlExecutionProvider"], _SessionOptions())
+
+    assert enforce_directml_session(session) is session
+    assert session.fallback_disabled is True
+
+
 @pytest.mark.parametrize(
     "path",
     PRODUCTIVE_SESSION_CONSTRUCTORS,
