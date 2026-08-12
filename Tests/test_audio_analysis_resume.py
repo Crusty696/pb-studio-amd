@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 from contextlib import asynccontextmanager, contextmanager
+from types import SimpleNamespace
 
 
 class _FakeState:
@@ -11,10 +12,17 @@ class _FakeState:
         self.analysis = analysis
         self.persisted: dict = {}
         self.persisted_history: list[dict] = []
+        self.timeline: list[tuple[str, object]] = []
+        self.current_project = {
+            "db_project_id": 17,
+            "path": ".",
+            "project_uuid": "0e736c32-948c-4323-b9ba-0f9d50fa193f",
+        }
+        self.context = SimpleNamespace(project_id=17, epoch=9)
 
     @asynccontextmanager
     async def project_operation(self):
-        yield object()
+        yield self.context
 
     @contextmanager
     def project_commit(self, _context):
@@ -29,6 +37,7 @@ class _FakeState:
     def update_audio_analysis(self, **kwargs) -> None:
         self.persisted = kwargs
         self.persisted_history.append(dict(kwargs))
+        self.timeline.append(("persist", dict(kwargs)))
 
 
 def _completed_cache() -> dict:
@@ -132,16 +141,19 @@ def test_retry_runs_only_missing_stage_and_preserves_completed_data(
             "_stage_errors": {},
         }
 
-    async def no_event(*_args, **_kwargs):
+    async def capture_event(name, payload):
+        state.timeline.append(("event", (name, dict(payload))))
+
+    async def no_log(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(audio_router, "_run_audio_analysis", run_analysis)
-    monkeypatch.setattr(audio_router, "publish_event", no_event)
-    monkeypatch.setattr(audio_router, "publish_log", no_event)
+    monkeypatch.setattr(audio_router, "publish_event", capture_event)
+    monkeypatch.setattr(audio_router, "publish_log", no_log)
     monkeypatch.setattr(
         audio_router,
         "_store_audio_embedding_in_brain_cache",
-        no_event,
+        no_log,
     )
 
     response = asyncio.run(
@@ -233,16 +245,19 @@ def test_force_recomputes_only_explicitly_requested_stage(
             "_stage_errors": {},
         }
 
-    async def no_event(*_args, **_kwargs):
+    async def capture_event(name, payload):
+        state.timeline.append(("event", (name, dict(payload))))
+
+    async def no_log(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(audio_router, "_run_audio_analysis", run_analysis)
-    monkeypatch.setattr(audio_router, "publish_event", no_event)
-    monkeypatch.setattr(audio_router, "publish_log", no_event)
+    monkeypatch.setattr(audio_router, "publish_event", capture_event)
+    monkeypatch.setattr(audio_router, "publish_log", no_log)
     monkeypatch.setattr(
         audio_router,
         "_store_audio_embedding_in_brain_cache",
-        no_event,
+        no_log,
     )
 
     request = AudioAnalyzeRequest(
@@ -340,12 +355,15 @@ def test_cancel_preserves_checkpoint_and_blocks_late_worker_commit(
         finally:
             worker_done.set()
 
-    async def no_event(*_args, **_kwargs):
+    async def capture_event(name, payload):
+        state.timeline.append(("event", (name, dict(payload))))
+
+    async def no_log(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(audio_router, "_run_audio_analysis", run_analysis)
-    monkeypatch.setattr(audio_router, "publish_event", no_event)
-    monkeypatch.setattr(audio_router, "publish_log", no_event)
+    monkeypatch.setattr(audio_router, "publish_event", capture_event)
+    monkeypatch.setattr(audio_router, "publish_log", no_log)
 
     async def scenario() -> None:
         request = AudioAnalyzeRequest(
@@ -361,17 +379,54 @@ def test_cancel_preserves_checkpoint_and_blocks_late_worker_commit(
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            state.timeline.append(("cancelled_return", None))
         release_worker.set()
         assert await asyncio.to_thread(worker_done.wait, 2.0)
 
     asyncio.run(scenario())
 
-    assert len(state.persisted_history) == 2
-    assert state.persisted_history[0]["stage_status"] == {"beats": "completed"}
+    assert len(state.persisted_history) == 3
+    assert state.persisted_history[0]["stage_status"] == {
+        "beats": "running",
+        "structure": "running",
+        "spectral": "skipped",
+        "key": "skipped",
+    }
+    assert state.persisted_history[1]["stage_status"] == {
+        "beats": "completed",
+        "structure": "running",
+        "spectral": "skipped",
+        "key": "skipped",
+    }
     assert state.persisted_history[-1]["stage_status"] == {
         "beats": "completed",
         "structure": "interrupted",
+        "spectral": "skipped",
+        "key": "skipped",
     }
     assert state.persisted_history[-1]["bpm"] == 128.0
     assert state.persisted_history[-1]["structure_segments"] is None
+    final_receipts = state.persisted_history[-1]["stage_receipts"]
+    assert final_receipts["beats"]["status"] == "completed"
+    assert final_receipts["beats"]["artifact_valid"] is True
+    assert final_receipts["structure"]["status"] == "interrupted"
+    assert final_receipts["structure"]["error_code"] == "analysis_interrupted"
+    assert (
+        final_receipts["beats"]["correlation_id"]
+        == final_receipts["structure"]["correlation_id"]
+    )
+    interrupted_persist_index = max(
+        index
+        for index, row in enumerate(state.timeline)
+        if row[0] == "persist"
+        and row[1]["stage_receipts"]["structure"]["status"] == "interrupted"
+    )
+    interrupted_event_index = next(
+        index
+        for index, row in enumerate(state.timeline)
+        if row[0] == "event" and row[1][1].get("status") == "interrupted"
+    )
+    cancelled_return_index = next(
+        index for index, row in enumerate(state.timeline) if row[0] == "cancelled_return"
+    )
+    assert interrupted_persist_index < interrupted_event_index < cancelled_return_index

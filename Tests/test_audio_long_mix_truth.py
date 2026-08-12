@@ -411,7 +411,11 @@ def test_partial_result_never_publishes_completed(monkeypatch, tmp_path):
     audio = tmp_path / "partial.wav"
     audio.write_bytes(b"audio")
     state = AppState()
-    state.current_project = {"db_project_id": 1, "path": str(tmp_path)}
+    state.current_project = {
+        "db_project_id": 1,
+        "path": str(tmp_path),
+        "project_uuid": "0e736c32-948c-4323-b9ba-0f9d50fa193f",
+    }
     clip = state.register_audio_clip(
         {
             "name": "partial",
@@ -436,6 +440,12 @@ def test_partial_result_never_publishes_completed(monkeypatch, tmp_path):
         "beats": [{"time": 1.0, "strength": 1.0, "beat_type": "beat"}],
         "key": None,
         "energy_curve": [0.5],
+        "downbeats": [],
+        "downbeat_provenance": {"status": "unavailable"},
+        "onset_times": [1.0],
+        "kick_times": [1.0],
+        "snare_times": [],
+        "hihat_times": [],
         "structure_segments": [],
         "spectral_data": None,
         "_analysis_status": "partial",
@@ -456,7 +466,11 @@ def test_partial_result_never_publishes_completed(monkeypatch, tmp_path):
 
     response = asyncio.run(
         audio_router.analyze_audio(
-            AudioAnalyzeRequest(clip_id=clip["id"]),
+            AudioAnalyzeRequest(
+                clip_id=clip["id"],
+                detect_structure=False,
+                spectral_analysis=False,
+            ),
             state,
         )
     )
