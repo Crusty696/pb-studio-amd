@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-11T21:52:09.8914756Z",
+  "contract": {
+    "provider": "DmlExecutionProvider",
+    "enable_mem_pattern": false,
+    "enable_cpu_mem_arena": false,
+    "execution_mode": "ORT_SEQUENTIAL",
+    "same_session_parallel_run_allowed": false
+  },
+  "routes": [
+    {
+      "name": "model_loader_clap_siglip",
+      "constructor": "src/pb_studio/core/model_loader.py",
+      "dml_requested": true,
+      "memory_flags": true,
+      "ort_sequential": false,
+      "global_run_lock": true
+    },
+    {
+      "name": "moondream",
+      "constructor": "src/pb_studio/video/moondream.py",
+      "dml_requested": true,
+      "memory_flags": true,
+      "ort_sequential": false,
+      "global_run_lock": true
+    },
+    {
+      "name": "raft",
+      "constructor": "src/pb_studio/video/raft.py",
+      "dml_requested": true,
+      "memory_flags": true,
+      "ort_sequential": true,
+      "global_run_lock": true
+    },
+    {
+      "name": "audio_separator_external_ort",
+      "constructor": "src/pb_studio/audio/separator.py",
+      "dml_requested": true,
+      "memory_flags": true,
+      "ort_sequential": false,
+      "global_run_lock": true,
+      "locked_file": true
+    }
+  ],
+  "enforcer_gaps": [
+    "execution_mode_not_validated",
+    "exclusive_provider_list_not_validated"
+  ],
+  "missing_tests": [
+    "central_session_options_sequential",
+    "enforcer_rejects_ort_parallel",
+    "all_consumers_sequential_contract",
+    "same_session_concurrency_max_one",
+    "ast_inventory_guard"
+  ],
+  "status": "contract_gap_reproduced"
+}

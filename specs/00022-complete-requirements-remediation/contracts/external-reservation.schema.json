@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OBJ-77 external resource reservation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "objective",
+    "captured_at_utc",
+    "intel",
+    "nvidia",
+    "lm_window",
+    "stress_window"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "objective": {
+      "const": "OBJ-77"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intel": {
+      "$ref": "#/$defs/reservation"
+    },
+    "nvidia": {
+      "$ref": "#/$defs/reservation"
+    },
+    "lm_window": {
+      "$ref": "#/$defs/reservation"
+    },
+    "stress_window": {
+      "$ref": "#/$defs/reservation"
+    }
+  },
+  "$defs": {
+    "non_placeholder_string": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "enum": [
+          "",
+          "TBD",
+          "tbd",
+          "TODO",
+          "todo",
+          "UNKNOWN",
+          "unknown",
+          "N/A",
+          "n/a",
+          "NONE",
+          "none"
+        ]
+      }
+    },
+    "reservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "owner",
+        "start_utc",
+        "end_utc",
+        "machine_or_provider_identity",
+        "approval_identity",
+        "approval_scope",
+        "blocking_reason"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/non_placeholder_string"
+        },
+        "owner": {
+          "$ref": "#/$defs/non_placeholder_string"
+        },
+        "start_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "machine_or_provider_identity": {
+          "$ref": "#/$defs/non_placeholder_string"
+        },
+        "approval_identity": {
+          "$ref": "#/$defs/non_placeholder_string"
+        },
+        "approval_scope": {
+          "$ref": "#/$defs/non_placeholder_string"
+        },
+        "blocking_reason": {
+          "$ref": "#/$defs/non_placeholder_string"
+        }
+      }
+    }
+  }
+}

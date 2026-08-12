@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OBJ-77 real-media Wave-0 registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "objective", "mode", "audio_root", "video_root", "entries", "registration_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "objective": {"const": "OBJ-77"},
+    "mode": {"const": "registration"},
+    "registered_at_utc": {"type": "string", "format": "date-time"},
+    "audio_root": {"type": "string", "minLength": 1},
+    "video_root": {"type": "string", "minLength": 1},
+    "registration_sha256": {"$ref": "#/$defs/sha256"},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "semver": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_id", "media_type", "absolute_path", "size_bytes", "media_sha256", "duration_seconds", "stream", "annotation_version", "verification_status"],
+      "properties": {
+        "media_id": {"type": "string", "minLength": 1},
+        "media_type": {"enum": ["audio", "video"]},
+        "absolute_path": {"type": "string", "minLength": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "media_sha256": {"$ref": "#/$defs/sha256"},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "stream": {"type": "object", "additionalProperties": false, "required": ["codec_type", "codec_name"], "properties": {"codec_type": {"enum": ["audio", "video"]}, "codec_name": {"type": "string", "minLength": 1}}},
+        "annotation_version": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/semver"}]},
+        "verification_status": {"enum": ["pending", "verified", "rejected"]},
+        "annotation_path": {"type": "string", "minLength": 1},
+        "annotation_sha256": {"$ref": "#/$defs/sha256"},
+        "rights_evidence": {}, "reviewer_id": {}, "annotator_id": {}, "independent_labeling": {}, "kpi_definitions": {}
+      }
+    }
+  }
+}

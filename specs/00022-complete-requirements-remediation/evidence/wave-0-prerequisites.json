@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-11T21:52:09.8914756Z",
+  "git_sha": "8328d492f8b128b02ae1ce92a0e6e14d999b2af2",
+  "runtime": {
+    "python": "3.11.9",
+    "numpy": "1.26.4",
+    "onnxruntime": "1.19.2",
+    "available_providers": [
+      "DmlExecutionProvider",
+      "CPUExecutionProvider"
+    ]
+  },
+  "directml_hardware": {
+    "amd": {
+      "status": "available",
+      "name": "AMD Radeon RX 7800 XT",
+      "device_id": 1,
+      "luid": "0x00000000_0x00010718",
+      "pci_device": "0x747e",
+      "driver": "32.0.31035.1003",
+      "dedicated_vram_bytes_dxgi": 16963137536
+    },
+    "intel": {
+      "status": "missing",
+      "blocking_gate": "K-16"
+    },
+    "nvidia": {
+      "status": "missing",
+      "blocking_gate": "K-16"
+    }
+  },
+  "lm_studio": {
+    "base_url": "http://127.0.0.1:1234/v1",
+    "status": "unreachable",
+    "listener_present": false,
+    "blocking_gates": [
+      "V-10",
+      "V-11",
+      "K-06",
+      "K-12"
+    ]
+  },
+  "real_media": [
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\audio\\test_30s.wav",
+      "bytes": 5292078,
+      "duration_seconds": 30.0,
+      "sha256": "c500711c97af0c6403b6394b8d1b83ed13e02d7f3b25d4c0920c281b93aa380f"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\audio\\test_60s.wav",
+      "bytes": 10584078,
+      "duration_seconds": 60.0,
+      "sha256": "3608092f9f63aa20da120e09193e1c13b891aa7d9f586e8b5a37abf705e5b7f7"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\video\\test_5s.mp4",
+      "bytes": 1884024,
+      "duration_seconds": 5.0,
+      "sha256": "2f4723d14bfaeb4abf3ad29b813a5ddfa1c03e703925834c96bdb2a40e6f818c"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\video\\test_8s.mp4",
+      "bytes": 3223531,
+      "duration_seconds": 8.0,
+      "sha256": "2124b0bffa8902fa23962840e2b033c5338eb9d33a793198364e57dfdac43e26"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\video\\test_10s.mp4",
+      "bytes": 9383115,
+      "duration_seconds": 10.008,
+      "sha256": "ddf2bb708b1f22fa9a2cc7a9e975b52be97adcccf4bcc9947c81d04ead18b0d4"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\video\\test_12s.mp4",
+      "bytes": 4674174,
+      "duration_seconds": 12.0,
+      "sha256": "cc6b4324c77565037155f150a742d0688718c5df93d670512054a04481608ecf"
+    },
+    {
+      "path": "C:\\Users\\david\\Videos\\test_data\\video\\test_20s.mp4",
+      "bytes": 17253914,
+      "duration_seconds": 20.016,
+      "sha256": "6e62fbdda4a8098e0b9f413fdd29a12fe3408a85d24d08fe24d4e96316cc87fc"
+    }
+  ],
+  "ground_truth": {
+    "status": "missing",
+    "annotation_file_count": 0,
+    "required_sets": [
+      "downbeats_and_bars",
+      "subtracks",
+      "song_sections",
+      "cut_positions",
+      "scene_boundaries",
+      "tagging"
+    ],
+    "blocking_gates": [
+      "A-14",
+      "A-15",
+      "A-16",
+      "V-08-scene-ground-truth",
+      "P-10",
+      "P-11",
+      "P-12"
+    ]
+  },
+  "four_hour_window": {
+    "status": "not_runnable",
+    "missing_worker": "src/tools/execute_4h_stress_test.py",
+    "missing_assets": "data/stress_test_assets",
+    "required_forced_vram_mb": 4096,
+    "current_low_vram_wrapper_mb": 4000,
+    "blocking_gate": "D-08"
+  },
+  "overall_status": "blocked",
+  "reason": "Intel/NVIDIA hardware, LM Studio, real ground truth and runnable four-hour worker are unavailable."
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OBJ-77 later KPI annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "media_id", "media_sha256", "annotation_version", "verification_status", "downbeats", "subtracks", "song_sections", "scene_boundaries", "tags", "pacing_cases"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "media_id": {"type": "string", "minLength": 1},
+    "media_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "annotation_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "verification_status": {"enum": ["pending", "verified", "rejected"]},
+    "downbeats": {"type": "array"},
+    "subtracks": {"type": "array"},
+    "song_sections": {"type": "array"},
+    "scene_boundaries": {"type": "array"},
+    "tags": {"type": "object", "additionalProperties": false, "required": ["required", "allowed", "forbidden"], "properties": {"required": {"type": "array"}, "allowed": {"type": "array"}, "forbidden": {"type": "array"}}},
+    "pacing_cases": {"type": "array"},
+    "rights_evidence": {}, "reviewer_id": {}, "annotator_id": {}, "independent_labeling": {}, "kpi_definitions": {}
+  }
+}
