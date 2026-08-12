@@ -8,7 +8,13 @@
 
 - Der unveraenderte Audit-Hash und ein Ledger mit genau 80 qualifizierten
   Befundschluesseln bilden die Abnahmebasis.
-- Jede Wave startet nur vom gruenen Merge-SHA der vorherigen Wave.
+- Jede Wave startet nur vom gruenen lokalen AMD-Merge-SHA der vorherigen Wave;
+  die vier explizit deferred externen Release-Gates blockieren diese lokalen
+  Wave-Uebergaenge nicht.
+- Die Umsetzung folgt AMD-first: Zuerst werden alle nicht-externen Befunde und
+  die vollstaendige lokale Produktkette auf der vorhandenen RX 7800 XT
+  geschlossen. Intel/NVIDIA-DirectML, das LM-Studio-Wartungsfenster und der
+  echte 4h-Lauf folgen erst als abschliessende externe Release-Abnahme.
 - Externe Live-, Hardware- und Ground-Truth-Gates werden weder gemockt noch
   durch statische Tests ersetzt.
 - Historische SDD-Artefakte werden nicht umgeschrieben. Compliance-Aufloesung
@@ -24,9 +30,12 @@
 4. DirectML-Konstruktions- und Run-Pfade vollstaendig inventarisieren.
 5. Historische SDD-Dateien hashen und vor stiller Aenderung schuetzen.
 
-**Gate:** Baseline und Ressourcenstatus sind commitgebunden dokumentiert; kein
-Produktcode ist geaendert. Fehlende Pflichtressourcen sperren die betroffene
-Folgewave ehrlich.
+**Gate:** Baseline und Ressourcenstatus sind commitgebunden dokumentiert;
+Ground Truth ist hashgebunden registriert; kein Produktcode ist geaendert. Ein
+ehrlicher Exit 1 des Reservierungsvalidators fuer Intel, NVIDIA,
+LM-Studio-Wartungsfenster und 4h-Fenster ist als `deferred` dokumentiert und
+blockiert weder den Wave-0-Merge noch die lokalen AMD-Waves. Er blockiert erst
+die abschliessende externe Release-Abnahme. OR-363 bleibt unveraendert.
 
 ## Wave 1 - Shared Contracts, Persistenz und Recovery
 
@@ -65,11 +74,16 @@ sowie A-14..A-16 sind gruen. LOCKED Separator-Dateien bleiben unveraendert.
 2. Extraktionsloops sequenziell dekodieren und RAFT-DirectML in den produktiven
    Scene-Pfad integrieren.
 3. Stage-Nachforderung trotz frueherem IsAnalyzed erlauben.
-4. Reales LM-Studio-Tagging, Degradation und Restart/Resume belegen.
-5. Nach separatem Go den 10-Clip-Canary ausfuehren; vorher kein Bulk.
+4. Tagging-, Degradations- und Restart/Resume-Vertraege lokal auf der
+   vorhandenen AMD-Hardware implementieren und mit nicht-invasiven Tests
+   absichern; das Hermes-Wartungsfenster bleibt bis zur Endabnahme deferred.
+5. Canary-Vertrag und Bulk-Sperre implementieren; die wartungsfenstergebundene
+   Live-Ausfuehrung folgt erst nach allen lokalen AMD-Gates.
 
-**Gate:** Suche/Reload, 10k-Library, Scene-Ground-Truth und T003 sind gruen;
-T019 besitzt ein eigenes Go und 10/10 korrekte Receipts.
+**Lokales AMD-Gate:** Suche/Reload, 10k-Library, Scene-Ground-Truth sowie alle
+nicht-invasiv lokal pruefbaren Video- und Resume-Vertraege sind gruen. T003 und
+T019 bleiben bis zur abschliessenden LM-Studio-Abnahme offen; T019 besitzt
+weiterhin ein eigenes Go.
 
 ## Wave 4 - Pacing und Timeline
 
@@ -93,26 +107,50 @@ Freezes, kein Persistenzverlust und P-10..P-12 bestanden.
    schliessen.
 4. 14 Views bei 100/150/200 Prozent, High Contrast, Keyboard, Fokus und UIA
    pruefen; P95-Latenz messen.
-5. DirectML auf realer AMD-, Intel- und NVIDIA-Hardware ausfuehren.
+5. DirectML und die vollstaendige KI-/UI-Kette auf der vorhandenen RX 7800 XT
+   ausfuehren; Intel und NVIDIA werden erst in der Endabnahme geprueft.
 
-**Gate:** keine verbotenen Fallbacks, korrekte Provider-/Modellreceipts,
-GUI-Matrix und Hardwarematrix gruen. K-11-Dateiloeschung wartet auf separate
-Freigabe.
+**Lokales AMD-Gate:** keine verbotenen Fallbacks, korrekte lokale
+Provider-/Modellreceipts, GUI-Matrix und RX-7800-XT-Nachweis gruen.
+K-11-Dateiloeschung wartet auf separate Freigabe; K-16 bleibt bis zur
+abschliessenden Intel-/NVIDIA-Matrix offen.
 
 ## Wave 6 - Resilienz, Governance und Release
 
-1. Versionierten fail-closed 4h-Worker mit erzwungenen 4096 MB bereitstellen.
+1. Nicht-externe Resilienzvertraege auf der RX 7800 XT schliessen. Der echte
+   4h-Worker samt Canary, Soak und Release-Lauf ist nicht Teil dieses lokalen
+   Gates und beginnt erst in der externen Endabnahme.
 2. Recovery-/Owner-Testkontamination beseitigen und Reihenfolgevarianten testen.
 3. Additive compliance.json-Dateien mit historischen Hashes erzeugen und
    qualifizierte Requirement-IDs repo-weit validieren.
 4. README-Smokes, Brain-Status, GUI-Help, QC-Digest, Secret-, Dependency- und
    Iron-Rule-Gates schliessen.
-5. Vollsuite, native C#-Tests, WPF Release, OpenAPI, GUI, KPI, DirectML-Matrix,
-   LM Studio, 4h-Stress und Store-Integritaet ausfuehren.
+5. Vollsuite, native C#-Tests, WPF Release, OpenAPI, GUI, lokale KPIs und
+   Store-Integritaet auf der vorhandenen AMD-Hardware ausfuehren.
 
-**Gate:** kein offener Ledgerstatus; aktive Workspaces release-valid,
-historische archive-valid; PR-Checks und Reviews gruen. Merge, Remote-SHA,
-Release-Binary und lokaler Produktpfad sind real verifiziert.
+**Lokales AMD-Gate:** alle nicht-externen Ledgerzeilen sind geschlossen; aktive
+Workspaces sind fuer die externe Endabnahme valid, historische archive-valid;
+lokale Tests, Reviews und der Produktpfad auf der RX 7800 XT sind gruen. Ein
+Release bleibt bis zur nachfolgenden externen Endabnahme gesperrt.
+
+## Abschliessende externe Release-Abnahme
+
+Diese Phase startet erst, wenn alle Wave-1-bis-Wave-6-Gates fuer nicht-externe
+Arbeit und die lokale RX-7800-XT-Produktkette gruen sind.
+
+1. Den identischen Candidate-SHA auf realer AMD-, Intel- und
+   NVIDIA-DirectML-Hardware pruefen.
+2. Das autorisierte LM-Studio/Hermes-Wartungsfenster reversibel ausfuehren,
+   T003 belegen und T019 erst nach seinem separaten Go starten.
+3. Canary und Soak des versionierten 4096-MB-Stressworkers ausfuehren und
+   danach den echten mindestens 14.400 Sekunden dauernden Lauf abschliessen.
+4. Alle externen Receipts commit-, config-, asset-, medien- und
+   hardwaregebunden validieren und im finalen Closure-Manifest einzeln listen.
+
+**Finales Release-Gate:** Intel-/NVIDIA-Matrix, LM-Studio-Live-Nachweise,
+Hermes-Restore und echter 4h-Stress sind gruen; OR-363 ist damit erfuellt; kein
+Ledgerstatus ist offen; PR-Checks und Reviews sind gruen. Erst danach folgen
+Merge, Remote-SHA, Release-Binary und erneute lokale Produktpfadpruefung.
 
 ## Ausfuehrungs- und Evidence-Vertrag
 

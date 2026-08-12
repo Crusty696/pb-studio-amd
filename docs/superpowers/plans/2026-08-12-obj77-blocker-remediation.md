@@ -1,10 +1,10 @@
-# OBJ-77 External Blocker Remediation Implementation Plan
+# OBJ-77 AMD-First Blocker Remediation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Resolve the five blocker classes without weakening OBJ-77 evidence rules: first close and merge documentation-only Wave 0, then implement and execute the DirectML, LM-Studio and four-hour gates in their prescribed later waves.
+**Goal:** Complete every non-external repair and prove the full local product chain on the existing RX 7800 XT first. Only after that local AMD completion may the Intel/NVIDIA DirectML matrix, LM-Studio maintenance window and real four-hour stress run execute as final release gates. OR-363 remains unchanged and must be fulfilled before release.
 
-**Architecture:** Wave 0 records genuine resource reservations and registered, hash-bound pending-or-verified real-media manifests without changing product code, then merges into the integration branch. Four fail-closed verification tracks subsequently share the existing OBJ-77 measurement contract: Ground Truth, an isolated vendor-neutral ONNX-DirectML matrix runner, a reversible LM-Studio/Hermes maintenance harness, and a versioned 4096-MB four-hour stress runner. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
+**Architecture:** Wave 0 records the truthful current external-resource status and registered, hash-bound pending-or-verified real-media manifests without changing product code, then merges into the integration branch even while the reservation validator truthfully exits 1. Waves 1-6 first complete all non-external implementation and local RX 7800 XT verification. Only after every local AMD gate is green do three deferred fail-closed tracks execute: an isolated vendor-neutral Intel/NVIDIA ONNX-DirectML matrix, a reversible LM-Studio/Hermes maintenance window and the versioned 4096-MB four-hour stress run. Production PB Studio remains AMD-only; Intel and NVIDIA prove the ONNX-DirectML contract, not a new product-support promise.
 
 **Tech Stack:** Python 3.11.9, NumPy 1.26.4, ONNX Runtime DirectML 1.19.2, PowerShell 5.1, Windows batch, pytest, FastAPI, DXGI, LibreHardwareMonitor, LM Studio HTTP API, JSON/SHA-256 evidence.
 
@@ -20,6 +20,8 @@
 - No database migration, dependency change, `IApiClient.cs` change, file deletion, model load/unload, watchdog stop or paid cloud resource without its existing explicit approval gate.
 - Historical evidence files are immutable. New observations go into new timestamped receipts.
 - T003 must pass before requesting T019; no bulk analysis before the ten-clip Canary receives separate approval.
+- Wave 0 and Waves 1-6 local-AMD work are not blocked by missing Intel/NVIDIA access, an unauthorized LM-Studio maintenance window or an unreserved four-hour stress window. Those four states remain truthfully failed and deferred until final external release acceptance.
+- Tasks 5, 6 and 7 must not start until every master-plan non-external and local RX 7800 XT gate has passed. Task 8 remains the final release-convergence gate.
 
 ## Authoritative Task-2 Scope Correction
 
@@ -68,7 +70,7 @@ V-11/T019 (Wave 3) gates. The authoritative ruling is
 
 ---
 
-### Task 1: External authorization and reservation gate
+### Task 1: External authorization and reservation status inventory
 
 **Files:**
 - Create: `specs/00022-complete-requirements-remediation/contracts/external-reservation.schema.json`
@@ -77,8 +79,8 @@ V-11/T019 (Wave 3) gates. The authoritative ruling is
 - Evidence: `specs/00022-complete-requirements-remediation/evidence/external-resource-reservations.json`
 
 **Interfaces:**
-- Consumes: OBJ-77 `OR-363`, the two approved media roots, and explicit user authorizations.
-- Produces: `validate_reservations(path: Path) -> list[str]`; an empty list is the only green result.
+- Consumes: OBJ-77 `OR-363` and the currently verifiable external-resource state.
+- Produces: `validate_reservations(path: Path) -> list[str]`; an empty list is required only for final external release acceptance, while Wave 0 records the truthful nonzero result.
 
 - [ ] **Step 1: Write the failing reservation tests**
 
@@ -141,9 +143,9 @@ def validate_reservations(path: Path) -> list[str]:
 
 The JSON schema must additionally require owner, start/end UTC, machine or provider identity, approval identity and scope for every reservation. Temporary sentinel values and empty strings are invalid.
 
-- [ ] **Step 4: Record the current blocked state without fabricating approvals**
+- [ ] **Step 4: Record the current deferred state without fabricating approvals**
 
-Create the receipt with real known data and explicit blocked values. The validator must exit nonzero until Intel access, NVIDIA/Azure authorization, an LM maintenance window and a 4.5-hour stress window are supplied.
+Create the receipt with real known data and explicit deferred values. The validator must exit nonzero until Intel access, NVIDIA/Azure authorization, an LM maintenance window and a 4.5-hour stress window are supplied. That nonzero result blocks only final external release acceptance; it does not block Wave 0 or local AMD remediation.
 
 - [ ] **Step 5: Run unit and live validation**
 
@@ -153,9 +155,9 @@ $env:PYTHONPATH = "src;."
 .\.venv\Scripts\python.exe scripts\requirements\validate_obj77_reservations.py specs\00022-complete-requirements-remediation\evidence\external-resource-reservations.json
 ```
 
-Expected: unit tests pass; live validation remains nonzero until all four external reservations are genuine.
+Expected: unit tests pass; live validation remains nonzero until all four external reservations are genuine. Preserve that exit code as Wave-0 evidence and continue with AMD-first local work.
 
-- [ ] **Step 6: Commit validator and honest blocked receipt**
+- [ ] **Step 6: Commit validator and honest deferred receipt**
 
 ```powershell
 git add specs/00022-complete-requirements-remediation/contracts/external-reservation.schema.json scripts/requirements/validate_obj77_reservations.py Tests/test_obj77_external_reservations.py specs/00022-complete-requirements-remediation/evidence/external-resource-reservations.json
@@ -212,10 +214,9 @@ clips are V-11/T019 Wave 3 work, not Wave-0 requirements.
 
 **Files:**
 - Create: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json`
-- Modify: `specs/00022-complete-requirements-remediation/tasks.md`
 
 **Interfaces:**
-- Consumes: genuine Task-1 reservations, approved Task-2 Ground-Truth registration and the immutable saved baseline.
+- Consumes: the truthful Task-1 reservation-status receipt, approved Task-2 Ground-Truth registration and the immutable saved baseline.
 - Produces: one Wave-0 gate decision and the integration merge SHA; no product-code change.
 
 - [ ] **Step 1: Verify the Wave-0 branch contains no product-code diff**
@@ -227,7 +228,7 @@ git diff --name-only "$base..HEAD" | rg "^(src|backend|PBStudio.UI)/"
 
 Expected: no output. Changes under `specs/`, `docs/`, `scripts/requirements/` and contract tests are infrastructure/documentation, not product behavior.
 
-- [ ] **Step 2: Validate reservations and Ground Truth**
+- [ ] **Step 2: Record deferred reservations and validate Ground Truth**
 
 ```powershell
 $env:PYTHONPATH = "src;."
@@ -236,9 +237,12 @@ $env:PYTHONPATH = "src;."
 .\.venv\Scripts\python.exe -m pytest Tests\test_obj77_external_reservations.py Tests\test_obj77_ground_truth_contract.py -q
 ```
 
-Expected: all commands exit 0. The Wave-0 registration receipt is sufficient
-here; strict KPI validation remains a later annotation gate. Reservation does
-not count as final K-16, T003 or D-08 evidence.
+Expected: the reservation validator exits 1 for the four truthfully deferred
+external gates; record that exact exit code. Ground-Truth registration and both
+contract-test files exit 0. The Wave-0 registration receipt is sufficient here;
+strict KPI validation remains a later annotation gate. Reservation status does
+not count as final K-16, T003 or D-08 evidence and does not block the AMD-first
+Wave-0 merge.
 
 - [ ] **Step 3: Revalidate the saved Wave-0 baseline and SDD state**
 
@@ -253,13 +257,15 @@ Expected: SDD open-valid, requirement registry green and no whitespace errors. P
 
 - [ ] **Step 4: Create the immutable Wave-0 unblock receipt**
 
-The receipt must contain the current Git SHA, source receipt paths and hashes, exact commands and exit codes, start/end UTC, `product_code_changed: false`, `resources_reserved: true`, `ground_truth_registered: true` and `overall_status: pass`.
+The receipt must contain the current Git SHA, source receipt paths and hashes, exact commands and exit codes, start/end UTC and exactly these decision fields: `resources_reserved: false`, `external_release_gates_deferred: true`, `deferred_external_release_gates: ["intel_directml_system", "nvidia_directml_system", "lm_studio_maintenance_window", "four_hour_stress_window"]`, `reservation_validator_exit_code: 1`, `ground_truth_registered: true`, `product_code_changed: false` and `overall_status: pass_for_wave_0_amd_first`.
 
-- [ ] **Step 5: Update only T083 and commit Wave-0 evidence**
+- [ ] **Step 5: Commit Wave-0 evidence without changing completed T083**
+
+T083 was already completed by Task 2 and must not be edited again in this step.
 
 ```powershell
-git add specs/00022-complete-requirements-remediation/tasks.md specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json
-git commit -m "docs(sdd): close obj77 wave0 external prerequisites"
+git add specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json
+git commit -m "docs(sdd): close obj77 wave0 amd-first foundation"
 ```
 
 - [ ] **Step 6: Verify the protected source worktree and merge Wave 0**
@@ -344,7 +350,7 @@ Expected scan: no new prohibited runtime inference path.
 
 ---
 
-### Task 5: Portable AMD/Intel/NVIDIA DirectML matrix in Wave 5
+### Task 5: Final AMD/Intel/NVIDIA DirectML release matrix
 
 **Files:**
 - Create: `scripts/directml_matrix/probe.py`
@@ -357,7 +363,7 @@ Expected scan: no new prohibited runtime inference path.
 - Consumes: `enumerate_dxgi_adapters()`, expected vendor, expected Git SHA, model manifest and real media manifest.
 - Produces: `select_expected_adapter(adapters, expected_vendor) -> DirectMLAdapter` and one hash-bound evidence bundle per vendor.
 
-Execute this task only on the Wave-5 branch created from the green Wave-4 integration SHA. Hardware reserved in Wave 0 is not evidence until this task runs on all three real vendors.
+Do not start this task during the local implementation waves. Start it only after every master-plan non-external gate and every local RX 7800 XT functional gate is green, using the exact resulting candidate SHA. The local AMD receipt confirms the already-working candidate; Intel and NVIDIA then close the deferred K-16 external release gate. A Wave-0 reservation status is never hardware evidence.
 
 - [ ] **Step 1: Write failing vendor-selection tests**
 
@@ -454,7 +460,7 @@ git commit -m "test(core): add portable directml hardware matrix"
 
 ---
 
-### Task 6: Reversible LM-Studio/Hermes maintenance window in Waves 3 and 5
+### Task 6: Final reversible LM-Studio/Hermes maintenance window
 
 **Files:**
 - Create: `scripts/diagnostics/obj77_lmstudio_window.ps1`
@@ -466,7 +472,7 @@ git commit -m "test(core): add portable directml hardware matrix"
 - Consumes: exact watchdog PID/start time/path, approved maintenance receipt, QC project path and real clip ID.
 - Produces: pre-state, T003 product receipt, post-restart receipt and restored Hermes receipt.
 
-Develop the harness and close T003 on the Wave-3 branch after the Wave-2 merge. Reuse the same committed harness on the Wave-5 SHA for K-06 and K-12; do not backport later evidence into the historical Wave-3 receipt.
+Do not start this task until every master-plan non-external gate and every local RX 7800 XT functional gate is green. Then develop and execute the harness on the exact final external-acceptance candidate SHA to close the deferred LM-Studio live gates. Do not backport later evidence into historical wave receipts.
 
 - [ ] **Step 1: Write static safety tests before process-control code**
 
@@ -540,7 +546,7 @@ git commit -m "test(video): prove reversible lm studio live resume"
 
 ---
 
-### Task 7: Versioned fail-closed 4096-MB four-hour stress gate in Wave 6
+### Task 7: Final versioned fail-closed 4096-MB four-hour stress gate
 
 **Files:**
 - Create: `scripts/qa/stress_receipt.py`
@@ -556,7 +562,7 @@ git commit -m "test(video): prove reversible lm studio live resume"
 - Consumes: duration, real-media manifest, receipt path, backend URL and the enforced VRAM environment.
 - Produces: atomic version-1 stress receipt; process exit 0 only when all release invariants pass.
 
-Execute this task only on the Wave-6 branch created from the green Wave-5 integration SHA. The reserved Wave-0 time slot may be rescheduled, but the final receipt must use the actual Wave-6 commit.
+Do not start this task until every master-plan non-external gate and every local RX 7800 XT functional gate is green. Execute its unit guards, canaries, soak and real four-hour run on the exact final external-acceptance candidate SHA. The final receipt must bind to that candidate; no Wave-0 reservation was required.
 
 - [ ] **Step 1: Write guard tests**
 
@@ -651,6 +657,8 @@ git commit -m "test(infra): enforce real four-hour 4096mb stress gate"
 - Consumes: the Wave-0 merge receipt plus green hardware, LM-Studio and stress receipts from Tasks 5-7.
 - Produces: one hash manifest that closes only the blocker-related tasks whose full acceptance criteria passed.
 
+Start Task 8 only after Tasks 5-7 have run at the end of the AMD-first sequence. Task 8 is the final release-convergence gate and cannot be used to bypass any unchanged OR-363 acceptance criterion.
+
 - [ ] **Step 1: Verify every external receipt against the current commit**
 
 All Ground-Truth, DirectML, LM-Studio and stress evidence must reference the exact expected Git SHA, config hash and asset manifest hash. A receipt from another commit cannot close the gate.
@@ -688,7 +696,7 @@ T062 changes to `[X]` only after all three real hardware receipts pass. T073 cha
 
 Record the relevant wave SHAs, receipt paths, test totals, remaining master-plan gates and the fact that production remains AMD-only while K-16 is a vendor-neutral ONNX-DirectML contract.
 
-- [ ] **Step 7: Commit the blocker-closure evidence on the active Wave-6 branch**
+- [ ] **Step 7: Commit the blocker-closure evidence on the final external-acceptance branch**
 
 ```powershell
 git add specs/00022-complete-requirements-remediation/tasks.md specs/00022-complete-requirements-remediation/evidence/blocker-closure-manifest.json
@@ -705,7 +713,7 @@ Expected: exactly the pre-existing modified/untracked files; no remediation edit
 
 - [ ] **Step 9: Return control to the master Wave-6 gate**
 
-Do not merge this branch independently. The master remediation plan merges the Wave-6 branch only after its complete Python, C#, WPF, OpenAPI, GUI, KPI, store, SDD and release checks pass.
+Do not merge this branch independently. The master remediation plan merges the final external-acceptance candidate only after its complete Python, C#, WPF, OpenAPI, GUI, KPI, store, SDD and release checks pass.
 
 ---
 
@@ -728,15 +736,20 @@ Do not merge this branch independently. The master remediation plan merges the W
 2. **K-16 scope:** Vendor-neutral ONNX-DirectML contract on AMD/Intel/NVIDIA; full PB Studio remains AMD-only.
 3. **LM Studio:** Exact-process maintenance window with complete Hermes restoration; no wildcard process termination and no `lms server status` healthcheck.
 4. **Stress:** Tracked worker under `scripts/qa`, exact 4096 MB, 14,400 measured seconds and fail-closed receipt; no started flag as evidence.
-5. **Merge:** Reservation receipts can unblock planning, but only actual T083 evidence and the complete Wave-0 QC receipt permit the integration merge.
+5. **AMD-first ordering:** The truthful reservation validator exit 1 is recorded in Wave 0 but does not block its merge or subsequent local RX 7800 XT remediation. Tasks 5-7 start only after all non-external and local-AMD gates pass.
+6. **Final release:** Intel/NVIDIA DirectML, the authorized LM-Studio maintenance window and the real four-hour stress receipt remain mandatory final release evidence. OR-363 is unchanged.
 
 ## Execution Stop Conditions
 
 - Stop before Task 2 registration if either approved media root is unavailable;
   do not invent annotations. Strict KPI validation stops until verified,
   hash-bound annotation documents exist.
-- Stop before Task 5 external execution if Intel hardware or NVIDIA budget/quota is not approved.
-- Stop before Task 6 `Pause` if the Hermes maintenance receipt is not authorized.
+- Do not stop Wave 0 or local RX 7800 XT remediation because the reservation
+  validator exits 1; record the four deferred gates exactly and continue.
+- Stop before Tasks 5, 6 and 7 until every master-plan non-external and local
+  RX 7800 XT gate is green.
+- Stop before Task 5 external execution if Intel hardware or NVIDIA budget/quota is not approved; this blocks final release only.
+- Stop before Task 6 `Pause` if the Hermes maintenance receipt is not authorized; this blocks final release only.
 - Stop before T019 if T003 has not passed or the separate Canary approval is missing.
-- Stop before Task 7 release run if the 15-minute Canary or 60-minute Soak fails.
+- Stop before Task 7 release run if the 15-minute Canary or 60-minute Soak fails; this blocks final release only.
 - Stop before Task 8 convergence on any nonzero test, invalid receipt, Git-SHA mismatch or protected-worktree drift.
