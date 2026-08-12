@@ -258,7 +258,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 try
                 {
                     // StartAsync() im Hintergrund aufrufen, um den UI-Thread nicht zu belasten.
-                    await Task.Run(async () => await _bridge.StartAsync().ConfigureAwait(false));
+                    await Task.Run(async () => await _bridge.StartAsync());
                 }
                 catch (Exception ex)
                 {

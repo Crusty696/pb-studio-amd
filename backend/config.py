@@ -18,7 +18,10 @@ _SRC_DIR = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from pb_studio.runtime_contract import ffmpeg_path, ffprobe_path
+from pb_studio.runtime_contract import backend_endpoint, ffmpeg_path, ffprobe_path
+
+
+_BACKEND_ENDPOINT = backend_endpoint()
 
 
 def _default_documents_dir() -> Path:
@@ -69,8 +72,8 @@ def _default_documents_dir() -> Path:
 class ServerConfig(BaseSettings):
     """Server-Konfiguration via Environment oder .env Datei."""
 
-    host: str = "127.0.0.1"
-    port: int = 8765
+    host: str = _BACKEND_ENDPOINT.host
+    port: int = _BACKEND_ENDPOINT.port
     debug: bool = False
     log_level: str = "info"
 
@@ -101,6 +104,21 @@ class ServerConfig(BaseSettings):
                 f"PB Studio requires canonical FFmpeg runtime {canonical}"
             )
         return canonical
+
+    @field_validator("host")
+    @classmethod
+    def require_loopback_host(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("PB Studio backend host must be loopback-only")
+        return normalized
+
+    @field_validator("port")
+    @classmethod
+    def require_valid_port(cls, value: int) -> int:
+        if not 1 <= value <= 65535:
+            raise ValueError("PB Studio backend port must be between 1 and 65535")
+        return value
 
     @field_validator("ffprobe_path")
     @classmethod

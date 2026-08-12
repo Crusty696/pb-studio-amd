@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 param(
-    [string]$BaseUrl = 'http://127.0.0.1:8765',
+    [string]$BaseUrl = '',
     [string]$ProjectPath = $PSScriptRoot,
     [string]$OutputPath = '',
     [string]$AllowedProjectRoot = '',
@@ -11,6 +11,16 @@ $ErrorActionPreference = 'Stop'
 $ProjectPath = (Resolve-Path $ProjectPath).Path
 . (Join-Path $ProjectPath 'scripts\runtime_contract.ps1')
 $Runtime = Get-PBStudioRuntimeContract -ProjectRoot $ProjectPath -RequirePython -RequireFFmpeg -ApplyEnvironment
+if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+    $BaseUrl = $Runtime.BackendOrigin
+} else {
+    $BaseUrl = (ConvertFrom-PBStudioBackendOrigin `
+        -Origin $BaseUrl `
+        -Source '-BaseUrl override').Origin
+    if ($BaseUrl -cne $Runtime.BackendOrigin) {
+        throw "-BaseUrl must match the effective PB Studio backend origin $($Runtime.BackendOrigin)"
+    }
+}
 
 $script:StartedBackend = $false
 $script:BackendProcess = $null

@@ -940,7 +940,7 @@ Write-Host ""
 Write-Host "  Log: $LogFile" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Naechste Schritte:" -ForegroundColor Cyan
-Write-Host "    1. Backend:    .\.venv\Scripts\Activate.ps1; `$env:PYTHONPATH='src'; python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765"
+Write-Host "    1. Backend:    .\.venv\Scripts\Activate.ps1; `$env:PYTHONPATH='src'; python $($RuntimeContract.BackendArguments -join ' ')"
 Write-Host "    2. WPF App:    dotnet run --project PBStudio.UI"
 Write-Host "    3. Brain Verify Guide: docs\HARDWARE_VERIFY_GUIDE.md"
 Write-Host "    4. Brain User Guide:   docs\BRAIN_USER_GUIDE.md"

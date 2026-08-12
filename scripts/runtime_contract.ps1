@@ -1,5 +1,139 @@
 #Requires -Version 5.1
 
+function ConvertTo-PBStudioBackendEndpoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Scheme,
+        [Parameter(Mandatory = $true)]
+        [object]$HostName,
+        [Parameter(Mandatory = $true)]
+        [object]$Port,
+        [Parameter(Mandatory = $true)]
+        [string]$Source
+    )
+
+    if ($Scheme -isnot [string] -or $Scheme -cne 'http') {
+        throw "Backend Scheme must be exactly 'http' in ${Source}"
+    }
+    if ($HostName -isnot [string] -or [string]::IsNullOrWhiteSpace($HostName)) {
+        throw "Backend Host must be a non-empty string in ${Source}"
+    }
+
+    $normalizedHost = $HostName
+    if ($normalizedHost -cne $normalizedHost.Trim()) {
+        throw "Backend Host may not contain whitespace in ${Source}"
+    }
+    $allowedHosts = @('127.0.0.1', 'localhost', '::1')
+    if (-not ($allowedHosts -ccontains $normalizedHost)) {
+        throw "Backend Host must be loopback-only in ${Source}: $normalizedHost"
+    }
+
+    if ($Port -is [string]) {
+        $parsedPort = 0L
+        if (-not [long]::TryParse(
+            $Port,
+            [Globalization.NumberStyles]::None,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$parsedPort
+        )) {
+            throw "Backend Port must be a decimal integer in ${Source}"
+        }
+        $Port = $parsedPort
+    } elseif ($Port -isnot [int] -and $Port -isnot [long]) {
+        throw "Backend Port must be an integer in ${Source}"
+    }
+    $normalizedPort = [long]$Port
+    if ($normalizedPort -lt 1 -or $normalizedPort -gt 65535) {
+        throw "Backend Port must be between 1 and 65535 in ${Source}: $normalizedPort"
+    }
+
+    $builder = New-Object System.UriBuilder(
+        'http',
+        $normalizedHost,
+        [int]$normalizedPort
+    )
+    return [pscustomobject]@{
+        Scheme = 'http'
+        Host = $normalizedHost
+        Port = [int]$normalizedPort
+        Origin = $builder.Uri.GetLeftPart([UriPartial]::Authority)
+        Source = $Source
+    }
+}
+
+function Get-PBStudioBackendEndpoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectRoot
+    )
+
+    $root = (Resolve-Path -LiteralPath $ProjectRoot -ErrorAction Stop).Path
+    $settingsPath = Join-Path $root 'appsettings.json'
+    if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
+        throw "Backend settings missing: $settingsPath"
+    }
+
+    try {
+        $settings = Get-Content -LiteralPath $settingsPath -Raw -ErrorAction Stop |
+            ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Backend settings are not valid JSON: $settingsPath"
+    }
+    if ($null -eq $settings.Backend) {
+        throw "Backend section missing: $settingsPath"
+    }
+    $rootNames = @($settings.PSObject.Properties.Name)
+    if ($rootNames.Count -ne 1 -or $rootNames[0] -cne 'Backend') {
+        throw "Backend settings may only contain the Backend section: $settingsPath"
+    }
+    $backendNames = @($settings.Backend.PSObject.Properties.Name)
+    if ($backendNames.Count -ne 3 -or
+        -not ($backendNames -ccontains 'Scheme') -or
+        -not ($backendNames -ccontains 'Host') -or
+        -not ($backendNames -ccontains 'Port')) {
+        throw "Backend must contain Scheme, Host and Port only: $settingsPath"
+    }
+
+    $effectiveHost = if ([string]::IsNullOrEmpty($env:PBSTUDIO_HOST)) {
+        $settings.Backend.Host
+    } else {
+        $env:PBSTUDIO_HOST
+    }
+    $effectivePort = if ([string]::IsNullOrEmpty($env:PBSTUDIO_PORT)) {
+        $settings.Backend.Port
+    } else {
+        $env:PBSTUDIO_PORT
+    }
+    return ConvertTo-PBStudioBackendEndpoint `
+        -Scheme $settings.Backend.Scheme `
+        -HostName $effectiveHost `
+        -Port $effectivePort `
+        -Source $settingsPath
+}
+
+function ConvertFrom-PBStudioBackendOrigin {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Origin,
+        [string]$Source = 'backend origin override'
+    )
+
+    $uri = $null
+    if (-not [Uri]::TryCreate($Origin, [UriKind]::Absolute, [ref]$uri) -or
+        $uri.AbsolutePath -ne '/' -or
+        -not [string]::IsNullOrEmpty($uri.Query) -or
+        -not [string]::IsNullOrEmpty($uri.Fragment) -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo)) {
+        throw "Backend origin must be an absolute origin without path, query, fragment, or credentials: $Origin"
+    }
+
+    return ConvertTo-PBStudioBackendEndpoint `
+        -Scheme $uri.Scheme `
+        -HostName $uri.Host `
+        -Port $uri.Port `
+        -Source $Source
+}
+
 function Get-PBStudioRuntimeContract {
     param(
         [Parameter(Mandatory = $true)]
@@ -10,6 +144,7 @@ function Get-PBStudioRuntimeContract {
     )
 
     $root = (Resolve-Path -LiteralPath $ProjectRoot -ErrorAction Stop).Path
+    $backendEndpoint = Get-PBStudioBackendEndpoint -ProjectRoot $root
     $manifestPath = Join-Path $root 'config\ffmpeg-runtime.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         throw "FFmpeg runtime manifest missing: $manifestPath"
@@ -168,7 +303,16 @@ function Get-PBStudioRuntimeContract {
         LhmLibraryPath = $lhmLibraryPath
         LhmManifestSha256 = $lhmManifestHash
         LhmLibrarySha256 = $lhmLibraryHash
-        BackendArguments = @('-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8765')
+        BackendScheme = $backendEndpoint.Scheme
+        BackendHost = $backendEndpoint.Host
+        BackendPort = $backendEndpoint.Port
+        BackendOrigin = $backendEndpoint.Origin
+        BackendSettingsPath = $backendEndpoint.Source
+        BackendArguments = @(
+            '-m', 'uvicorn', 'backend.main:app',
+            '--host', $backendEndpoint.Host,
+            '--port', [string]$backendEndpoint.Port
+        )
         Manifest = $manifest
         ManifestPath = $manifestPath
         LhmContract = $lhmContract

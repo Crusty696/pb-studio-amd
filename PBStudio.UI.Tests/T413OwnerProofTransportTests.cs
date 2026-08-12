@@ -263,7 +263,7 @@ public sealed class T413OwnerProofTransportTests
     {
         var handler = (DelegatingHandler)Activator.CreateInstance(
             CapabilityAssemblyType("OwnerCapabilityRequestHandler"),
-            nonPublic: true)!;
+            [BackendEndpointOptions.Load()])!;
         handler.InnerHandler = new StubHandler(respond);
         return handler;
     }

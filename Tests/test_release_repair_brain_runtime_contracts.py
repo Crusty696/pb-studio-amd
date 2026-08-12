@@ -507,11 +507,10 @@ def test_launchers_share_runtime_contract_and_backend_arguments():
     runtime_ps = _source("scripts/runtime_contract.ps1")
     bridge = _source("PBStudio.UI/Services/PythonBridgeService.cs")
     assert "'.venv\\Scripts\\python.exe'" in runtime_ps
-    assert "'--host', '127.0.0.1', '--port', '8765'" in runtime_ps
-    assert (
-        "backend.main:app --host 127.0.0.1 --port {Port}"
-        in bridge
-    )
+    assert "Get-PBStudioBackendEndpoint" in runtime_ps
+    assert "'--host', $backendEndpoint.Host" in runtime_ps
+    assert "'--port', [string]$backendEndpoint.Port" in runtime_ps
+    assert "--host {_endpoint.Host} --port {_endpoint.Port}" in bridge
 
 
 def test_legacy_git_mutation_wrappers_are_fail_closed():
@@ -649,7 +648,7 @@ def test_partial_failure_and_evidence_states_remain_visible_and_copyable():
 
     assert 'clip.IsAnalyzed = result.AnalysisStatus == "completed";' in audio_vm
     assert 'result.AnalysisStatus == "partial"' in audio_vm
-    assert 'AnalysisStatus is "partial" or "failed"' in audio_model
+    assert '"partial" or "failed" or "interrupted" or "unavailable"' in audio_model
     assert 'BeatType.Equals("downbeat"' in beat_model
     assert 'BeatType.Equals("bar"' in beat_model
     assert "% 4" not in beat_model

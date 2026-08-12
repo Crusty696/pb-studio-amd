@@ -4,7 +4,7 @@
     PB Studio AMD - Launcher Script
 .DESCRIPTION
     Startet das Python FastAPI Backend und das C# WPF Frontend.
-    Backend: localhost:8765 (Python + FastAPI + Uvicorn)
+    Backend: Root-appsettings.json (Python + FastAPI + Uvicorn)
     Frontend: PBStudio.UI.exe (.NET 9.0 WPF)
 #>
 
@@ -45,9 +45,11 @@ trap {
 Append-Log "launch.ps1 gestartet"
 $ProjectRoot = $PSScriptRoot
 . (Join-Path $ProjectRoot 'scripts\runtime_contract.ps1')
-$BackendPort = 8765
-$BackendHost = '127.0.0.1'
-$HealthCheckUrl = "http://${BackendHost}:${BackendPort}/health"
+$BackendEndpoint = Get-PBStudioBackendEndpoint -ProjectRoot $ProjectRoot
+$BackendPort = $BackendEndpoint.Port
+$BackendHost = $BackendEndpoint.Host
+$BackendOrigin = $BackendEndpoint.Origin
+$HealthCheckUrl = $BackendOrigin + '/health'
 $MaxStartupWaitSeconds = 90
 $startedBackend = $false
 $backendProcess = $null
@@ -539,7 +541,7 @@ Initialize-OwnerCapability
 
 if (-not $FrontendOnly) {
     if (Test-BackendHealth) {
-        Write-Status "Backend läuft bereits auf http://${BackendHost}:${BackendPort}" 'Green'
+        Write-Status "Backend läuft bereits auf $BackendOrigin" 'Green'
     } else {
         Write-Status 'Starte Python Backend...'
 
@@ -574,7 +576,7 @@ if (-not $FrontendOnly) {
 
 if ($BackendOnly) {
     if ($startedBackend -and $backendProcess) {
-        Write-Status "Backend läuft auf http://${BackendHost}:${BackendPort}" 'Green'
+        Write-Status "Backend läuft auf $BackendOrigin" 'Green'
         Write-Status 'BackendOnly aktiv. Warte auf Backend-Ende...' 'Yellow'
         try {
             while (Test-BackendHealth) {
@@ -586,7 +588,7 @@ if ($BackendOnly) {
         }
     }
 
-    Write-Status "Backend läuft bereits auf http://${BackendHost}:${BackendPort}" 'Green'
+    Write-Status "Backend läuft bereits auf $BackendOrigin" 'Green'
     Write-Status 'BackendOnly: bestehender Backend-Prozess bleibt unverändert.' 'Yellow'
     Write-Status '=== PB Studio beendet ===' 'Yellow'
     exit 0
@@ -621,7 +623,7 @@ if (-not $BackendOnly) {
     } else {
         Write-Status 'Frontend nicht gefunden. Nutze zuerst publish.ps1 oder dotnet build.' 'Yellow'
         if ($backendProcess) {
-            Write-Status "Backend läuft auf http://${BackendHost}:${BackendPort}" 'Yellow'
+            Write-Status "Backend läuft auf $BackendOrigin" 'Yellow'
             Write-Status 'Drücke Ctrl+C zum Beenden' 'Yellow'
             $backendProcess.WaitForExit()
         }
@@ -637,7 +639,7 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
     Write-Status 'Stoppe Backend...'
     try {
         Invoke-RestMethod `
-            -Uri "http://${BackendHost}:${BackendPort}/shutdown" `
+            -Uri ($BackendOrigin + '/shutdown') `
             -Method Post `
             -Headers @{ 'X-PBStudio-Owner-Capability' = $env:PBSTUDIO_OWNER_CAPABILITY } `
             -TimeoutSec 5 `
@@ -656,7 +658,7 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
     Write-Status 'FrontendOnly: stoppe von der UI gestartetes Backend...' 'Yellow'
     try {
         Invoke-RestMethod `
-            -Uri "http://${BackendHost}:${BackendPort}/shutdown" `
+            -Uri ($BackendOrigin + '/shutdown') `
             -Method Post `
             -Headers @{ 'X-PBStudio-Owner-Capability' = $env:PBSTUDIO_OWNER_CAPABILITY } `
             -TimeoutSec 5 `

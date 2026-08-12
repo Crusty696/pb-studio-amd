@@ -65,7 +65,9 @@ public partial class App : Application
         };
 
         var services = new ServiceCollection();
-        ConfigureServices(services);
+        var endpoint = BackendEndpointOptions.Load();
+        services.AddSingleton(endpoint);
+        ConfigureServices(services, endpoint);
         _serviceProvider = services.BuildServiceProvider();
 
         Ioc.Default.ConfigureServices(_serviceProvider);
@@ -121,7 +123,9 @@ public partial class App : Application
             ?.Log(level, "{Source}: {Crash}", source, redacted);
     }
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(
+        IServiceCollection services,
+        BackendEndpointOptions endpoint)
     {
         var terminalLogBuffer = new TerminalLogBuffer();
         services.AddSingleton(terminalLogBuffer);
@@ -148,7 +152,7 @@ public partial class App : Application
         services.AddTransient<OwnerCapabilityRequestHandler>();
         services.AddHttpClient<ApiClient>(client =>
         {
-            client.BaseAddress = new Uri("http://127.0.0.1:8765");
+            client.BaseAddress = endpoint.BaseUri;
             client.Timeout = TimeSpan.FromMinutes(20);
         })
         .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler

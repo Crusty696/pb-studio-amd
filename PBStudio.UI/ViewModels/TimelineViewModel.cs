@@ -276,7 +276,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         var seq = Interlocked.Increment(ref _motionLoadSequence);
         try
         {
-            var data = await _api.GetMotionAsync(clipId).ConfigureAwait(false);
+            var data = await _api.GetMotionAsync(clipId);
             if (seq != _motionLoadSequence) return;
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -336,7 +336,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         {
             var stripTask = _api.GetThumbStripAsync(cid, n: 8, cancellationToken: ct);
             var waveTask = _api.GetClipWaveAsync(cid, n: 256, cancellationToken: ct);
-            await Task.WhenAll(stripTask, waveTask).ConfigureAwait(false);
+            await Task.WhenAll(stripTask, waveTask);
             ct.ThrowIfCancellationRequested();
 
             var decodedFrames = new List<System.Windows.Media.ImageSource>();
@@ -1324,7 +1324,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
-            var explain = await _api.BrainExplainAsync(entry.CutId, topN: 3, ct: ct).ConfigureAwait(false);
+            var explain = await _api.BrainExplainAsync(entry.CutId, topN: 3, ct: ct);
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 entry.BrainExplainTooltip = explain == null
@@ -1376,7 +1376,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
         try
         {
-            var explain = await _api.BrainExplainAsync(cutId, topN: 3).ConfigureAwait(false);
+            var explain = await _api.BrainExplainAsync(cutId, topN: 3);
             if (explain == null) return;
 
             await Application.Current.Dispatcher.InvokeAsync(() =>

@@ -39,6 +39,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _monitoringStatus = "Wird geladen...";
     [ObservableProperty] private string? _monitoringError;
     [ObservableProperty] private bool _backendOnline;
+    public string BackendEndpointDisplay { get; }
 
     // ── VRAM Cap (Slider, persistiert) ────────────────────────────────────
     [ObservableProperty] private int _vramLimitMb = 8192;
@@ -82,12 +83,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IApiClient api,
         IDialogService dialogs,
         ISettingsService settings,
-        ProjectService? projects = null)
+        ProjectService? projects = null,
+        BackendEndpointOptions? endpoint = null)
     {
         _api = api;
         _ = dialogs;
         _settings = settings;
         _projects = projects;
+        BackendEndpointDisplay = (endpoint ?? BackendEndpointOptions.Load()).DisplayValue;
         StatusText = "Backend: Startet...";
 
         SettingsFilePath = _settings.ConfigFilePath;

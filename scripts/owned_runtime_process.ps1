@@ -23,6 +23,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$runtimeScript = Join-Path $PSScriptRoot 'runtime_contract.ps1'
+. $runtimeScript
+$backendEndpoint = Get-PBStudioBackendEndpoint -ProjectRoot $repoRoot
 $logsRoot = Join-Path $repoRoot 'logs'
 New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
 $statePath = Join-Path $logsRoot ($StateName + '.process.json')
@@ -36,7 +39,7 @@ function Get-ExpectedExecutable {
         )
     }
 
-    . (Join-Path $PSScriptRoot 'runtime_contract.ps1')
+    . $runtimeScript
     $runtime = Get-PBStudioRuntimeContract `
         -ProjectRoot $repoRoot `
         -RequirePython `
@@ -95,7 +98,7 @@ if ($Operation -eq 'Start') {
     }
 
     if ($Kind -eq 'Backend') {
-        . (Join-Path $PSScriptRoot 'runtime_contract.ps1')
+        . $runtimeScript
         $runtime = Get-PBStudioRuntimeContract `
             -ProjectRoot $repoRoot `
             -RequirePython `
@@ -153,7 +156,7 @@ if ($Kind -eq 'Backend' -and $StopMode -eq 'Graceful') {
     }
     try {
         Invoke-RestMethod `
-            -Uri 'http://127.0.0.1:8765/shutdown' `
+            -Uri ($backendEndpoint.Origin + '/shutdown') `
             -Method Post `
             -Headers @{
                 'X-PBStudio-Owner-Capability' = $env:PBSTUDIO_OWNER_CAPABILITY

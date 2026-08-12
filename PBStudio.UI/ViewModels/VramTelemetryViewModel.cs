@@ -92,7 +92,7 @@ public partial class VramTelemetryViewModel : ObservableObject, IDisposable
     private async void OnRefreshTick(object? sender, EventArgs e)
     {
         if (!IsActive) return;
-        await LoadAsync().ConfigureAwait(false);
+        await LoadAsync();
     }
 
     [RelayCommand]

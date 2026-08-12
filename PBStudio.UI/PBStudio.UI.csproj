@@ -49,6 +49,10 @@
   <ItemGroup>
     <Compile Remove="Generated\*.g.cs" />
     <Compile Include="obj/Generated/ApiTypes.g.cs" />
+    <Content Include="..\appsettings.json" Link="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

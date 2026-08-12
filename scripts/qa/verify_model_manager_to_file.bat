@@ -4,6 +4,9 @@ REM so a remote agent can read the build result via filesystem without needing
 REM Terminal/PowerShell visibility access.
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."
+set "PBSTUDIO_PROJECT_ROOT=%CD%"
+for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ". ([IO.Path]::Combine($env:PBSTUDIO_PROJECT_ROOT,'scripts','runtime_contract.ps1')); (Get-PBStudioBackendEndpoint -ProjectRoot $env:PBSTUDIO_PROJECT_ROOT).Origin"') do set "PBSTUDIO_BACKEND_ORIGIN=%%I"
+if not defined PBSTUDIO_BACKEND_ORIGIN exit /b 1
 set LOG=%~dp0verify_model_manager.log
 echo Verify start %date% %time% > "%LOG%"
 
@@ -22,12 +25,12 @@ echo Verify start %date% %time% > "%LOG%"
 
     echo.
     echo === [4/5] Backend /models/list ===
-    curl -s -m 3 http://localhost:8765/models/list
+    curl -s -m 3 "!PBSTUDIO_BACKEND_ORIGIN!/models/list"
     echo.
 
     echo.
     echo === [5/5] /models/recommendations?mode=balance ===
-    curl -s -m 3 "http://localhost:8765/models/recommendations?task=video_captioning&mode=balance"
+    curl -s -m 3 "!PBSTUDIO_BACKEND_ORIGIN!/models/recommendations?task=video_captioning&mode=balance"
     echo.
 
     echo.

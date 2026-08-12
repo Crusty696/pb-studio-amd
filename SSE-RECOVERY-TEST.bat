@@ -4,6 +4,8 @@ setlocal
 cd /d "%~dp0"
 call "%~dp0scripts\runtime_contract.bat"
 if errorlevel 1 exit /b %ERRORLEVEL%
+for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ". ([IO.Path]::Combine($env:PBSTUDIO_PROJECT_ROOT,'scripts','runtime_contract.ps1')); (Get-PBStudioBackendEndpoint -ProjectRoot $env:PBSTUDIO_PROJECT_ROOT).Origin"') do set "PBSTUDIO_BACKEND_ORIGIN=%%I"
+if not defined PBSTUDIO_BACKEND_ORIGIN exit /b 1
 for /f "delims=" %%I in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\owner_capability.ps1"') do set "PBSTUDIO_OWNER_CAPABILITY=%%I"
 if not defined PBSTUDIO_OWNER_CAPABILITY exit /b 1
 
@@ -36,7 +38,7 @@ echo Waiting 30s for backend ready... >> sse_test.log
 ping -n 31 127.0.0.1 >nul
 
 REM Health-Check
-curl -s -m 5 http://127.0.0.1:8765/health >> sse_test.log 2>&1
+curl -s -m 5 "%PBSTUDIO_BACKEND_ORIGIN%/health" >> sse_test.log 2>&1
 echo. >> sse_test.log
 echo Backend health probed >> sse_test.log
 

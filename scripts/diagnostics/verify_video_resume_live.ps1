@@ -27,6 +27,7 @@ $runtime = Get-PBStudioRuntimeContract `
     -RequirePython `
     -RequireFFmpeg `
     -ApplyEnvironment
+$backendOrigin = $runtime.BackendOrigin
 $ownerCapability = [string](& $ownerScript)
 $env:PBSTUDIO_OWNER_CAPABILITY = $ownerCapability
 $headers = @{ 'X-PBStudio-Owner-Capability' = $ownerCapability }
@@ -62,7 +63,7 @@ function Start-OwnedBackend {
         }
         try {
             $health = Invoke-RestMethod `
-                -Uri 'http://127.0.0.1:8765/health' `
+                -Uri ($backendOrigin + '/health') `
                 -TimeoutSec 2
             if ($health.status -eq 'ok') {
                 return $process
@@ -82,7 +83,7 @@ function Stop-OwnedBackend {
     }
     try {
         Invoke-RestMethod `
-            -Uri 'http://127.0.0.1:8765/shutdown' `
+            -Uri ($backendOrigin + '/shutdown') `
             -Method Post `
             -Headers $headers `
             -TimeoutSec 10 | Out-Null
@@ -102,7 +103,7 @@ function Invoke-Analysis {
     param([Parameter(Mandatory = $true)]$Process)
 
     Invoke-RestMethod `
-        -Uri 'http://127.0.0.1:8765/project/open' `
+        -Uri ($backendOrigin + '/project/open') `
         -Method Post `
         -Headers $headers `
         -ContentType 'application/json' `
@@ -110,7 +111,7 @@ function Invoke-Analysis {
         -TimeoutSec 60 | Out-Null
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $response = Invoke-RestMethod `
-        -Uri 'http://127.0.0.1:8765/video/analyze' `
+        -Uri ($backendOrigin + '/video/analyze') `
         -Method Post `
         -Headers $headers `
         -ContentType 'application/json' `

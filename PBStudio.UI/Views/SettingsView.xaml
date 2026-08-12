@@ -413,7 +413,7 @@
                                     <Setter Property="Text" Value="Offline"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding BackendOnline}" Value="True">
-                                            <Setter Property="Text" Value="Online (Port 8765)"/>
+                                            <Setter Property="Text" Value="{Binding BackendEndpointDisplay, StringFormat=Online ({0})}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>

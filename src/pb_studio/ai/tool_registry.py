@@ -5,8 +5,8 @@ die ein LLM ueber Function-Calling (Ollama ``tools``-Parameter) aufrufen kann.
 Jedes Tool hat ein JSON-Schema fuer die Argumente und einen async Handler,
 der den eigentlichen HTTP-Call ausfuehrt.
 
-Der Chat-Agent ruft via HTTP-Loopback auf das eigene Backend an
-(``http://localhost:8765``). Damit bleibt die Trennung Frontend/Backend
+Der Chat-Agent ruft via HTTP-Loopback auf das konfigurierte eigene Backend an.
+Damit bleibt die Trennung Frontend/Backend
 sauber — keine direkten Module-Imports im Chat-Pfad, kein Risiko von
 Singleton-Side-Effects.
 
@@ -31,6 +31,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from pb_studio.runtime_contract import backend_endpoint, validate_backend_url
+
 
 def _render_encoder_values() -> list[str]:
     """M4-Fix (P-M2): RenderEncoder-Enum-Werte als list[str] fuer Tool-Schema."""
@@ -47,7 +49,7 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 # Defaults
 # ----------------------------------------------------------------------
-DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8765"
+DEFAULT_BACKEND_BASE_URL = backend_endpoint().base_url
 _project_capability: ContextVar[str | None] = ContextVar(
     "pb_studio_chat_project_capability",
     default=None,
@@ -55,7 +57,14 @@ _project_capability: ContextVar[str | None] = ContextVar(
 
 
 def _get_backend_base_url() -> str:
-    return os.environ.get("PBSTUDIO_BACKEND_URL", DEFAULT_BACKEND_BASE_URL)
+    configured = validate_backend_url(
+        os.environ.get("PBSTUDIO_BACKEND_URL", DEFAULT_BACKEND_BASE_URL)
+    )
+    if configured != DEFAULT_BACKEND_BASE_URL:
+        raise RuntimeError(
+            "PBSTUDIO_BACKEND_URL must match PBSTUDIO_HOST/PBSTUDIO_PORT"
+        )
+    return configured
 
 
 @contextmanager
@@ -70,16 +79,15 @@ def project_capability_scope(capability: str | None) -> Iterator[None]:
 
 def _owner_headers_for_loopback(url: str) -> dict[str, str]:
     """Return internal capabilities only for PB Studio's canonical loopback."""
-    parsed = urlparse(url)
     try:
-        port = parsed.port
-    except ValueError:
+        candidate = urlparse(url)
+        candidate_origin = validate_backend_url(
+            f"{candidate.scheme}://{candidate.netloc}"
+        )
+        configured_origin = _get_backend_base_url()
+    except RuntimeError:
         return {}
-    if (
-        parsed.scheme != "http"
-        or parsed.hostname not in {"127.0.0.1", "localhost"}
-        or port != 8765
-    ):
+    if candidate_origin != configured_origin:
         return {}
 
     from backend.owner_capability import (

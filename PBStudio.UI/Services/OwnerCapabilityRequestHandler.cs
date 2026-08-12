@@ -8,7 +8,13 @@ namespace PBStudio.UI.Services;
 /// </summary>
 internal sealed class OwnerCapabilityRequestHandler : DelegatingHandler
 {
-    private static readonly Uri BackendOrigin = new("http://127.0.0.1:8765");
+    private readonly Uri _backendOrigin;
+
+    public OwnerCapabilityRequestHandler(BackendEndpointOptions endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        _backendOrigin = endpoint.BaseUri;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -45,13 +51,13 @@ internal sealed class OwnerCapabilityRequestHandler : DelegatingHandler
         return request.RequestUri!.AbsolutePath is "/health" or "/health/proof";
     }
 
-    private static bool IsTrustedBackendRequest(HttpRequestMessage request)
+    private bool IsTrustedBackendRequest(HttpRequestMessage request)
     {
         var uri = request.RequestUri;
         return uri is { IsAbsoluteUri: true }
-            && uri.Scheme == BackendOrigin.Scheme
-            && uri.Host == BackendOrigin.Host
-            && uri.Port == BackendOrigin.Port
+            && uri.Scheme == _backendOrigin.Scheme
+            && uri.Host == _backendOrigin.Host
+            && uri.Port == _backendOrigin.Port
             && string.IsNullOrEmpty(uri.UserInfo);
     }
 }

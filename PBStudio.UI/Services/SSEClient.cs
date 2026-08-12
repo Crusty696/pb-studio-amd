@@ -86,10 +86,19 @@ public class SSEClient : IDisposable
     public bool IsBackendReachable => _isBackendReachable;
 
     public SSEClient(ILogger<SSEClient> logger, TerminalLogBuffer terminalLogBuffer)
+        : this(logger, terminalLogBuffer, BackendEndpointOptions.Load())
+    {
+    }
+
+    public SSEClient(
+        ILogger<SSEClient> logger,
+        TerminalLogBuffer terminalLogBuffer,
+        BackendEndpointOptions endpoint)
     {
         _logger = logger;
         _terminalLogBuffer = terminalLogBuffer;
-        _httpClient = new HttpClient(new OwnerCapabilityRequestHandler
+        ArgumentNullException.ThrowIfNull(endpoint);
+        _httpClient = new HttpClient(new OwnerCapabilityRequestHandler(endpoint)
         {
             InnerHandler = new HttpClientHandler
             {
@@ -97,7 +106,7 @@ public class SSEClient : IDisposable
             },
         })
         {
-            BaseAddress = new Uri("http://127.0.0.1:8765"),
+            BaseAddress = endpoint.BaseUri,
             Timeout = TimeSpan.FromMilliseconds(Timeout.Infinite),
         };
     }

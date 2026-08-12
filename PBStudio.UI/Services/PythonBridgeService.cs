@@ -29,7 +29,7 @@ public class PythonBridgeService : IDisposable
 
     private static readonly string? PythonExe = ResolvePythonExe();
     private static readonly bool PreferExternalBackend = IsEnabled(Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY"));
-    private const int Port = 8765;
+    private readonly BackendEndpointOptions _endpoint;
     private const int StartupTimeoutMs = 30_000;
     private const int HealthCheckIntervalMs = 500;
 
@@ -91,14 +91,29 @@ public class PythonBridgeService : IDisposable
     public event EventHandler<bool>? StatusChanged;
 
     public PythonBridgeService(ILogger<PythonBridgeService> logger)
-        : this(logger, CreateBootstrapHttpClient(), CreateProtectedHttpClient())
+        : this(logger, BackendEndpointOptions.Load())
+    {
+    }
+
+    public PythonBridgeService(
+        ILogger<PythonBridgeService> logger,
+        BackendEndpointOptions endpoint)
+        : this(
+            logger,
+            CreateBootstrapHttpClient(),
+            CreateProtectedHttpClient(endpoint),
+            endpoint)
     {
     }
 
     internal PythonBridgeService(
         ILogger<PythonBridgeService> logger,
         HttpClient bootstrapHttpClient)
-        : this(logger, bootstrapHttpClient, CreateProtectedHttpClient())
+        : this(
+            logger,
+            bootstrapHttpClient,
+            null,
+            BackendEndpointOptions.Load())
     {
     }
 
@@ -106,12 +121,27 @@ public class PythonBridgeService : IDisposable
         ILogger<PythonBridgeService> logger,
         HttpClient bootstrapHttpClient,
         HttpClient protectedHttpClient)
+        : this(
+            logger,
+            bootstrapHttpClient,
+            protectedHttpClient,
+            BackendEndpointOptions.Load())
+    {
+    }
+
+    internal PythonBridgeService(
+        ILogger<PythonBridgeService> logger,
+        HttpClient bootstrapHttpClient,
+        HttpClient? protectedHttpClient,
+        BackendEndpointOptions endpoint)
     {
         _logger = logger;
         _bootstrapHttpClient = bootstrapHttpClient;
-        _protectedHttpClient = protectedHttpClient;
-        _bootstrapHttpClient.BaseAddress ??= new Uri($"http://127.0.0.1:{Port}");
-        _protectedHttpClient.BaseAddress ??= new Uri($"http://127.0.0.1:{Port}");
+        _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+        _protectedHttpClient = protectedHttpClient
+            ?? CreateProtectedHttpClient(_endpoint);
+        _bootstrapHttpClient.BaseAddress ??= _endpoint.BaseUri;
+        _protectedHttpClient.BaseAddress ??= _endpoint.BaseUri;
         _bootstrapHttpClient.Timeout = TimeSpan.FromMinutes(20);
         _protectedHttpClient.Timeout = TimeSpan.FromMinutes(20);
     }
@@ -122,8 +152,9 @@ public class PythonBridgeService : IDisposable
             AllowAutoRedirect = false,
         });
 
-    private static HttpClient CreateProtectedHttpClient() => new(
-        new OwnerCapabilityRequestHandler
+    private static HttpClient CreateProtectedHttpClient(
+        BackendEndpointOptions endpoint) => new(
+        new OwnerCapabilityRequestHandler(endpoint)
         {
             InnerHandler = new HttpClientHandler
             {
@@ -153,7 +184,7 @@ public class PythonBridgeService : IDisposable
                     {
                         _logger.LogError(
                             "Port {Port} belegt, aber keine externe Owner-Capability wurde bereitgestellt; fremdes Backend wird nicht übernommen",
-                            Port);
+                            _endpoint.Port);
                         return;
                     }
 
@@ -166,14 +197,14 @@ public class PythonBridgeService : IDisposable
 
                     _logger.LogError(
                         "Port {Port} belegt, aber Health-Proof stimmt nicht mit Owner-Capability überein; fremdes Backend wird nicht übernommen",
-                        Port);
+                        _endpoint.Port);
                     return;
                 }
             }
 
             if (PreferExternalBackend)
             {
-                _logger.LogWarning("Extern verwaltetes Backend erwartet, aber Port {Port} ist nicht gesund - es wird kein zweiter Backend-Prozess gestartet", Port);
+                _logger.LogWarning("Extern verwaltetes Backend erwartet, aber Port {Port} ist nicht gesund - es wird kein zweiter Backend-Prozess gestartet", _endpoint.Port);
                 return;
             }
 
@@ -199,7 +230,7 @@ public class PythonBridgeService : IDisposable
             var startInfo = new ProcessStartInfo
             {
                 FileName = pythonExe,
-                Arguments = $"-m uvicorn backend.main:app --host 127.0.0.1 --port {Port}",
+                Arguments = $"-m uvicorn backend.main:app --host {_endpoint.Host} --port {_endpoint.Port}",
                 WorkingDirectory = projectRoot,
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -449,7 +480,7 @@ public class PythonBridgeService : IDisposable
         _pythonProcess = null;
         _isRunning = true;
         _ownsProcess = false;
-        _logger.LogInformation(logMessage, Port);
+        _logger.LogInformation(logMessage, _endpoint.Port);
         StatusChanged?.Invoke(this, true);
         // AP3.2: auch im Attach-Modus ist das Backend ab hier nutzbar
         WeakReferenceMessenger.Default.Send(new BackendReadyMessage());
