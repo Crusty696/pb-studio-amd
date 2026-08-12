@@ -23,6 +23,7 @@ from backend.schemas.pacing_schemas import (
 )
 from backend.schemas.video_schemas import VideoAnalyzeRequest
 from pb_studio.brain.brain_service import BrainService, StaleBrainProjectLeaseError
+from pb_studio.data.database_core import DatabaseCore
 from pb_studio.storage.migration_runner import migrate_project_state
 
 
@@ -88,6 +89,41 @@ def _sqlite_snapshot(path: Path) -> dict[str, tuple[tuple[Any, ...], ...]]:
         return {
             name: tuple(connection.execute(f'SELECT * FROM "{name}" ORDER BY rowid'))
             for name in table_names
+        }
+
+
+def _catalog_project_snapshot(
+    path: Path,
+    project_id: int,
+) -> dict[str, tuple[tuple[Any, ...], ...]]:
+    """Capture only catalog rows owned by one project plus its canary."""
+    with sqlite3.connect(path) as connection:
+        return {
+            "project": tuple(
+                connection.execute(
+                    "SELECT * FROM projects WHERE id = ? ORDER BY id",
+                    (project_id,),
+                )
+            ),
+            "media": tuple(
+                connection.execute(
+                    "SELECT * FROM media WHERE project_id = ? ORDER BY id",
+                    (project_id,),
+                )
+            ),
+            "media_import_guard": tuple(
+                connection.execute(
+                    "SELECT * FROM media_import_guard "
+                    "WHERE project_id = ? ORDER BY media_id",
+                    (project_id,),
+                )
+            ),
+            "canary": tuple(
+                connection.execute(
+                    "SELECT * FROM t410_canary WHERE project_id = ? ORDER BY rowid",
+                    (project_id,),
+                )
+            ),
         }
 
 
@@ -178,10 +214,27 @@ def _prepare_projects(tmp_path: Path, database_path: Path) -> tuple[AppState, Ap
         connection.execute("INSERT INTO t410_brain_canary VALUES ('B-brain-canary')")
         connection.commit()
 
-    with sqlite3.connect(database_path) as connection:
+    database = DatabaseCore()
+    with database.transaction() as connection:
+        connection.executemany(
+            "INSERT INTO projects(id, name, json_data) VALUES (?, ?, ?)",
+            (
+                (101, "A", json.dumps({"project_uuid": project_a_uuid})),
+                (202, "B", json.dumps({"project_uuid": project_b_uuid})),
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO media(id, project_id, file_path, file_hash, duration_sec) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                (101, 101, str(audio_a), "a-audio", 30.0),
+                (102, 101, str(video_a), "a-video", 30.0),
+                (201, 202, str(audio_b), "b-audio", 44.0),
+                (202, 202, str(video_b), "b-video", 44.0),
+            ),
+        )
         connection.execute("CREATE TABLE t410_canary (project_id INTEGER, value TEXT)")
         connection.execute("INSERT INTO t410_canary VALUES (?, ?)", (202, "B-database-canary"))
-        connection.commit()
 
     state = AppState(
         current_project={
@@ -345,7 +398,7 @@ def test_project_switch_cancels_a_job_without_mutating_b(
         )
         expected_b = _runtime_snapshot(candidate_b)
         expected_b["project"] = project_data_b
-        database_before = _sqlite_snapshot(isolated_test_database)
+        database_b_before = _catalog_project_snapshot(isolated_test_database, 202)
         brain_database_before = _sqlite_snapshot(project_b / "state.db")
         files_before = _file_snapshot(project_b)
         barrier = _WorkerBarrier()
@@ -409,7 +462,10 @@ def test_project_switch_cancels_a_job_without_mutating_b(
                 await task
 
             assert _runtime_snapshot(state) == expected_b
-            assert _sqlite_snapshot(isolated_test_database) == database_before
+            assert (
+                _catalog_project_snapshot(isolated_test_database, 202)
+                == database_b_before
+            )
             assert _sqlite_snapshot(project_b / "state.db") == brain_database_before
             assert _file_snapshot(project_b) == files_before
             if operation == "brain":

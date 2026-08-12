@@ -359,10 +359,11 @@ async def _activate_project(
 ) -> None:
     """Serialisiert Brain-Bind, Epoch-Wechsel, Task-Drain und State-Swap."""
     async with state.project_lifecycle_lock:
-        # Alte Commits zuerst sperren und registrierte Tasks beenden. Dadurch
-        # kann während des externen Brain-Rebinds kein A-Job mehr nach B schreiben.
-        state.invalidate_project_context()
+        # The lifecycle lock blocks new project operations. Drain first so
+        # cancellation handlers can persist terminal receipts to the old project.
         _, pending = await state.cancel_and_drain_project_tasks()
+        # Non-cooperative tasks become stale before any state swap.
+        state.invalidate_project_context()
         # Ein Bind-Fehler lässt den bisherigen Runtime-State erhalten; dessen
         # alte Tasks bleiben jedoch bewusst invalidiert und beendet.
         _bind_brain_to_project(
@@ -765,8 +766,8 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
             if not state.current_project:
                 raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
             name = state.current_project.get("name", "Unbekannt")
-        state.invalidate_project_context()
         _, pending = await state.cancel_and_drain_project_tasks()
+        state.invalidate_project_context()
         # In-flight Render-Threads nutzen weiterhin ihre bestehenden Cancel-Flags.
         with state._state_lock:
             task_ids = list(state.render_tasks.keys())

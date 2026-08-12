@@ -909,6 +909,7 @@ class AppState:
     def update_audio_analysis(
         self,
         clip_id: int,
+        project_id: Optional[int] = None,
         bpm: Optional[float] = None,
         key: Optional[str] = None,
         beat_count: Optional[int] = None,
@@ -927,6 +928,7 @@ class AppState:
         analysis_status: Optional[str] = None,
         stage_status=None,
         stage_errors=None,
+        stage_receipts=None,
         downbeats=None,
         downbeat_provenance=None,
     ) -> None:
@@ -951,8 +953,18 @@ class AppState:
                     "audio_analysis",
                     f"Audio-Clip {clip_id} fehlt im Projektzustand",
                 )
+            effective_project_id = (
+                int(project_id)
+                if project_id is not None
+                else self.get_current_project_db_id()
+            )
+            if effective_project_id <= 0:
+                raise _persistence_error(
+                    "audio_analysis",
+                    f"Ungueltige Projekt-ID {effective_project_id}",
+                )
             row = repo.find_by_project_and_path(
-                project_id=self.get_current_project_db_id(),
+                project_id=effective_project_id,
                 file_path=clip["path"],
             )
             if row is None:
@@ -1017,6 +1029,8 @@ class AppState:
                 ai_data["stage_status"] = stage_status
             if stage_errors is not None:
                 ai_data["stage_errors"] = stage_errors
+            if stage_receipts is not None:
+                ai_data["stage_receipts"] = stage_receipts
             if downbeats is not None:
                 ai_data["downbeats"] = downbeats
             if downbeat_provenance is not None:
@@ -1062,6 +1076,8 @@ class AppState:
                 cache_update["_stage_status"] = stage_status
             if stage_errors is not None:
                 cache_update["_stage_errors"] = stage_errors
+            if stage_receipts is not None:
+                cache_update["_stage_receipts"] = stage_receipts
             if downbeats is not None:
                 cache_update["downbeats"] = downbeats
             if downbeat_provenance is not None:

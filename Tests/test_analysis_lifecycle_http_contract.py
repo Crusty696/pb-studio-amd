@@ -156,3 +156,54 @@ def test_shutdown_drains_project_operations_before_starting_timer(monkeypatch) -
     assert response == {"status": "shutting_down"}
     assert duplicate == {"status": "shutting_down"}
     assert calls == ["begin", "drain", "timer", "begin"]
+
+
+def test_project_activation_drains_receipt_writers_before_epoch_invalidation(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Cancellation handlers keep the old context through their terminal write."""
+    project_router = importlib.import_module("backend.routers.project_router")
+    calls: list[str] = []
+
+    class _State:
+        def __init__(self) -> None:
+            self.project_lifecycle_lock = asyncio.Lock()
+            self.project_epoch = 7
+
+        async def cancel_and_drain_project_tasks(self):
+            calls.append("drain")
+            return 1, 0
+
+        def invalidate_project_context(self):
+            calls.append("invalidate")
+            self.project_epoch += 1
+            return self.project_epoch
+
+        def reset(self, *, invalidate_context):
+            assert invalidate_context is False
+            calls.append("reset")
+
+        def install_project_state(self, project_data, candidate):
+            calls.append("install")
+
+    state = _State()
+    monkeypatch.setattr(
+        project_router,
+        "_bind_brain_to_project",
+        lambda *_args, **_kwargs: calls.append("bind"),
+    )
+
+    asyncio.run(
+        project_router._activate_project(
+            state,
+            tmp_path / "project-b",
+            {
+                "db_project_id": 202,
+                "project_uuid": "75efc170-823d-4874-962e-5e472becaf8f",
+            },
+            candidate_state=None,
+        )
+    )
+
+    assert calls == ["drain", "invalidate", "bind", "reset", "install"]

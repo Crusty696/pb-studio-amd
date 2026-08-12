@@ -97,6 +97,83 @@ def test_update_audio_analysis_exposes_beats_to_live_consumers_without_reload(st
     assert persisted_ai_data["beats_json"] == beats
 
 
+def test_update_audio_analysis_persists_receipts_and_updates_live_truth(state):
+    """Stage receipts must reach SQLite and both in-memory truth sources."""
+    clip_id = 3
+    receipts = {
+        "beats": {
+            "receipt_version": 0,
+            "stage_id": "beats",
+            "requested": True,
+            "status": "completed",
+            "input_fingerprint": None,
+            "config_fingerprint": None,
+            "artifact_ref": None,
+            "artifact_sha256": None,
+            "artifact_valid": None,
+            "started_at_utc": None,
+            "finished_at_utc": None,
+            "error_code": None,
+            "error_message": None,
+            "provider": None,
+            "model_id": None,
+            "attempts": [],
+            "correlation_id": None,
+        }
+    }
+    state.audio_clips[clip_id] = {
+        "id": clip_id,
+        "path": "receipts.wav",
+        "duration_seconds": 10.0,
+    }
+
+    with patch("pb_studio.data.repositories.media_repository.MediaRepository") as MockRepo:
+        mock_repo = MockRepo.return_value
+        mock_repo.find_by_project_and_path.return_value = {
+            "id": 102,
+            "ai_data_json": "{}",
+        }
+
+        state.update_audio_analysis(clip_id=clip_id, stage_receipts=receipts)
+
+    persisted_ai_data = mock_repo.update_status.call_args.kwargs["ai_data"]
+    assert persisted_ai_data["stage_receipts"] == receipts
+    assert state.audio_analysis_cache[clip_id]["_stage_receipts"] == receipts
+    assert state.audio_clips[clip_id]["_stage_receipts"] == receipts
+
+
+def test_update_audio_analysis_uses_captured_project_id(state):
+    """An explicit operation project ID must win over later active-project state."""
+    clip_id = 4
+    state.current_project = {
+        "db_project_id": 999,
+        "path": "later-project",
+    }
+    state.audio_clips[clip_id] = {
+        "id": clip_id,
+        "path": "captured.wav",
+        "duration_seconds": 10.0,
+    }
+
+    with patch("pb_studio.data.repositories.media_repository.MediaRepository") as MockRepo:
+        mock_repo = MockRepo.return_value
+        mock_repo.find_by_project_and_path.return_value = {
+            "id": 103,
+            "ai_data_json": "{}",
+        }
+
+        state.update_audio_analysis(
+            clip_id=clip_id,
+            project_id=17,
+            analysis_status="running",
+        )
+
+    mock_repo.find_by_project_and_path.assert_called_once_with(
+        project_id=17,
+        file_path="captured.wav",
+    )
+
+
 def test_update_video_analysis_writes_to_video_clips(state):
     """update_video_analysis muss video_clips[id] UND video_analysis_cache[id] aktualisieren."""
     clip_id = 42
