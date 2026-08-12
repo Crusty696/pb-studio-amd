@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from scripts.validate_obj77_ground_truth import (
+    DEFAULT_AUDIO_ROOT,
+    DEFAULT_VIDEO_ROOT,
+    main,
     validate_annotation,
+    validate_corpus,
     validate_corpus_metadata,
     validate_media_path,
     validate_media_snapshot,
@@ -23,6 +27,12 @@ def valid_annotation() -> dict:
         "annotation_status": "approved",
         "annotator_id": "annotator-a",
         "reviewer_id": "reviewer-b",
+        "independent_labeling": {
+            "attested": True,
+            "annotator_attestor_id": "annotator-a",
+            "reviewer_attestor_id": "reviewer-b",
+            "source_system": "independent_of_pb_studio",
+        },
         "downbeats": [{"time": 0.0, "bar_number": 1}],
         "subtracks": [],
         "song_sections": [],
@@ -145,18 +155,27 @@ def test_rejects_missing_rights_evidence_and_kpi_roles() -> None:
         ],
         "annotations": [],
     }
-    assert validate_corpus_metadata(payload) == [
+    errors = validate_corpus_metadata(payload)
+    assert {
         "audio-mix-001 rights evidence is incomplete",
         "kpi_definitions.section_alignment roles are incomplete",
         "kpi_definitions.cut_accuracy roles are incomplete",
         "kpi_definitions.sync_drift_under_10ms roles are incomplete",
-    ]
+    }.issubset(errors)
 
 
 def test_rejects_annotation_mutation_without_version_increase() -> None:
     payload = {
         "schema_version": 1,
         "objective": "OBJ-77",
+        "corpus_version": "1.1.0",
+        "previous_corpus_sha256": "c" * 64,
+        "previous_corpus_version": "1.0.0",
+        "corpus_policy": {
+            "mode": "update",
+            "audio_duration_slots": [],
+            "video_coverage": {"required_markers": [], "approval_id": "approval", "approver_id": "reviewer"},
+        },
         "kpi_definitions": {
             name: {"formula": "frozen", "owner_id": "kpi-owner", "reviewer_id": "kpi-reviewer"}
             for name in ("section_alignment", "cut_accuracy", "sync_drift_under_10ms")
@@ -168,17 +187,194 @@ def test_rejects_annotation_mutation_without_version_increase() -> None:
                 "relative_path": "audio-mix-001.json",
                 "sha256": "a" * 64,
                 "annotation_version": "1.0.0",
-                "registered_sha256": "b" * 64,
-                "registered_annotation_version": "1.0.0",
+                "previous_sha256": "b" * 64,
+                "previous_annotation_version": "1.0.0",
             }
         ],
     }
-    assert validate_corpus_metadata(payload) == [
-        "audio-mix-001 annotation mutation without a version increase"
-    ]
+    prior_registration = {
+        "schema_version": 1,
+        "registration_kind": "OBJ-77-ground-truth-prior",
+        "corpus_sha256": "c" * 64,
+        "corpus_version": "1.0.0",
+        "annotations": [{"media_id": "audio-mix-001", "sha256": "b" * 64, "annotation_version": "1.0.0"}],
+    }
+    assert "audio-mix-001 annotation mutation without a version increase" in validate_corpus_metadata(
+        payload,
+        prior_registration,
+    )
 
 
 def test_metadata_only_documents_do_not_close_the_live_gate(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus.json"
     corpus.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
     assert json.loads(corpus.read_text(encoding="utf-8")) == {"schema_version": 1}
+
+
+def _valid_corpus() -> dict:
+    slots = [
+        ("mix-1h", 3500.0, 3700.0),
+        ("mix-2h-a", 7100.0, 7300.0),
+        ("mix-2h-b", 7100.0, 7300.0),
+        ("mix-3h", 10700.0, 10900.0),
+        ("mix-4h", 14300.0, 14500.0),
+    ]
+    media: list[dict] = []
+    for index, (slot_id, minimum, maximum) in enumerate(slots):
+        media.append(
+            {
+                "media_id": f"audio-mix-{index + 1:03d}",
+                "media_type": "audio",
+                "relative_path": f"mix-{index + 1}.mp3",
+                "sha256": f"{index + 1:064x}",
+                "duration_seconds": (minimum + maximum) / 2,
+                "stream": {"codec_type": "audio", "codec_name": "mp3"},
+                "rights_evidence": {
+                    "approval_id": f"rights-audio-{index + 1}",
+                    "approver_id": "rights-reviewer",
+                    "approved": True,
+                    "provenance": "licensed test corpus",
+                    "source_type": "licensed",
+                    "real_media": True,
+                },
+                "profile_slot": slot_id,
+            }
+        )
+    markers = ("continuous", "cut", "fade", "dissolve")
+    for index in range(10):
+        media.append(
+            {
+                "media_id": f"video-{index + 1:03d}",
+                "media_type": "video",
+                "relative_path": f"video-{index + 1}.mp4",
+                "sha256": f"{index + 6:064x}",
+                "duration_seconds": 120.0,
+                "stream": {"codec_type": "video", "codec_name": "h264"},
+                "rights_evidence": {
+                    "approval_id": f"rights-video-{index + 1}",
+                    "approver_id": "rights-reviewer",
+                    "approved": True,
+                    "provenance": "licensed test corpus",
+                    "source_type": "licensed",
+                    "real_media": True,
+                },
+                "coverage_markers": [markers[index % len(markers)]],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "objective": "OBJ-77",
+        "corpus_version": "1.0.0",
+        "corpus_policy": {
+            "mode": "initial",
+            "audio_duration_slots": [
+                {"slot_id": slot_id, "min_duration_seconds": minimum, "max_duration_seconds": maximum}
+                for slot_id, minimum, maximum in slots
+            ],
+            "video_coverage": {
+                "required_markers": list(markers),
+                "approval_id": "coverage-approval-1",
+                "approver_id": "coverage-reviewer",
+            },
+        },
+        "kpi_definitions": {
+            name: {"formula": "frozen formula", "owner_id": "kpi-owner", "reviewer_id": "kpi-reviewer"}
+            for name in ("section_alignment", "cut_accuracy", "sync_drift_under_10ms")
+        },
+        "media": media,
+        "annotations": [
+            {
+                "media_id": entry["media_id"],
+                "relative_path": f"annotations/{entry['media_id']}.json",
+                "sha256": entry["sha256"],
+                "annotation_version": "1.0.0",
+            }
+            for entry in media
+        ],
+    }
+
+
+def _write_corpus(tmp_path: Path, payload: dict) -> Path:
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text(json.dumps(payload), encoding="utf-8")
+    return corpus
+
+
+def test_validate_corpus_rejects_annotation_free_corpus(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["annotations"] = []
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert "missing annotation registration for audio-mix-001" in errors
+
+
+def test_validate_corpus_rejects_duplicate_media_metadata(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["media"].append(payload["media"][0].copy())
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert "duplicate media_id: audio-mix-001" in errors
+    assert "duplicate media relative_path: mix-1.mp3" in errors
+    assert "duplicate media sha256" in errors
+
+
+def test_validate_corpus_rejects_duplicate_resolved_paths(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["media"][1]["relative_path"] = "nested/../mix-1.mp3"
+    payload["annotations"][1]["relative_path"] = "annotations/nested/../audio-mix-001.json"
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert any(error.startswith("duplicate resolved media path:") for error in errors)
+    assert any(error.startswith("duplicate resolved annotation path:") for error in errors)
+
+
+def test_validate_corpus_requires_frozen_audio_profile_policy(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["audio_duration_slots"] = []
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert "corpus_policy must define exactly five audio duration slots" in errors
+
+
+def test_validate_corpus_requires_human_approved_video_coverage(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["video_coverage"].pop("approver_id")
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert "corpus_policy.video_coverage approval is incomplete" in errors
+
+
+def test_annotation_structure_rejects_missing_and_unexpected_fields(valid_annotation: dict) -> None:
+    valid_annotation.pop("tags")
+    valid_annotation["unexpected"] = True
+    errors = validate_annotation(valid_annotation, duration_seconds=3600.0)
+    assert "annotation missing required field: tags" in errors
+    assert "annotation has unexpected field: unexpected" in errors
+
+
+def test_annotation_independence_normalizes_case_and_whitespace(valid_annotation: dict) -> None:
+    valid_annotation["reviewer_id"] = " ANNOTATOR-A "
+    assert "annotator_id and reviewer_id must differ" in validate_annotation(
+        valid_annotation,
+        duration_seconds=3600.0,
+    )
+
+
+def test_validate_corpus_update_requires_separate_prior_registration(tmp_path: Path) -> None:
+    payload = _valid_corpus()
+    payload["corpus_policy"]["mode"] = "update"
+    payload["previous_corpus_sha256"] = "f" * 64
+    payload["previous_corpus_version"] = "1.0.0"
+    errors = validate_corpus(_write_corpus(tmp_path, payload), tmp_path / "audio", tmp_path / "video")
+    assert "update mode requires --prior-registration" in errors
+
+
+def test_strict_cli_rejects_approved_root_override(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(
+        [
+            "--corpus",
+            str(tmp_path / "absent.json"),
+            "--audio-root",
+            str(tmp_path / "override-audio"),
+            "--video-root",
+            str(DEFAULT_VIDEO_ROOT),
+            "--strict",
+        ]
+    )
+    assert exit_code == 1
+    assert "--audio-root must equal the approved root in strict mode" in capsys.readouterr().err
