@@ -653,10 +653,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             return false;
 
         clip.IsAnalyzed = IsCompleted(result);
+        clip.Tags = result.Tags.ToList();
+        clip.TagSource = result.TagSource;
         clip.AnalysisStatus = result.Status;
         clip.StageStatus = result.StageStatus;
         clip.StageErrors = result.StageErrors;
         ApplyMotionResult(clip, result);
+        if (ReferenceEquals(SelectedClip, clip))
+            OnPropertyChanged(nameof(SelectedClip));
         if (SelectedSortOption == "Status: offen zuerst"
             && VideoClipsView is not ICollectionViewLiveShaping { IsLiveSorting: true })
         {

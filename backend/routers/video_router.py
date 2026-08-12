@@ -1027,17 +1027,19 @@ async def list_clips(
         va = analysis_snap.get(clip_id)
         if va is None and project_id is not None:
             va = _load_persisted_video_analysis(state, c, project_id)
+        analysis_truth = va if isinstance(va, dict) and va else c
         analysis_status = _video_analysis_status(
-            va,
+            analysis_truth,
             legacy_is_analyzed=(
                 bool(c.get("is_analyzed", False))
                 or clip_id in analysis_snap
             ),
         )
         is_analyzed = analysis_status == "completed"
-        stage_status = dict((va or {}).get("stage_status") or {})
-        stage_errors = dict((va or {}).get("stage_errors") or {})
-        stage_receipts = dict((va or {}).get("stage_receipts") or {})
+        tags = list(analysis_truth.get("tags") or [])
+        stage_status = dict(analysis_truth.get("stage_status") or {})
+        stage_errors = dict(analysis_truth.get("stage_errors") or {})
+        stage_receipts = dict(analysis_truth.get("stage_receipts") or {})
         # L-N3: video_hash aus in-memory state (None falls Hashing fehlgeschlagen
         # oder Clip aus aelterer DB-Persistenz ohne Hash-Spalte geladen wurde).
         # UI rendert daraus einen "CACHED"-Badge auf der VideoClip-Card.
@@ -1052,8 +1054,8 @@ async def list_clips(
         embedding_samples: Optional[int] = None
         has_embedding: bool = False
         tag_source: Optional[str] = None
-        if va:
-            motion = va.get("motion") or {}
+        if analysis_truth:
+            motion = analysis_truth.get("motion") or {}
             if motion:
                 _avg = motion.get("avg_motion")
                 _peak = motion.get("peak_motion")
@@ -1075,8 +1077,8 @@ async def list_clips(
                 elif avg_motion is not None:
                     motion_category = _classify_motion(avg_motion)
             # L-M8: embedding-Meta
-            _emb_dim = va.get("embedding_dim")
-            _emb_samples = va.get("embedding_samples")
+            _emb_dim = analysis_truth.get("embedding_dim")
+            _emb_samples = analysis_truth.get("embedding_samples")
             if _emb_dim is not None:
                 try:
                     embedding_dim = int(_emb_dim)
@@ -1087,8 +1089,8 @@ async def list_clips(
                     embedding_samples = int(_emb_samples)
                 except (TypeError, ValueError):
                     embedding_samples = None
-            has_embedding = bool(va.get("has_embedding", False))
-            tag_source = va.get("tag_source")
+            has_embedding = bool(analysis_truth.get("has_embedding", False))
+            tag_source = analysis_truth.get("tag_source")
 
         # L-N3: Felder die hier explizit als kwarg uebergeben werden, aus c_payload entfernen
         # damit kein TypeError "multiple values for keyword" auftritt (passiert nach analyze_video,
@@ -1098,12 +1100,13 @@ async def list_clips(
             "video_hash", "is_analyzed", "avg_motion", "peak_motion", "motion_category",
             "embedding_dim", "embedding_samples", "has_embedding", "tag_source",
             "analysis_status", "stage_status", "stage_errors",
-            "stage_receipts",
+            "stage_receipts", "tags",
         }
         c_payload = {k: v for k, v in c.items() if k not in _explicit_kwargs}
         result.append(
             VideoClipInfo(
                 **c_payload,
+                tags=tags,
                 is_analyzed=is_analyzed,
                 video_hash=video_hash_value,
                 avg_motion=avg_motion,
