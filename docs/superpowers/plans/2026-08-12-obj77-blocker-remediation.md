@@ -213,22 +213,23 @@ clips are V-11/T019 Wave 3 work, not Wave-0 requirements.
 ### Task 3: Close documentation-only Wave 0 and merge it
 
 **Files:**
-- Create: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt-v2.json`
+- Historical/rejected: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json` (v1; retained solely as an immutable rejected artifact).
+- Current authoritative output: `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt-v2.json`.
 
 **Interfaces:**
-- Consumes: the truthful Task-1 reservation-status receipt, approved Task-2 Ground-Truth registration and the immutable saved baseline.
-- Produces: one Wave-0 gate decision and the integration merge SHA; no product-code change. Every downstream Wave-0 receipt consumer MUST use `wave-0-unblock-receipt-v2.json` and treat `wave-0-unblock-receipt.json` as invalid/superseded.
+- Consumes: the truthful Task-1 reservation-status receipt, approved Task-2 Ground-Truth registration, immutable saved baseline, pre-merge verification, and the post-merge review invalidation of v1.
+- Produces: the authoritative Wave-0 gate decision with the integration merge SHA; no product-code change. Every downstream Wave-0 receipt consumer MUST use `wave-0-unblock-receipt-v2.json`; v1 is invalid/superseded and MUST NOT be consumed.
 
-- [ ] **Step 1: Verify the Wave-0 branch contains no product-code diff**
+- [ ] **Step 1: Pre-merge verification of the Wave-0 branch**
 
 ```powershell
 $base = git merge-base codex/obj77-wave0-foundation 8328d492f8b128b02ae1ce92a0e6e14d999b2af2
 git diff --name-only "$base..HEAD" | rg "^(src|backend|PBStudio.UI)/"
 ```
 
-Expected: no output. Changes under `specs/`, `docs/`, `scripts/requirements/` and contract tests are infrastructure/documentation, not product behavior.
+Recorded result: no output and raw `rg` exit 1; changes under `specs/`, `docs/`, `scripts/requirements/` and contract tests are infrastructure/documentation, not product behavior.
 
-- [ ] **Step 2: Record deferred reservations and validate Ground Truth**
+- [ ] **Step 2: Pre-merge deferred-reservation and Ground-Truth validation**
 
 ```powershell
 $env:PYTHONPATH = "src;."
@@ -244,7 +245,7 @@ strict KPI validation remains a later annotation gate. Reservation status does
 not count as final K-16, T003 or D-08 evidence and does not block the AMD-first
 Wave-0 merge.
 
-- [ ] **Step 3: Revalidate the saved Wave-0 baseline and SDD state**
+- [ ] **Step 3: Pre-merge baseline and SDD revalidation**
 
 ```powershell
 $env:PYTHONPATH = "src;."
@@ -255,29 +256,30 @@ git diff --check
 
 Expected: SDD open-valid, requirement registry green and no whitespace errors. Previously captured baseline failures remain baseline evidence; Wave 0 does not rewrite product code to close them.
 
-- [ ] **Step 4: Create the immutable Wave-0 unblock receipt v2**
+- [ ] **Step 4: Recorded historical v1 evidence commit — do not repeat**
 
-The v2 receipt must contain the current Git SHA, source receipt paths and hashes, exact commands and exit codes, start/end UTC and exactly these decision fields: `resources_reserved: false`, `external_release_gates_deferred: true`, `deferred_external_release_gates: ["intel_directml_system", "nvidia_directml_system", "lm_studio_maintenance_window", "four_hour_stress_window"]`, `reservation_validator_exit_code: 1`, `ground_truth_registered: true`, `product_code_changed: false` and `overall_status: pass_for_wave_0_amd_first`. The immutable v1 receipt is invalid/superseded and MUST NOT be consumed downstream.
+The pre-merge verification at source SHA `b63e04c113846731f820c8ee2a6c3b76ea6dd70c` historically created immutable v1 and committed it as `cb0daf3a2ae2f2bc771141c14855ec98cef7819b` with `docs(sdd): close obj77 wave0 amd-first foundation`. This recorded action is not a future recipe: v1 was later invalidated and MUST NOT be recreated or consumed downstream.
 
-- [ ] **Step 5: Commit Wave-0 evidence without changing completed T083**
+- [ ] **Step 5: Recorded historical integration merge — do not repeat**
 
-T083 was already completed by Task 2 and must not be edited again in this step.
-
-```powershell
-git add specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt-v2.json
-git commit -m "docs(sdd): close obj77 wave0 amd-first foundation"
-```
-
-- [ ] **Step 6: Verify the protected source worktree and merge Wave 0**
+The protected source worktree was verified with only its pre-existing changes. The integration branch then ran:
 
 ```powershell
-git -C C:\Users\david\Documents\Pb_studio_AMD_version status --short
 git switch codex/complete-requirements-remediation
 git merge --no-ff codex/obj77-wave0-foundation -m "merge: complete obj77 wave0 foundation"
-git rev-parse HEAD
 ```
 
-Expected: the protected worktree contains only its pre-existing changes; the merge succeeds. Record the integration SHA without marking later live gates complete.
+Recorded merge SHA: `47825043e506ebf2e2ecb7c1a9767cf126a27ce8`. T083 was already completed by Task 2 and was not changed.
+
+- [ ] **Step 6: Recorded post-merge review invalidation of v1 — do not rewrite it**
+
+Task review found two immutable-evidence defects in v1: its Ground-Truth SHA-256 was not the actual source hash, and its no-match `rg` pipeline recorded a normalized exit without the raw exit. v1 remains retained solely as the rejected historical artifact at its recorded path and hash; it is invalid/superseded for every downstream consumer.
+
+- [ ] **Step 7: Required/current authoritative post-merge v2 correction**
+
+Create v2 only after the merge SHA exists, on `codex/complete-requirements-remediation`. It MUST bind source SHA `b63e04c113846731f820c8ee2a6c3b76ea6dd70c`, merge SHA `47825043e506ebf2e2ecb7c1a9767cf126a27ce8`, v1 path `specs/00022-complete-requirements-remediation/evidence/wave-0-unblock-receipt.json` and SHA `a3e9992bd3655d81325da39ca6a1cf5f0de2c47506419cd457cdafcaf928bdf2`, both correction reasons, real source hashes (reservations `4cc06d93ebf18c3245ec3174924e0e1f00282c1d76d5f166e93f9b52140787f8`, Ground-Truth `df15c34452c5a250268958eb6b10935a9f8574a4c88311409965a5a78092b0b0`, baseline `15509371110ac85ea1fee729a1072170977bd787b171ef89cceaaa1cc6137621`), and raw no-match `rg` exit 1. It repeats the AMD-first decision fields: `resources_reserved: false`, `external_release_gates_deferred: true`, `deferred_external_release_gates: ["intel_directml_system", "nvidia_directml_system", "lm_studio_maintenance_window", "four_hour_stress_window"]`, `reservation_validator_exit_code: 1`, `ground_truth_registered: true`, `product_code_changed: false` and `overall_status: pass_for_wave_0_amd_first`.
+
+Recorded correction commit: `ecbf213d5f7fbbedb26d44a8416e2021e345b31f` with `fix(sdd): supersede obj77 wave0 receipt evidence`. v2 is the only authoritative downstream output and does not mark later live gates complete.
 
 ---
 
