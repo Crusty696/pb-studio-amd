@@ -77,8 +77,39 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-08 (OBJ-73 Remote PASS; geschützter Default-Branch `main`)
-- **Status (2026-08-08 — autoritativ):**
+- **Date:** 2026-08-09 (OBJ-75 gemerged; `main` == HEAD, Arbeitsbaum sauber)
+- **Status (2026-08-09 — autoritativ):**
+  - PR #28 (`codex/obj75-open-bug-fixes`) in `main` gemergt, Merge-SHA
+    `a1a745829f7854ef006e3942a12665cdb407ad28`. Keine offenen PRs; `main` bleibt
+    geschützter Default-Branch.
+  - OBJ-75 T001–T053 geschlossen; `.completed` und `.qc-passed` in
+    `specs/00020-obj75-open-bug-fixes` (Task-Digest `530e42ea…`, gebunden an
+    Commit `73e9e68`).
+  - Drei High-Risiken geschlossen: Chat-Tool/Projekt-Race (projektgebundene
+    Capability über den vollständigen Stream- und Tool-Turn), Projector-Replay
+    (stabile Projekt-/Event-UUIDs, Pending-Events, Checkpoints, exactly-once
+    Publish) und Cache-/Embedding-Recovery (immutable hashgeprüfte Generationen,
+    Startup-Gate, Owner-Adapter).
+  - QC laut `specs/00020-obj75-open-bug-fixes/qc-report.md`: breite
+    Python-Bestandsaufnahme **1450 passed / 13 skipped** (1 `BrokenBarrierError`
+    im T412-Last-Harness, danach 3/3 und 10/10 Stresskonvergenz), Native C#
+    **55/55**, WPF Release **0 Warnungen/0 Fehler**, A→B-Live-Smoke und zwei
+    14-View-GUI-Runden bestanden.
+  - **Ehrlich offen:** ein zweiter 17-Minuten-Gesamtlauf wurde auf
+    Nutzerentscheidung nicht ausgeführt; der Bericht behauptet keinen
+    nachträglich grünen Gesamtlauf, sondern die TR-369/TR-371-Konvergenz.
+- **Historischer Stand:** 2026-08-08/09 (OBJ-74 Resume, Pacing, Branch-Konvergenz)
+- **Status (OBJ-74 — abgeschlossen):**
+  - T001–T035 geschlossen; `.qc-passed` in
+    `specs/00019-deep-app-audit-resume-pacing`, gebunden an Commit `20792e7`.
+  - Belegt: Resume, Long-Mix-Checkpoint, Pacing-Provenienz, Branch-Konvergenz,
+    Live-API und 14-Tab-GUI. **1371 passed / 13 skipped / 0 failed**, Native C#
+    **54/54**, WPF Release **0/0**, OpenAPI-Snapshot 4/4.
+  - Restgrenzen: keine Partial-Checkpoints je Stem-Datei innerhalb eines
+    abgebrochenen Separationslaufs; `test_20s.mp4` meldet ehrlich `partial`
+    (SigLIP-Frame-Read). `src/pb_studio/audio/separator.py` blieb unverändert.
+- **Historischer Stand:** 2026-08-08 (OBJ-73 Release-Gate-Remediation)
+- **Status (2026-08-08 — OBJ-73, historisch):**
   - PR #22 mit allen Required Checks gemerged; `main` ist Default-Branch und
     gegen ungeprüfte Änderungen, Force-Pushes und Löschungen geschützt.
   - Acht High-Runtimebefunde behoben: Live-Beat-Cache, SSE-Abschlussjournal,
@@ -253,9 +284,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:** T415 nach expliziter Freigabe über PR, Required Checks und
-  geschützten Main-/Release-SHA belegen; anschließend T414 und `.qc-passed`
-  digestgebunden schließen. Moondream Caption bleibt bis zu einem
+- **Next Task:** keine offene SDD-Aufgabe. OBJ-72 T414/T415 sind mit OBJ-73
+  (PR #22) erledigt; OBJ-74 und OBJ-75 sind digestgebunden geschlossen. Offene
+  Punkte für die nächste Session: (a) P1-Restscope aus
+  `specs/00020-obj75-open-bug-fixes/residual-remediation-plan.md` —
+  Render-Retention, Config-Reload, Chat-Tokenstream — braucht ein eigenes
+  Feature-Workspace; (b) Bookkeeping-Drift in
+  `specs/00014-ki-mode-sync-and-fallbacks/tasks.md`: T001–T009 sind im Code
+  nachweisbar umgesetzt (`POST /models/mode`, `UpdateKiModeAsync`), die
+  Checkboxen aber nie abgehakt — nicht nachtragen ohne die digestgebundenen
+  Marker neu zu binden. Moondream Caption bleibt bis zu einem
   strict-DirectML-kompatiblen Decoder bewusst deaktiviert.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
