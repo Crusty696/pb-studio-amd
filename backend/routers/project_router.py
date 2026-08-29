@@ -647,6 +647,38 @@ async def open_project(
         raise HTTPException(status_code=404, detail=f"Projekt nicht gefunden: {request.path}")
 
     meta = _read_project_meta(project_path)
+
+    # Reopen desselben Projekts ist KEIN Wechsel. Der weitere Verlauf laedt den
+    # Medienkatalog und die Datei-Timeline in einen candidate_state, den
+    # _activate_project ueber install_project_state (app_state.py:421) als
+    # kompletten Laufzeitzustand einsetzt. Beim bereits offenen Projekt wuerde
+    # damit der aeltere Dateistand den RAM-Stand ersetzen - ein Pacing-Lauf, der
+    # noch nicht gespeichert wurde, waere ersatzlos weg.
+    # Der Guard steht bewusst VOR dem Laden: er soll den Austausch verhindern,
+    # nicht nachtraeglich reparieren.
+    with state._state_lock:
+        active_project = dict(state.current_project or {})
+    active_path = active_project.get("path")
+    if active_path and Path(active_path).resolve() == project_path:
+        logger.info(
+            "Projekt ist bereits geoeffnet, Reopen bleibt folgenlos: %s",
+            project_path,
+        )
+        return ProjectInfo(
+            name=meta.get("name", active_project.get("name", project_path.name)),
+            path=str(project_path),
+            db_project_id=active_project.get("db_project_id"),
+            audio_count=len(state.get_audio_clips_snapshot()),
+            video_count=len(state.get_video_clips_snapshot()),
+            # ODER-Semantik wie in def8f3d (:742): der RAM-Stand ist der
+            # aktuellere, aber eine vorhandene timeline.json darf nicht
+            # verschwiegen werden, nur weil der RAM gerade leer ist.
+            has_timeline=bool(state.get_timeline_snapshot())
+            or bool(meta.get("has_timeline")),
+            created_at=meta.get("created_at") or active_project.get("created_at"),
+            modified_at=meta.get("modified_at") or active_project.get("modified_at"),
+        )
+
     existing_project_id = _find_project_db_record_id(project_path)
     candidate_project_id = (
         existing_project_id if existing_project_id is not None else -1
