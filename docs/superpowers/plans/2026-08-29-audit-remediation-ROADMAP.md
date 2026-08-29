@@ -774,3 +774,129 @@ Material. Die Funktion hat in diesem Produkt keinen Anknüpfungspunkt.
 **C-13 und C-18 haben in diesem Plan noch keinen ausgearbeiteten Task** — sie sind im Bericht
 belegt, aber ich habe die Umsetzung nicht bis zum Schritt durchdacht. Das ist eine bekannte
 Lücke, keine Auslassung.
+
+---
+
+## Nachtrag 2026-08-29 — aus der verworfenen Planfassung gerettet
+
+Vor dem Löschen der älteren Fassung (`2026-08-29-audit-remediation-plan.md`,
+Root, 1106 Z., Titel „Fully Verified & Validated") wurde sie vollständig gegen
+dieses Dokument verglichen. Ergebnis: der weitaus größte Teil war redundant,
+widerlegt oder bezog sich auf den uncommitteten `patch.py`-Stand. **Alle 15
+Funktionsnamen ihrer Testcodeblöcke existieren in HEAD nicht** — die Tests wären
+mit `ImportError` gescheitert, was der Plan als „erwartetes Rot" ausgab. Fünf der
+genannten Dateipfade existieren ebenfalls nicht.
+
+**Vier Befunde standen aber nur dort, sind am Quelltext in HEAD bestätigt und
+fielen in diesem Dokument durch das Raster.** Die Codebeispiele der alten Fassung
+waren auch bei diesen vieren erfunden; die Defekte selbst wurden unabhängig
+nachgewiesen.
+
+### Task 3.7 — Pacing lädt CLAP ohne VRAM-Buchführung (C-07)
+
+**Dateien:** `backend/routers/pacing_router.py`, `src/pb_studio/services/pacing_service.py:103`,
+`src/pb_studio/pacing/clip_selector.py:1286`, `src/pb_studio/ai/smart_director.py:287/418`
+
+`with_gpu_task` kommt in `pacing_router.py` und `pacing_service.py` **0x** vor
+(selbst nachgezählt). Ein Pacing-Lauf lädt über `SmartDirector.get_dominant_mood`
+CLAP als ONNX-Session in den VRAM, ohne dass `VRAMBudgetManager` die Belegung je
+sieht. Die seit 2026-08-07 verdrahtete Sensor-Gegenprobe ist für diesen Pfad blind.
+
+Die Abdeckungstabelle dieses Dokuments verweist für C-07 auf „3.2 (+ eigener
+Task)" — Task 3.2 behandelt aber ausschließlich `enforce_size_limit`, Tombstones
+und Recovery-Retention, **kein Wort zu VRAM**. Der „eigene Task" existierte nicht.
+
+- [ ] **1.** Wächter auf den **Produzenten**, nicht auf den Arbiter: läuft ein
+      Pacing-Lauf mit aktiver Semantik durch `with_gpu_task`? Den Arbiter nicht
+      mocken — Lehre vom 2026-08-07, ein Test mit selbst injizierter Abhängigkeit
+      beweist nichts.
+- [ ] **2.** Ort entscheiden: um den Router-Endpunkt (grob, aber ehrlich) oder um
+      `get_dominant_mood`/`encode_text` im `SmartDirector`. Zweites kollidiert mit
+      Task 2.5 — **danach einplanen**.
+- [ ] **3.** `manage_vram`-Entscheidung dokumentieren. Von den drei bestehenden
+      Aufrufen setzen zwei `manage_vram=False`; entweder dieselbe Begründung
+      tragen oder echtes Budget führen.
+
+### Task 2.8 — Tote obere Reglerbereiche (H-Regler)
+
+**Dateien:** `advanced_pacing_engine.py:2024-2025` (auch `:1873/:1883/:2096/:2107`),
+`pacing_models.py:31`, `DirectorView.xaml:231/246/261/290/314`
+
+`PacingCut.__post_init__` klemmt `strength = max(0.0, min(1.0, strength))`. Die
+Engine multipliziert vorher mit 0.9 (Kick) bzw. 0.85 (Snare). Der Slider läuft bis
+2.0. Nachgerechnet:
+
+| Regler | wirksam bis | toter Reglerweg |
+|---|---|---|
+| Kick | 1.111 | **44 %** |
+| Snare | 1.176 | **41 %** |
+| Beat | 1.000 | **50 %** |
+
+Die obere Reglerhälfte verändert nichts, ohne jedes Signal an den Nutzer. Die
+Abdeckungstabelle mappt „H-Regler" auf Task 2.7 — der behandelt aber nur den toten
+`enable_motion_matching`-Schalter.
+
+- [ ] **1.** Test: `kick_weight=2.0` muss eine andere Cut-Liste erzeugen als
+      `kick_weight=1.2`. **Muss rot sein.**
+- [ ] **2.** Entscheiden — Sliderweg auf den wirksamen Bereich zurücknehmen
+      (billig, ehrlich) **oder** `strength` als unbeschränktes Gewicht führen und
+      erst bei der Normalisierung klemmen. Nicht beides halb.
+- [ ] **3.** Im selben Zug die vier weiteren Zeilen aus
+      `FUNKTIONSAUDIT_2026-08-29.md` (Z. 415-421: `MinCutInterval`,
+      `MaxCutInterval`, `trigger_settings.min_cut_interval` mit 0 Engine-Lesern) —
+      gleiche Ursachenklasse.
+
+### Task 2.9 — Stiller Degradationspfad im Pacing (H-Fake)
+
+**Datei:** `src/pb_studio/services/pacing_service.py:1052`, `:1059-1062`, `:1394`,
+`:1410-1413`, Fallback bei `:1481`
+
+Vier Pfade fangen `Exception` und liefern `_generate_time_grid_fallback` als
+**reguläres Ergebnis** zurück. Das Zeitraster arbeitet allein auf
+`target_duration` — ohne Beats, Trigger, Struktur, Anker. Der Router meldet
+`cut_count=N`, die UI zeigt „N Cuts generiert". **Ein Totalausfall der
+musikalischen Analyse ist für den Nutzer von einem Erfolg nicht unterscheidbar**;
+er steht nur im `backend.log`. In diesem Dokument bisher gar nicht vorhanden.
+
+- [ ] **1.** Test: Engine wirft → die Antwort darf nicht wie ein normaler Erfolg
+      aussehen. **Muss rot sein.**
+- [ ] **2.** Herkunft mitliefern statt den Fallback zu streichen — er ist der
+      letzte Rettungsanker. `generation_mode`/`degraded`-Feld in `CutListResponse`,
+      vom Fallback gesetzt.
+- [ ] **3.** WPF: Feld sichtbar machen (Schema, `openapi.snapshot.json`,
+      `ApiClient.cs`, XAML, Release-Build). **Achtung:** genau diese Kette ist bei
+      `rejected_clips` zweimal gerissen — Task 2.3/6.1 zuerst entscheiden.
+
+### Task 3.8 — Synthetische Subtrack-Grenzen im 120-s-Raster (C-13)
+
+**Datei:** `src/pb_studio/audio/subtrack_detector.py:56`, `:220-292`, `:173-175`
+
+Nur für Mixe > 600 s. Pro 120-s-Chunk wird **ein** `librosa.beat.beat_track`
+gerechnet und als `np.full(n_bins, tempo_value)` über den ganzen Chunk konstant
+gehalten. Dadurch ist `s3 = |diff(tempo)|` (`:173-175`) überall exakt 0 **außer an
+Vielfachen von 120 s**; `_normalize` hebt diese Einzelwerte auf 1.0, und
+`W_TEMPO = 0.20` gibt ihnen ein Fünftel der fusionierten Novelty. Kein Overlap
+zwischen den Chunks. **20 % der Novelty sind bei jedem langen Mix ein Artefakt des
+Dekodierrasters** — und lange DJ-Mixe sind der dokumentierte Kernanwendungsfall.
+
+Dieses Dokument benannte die Lücke („C-13 | eigener Task | offen"), hatte aber
+keinen Task und keinen Dateizeiger.
+
+- [ ] **1.** Test: synthetisches 15-Minuten-Signal mit konstantem Tempo → keine
+      Grenze bei 120/240/360 s. **Muss rot sein.**
+- [ ] **2.** Tempo interpolieren statt treppen (oder mehrere `beat_track`-Fenster
+      je Chunk), Chunks mit Overlap laden — dann sind auch `onset_strength` und
+      `chroma_cqt` an den Nähten nicht mehr angeschnitten.
+- [ ] **3.** Gegenprobe an einer echten langen Datei: die Grenzen dürfen sich bei
+      Änderung von `LONG_MIX_CHUNK_SEC` **nicht verschieben**. Das ist der
+      eigentliche Beweis.
+
+### Ausdrücklich NICHT übernommen
+
+**C-10 (sequentielles `cap.grab()` statt `CAP_PROP_POS_FRAMES`)** — in HEAD nicht
+vorhanden. `video_router.py` nutzt bei `:1673` und `:2253` bereits
+`cap.set(cv2.CAP_PROP_POS_FRAMES, ...)`. Die Grab-Schleife existiert
+**ausschließlich im uncommitteten `patch.py`-Stand**. Wer sie „repariert", fixt
+eine fremde, nie committete Änderung — derselbe Fehler wie beim `mel_bands`-Fall
+(`d1724f6`, revertiert in `1d9a8d4`). Solange über `patch.py` nicht entschieden
+ist, ist Task 3.3 in diesem Punkt gegenstandslos.
