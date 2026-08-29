@@ -351,6 +351,57 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
         return False
 
 
+def persist_timeline_for_context(state: AppState, project_root: Path) -> bool:
+    """Sichert die RAM-Timeline nach timeline.json, bevor der State verworfen wird.
+
+    Die Pacing-Engine schreibt ihr Ergebnis nur über ``state.set_timeline(...)``.
+    Ohne diesen Aufruf verliert jeder Projektwechsel und jedes Close die
+    generierte Timeline ersatzlos.
+
+    Bewusst OHNE ``state.project_commit(...)``-Guard: an beiden Aufrufstellen
+    (``close_project``, ``_activate_project``) existiert kein
+    ``ProjectOperationContext`` — der Kontext wird dort gerade invalidiert. Der
+    Schreibvorgang gehört zum alten Projekt und darf deshalb nicht an dessen
+    Epoch-Guard hängen, sonst wäre er per Konstruktion immer blockiert.
+
+    Returns:
+        True wenn geschrieben wurde, False wenn es nichts zu sichern gab.
+    """
+    timeline = _normalize_timeline_entries(state.get_timeline_snapshot())
+    if not timeline:
+        return False
+
+    with state._state_lock:
+        audio_path = state.current_audio_path
+
+    # Format wörtlich wie in _save_project_in_context — der einzige Leser
+    # (_load_timeline_into_state) erwartet ein Dict, keine nackte Liste.
+    payload = {
+        "audio_path": audio_path,
+        "timeline": timeline,
+        "saved_at": _utc_now_iso(),
+    }
+
+    path = _timeline_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        os.replace(str(tmp), str(path))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    logger.info(
+        "Timeline vor Projektwechsel/Close gesichert: %d Cuts in %s",
+        len(timeline),
+        path,
+    )
+    return True
+
+
 async def _activate_project(
     state: AppState,
     project_path: Path,
@@ -359,6 +410,22 @@ async def _activate_project(
 ) -> None:
     """Serialisiert Brain-Bind, Epoch-Wechsel, Task-Drain und State-Swap."""
     async with state.project_lifecycle_lock:
+        # Timeline des NOCH aktiven alten Projekts sichern, bevor der Kontext
+        # invalidiert und der Runtime-State ersetzt wird. current_project zeigt
+        # hier noch auf A; genullt wird es erst in state.reset().
+        with state._state_lock:
+            previous_project = dict(state.current_project or {})
+        previous_root = previous_project.get("path")
+        if previous_root:
+            try:
+                persist_timeline_for_context(state, Path(previous_root))
+            except Exception as exc:
+                logger.error(
+                    "Timeline des vorherigen Projekts konnte vor dem Wechsel "
+                    "nicht gesichert werden: %s",
+                    exc,
+                    exc_info=True,
+                )
         # Alte Commits zuerst sperren und registrierte Tasks beenden. Dadurch
         # kann während des externen Brain-Rebinds kein A-Job mehr nach B schreiben.
         state.invalidate_project_context()
@@ -765,6 +832,18 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
             if not state.current_project:
                 raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
             name = state.current_project.get("name", "Unbekannt")
+            project_root = state.current_project.get("path")
+        # Timeline sichern, bevor state.reset() sie verwirft. Ein Schreibfehler
+        # darf das Schliessen nicht verhindern.
+        if project_root:
+            try:
+                persist_timeline_for_context(state, Path(project_root))
+            except Exception as exc:
+                logger.error(
+                    "Timeline konnte vor dem Schliessen nicht gesichert werden: %s",
+                    exc,
+                    exc_info=True,
+                )
         state.invalidate_project_context()
         _, pending = await state.cancel_and_drain_project_tasks()
         # In-flight Render-Threads nutzen weiterhin ihre bestehenden Cancel-Flags.
