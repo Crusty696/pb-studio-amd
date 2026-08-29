@@ -258,7 +258,7 @@ def _write_project_meta(project_path: Path, meta: dict) -> None:
 
 def _restore_file_snapshot(path: Path, snapshot: bytes | None) -> None:
     """Restore one save-owned file to its exact pre-save bytes."""
-    rollback_path = path.with_suffix(f"{path.suffix}.rollback.tmp")
+    rollback_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.rollback.tmp")
     try:
         if snapshot is None:
             path.unlink(missing_ok=True)
@@ -801,8 +801,11 @@ def _save_project_in_context(
             "Bestehende Projektdateien konnten nicht gesichert werden",
             exc,
         ) from exc
-    timeline_stage = timeline_path.with_suffix(f"{timeline_path.suffix}.save.tmp")
-    meta_stage = meta_path.with_suffix(f"{meta_path.suffix}.save.tmp")
+    # Ein Token fuer beide Stages: im Fehlerfall bleibt erkennbar, dass beide
+    # Reste zum selben Saveversuch gehoeren. Vorbild: ``set_anchors``.
+    stage_token = uuid.uuid4().hex
+    timeline_stage = timeline_path.with_name(f".{timeline_path.name}.{stage_token}.tmp")
+    meta_stage = meta_path.with_name(f".{meta_path.name}.{stage_token}.tmp")
     durable_mutated = False
     try:
         if timeline_payload is not None:
