@@ -61,7 +61,7 @@ def _reset_brain_project_state(phase: str) -> None:
     try:
         clear_project_state()
     except Exception as exc:
-        logging.getLogger("conftest").warning(
+        logging.getLogger(__name__).warning(
             "clear_project_state() hat im %s geworfen - die Testisolation ist "
             "moeglicherweise unvollstaendig",
             phase,
