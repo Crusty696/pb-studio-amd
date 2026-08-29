@@ -1472,7 +1472,10 @@ public record VideoAnalysisResult(
     string Status = "completed",
     Dictionary<string, string>? StageStatus = null,
     Dictionary<string, string>? StageErrors = null);
-public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
+public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration, List<ModeDegradation>? Degradations = null);
+// FR-362: ein angeforderter Pacing-Modus, der mangels Datengrundlage nicht wirkte.
+// Leere/fehlende Liste = jeder angeforderte Modus hatte eine echte Grundlage.
+public record ModeDegradation(string Mode, string Reason, int ScoredClips, int TotalClips);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(

@@ -82,12 +82,27 @@ class CutListEntrySchema(BaseModel):
         return self.end_time - self.start_time
 
 
+class ModeDegradationSchema(BaseModel):
+    """Ein angeforderter Pacing-Modus, der mangels Datengrundlage nicht wirkte.
+
+    FR-362: ein Modus darf nicht still auf Defaultwerte zurückfallen und dabei
+    als aktiv gemeldet werden. Wenn kein einziger Clip bewertbar ist, wirkt der
+    Modus als uniformer Faktor — also gar nicht. Das gehört sichtbar gemacht.
+    """
+    mode: str
+    reason: str
+    scored_clips: int = 0
+    total_clips: int = 0
+
+
 class CutListResponse(BaseModel):
     """Response: Generierte Cut-Liste."""
     cuts: list[CutListEntrySchema] = []
     total_duration: float = 0.0
     cut_count: int = 0
     average_cut_duration: float = 0.0
+    # Leer = jeder angeforderte Modus hatte eine echte Datengrundlage.
+    degradations: list[ModeDegradationSchema] = []
 
 
 class TimelineEntrySchema(BaseModel):

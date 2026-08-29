@@ -1233,12 +1233,23 @@ class PacingService:
                 if cid is not None and ak:
                     video_keys_map[cid] = ak
             pacing_engine.clip_selector.video_keys = video_keys_map
-            logger.info(
-                "Audit E1 + L-K4: use_key_matching aktiviert (audio_key=%r, "
-                "%d/%d video_keys verfuegbar) — Camelot-Wheel Score in "
-                "clip_selector._key_compatibility_score wirksam",
-                cached_audio_key, len(video_keys_map), len(clips),
-            )
+            if video_keys_map and cached_audio_key:
+                logger.info(
+                    "Audit E1 + L-K4: use_key_matching aktiviert (audio_key=%r, "
+                    "%d/%d video_keys verfuegbar) — Camelot-Wheel Score in "
+                    "clip_selector._key_compatibility_score wirksam",
+                    cached_audio_key, len(video_keys_map), len(clips),
+                )
+            else:
+                # Reached only if a caller bypasses the router degrade above.
+                # Without a scorable clip every candidate gets the same neutral
+                # factor, so the mode cannot influence the ranking at all.
+                logger.warning(
+                    "use_key_matching ohne Wirkung: audio_key=%r, %d/%d "
+                    "video_keys verfuegbar — jeder Clip erhaelt denselben "
+                    "neutralen Faktor, das Ranking bleibt unveraendert",
+                    cached_audio_key, len(video_keys_map), len(clips),
+                )
         else:
             pacing_engine.clip_selector.use_key_matching = False
             pacing_engine.clip_selector.audio_key = None

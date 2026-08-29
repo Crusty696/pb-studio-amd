@@ -3703,6 +3703,14 @@
             "type": "number",
             "title": "Average Cut Duration",
             "default": 0.0
+          },
+          "degradations": {
+            "items": {
+              "$ref": "#/components/schemas/ModeDegradationSchema"
+            },
+            "type": "array",
+            "title": "Degradations",
+            "default": []
           }
         },
         "type": "object",
@@ -3889,6 +3897,35 @@
           "count"
         ],
         "title": "HistoryResponse"
+      },
+      "ModeDegradationSchema": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "scored_clips": {
+            "type": "integer",
+            "title": "Scored Clips",
+            "default": 0
+          },
+          "total_clips": {
+            "type": "integer",
+            "title": "Total Clips",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "reason"
+        ],
+        "title": "ModeDegradationSchema",
+        "description": "Ein angeforderter Pacing-Modus, der mangels Datengrundlage nicht wirkte.\n\nFR-362: ein Modus darf nicht still auf Defaultwerte zurückfallen und dabei\nals aktiv gemeldet werden. Wenn kein einziger Clip bewertbar ist, wirkt der\nModus als uniformer Faktor — also gar nicht. Das gehört sichtbar gemacht."
       },
       "ModeRequest": {
         "properties": {
@@ -4709,7 +4746,8 @@
           "audio_path": {
             "type": "string",
             "title": "Audio Path",
-            "description": "Audio-Quell-Pfad"
+            "description": "Audio-Quell-Pfad",
+            "default": ""
           },
           "quality": {
             "$ref": "#/components/schemas/RenderQuality",
@@ -4755,8 +4793,7 @@
         },
         "type": "object",
         "required": [
-          "output_path",
-          "audio_path"
+          "output_path"
         ],
         "title": "RenderRequest",
         "description": "Request: Rendering starten."

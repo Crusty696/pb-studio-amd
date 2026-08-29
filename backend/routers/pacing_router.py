@@ -32,6 +32,7 @@ from ..media_path_policy import (
 from ..schemas.common import validate_timeline, StatusResponse
 from ..schemas.pacing_schemas import (
     PacingConfigSchema, TriggerSettingsSchema, CutListResponse, CutListEntrySchema,
+    ModeDegradationSchema,
     TimelineResponse, TimelineEntrySchema, TimelineUpdateRequest,
     PreviewRequest, PreviewResponse,
 )
@@ -206,17 +207,55 @@ def _pacing_stage_payload_is_valid(
     return False
 
 
+# Stages whose source data can be legitimately absent without anything failing.
+# A video without an audio track cannot carry a key — video_router records that
+# as "unavailable" with no stage error (video_router.py, audio_key branch). Such
+# a clip stays in the run and is reported as unscored; the selector already
+# handles a missing key natively. Motion and embedding are always producible
+# from a decodable video, so they are deliberately NOT listed here.
+_CAPABILITY_OPTIONAL_STAGES: frozenset[tuple[str, str]] = frozenset(
+    {("video", "audio_key")}
+)
+
+
+def _stage_is_absent_by_capability(
+    domain: str,
+    stage: str,
+    payload: dict[str, Any],
+    status: str,
+) -> bool:
+    """True when "unavailable" is a truthful capability result, not a defect.
+
+    The same status is written by video_router's exception branch, so a recorded
+    stage error keeps the stage blocking. Only an error-free "unavailable" on a
+    capability-optional stage is waived.
+    """
+    if status != "unavailable":
+        return False
+    if (domain, stage) not in _CAPABILITY_OPTIONAL_STAGES:
+        return False
+    errors = payload.get("_stage_errors") or payload.get("stage_errors") or {}
+    if not isinstance(errors, dict):
+        return False
+    return not errors.get(stage)
+
+
 def _missing_pacing_stages(
     domain: str,
     payload: dict[str, Any],
     required_stages: list[str],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Return blocking stages and the stages waived as absent-by-capability."""
     status_map = payload.get("_stage_status") or payload.get("stage_status") or {}
     if not isinstance(status_map, dict):
         status_map = {}
     missing = []
+    waived = []
     for stage in required_stages:
         status = str(status_map.get(stage) or "missing")
+        if _stage_is_absent_by_capability(domain, stage, payload, status):
+            waived.append(stage)
+            continue
         payload_valid = _pacing_stage_payload_is_valid(domain, stage, payload)
         if status != "completed" or not payload_valid:
             missing.append(
@@ -226,15 +265,19 @@ def _missing_pacing_stages(
                     "payload_valid": payload_valid,
                 }
             )
-    return missing
+    return missing, waived
 
 
 def _validate_pacing_analysis_preflight(
     config: PacingConfigSchema,
     audio_analysis: dict[str, Any],
     video_analysis_by_clip: dict[int, dict[str, Any]],
-) -> None:
-    """Block generation when an enabled Pacing mode lacks truthful analysis."""
+) -> dict[str, Any]:
+    """Block generation when an enabled Pacing mode lacks truthful analysis.
+
+    Returns a report of what the run can actually score, so the caller can
+    degrade a mode honestly instead of running it as a silent no-op.
+    """
     required_audio = ["beats"]
     if config.use_structure_awareness:
         required_audio.append("structure")
@@ -249,23 +292,30 @@ def _validate_pacing_analysis_preflight(
     if config.use_key_matching:
         required_video.append("audio_key")
 
-    missing_audio = _missing_pacing_stages(
+    missing_audio, _ = _missing_pacing_stages(
         "audio",
         audio_analysis if isinstance(audio_analysis, dict) else {},
         required_audio,
     )
     missing_video = []
+    key_unscored_clips: list[int] = []
+    key_scored_clips = 0
     for clip_id in config.video_clip_ids:
         payload = video_analysis_by_clip.get(clip_id)
         if payload is None:
             payload = video_analysis_by_clip.get(str(clip_id), {})
-        stages = _missing_pacing_stages(
+        stages, waived = _missing_pacing_stages(
             "video",
             payload if isinstance(payload, dict) else {},
             required_video,
         )
         if stages:
             missing_video.append({"clip_id": clip_id, "stages": stages})
+        if config.use_key_matching:
+            if "audio_key" in waived:
+                key_unscored_clips.append(clip_id)
+            elif not any(entry["stage"] == "audio_key" for entry in stages):
+                key_scored_clips += 1
 
     if missing_audio or missing_video:
         raise HTTPException(
@@ -287,6 +337,11 @@ def _validate_pacing_analysis_preflight(
                 },
             },
         )
+
+    return {
+        "key_scored_clips": key_scored_clips,
+        "key_unscored_clips": key_unscored_clips,
+    }
 
 
 @router.post(
@@ -356,11 +411,45 @@ async def _generate_cut_list_for_project(
         if _requires_video_analysis(config)
         else {}
     )
-    _validate_pacing_analysis_preflight(
+    preflight_report = _validate_pacing_analysis_preflight(
         config,
         cached_analysis,
         video_analysis_snapshot,
     )
+
+    # FR-362: a mode without a single scorable clip multiplies every candidate
+    # by the same neutral factor — a guaranteed no-op. Switch it off for real
+    # and report it, instead of letting the UI show it as active.
+    degradations: list[ModeDegradationSchema] = []
+    if config.use_key_matching and preflight_report["key_scored_clips"] == 0:
+        unscored = len(preflight_report["key_unscored_clips"])
+        total_clips = len(config.video_clip_ids)
+        degradations.append(
+            ModeDegradationSchema(
+                mode="key_matching",
+                reason=(
+                    "Kein ausgewählter Clip trägt eine auswertbare Tonart "
+                    "(keine Tonspur im Video). Tonart-Matching bleibt ohne Wirkung "
+                    "und wurde für diesen Lauf abgeschaltet."
+                ),
+                scored_clips=0,
+                total_clips=total_clips,
+            )
+        )
+        config = config.model_copy(update={"use_key_matching": False})
+        # publish_log geht nur an die SSE-Konsole; der Dauerbeleg gehoert ins
+        # Backend-Log, sonst ist der Degrade in Nachanalysen wieder unsichtbar.
+        logger.warning(
+            "Tonart-Matching abgeschaltet: 0/%d Clips tragen eine auswertbare "
+            "Tonart — der Modus haette jeden Kandidaten gleich gewichtet",
+            unscored,
+        )
+        await publish_log(
+            "Tonart-Matching abgeschaltet: keine bewertbare Tonart",
+            level="warning",
+            source="pacing.generate",
+            detail=f"scored=0/{unscored} Clips",
+        )
 
     try:
         import time as _time
@@ -520,6 +609,7 @@ async def _generate_cut_list_for_project(
             total_duration=total_dur,
             cut_count=len(cuts),
             average_cut_duration=round(avg_dur, 2),
+            degradations=degradations,
         )
     except asyncio.CancelledError:
         raise
