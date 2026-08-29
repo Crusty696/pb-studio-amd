@@ -338,8 +338,10 @@ aelteren Dateistand ersetzt - ein noch nicht gespeicherter Pacing-Lauf war
 danach weg.
 
 Der Guard steht vor dem Laden und macht den Reopen zu einem No-Op, der den
-aktuellen Zustand zurueckmeldet. has_timeline kommt dabei aus dem RAM, nicht
-aus project.json - das ist der aktuellere der beiden Werte.
+aktuellen Zustand zurueckmeldet. has_timeline kommt dabei aus dem RAM ODER aus
+project.json - der RAM-Stand ist der aktuellere, aber eine vorhandene
+timeline.json darf nicht verschwiegen werden, nur weil der RAM gerade leer ist.
+Das erhaelt die ODER-Semantik aus def8f3d.
 
 Bewusste Einschraenkung: ein echtes "von Platte neu laden" ist ueber diesen
 Endpunkt nicht mehr moeglich. Es war es vorher auch nicht sinnvoll, weil es
