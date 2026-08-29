@@ -11,6 +11,7 @@ Kein Auth, kein HTTPS, kein Multi-User.
 import asyncio
 import logging
 import os
+import shutil
 import sys
 import threading
 import time
@@ -125,6 +126,39 @@ _start_time = time.time()
 def get_uptime() -> float:
     """Gibt die Server-Uptime in Sekunden zurück."""
     return time.time() - _start_time
+
+
+_STALE_TEMP_MAX_AGE_SECONDS = 24 * 3600
+
+
+def _sweep_stale_temp_artifacts(proj_root: Path) -> int:
+    """Entfernt verwaiste Render-Temp-Dirs und Stage-Dateien aelter als 24h.
+
+    Die Altersgrenze ist nicht optional: ohne sie wuerde der Sweep die
+    Stage-Datei eines gerade laufenden Saves loeschen.
+    """
+    threshold = time.time() - _STALE_TEMP_MAX_AGE_SECONDS
+    cleaned = 0
+    if not proj_root.exists():
+        return cleaned
+    for temp_dir in proj_root.rglob(".temp_render"):
+        try:
+            mtime = temp_dir.stat().st_mtime
+            if mtime < threshold:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                cleaned += 1
+        except Exception as cleanup_err:
+            logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
+    # Verwaiste Stage-Dateien der atomaren Schreibpfade (".<name>.<uuid>.tmp").
+    # pathlib.rglob matcht Dotfiles, glob.glob nicht.
+    for stale in proj_root.rglob(".*.tmp"):
+        try:
+            if stale.is_file() and stale.stat().st_mtime < threshold:
+                stale.unlink(missing_ok=True)
+                cleaned += 1
+        except Exception as cleanup_err:
+            logger.debug(f"  stage-cleanup skipped {stale}: {cleanup_err}")
+    return cleaned
 
 
 @asynccontextmanager
@@ -267,26 +301,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # M8-Fix (I-M2, 2026-05-20): Startup-Cleanup von verwaisten temp-Dirs aelter
     # als 24h. Vor Fix: temp/ wurde nur bei Render-Cancel/Fail aufgeraeumt
     # (_cleanup_render_temps), nach Crash blieben .temp_render-Verzeichnisse mit
-    # Stale-Files liegen. Jetzt: Startup-sweep aller .temp_render-Dirs > 24h.
+    # Stale-Files liegen. Seit die Save-Pfade eindeutige uuid4-Stage-Namen
+    # benutzen, ueberschreibt kein spaeterer Save mehr die Leiche eines harten
+    # Abbruchs; der Sweep greift deshalb auch verwaiste ".<name>.<uuid>.tmp".
     try:
-        import time
-        import shutil
-        from pathlib import Path
-        threshold = time.time() - 24 * 3600
-        cleaned = 0
-        # Project-Dir scan nach .temp_render
-        proj_root = Path(config.project_dir)
-        if proj_root.exists():
-            for temp_dir in proj_root.rglob(".temp_render"):
-                try:
-                    mtime = temp_dir.stat().st_mtime
-                    if mtime < threshold:
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-                        cleaned += 1
-                except Exception as cleanup_err:
-                    logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
+        cleaned = _sweep_stale_temp_artifacts(Path(config.project_dir))
         if cleaned:
-            logger.info(f"  Stale temp-Dirs entfernt: {cleaned} (älter als 24h)")
+            logger.info(f"  Stale temp-Artefakte entfernt: {cleaned} (älter als 24h)")
     except Exception as e:
         logger.warning(f"  temp-Cleanup-on-Startup übersprungen: {e}")
 
