@@ -77,15 +77,37 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-29 (Vollständiger Funktionsaudit, 15 Agenten)
+- **Date:** 2026-08-29 (Funktionsaudit + Reparaturplan 01 abgearbeitet)
 - **Audit 2026-08-29:** ~243 Befunde (18 CRITICAL, 61 HIGH, 74 MEDIUM).
-  Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Vollsuite **10 failed / 1492 passed /
-  13 skipped / 2 errors** — der bisher geführte Wert 1291 stimmt nicht mehr.
-  Kernbefund: die Ketten brechen an den Übergabestellen zwischen Domänen, nicht
-  innerhalb. Der uncommittete Stand (892 Z., maschinell via `patch.py` erzeugt)
-  ist NICHT committfähig; zwei projekteigene Guard-Tests sind rot.
-  Die Testsuite selbst ist unzuverlässig: `--basetemp` wird während des Laufs
-  gelöscht, der DirectML-Adapter ist gefakt, die Owner-Capability global gepatcht.
+  Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Kernbefund: die Ketten brechen an den
+  Übergabestellen zwischen Domänen, nicht innerhalb — und die Tests sind
+  durchgehend domänenintern.
+  Der uncommittete Stand (892 Z., maschinell via `patch.py` erzeugt) ist NICHT
+  committfähig und liegt weiterhin unangetastet im Arbeitsbaum (28 Einträge).
+  **Korrektur zur ersten Fassung:** die gemeldeten „10 failed / 2 errors" waren
+  ein Messartefakt aus sieben parallel laufenden Agenten mit geteiltem
+  `basetemp`. Sequenziell: 7 failed / 1497 passed / 0 errors, alle 7 zuordenbar,
+  5 davon aus dem `patch.py`-Stand. `--basetemp` wird NICHT vom Produktionscode
+  gelöscht und darf NICHT aus `pytest.ini` entfernt werden — ohne die Option legt
+  pytest einen `pytest-current`-Symlink an, der auf dieser Maschine jeden Lauf mit
+  `PermissionError: [WinError 5]` bricht. Bestehen bleibt: der DirectML-Adapter
+  ist testseitig gefakt, die Owner-Capability global gepatcht — „grün" beweist
+  keine Funktion auf der Hardware.
+- **Reparaturplan 01 (Datenverlust) — abgeschlossen, 8 lokale Commits:**
+  `Tests/`-Wächter gegen doppelte Dict-Schlüssel; drei verschluckte
+  Persistenzfehler laut gemacht (fail-closed Unbind über neues
+  `BrainService.force_unbind_project_state`, zwei atexit-Save-Handler melden und
+  hinterlassen einen in `_load_index` gelesenen Dirty-Marker); Timeline wird vor
+  Close und Projektwechsel persistiert (`persist_timeline_for_context`); Save-Pfad
+  auf eindeutige versteckte Stage-Namen gehärtet.
+  Vollsuite danach: **7 failed / 1522 passed / 13 skipped / 0 errors** (31:12) —
+  dieselben 7 Fehler wie vorher, keine neuen; +25 vollständig zugeordnet.
+  **Prozesslehre dieser Session:** von vier geplanten Tasks war genau einer
+  fachlich korrekt. Zwei hätten still nichts bewirkt, einer behob gar keinen
+  erreichbaren Bug. Zwei Fixes hätten neue Defekte erzeugt (Verbindungsleck,
+  Reopen-Datenverlust). Ein eigener Commit (`d1724f6`) hat eine fremde
+  Arbeitsbaum-Änderung mitgenommen und dabei einen Fix behauptet, der keiner war
+  — revertiert in `1d9a8d4`, Message bewusst nicht umgeschrieben.
 - **Historischer Stand:** 2026-08-11 (OBJ-76 Runtime-Wahrheit; 18/20 Tasks belegt)
 - **Current Status:** Launcher/LHM/Capture, Shutdown-Persistenz, SigLIP-Gate,
   Scene-Ground-Truth und Recovery-Dry-Run sind fokussiert und live belegt.
