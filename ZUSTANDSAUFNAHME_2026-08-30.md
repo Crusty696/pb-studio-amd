@@ -176,6 +176,43 @@ im Schema und im Snapshot, fehlen im C#-Record. CLAUDE.md führt seit 2026-08-06
 `backend__schemas__common__StatusResponse`. Modulverkettete Namen, die jeder
 Generator so übernimmt.
 
+### B-7a · Etwas schreibt zur Laufzeit in `config.json` — Schreiber nicht identifiziert
+**SELBST BEOBACHTET, Ursache OFFEN.**
+
+Ich hatte die `task_overrides` in `config.json` bewusst auf dem HEAD-Stand
+belassen (`qwen3.5-9b`); `git status` war beim Push um 22:5x sauber. Um
+**23:09:07** stand exakt die verworfene Änderung wieder in der Datei — alle
+vier Chat-Aufgaben auf `qwen2.5-vl-7b-instruct`, also auf das Vision-Modell.
+Ich habe sie nicht geschrieben.
+
+**Der Mechanismus, der so etwas ermöglicht, ist belegt:**
+`ConfigManager.set()` (`config_manager.py:154-157`) schreibt über
+`save_config()` die **gesamte** In-Memory-Konfiguration zurück. Wer also
+irgendeinen Abschnitt setzt — etwa `health_router.py:99` das VRAM-Limit unter
+`hardware` — persistiert dabei auch jede fremde Veränderung an `ai`. Und
+`ConfigManager` ist ein Singleton (`__new__`, `_instance`): wer ihn zuerst
+real instanziiert, legt `config_file` auf die Repo-Datei fest.
+
+**Was ich ausgeschlossen habe** (je eigener Lauf mit Hash-Vergleich vorher/nachher):
+`test_t357_models_router_persistence.py`, `test_model_registry.py`,
+`test_t357_model_inventory_receipts.py`,
+`test_t357_gpu_wpf_nullability_contracts.py`, `test_config_manager.py`,
+`test_config_manager_paths.py` — alle sechs lassen die Datei unverändert. Auch
+ein vollständiges `--collect-only` über alle 1572 Tests ändert nichts, ein
+Schreibvorgang beim Modulimport ist damit ausgeschlossen. Das laufende Backend
+war zum fraglichen Zeitpunkt bereits beendet.
+
+**Damit korrigiere ich eine eigene frühere Einordnung:** ich hatte die
+`config.json`-Änderung dem `patch.py`-Stand zugerechnet. Ob sie von dort stammt
+oder von diesem unbekannten Laufzeit-Schreiber, ist **offen**. Die Entscheidung,
+sie nicht zu übernehmen, bleibt davon unberührt richtig — ein Vision-Modell als
+globales Chat- und Tool-Use-Modell ist ohne Beleg ein Rückschritt.
+
+**Warum das zählt:** eine Anwendung, die die Konfigurationsdatei des Nutzers
+ungefragt umschreibt, macht jede bewusste Einstellung unzuverlässig. Der
+nächste Schritt wäre ein Schreib-Wächter auf der Datei während eines
+Vollsuite-Laufs.
+
 ### B-8 · `media.status` trägt vier unvereinbare Vokabulare
 **AGENT, UNGEPRÜFT.** `completed|partial|failed` vs. `analyzed` (auch beim
 Import, vor jeder Analyse) vs. `pending` vs. `analyzing|error|ready`.
