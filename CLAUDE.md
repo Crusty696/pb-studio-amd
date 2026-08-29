@@ -77,7 +77,16 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-11 (OBJ-76 Runtime-Wahrheit; 18/20 Tasks belegt)
+- **Date:** 2026-08-29 (Vollständiger Funktionsaudit, 15 Agenten)
+- **Audit 2026-08-29:** ~243 Befunde (18 CRITICAL, 61 HIGH, 74 MEDIUM).
+  Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Vollsuite **10 failed / 1492 passed /
+  13 skipped / 2 errors** — der bisher geführte Wert 1291 stimmt nicht mehr.
+  Kernbefund: die Ketten brechen an den Übergabestellen zwischen Domänen, nicht
+  innerhalb. Der uncommittete Stand (892 Z., maschinell via `patch.py` erzeugt)
+  ist NICHT committfähig; zwei projekteigene Guard-Tests sind rot.
+  Die Testsuite selbst ist unzuverlässig: `--basetemp` wird während des Laufs
+  gelöscht, der DirectML-Adapter ist gefakt, die Owner-Capability global gepatcht.
+- **Historischer Stand:** 2026-08-11 (OBJ-76 Runtime-Wahrheit; 18/20 Tasks belegt)
 - **Current Status:** Launcher/LHM/Capture, Shutdown-Persistenz, SigLIP-Gate,
   Scene-Ground-Truth und Recovery-Dry-Run sind fokussiert und live belegt.
   Der direkte LM-Studio-Load/SSE-Transport ist für qwen3.6 und qwen2.5-VL grün;
@@ -246,7 +255,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **2 Agent-Teams gebaut** (`dev-*`/`analyst-*` x 12 WPF-Tab-Domains = 24 Subagents + 12 Skills), siehe `docs/agent-teams/README.md`.
   - **Voller 24-Agent-Sweep** über alle 12 Domains, Fokus Pacing-Datennutzung. Kernfund: `advanced_pacing_engine.py:1022` importierte totes `core.session_manager`-Modul (existiert nicht im Repo), ImportError von `except Exception: pass` verschluckt → Onset/Kick/Snare/HiHat/Energy-Trigger im normalen (pre-cached) Pacing-Pfad wirkungslos. Volle priorisierte Findings-Liste (14 HIGH + 12 MEDIUM + 4 LOW) in `docs/agent-teams/README.md` Abschnitt "Sweep 2026-07-10".
   - **Selbstkorrektur:** eigener `CrossModalProjector`-Fix von Teil-1 dieser Session (768→1152) war falsch (SigLIP-Modell-Verwechslung `siglip_wrapper.py` vs. echtem Brain-Feeder `video_embedder.py`). Zurückgesetzt auf 768.
-  - **Onset-Caching-Fix umgesetzt** (User-Entscheid: größere Lösung statt Workaround): Audio-Pipeline (`audio_router.py`) berechnet jetzt Onset/Kick/Snare/HiHat-Trigger-Kandidaten einmalig beim `/audio/analyze`-Lauf (gleiche librosa-Parameter wie der Live-Fallback), persistiert über `app_state.py` (JSON-Blob, kein DB-Schema-Migration nötig), injiziert via `pacing_service._inject_cached_into_engine` in die Pacing-Engine. `advanced_pacing_engine.py`: toter SessionManager-Import entfernt, Audio-Load-Gate korrigiert (lädt Audio nur noch, wenn für eine AKTIVE Trigger-Gewichtung wirklich kein Cache existiert — sonst RAM-Optimierung für lange DJ-Mixes erhalten), `_build_triggers_from_cache` um Kick/Snare/HiHat erweitert. Neue Schema-Felder in `AudioAnalysisResult` (`onset_times`/`kick_times`/`snare_times`/`hihat_times`), C#-DTOs regeneriert.
+  - **Onset-Caching-Fix umgesetzt** (User-Entscheid: größere Lösung statt Workaround): Audio-Pipeline (`audio_router.py`) berechnet jetzt Onset/Kick/Snare/HiHat-Trigger-Kandidaten einmalig beim `/audio/analyze`-Lauf (~~gleiche librosa-Parameter wie der Live-Fallback~~ — **widerlegt im Audit 2026-08-29:** Cache-, Stem- und Fallback-Pfad nutzen drei divergierende Parametersätze; `n_mels` adaptiv/128/64, `n_fft` adaptiv/2048, `preemphasis` ja/nein/ja, `delta` ungesetzt/gesetzt/gesetzt. Dieselbe Datei liefert je nach Codepfad andere Trigger-Zeitpunkte), persistiert über `app_state.py` (JSON-Blob, kein DB-Schema-Migration nötig), injiziert via `pacing_service._inject_cached_into_engine` in die Pacing-Engine. `advanced_pacing_engine.py`: toter SessionManager-Import entfernt, Audio-Load-Gate korrigiert (lädt Audio nur noch, wenn für eine AKTIVE Trigger-Gewichtung wirklich kein Cache existiert — sonst RAM-Optimierung für lange DJ-Mixes erhalten), `_build_triggers_from_cache` um Kick/Snare/HiHat erweitert. Neue Schema-Felder in `AudioAnalysisResult` (`onset_times`/`kick_times`/`snare_times`/`hihat_times`), C#-DTOs regeneriert.
   - **Verifiziert:** pytest **749 passed**/12 skipped (voller Lauf); Release-Build 0 Fehler; Backend-Live-Smoke sauber (kein Import-/Wiring-Fehler); openapi-Snapshot aktualisiert + Drift-Test grün.
   - **Nicht verifiziert (offen):** kein Live-Test mit echter langer DJ-Mix-Datei, ob Onset/Kick/Snare/HiHat-Regler jetzt tatsächlich sichtbar unterschiedliche Cut-Listen erzeugen (nur Unit-Test-Ebene + Code-Pfad-Verifikation).
 - **Status (2026-07-10, Teil 2 — KI-Model-Wiring-Audit):**
@@ -276,12 +285,26 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
-- *VRAM Arbiter:* `with_gpu_task(model_id=...)` prüft VRAMBudgetManager
+- *VRAM Arbiter:* `with_gpu_task(model_id=...)` prüft VRAMBudgetManager.
+  **Audit 2026-08-29:** die Klasse `VRAMArbiter` (264 Z.) ist vollständig toter
+  Code (0 Produktions-Aufrufer); die dort beschriebene Dual-Verification läuft
+  nicht. Von den 3 produktiven `with_gpu_task`-Aufrufen setzen 2 `manage_vram=False`
+  und der dritte ist unerreichbar (`moondream_decoder.onnx` fehlt) — der gesamte
+  Reservierungscode läuft im heutigen Betrieb nie. Pacing erreicht DirectML ganz
+  ohne `with_gpu_task`.
 - *Vision LLM:* Moondream ONNX (FP16) via DirectML
 - *Motion Analysis:* RAFT ONNX via DirectML (`raft.py → MotionAnalyzer`)
 - *Stem Separation:* htdemucs runs on CPU because PyTorch CPU is used in the pinned environment. DirectML acceleration only applies to ONNX-MDX paths in StemSeparator.
 - *Vector DB:* FAISS-CPU (1152-dim SigLIP SO400M embeddings) + sqlite-vec (Brain-Modul KNN)
-- *Beat Detection:* BeatNet (madmom) aktiv, librosa als Fallback. **Korrektur
+- *Beat Detection:* BeatNet (madmom) installiert und `BEATNET_AVAILABLE=True`, ABER
+  **die Downbeats erreichen die Pacing-Engine nicht** (Audit 2026-08-29, C-01):
+  `audio_router.py:2255` ruft `detector.get_downbeats()` ohne das Pflichtargument
+  → `TypeError`, von `except Exception` verschluckt. Zusätzlich schreibt der Router
+  `downbeat_provenance="available"`, während `pacing_service.py:389` auf
+  `"measured"` prüft, und `beats` wird nach dem Anhängen der Downbeats nie
+  sortiert. Drei Brüche in einer Kette — ein Teilfix macht es schlimmer.
+  `beat_trigger_mode="downbeat_only"` liefert daher eine leere Cut-Liste.
+  librosa als Fallback. **Korrektur
   2026-08-06:** die frühere Angabe „madmom nicht installierbar auf 3.11" war
   falsch — madmom 0.16.1 baut auf 3.11.9, siehe `requirements-optional-beatnet.txt`.
   Ohne madmom liefert `get_downbeats()` hart `[]`, dann existieren keine Downbeats.
@@ -321,7 +344,7 @@ PBStudio.UI/
 | Python | 3.11.x | madmom/BeatNet |
 | NumPy | 1.26.4 | < 2.0 strict |
 | onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | 2.11.0+cpu | ML tensors |
+| PyTorch (CPU) | **Lock 2.11.0+cpu, installiert 2.4.1+cpu** | ML tensors. **Audit 2026-08-29: die venv wurde nie aus `requirements.txt` gebaut.** Auch transformers (4.49 statt 5.5.4), hf-hub (0.36.2 statt 1.5.0) und starlette (1.0.0 statt 1.3.1) weichen ab; `torch-directml` ist undokumentiert installiert. Ein Clean-Install erzeugt eine ANDERE Umgebung als die, in der die Suite grün gemeldet wurde. Entscheidung offen: Lock anpassen oder venv neu bauen. |
 | BeatNet | 1.1.1 | Beat detection |
 | FFmpeg | aktives Manifest: 6.1.1 Gyan.dev; T411-Hardware-QC bestanden | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
