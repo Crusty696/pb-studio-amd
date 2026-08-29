@@ -905,3 +905,81 @@ vorhanden. `video_router.py` nutzt bei `:1673` und `:2253` bereits
 eine fremde, nie committete Änderung — derselbe Fehler wie beim `mel_bands`-Fall
 (`d1724f6`, revertiert in `1d9a8d4`). Solange über `patch.py` nicht entschieden
 ist, ist Task 3.3 in diesem Punkt gegenstandslos.
+
+---
+
+## Sitzung 2026-08-29 (Abend) — Plan 03 und der `patch.py`-Stand
+
+### Plan 03 — abgeschlossen
+
+`fd7a6d2` + `1454467`. `Tests/conftest.py:isolated_test_database` kapselt
+`clear_project_state()` jetzt in `_reset_brain_project_state(phase)`, das den
+Fehlschlag per Log **und** `warnings.warn(BrainResetFailure)` meldet, ohne den
+Lauf zu reißen. Die Logzeile allein hätte nicht genügt: `pytest.ini` setzt
+weder `log_cli` noch `log_file`, ein grüner Lauf zeigt sie nie.
+
+Am echten Produktionscode belegt: mit einem absichtlich werfenden
+`clear_project_state` liefen **33 Tests statt 0**, keine Fixture-Errors.
+Spec-Review: konform. Quality-Review: kein blockierender Befund, zwei wichtige
+Testdefekte — beide in `1454467` behoben (der Test hinterließ selbst eine
+Dauerwarnung im Signalkanal; `phase` war ungeprüft; der AST-Guard übersah die
+Attributform).
+
+Damit ist die Vorbedingungszeile in Stufe 1 (`Tests/conftest.py:109/122`)
+erledigt.
+
+### `patch.py`-Stand — entschieden und aufgeteilt
+
+Der Stand ist **keine einheitliche Arbeit**. Er zerfällt in eine
+handgeschriebene Schicht (verdrahtet, begründet, getestet) und die
+`patch.py`-Schicht (Felder ohne Leser, Validator ohne Anlass,
+Performance-Regressionen). Beide Guard-Testfehler stammten aus der
+`patch.py`-Schicht.
+
+**Übernommen — sechs thematische Commits:**
+
+| Commit | Inhalt |
+|---|---|
+| `766cb0d` | `global.json` auf 9.0.317. HEAD pinnte 9.0.316 mit `rollForward: disable`; **dieses SDK ist auf der Maschine nicht installiert**, HEAD war nicht baubar. |
+| `349e9cc` | Tonart-Score kehrte die Rangfolge um, sobald `total_score` negativ ist (`audio_state == "break"`). Gegenprobe: Test fällt mit der HEAD-Fassung. |
+| `1b1b76b` | `audio_key`: Kein-Ton (`unavailable`) von Detektorfehler (`failed`) getrennt, plus zwei echte Produzententests. |
+| `d69604d` | FR-362: Waiver für fähigkeitsoptionale Stages + realer Degrade von `use_key_matching` mit `ModeDegradationSchema`. Einzige vollständig durchverdrahtete Kette des Stands. |
+| `46616ea` | Struktur-Labels auf das Vokabular von `STRUCTURE_INTENSITY_MULTIPLIERS`. Die alten fielen alle auf den Default 0.8 — die Struktur wirkte nicht. |
+| `1454467` | Nacharbeit zu Plan 03 aus der Quality-Review. |
+
+**Verworfen — jeweils am Quelltext belegt:**
+
+| Änderung | Grund |
+|---|---|
+| `provider_receipt` / `model_receipt` / `attempt_receipt` (12 Stellen) | Repo-weiter Grep: ausschließlich in `video_router.py` selbst. Weder Produzent noch Konsument; der Merge-Zweig ist unerreichbar. |
+| `rejected_clips` / `rejection_reasons` + Reflection in `DirectorViewModel` | Nie befüllt; `GetProperty` griff ins Leere. Riss `test_openapi_snapshot_drift` rot. **Ersetzt Task 2.3** — Entscheidung: zurückgenommen, nicht durchgezogen. |
+| `extract_nested_min_cut` | Kein Aufrufer sendet je ein Dict; `float(None)` hätte aus 422 einen 500er gemacht; hing nur an einem von zwei Schemas mit dem Feld. |
+| Drei `cap.grab()`-Schleifen | Die in `_run_color_and_caption_analysis` dekodiert sequenziell bis Frame `3*total/4` — bei 190.051-Frame-Clips ~142.000 `grab()` statt drei Seeks. Für die anderen zwei existiert keine Messung. |
+| `BeatMarkerViewModel.Label` | Teil-Revert von `c6b8cd0`, der die synthetische Taktnummer bewusst entfernt hat. Der Wächter prüft `"% 4"` und wurde durch `/ 4` nur zufällig umgangen. |
+| `ShowSpectralDepth` | `UpdateSpectralPoints()` liest die Property nirgends, kein XAML bindet sie. Property ohne Wirkung und ohne Bedienung. |
+| `AudioStageDTO` + die drei Fingerprint-Feldnamen | **Beide** ohne Produzent — Grep findet `input_fingerprint`/`config_fingerprint`/`stage_timestamp` nur in der Feldnamensliste selbst. (Korrektur an einem Agentenbefund, der die Feldnamen für verdrahtet hielt.) |
+| `config.json` `task_overrides` auf `qwen2.5-vl-7b-instruct` | Hätte ein 7B-**Vision**-Modell zum globalen Chat-, Tool-Use- und Erklärmodell gemacht. LM Studio lief nicht, die Modell-IDs waren nicht überprüfbar. |
+| `SettingsView.xaml` `UseLayoutRounding` | Behebt nichts Nachweisbares. |
+
+### Was dabei neu gefunden wurde
+
+- **Task 2.1 (Downbeats) ist teurer als geplant.** `get_downbeats(audio_path)`
+  ruft `self._estimator.process(audio_path)` — einen **vollständigen zweiten
+  BeatNet-Lauf** über die ganze Datei, zusätzlich zu dem aus `detect_beats`.
+  Der naheliegende Fix „Pflichtargument nachreichen" verdoppelt die
+  Beat-Erkennungszeit jeder Audioanalyse. `BeatDetector.scan()` liefert beides
+  in **einem** Durchlauf und ist der richtige Ansatzpunkt. Der Roadmap-Schritt
+  „`get_downbeats(audio_path)` — Pfad übergeben" ist entsprechend zu ersetzen.
+- **`has_audio_embedding` ist an zwei Stellen unwahr, nicht an einer.** Der
+  Arbeitsstand wollte es beim Import echt setzen — das hätte eine synchrone
+  CLAP-Inferenz in jeden Audio-Import gelegt, für ein Feld ohne UI-Leser, und
+  die eigentliche Staleness nicht behoben: der Analysepfad legt das Embedding
+  ab (`audio_router.py:1362`), aktualisiert das Flag aber nie. Nicht
+  übernommen; eigener Vorgang.
+- **`"peak"` fehlt in `STRUCTURE_INTENSITY_MULTIPLIERS`.**
+  `structure_analyzer.py:244` vergibt das Label, kein Multiplikator-Dict kennt
+  es, es fällt auf 0.8. Kein Synonym eines der acht kanonischen Labels.
+- **`energy_only=False` im Mix-Pfad** hätte alle bestehenden
+  `mix_energy`-Resume-Checkpoints ungültig gemacht (`energy_only` steckt im
+  `_checkpoint_config`) und die Chroma/Key-Erkennung vom Instrumental-Stem auf
+  den vollen Mix umgestellt — gegen die erklärte Absicht des umgebenden Codes.
