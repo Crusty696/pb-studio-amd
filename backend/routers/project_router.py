@@ -351,54 +351,88 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
         return False
 
 
+def _timeline_payload(timeline: list[dict], audio_path: str | None) -> dict:
+    """Einziges Dateiformat fuer timeline.json — von /project/save und vom Close-Pfad geteilt.
+
+    Der einzige Leser (``_load_timeline_into_state``) erwartet ein Dict. Eine
+    nackte Liste wuerde dort still verworfen, deshalb darf das Format nur an
+    dieser einen Stelle entstehen.
+    """
+    return {
+        "audio_path": audio_path,
+        "timeline": timeline,
+        "saved_at": _utc_now_iso(),
+    }
+
+
 def persist_timeline_for_context(state: AppState, project_root: Path) -> bool:
     """Sichert die RAM-Timeline nach timeline.json, bevor der State verworfen wird.
 
-    Die Pacing-Engine schreibt ihr Ergebnis nur über ``state.set_timeline(...)``.
+    Die Pacing-Engine schreibt ihr Ergebnis nur ueber ``state.set_timeline(...)``.
     Ohne diesen Aufruf verliert jeder Projektwechsel und jedes Close die
     generierte Timeline ersatzlos.
 
     Bewusst OHNE ``state.project_commit(...)``-Guard: an beiden Aufrufstellen
     (``close_project``, ``_activate_project``) existiert kein
     ``ProjectOperationContext`` — der Kontext wird dort gerade invalidiert. Der
-    Schreibvorgang gehört zum alten Projekt und darf deshalb nicht an dessen
-    Epoch-Guard hängen, sonst wäre er per Konstruktion immer blockiert.
+    Schreibvorgang gehoert zum alten Projekt und darf deshalb nicht an dessen
+    Epoch-Guard haengen, sonst waere er per Konstruktion immer blockiert.
+
+    Bewusste Asymmetrie zu ``_save_project_in_context``: bei leerer Timeline
+    loescht der Save-Pfad die Datei, dieser Pfad laesst sie stehen. Ein leerer
+    ``current_timeline`` entsteht auch nach einem fehlgeschlagenen Pacing-Lauf
+    oder vor dem Laden eines Projekts; ein Close-Pfad, der daraufhin still
+    Nutzdaten loescht, waere der schlimmere Fehler. Die Falle bleibt: wer alle
+    Cuts entfernt und dann nur schliesst, findet die alte Timeline wieder —
+    zum Loeschen ist ``/project/save`` zustaendig.
+
+    Legt bewusst KEIN Verzeichnis an (anders als ``set_anchors``, das unter
+    ``project_operation()`` laeuft und dessen Existenz garantiert ist). Sonst
+    liesse ein extern geloeschter Projektordner sich hier als Geisterprojekt
+    mit einer einsamen timeline.json wiederauferstehen.
 
     Returns:
         True wenn geschrieben wurde, False wenn es nichts zu sichern gab.
     """
-    timeline = _normalize_timeline_entries(state.get_timeline_snapshot())
-    if not timeline:
-        return False
-
+    # Timeline und audio_path gehoeren zusammen und werden in EINER
+    # Lock-Akquise gelesen; zwei getrennte Snapshots waeren nicht konsistent.
     with state._state_lock:
+        raw_timeline = list(state.current_timeline)
         audio_path = state.current_audio_path
 
-    # Format wörtlich wie in _save_project_in_context — der einzige Leser
-    # (_load_timeline_into_state) erwartet ein Dict, keine nackte Liste.
-    payload = {
-        "audio_path": audio_path,
-        "timeline": timeline,
-        "saved_at": _utc_now_iso(),
-    }
+    timeline = _normalize_timeline_entries(raw_timeline)
+    if not timeline:
+        if _timeline_path(project_root).exists():
+            logger.info(
+                "Leere RAM-Timeline: vorhandene timeline.json in %s bleibt erhalten. "
+                "Zum Loeschen /project/save verwenden.",
+                project_root,
+            )
+        return False
+
+    if not project_root.is_dir():
+        logger.warning(
+            "Timeline nicht gesichert: Projektordner fehlt (%s)",
+            project_root,
+        )
+        return False
 
     path = _timeline_path(project_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         tmp.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False),
+            json.dumps(
+                _timeline_payload(timeline, audio_path),
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         os.replace(str(tmp), str(path))
     finally:
         tmp.unlink(missing_ok=True)
 
-    logger.info(
-        "Timeline vor Projektwechsel/Close gesichert: %d Cuts in %s",
-        len(timeline),
-        path,
-    )
+    logger.info("Timeline gesichert: %d Cuts in %s", len(timeline), path)
     return True
 
 
@@ -416,7 +450,12 @@ async def _activate_project(
         with state._state_lock:
             previous_project = dict(state.current_project or {})
         previous_root = previous_project.get("path")
-        if previous_root:
+        # Reopen desselben Projekts ist KEIN Wechsel: open_project hat die alte
+        # timeline.json bereits in candidate_state geladen und wuerde sie
+        # gleich in den RAM setzen. Ein Schreiben des neuen RAM-Stands liesse
+        # Datei und UI auseinanderlaufen. Es gibt keinen Same-Path-Guard in
+        # open_project, dieser Fall ist also real erreichbar.
+        if previous_root and Path(previous_root).resolve() != project_path.resolve():
             try:
                 persist_timeline_for_context(state, Path(previous_root))
             except Exception as exc:
@@ -673,7 +712,11 @@ async def open_project(
         ),
         "audio_count": audio_count,
         "video_count": video_count,
-        "has_timeline": bool(meta.get("has_timeline", has_timeline)),
+        # I-1: `or` statt Default — create_project schreibt den Schluessel IMMER
+        # als False, der Default griff daher nie. Wurde eine timeline.json
+        # tatsaechlich geladen, gewinnt diese Beobachtung gegen stale Metadaten
+        # (Close ohne Save, manuell kopierte Projekte).
+        "has_timeline": bool(meta.get("has_timeline") or has_timeline),
         "created_at": meta.get("created_at"),
         "modified_at": meta.get("modified_at"),
     }
@@ -744,13 +787,7 @@ def _save_project_in_context(
     }
 
     timeline_payload = (
-        {
-            "audio_path": state.current_audio_path,
-            "timeline": timeline,
-            "saved_at": _utc_now_iso(),
-        }
-        if timeline
-        else None
+        _timeline_payload(timeline, state.current_audio_path) if timeline else None
     )
     meta_path = _project_meta_path(project_path)
     try:
