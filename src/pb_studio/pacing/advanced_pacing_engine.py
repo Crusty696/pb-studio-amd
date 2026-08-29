@@ -70,8 +70,11 @@ ONSET_DELTA_MAX = 0.12
 #   0.5 = neutral (None-Input → kein Penalty)
 #
 # Einsatzort: AdvancedPacingEngine.clip_selector nutzt diese Funktion sobald
-# Video-Clips ein audio_key-Feld haben. Aktuell heuristisch, wirkt als no-op
-# weil Video-Analyse keinen Key extrahiert — Flag-Pipeline ist trotzdem getestet.
+# Video-Clips ein audio_key-Feld haben. Seit L-K4 extrahiert die Video-Analyse
+# den Key echt (audio_key_detector.py) — der frühere "no-op"-Vermerk hier war
+# seitdem überholt. Clips ohne auswertbare Tonspur bleiben unbewertet und
+# erhalten 0.5; wie viele das sind, meldet PacingService, damit ein Lauf ohne
+# einen einzigen bewertbaren Clip nicht still als aktives Matching durchgeht.
 KEY_COMPATIBLE: Dict[str, set] = {
     # major: relative_minor + perfect_fifth_up + perfect_fifth_down
     "C major":  {"C major", "A minor", "G major", "F major"},

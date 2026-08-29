@@ -997,7 +997,15 @@ class ClipSelector:
                     # Fallback: clip selbst kann audio_key Feld tragen (Test-Pfad).
                     video_key = clip.get("audio_key")
                 key_score = _key_score_fn(self.audio_key, video_key)
-                total_score *= key_score
+                # Apply monotonically in key_score for BOTH signs. A plain
+                # multiplication inverts the ranking as soon as total_score is
+                # negative (audio_state == "break" subtracts 0.50 above): a
+                # fitting clip (x1.0) would then rank below a clashing one
+                # (x0.3), because -0.4*0.3 > -0.4*1.0.
+                if total_score >= 0:
+                    total_score *= key_score
+                else:
+                    total_score /= max(key_score, 1e-6)
 
             if total_score > best_score:
                 best_score = total_score

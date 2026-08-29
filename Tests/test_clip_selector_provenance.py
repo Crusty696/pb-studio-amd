@@ -271,3 +271,40 @@ def test_motion_provenance_exposes_key_and_anchor_contributions(monkeypatch) -> 
     assert components["total_score"] == pytest.approx(
         components["pre_key_score"] * 0.75
     )
+
+
+def test_key_matching_ranks_fitting_clip_first_on_negative_scores(monkeypatch) -> None:
+    """A plain multiplication inverts the ranking once the score is negative.
+
+    The "break" branch subtracts 0.50, which drives high-motion clips below
+    zero. Multiplying there would rank the clashing clip (x0.3) above the
+    harmonically fitting one (x1.0), because -0.4*0.3 > -0.4*1.0.
+    """
+    from pb_studio.pacing import advanced_pacing_engine
+
+    selector = ClipSelector(strategy="motion")
+    selector.use_key_matching = True
+    selector.audio_key = "C major"
+    selector.video_keys = {"fitting": "C major", "clashing": "F# major"}
+    monkeypatch.setattr(
+        advanced_pacing_engine,
+        "_key_compatibility_score",
+        lambda _audio_key, video_key: 1.0 if video_key == "C major" else 0.3,
+    )
+
+    # select_clip derives audio_state itself from the cached energy curve, so
+    # the scoring function is driven directly here. High-motion clips against a
+    # weak trigger score 0.0 on the motion match, and "break" subtracts 0.50.
+    selected = selector._select_by_motion(
+        [
+            {"id": "fitting", "file_path": "fitting.mp4", "motion_score": 0.9},
+            {"id": "clashing", "file_path": "clashing.mp4", "motion_score": 0.9},
+        ],
+        0.1,
+        "beat",
+        audio_state="break",
+    )
+
+    components = selector._selection_details["score_components"]
+    assert components["pre_key_score"] < 0, "test premise: score must be negative here"
+    assert selected.clip_id == "fitting"
