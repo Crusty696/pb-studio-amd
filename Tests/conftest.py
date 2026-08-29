@@ -8,7 +8,9 @@ Provides shared fixtures for:
 - Mock hardware monitors
 """
 
+import logging
 import os
+import warnings
 
 import httpx
 import pytest
@@ -20,6 +22,57 @@ from unittest.mock import MagicMock, patch
 
 TEST_OWNER_CAPABILITY = "pb-studio-pytest-owner-capability"
 os.environ["PBSTUDIO_OWNER_CAPABILITY"] = TEST_OWNER_CAPABILITY
+
+# Bewusst NACH dem Setzen der Owner-Capability: die Reihenfolge wird
+# festgeschrieben, statt sich darauf zu verlassen, dass heute zufaellig nichts
+# in der Importkette diese Variable liest.
+try:
+    from backend._brain_singleton import clear_project_state
+except ImportError:
+    clear_project_state = None
+
+
+class BrainResetFailure(RuntimeWarning):
+    """Der Brain-State konnte zwischen zwei Tests nicht geloest werden."""
+
+
+def _reset_brain_project_state(phase: str) -> None:
+    """Brain-State zwischen Tests loesen, ohne dass die Suite am Verhalten des
+    Produktionscodes haengt.
+
+    Audit 2026-08-29: isolated_test_database ist autouse und rief
+    clear_project_state() ohne try/except in Setup UND Teardown. Solange das so
+    war, konnte clear_project_state niemals zu einem Re-Raise weiterentwickelt
+    werden - gemessen: ein Wurf im Setup erzeugt 1552 Fixture-Errors bei
+    0 ausgefuehrten Tests. Die Testinfrastruktur diktierte das
+    Produktionsverhalten.
+
+    Der Fehlschlag wird gemeldet, nicht geschluckt. Die Logzeile allein
+    genuegt dafuer NICHT: pytest.ini setzt weder log_cli noch log_file, und
+    pytest zeigt den Captured-log-Abschnitt nur bei fehlschlagenden Tests - in
+    einem gruenen Lauf waere sie unsichtbar. Erst warnings.warn taucht im
+    warnings summary jedes Laufs auf. Ohne diese zweite Meldung waere die
+    Kapselung eine Verschlechterung: sie wuerde eine laute Fehlerwand gegen
+    stilles Schlucken tauschen und eine kaputte Testisolation unbemerkt
+    gruen durchlaufen lassen.
+    """
+    if clear_project_state is None:
+        return
+    try:
+        clear_project_state()
+    except Exception as exc:
+        logging.getLogger("conftest").warning(
+            "clear_project_state() hat im %s geworfen - die Testisolation ist "
+            "moeglicherweise unvollstaendig",
+            phase,
+            exc_info=True,
+        )
+        warnings.warn(
+            f"clear_project_state() hat im {phase} geworfen ({exc!r}) - "
+            "die Testisolation ist moeglicherweise unvollstaendig",
+            BrainResetFailure,
+            stacklevel=2,
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -85,10 +138,6 @@ def isolated_test_database(tmp_path, monkeypatch):
     from pb_studio.config_manager import ConfigManager
     from pb_studio.data.database_core import DatabaseCore
     from pb_studio.brain.brain_service import BrainService
-    try:
-        from backend._brain_singleton import clear_project_state
-    except ImportError:
-        clear_project_state = None
 
     test_db_path = tmp_path / "test_pb_studio.db"
 
@@ -106,8 +155,7 @@ def isolated_test_database(tmp_path, monkeypatch):
     DatabaseCore._instance = None
     
     BrainService.reset_singleton()
-    if clear_project_state:
-        clear_project_state()
+    _reset_brain_project_state("Setup")
 
     monkeypatch.setattr(ConfigManager, "_load_config", _load_test_config)
 
@@ -119,8 +167,7 @@ def isolated_test_database(tmp_path, monkeypatch):
     DatabaseCore._instance = None
     
     BrainService.reset_singleton()
-    if clear_project_state:
-        clear_project_state()
+    _reset_brain_project_state("Teardown")
 
 
 @pytest.fixture
