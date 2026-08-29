@@ -1199,10 +1199,22 @@ async def _analyze_video_in_project(
                     result["stage_errors"].pop("audio_key", None)
                     logger.info(f"L-K4: Video-Audio-Key fuer clip {request.clip_id}: {audio_key_val}")
                 else:
+                    # Truthful capability result: the file carries no usable audio
+                    # track, so no key exists to detect. Distinct from the except
+                    # branch below, and logged — an unlogged terminal state left
+                    # 498 clips silently unscored until Pacing surfaced it.
                     result["stage_status"]["audio_key"] = "unavailable"
+                    result["stage_errors"].pop("audio_key", None)
+                    logger.info(
+                        "L-K4: clip %s hat keine auswertbare Tonspur — audio_key "
+                        "bleibt unavailable (kein Fehler)",
+                        request.clip_id,
+                    )
             except Exception as e:
+                # A detector/ffmpeg fault is a defect, not a missing capability.
+                # "failed" keeps it retryable and keeps the Pacing gate blocking.
                 logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
-                result["stage_status"]["audio_key"] = "unavailable"
+                result["stage_status"]["audio_key"] = "failed"
                 result["stage_errors"]["audio_key"] = str(e)
             active_stages = ()
 

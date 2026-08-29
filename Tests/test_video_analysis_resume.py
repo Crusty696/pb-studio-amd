@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 from contextlib import contextmanager
 from copy import deepcopy
 from types import SimpleNamespace
@@ -84,6 +85,104 @@ class _State:
 
 async def _noop(*_args, **_kwargs):
     return None
+
+
+def test_restart_reload_preserves_completed_caption_and_skips_retry(
+    monkeypatch,
+    tmp_path,
+):
+    from backend.app_state import AppState
+    from pb_studio.data.repositories import media_repository
+    from pb_studio.data import vector_operation_outbox
+
+    video_router = importlib.import_module("backend.routers.video_router")
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"video")
+    persisted = _existing_analysis()
+    persisted["is_analyzed"] = True
+
+    class FakeRepository:
+        db = object()
+
+        def get_by_project(self, project_id):
+            assert project_id == 1
+            return [
+                {
+                    "id": 70,
+                    "file_path": str(media),
+                    "duration_sec": 4.0,
+                    "file_hash": "hash-7",
+                    "metadata_json": json.dumps(
+                        {
+                            "clip_type": "video",
+                            "clip_id": 7,
+                            "name": "resume",
+                            "video_hash": "hash-7",
+                        }
+                    ),
+                    "ai_data_json": json.dumps(persisted),
+                }
+            ]
+
+    class FakeOutbox:
+        def __init__(self, db):
+            assert db is FakeRepository.db
+
+        def recover_pending(self, project_id):
+            assert project_id == 1
+            return 0
+
+    monkeypatch.setattr(media_repository, "MediaRepository", FakeRepository)
+    monkeypatch.setattr(vector_operation_outbox, "VectorOperationOutbox", FakeOutbox)
+
+    state = AppState(
+        current_project={"db_project_id": 1, "path": str(tmp_path)},
+    )
+    assert state.load_from_db(project_id=1) is True
+    reconstructed = state.get_video_analysis(7)
+    assert reconstructed is not None
+    assert reconstructed["tag_source"] == "lmstudio:test-model"
+    assert reconstructed["stage_status"]["captions"] == "completed"
+    assert reconstructed["stage_errors"] == {
+        "embedding": "previous SigLIP failure"
+    }
+
+    caption_calls = 0
+
+    async def caption_stage_must_not_run(*_args, **_kwargs):
+        nonlocal caption_calls
+        caption_calls += 1
+        raise AssertionError("completed caption stage must survive restart")
+
+    monkeypatch.setattr(
+        video_router,
+        "_run_color_and_caption_analysis",
+        caption_stage_must_not_run,
+    )
+    monkeypatch.setattr(video_router, "_persist_video_analysis_outcome", lambda *_args: None)
+    monkeypatch.setattr(video_router, "publish_event", _noop)
+    monkeypatch.setattr(video_router, "publish_log", _noop)
+
+    result = asyncio.run(
+        video_router._analyze_video_in_project(
+            VideoAnalyzeRequest(
+                clip_id=7,
+                detect_scenes=False,
+                generate_embeddings=False,
+                analyze_motion=False,
+                generate_captions=True,
+                analyze_colors=False,
+                analyze_audio_key=False,
+            ),
+            state,
+            state.capture_project_context(),
+        )
+    )
+
+    assert caption_calls == 0
+    assert result.tags == ["concert", "stage"]
+    assert result.tag_source == "lmstudio:test-model"
+    assert result.stage_status["captions"] == "completed"
 
 
 def test_partial_retry_runs_only_failed_embedding_and_preserves_completed_data(
