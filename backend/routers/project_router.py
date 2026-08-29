@@ -244,6 +244,26 @@ def _read_project_meta(project_path: Path) -> dict:
         return {}
 
 
+def _meta_name(meta: dict, *fallbacks: str | None) -> str:
+    """Erster brauchbarer Projektname aus project.json, sonst aus den Fallbacks.
+
+    ``meta.get("name", fallback)`` greift nur bei FEHLENDEM Schluessel. Ein
+    extern editiertes oder von Hand kopiertes project.json mit ``"name": null``
+    lieferte damit None, und ``ProjectInfo`` verlangt einen ``str`` - das
+    Projekt war per HTTP 500 unoeffenbar.
+
+    Der leere String als letzte Rueckgabe ist bewusst und in der Praxis
+    unerreichbar: der letzte Fallback ist stets ``project_path.name``, und der
+    ist nur fuer ein Dateisystem-Wurzelverzeichnis leer. Ein Projekt ist immer
+    ein Ordner unterhalb von ``config.project_dir``. Lieber ein leerer Name als
+    ein erfundener, der so in den DB-Record wandern wuerde.
+    """
+    for candidate in (meta.get("name"), *fallbacks):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate
+    return ""
+
+
 def _write_project_meta(project_path: Path, meta: dict) -> None:
     import os
     meta_path = _project_meta_path(project_path)
@@ -682,7 +702,9 @@ async def open_project(
             project_path,
         )
         return ProjectInfo(
-            name=meta.get("name", active_project.get("name", project_path.name)),
+            name=_meta_name(
+                meta, active_project.get("name"), project_path.name
+            ),
             path=str(project_path),
             db_project_id=active_project.get("db_project_id"),
             audio_count=ram_audio_count,
@@ -749,12 +771,12 @@ async def open_project(
         if existing_project_id is not None
         else _find_or_create_project_db_record(
             project_path,
-            meta.get("name", project_path.name),
+            _meta_name(meta, project_path.name),
             meta,
         )
     )
     project_data = {
-        "name": meta.get("name", project_path.name),
+        "name": _meta_name(meta, project_path.name),
         "path": str(project_path),
         "db_project_id": db_project_id,
         "project_uuid": _catalog_project_uuid(
