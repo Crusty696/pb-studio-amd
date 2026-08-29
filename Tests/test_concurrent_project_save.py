@@ -123,23 +123,35 @@ def _prepare_project(client, fresh_state, tmp_path, monkeypatch, name: str) -> P
     return tmp_path / name
 
 
-def _stage_names(seen: list[Path]) -> list[str]:
-    return [p.name for p in seen if p.name.endswith(".tmp")]
+def _stage_names(seen: list[Path], scope: Path) -> list[str]:
+    """Nur Schreibvorgaenge im Projektverzeichnis auswerten.
+
+    Der Spy patcht ``Path.write_text``/``write_bytes`` prozessweit und sieht
+    damit auch fremde Threads. Im Repo existieren Writer mit FESTEN
+    ``.tmp``-Namen (z.B. ``brain/feedback_logger.py``); feuert einer davon
+    waehrend des Tests, schluege die Namenspruefung fehl und zeigte
+    faelschlich auf den Save-Pfad.
+    """
+    scope_resolved = scope.resolve()
+    return [
+        p.name for p in seen
+        if p.name.endswith(".tmp") and p.parent.resolve() == scope_resolved
+    ]
 
 
 def test_stage_filenames_are_unique_and_hidden_per_save(
     client, fresh_state, tmp_path, monkeypatch, recorded_writes
 ):
     """Zwei Saves duerfen keinen Stage-Dateinamen teilen; alle sind versteckt."""
-    _prepare_project(client, fresh_state, tmp_path, monkeypatch, "StageNames")
+    project_path = _prepare_project(client, fresh_state, tmp_path, monkeypatch, "StageNames")
 
     recorded_writes.clear()
     assert client.post("/project/save").status_code == 200
-    first = _stage_names(recorded_writes)
+    first = _stage_names(recorded_writes, project_path)
 
     recorded_writes.clear()
     assert client.post("/project/save").status_code == 200
-    second = _stage_names(recorded_writes)
+    second = _stage_names(recorded_writes, project_path)
 
     assert first, "Save hat keine Stage-Datei geschrieben - Test misst nichts"
     assert second
@@ -178,11 +190,11 @@ def test_rollback_intermediate_path_is_unique_and_hidden(tmp_path, recorded_writ
 
     recorded_writes.clear()
     module._restore_file_snapshot(target, b"alt-1")
-    first = _stage_names(recorded_writes)
+    first = _stage_names(recorded_writes, tmp_path)
 
     recorded_writes.clear()
     module._restore_file_snapshot(target, b"alt-2")
-    second = _stage_names(recorded_writes)
+    second = _stage_names(recorded_writes, tmp_path)
 
     assert len(first) == 1 and len(second) == 1
     assert first[0].startswith("."), f"Rollback-Zwischenpfad nicht versteckt: {first[0]}"
