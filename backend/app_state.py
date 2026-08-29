@@ -991,16 +991,22 @@ class AppState:
                 ai_data["is_analyzed"] = is_analyzed
             elif "is_analyzed" not in ai_data:
                 ai_data["is_analyzed"] = False
+            import zlib, base64
+            def _comp(arr):
+                if not arr: return arr
+                if isinstance(arr, str): return arr
+                return base64.b64encode(zlib.compress(json.dumps(arr).encode('utf-8'))).decode('ascii')
+
             if energy_curve is not None:
-                ai_data["energy_curve"] = energy_curve
+                ai_data["energy_curve"] = _comp(energy_curve)
             if structure_segments is not None:
                 ai_data["structure_segments"] = structure_segments
             if spectral_data is not None:
-                ai_data["spectral_data"] = spectral_data
+                ai_data["spectral_data"] = _comp(spectral_data)
             if subtrack_segments is not None:
                 ai_data["subtrack_segments"] = subtrack_segments
             if tempo_curve is not None:
-                ai_data["tempo_curve"] = tempo_curve
+                ai_data["tempo_curve"] = _comp(tempo_curve)
             if onset_times is not None:
                 ai_data["onset_times"] = onset_times
             if kick_times is not None:
@@ -1375,6 +1381,53 @@ class AppState:
         damit Re-Open/Restore deterministisch bleibt und keine stale In-Memory-Clips mitschleppt.
         """
         try:
+            import zlib, base64
+
+            def _decomp(val, empty=None):
+                """Kehrt `_comp` aus update_audio_analysis um. Typerhaltend.
+
+                Audit 2026-08-29 (C-02): die Vorgaengerfassung gab fuer jeden
+                Wert, der weder Liste noch String war, `[]` zurueck. Das hatte
+                zwei Folgen:
+                  * `spectral_data` liegt in bestehenden Zeilen unkomprimiert
+                    als dict vor -> `[]` -> stiller Datenverlust bei jedem Reload.
+                  * ein fehlendes Feld (None) wurde zu `[]`; da
+                    `AudioAnalysisResult.spectral_data` als
+                    `Optional[SpectralData]` deklariert ist, brach das die
+                    Pydantic-Validierung und endete als HTTP 500.
+
+                `empty` ist der feldrichtige Leerwert: `[]` fuer Listenfelder,
+                `None` fuer Objektfelder. Ein unlesbarer Blob liefert ihn
+                ebenfalls, aber mit Logzeile statt stillschweigend.
+
+                Leere Container werden ebenfalls auf `empty` normalisiert.
+                Grund: `migrate_audio_ai_data` setzt fuer ein fehlendes
+                `spectral_data` den Default `{}` (media_json_schema.py:102) —
+                und `{}` bricht `Optional[SpectralData]` genauso wie `[]`,
+                weil `SpectralData.clip_id` ein Pflichtfeld ist. Ein leerer
+                Container traegt ohnehin keine Daten.
+                """
+                if val is None:
+                    return empty
+                if isinstance(val, (list, dict)):
+                    return val if val else empty
+                if isinstance(val, str):
+                    if not val:
+                        return empty
+                    try:
+                        return json.loads(zlib.decompress(base64.b64decode(val)).decode('utf-8'))
+                    except Exception:
+                        try:
+                            return json.loads(val)
+                        except Exception:
+                            logger.warning(
+                                "ai_data-Feld konnte nicht dekomprimiert werden "
+                                "(%d Zeichen) - Wert wird verworfen",
+                                len(val),
+                            )
+                            return empty
+                return val
+
             from pb_studio.data.repositories.media_repository import MediaRepository
             from pb_studio.data.vector_operation_outbox import VectorOperationOutbox
 
@@ -1540,12 +1593,14 @@ class AppState:
                             "key": ai_data.get("key"),
                             "beat_count": int(ai_data.get("beat_count", 0) or 0),
                             "beats": beats,
-                            "energy_curve": ai_data.get("energy_curve", []),
+                            "energy_curve": _decomp(ai_data.get("energy_curve", []), []),
                             "structure_segments": ai_data.get("structure_segments", []),
-                            "spectral_data": ai_data.get("spectral_data"),
+                            # spectral_data ist ein Objekt, kein Array:
+                            # Leerwert None, damit Optional[SpectralData] haelt.
+                            "spectral_data": _decomp(ai_data.get("spectral_data"), None),
                             # L-AUDIO-6: Subtracks + Tempo-Curve mit-restoren
                             "subtrack_segments": ai_data.get("subtrack_segments", []),
-                            "tempo_curve": ai_data.get("tempo_curve", []),
+                            "tempo_curve": _decomp(ai_data.get("tempo_curve", []), []),
                             # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten restoren
                             "onset_times": ai_data.get("onset_times", []),
                             "kick_times": ai_data.get("kick_times", []),
@@ -1590,7 +1645,7 @@ class AppState:
                         "thumbnail_available": _thumbnail_exists_for_clip(
                             clip_id, self.current_project, file_path
                         ),
-                        "tags": [],
+                        "tags": ai_data.get("tags", []),
                         # L-VIDEO-3 (CD-3): video_hash aus Meta (oder Legacy
                         # file_hash) zurueck ins In-Memory-Dict damit
                         # UI-CACHED-Badge + EmbeddingCache-Lookup funktionieren.
@@ -1600,7 +1655,7 @@ class AppState:
                     video_count += 1
 
                     # Video-Analyse-Cache wiederherstellen
-                    if is_analyzed and ai_data:
+                    if ai_data:
                         tmp_video_analysis[clip_id] = {
                             "clip_id": clip_id,
                             "scene_count": int(ai_data.get("scene_count", 0) or 0),
@@ -1610,6 +1665,7 @@ class AppState:
                             "motion": ai_data.get("motion", {}),
                             "dominant_colors": ai_data.get("dominant_colors", []),
                             "tags": ai_data.get("tags", []),
+                            "tag_source": ai_data.get("tag_source", "none"),
                             # L-M8: SigLIP-Embedding-Metadaten nach Reload zeigen
                             "embedding_dim": int(ai_data.get("embedding_dim", 0) or 0),
                             "embedding_samples": int(ai_data.get("embedding_samples", 0) or 0),
@@ -1619,6 +1675,11 @@ class AppState:
                             "avg_saturation": float(ai_data.get("avg_saturation", 0.5) or 0.5),
                             "avg_color_temp": float(ai_data.get("avg_color_temp", 0.0) or 0.0),
                             "mood_tags": ai_data.get("mood_tags", []),
+                            "status": ai_data.get("analysis_status", "completed"),
+                            "analysis_status": ai_data.get("analysis_status", "completed"),
+                            "stage_status": ai_data.get("stage_status", {}),
+                            "stage_errors": ai_data.get("stage_errors", {}),
+                            "is_analyzed": is_analyzed,
                         }
 
             # Unter Lock alle Clips und Caches atomar leeren und zuweisen (R-2 Fix)
