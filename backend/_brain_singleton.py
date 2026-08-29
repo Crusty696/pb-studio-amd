@@ -72,45 +72,51 @@ def current_project_state_identity() -> Optional[BrainProjectIdentity]:
 
 
 def clear_project_state() -> None:
-    """L-STATE-4: unbind state.db nach /project/close — verhindert dass
+    """L-STATE-4: unbind state.db nach /project/close - verhindert dass
     /brain/feedback weiter in die alte state.db schreibt (Cross-Project-Leak).
 
     Wird vom project_router.close_project gerufen. Wirft nicht, damit der
-    App-Lifecycle nicht crashed — meldet den Fehlschlag aber laut und loest
+    App-Lifecycle nicht crashed - meldet den Fehlschlag aber laut und loest
     den Brain-State fail-closed hart: bleibt die Bindung bestehen, waehrend
     _PROJECT_STATE_PATH schon None ist, schreibt jedes folgende
     /brain/feedback Lerndaten in das geschlossene Projekt."""
     global _PROJECT_STATE_PATH
     _PROJECT_STATE_PATH = None
-    service = None
+
     try:
         service = BrainService.get()
-        service.unbind_project_state()
     except Exception:
         logger.error(
-            "unbind_project_state fehlgeschlagen — Brain-State wird fail-closed "
-            "hart geloest, um Schreibzugriffe auf das geschlossene Projekt zu "
-            "verhindern",
+            "BrainService.get() beim Projekt-Close fehlgeschlagen - es gibt "
+            "keine Instanz, an der ein Brain-State geloest werden koennte",
             exc_info=True,
         )
-        _force_unbind(service)
-
-
-def _force_unbind(service) -> None:
-    """Fail-closed: Bindung ohne _state_binding_lock kappen.
-
-    Nach einem gescheiterten unbind_project_state ist der Zustand des Locks
-    unbekannt; ein erneuter Erwerb koennte haengen. Attributzuweisung ist in
-    CPython atomar und reicht, um sowohl den direkten (state_conn) als auch
-    den Lease-Pfad (_current_state_slot) zu sperren."""
-    if service is None:
         return
+
     try:
-        service.state_conn = None
-        service._current_state_slot = None
+        service.unbind_project_state()
+        return
+    except Exception:
+        logger.error(
+            "unbind_project_state fehlgeschlagen - Brain-State wird "
+            "fail-closed hart geloest, um Schreibzugriffe auf das "
+            "geschlossene Projekt zu verhindern",
+            exc_info=True,
+        )
+
+    try:
+        cleaned_up = service.force_unbind_project_state()
     except Exception:
         logger.critical(
-            "Brain-State konnte nicht fail-closed geloest werden — "
+            "Brain-State konnte nicht fail-closed geloest werden - "
             "/brain/feedback kann in das geschlossene Projekt schreiben",
             exc_info=True,
+        )
+        return
+
+    if not cleaned_up:
+        logger.critical(
+            "Brain-State-Bindung wurde gekappt, der Slot konnte aber nicht "
+            "unter dem Lock aufgeraeumt werden - die state.db-Verbindung "
+            "bleibt offen und haelt die Datei unter Windows fest"
         )

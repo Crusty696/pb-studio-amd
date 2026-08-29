@@ -201,7 +201,11 @@ class VectorStore:
                     "seit dem letzten Write ergaenzte Embeddings sind verloren",
                     exc_info=True,
                 )
-                inst._mark_dirty("atexit save failed")
+                inst._mark_dirty(
+                    "atexit save failed",
+                    path_class=_path_ref,
+                    logger_mod=_logger_ref,
+                )
 
     def _snapshot_targets(self) -> tuple[Path, Path, Path]:
         return (
@@ -317,6 +321,7 @@ class VectorStore:
 
 
     def _load_index(self):
+        self._report_dirty_marker()
         self._recover_incomplete_snapshot()
         if self.index_path.exists():
             try:
@@ -842,25 +847,66 @@ class VectorStore:
                 "ergaenzte Embeddings sind verloren",
                 exc_info=True,
             )
-            self._mark_dirty("final save failed", path_class=path_class)
+            self._mark_dirty(
+                "final save failed",
+                path_class=path_class,
+                logger_mod=logger_mod,
+            )
 
-    def _mark_dirty(self, reason: str, path_class=Path) -> None:
+    def _mark_dirty(
+        self,
+        reason: str,
+        *,
+        path_class=Path,
+        logger_mod=logger,
+        time_mod=time,
+    ) -> None:
         """Persistierter Marker neben der Indexdatei nach verlorenem Save.
 
-        Wird bewusst NICHT von einem spaeteren erfolgreichen Save entfernt: die
+        Wird beim naechsten Start von _load_index() gelesen und gemeldet, und
+        bewusst NICHT von einem spaeteren erfolgreichen Save entfernt: die
         verlorenen Embeddings lagen nur im RAM, ein neuer Write holt sie nicht
         zurueck. Der Marker bleibt, bis er beim Nachanalysieren aufgeraeumt wird.
-        Wirft nie — alle Aufrufer sind Shutdown-Pfade."""
+        Module werden injiziert, weil der atexit-Pfad seine eigenen starken
+        Referenzen haelt (T-DATA-01). Wirft nie - alle Aufrufer sind
+        Shutdown-Pfade."""
         try:
             marker = path_class(str(self.index_path) + ".dirty")
-            marker.write_text(
-                f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {reason}\n",
-                encoding="utf-8",
-            )
+            timestamp = time_mod.strftime("%Y-%m-%dT%H:%M:%SZ", time_mod.gmtime())
+            marker.write_text(f"{timestamp} {reason}\n", encoding="utf-8")
         except Exception:
-            logger.critical(
-                "FAISS-Dirty-Marker konnte nicht geschrieben werden (%s) — "
-                "der Verlust bleibt unsichtbar",
-                reason,
-                exc_info=True,
+            try:
+                logger_mod.critical(
+                    "FAISS-Dirty-Marker konnte nicht geschrieben werden (%s) - "
+                    "der Verlust bleibt unsichtbar",
+                    reason,
+                    exc_info=True,
+                )
+            except Exception:
+                # Letzte Ebene: beim Interpreter-Teardown kann selbst das
+                # Logging fehlschlagen. Hier ist stummes Schlucken korrekt,
+                # der atexit-Handler darf nicht werfen.
+                pass
+
+    def _report_dirty_marker(self) -> None:
+        """Verlorene Saves beim Start sichtbar machen.
+
+        Ohne diesen Leser waere der Marker aus _mark_dirty ein weiterer
+        Producer ohne Consumer: die Datei laege da, niemand meldete sie."""
+        try:
+            marker = Path(str(self.index_path) + ".dirty")
+            if not marker.exists():
+                return
+            content = marker.read_text(encoding="utf-8").strip()
+        except Exception as read_error:
+            logger.warning(
+                "FAISS-Dirty-Marker konnte nicht gelesen werden: %s", read_error
             )
+            return
+        logger.warning(
+            "FAISS-Dirty-Marker gefunden (%s): ein frueherer Abschluss-Save ist "
+            "fehlgeschlagen, dem Index fehlen die damals nur im RAM gehaltenen "
+            "Embeddings [%s]",
+            marker,
+            content or "ohne Inhalt",
+        )
