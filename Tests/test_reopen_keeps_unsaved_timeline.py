@@ -1,11 +1,11 @@
 """Das erneute Oeffnen des bereits offenen Projekts darf nichts verwerfen.
 
 Audit 2026-08-29: open_project laedt die Datei-Timeline in einen candidate_state
-(project_router.py:688) und _activate_project ersetzt damit ueber
-install_project_state (app_state.py:470) den kompletten Laufzeitzustand. Zeigt
-die Anfrage auf das bereits offene Projekt, ist das kein Wechsel, sondern
-Datenverlust - gemessen: RAM-Timeline 2 -> 0. Der Same-Path-Guard in
-_activate_project (:461) ueberspringt nur das Persistieren, nicht den Austausch.
+und _activate_project ersetzt damit ueber install_project_state den kompletten
+Laufzeitzustand - Timeline UND Analyse-Caches. Zeigt die Anfrage auf das bereits
+offene Projekt, ist das kein Wechsel, sondern Datenverlust - gemessen:
+RAM-Timeline 2 -> 0. Der Same-Path-Guard in _activate_project ueberspringt nur
+das Persistieren, nicht den Austausch.
 """
 
 import importlib
@@ -95,14 +95,24 @@ class TestReopenIsANoOp:
         ).status_code == 200
         project_path = tmp_path / "Alpha"
 
-        # Ein Pacing-Lauf, der noch NICHT gespeichert wurde.
+        # Ein Pacing-Lauf und eine Audioanalyse, die noch NICHT gespeichert sind.
         fresh_state.set_timeline(_timeline_entries())
+        fresh_state.audio_analysis_cache[1] = {"bpm": 128.0}
+        fresh_state.video_analysis_cache[1] = {"scenes": 7}
 
         response = client.post("/project/open", json={"path": str(project_path)})
 
         assert response.status_code == 200
         assert len(fresh_state.get_timeline_snapshot()) == 2, (
             "Reopen desselben Projekts hat den ungespeicherten RAM-Stand ersetzt"
+        )
+        # install_project_state ersetzt auch die Analyse-Caches. Eine verlorene
+        # komplette Audioanalyse waere der zweite spuerbare Schaden.
+        assert fresh_state.audio_analysis_cache == {1: {"bpm": 128.0}}, (
+            "Reopen hat die ungespeicherte Audioanalyse verworfen"
+        )
+        assert fresh_state.video_analysis_cache == {1: {"scenes": 7}}, (
+            "Reopen hat die ungespeicherte Videoanalyse verworfen"
         )
         assert response.json()["has_timeline"] is True
         assert response.json()["path"] == str(project_path)
@@ -165,4 +175,63 @@ class TestReopenIsANoOp:
         assert response.status_code == 200
         assert seen == [tmp_path / "Beta"], (
             "Beim Oeffnen eines ANDEREN Projekts muss der Ladepfad weiterhin laufen"
+        )
+
+    def test_first_open_without_any_active_project_takes_the_normal_path(
+        self, client, fresh_state, tmp_path, monkeypatch
+    ):
+        """current_project is None darf den Guard nicht ausloesen."""
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        assert client.post(
+            "/project/create", json={"name": "Alpha", "path": str(tmp_path)}
+        ).status_code == 200
+        project_path = tmp_path / "Alpha"
+
+        # Zustand wie beim frischen Backend-Start: nichts geoeffnet.
+        fresh_state.current_project = None
+
+        seen = []
+        real_loader = project_router._load_timeline_into_state
+        monkeypatch.setattr(
+            project_router,
+            "_load_timeline_into_state",
+            lambda p, t: (seen.append(Path(p)), real_loader(p, t))[1],
+        )
+
+        assert client.post(
+            "/project/open", json={"path": str(project_path)}
+        ).status_code == 200
+        assert seen == [project_path], (
+            "Ohne aktives Projekt muss der normale Ladepfad laufen"
+        )
+
+    def test_active_project_without_path_takes_the_normal_path(
+        self, client, fresh_state, tmp_path, monkeypatch
+    ):
+        """Ein current_project ohne 'path' darf den Guard nicht ausloesen."""
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        assert client.post(
+            "/project/create", json={"name": "Alpha", "path": str(tmp_path)}
+        ).status_code == 200
+        project_path = tmp_path / "Alpha"
+
+        fresh_state.current_project = {"name": "Alpha", "db_project_id": 500}
+
+        seen = []
+        real_loader = project_router._load_timeline_into_state
+        monkeypatch.setattr(
+            project_router,
+            "_load_timeline_into_state",
+            lambda p, t: (seen.append(Path(p)), real_loader(p, t))[1],
+        )
+
+        assert client.post(
+            "/project/open", json={"path": str(project_path)}
+        ).status_code == 200
+        assert seen == [project_path], (
+            "Ohne 'path' im current_project muss der normale Ladepfad laufen"
         )

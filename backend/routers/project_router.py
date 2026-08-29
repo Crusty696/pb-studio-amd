@@ -456,8 +456,10 @@ async def _activate_project(
         # Reopen desselben Projekts ist KEIN Wechsel: open_project hat die alte
         # timeline.json bereits in candidate_state geladen und wuerde sie
         # gleich in den RAM setzen. Ein Schreiben des neuen RAM-Stands liesse
-        # Datei und UI auseinanderlaufen. Es gibt keinen Same-Path-Guard in
-        # open_project, dieser Fall ist also real erreichbar.
+        # Datei und UI auseinanderlaufen. open_project haelt seit 00f2c23
+        # selbst einen Same-Path-Guard; dieser Zweig bleibt als Absicherung
+        # gegen einen Projektwechsel zwischen jener Pruefung und dem
+        # project_lifecycle_lock.
         if previous_root and Path(previous_root).resolve() != project_path.resolve():
             try:
                 persist_timeline_for_context(state, Path(previous_root))
@@ -636,7 +638,12 @@ async def open_project(
     request: ProjectOpen,
     state: AppState = Depends(get_app_state),
 ) -> ProjectInfo:
-    """Öffnet ein bestehendes Projekt."""
+    """Öffnet ein bestehendes Projekt.
+
+    Zeigt die Anfrage auf das bereits offene Projekt, ist der Aufruf ein
+    No-Op, der den aktuellen Laufzeitzustand zurueckmeldet - ein Neuladen von
+    Platte wuerde ungespeicherte Cuts verwerfen (siehe Guard unten).
+    """
 
     project_path = Path(request.path).resolve()
     # SEC-001: Path-Traversal-Schutz für Open (gegen globalen Basis-Ordner)
@@ -650,14 +657,24 @@ async def open_project(
 
     # Reopen desselben Projekts ist KEIN Wechsel. Der weitere Verlauf laedt den
     # Medienkatalog und die Datei-Timeline in einen candidate_state, den
-    # _activate_project ueber install_project_state (app_state.py:421) als
-    # kompletten Laufzeitzustand einsetzt. Beim bereits offenen Projekt wuerde
-    # damit der aeltere Dateistand den RAM-Stand ersetzen - ein Pacing-Lauf, der
-    # noch nicht gespeichert wurde, waere ersatzlos weg.
+    # _activate_project ueber install_project_state als kompletten
+    # Laufzeitzustand einsetzt. Beim bereits offenen Projekt wuerde damit der
+    # aeltere Dateistand den RAM-Stand ersetzen - ein Pacing-Lauf, der noch
+    # nicht gespeichert wurde, waere ersatzlos weg.
     # Der Guard steht bewusst VOR dem Laden: er soll den Austausch verhindern,
     # nicht nachtraeglich reparieren.
+    # Alle Felder werden in EINER Lock-Akquise gelesen. install_project_state
+    # haelt _state_lock ueber den gesamten Austausch; mehrere Einzelzugriffe
+    # koennten sonst current_project von X mit den Zaehlern von Y mischen.
+    # Direkte len()/bool()-Zugriffe statt der Snapshot-Getter: identisch zur
+    # Semantik von /project/info und ohne die Deepcopy des ganzen Katalogs.
+    # Path.resolve() bleibt bewusst AUSSERHALB des Locks - es ist ein
+    # Dateisystemzugriff und hat unter einem Zustands-Lock nichts zu suchen.
     with state._state_lock:
         active_project = dict(state.current_project or {})
+        ram_audio_count = len(state.audio_clips)
+        ram_video_count = len(state.video_clips)
+        ram_has_timeline = bool(state.current_timeline)
     active_path = active_project.get("path")
     if active_path and Path(active_path).resolve() == project_path:
         logger.info(
@@ -668,13 +685,13 @@ async def open_project(
             name=meta.get("name", active_project.get("name", project_path.name)),
             path=str(project_path),
             db_project_id=active_project.get("db_project_id"),
-            audio_count=len(state.get_audio_clips_snapshot()),
-            video_count=len(state.get_video_clips_snapshot()),
-            # ODER-Semantik wie in def8f3d (:742): der RAM-Stand ist der
-            # aktuellere, aber eine vorhandene timeline.json darf nicht
-            # verschwiegen werden, nur weil der RAM gerade leer ist.
-            has_timeline=bool(state.get_timeline_snapshot())
-            or bool(meta.get("has_timeline")),
+            audio_count=ram_audio_count,
+            video_count=ram_video_count,
+            # ODER-Semantik wie im Normalpfad ("has_timeline" weiter unten):
+            # der RAM-Stand ist der aktuellere, aber eine vorhandene
+            # timeline.json darf nicht verschwiegen werden, nur weil der RAM
+            # gerade leer ist.
+            has_timeline=ram_has_timeline or bool(meta.get("has_timeline")),
             created_at=meta.get("created_at") or active_project.get("created_at"),
             modified_at=meta.get("modified_at") or active_project.get("modified_at"),
         )
