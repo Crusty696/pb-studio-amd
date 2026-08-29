@@ -126,8 +126,6 @@ class SpectralAnalyzer:
 
             # Spectral Centroid berechnen
             centroids = librosa.feature.spectral_centroid(S=S, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length)[0]
-            mel = librosa.feature.melspectrogram(S=S**2, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length, n_mels=128)
-            mel_db = librosa.power_to_db(mel, ref=np.max)
 
             band_energies: Dict[str, Any] = {}
             band_means: Dict[str, float] = {}
@@ -151,7 +149,6 @@ class SpectralAnalyzer:
                 "times": times.tolist(),
                 "band_energies": {k: v.tolist() for k, v in band_energies.items()},
                 "centroids": centroids.tolist(),
-                "mel_bands": mel_db.tolist(),
                 "band_means": band_means,
                 "band_variances": band_variances,
                 "events": events,
@@ -184,8 +181,6 @@ class SpectralAnalyzer:
         # STFT berechnen
         S = np.abs(librosa.stft(y, n_fft=self.n_fft, hop_length=self.hop_length))
         freqs = librosa.fft_frequencies(sr=sr, n_fft=self.n_fft)
-        mel = librosa.feature.melspectrogram(S=S**2, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length, n_mels=128)
-        mel_db = librosa.power_to_db(mel, ref=np.max)
         times = librosa.frames_to_time(
             np.arange(S.shape[1]), sr=sr, hop_length=self.hop_length
         )
@@ -219,7 +214,6 @@ class SpectralAnalyzer:
             "band_means": band_means,
             "band_variances": band_variances,
             "events": events,
-            "mel_bands": mel_db.tolist(),
             "duration": float(len(y) / sr),
             "num_frames": len(times),
         }
@@ -337,7 +331,6 @@ class SpectralAnalyzer:
             "band_means": {b: 0.0 for b in BAND_NAMES},
             "band_variances": {b: 0.0 for b in BAND_NAMES},
             "events": [],
-            "mel_bands": [],
             "duration": 0.0,
             "num_frames": 0,
         }
