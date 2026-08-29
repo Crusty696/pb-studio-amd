@@ -135,6 +135,51 @@ def _video_stage_data_is_valid(stage: str, result: dict[str, Any]) -> bool:
     return False
 
 
+# Der Analyselauf ist in PHASEN gegliedert, und eine Phase faehrt teilweise zwei
+# Stages. Phasennamen sind KEINE Stage-Namen - landen sie in stage_status, raeumt
+# sie niemand je weg: _video_analysis_resume_base kopiert den Dict unveraendert
+# zurueck, _video_stage_should_run schlaegt nur unter echten Stage-Namen nach
+# (auch mit force=True), und _derive_video_analysis_status iteriert ueber alle
+# Werte. Ein einziges ueberlebendes "failed" macht den Clip damit dauerhaft zu
+# "partial", und is_analyzed wird nie wieder True.
+_VIDEO_PHASE_STAGES: dict[str, tuple[str, ...]] = {
+    "scenes": ("scenes",),
+    "motion_embedding": ("motion", "embedding"),
+    "colors_captions": ("colors", "captions"),
+    "audio_key": ("audio_key",),
+    # Persistenz ist keine Analyse-Stage. Ein Fehlschlag dort gehoert in
+    # stage_errors, aber nicht in stage_status.
+    "persistence": (),
+}
+
+
+def _stage_status_keys_for_phase(phase: str) -> tuple[str, ...]:
+    """Die Stages, die eine Laufphase abdeckt - die einzige Umrechnungsstelle."""
+    return _VIDEO_PHASE_STAGES.get(phase, ())
+
+
+def _drop_unknown_stage_keys(stage_status: dict[str, str]) -> dict[str, str]:
+    """Entfernt Schluessel, die keine Stage sind (Altlast aus dem Phasen-Defekt).
+
+    Danach hat die betroffene Stage keinen Status mehr, laeuft also beim
+    naechsten Lauf wieder und liefert ein ehrliches Ergebnis.
+    """
+    cleaned = {
+        stage: status
+        for stage, status in stage_status.items()
+        if stage in VIDEO_ANALYSIS_STAGE_FIELDS
+    }
+    dropped = set(stage_status) - set(cleaned)
+    if dropped:
+        logger.warning(
+            "stage_status enthielt %d Schluessel, die keine Stage sind (%s) - "
+            "entfernt; die betroffenen Stages laufen neu",
+            len(dropped),
+            ", ".join(sorted(dropped)),
+        )
+    return cleaned
+
+
 def _video_stage_should_run(
     stage: str,
     requested: bool,
@@ -174,7 +219,9 @@ def _video_analysis_resume_base(
     for field in reusable_fields:
         if field in existing:
             result[field] = deepcopy(existing[field])
-    result["stage_status"] = dict(existing.get("stage_status") or {})
+    result["stage_status"] = _drop_unknown_stage_keys(
+        dict(existing.get("stage_status") or {})
+    )
     result["stage_errors"] = dict(existing.get("stage_errors") or {})
     result["status"] = _video_analysis_status(
         existing,
@@ -1347,8 +1394,14 @@ async def _analyze_video_in_project(
         raise
     except Exception as e:
         result["status"] = "failed"
-        result["stage_status"][current_stage] = "failed"
-        result["stage_errors"][current_stage] = str(e)
+        failed_stages = _stage_status_keys_for_phase(current_stage)
+        for failed_stage in failed_stages:
+            result["stage_status"][failed_stage] = "failed"
+            result["stage_errors"][failed_stage] = str(e)
+        if not failed_stages:
+            # Phase ohne eigene Stage (Persistenz): sichtbar machen, ohne
+            # stage_status mit einem Nicht-Stage-Schluessel zu vergiften.
+            result["stage_errors"][current_stage] = str(e)
         try:
             _compensate_new_video_embedding(result)
         except Exception as compensation_exc:

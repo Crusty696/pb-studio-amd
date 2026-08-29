@@ -41,10 +41,16 @@ def detect_video_audio_key(video_path: str | Path) -> Optional[str]:
             return None
         video_path_str = str(video_path_obj.resolve())
 
+        # Dieselbe Reihenfolge wie audio/analyzer.py:12-18. Der frueher hier
+        # stehende erste Zweig griff auf `pb_studio.config` zu - ein Modul, das
+        # es nicht gibt und nie gab (die Datei heisst `config_manager.py`). Der
+        # ImportError wurde vom `except` geschluckt, also lief immer der
+        # Fallback. Genau dieses Muster - toter Import hinter bare-except - hat
+        # in diesem Repo schon einmal die Onset-Trigger stillgelegt.
         ffmpeg_path = "ffmpeg"
         try:
-            from pb_studio.config import config as _config
-            ffmpeg_path = str(getattr(_config, "ffmpeg_path", "ffmpeg"))
+            from pb_studio.config_manager import ConfigManager
+            ffmpeg_path = str(ConfigManager().ffmpeg_path)
         except Exception:
             try:
                 from pb_studio.video.encoder_utils import _get_ffmpeg_path
