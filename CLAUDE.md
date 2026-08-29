@@ -108,6 +108,55 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   Reopen-Datenverlust). Ein eigener Commit (`d1724f6`) hat eine fremde
   Arbeitsbaum-Änderung mitgenommen und dabei einen Fix behauptet, der keiner war
   — revertiert in `1d9a8d4`, Message bewusst nicht umgeschrieben.
+- **Reparaturplan 03 + `patch.py`-Stand — abgeschlossen und gepusht.**
+  Remote-SHA `0a7768c9db3d8131fed8ecb7db4e26b89cd1691b`, neun Commits.
+  Vollsuite danach: **2 failed / 1548 passed / 13 skipped / 0 errors** (26:46) —
+  von sieben Fehlern auf zwei. Die fünf verschwundenen sind exakt die, die der
+  Audit dem `patch.py`-Stand zuschrieb; damit ist jene Zuordnung bestätigt.
+  **Die zwei verbleibenden Fehler sind beide Infrastruktur, kein Produktdefekt:**
+  `test_audit_sdd_gate` prüft, ob `.qc-passed` für HEAD aktuell ist — der Marker
+  pinnt `commit_sha 20792e75`, also ist der Test nach *jedem* Commit rot und
+  trägt im Arbeitsalltag kein Signal. `test_t357::test_lhm_backup_restore_copy…`
+  löst über eine Evidence-Datei den Ordner
+  `tools/LibreHardwareMonitor.backup-20260730T0515+0200` auf; der fällt unter
+  `.gitignore:62 /tools/*`, war nie getrackt und existiert nicht mehr — der Test
+  kann in **keinem** Clone je grün werden.
+- **Der `patch.py`-Arbeitsstand war keine einheitliche Arbeit.** Zwei Schichten,
+  am Kommentarstil trennbar: eine handgeschriebene (verdrahtet, begründet,
+  getestet) und die maschinelle. **Beide roten Guard-Tests stammten aus der
+  maschinellen.** Übernommen: SDK-Pin (HEAD war mit `9.0.316` +
+  `rollForward: disable` auf dieser Maschine **gar nicht baubar**),
+  Tonart-Score-Vorzeichenfix, `audio_key`-Semantik, FR-362-Degrade,
+  Struktur-Labels. Verworfen mit Beleg: drei `*_receipt`-Feldergruppen ohne
+  Produzent *und* Konsument, `rejected_clips` samt einer C#-Reflection auf
+  nicht existierende Properties, ein Validator ohne Aufrufer, drei
+  `cap.grab()`-Schleifen (eine davon ~142.000 Aufrufe statt drei Seeks je Clip),
+  ein Teil-Revert des bewussten Fixes `c6b8cd0`.
+- **Live verifiziert am laufenden Backend** (`launch.ps1 -BackendOnly`,
+  `/health` → `gpu_available: true`): Projekt `12345` zweimal geöffnet, beide
+  Male HTTP 200, `/project/info` vorher und nachher byteidentisch, Logzeile
+  `Projekt ist bereits geoeffnet, Reopen bleibt folgenlos` (`project_router.py:701`).
+  **Grenze dieses Belegs, ausdrücklich:** er zeigt, dass der Reopen folgenlos
+  bleibt — er zeigt **nicht**, dass eine ungespeicherte Timeline erhalten
+  bliebe, denn das Projekt hat keine (`has_timeline: false`). Dafür wäre ein
+  echter Pacing-Lauf nötig. DB vor und nach allem: 6 Projekte, 711 Medien,
+  `integrity_check: ok`.
+- **Zwei Korrekturen an diesem Dokument selbst:**
+  - Die C-01-Beschreibung („`audio_router.py:2255` ruft `get_downbeats()` ohne
+    Pflichtargument") beschrieb den **Arbeitsbaum**, nicht HEAD. In HEAD gibt es
+    **überhaupt keinen** `get_downbeats`-Aufruf; `downbeat_provenance` ist
+    ausnahmslos `"unavailable"`. Der Defekt ist real, aber ein anderer: Downbeats
+    werden nie versucht. Und der naheliegende Fix ist falsch —
+    `get_downbeats(audio_path)` fährt einen **zweiten vollständigen
+    BeatNet-Lauf**; richtig ist `BeatDetector.scan()`, das beides in einem
+    Durchlauf liefert.
+  - Die LUID-Angaben unten (`0x0001185b`) sind keine Geräteidentität.
+    **DXGI-LUIDs werden pro Boot vergeben.** Heute live gemessen:
+    `0x00000000_0x314b3078`. Im Repo stehen vier verschiedene Werte für dieselbe
+    Karte; alle waren zum Zeitpunkt ihrer Aufnahme richtig. Kein
+    Produktionscode gated auf eine hartkodierte LUID (geprüft) — die Vergleiche
+    in `system_monitor.py`, `vram_arbiter.py` und `vram_budget_manager.py`
+    halten zwei zur Laufzeit gelesene Werte gegeneinander.
 - **Historischer Stand:** 2026-08-11 (OBJ-76 Runtime-Wahrheit; 18/20 Tasks belegt)
 - **Current Status:** Launcher/LHM/Capture, Shutdown-Persistenz, SigLIP-Gate,
   Scene-Ground-Truth und Recovery-Dry-Run sind fokussiert und live belegt.
@@ -296,7 +345,15 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:** Hermes-Research-Watchdog nur mit eigener Freigabe kurz
+- **Next Task (2026-08-29):** Auswertung der vier App-weiten
+  Zustandsaufnahmen (Backend, `src/pb_studio`, WPF, Infrastruktur/Tests). Danach
+  offen und je einen eigenen Vorgang wert: Downbeats über
+  `BeatDetector.scan()` statt eines zweiten BeatNet-Laufs; `has_audio_embedding`
+  wird nach der Analyse nie aktualisiert; `"peak"` fehlt in
+  `STRUCTURE_INTENSITY_MULTIPLIERS`; `test_audit_sdd_gate` und der
+  LHM-Backup-Test brauchen eine Entscheidung (Marker nachziehen bzw. Test an ein
+  eingechecktes Artefakt binden), sonst bleiben zwei Dauerrote ohne Signal.
+- **Next Task (älter, unverändert offen):** Hermes-Research-Watchdog nur mit eigener Freigabe kurz
   pausieren, genau T003 isoliert live wiederholen und den Watchdog danach exakt
   wieder starten. Nur wenn der echte Produktaufruf dann erneut keine Tags
   liefert, die reservierte Videoanalyse-Zone minimal ändern. Erst nach
