@@ -11,6 +11,7 @@ Kein Auth, kein HTTPS, kein Multi-User.
 import asyncio
 import logging
 import os
+import re
 import shutil
 import sys
 import threading
@@ -130,6 +131,13 @@ def get_uptime() -> float:
 
 _STALE_TEMP_MAX_AGE_SECONDS = 24 * 3600
 
+# Genau die Stage-Dateien unserer eigenen atomaren Schreibpfade:
+# ".<name>.<uuid4().hex>.tmp" bzw. ".<name>.<uuid4().hex>.rollback.tmp".
+# Der Basename enthaelt selbst Punkte ("timeline.json"), deshalb wird der
+# ganze Name geprueft und nicht das Suffix. Bewusst eng: ein liegen-
+# gebliebener Fremd-Dotfile ist harmlos, eine geloeschte Fremddatei nicht.
+_STALE_STAGE_NAME = re.compile(r"^\..+\.[0-9a-f]{32}(\.rollback)?\.tmp$")
+
 
 def _sweep_stale_temp_artifacts(proj_root: Path) -> int:
     """Entfernt verwaiste Render-Temp-Dirs und Stage-Dateien aelter als 24h.
@@ -149,10 +157,12 @@ def _sweep_stale_temp_artifacts(proj_root: Path) -> int:
                 cleaned += 1
         except Exception as cleanup_err:
             logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
-    # Verwaiste Stage-Dateien der atomaren Schreibpfade (".<name>.<uuid>.tmp").
+    # Verwaiste Stage-Dateien der atomaren Schreibpfade.
     # pathlib.rglob matcht Dotfiles, glob.glob nicht.
     for stale in proj_root.rglob(".*.tmp"):
         try:
+            if not _STALE_STAGE_NAME.match(stale.name):
+                continue
             if stale.is_file() and stale.stat().st_mtime < threshold:
                 stale.unlink(missing_ok=True)
                 cleaned += 1
