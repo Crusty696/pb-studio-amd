@@ -192,8 +192,16 @@ class VectorStore:
                 )
                 inst._closed = True
             except Exception:
-                # atexit darf niemals werfen
-                pass
+                # atexit darf niemals werfen — "nicht werfen" ist aber nicht
+                # dasselbe wie "nicht melden": ohne Log und Dirty-Marker gehen
+                # alle seit dem letzten Write ergaenzten Embeddings spurlos
+                # verloren.
+                _logger_ref.critical(
+                    "FAISS-Abschluss-Save beim Prozessende fehlgeschlagen — "
+                    "seit dem letzten Write ergaenzte Embeddings sind verloren",
+                    exc_info=True,
+                )
+                inst._mark_dirty("atexit save failed")
 
     def _snapshot_targets(self) -> tuple[Path, Path, Path]:
         return (
@@ -825,4 +833,34 @@ class VectorStore:
                     path_class=path_class
                 )
         except Exception:
-            pass
+            # Letzter Persistenzpunkt. Ohne Log und Dirty-Marker fehlen beim
+            # naechsten Start Clips im semantischen Index und der Zeitpunkt des
+            # Verlusts ist nicht rekonstruierbar. Darf trotzdem nicht werfen,
+            # der Aufrufer ist der Shutdown-Pfad.
+            logger_mod.critical(
+                "Finaler FAISS-Save fehlgeschlagen — seit dem letzten Write "
+                "ergaenzte Embeddings sind verloren",
+                exc_info=True,
+            )
+            self._mark_dirty("final save failed", path_class=path_class)
+
+    def _mark_dirty(self, reason: str, path_class=Path) -> None:
+        """Persistierter Marker neben der Indexdatei nach verlorenem Save.
+
+        Wird bewusst NICHT von einem spaeteren erfolgreichen Save entfernt: die
+        verlorenen Embeddings lagen nur im RAM, ein neuer Write holt sie nicht
+        zurueck. Der Marker bleibt, bis er beim Nachanalysieren aufgeraeumt wird.
+        Wirft nie — alle Aufrufer sind Shutdown-Pfade."""
+        try:
+            marker = path_class(str(self.index_path) + ".dirty")
+            marker.write_text(
+                f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {reason}\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.critical(
+                "FAISS-Dirty-Marker konnte nicht geschrieben werden (%s) — "
+                "der Verlust bleibt unsichtbar",
+                reason,
+                exc_info=True,
+            )
