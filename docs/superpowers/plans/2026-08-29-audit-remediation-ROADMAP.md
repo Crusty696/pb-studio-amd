@@ -145,8 +145,13 @@ das der Bericht selbst als Kernproblem des Projekts beschreibt.
 >       `with_name`-Konvention ziehen — letzter fester, sichtbarer Temp-Name
 > - [ ] Test-Spy in `test_concurrent_project_save.py` auf das Projektverzeichnis
 >       eingrenzen (patcht `Path.write_text` prozessweit)
-> - [ ] `install_project_state` verwirft beim Reopen weiterhin ungespeicherte
->       Cuts — **Altdefekt**, von dieser Runde bewusst nicht geheilt
+> - [x] `install_project_state` verwirft beim Reopen weiterhin ungespeicherte
+>       Cuts — **erledigt** in `00f2c23` über Plan 02
+>       (`2026-08-29-remediation-02-reopen-datenverlust.md`). Same-Path-Guard in
+>       `open_project` **vor** dem Laden des Kandidaten; der Reopen ist jetzt ein
+>       No-Op. Der Datenverlust war vorab gemessen (RAM-Timeline 2 → 0) und über
+>       den Ordnerdialog der UI erreichbar. Preis, bewusst gewählt: ein echtes
+>       „von Platte neu laden" gibt es über diesen Endpunkt nicht mehr.
 > - [ ] `Tests/conftest.py:109/122` ruft `clear_project_state()` ungeschützt in
 >       Setup und Teardown und nagelt die Funktion damit dauerhaft auf „melden
 >       statt werfen" fest
