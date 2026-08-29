@@ -201,3 +201,29 @@ def test_rollback_intermediate_path_is_unique_and_hidden(tmp_path, recorded_writ
     assert second[0].startswith(".")
     assert first[0] != second[0], f"Rollback-Zwischenpfad wiederverwendet: {first[0]}"
     assert target.read_bytes() == b"alt-2"
+
+
+def test_project_meta_stage_path_is_unique_and_hidden(tmp_path, recorded_writes):
+    """``_write_project_meta`` muss dieselbe Stage-Konvention benutzen.
+
+    ``with_suffix(".tmp")`` ERSETZT die Endung: aus ``project.json`` wurde
+    ``project.tmp`` - fest benannt und sichtbar.
+    """
+    module = importlib.import_module("backend.routers.project_router")
+
+    recorded_writes.clear()
+    module._write_project_meta(tmp_path, {"name": "A"})
+    first = _stage_names(recorded_writes, tmp_path)
+
+    recorded_writes.clear()
+    module._write_project_meta(tmp_path, {"name": "B"})
+    second = _stage_names(recorded_writes, tmp_path)
+
+    assert len(first) == 1 and len(second) == 1
+    assert first[0].startswith("."), f"Meta-Stage nicht versteckt: {first[0]}"
+    assert first[0].startswith(".project.json."), (
+        f"Meta-Stage haengt die Endung nicht an: {first[0]}"
+    )
+    assert first[0] != second[0], f"Meta-Stage wiederverwendet: {first[0]}"
+    assert json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))["name"] == "B"
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []

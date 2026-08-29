@@ -247,7 +247,10 @@ def _read_project_meta(project_path: Path) -> dict:
 def _write_project_meta(project_path: Path, meta: dict) -> None:
     import os
     meta_path = _project_meta_path(project_path)
-    tmp_path = meta_path.with_suffix(".tmp")
+    # Hauskonvention wie ``set_anchors``: versteckt, eindeutig, Endung
+    # angehaengt statt ersetzt (``with_suffix`` machte aus project.json ein
+    # festes, sichtbares project.tmp).
+    tmp_path = meta_path.with_name(f".{meta_path.name}.{uuid.uuid4().hex}.tmp")
     try:
         tmp_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(str(tmp_path), str(meta_path))
