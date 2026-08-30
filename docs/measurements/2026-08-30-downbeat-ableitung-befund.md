@@ -124,3 +124,70 @@ berücksichtigen:
   2 beide Taktanfang — genau die Periode-2-Falle.
 - **Keine Multiplizitätskorrektur** in der Rohausgabe; 5 Merkmale × 3 Fenster
   je Datei.
+
+
+---
+
+## Nachtrag: Gegenprobe an kommerziellem Material (2026-08-30)
+
+Einwand des Projektinhabers: die erste Messung lief überwiegend über eigene
+DJ-Mixe. Wiederholt an `D:\beatport_tracks_2025-08` — 35 einzelne, gemasterte
+AIFF-Tracks mit **BPM und Tonart im Dateinamen**, also mit Referenzwert.
+Rohdaten: `2026-08-30-downbeat-phase-contrast-beatport.json` (520 Messwerte,
+104 nicht überlappende Fenster).
+
+Zwei Verbesserungen am Werkzeug für diesen Lauf: Fenster überlappen nicht mehr
+(vorher bei 3–5-Minuten-Tracks 37–75 % Überlappung), und das Tempo wird gegen
+die Dateinamen-BPM geprüft.
+
+### Der Befund zur Ableitung hält
+
+| Merkmal | besteht Gatter | von |
+|---|---|---|
+| `onset_strength` | 2 | 104 |
+| `high_2k_8k` | 5 | 104 |
+| `lowmid_120_500` | 2 | 104 |
+| `bass_20_120` | 0 | 104 |
+| `rms` | 0 | 104 |
+
+**9 von 520.** Allein durch Vielfachtesten wären rund **26** zu erwarten.
+Phasenstabilität 16–22 % bei 25 % Zufall. Und `high_2k_8k` fällt wieder von
+44,2 % (freie Permutation) auf 11,5 % (korrekte Null) — dasselbe
+Periode-2-Artefakt wie zuvor.
+
+**Auf sauberem kommerziellem Material gilt derselbe Schluss.**
+
+### Der eigentliche Fund: die Temposchätzung trägt nicht
+
+Der Referenzwert im Dateinamen erlaubt erstmals einen Abgleich des
+Beat-Rasters — und der fällt schlecht aus:
+
+| Verhältnis erkannt / Dateiname | Fenster |
+|---|---|
+| 1× (korrekt) | 60 (57,7 %) |
+| **unverwandt** | **35 (33,7 %)** |
+| 3/2× | 4 |
+| 2× · 2/3× · 1/2× | 5 |
+
+Oktavnormierte Korrelation zwischen Dateiname und Erkennung: **r = +0,254**,
+mittlere Abweichung **14,8 BPM**.
+
+Noch deutlicher: über 104 Fenster gibt es nur **sechs verschiedene erkannte
+BPM-Werte**, und drei davon decken 99 Fenster ab — 143,6 (54×), 136,0 (27×),
+92,3 (18×). Bei Tracks, die laut Auszeichnung von 69 bis 145 BPM streuen.
+
+Ein Tempo-Prior repariert die meisten Fälle:
+
+| Datei-BPM | ohne Prior | mit `start_bpm` |
+|---|---|---|
+| 140 | 69,8 | 143,6 |
+| 71 | 92,3 | 143,6 |
+| 122 | 136,0 | 136,0 *(bleibt falsch)* |
+
+**Warum das schwerer wiegt als die Downbeat-Frage:** jeder beat-synchrone
+Schnitt sitzt auf diesem Raster, und PB Studio leitet die angezeigte BPM
+ihrerseits aus den erkannten Beats ab (`60 / median(diff)`) — ein falsches
+Raster erzeugt also auch eine falsche BPM-Anzeige, ohne Widerspruch.
+
+Das ist ein **eigener, noch nicht abgeschlossener Vorgang**. Hier ist nur der
+Messbefund festgehalten; am Beat-Pfad wurde nichts geändert.

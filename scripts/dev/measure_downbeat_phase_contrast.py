@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -74,6 +75,8 @@ class WindowResult:
     window_offset_s: float
     window_length_s: float
     bpm: float
+    bpm_from_name: float
+    tempo_ratio: float          # erkannt / Dateiname; 1.0 = passt, 2.0/0.5 = Oktavfehler
     beat_count: int
     feature: str
     phase_means: list[float]
@@ -103,10 +106,33 @@ def _sha256_16(path: Path) -> str:
 
 
 def _window_offsets(duration: float) -> list[float]:
-    """Deterministische Fensterlagen: bei kurzen Dateien das ganze Stueck."""
+    """Deterministische, NICHT ueberlappende Fensterlagen.
+
+    Die erste Fassung nahm 25/50/75 % der Dauer; bei einem 4-Minuten-Track
+    ueberlappten die drei Fenster dadurch zu ueber der Haelfte, und "drei
+    Fenster einig" war fast tautologisch statt ein dreifacher Beleg.
+    """
     if duration <= WINDOW_SECONDS * 1.5:
         return [0.0]
-    return [duration * frac - WINDOW_SECONDS / 2 for frac in (0.25, 0.50, 0.75)]
+    usable = duration - WINDOW_SECONDS
+    count = min(3, max(1, int(usable // WINDOW_SECONDS) + 1))
+    if count == 1:
+        return [usable / 2.0]
+    return [usable * index / (count - 1) for index in range(count)]
+
+
+_BPM_IN_NAME = re.compile(r"_(\d{2,3})__")
+
+
+def _bpm_from_filename(path: Path) -> float:
+    """BPM aus dem Dateinamen, falls vorhanden (Beatport-Namensschema).
+
+    Erlaubt den Abgleich des erkannten Tempos gegen die Wahrheit und damit das
+    Erkennen von Oktavfehlern - bei doppeltem Tempo sind die Phasen 0 und 2
+    beide Taktanfang, was den ganzen Befund entwertet.
+    """
+    match = _BPM_IN_NAME.search(path.name)
+    return float(match.group(1)) if match else float("nan")
 
 
 def _feature_values(
@@ -209,6 +235,7 @@ def _period_components(values: np.ndarray) -> tuple[float, float]:
 
 def measure_file(path: Path) -> list[WindowResult]:
     duration = float(librosa.get_duration(path=str(path)))
+    bpm_name = _bpm_from_filename(path)
     sha = _sha256_16(path)
     size = path.stat().st_size
     results: list[WindowResult] = []
@@ -255,6 +282,8 @@ def measure_file(path: Path) -> list[WindowResult]:
                     window_offset_s=round(offset, 2),
                     window_length_s=round(length, 2),
                     bpm=round(bpm, 2),
+                    bpm_from_name=bpm_name,
+                    tempo_ratio=round(bpm / bpm_name, 4) if bpm_name == bpm_name and bpm_name > 0 else float("nan"),
                     beat_count=len(beats),
                     feature=feature,
                     phase_means=[round(m, 6) for m in means],
@@ -279,7 +308,7 @@ def _collect_files(args: argparse.Namespace) -> list[Path]:
     if args.files:
         paths.extend(Path(f) for f in args.files)
     if args.dir:
-        extensions = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".opus"}
+        extensions = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".opus", ".aiff", ".aif"}
         for candidate in sorted(Path(args.dir).rglob("*")):
             if candidate.suffix.lower() in extensions and candidate.is_file():
                 paths.append(candidate)
@@ -322,7 +351,7 @@ def main() -> int:
         return 0 if identical else 1
 
     payload: dict[str, object] = {
-        "schema_version": 3,
+        "schema_version": 4,
         "environment": {
             "python": sys.version.split()[0],
             "numpy": np.__version__,

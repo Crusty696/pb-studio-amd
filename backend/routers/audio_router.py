@@ -2136,10 +2136,6 @@ def _run_audio_analysis(
     # 1. BeatNet Beat-Detection
     beats: list[dict] = []
     downbeats: list[float] = []
-    # Muss hier stehen, nicht im Beat-Zweig: der Leser weiter unten liegt
-    # ausserhalb von `if beat_times:` und saehe sonst einen NameError, sobald
-    # die Beat-Erkennung nichts liefert.
-    downbeat_is_derived = False
     downbeat_provenance: dict = {
         "status": "unavailable",
         "method": "not_requested",
@@ -2228,29 +2224,6 @@ def _run_audio_analysis(
                     # nicht angehaengt - Anhaengen verdoppelte jeden
                     # Taktanfang und brachte beats/strengths ausser Tritt.
                     downbeat_set = {float(t) for t in downbeat_times}
-                    if not downbeat_set:
-                        # madmom 0.16.1 wirft auf NumPy >= 1.24 in seinem
-                        # DBN-Downbeat-Prozessor; BeatNet liefert hier also nie
-                        # Taktpositionen, und die Beats stammen faktisch von
-                        # librosa. Statt den Modus downbeat_only leer laufen zu
-                        # lassen, wird der Taktanfang aus den Anschlagstaerken
-                        # abgeleitet - und ausdruecklich als abgeleitet
-                        # gekennzeichnet. Die Funktion verweigert die Auskunft,
-                        # wenn sich keine Taktposition abhebt (FR-317).
-                        from pb_studio.audio.beat_detector import (
-                            derive_downbeats_from_strengths,
-                        )
-                        derived = derive_downbeats_from_strengths(
-                            [float(t) for t in arr], [float(x) for x in strengths]
-                        )
-                        if derived:
-                            downbeat_set = set(derived)
-                            downbeat_is_derived = True
-                            logger.info(
-                                "Downbeats aus Anschlagstaerken abgeleitet "
-                                "(%d Taktanfaenge) - nicht gemessen",
-                                len(derived),
-                            )
                     for t, s in zip(arr, strengths):
                         beat_time = float(t)
                         beats.append({
@@ -2269,19 +2242,9 @@ def _run_audio_analysis(
                         for beat_time in downbeat_set
                         if any(beat_time == float(t) for t in arr)
                     )
-                if downbeats and downbeat_is_derived:
-                    # Ausdruecklich NICHT "measured": FR-317 verlangt, echte
-                    # Taktpositionen von abgeleiteten zu trennen.
-                    downbeat_provenance = {
-                        "status": "derived",
-                        "method": "onset_strength_phase",
-                        "synthetic": True,
-                        "measured_count": 0,
-                        "derived_count": len(downbeats),
-                    }
-                elif downbeats:
+                if downbeats:
                     # "measured" ist echten Taktpositionen aus dem Detektor
-                    # vorbehalten; pacing_service akzeptiert beide Woerter.
+                    # vorbehalten.
                     downbeat_provenance = {
                         "status": "measured",
                         "method": "beatnet_native",

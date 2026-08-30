@@ -346,12 +346,13 @@ class PacingService:
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
         pre_cached_downbeats: List[float] = []
-        # "measured" sind echte Taktpositionen aus dem Detektor. "derived"
-        # sind aus den Anschlagstaerken abgeleitete - sie tragen zusaetzlich
-        # synthetic=True und werden nie als gemessen ausgegeben. Beides ist
-        # brauchbar; alles andere bleibt liegen. FR-317 verlangt die Trennung,
-        # nicht den Verzicht.
-        USABLE_DOWNBEAT_STATES = {"measured", "derived"}
+        # Nur echte Taktpositionen aus dem Detektor. Der zuvor hier ebenfalls
+        # akzeptierte Status "derived" ist am 2026-08-30 zurueckgenommen
+        # worden: die Ableitung aus Anschlagstaerken hat an 68 Stuecken kein
+        # belastbares Ergebnis geliefert (8 von 750 Messwerten bestanden ein
+        # korrektes Gatter, waehrend allein Vielfachtesten rund 38 erwarten
+        # laesst). Siehe docs/measurements/2026-08-30-downbeat-ableitung-befund.md
+        USABLE_DOWNBEAT_STATES = {"measured"}
         downbeat_provenance = cached_analysis.get("downbeat_provenance") or {
             "status": "unavailable",
             "method": "cache_field_missing",
