@@ -173,3 +173,10 @@ scratch_test.ps1
 /.codex/*
 !/.codex/config.toml
 .agent/
+
+# Zusaetzliche venvs aus dem Lock-Neubau 2026-08-30:
+# .venv-pre-lock-* ist die Sicherung der alten Umgebung,
+# .venv-lock die parallel gebaute Pruefumgebung. Beide sind
+# Wegwerfstaende und gehoeren nicht ins Repo.
+.venv-lock/
+.venv-pre-lock-*/
