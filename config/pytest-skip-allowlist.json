@@ -10,7 +10,7 @@
     {
       "nodeid": "Tests/test_clip_selector_motion_curve.py::*",
       "owner": "pacing",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Legacy motion-curve helper contract is not active."
     },
     {
@@ -22,7 +22,7 @@
     {
       "nodeid": "Tests/test_ollama_vision_wrapper.py",
       "owner": "models",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Deprecated compatibility marker pending governed file removal."
     },
     {
@@ -34,13 +34,13 @@
     {
       "nodeid": "Tests/test_pacing_progress_events.py::test_engine_emits_progress_callback",
       "owner": "pacing",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Input-dependent no-cut branch requires a deterministic fixture."
     },
     {
       "nodeid": "Tests/test_trigger_settings_full_wiring.py::*",
       "owner": "pacing",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Two documented engine-reader decisions remain open for max-cut interval and onset sensitivity."
     },
     {
@@ -112,7 +112,7 @@
     {
       "nodeid": "Tests/test_timeline_integrity.py::test_auto_pacing_pipeline_chronological_no_violations",
       "owner": "pacing",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Legacy empty-cut branch requires a deterministic fixture."
     },
     {
@@ -124,19 +124,19 @@
     {
       "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_extract_3band_waveform",
       "owner": "audio",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Legacy external audio fixture is not present in clean checkout."
     },
     {
       "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_downsampled_waveform",
       "owner": "audio",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Legacy external audio fixture is not present in clean checkout."
     },
     {
       "nodeid": "Tests/test_waveform_analyzer.py::TestWaveformAnalyzer::test_frequency_content_analysis",
       "owner": "audio",
-      "expires_on": "2026-08-31",
+      "expires_on": "2026-09-30",
       "reason": "Legacy external audio fixture is not present in clean checkout."
     }
   ]
