@@ -345,28 +345,31 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task (2026-08-30) — vier Entscheidungen, dann erst Code.** Die
-  App-weite Zustandsaufnahme ist abgeschlossen: `ZUSTANDSAUFNAHME_2026-08-30.md`
-  (Remote `ddfb746`). Vollsuite **2 failed / 1558 passed / 13 skipped /
-  0 errors**; beide Fehler sind Infrastruktur, keiner ein Produktdefekt.
-  1. **Skip-Allowlist verfällt am 31.08.** — acht Einträge in
-     `config/pytest-skip-allowlist.json`, dazu zwei SCA-Ausnahmen am 01.09.
-     `pytest_release_guard.py:66-70` wirft in `pytest_configure`: es wird kein
-     Test rot, die **Session startet nicht**. Bewusst nicht eigenmächtig
-     verlängert — ein Ablaufdatum ist die Rechenschaftsmechanik.
-  2. **`downbeat_only` schließen oder aus der UI nehmen.** Der bisher hier
-     geführte Fix ist widerlegt; `BeatDetector.scan()` ist der Ansatzpunkt.
-  3. **Toter Code:** `services/`-Schicht, SyncMode-Planer, `VRAMArbiter`,
-     `VideoEmbedder`. Vor jeder Löschung `getattr`/Registry-Dispatch gegenprüfen
-     — die Aufruferzählungen sind grep-/AST-basiert.
-  4. **venv gegen Lock:** 14 Versions-, 13 Zusatz-, 6 fehlende Pakete.
-  Ungeklärt und ernst: **etwas schreibt zur Laufzeit `config.json` um.**
-  Mechanismus belegt (`ConfigManager.set()` persistiert die gesamte
-  In-Memory-Konfiguration, Singleton auf die Repo-Datei), Schreiber trotz sechs
-  gezielter Experimente nicht isoliert.
-  Kleiner und gut abgegrenzt: `has_audio_embedding` wird nach der Analyse nie
-  aktualisiert; `"peak"` fehlt in `STRUCTURE_INTENSITY_MULTIPLIERS`; der
-  Binding-Wächter braucht Wortgrenze und Klassenzuordnung.
+- **Next Task (2026-08-30, Stand 18:30) — die vier Entscheidungen sind
+  abgearbeitet und gepusht.** Vollsuite auf der neu gebauten Umgebung:
+  **2 failed / 1585 passed / 13 skipped / 0 errors** (25:08); die +27 sind
+  exakt die neuen Tests. Beide Fehler sind Infrastruktur, keiner ein
+  Produktdefekt.
+  Offen und je einen eigenen Vorgang wert:
+  1. **Ungeklärt und ernst:** etwas schreibt zur Laufzeit `config.json` um.
+     Mechanismus belegt (`ConfigManager.set()` persistiert die gesamte
+     In-Memory-Konfiguration, Singleton auf die Repo-Datei), Schreiber trotz
+     sechs gezielter Experimente nicht isoliert. Nächster Schritt wäre ein
+     Schreib-Wächter auf der Datei während eines Vollsuite-Laufs.
+  2. **Die zwei Dauerroten entscheiden.** `test_audit_sdd_gate` ist nach
+     *jedem* Commit rot (Marker pinnt einen SHA) und trägt kein Signal; der
+     LHM-Backup-Test löst einen gitignorierten Ordner auf und kann in keinem
+     Clone grün werden. Beide brauchen eine Entscheidung, sonst gewöhnt sich
+     jeder an rote Läufe.
+  3. **Die Ableitung an echter Musik prüfen.** Der Beleg stammt aus
+     synthetischem Material. Bei dominanter Snare auf 2 und 4 kann das
+     Verfahren die falsche Taktposition finden — es verweigert dann meist,
+     ausgeschlossen ist es nicht.
+  4. Kleiner: `has_audio_embedding` wird nach der Analyse nie aktualisiert;
+     `"peak"` fehlt in `STRUCTURE_INTENSITY_MULTIPLIERS`; der Binding-Wächter
+     braucht Wortgrenze und Klassenzuordnung (zwei belegte Falschgrün-Klassen).
+  5. **Aufräumen möglich:** `.venv-pre-lock-20260830` und `.venv-lock` sind
+     Wegwerfstände und können nach eigener Prüfung gelöscht werden.
 - **Next Task (älter, unverändert offen):** Hermes-Research-Watchdog nur mit eigener Freigabe kurz
   pausieren, genau T003 isoliert live wiederholen und den Watchdog danach exakt
   wieder starten. Nur wenn der echte Produktaufruf dann erneut keine Tags
