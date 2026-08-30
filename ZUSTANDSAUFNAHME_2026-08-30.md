@@ -297,10 +297,30 @@ Pragmas kosten auf der 29-MB-Datenbank dasselbe (je 14,5 ms) — die laxere
 Prüfung kaufte keine Zeit, sie war nur blind. **Behoben in `3df4156`** samt
 Test, der die Beschädigung selbst erzeugt.
 
-**Was offen bleibt:** der bestehende Snapshot enthält die beschädigte
-Datenbank unverändert. Das neue Gatter verhindert nur *neue* solche Snapshots.
-Bis ein sauberer Backend-Shutdown eine frische Generation erzeugt, würde der
-nächste unsaubere Abbruch die Beschädigung erneut einspielen.
+**Erledigt am 2026-08-30:** ein sauberer Backend-Shutdown hat eine frische
+Generation erzeugt — `20260830T173403884243Z-d9e9873b47dd4507b148a5d3b12e14e9`,
+398 Artefakte, Journal `snapshot / COMMITTED`, DIRTY geräumt. Die Datenbank im
+neuen Snapshot besteht `integrity_check`, und `config.json` darin stimmt
+byteweise mit HEAD überein. Damit ist die Beschädigung aus dem Wiederher-
+stellungspfad heraus und der nächste Restore würde den gesunden Stand
+einspielen.
+
+**Zwei eigene Fehlschlüsse dabei, beide korrigiert:** ich hatte nach dem
+`POST /shutdown` gemeldet, der Shutdown sei nicht sauber gewesen, weil der
+DIRTY-Marker zwei Sekunden später noch stand — und daraus geschlossen, der
+Launcher schieße den Prozess vorzeitig ab. Beides war falsch. Gemessen am Log:
+der Health-Endpunkt verstummt, sobald uvicorn den Socket schließt, aber die
+Lifespan-Abschaltung arbeitet danach noch **28 Sekunden** (19:34:03 → 19:34:31)
+und räumt DIRTY erst am Ende. Mein Fertigsignal war das falsche.
+
+Zum Launcher, nachgelesen statt vermutet: `Wait-ForBackendShutdown`
+(`launch.ps1:212`) verlangt in der Schleife `HasExited`, fällt nach Ablauf aber
+auf „Health tot und kein Listener" zurück — und das trifft nach ~2 s zu. Die
+Funktion liefert `true`, der `Stop-ProcessTree`-Zweig (`:648`) wird **nicht
+erreicht**. Der Launcher hält den Prozess also nicht auf; er betrachtet die
+Abschaltung nur rund 26 s früher als beendet, als sie es ist. Ein Defekt ist
+das nicht, aber es heißt: wer in diesem Fenster den Rechner herunterfährt,
+verliert den Shutdown-Snapshot.
 
 ### B-8 · `media.status` trägt vier unvereinbare Vokabulare
 **AGENT, UNGEPRÜFT.** `completed|partial|failed` vs. `analyzed` (auch beim
