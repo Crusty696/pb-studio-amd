@@ -2195,12 +2195,19 @@ def _run_audio_analysis(
                 # detect_beats gibt list[float] zurück - BeatNet oder Librosa-Fallback
                 beat_detect_path = drums_path if drums_path and Path(drums_path).exists() and Path(drums_path).stat().st_size > 0 else (instrumental_path if instrumental_path and Path(instrumental_path).exists() else audio_path)
                 logger.info(f"Beat-Detection verwendet Pfad: {beat_detect_path}")
+                # detect_beats_with_downbeats liefert beides aus EINEM
+                # BeatNet-Durchlauf. get_downbeats() waere ein zweiter Lauf
+                # ueber dieselbe Datei gewesen.
                 try:
-                    beat_times = detector.detect_beats(beat_detect_path, on_progress=_beat_progress)
+                    beat_times, downbeat_times = detector.detect_beats_with_downbeats(
+                        beat_detect_path, on_progress=_beat_progress
+                    )
                 except Exception as e:
                     if beat_detect_path != audio_path:
                         logger.warning(f"Beat-Detection mit {beat_detect_path} fehlgeschlagen: {e}. Versuche Fallback auf Original-Mix...")
-                        beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
+                        beat_times, downbeat_times = detector.detect_beats_with_downbeats(
+                            audio_path, on_progress=_beat_progress
+                        )
                     else:
                         raise
                 if beat_times:
@@ -2212,22 +2219,46 @@ def _run_audio_analysis(
                     from pb_studio.audio.beat_detector import BeatDetector as _BD
                     strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
 
+                    # Downbeats tragen dieselben Zeitstempel wie die Beats,
+                    # aus denen sie stammen. Sie werden deshalb MARKIERT und
+                    # nicht angehaengt - Anhaengen verdoppelte jeden
+                    # Taktanfang und brachte beats/strengths ausser Tritt.
+                    downbeat_set = {float(t) for t in downbeat_times}
                     for t, s in zip(arr, strengths):
+                        beat_time = float(t)
                         beats.append({
-                            "time": float(t),
+                            "time": beat_time,
                             "strength": float(s),
-                            "beat_type": "beat",
+                            "beat_type": (
+                                "downbeat" if beat_time in downbeat_set else "beat"
+                            ),
                         })
                     if len(arr) > 1:
                         intervals = np.diff(arr)
                         avg_interval = float(np.median(intervals))
                         bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
-                downbeat_provenance = {
-                    "status": "unavailable",
-                    "method": "beat_time_only_detector",
-                    "synthetic": False,
-                    "measured_count": 0,
-                }
+                    downbeats = sorted(
+                        beat_time
+                        for beat_time in downbeat_set
+                        if any(beat_time == float(t) for t in arr)
+                    )
+                if downbeats:
+                    # "measured" ist das Wort, auf das pacing_service.py:389
+                    # prueft. Jeder andere Wert laesst die Downbeats liegen.
+                    downbeat_provenance = {
+                        "status": "measured",
+                        "method": "beatnet_native",
+                        "synthetic": False,
+                        "measured_count": len(downbeats),
+                    }
+                else:
+                    # Ehrlich: der librosa-Fallback kennt keine Taktanfaenge.
+                    downbeat_provenance = {
+                        "status": "unavailable",
+                        "method": "beat_time_only_detector",
+                        "synthetic": False,
+                        "measured_count": 0,
+                    }
 
                 # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
                 rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
