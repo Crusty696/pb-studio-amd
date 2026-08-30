@@ -22,6 +22,44 @@ ausdrücklich anders vermerkt. Es wurde kein Test von den Aufnahmen ausgeführt.
 
 ---
 
+## 0a. Die vier Entscheidungen — getroffen und umgesetzt
+
+Nachtrag vom 2026-08-30. Der Projektinhaber hat alle vier entschieden; was
+darunter steht, ist der Stand VOR diesen Entscheidungen und bleibt als
+Begruendung stehen.
+
+| | Entscheidung | Umsetzung |
+|---|---|---|
+| **E-1** | Allowlist verlaengern | `a126f4e` acht Skip-Eintraege auf 30.09.; `d69e640` + `b0b941b` beide CVE-Ausnahmen neu ausgestellt |
+| **E-2** | Kette schliessen, Downbeats selbst rechnen | `7bdda17` + `6187eb2` |
+| **E-3** | Erst kennzeichnen, spaeter loeschen | `c3b756e` sechs Einheiten + symbolgenauer Waechter |
+| **E-4** | venv aus dem Lock neu bauen | parallel gebaut, gegen die Vollsuite geprueft, dann umgeschaltet |
+
+Drei Dinge, die dabei ans Licht kamen und die vorher niemand wusste:
+
+**madmom kann auf dieser Umgebung grundsaetzlich keine Downbeats liefern.**
+`madmom/features/downbeats.py:287` ruft `np.asarray(results)[:, 1]` auf eine
+ungleichfoermige Ergebnisliste — seit NumPy 1.24 ein Fehler. Gegengeprueft mit
+`beats_per_bar=[4]` statt `[2,3,4]`: wirft ebenfalls, keine Konfiguration
+umgeht den Pfad. BeatNet wirft damit bei **jeder** Datei, und saemtliche Beats
+stammen in Wahrheit von librosa. Die CLAUDE.md-Aussage vom 2026-08-06
+(„BeatNet erstmals aktiv, Downbeats existieren") ist damit widerlegt.
+
+**Sicherheitsausnahmen haben ein 30-Tage-Fenster**, kodiert in
+`Tests/test_t413_python_sca_gate.py` als eigene Zusicherung. Meine erste
+Verlaengerung auf den 30.09. haette es auf 59 Tage gedehnt. Die Ausnahmen sind
+stattdessen neu ausgestellt (2026-08-30 + 30 Tage). Verfahrensfehler meinerseits:
+ich hatte nach der Aenderung an `config/*.json` nur den Skip-Guard laufen
+lassen, nicht den Waechter dieser Datei.
+
+**`SmartDirector` ist lebendig**, entgegen der Aufnahme unten.
+`clip_selector._get_text_embedding` holt darueber den SigLIP-Text-Encoder,
+erreichbar ueber `select_clip`. Tot ist allein seine
+`generate_timeline`-Orchestrierung. Der Legacy-Waechter ist deshalb
+symbolgenau und nicht modulweit.
+
+---
+
 ## 0. Was deine Entscheidung braucht — und zwar zuerst
 
 ### E-1 · Die Skip-Allowlist verfällt am 31.08. und legt danach den **gesamten** CI-Lauf still

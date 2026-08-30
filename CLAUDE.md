@@ -389,7 +389,20 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *Motion Analysis:* RAFT ONNX via DirectML (`raft.py → MotionAnalyzer`)
 - *Stem Separation:* htdemucs runs on CPU because PyTorch CPU is used in the pinned environment. DirectML acceleration only applies to ONNX-MDX paths in StemSeparator.
 - *Vector DB:* FAISS-CPU (1152-dim SigLIP SO400M embeddings) + sqlite-vec (Brain-Modul KNN)
-- *Beat Detection:* BeatNet (madmom) installiert und `BEATNET_AVAILABLE=True`, ABER
+- *Beat Detection:* **librosa ist der reale Beat-Lieferant.** BeatNet/madmom
+  ist zur Laufzeit wirkungslos: `madmom/features/downbeats.py:287` ruft
+  `np.asarray(results)[:, 1]` auf eine ungleichförmige Ergebnisliste, was seit
+  NumPy 1.24 ein `ValueError` ist. Gegengeprüft mit `beats_per_bar=[4]` statt
+  `[2,3,4]` — wirft ebenfalls, keine Konfiguration umgeht den Pfad. BeatNet
+  wirft damit bei **jeder** Datei; der Wurf wird gefangen und librosa
+  übernimmt. Seit dem venv-Neubau ist `madmom` gar nicht mehr installiert.
+  **Downbeats werden seit `6187eb2` aus den Anschlagstärken abgeleitet** und
+  ausdrücklich als `status="derived"`, `synthetic=True` gekennzeichnet —
+  `"measured"` bleibt echten Detektor-Taktpositionen vorbehalten. Die
+  Ableitung verweigert die Auskunft, wenn sich keine Taktposition abhebt; das
+  hält FR-317 („keine pauschale jeder-vierte-Beat-Behauptung") ein. Der
+  T317-Wächter in `AdvancedPacingEngine._identify_downbeats` ist unangetastet.
+  *Historisch, jetzt überholt:*
   **die Downbeats erreichen die Pacing-Engine nicht** (Audit 2026-08-29, C-01):
   `audio_router.py:2255` ruft `detector.get_downbeats()` ohne das Pflichtargument
   → `TypeError`, von `except Exception` verschluckt. Zusätzlich schreibt der Router
@@ -437,8 +450,8 @@ PBStudio.UI/
 | Python | 3.11.x | madmom/BeatNet |
 | NumPy | 1.26.4 | < 2.0 strict |
 | onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | **Lock 2.11.0+cpu, installiert 2.4.1+cpu** | ML tensors. **Audit 2026-08-29: die venv wurde nie aus `requirements.txt` gebaut.** Auch transformers (4.49 statt 5.5.4), hf-hub (0.36.2 statt 1.5.0) und starlette (1.0.0 statt 1.3.1) weichen ab; `torch-directml` ist undokumentiert installiert. Ein Clean-Install erzeugt eine ANDERE Umgebung als die, in der die Suite grün gemeldet wurde. Entscheidung offen: Lock anpassen oder venv neu bauen. |
-| BeatNet | 1.1.1 | Beat detection |
+| PyTorch (CPU) | 2.11.0+cpu | ML tensors. **2026-08-30: venv aus dem Lock neu gebaut**, Lock und Installation stimmen wieder überein. Vorher wich sie an 14 Versionen ab (torch 2.4.1, transformers 4.49, hf-hub 0.36.2, starlette 1.0.0), hatte 13 Zusatzpakete und 6 fehlende. Die alte Umgebung liegt als `.venv-pre-lock-20260830` daneben. `torch-directml` ist ersatzlos weg — es hatte null Nutzer im Code; DirectML läuft über `onnxruntime-directml`. |
+| BeatNet | 1.1.1 im Lock, **zur Laufzeit wirkungslos** | `madmom` steht nicht in `requirements.txt`, `BEATNET_AVAILABLE` ist seit dem venv-Neubau `False`. Kein Verlust: madmom 0.16.1 wirft auf NumPy ≥ 1.24 ohnehin bei jeder Datei (siehe §4). Beats kommen von librosa. |
 | FFmpeg | aktives Manifest: 6.1.1 Gyan.dev; T411-Hardware-QC bestanden | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
 
