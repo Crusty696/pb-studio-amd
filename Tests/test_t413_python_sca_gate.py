@@ -202,7 +202,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "2.11.0+cpu",
                 "alias": "GHSA-RRMF-RVHW-RF47",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-01",
+                "expires_on": "2026-09-29",
                 "reason": (
                     "Affected torch.jit.script is absent in the shipped repository; "
                     "fresh-target compatibility and runtime tests remain required."
@@ -214,7 +214,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "81.0.0",
                 "alias": "GHSA-H35F-9H28-MQ5C",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-01",
+                "expires_on": "2026-09-29",
                 "reason": (
                     "The release target is Windows x64 with wheel-only installation, "
                     "which defeats the macOS sdist precondition."
@@ -222,7 +222,11 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
             },
         ],
     }
-    assert date.fromisoformat("2026-09-01") - date(2026, 8, 2) == timedelta(days=30)
+    # Die Ausnahmen sind am 2026-08-30 neu ausgestellt worden, nachdem die
+    # urspruengliche Frist (2026-08-02 + 30 Tage) auslief. Das 30-Tage-Fenster
+    # ist die eigentliche Zusicherung dieser Zeile - eine Verlaengerung darf
+    # es nicht stillschweigend dehnen.
+    assert date.fromisoformat("2026-09-29") - date(2026, 8, 30) == timedelta(days=30)
     assert len(security_gate._load_python_sca_exceptions(SCA_EXCEPTIONS)) == 2
 
     lock = tmp_path / "approved-exceptions.lock"
