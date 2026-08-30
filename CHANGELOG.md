@@ -3,6 +3,98 @@
 
 ---
 
+## 2026-08-30 - Recovery-Wahrheit, Downbeat-Kette, venv aus dem Lock
+
+### Fixed
+- **Recovery-Snapshot liess beschaedigte Indizes durch.**
+  `recovery_generation._backup_sqlite` validierte mit `PRAGMA quick_check`, und
+  quick_check prueft die Uebereinstimmung von Tabelle und Index nicht. Genau
+  diese Fehlerklasse (`row 604 missing from index idx_media_status`) lag im
+  Snapshot der Produktionsdatenbank vor, kam durch das Gatter und wurde beim
+  naechsten Restore in die Live-Datenbank zurueckgespielt. Jetzt
+  `integrity_check`; auf 29 MB gemessen kosten beide Pragmas dasselbe.
+- **Phasennamen vergifteten `stage_status` dauerhaft.** Der Except-Zweig in
+  `_analyze_video_in_project` schrieb `motion_embedding`, `colors_captions` und
+  `persistence` als Stage-Schluessel. Kein Codepfad raeumte sie je weg - auch
+  `force=True` nicht -, wodurch betroffene Clips fuer immer als nicht analysiert
+  galten. Eine Umrechnungsstelle plus Altlast-Heilung beim Wiederaufsetzen.
+- **Downbeat-Kette war an vier Stellen zugleich durchtrennt.** Drei davon im
+  eigenen Code: Beats und Downbeats kommen jetzt aus EINEM BeatNet-Durchlauf
+  (`detect_beats_with_downbeats`), `downbeats` wird zugewiesen statt nur
+  initialisiert, und die Provenance schreibt das Wort, auf das der Konsument
+  prueft. Downbeats werden markiert statt angehaengt - sie tragen dieselben
+  Zeitstempel, ein Anhaengen haette jeden Taktanfang verdoppelt.
+- **Tonart-Score kehrte die Rangfolge um**, sobald `total_score` negativ wurde
+  (`audio_state == "break"`): der Clip mit der unpassenden Tonart gewann.
+- **Fehlende Tonspur ist ein Faehigkeitsbefund, kein Fehler.** `audio_key`
+  trennt jetzt `unavailable` (kein Ton) von `failed` (Detektorfehler).
+- **Struktur-Labels** auf das Vokabular von `STRUCTURE_INTENSITY_MULTIPLIERS`;
+  die alten fielen ausnahmslos auf den Default 0.8, die Struktur wirkte nicht.
+- **`audio_key_detector.py` importierte `pb_studio.config`** - ein Modul, das
+  nie existiert hat. Vom bare-except geschluckt.
+- **SDK-Pin** war `9.0.316` mit `rollForward: disable`; dieses SDK ist nicht
+  installiert, HEAD war lokal nicht baubar. Jetzt Untergrenze mit `latestPatch`,
+  die lokal und in CI erfuellt ist.
+- **`Tests/conftest.py`** diktierte, ob `clear_project_state` werfen darf. Die
+  autouse-Fixture rief sie ungeschuetzt; jeder Wurf haette die gesamte Suite in
+  Fixture-Errors verwandelt.
+
+### Changed
+- **venv aus `requirements.txt` neu gebaut.** Lock und Installation stimmen
+  wieder ueberein (torch 2.11.0+cpu, transformers 5.5.4, hf-hub 1.5.0,
+  starlette 1.3.1). Vorher wich sie an 14 Versionen ab. `torch-directml`
+  entfaellt - null Nutzer im Code. Alte Umgebung: `.venv-pre-lock-20260830`.
+- **Downbeats werden abgeleitet**, wenn der Detektor keine liefert - aus den
+  Anschlagstaerken, gekennzeichnet als `status="derived"`, `synthetic=true`.
+  Die Ableitung verweigert die Auskunft, wenn sich keine Taktposition abhebt;
+  damit bleibt FR-317 ("keine pauschale jeder-vierte-Beat-Behauptung") gewahrt.
+- **FR-362:** ein Pacing-Modus ohne Datengrundlage wird real abgeschaltet und
+  als `ModeDegradationSchema` gemeldet, statt still als aktiv durchzugehen.
+- **Sechs tote Einheiten als LEGACY gekennzeichnet** (AnalysisService,
+  GenerationService, MediaService, VideoGenerator, VRAMArbiter, VideoEmbedder),
+  nichts geloescht; ein symbolgenauer Waechter verbietet neue Aufrufer.
+- Skip-Allowlist auf 2026-09-30 verlaengert, CVE-Ausnahmen im
+  30-Tage-Fenster neu ausgestellt (2026-09-29).
+
+### Widerlegt
+- **BeatNet liefert nichts.** madmom 0.16.1 wirft auf NumPy >= 1.24 in seinem
+  DBN-Downbeat-Prozessor bei JEDER Datei; librosa ist der reale
+  Beat-Lieferant. Die Angabe vom 2026-08-06 beschrieb den Installationszustand,
+  nicht das Laufzeitverhalten.
+- **Die DXGI-LUID ist keine Geraeteidentitaet** - sie wird pro Boot vergeben.
+  Vier verschiedene Werte stehen im Repo, alle waren zu ihrer Zeit richtig.
+- **`SmartDirector` ist lebendig**, entgegen der Zustandsaufnahme: er liefert
+  den SigLIP-Text-Encoder fuer die Clip-Auswahl. Nur `generate_timeline` ist
+  unerreichbar.
+
+### Betrieb
+- **Ein unsauberer Backend-Abbruch ist ein Datenverlust-Ereignis.** Er laesst
+  `RUNTIME_DIRTY` stehen; der naechste `backend.main`-Import - auch jeder
+  pytest-Lauf - stellt 398 Artefakte aus der letzten Generation wieder her,
+  darunter `data/pb_studio.db`, 349 Brain-Dateien und 30 `project.json`.
+- **Fertigsignal des Shutdowns ist das Verschwinden von `RUNTIME_DIRTY`**, nicht
+  der geschlossene Port. Dazwischen liegen gemessene 28 Sekunden.
+
+---
+
+## 2026-08-29 - Reparaturplan 01: Datenverlust und stille Fehler
+
+### Fixed
+- Drei verschluckte Persistenzfehler laut gemacht: fail-closed Unbind ueber
+  `BrainService.force_unbind_project_state`, zwei atexit-Save-Handler melden und
+  hinterlassen einen in `_load_index` gelesenen Dirty-Marker.
+- Timeline wird vor Close und Projektwechsel persistiert
+  (`persist_timeline_for_context`).
+- Save-Pfad auf eindeutige versteckte Stage-Namen gehaertet.
+- Reopen eines bereits offenen Projekts bleibt folgenlos, statt ungespeicherte
+  Cuts zu verwerfen.
+- `project.json` mit `"name": null` macht ein Projekt nicht mehr unoeffenbar.
+
+### Added
+- `Tests/`-Waechter gegen doppelte Dict-Schluessel.
+
+---
+
 ## 2026-08-11 - OBJ-76 Runtime-Wahrheit und Shutdown-Härtung
 
 ### Fixed

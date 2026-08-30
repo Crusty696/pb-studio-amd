@@ -983,3 +983,61 @@ Performance-Regressionen). Beide Guard-Testfehler stammten aus der
   `mix_energy`-Resume-Checkpoints ungültig gemacht (`energy_only` steckt im
   `_checkpoint_config`) und die Chroma/Key-Erkennung vom Instrumental-Stem auf
   den vollen Mix umgestellt — gegen die erklärte Absicht des umgebenden Codes.
+
+---
+
+## Sitzung 2026-08-30 — die vier Entscheidungen, und was dabei auffiel
+
+Der Projektinhaber hat alle vier offenen Entscheidungen getroffen. Umsetzung
+und Belege stehen in `ZUSTANDSAUFNAHME_2026-08-30.md` Abschnitt 0a; hier nur,
+was für die Roadmap selbst zählt.
+
+| | Entscheidung | Commit |
+|---|---|---|
+| E-1 | Allowlist verlängern | `a126f4e`, `d69e640`, korrigiert in `b0b941b` |
+| E-2 | Downbeat-Kette schließen, Downbeats ableiten | `7bdda17`, `6187eb2` |
+| E-3 | Toten Code kennzeichnen, nicht löschen | `c3b756e` |
+| E-4 | venv aus dem Lock neu bauen | `80a4487` (Doku), Umgebung getauscht |
+
+### Task 2.1 (Downbeats) — erledigt, aber anders als geplant
+
+Der Roadmap-Schritt „`get_downbeats(audio_path)` — Pfad übergeben" ist
+**gestrichen**. Er hätte einen zweiten vollständigen BeatNet-Lauf ausgelöst.
+Umgesetzt ist stattdessen `detect_beats_with_downbeats()`, das beides aus einem
+Durchlauf zieht und den Langdatei-Schutz behält — `scan()`, der andere
+naheliegende Kandidat, hat diesen Schutz **nicht** und hätte lange DJ-Mixes zum
+Hänger gemacht.
+
+**Der eigentliche Blocker liegt außerhalb des Repos:** madmom 0.16.1 wirft auf
+NumPy ≥ 1.24 in seinem DBN-Downbeat-Prozessor bei *jeder* Datei. Keine
+`beats_per_bar`-Konfiguration umgeht das. BeatNet liefert hier also nie
+Taktpositionen; Downbeats werden seither aus den Anschlagstärken **abgeleitet**
+und als `derived`/`synthetic` gekennzeichnet.
+
+### Task 2.3 (`rejected_clips`) — bleibt zurückgenommen
+
+Unverändert gegenüber dem letzten Stand: verworfen statt durchgezogen.
+
+### Neu aufgenommen: der Recovery-Pfad
+
+Nicht Teil des ursprünglichen Audits, in dieser Sitzung aufgedeckt und in
+`3df4156` teilweise behoben:
+
+- **Ein unsauberer Backend-Abbruch rollt 398 Artefakte zurück** — darunter
+  `data/pb_studio.db`, 349 Brain-Dateien und 30 `project.json`. Auslöser ist der
+  `RUNTIME_DIRTY`-Marker, den nur ein sauberer Shutdown räumt.
+- **Das Snapshot-Gatter war blind für Indexbeschädigung** (`PRAGMA quick_check`
+  prüft Tabelle gegen Index nicht). Behoben. Der damals beschädigte Snapshot ist
+  durch eine frische, gesunde Generation ersetzt.
+- **Offen und bewusst nicht angefasst:** der Launcher betrachtet die Abschaltung
+  rund 26 s früher als beendet, als sie es ist. Er tötet den Prozess dabei
+  *nicht* (nachgelesen: der `Stop-ProcessTree`-Zweig wird nicht erreicht), aber
+  wer in diesem Fenster den Rechner herunterfährt, verliert den Snapshot.
+
+### Was als Nächstes ansteht
+
+Keine Codearbeit, sondern **Live-Verifikation**. Sieben Fixes und zwei Features
+dieser und der Vorsitzung sind gebaut und getestet, aber keiner davon am
+laufenden Backend mit echten Projektdaten gesehen. Runbook mit Befehlen,
+Vorbedingungen und Erwartungswerten:
+`docs/handoff/2026-08-30-live-verifikation-startpunkt.md`.
