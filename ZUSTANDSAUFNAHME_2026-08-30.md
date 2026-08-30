@@ -251,6 +251,57 @@ ungefragt umschreibt, macht jede bewusste Einstellung unzuverlässig. Der
 nächste Schritt wäre ein Schreib-Wächter auf der Datei während eines
 Vollsuite-Laufs.
 
+### B-7b · AUFGEKLÄRT — der Schreiber ist der Recovery-Bootstrap
+**SELBST GEPRÜFT, vollständige Beweiskette.**
+
+Nicht die Anwendung, nicht ein Test. Der Ablauf:
+
+1. `backend/main.py:271` markiert die Laufzeit beim Backendstart als **DIRTY**.
+   Geräumt wird der Marker **nur beim sauberen Shutdown** (`:385`, zusammen mit
+   einem frischen Snapshot).
+2. Endet das Backend unsauber, bleibt der Marker liegen. Der nächste Prozess,
+   der `backend.main` importiert — **auch jeder pytest-Lauf** —, fährt
+   `_recover_generation` und stellt **alle 398 verwalteten Artefakte** aus der
+   letzten Generation wieder her.
+3. `config.json` ist eines davon: `owner: ConfigManager`,
+   `logical_id: "config:backend"`, `restore_policy: replace`.
+
+**Die Belege, jeder einzeln nachgeprüft:**
+
+| Beleg | Fund |
+|---|---|
+| `journal.json` | `operation: restore`, `state: COMMITTED`, 399 angewandte Einträge — darunter wörtlich `"config:backend"` |
+| Zeitstempel | `config.json` geschrieben 23:09:07, Journal committed 23:09:21 |
+| Manifest-Hash | `5c39afb9…` — stimmt **byteweise** mit der verworfenen VLM-Fassung überein; die HEAD-Fassung hat `80ac1719…` |
+| Auslöser | ich habe das Backend um 23:04 mit `Stop-Process -Force` beendet |
+| Warum nichts reproduzierte | der Restore hat den DIRTY-Marker geräumt; der Zustand ist seither sauber. Sechs Isolationsversuche und ein vollständiger Wächterlauf über alle 1572 Tests zeigen **null** Schreibvorgänge — korrekt, denn ohne DIRTY-Marker passiert nichts |
+
+**Die Reichweite ist erheblich größer als `config.json`.** Verwaltet werden
+398 Artefakte: 349 BrainStore-Dateien, 30 `project.json`, 14 Stems, 3
+VectorStore — und **`data/pb_studio.db` selbst**, ebenfalls mit
+`restore_policy: replace`. Jeder unsaubere Backend-Abbruch rollt sie auf den
+Stand der letzten Generation zurück; alles, was seitdem geschrieben wurde und
+in keiner neueren Generation steht, ist weg.
+
+**Und daran hängt die zweite, schwerere Entdeckung:** der Snapshot vom
+2026-08-29 enthält eine **beschädigte Datenbank** —
+`row 604 missing from index idx_media_status`, exakt die Verletzung, die ich
+am selben Abend per `REINDEX` repariert habe, ohne ihre Herkunft zu kennen.
+Sie kam nicht aus dem Betrieb, sondern wurde vom Restore eingespielt.
+
+Durchgekommen ist sie, weil `recovery_generation._backup_sqlite` mit
+`PRAGMA quick_check` validierte — und **quick_check prüft die
+Übereinstimmung von Tabelle und Index nicht**. Am realen Artefakt gemessen:
+`quick_check` meldet `ok`, `integrity_check` findet drei Verletzungen. Beide
+Pragmas kosten auf der 29-MB-Datenbank dasselbe (je 14,5 ms) — die laxere
+Prüfung kaufte keine Zeit, sie war nur blind. **Behoben in `3df4156`** samt
+Test, der die Beschädigung selbst erzeugt.
+
+**Was offen bleibt:** der bestehende Snapshot enthält die beschädigte
+Datenbank unverändert. Das neue Gatter verhindert nur *neue* solche Snapshots.
+Bis ein sauberer Backend-Shutdown eine frische Generation erzeugt, würde der
+nächste unsaubere Abbruch die Beschädigung erneut einspielen.
+
 ### B-8 · `media.status` trägt vier unvereinbare Vokabulare
 **AGENT, UNGEPRÜFT.** `completed|partial|failed` vs. `analyzed` (auch beim
 Import, vor jeder Analyse) vs. `pending` vs. `analyzing|error|ready`.
