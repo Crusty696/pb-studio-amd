@@ -1,3 +1,13 @@
+"""
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+`VideoGenerator` wird ausschliesslich von `GenerationService` instanziiert,
+die selbst tot ist. Der reale Renderpfad ist
+`src/pb_studio/rendering/render_service.py` ueber `render_router`.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`.
+"""
+
 import logging
 import random
 import subprocess

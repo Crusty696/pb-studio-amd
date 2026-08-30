@@ -3,6 +3,15 @@
 The historical Hugging Face/Torch producer is intentionally unavailable.
 Production embeddings are created by ``pb_studio.ai.siglip_wrapper`` and have
 1152 dimensions. Missing registered assets remain explicitly unavailable.
+
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+Abgeloest durch den registrierten SigLIP-ONNX-Pfad. Produktiv gelesen werden
+aus diesem Modul nur noch die drei Konstanten (`video_router.py:476-477`,
+`scripts/backfill_brain_embedding_cache.py`); Klasse und Zugangsfunktion
+haben null Aufrufer, auch in Tests nicht.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`.
 """
 
 from __future__ import annotations

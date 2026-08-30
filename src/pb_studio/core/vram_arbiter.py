@@ -6,6 +6,15 @@ Now integrated with VRAMBudgetManager for proper tracking.
 
 DEPRECATED: New code should use VRAMBudgetManager directly.
 This class is kept for compatibility with existing code.
+
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+Null Produktionsaufrufer; `vram_budget_manager.py:364` haelt das im Kommentar
+bereits fest. Die weiter unten beschriebene Dual-Verification laeuft im
+heutigen Betrieb NICHT: die Buchfuehrung macht `VRAMBudgetManager`, die
+Messung der im Lifespan verdrahtete Sensor.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`.
 """
 
 import logging

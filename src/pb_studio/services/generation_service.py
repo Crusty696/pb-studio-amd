@@ -1,3 +1,19 @@
+"""
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+Stammt aus der PyQt-Oberflaeche. Diese Klasse ist die einzige, die
+`VideoGenerator` instanziiert und ueber `SmartDirector.generate_timeline` den
+SyncMode-Planer der Pacing-Engine (`plan_cuts`, `_plan_beat_sync`,
+`_plan_hybrid_sync`, `_plan_emotional_sync`, `analyze_audio_structure`)
+ueberhaupt noch erreichbar macht. Faellt sie weg, faellt beides mit.
+Der reale Pfad ist `PacingService.generate_cut_list`.
+
+NICHT betroffen: `SmartDirector` selbst ist lebendig -
+`clip_selector._get_text_embedding` holt darueber den SigLIP-Text-Encoder.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`.
+"""
+
 import logging
 
 try:
