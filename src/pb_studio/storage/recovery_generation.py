@@ -246,12 +246,22 @@ def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
         destination_connection = sqlite3.connect(str(destination), timeout=30.0)
         source_connection.backup(destination_connection)
         destination_connection.commit()
-        quick_check = str(
-            destination_connection.execute("PRAGMA quick_check").fetchone()[0]
-        )
-        if quick_check != "ok":
+        # integrity_check statt quick_check: quick_check prueft die
+        # Uebereinstimmung von Tabelle und Index NICHT. Genau diese
+        # Fehlerklasse ("row N missing from index") lag am 2026-08-29 im
+        # Snapshot der Produktionsdatenbank vor, kam durch dieses Gatter und
+        # wurde beim naechsten Recovery-Restore in die Live-Datenbank
+        # zurueckgespielt. Auf der 29-MB-Datenbank gemessen kosten beide
+        # Pragmas dasselbe (je 14,5 ms) - die laxere Pruefung kaufte nichts.
+        findings = [
+            str(row[0])
+            for row in destination_connection.execute("PRAGMA integrity_check")
+        ]
+        integrity_check = findings[0] if findings else "unknown"
+        if findings != ["ok"]:
             raise RecoveryGenerationValidationError(
-                f"SQLite backup failed quick_check: {source}"
+                f"SQLite backup failed integrity_check: {source}: "
+                + "; ".join(findings[:5])
             )
         user_version = int(
             destination_connection.execute("PRAGMA user_version").fetchone()[0]
@@ -266,7 +276,7 @@ def _backup_sqlite(source: Path, destination: Path) -> tuple[int, str]:
     with destination.open("r+b") as handle:
         os.fsync(handle.fileno())
     _fsync_parent(destination)
-    return user_version, quick_check
+    return user_version, integrity_check
 
 
 def validate_generation(
