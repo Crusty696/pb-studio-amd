@@ -346,6 +346,12 @@ class PacingService:
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
         pre_cached_downbeats: List[float] = []
+        # "measured" sind echte Taktpositionen aus dem Detektor. "derived"
+        # sind aus den Anschlagstaerken abgeleitete - sie tragen zusaetzlich
+        # synthetic=True und werden nie als gemessen ausgegeben. Beides ist
+        # brauchbar; alles andere bleibt liegen. FR-317 verlangt die Trennung,
+        # nicht den Verzicht.
+        USABLE_DOWNBEAT_STATES = {"measured", "derived"}
         downbeat_provenance = cached_analysis.get("downbeat_provenance") or {
             "status": "unavailable",
             "method": "cache_field_missing",
@@ -365,7 +371,7 @@ class PacingService:
                 beat_time = float(b.get("time", 0.0))
                 pre_cached_beats.append(beat_time)
                 if (
-                    downbeat_provenance.get("status") == "measured"
+                    downbeat_provenance.get("status") in USABLE_DOWNBEAT_STATES
                     and str(b.get("beat_type") or "").lower()
                     in {"downbeat", "bar"}
                 ):
@@ -386,7 +392,7 @@ class PacingService:
         if pre_cached_beats:
             pacing_engine._pre_cached_beats = pre_cached_beats
             measured_downbeats = cached_analysis.get("downbeats") or []
-            if downbeat_provenance.get("status") == "measured":
+            if downbeat_provenance.get("status") in USABLE_DOWNBEAT_STATES:
                 pre_cached_downbeats.extend(
                     float(value) for value in measured_downbeats
                 )

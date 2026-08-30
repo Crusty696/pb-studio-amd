@@ -109,6 +109,64 @@ except ImportError as e:
     logger.warning(f"BeatNet nicht verfügbar: {e}. Verwende librosa Fallback.")
 
 
+# Wie deutlich die beste Taktposition die uebrigen uebertreffen muss, damit
+# ueberhaupt von einer Taktstruktur die Rede sein kann. Darunter wird nichts
+# abgeleitet - FR-317 verbietet ausdruecklich die pauschale "jeder vierte
+# Beat"-Behauptung, und genau die entstuende bei gleichmaessigen Staerken.
+DOWNBEAT_PHASE_CONTRAST = 1.25
+
+
+def derive_downbeats_from_strengths(
+    beat_times: List[float],
+    strengths: List[float],
+    beats_per_bar: int = 4,
+) -> List[float]:
+    """Leitet Taktanfaenge aus den Anschlagstaerken ab. HEURISTIK, nicht gemessen.
+
+    Hintergrund: madmom 0.16.1 wirft auf NumPy >= 1.24 in seinem
+    DBN-Downbeat-Prozessor (`np.asarray` auf eine ungleichfoermige
+    Ergebnisliste). BeatNet liefert deshalb auf dieser Umgebung nie Downbeats,
+    und die Beats stammen faktisch von librosa, das keine Taktposition kennt.
+
+    Verfahren: fuer jede der `beats_per_bar` moeglichen Positionen im Takt wird
+    die mittlere Anschlagstaerke der zugehoerigen Beats gebildet. Gewinnt eine
+    Position deutlich (Faktor `DOWNBEAT_PHASE_CONTRAST` gegenueber dem
+    Mittelwert der uebrigen), gilt sie als Taktanfang.
+
+    Gibt eine leere Liste zurueck, wenn keine Position sich abhebt. Das ist der
+    wesentliche Unterschied zu einer pauschalen Annahme: ohne erkennbare
+    Struktur wird nicht geraten.
+
+    Aufrufer MUESSEN das Ergebnis als `status="derived"` und `synthetic=True`
+    kennzeichnen. `"measured"` ist ausschliesslich echten Taktpositionen aus
+    dem Detektor vorbehalten.
+    """
+    if beats_per_bar < 2:
+        return []
+    count = len(beat_times)
+    if count != len(strengths) or count < beats_per_bar * 2:
+        return []
+
+    means: List[float] = []
+    for phase in range(beats_per_bar):
+        values = [float(strengths[i]) for i in range(phase, count, beats_per_bar)]
+        means.append(sum(values) / len(values) if values else 0.0)
+
+    best_phase = max(range(beats_per_bar), key=means.__getitem__)
+    others = [m for phase, m in enumerate(means) if phase != best_phase]
+    rest = sum(others) / len(others) if others else 0.0
+    if rest <= 0.0 or means[best_phase] < rest * DOWNBEAT_PHASE_CONTRAST:
+        logger.info(
+            "Downbeat-Ableitung verweigert: keine Taktposition hebt sich ab "
+            "(beste %.3f, uebrige %.3f)",
+            means[best_phase],
+            rest,
+        )
+        return []
+
+    return [float(beat_times[i]) for i in range(best_phase, count, beats_per_bar)]
+
+
 class BeatDetector:
     """KI-basierte Beat-Detection mit BeatNet.
 
