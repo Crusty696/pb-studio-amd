@@ -184,7 +184,7 @@
           "Project"
         ],
         "summary": "Open Project",
-        "description": "Öffnet ein bestehendes Projekt.",
+        "description": "Öffnet ein bestehendes Projekt.\n\nZeigt die Anfrage auf das bereits offene Projekt, ist der Aufruf ein\nNo-Op, der den aktuellen Laufzeitzustand zurueckmeldet - ein Neuladen von\nPlatte wuerde ungespeicherte Cuts verwerfen (siehe Guard unten).",
         "operationId": "open_project_project_open_post",
         "requestBody": {
           "content": {
@@ -2820,6 +2820,11 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Downbeat Provenance"
+          },
+          "beat_grid_provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Beat Grid Provenance"
           }
         },
         "type": "object",

@@ -1355,7 +1355,12 @@ public record AudioAnalysisResult(
     Dictionary<string, string>? StageErrors = null,
     Dictionary<string, JsonElement>? ChunkEvidence = null,
     List<double>? Downbeats = null,
-    Dictionary<string, JsonElement>? DownbeatProvenance = null)
+    Dictionary<string, JsonElement>? DownbeatProvenance = null,
+    // Herkunft und Plausibilitaet des Beat-Rasters (Audit 2026-08-30, C-3).
+    // Bis dahin trug ausschliesslich der Downbeat-Pfad eine Provenance,
+    // waehrend BPM und Beats - die Werte, die die Schnittzeitpunkte setzen -
+    // ohne jede Herkunftsangabe ausgeliefert wurden.
+    Dictionary<string, JsonElement>? BeatGridProvenance = null)
 {
     public static AudioAnalysisResult FromTransport(
         PBStudio.UI.Generated.AudioAnalysisResult value)
@@ -1402,7 +1407,8 @@ public record AudioAnalysisResult(
                 : new Dictionary<string, string>(value.Stage_errors),
             ToJsonDictionary(value.Chunk_evidence),
             value.Downbeats?.ToList(),
-            ToJsonDictionary(value.Downbeat_provenance));
+            ToJsonDictionary(value.Downbeat_provenance),
+            ToJsonDictionary(value.Beat_grid_provenance));
     }
 
     private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)

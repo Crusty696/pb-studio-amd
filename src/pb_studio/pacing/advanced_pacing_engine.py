@@ -51,6 +51,10 @@ ENERGY_PHASE_MULTIPLIERS = {
 }
 
 STRONG_BEAT_THRESHOLD = 0.75
+# H-5: Ab dieser Dauer wird das komplette Audio nicht mehr in den RAM geladen,
+# nur um fehlende Trigger-Kandidaten nachzuberechnen. Gleiche Grenze wie in
+# `audio/beat_detector.py:319`.
+LONG_AUDIO_FULL_LOAD_LIMIT_SEC = 600.0
 DEFAULT_ONSET_SENSITIVITY = 0.5
 ONSET_DELTA_MIN = 0.02
 ONSET_DELTA_MAX = 0.12
@@ -1131,7 +1135,52 @@ class AdvancedPacingEngine:
         )
         _no_cache_at_all = not (onset_times and energy_curve is not None and duration > 0)
 
-        if (not has_pre_cached and _no_cache_at_all) or _missing_for_active_weights:
+        _needs_full_load = (not has_pre_cached and _no_cache_at_all) or _missing_for_active_weights
+
+        # H-5 (Audit 2026-08-30): `_missing_for_active_weights` wird bereits wahr,
+        # wenn EINE aktive Gewichtung keine gecachten Kandidaten hat — und alle
+        # Defaults in `pacing_models.py` sind > 0. Ein fehlender `kick_times`-Cache
+        # zog dadurch `librosa.load(..., sr=22050)` auf den vollstaendigen Mix nach
+        # sich: bei 90 Minuten ~475 MB float32, also genau das OOM-Szenario, gegen
+        # das `StreamingAudioAnalyzer` gebaut wurde. Oberhalb der im Repo bereits
+        # etablierten 600-s-Grenze (vgl. `audio/beat_detector.py:319`) wird der
+        # Voll-Load daher unterlassen, sofern ueberhaupt verwertbarer Cache
+        # vorliegt. Welche Trigger-Arten dadurch fehlen, wird benannt — stilles
+        # Weglassen waere nicht nachvollziehbar.
+        if _needs_full_load and _missing_for_active_weights and has_pre_cached:
+            _probe_duration = duration
+            if _probe_duration <= 0:
+                try:
+                    _probe_duration = float(librosa.get_duration(path=audio_path))
+                except Exception as _dur_err:  # pragma: no cover - Header-Probe
+                    logger.debug(f"H-5 Dauer-Probe fehlgeschlagen: {_dur_err}")
+                    _probe_duration = 0.0
+            if _probe_duration > LONG_AUDIO_FULL_LOAD_LIMIT_SEC:
+                _skipped = []
+                if _ts_gate.onset_weight > 0 and not onset_times:
+                    _skipped.append(f"onset_weight={_ts_gate.onset_weight:.2f}")
+                if _ts_gate.kick_weight > 0 and not kick_times:
+                    _skipped.append(f"kick_weight={_ts_gate.kick_weight:.2f}")
+                if _ts_gate.snare_weight > 0 and not snare_times:
+                    _skipped.append(f"snare_weight={_ts_gate.snare_weight:.2f}")
+                if _ts_gate.hihat_weight > 0 and not hihat_times:
+                    _skipped.append(f"hihat_weight={_ts_gate.hihat_weight:.2f}")
+                if _ts_gate.energy_weight > 0 and energy_curve is None:
+                    _skipped.append(f"energy_weight={_ts_gate.energy_weight:.2f}")
+                logger.warning(
+                    "H-5: Audio-Voll-Load uebersprungen — Dauer %.1fs > %.0fs "
+                    "(RAM-Schutz fuer lange DJ-Mixes). Ohne Cache und daher OHNE "
+                    "Wirkung bleiben: %s. Es wird ausschliesslich mit den bereits "
+                    "gecachten Trigger-Kandidaten gearbeitet.",
+                    _probe_duration,
+                    LONG_AUDIO_FULL_LOAD_LIMIT_SEC,
+                    ", ".join(_skipped) if _skipped else "(keine)",
+                )
+                if duration <= 0:
+                    duration = _probe_duration
+                _needs_full_load = False
+
+        if _needs_full_load:
             if self._cached_audio_path != audio_path or self._cached_y is None:
                 if self._cached_y is not None:
                     del self._cached_y
@@ -1146,6 +1195,14 @@ class AdvancedPacingEngine:
             duration = librosa.get_duration(y=y, sr=sr) if duration <= 0 else duration
 
         # --- BPM schätzen ---
+        # H-1 (Audit 2026-08-30): dieser Wert wird derzeit von KEINEM
+        # Trigger-Pfad gelesen. `_build_beat_triggers`, `_build_triggers_from_cache`
+        # und `_extract_other_triggers` leiten keine Zeitspanne aus BPM ab —
+        # die Schnittzeitpunkte kommen ausschliesslich aus der Beat-Zeitliste
+        # bzw. aus Onset-/Drum-/Energie-Zeiten. `bpm` dient hier nur noch der
+        # Protokollierung. Der `expected_bpm is None`-Zweig ist im Produktiv-
+        # betrieb unerreichbar: alle fuenf Aufrufer in `services/pacing_service.py`
+        # uebergeben `pacing_config.get("expected_bpm", 120)`.
         if expected_bpm is None:
             # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
             if hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
@@ -1180,11 +1237,11 @@ class AdvancedPacingEngine:
         # Cache+Audio gleichzeitig. Nur wenn y NICHT geladen wurde (Cache war
         # fuer alle aktiven Gewichtungen ausreichend), den Cache-Pfad nutzen.
         if y is not None:
-            triggers.extend(self._extract_other_triggers(y, sr, bpm))
+            triggers.extend(self._extract_other_triggers(y, sr))
         elif onset_times or energy_curve is not None or kick_times or snare_times or hihat_times:
             triggers.extend(
                 self._build_triggers_from_cache(
-                    onset_times, energy_curve, bpm,
+                    onset_times, energy_curve,
                     kick_times=kick_times, snare_times=snare_times,
                     hihat_times=hihat_times, duration=duration,
                 )
@@ -1321,6 +1378,34 @@ class AdvancedPacingEngine:
         Returns:
             float BPM-Wert. 120.0 als Default wenn keine tempo_curve injiziert
             oder leer. Erster Wert der Curve falls duration fehlt/<=0.
+
+        M-3 (Audit 2026-08-30) — KEIN PRODUKTIVER KONSUMENT, bewusst so belassen:
+            Produzent existiert (SubtrackDetector -> app_state ->
+            `pacing_service._inject_cached_into_engine`), Konsument nicht:
+            repo-weit ruft diese Methode ausser `Tests/test_pacing_tempo_curve.py`
+            niemand auf. Der Grund ist fachlich, nicht schlampig:
+            im Live-Trigger-Pfad (`_generate_cut_list_from_audio`) wird aus BPM
+            NIRGENDS eine Zeitspanne abgeleitet — Schnittzeitpunkte kommen aus
+            der Beat-Zeitliste bzw. aus Onset-/Drum-/Energie-Zeiten, und die
+            Clip-Laengen aus den Konstanten `ts.min_clip_length` /
+            `_effective_max_cut_interval()`. Der einzige BPM->Zeitspanne-Schritt
+            der Datei ist `_plan_emotional_sync` (`bar_length = (60.0/bpm) * 4`),
+            und der liegt im `generate()`/`SyncMode`-Pfad, der ausschliesslich
+            ueber `services/generation_service.py` und `ai/smart_director.py`
+            erreicht wird — dort findet `_inject_cached_into_engine` nie statt,
+            `_pre_cached_tempo_curve` waere also immer leer und ein Aufruf hier
+            wuerde das echte `audio_analysis["bpm"]` durch den 120.0-Default
+            ersetzen. Eine Verdrahtung dort waere eine Verschlechterung.
+
+            Was es braeuchte, damit diese Methode einen echten Konsumenten hat
+            (beides ausserhalb dieser Datei, daher hier nicht umgesetzt):
+              1. Die Tempo-Kurve muesste auch im `generate()`-Pfad injiziert
+                 werden (Producer in `smart_director.py` /
+                 `generation_service.py`), ODER
+              2. der Live-Trigger-Pfad braeuchte ueberhaupt erst eine
+                 BPM-abhaengige Zeitspanne (z.B. taktrasterbasierte
+                 min/max-Clip-Laengen statt fester Sekundenwerte in
+                 `pacing_models.TriggerSettings`).
         """
         curve = getattr(self, "_pre_cached_tempo_curve", None)
         if curve is None:
@@ -1862,12 +1947,27 @@ class AdvancedPacingEngine:
         ts = self.trigger_settings
         hop_length = 512
 
+        # H-3 (Audit 2026-08-30): auch dieser Pfad benutzt jetzt die gemeinsamen
+        # Bandgrenzen aus `pb_studio.audio.band_params`. Er war die vierte
+        # unabhaengige Fassung derselben Rechnung und die groebste: ohne
+        # `n_mels`-Angabe griff der librosa-Default von 128 Filtern, im
+        # Kick-Band bei sr=22050 also 128 Filter auf rund 14 Bins.
+        from pb_studio.audio.band_params import (
+            HIHAT_BAND,
+            KICK_BAND,
+            SNARE_BAND,
+            band_stft_params,
+        )
+
         try:
             y, sr = librosa.load(stem_path, sr=22050)
 
             if ts.kick_weight > 0:
+                kick_fft, kick_mels = band_stft_params(sr, *KICK_BAND)
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
-                                                   aggregate=np.median, fmax=150)
+                                                   aggregate=np.median,
+                                                   fmin=KICK_BAND[0], fmax=KICK_BAND[1],
+                                                   n_fft=kick_fft, n_mels=kick_mels)
                 frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr,
                                                     hop_length=hop_length, backtrack=True,
                                                     delta=self._onset_detection_delta())
@@ -1876,8 +1976,10 @@ class AdvancedPacingEngine:
                                               strength=ts.kick_weight * 0.95))
 
             if ts.snare_weight > 0:
+                snare_fft, snare_mels = band_stft_params(sr, *SNARE_BAND)
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
-                                                   fmin=200, fmax=400)
+                                                   fmin=SNARE_BAND[0], fmax=SNARE_BAND[1],
+                                                   n_fft=snare_fft, n_mels=snare_mels)
                 frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr,
                                                     hop_length=hop_length, backtrack=True,
                                                     delta=self._onset_detection_delta())
@@ -1886,7 +1988,10 @@ class AdvancedPacingEngine:
                                               strength=ts.snare_weight * 0.9))
 
             if ts.hihat_weight > 0:
-                env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length, fmin=5000)
+                hihat_fft, hihat_mels = band_stft_params(sr, *HIHAT_BAND)
+                env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
+                                                   fmin=HIHAT_BAND[0], fmax=HIHAT_BAND[1],
+                                                   n_fft=hihat_fft, n_mels=hihat_mels)
                 frames = librosa.onset.onset_detect(
                     onset_envelope=env, sr=sr, hop_length=hop_length,
                     delta=self._onset_detection_delta(),
@@ -1916,16 +2021,20 @@ class AdvancedPacingEngine:
                 delta=self._onset_detection_delta(),
             )
             times = librosa.frames_to_time(frames, sr=sr, hop_length=hop_length)
-            # Audit A2 follow-up: prefer injected cached energy if available
-            # (skip redundant librosa.feature.rms recompute, ~150-200ms overhead).
-            if (
-                hasattr(self, "_pre_cached_energy")
-                and self._pre_cached_energy is not None
-                and len(self._pre_cached_energy) > 0
-            ):
-                rms = self._pre_cached_energy
-            else:
-                rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+            # C-2 (Audit 2026-08-30): hier wurde frueher `_pre_cached_energy`
+            # bevorzugt ("Audit A2 follow-up", ~150-200 ms gespart). Das war
+            # fachlich falsch, gleich doppelt:
+            #   1. `frames` sind Onset-Frame-Indizes DIESES Bass-Stems (sr=22050,
+            #      hop_length=512). Die gecachte Kurve ist die Energie des
+            #      MIXES mit anderer Framerate und anderer Laenge — der Index
+            #      zeigte auf eine voellig andere Stelle im Song.
+            #   2. `rms_norm[min(frame, len(rms_norm) - 1)]` klemmte den
+            #      Ueberlauf still auf den letzten Wert, statt aufzufallen.
+            # Die Mix-Energie sagt nichts ueber die Anschlagstaerke des
+            # Bass-Stems aus. Die RMS-Kurve wird deshalb immer lokal auf dem
+            # geladenen Stem berechnet; die Cache-Optimierung entfaellt hier
+            # bewusst.
+            rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
             rms_norm = rms / (np.max(rms) + 1e-10)
 
             for frame, t in zip(frames, times):
@@ -1967,34 +2076,69 @@ class AdvancedPacingEngine:
             )
             strengths = None
 
-        out: List["PacingCut"] = []
-        for i, t in enumerate(beats):
-            is_downbeat = t in downbeat_set
-            base = 1.0 if is_downbeat else 0.7
-            if strengths is not None:
-                # Multiply by real onset-strength (0..1); preserves base
-                # downbeat boost and clamps to [0, 1].
-                multiplier = max(0.0, min(1.0, float(strengths[i])))
-                strength = ts.beat_weight * base * multiplier
+        def _build(active_mode: str) -> List["PacingCut"]:
+            built: List["PacingCut"] = []
+            for i, t in enumerate(beats):
+                is_downbeat = t in downbeat_set
+                base = 1.0 if is_downbeat else 0.7
+                if strengths is not None:
+                    # Multiply by real onset-strength (0..1); preserves base
+                    # downbeat boost and clamps to [0, 1].
+                    multiplier = max(0.0, min(1.0, float(strengths[i])))
+                    strength = ts.beat_weight * base * multiplier
+                else:
+                    multiplier = base
+                    strength = ts.beat_weight * base
+                if active_mode == "downbeat_only" and not is_downbeat:
+                    continue
+                if active_mode == "strong_only" and multiplier < STRONG_BEAT_THRESHOLD:
+                    continue
+                built.append(PacingCut(
+                    time=float(t),
+                    trigger_type="downbeat" if is_downbeat else "beat",
+                    strength=strength,
+                ))
+            return built
+
+        out = _build(mode)
+
+        # H-6 (Audit 2026-08-30): beide Sondermodi konnten still eine LEERE
+        # Trigger-Liste liefern, obwohl Beats vorhanden waren:
+        #   * "downbeat_only" — `downbeat_set` ist der Normalfall leer
+        #     (BEATNET_AVAILABLE=False, USABLE_DOWNBEAT_STATES={"measured"}),
+        #     dann greift `continue` fuer jeden Beat.
+        #   * "strong_only" — ohne `_pre_cached_beat_strengths` ist der
+        #     multiplier fuer normale Beats fest 0.7 und damit immer unter
+        #     STRONG_BEAT_THRESHOLD (0.75); nur Downbeats (1.0) ueberleben,
+        #     und die gibt es dann eben auch nicht.
+        # Ergebnis war eine leere Cut-Liste ohne jede Meldung. Jetzt: Ursache
+        # benennen und auf mode="all" zurueckfallen, damit der Nutzer eine
+        # Cut-Liste bekommt.
+        if beats and not out and mode in ("downbeat_only", "strong_only"):
+            if mode == "downbeat_only":
+                cause = "keine Downbeats verfuegbar (downbeats-Liste leer)"
+            elif strengths is None:
+                cause = "keine Beat-Staerken verfuegbar (_pre_cached_beat_strengths fehlt)"
             else:
-                multiplier = base
-                strength = ts.beat_weight * base
-            if mode == "downbeat_only" and not is_downbeat:
-                continue
-            if mode == "strong_only" and multiplier < STRONG_BEAT_THRESHOLD:
-                continue
-            out.append(PacingCut(
-                time=float(t),
-                trigger_type="downbeat" if is_downbeat else "beat",
-                strength=strength,
-            ))
+                cause = (
+                    f"kein Beat erreicht STRONG_BEAT_THRESHOLD={STRONG_BEAT_THRESHOLD}"
+                )
+            logger.warning(
+                "H-6: beat_trigger_mode='%s' haette 0 Trigger aus %d Beats erzeugt "
+                "— Ursache: %s. Rueckfall auf beat_trigger_mode='all'.",
+                mode, len(beats), cause,
+            )
+            out = _build("all")
+            logger.warning(
+                "H-6: Rueckfall aktiv — %d Beat-Trigger aus mode='all' erzeugt.",
+                len(out),
+            )
         return out
 
     def _build_triggers_from_cache(
         self,
         onset_times: List[float],
         energy_curve: List[float],
-        bpm: float,
         *,
         kick_times: Optional[List[float]] = None,
         snare_times: Optional[List[float]] = None,
@@ -2007,6 +2151,9 @@ class AdvancedPacingEngine:
 
         Audit-Fix 2026-07-10: Kick/Snare/HiHat-Kandidaten + echte Dauer als
         Parameter statt aus dem toten `core.session_manager`-Cache zu raten.
+
+        H-1 (Audit 2026-08-30): der frueher entgegengenommene Parameter ``bpm``
+        wurde im gesamten Rumpf nie gelesen und ist ersatzlos entfernt.
         """
         from .pacing_models import PacingCut
 
@@ -2066,9 +2213,14 @@ class AdvancedPacingEngine:
         self,
         y: np.ndarray,
         sr: int,
-        bpm: float,
     ) -> List["PacingCut"]:
-        """Extrahiert Onsets, Drums und Energy-Spitzen aus Audio-Array."""
+        """Extrahiert Onsets, Drums und Energy-Spitzen aus Audio-Array.
+
+        H-1 (Audit 2026-08-30): der frueher hier entgegengenommene Parameter
+        ``bpm`` wurde im gesamten Rumpf nie gelesen. Er ist ersatzlos entfernt
+        statt weiter mitgeschleppt zu werden — die Schnittzeitpunkte entstehen
+        ausschliesslich aus Beat-/Onset-/Drum-/Energie-Zeiten.
+        """
         from .pacing_models import PacingCut
         import librosa
 
@@ -2086,10 +2238,28 @@ class AdvancedPacingEngine:
                                           strength=ts.onset_weight * 0.5))
 
         try:
+            # H-3 (Audit 2026-08-30): Bandgrenzen und Filterbank kommen aus
+            # `pb_studio.audio.band_params` — derselben Quelle, die auch
+            # audio_router und streaming_analyzer benutzen. Vorher stand hier
+            # `n_mels=64` mit dem n_fft-Default 2048; im Kick-Band sind das bei
+            # sr=22050 rund 14 Bins fuer 64 Filter, also genau die degenerierte
+            # Filterbank, die der Audit 2026-08-05 in den beiden anderen
+            # Pfaden bereits verworfen hatte. Das HiHat-Band hatte zudem kein
+            # `fmax` und reichte bis zur halben Abtastrate — hier 11025 Hz,
+            # im Router 22050 Hz, also ein anderes Band fuer dieselbe Aufgabe.
+            from pb_studio.audio.band_params import (
+                HIHAT_BAND,
+                KICK_BAND,
+                SNARE_BAND,
+                band_stft_params,
+            )
+
             if ts.kick_weight > 0:
+                kick_fft, kick_mels = band_stft_params(sr, *KICK_BAND)
                 env = librosa.onset.onset_strength(y=librosa.effects.preemphasis(y), sr=sr,
                                                    hop_length=hop_length, aggregate=np.median,
-                                                   fmax=150, n_mels=64)
+                                                   fmin=KICK_BAND[0], fmax=KICK_BAND[1],
+                                                   n_fft=kick_fft, n_mels=kick_mels)
                 frames = librosa.onset.onset_detect(
                     onset_envelope=env, sr=sr, hop_length=hop_length,
                     delta=onset_delta,
@@ -2099,8 +2269,10 @@ class AdvancedPacingEngine:
                                               strength=ts.kick_weight * 0.9))
 
             if ts.snare_weight > 0:
+                snare_fft, snare_mels = band_stft_params(sr, *SNARE_BAND)
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
-                                                   fmin=200, fmax=400, n_mels=64)
+                                                   fmin=SNARE_BAND[0], fmax=SNARE_BAND[1],
+                                                   n_fft=snare_fft, n_mels=snare_mels)
                 frames = librosa.onset.onset_detect(
                     onset_envelope=env, sr=sr, hop_length=hop_length,
                     delta=onset_delta,
@@ -2110,8 +2282,10 @@ class AdvancedPacingEngine:
                                               strength=ts.snare_weight * 0.85))
 
             if ts.hihat_weight > 0:
+                hihat_fft, hihat_mels = band_stft_params(sr, *HIHAT_BAND)
                 env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length,
-                                                   fmin=5000, n_mels=64)
+                                                   fmin=HIHAT_BAND[0], fmax=HIHAT_BAND[1],
+                                                   n_fft=hihat_fft, n_mels=hihat_mels)
                 frames = librosa.onset.onset_detect(
                     onset_envelope=env, sr=sr, hop_length=hop_length,
                     delta=onset_delta,
@@ -2125,22 +2299,47 @@ class AdvancedPacingEngine:
         if ts.energy_weight > 0:
             # Audit A2 follow-up: prefer injected cached energy if available
             # (skip redundant librosa.feature.rms recompute, ~150-200ms overhead).
-            if (
-                hasattr(self, "_pre_cached_energy")
-                and self._pre_cached_energy is not None
-                and len(self._pre_cached_energy) > 0
-            ):
-                rms = self._pre_cached_energy
+            # C-1 (Audit 2026-08-30): Index->Zeit haengt davon ab, WOHER die
+            # Kurve kommt. Die gecachte Kurve wird NICHT mit hop_length=512 bei
+            # sr=22050 erzeugt:
+            #   * audio_router.py rechnet sie bei analysis_sr = 44100 (Default,
+            #     wenn spectral_analysis=True) -> 86,13 statt 43,07 Frames/s.
+            #     `librosa.frames_to_time(..., sr=22050, hop_length=512)` lieferte
+            #     dadurch exakt die doppelte Zeit; an einer 544,2-s-Datei wurde
+            #     der Peak bei 327,98 s als 655,96 s gemeldet — jenseits des
+            #     Dateiendes.
+            #   * im Streaming-Pfad kommt sie aus `_EnergyAggregator.add_chunk_rms`
+            #     (zusaetzlich um Faktor 4 downgesampelt, ~21,5 Werte/s).
+            # Fuer die gecachte Kurve ist daher nur die Relation
+            # `index / len(curve)` verlaesslich — genau so rechnet auch
+            # `_build_triggers_from_cache`. `frames_to_time` bleibt korrekt
+            # ausschliesslich fuer die hier lokal berechnete RMS-Kurve.
+            cached_energy = getattr(self, "_pre_cached_energy", None)
+            if cached_energy is not None and len(cached_energy) > 0:
+                rms = np.asarray(cached_energy, dtype=float)
+                energy_is_cached = True
             else:
                 rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+                energy_is_cached = False
             rms_norm = rms / (np.max(rms) + 1e-10)
+            # Dauer des tatsaechlich geladenen Audios — massgeblich fuer die
+            # relative Zeitabbildung der gecachten Kurve.
+            audio_duration = float(len(y)) / float(sr) if sr else 0.0
+            time_per_sample = (
+                audio_duration / len(rms_norm)
+                if energy_is_cached and len(rms_norm) > 0 and audio_duration > 0
+                else 0.0
+            )
             peaks = np.where(rms_norm > ts.energy_threshold)[0]
             if len(peaks) > 0:
                 groups = np.split(peaks, np.where(np.diff(peaks) > 5)[0] + 1)
                 for group in groups:
                     if len(group) > 0:
                         best = group[np.argmax(rms_norm[group])]
-                        t = librosa.frames_to_time(best, sr=sr, hop_length=hop_length)
+                        if energy_is_cached and time_per_sample > 0:
+                            t = float(best) * time_per_sample
+                        else:
+                            t = librosa.frames_to_time(best, sr=sr, hop_length=hop_length)
                         triggers.append(PacingCut(time=float(t), trigger_type="energy",
                                                   strength=float(rms_norm[best]) * ts.energy_weight))
 
