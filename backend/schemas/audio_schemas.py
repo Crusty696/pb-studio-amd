@@ -93,6 +93,13 @@ class AudioAnalysisResult(BaseModel):
     # Gegenprobe gegen die Kick-Onsets bestanden wurde (`kick_alignment`,
     # `kick_cross_check`). `status`: plausible | suspect | unavailable.
     beat_grid_provenance: dict[str, Any] = Field(default_factory=dict)
+    # Das Beatgrid als REGEL statt als Liste: Anker plus Tempo, aus denen jede
+    # Beat-Position folgt - so, wie DJ-Programme ein Grid halten. Getrennt von
+    # `beats`, weil die Zeitmarkenliste aus `librosa.beat_track` stammt und
+    # etwas anderes ist: sie folgt den Anschlaegen, statt eine Regel zu sein.
+    # Felder: bpm, anchor_s, contrast, method, status, kick_recall,
+    # kick_precision, octave_checked. `status`: plausible | suspect | unavailable.
+    beat_grid: dict[str, Any] = Field(default_factory=dict)
 
 
 class WaveformRequest(BaseModel):

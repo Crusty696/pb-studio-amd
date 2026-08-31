@@ -1360,7 +1360,12 @@ public record AudioAnalysisResult(
     // Bis dahin trug ausschliesslich der Downbeat-Pfad eine Provenance,
     // waehrend BPM und Beats - die Werte, die die Schnittzeitpunkte setzen -
     // ohne jede Herkunftsangabe ausgeliefert wurden.
-    Dictionary<string, JsonElement>? BeatGridProvenance = null)
+    Dictionary<string, JsonElement>? BeatGridProvenance = null,
+    // Das Beatgrid als Regel: Anker plus Tempo, aus denen jede Beat-Position
+    // folgt - getrennt von der Zeitmarkenliste in Beats, die aus
+    // librosa.beat_track stammt und den Anschlaegen folgt statt eine Regel
+    // zu sein.
+    Dictionary<string, JsonElement>? BeatGrid = null)
 {
     public static AudioAnalysisResult FromTransport(
         PBStudio.UI.Generated.AudioAnalysisResult value)
@@ -1408,7 +1413,8 @@ public record AudioAnalysisResult(
             ToJsonDictionary(value.Chunk_evidence),
             value.Downbeats?.ToList(),
             ToJsonDictionary(value.Downbeat_provenance),
-            ToJsonDictionary(value.Beat_grid_provenance));
+            ToJsonDictionary(value.Beat_grid_provenance),
+            ToJsonDictionary(value.Beat_grid));
     }
 
     private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)

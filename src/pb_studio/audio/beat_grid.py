@@ -41,6 +41,27 @@ Hier wird deshalb zusaetzlich gemessen, welcher Anteil der **Beats** einen Kick
 trifft. Ein doppelt zu schnelles Raster halbiert diesen Wert. Erst beide Werte
 zusammen trennen die Oktave in beide Richtungen.
 
+**5. Kein 3:2-Faktor in der Oktavpruefung - gemessen, nicht vergessen.** Der
+Anlass war ein 3:2-Fehler an echtem Material: 94,67 statt 143 BPM. Die
+Kandidatenliste enthaelt das wahre Tempo (142,00, Kontrast 4,35) direkt hinter
+dem gewaehlten (94,67, Kontrast 4,44), und 94,67 x 1,5 = 142,00 - der Faktor
+1,5 wuerde also genau dorthin fuehren. Er ist trotzdem nicht eingebaut, weil
+die Gegenprobe ihn nicht traegt. An derselben Datei, harmonisches Mittel aus
+Trefferquote und Praezision, Toleranz 69,7 ms:
+
+    x1     ->  94,67 BPM   0,3098   (+0,05 Zuschlag = 0,3598)
+    x1,5   -> 142,00 BPM   0,2606
+    x2     -> 189,34 BPM   0,4053
+
+Das wahre Tempo schneidet am schlechtesten ab. Ein zusaetzlicher Faktor 1,5
+wuerde die Auswahl also nicht auf 143 bringen, und an derselben Datei mit
+sr=22050 zoege er sie von 81,14 auf 126,22 - auch falsch. Der Grund liegt
+tiefer und ist in
+docs/measurements/2026-08-31-kick-gegenprobe-befund.md belegt: die
+Kick-Kette dieses Tracks traegt tatsaechlich einen Puls bei 0,634 s
+(= 1,5 Beats), die Gegenprobe stuetzt das falsche Tempo. Wer 1,5 ergaenzen
+will, braucht vorher eine Referenz, die das wahre Tempo auch belohnt.
+
 Bewusste Grenze: ein Tempo pro Aufruf. Fuer DJ-Mixe mit wechselndem Tempo ist
 das strukturell falsch - dort muss der Aufrufer segmentieren und je Segment
 schaetzen. Die Messung, die diesem Modul zugrunde liegt, lief ausschliesslich
@@ -65,10 +86,39 @@ PHASE_STEPS = 64
 TEMPO_RANGE = (50.0, 220.0)
 TEMPO_CANDIDATES = 6
 
-# Feinsuche um jeden Kandidaten. +-2 % deckt die gemessene Streuung ab
-# (90-Perzentil der noetigen Korrektur lag bei rund 1,45 %).
-TEMPO_REFINE_REL = 0.02
-TEMPO_REFINE_STEPS = 41
+# Feinsuche um jeden Kandidaten.
+#
+# Die urspruengliche Begruendung fuer +-2 % ("90-Perzentil der noetigen
+# Korrektur lag bei rund 1,45 %") war an der falschen Groesse gemessen: sie
+# betraf die Abweichung von einer bereits richtigen BPM, nicht die Luecke
+# zwischen zwei Kandidaten.
+#
+# Die Kandidaten kommen aus dem Tempogramm und liegen deshalb auf einem
+# diskreten Raster: 60*sr/hop / k, bei sr=22050 und hop=512 also 2583,98 / k.
+# Der Abstand zweier Nachbarn betraegt dort 3,3 % bis 6,7 %:
+#
+#     k=14 -> 184,57 BPM   Luecke 6,7 %
+#     k=18 -> 143,55 BPM   Luecke 5,3 %
+#     k=28 ->  92,29 BPM   Luecke 3,4 %
+#
+# Mit +-2 % konnte die Suche zwischen zwei Kandidaten gar nicht landen. An
+# 127 Fenstern gemessen war die Folge ein eigener Attraktor: 32 Fenster
+# lieferten 141,98 BPM (= 143,55 x 0,989, also den unteren Rand des
+# Suchbereichs um k=18) fuer wahre Tempi zwischen 69 und 144.
+#
+# Genau derselbe Mechanismus erklaert die Attraktoren des heutigen
+# Produktionspfads: dessen drei haeufigste Werte - 143,55 / 136,00 / 92,29 -
+# sind exakt die Tempogramm-Frequenzen fuer k = 18, 19 und 28.
+#
+# Der Suchbereich richtet sich daher nach der tatsaechlichen Luecke des
+# jeweiligen Kandidaten (siehe `_refine_span`). Ueberlappende Bereiche
+# benachbarter Kandidaten schaden nicht - es gewinnt ohnehin der beste
+# Kontrast.
+TEMPO_REFINE_STEPS = 81
+# Untere Schranke, falls die Luecke sehr klein wird (hohe k, langsame Tempi).
+TEMPO_REFINE_REL_MIN = 0.02
+# Konstante des Tempogramm-Rasters: 60 * sr / hop_length.
+_TEMPOGRAM_CONST = 60.0 * 22050.0 / HOP_LENGTH
 
 # Ab diesem Kontrast gilt ein Raster als sitzend. Der Wert trennt die beiden
 # Modi der gemessenen, deutlich bimodalen Verteilung (Kontrast springt
@@ -85,6 +135,74 @@ OCTAVE_MARGIN = 0.05
 # Quantisierungsrauschen statt Treffer.
 _KICK_TOLERANCE_FRAMES = 3
 
+# Bezugsrate der Toleranz - NICHT die tatsaechliche `sr`.
+#
+# Der Router laedt mit `analysis_sr`, und das ist 44100, wenn
+# `spectral_analysis` gesetzt ist, sonst 22050 (audio_router.py:2136). Wurde
+# die Toleranz mit der tatsaechlichen Rate gerechnet, hing sie an einem Flag,
+# das mit Beats nichts zu tun hat: 3*512/22050 = 69,7 ms gegen
+# 3*512/44100 = 34,8 ms.
+#
+# An der echten Datei gemessen (Antinomy - Imagination (Kalki remix), 544 s,
+# 143 BPM laut Auszeichnung), identisches Signal, identische Kick-Kette,
+# identisches 94,67-BPM-Raster:
+#
+#     34,8 ms -> Trefferquote 0,0339   Praezision 0,0349
+#     69,7 ms -> Trefferquote 0,3054   Praezision 0,3143
+#
+# Faktor 9 allein aus der Abtastrate. Genau das ist der Grund, aus dem die
+# Schwester-Pruefung im Router ihre Toleranz fest an 22050 bindet
+# (`_BEAT_GRID_KICK_TOLERANCE_FLOOR`, audio_router.py:897): "damit dieselbe
+# Datei nicht je nach `spectral_analysis`-Flag anders bewertet wird". Hier galt
+# diese Regel nicht - das war der Fehler.
+_KICK_TOLERANCE_REFERENCE_SR = 22050
+
+
+def _kick_tolerance(sr: int) -> float:
+    """Vergleichstoleranz in Sekunden, unabhaengig von der geladenen Rate.
+
+    Untergrenze ist die Hop-Dauer bei 22050 Hz. Wird noch groeber geladen
+    (sr < 22050), zaehlt die tatsaechliche, groebere Hop-Dauer - darunter
+    misst man wieder Quantisierungsrauschen.
+    """
+    if sr <= 0:
+        return _KICK_TOLERANCE_FRAMES * HOP_LENGTH / float(_KICK_TOLERANCE_REFERENCE_SR)
+    return max(
+        _KICK_TOLERANCE_FRAMES * HOP_LENGTH / float(sr),
+        _KICK_TOLERANCE_FRAMES * HOP_LENGTH / float(_KICK_TOLERANCE_REFERENCE_SR),
+    )
+
+
+def _chance_rates(
+    bpm: float, kick_count: int, span: float, tolerance: float
+) -> tuple[float, float]:
+    """Zufallserwartung fuer Trefferquote und Praezision.
+
+    Keine abgelesene Schwelle, sondern die Nullhypothese selbst: liegt ein
+    Zeitpunkt gleichverteilt auf der Achse, faellt er mit Wahrscheinlichkeit
+    `2*Toleranz/Abstand` in das Fenster um eine der Marken der Gegenseite.
+
+        Trefferquote  Marken sind die Beats      -> Abstand 60/bpm
+        Praezision    Marken sind die Kicks      -> Abstand span/(n-1)
+
+    Beispiel aus der Messung oben: 94,67 BPM (Intervall 0,634 s), Toleranz
+    34,8 ms -> Zufall 0,110. Gemessen wurden 0,0339 - ein Drittel des
+    Zufallsniveaus. Solche Werte sind kein "schlechtes Material", sie zeigen
+    an, dass die beiden Ketten nicht dasselbe messen. Ein Raster, dessen
+    Gegenprobe das Zufallsniveau nicht erreicht, darf sich nicht `plausible`
+    nennen (siehe `estimate_beat_grid`).
+    """
+    if bpm <= 0.0 or span <= 0.0 or kick_count < 2:
+        return 0.0, 0.0
+    beat_interval = 60.0 / bpm
+    kick_interval = span / float(kick_count - 1)
+    if beat_interval <= 0.0 or kick_interval <= 0.0:
+        return 0.0, 0.0
+    return (
+        min(1.0, 2.0 * tolerance / beat_interval),
+        min(1.0, 2.0 * tolerance / kick_interval),
+    )
+
 
 @dataclass
 class BeatGrid:
@@ -97,6 +215,11 @@ class BeatGrid:
     status: str
     kick_recall: Optional[float] = None
     kick_precision: Optional[float] = None
+    # Zufallserwartung zu genau diesen beiden Werten. Ohne sie ist eine
+    # Trefferquote nicht lesbar: 0,30 ist bei 95 BPM gut und bei 190 BPM
+    # nichts. Wird mitgeliefert, damit das Urteil nachrechenbar bleibt.
+    kick_recall_chance: Optional[float] = None
+    kick_precision_chance: Optional[float] = None
     octave_checked: bool = False
     candidates: list[dict[str, float]] = field(default_factory=list)
 
@@ -162,14 +285,33 @@ def _tempo_candidates(envelope: np.ndarray, sr: int) -> list[float]:
     return [float(frequencies[usable][i]) for i in order[:TEMPO_CANDIDATES]]
 
 
+def _refine_span(bpm: float, sr: int) -> float:
+    """Relativer Suchbereich, der bis zum Nachbarkandidaten reicht.
+
+    Die Tempogramm-Kandidaten liegen bei `60*sr/hop / k`. Der Abstand zum
+    Nachbarn betraegt relativ rund `1/(k-1)`. Deckt die Feinsuche weniger ab,
+    entstehen Tempi, die der Schaetzer strukturell nie erreichen kann - siehe
+    die Herleitung bei TEMPO_REFINE_STEPS.
+    """
+    if bpm <= 0.0:
+        return TEMPO_REFINE_REL_MIN
+    const = 60.0 * float(sr) / HOP_LENGTH
+    k = const / bpm
+    if k <= 2.0:
+        return max(TEMPO_REFINE_REL_MIN, 0.5)
+    return max(TEMPO_REFINE_REL_MIN, 1.0 / (k - 1.0))
+
+
 def _refine(
-    envelope: np.ndarray, times: np.ndarray, bpm: float, span: float
+    envelope: np.ndarray, times: np.ndarray, bpm: float, span: float,
+    sr: int = 22050,
 ) -> tuple[float, float, float]:
     """Tempo eng nachoptimieren. Liefert (bpm, anchor_s, contrast)."""
     best = (bpm, 0.0, 0.0)
+    rel = _refine_span(bpm, sr)
     grid = np.linspace(
-        bpm * (1.0 - TEMPO_REFINE_REL),
-        bpm * (1.0 + TEMPO_REFINE_REL),
+        bpm * (1.0 - rel),
+        bpm * (1.0 + rel),
         TEMPO_REFINE_STEPS,
     )
     for candidate in grid:
@@ -221,8 +363,10 @@ def estimate_beat_grid(
 
     Returns:
         Ein `BeatGrid`. `status` ist ``"plausible"``, wenn der Kontrast die
-        Schwelle erreicht, sonst ``"suspect"``; bei zu kurzem oder stillem
-        Material ``"unavailable"``.
+        Schwelle erreicht UND die Kick-Gegenprobe (sofern gelaufen) das
+        Zufallsniveau uebersteigt; sonst ``"suspect"``, bei zu kurzem oder
+        stillem Material ``"unavailable"``. Ein wegen der Gegenprobe
+        abgestuftes Raster traegt das Suffix ``_below_chance`` im `method`-Feld.
     """
     import librosa
 
@@ -235,7 +379,7 @@ def estimate_beat_grid(
 
     scored: list[tuple[float, float, float]] = []
     for candidate in _tempo_candidates(envelope, sr):
-        refined = _refine(envelope, times, candidate, span)
+        refined = _refine(envelope, times, candidate, span, sr)
         if refined[2] > 0.0:
             scored.append(refined)
     if not scored:
@@ -273,7 +417,7 @@ def estimate_beat_grid(
 
     if kicks.size >= 4:
         octave_checked = True
-        tolerance = _KICK_TOLERANCE_FRAMES * HOP_LENGTH / float(sr)
+        tolerance = _kick_tolerance(sr)
         # Das gewaehlte Tempo gegen seine Oktavnachbarn stellen. Bewertet wird
         # das harmonische Mittel aus Trefferquote und Praezision: ein zu
         # langsames Raster verliert an Trefferquote, ein zu schnelles an
@@ -286,14 +430,21 @@ def estimate_beat_grid(
             trial_bpm = bpm * factor
             if not (TEMPO_RANGE[0] <= trial_bpm <= TEMPO_RANGE[1]):
                 continue
-            trial = _refine(envelope, times, trial_bpm, span)
+            trial = _refine(envelope, times, trial_bpm, span, sr)
             if trial[2] <= 0.0:
                 continue
             grid = BeatGrid(trial[0], trial[1], trial[2], "", "").beat_times(0.0, span)
             trial_recall, trial_precision = _kick_agreement(grid, kicks, tolerance)
-            if trial_recall + trial_precision <= 0.0:
-                continue
-            score = 2.0 * trial_recall * trial_precision / (trial_recall + trial_precision)
+            # Ein Nullergebnis wurde vorher UEBERSPRUNGEN. Traf keine Oktave
+            # auch nur einen Kick, blieb `recall`/`precision` deshalb `None`,
+            # und das Raster ging ungeprueft als `plausible` durch - der
+            # ungueenstigste Fall wurde als der beste ausgegeben. Ein
+            # Nullergebnis ist ein Messwert und wird als solcher gefuehrt.
+            denominator = trial_recall + trial_precision
+            score = (
+                0.0 if denominator <= 0.0
+                else 2.0 * trial_recall * trial_precision / denominator
+            )
             # Das ungeaenderte Tempo behaelt den Zuschlag, damit eine
             # Alternative es nur bei deutlichem Vorsprung verdraengt.
             if factor == 1.0:
@@ -312,12 +463,45 @@ def estimate_beat_grid(
                 "(Trefferquote %.2f, Praezision %.2f)", bpm, recall or 0.0, precision or 0.0
             )
 
+    # Status: Kontrast ALLEIN reicht nicht.
+    #
+    # Vorher entschied nur der Kontrast. An der echten Datei (544 s, 143 BPM
+    # laut Auszeichnung) lieferte das: 94,67 BPM, Kontrast 4,44, Trefferquote
+    # 0,0339, Praezision 0,0349 - und Status `plausible`. Der Kontrast misst
+    # nur, ob EIN Puls im Onset-Verlauf steht; ob es derselbe Puls ist wie der
+    # der Kicks, sagt er nicht. Ein Raster, dessen unabhaengige Gegenprobe
+    # unter der Zufallserwartung liegt, behauptet mit `plausible` etwas, das
+    # seine eigenen Messwerte widerlegen.
+    #
+    # Die Schwelle ist nicht abgelesen, sie IST die Nullhypothese: bei
+    # gleichverteilter Phase trifft schon der Zufall `2*Toleranz/Abstand`
+    # (siehe `_chance_rates`). Bewusst nicht mehr: eine hoehere, an Material
+    # kalibrierte Schwelle waere hier nicht zu rechtfertigen - die Messung in
+    # docs/measurements/2026-08-31-kick-gegenprobe-befund.md hat an 127
+    # Fenstern gezeigt, dass die Kick-Gegenprobe korrekte von falschen Tempi
+    # NICHT trennt (Median 0,433 gegen 0,336). Unterhalb des Zufallsniveaus
+    # ist die Aussage dagegen eindeutig: dort liegt kein schwaches Signal,
+    # dort liegt ein systematischer Widerspruch.
+    chance_recall = chance_precision = None
     status = "plausible" if contrast >= GRID_CONTRAST_MIN else "suspect"
     if status == "suspect":
         logger.info(
             "Beatgrid: Kontrast %.2f unter %.2f - Raster als suspect gemeldet",
             contrast, GRID_CONTRAST_MIN,
         )
+    elif recall is not None and precision is not None:
+        chance_recall, chance_precision = _chance_rates(
+            bpm, int(kicks.size), span, _kick_tolerance(sr)
+        )
+        if recall <= chance_recall or precision <= chance_precision:
+            status = "suspect"
+            method = f"{method}_below_chance"
+            logger.info(
+                "Beatgrid: Gegenprobe unter Zufallsniveau - Trefferquote %.4f "
+                "(Zufall %.4f), Praezision %.4f (Zufall %.4f) bei Kontrast "
+                "%.2f. Raster als suspect gemeldet.",
+                recall, chance_recall, precision, chance_precision, contrast,
+            )
 
     return BeatGrid(
         bpm=round(bpm, 4),
@@ -327,6 +511,12 @@ def estimate_beat_grid(
         status=status,
         kick_recall=None if recall is None else round(recall, 4),
         kick_precision=None if precision is None else round(precision, 4),
+        kick_recall_chance=(
+            None if chance_recall is None else round(chance_recall, 4)
+        ),
+        kick_precision_chance=(
+            None if chance_precision is None else round(chance_precision, 4)
+        ),
         octave_checked=octave_checked,
         candidates=[
             {"bpm": round(b, 3), "contrast": round(c, 4)} for b, _, c in scored[:TEMPO_CANDIDATES]

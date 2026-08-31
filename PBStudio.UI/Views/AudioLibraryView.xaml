@@ -367,6 +367,16 @@
                                        Foreground="{StaticResource AbletonTextDim}"
                                        VerticalAlignment="Bottom" Margin="0,0,0,5"/>
                         </StackPanel>
+                        <!-- Beatgrid als Regel (Anker + Tempo). Steht bewusst
+                             NEBEN der BPM-Anzeige und ersetzt sie nicht: die
+                             eigene Schaetzung trifft das Tempo in 48,8 % der
+                             Faelle gegen 37,0 % des bisherigen Pfads - besser,
+                             aber nicht gut genug, um allein zu stehen. -->
+                        <TextBlock Text="{Binding BeatGridText}" FontSize="11"
+                                   Margin="0,6,0,0" TextWrapping="Wrap"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   Visibility="{Binding BeatGridText,
+                                                Converter={StaticResource NullToVisibilityConverter}}"/>
                     </StackPanel>
                 </Border>
 

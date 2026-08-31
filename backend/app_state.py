@@ -929,6 +929,13 @@ class AppState:
         stage_errors=None,
         downbeats=None,
         downbeat_provenance=None,
+        # C-3 (Audit 2026-08-30): Herkunft und Plausibilitaet des
+        # Beat-Rasters. Ohne Persistenz erschien das Feld nur in der
+        # API-Antwort und ueberlebte keinen Neustart.
+        beat_grid_provenance=None,
+        # Das Grid als Regel (Anker + Tempo), getrennt von der
+        # Zeitmarkenliste in `beats`.
+        beat_grid=None,
     ) -> None:
         """
         Persistiert Audio-Analyse-Ergebnisse (BPM, Key, BeatCount, Beats, EnergyCurve,
@@ -1027,6 +1034,10 @@ class AppState:
                 ai_data["downbeats"] = downbeats
             if downbeat_provenance is not None:
                 ai_data["downbeat_provenance"] = downbeat_provenance
+            if beat_grid_provenance is not None:
+                ai_data["beat_grid_provenance"] = beat_grid_provenance
+            if beat_grid is not None:
+                ai_data["beat_grid"] = beat_grid
 
             repo.update_status(row["id"], "analyzed", ai_data=ai_data)
 
@@ -1072,6 +1083,10 @@ class AppState:
                 cache_update["downbeats"] = downbeats
             if downbeat_provenance is not None:
                 cache_update["downbeat_provenance"] = downbeat_provenance
+            if beat_grid_provenance is not None:
+                cache_update["beat_grid_provenance"] = beat_grid_provenance
+            if beat_grid is not None:
+                cache_update["beat_grid"] = beat_grid
 
             # C3-Fix (D-C1, 2026-05-19): NICHT nur audio_analysis_cache updaten,
             # sondern auch audio_clips[clip_id] — sonst sehen Endpoints, die
@@ -1622,6 +1637,25 @@ class AppState:
                                     "synthetic": False,
                                     "measured_count": 0,
                                 },
+                            ),
+                            # Bestandsdaten aus der Zeit vor C-3 tragen kein
+                            # beat_grid_provenance. Sie bekommen denselben
+                            # ehrlichen Ersatz wie die Downbeats: unbekannte
+                            # Herkunft, ausdruecklich als Altbestand markiert -
+                            # nicht "plausible", das waere eine Behauptung
+                            # ueber nie geprueftes Material.
+                            "beat_grid_provenance": ai_data.get(
+                                "beat_grid_provenance",
+                                {
+                                    "status": "unavailable",
+                                    "method": "legacy_cache",
+                                    "regular": None,
+                                    "kick_cross_check": "not_possible",
+                                },
+                            ),
+                            "beat_grid": ai_data.get(
+                                "beat_grid",
+                                {"status": "unavailable", "method": "legacy_cache"},
                             ),
                             "is_analyzed": is_analyzed,
                             "duration_seconds": row.get("duration_sec") or 0.0,

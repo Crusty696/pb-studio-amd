@@ -22,6 +22,8 @@ if str(REPO_ROOT / "src") not in sys.path:
 from pb_studio.audio.beat_grid import (  # noqa: E402
     GRID_CONTRAST_MIN,
     BeatGrid,
+    _chance_rates,
+    _kick_tolerance,
     estimate_beat_grid,
 )
 
@@ -145,6 +147,147 @@ def test_noise_is_reported_as_suspect_not_as_a_grid() -> None:
         f"Rauschen als {grid.status} mit Kontrast {grid.contrast} gemeldet"
     )
     assert grid.contrast < GRID_CONTRAST_MIN
+
+
+def test_grid_below_chance_agreement_is_not_called_plausible() -> None:
+    """Kernbefund vom 2026-08-31: Kontrast allein darf nicht ueber `status` entscheiden.
+
+    An echtem Material (Antinomy - Imagination (Kalki remix), 544 s, 143 BPM
+    laut Auszeichnung) meldete der Schaetzer 94,67 BPM mit Kontrast 4,44 als
+    `plausible` - bei Trefferquote 0,0339 und Praezision 0,0349. Ein Raster,
+    dessen unabhaengige Gegenprobe unter dem Zufallsniveau liegt, behauptet
+    mit `plausible` etwas, das seine eigenen Messwerte widerlegen.
+
+    Nachgestellt wird der Fall, den der Befund als Ursache nennt: ein
+    systematischer Versatz zwischen den beiden Ketten. Die Kicks liegen hier
+    110 ms hinter den Anschlaegen - mehr als die Toleranz von 69,7 ms, und zwar
+    fuer jede Oktave, die der Schaetzer von 174 BPM aus erreicht (58 / 116 /
+    174 BPM, Intervalle 1,034 / 0,517 / 0,345 s). Der Bereich ist an dieser
+    Stelle eng: ab etwa 130 ms faengt das 116-BPM-Raster jeden dritten Kick
+    ein, weil es zu den Anschlaegen im Verhaeltnis 2:3 steht. 100 und 120 ms
+    wurden gegengeprueft und verhalten sich wie 110 ms. Der Kontrast bleibt
+    dabei hoch, weil das Signal selbst sauber gepulst ist.
+    """
+    signal, times = _click_track(174.0, duration=30.0)
+    offset_kicks = [t + 0.110 for t in times]
+
+    grid = estimate_beat_grid(signal, SR, kick_times=offset_kicks)
+
+    assert grid.contrast >= GRID_CONTRAST_MIN, (
+        "Vorbedingung verletzt: das Signal muss einen klaren Puls tragen, "
+        f"Kontrast ist aber nur {grid.contrast}"
+    )
+    assert grid.octave_checked is True
+    assert grid.kick_recall == 0.0 and grid.kick_precision == 0.0, (
+        f"Aufbau greift nicht: recall={grid.kick_recall} "
+        f"precision={grid.kick_precision} - der Versatz muss jede Oktave "
+        f"verfehlen"
+    )
+    assert grid.status != "plausible", (
+        f"Raster mit Trefferquote {grid.kick_recall} und Praezision "
+        f"{grid.kick_precision} wurde als {grid.status} gemeldet"
+    )
+    assert "below_chance" in grid.method, (
+        f"der Grund fehlt in der Herkunftsangabe: {grid.method}"
+    )
+    assert grid.kick_recall_chance is not None, (
+        "die Zufallserwartung muss mitgeliefert werden, sonst ist das Urteil "
+        "nicht nachrechenbar"
+    )
+
+
+def test_a_clean_grid_stays_plausible_under_the_new_check() -> None:
+    """Gegenprobe zum Test darueber: die Pruefung darf nicht alles verwerfen."""
+    signal, times = _click_track(128.0, duration=30.0)
+    grid = estimate_beat_grid(signal, SR, kick_times=times)
+    assert grid.status == "plausible", (
+        f"sauberes Raster als {grid.status} verworfen "
+        f"(recall={grid.kick_recall}, chance={grid.kick_recall_chance})"
+    )
+    assert grid.kick_recall > (grid.kick_recall_chance or 0.0)
+
+
+def test_chance_level_is_the_null_hypothesis_not_a_read_off_number() -> None:
+    """Die Schwelle ist gerechnet, nicht gesetzt: 2*Toleranz/Abstand."""
+    tolerance = 3 * 512 / 22050  # 69,7 ms
+    # 143 BPM -> Beat-Intervall 0,4196 s; 100 Kicks ueber 40 s -> 0,404 s
+    chance_recall, chance_precision = _chance_rates(143.0, 100, 40.0, tolerance)
+    assert chance_recall == pytest.approx(2 * tolerance / (60.0 / 143.0), rel=1e-9)
+    assert chance_precision == pytest.approx(2 * tolerance / (40.0 / 99.0), rel=1e-9)
+    # Ein doppelt so schnelles Raster hat die doppelte Zufallserwartung - genau
+    # deshalb ist eine feste Schwelle fuer alle Tempi unbrauchbar.
+    faster, _ = _chance_rates(286.0, 100, 40.0, tolerance)
+    assert faster == pytest.approx(2 * chance_recall, rel=1e-9)
+    # Nie ueber 1.0, auch wenn die Toleranz den Abstand uebersteigt.
+    saturated, _ = _chance_rates(60.0, 100, 40.0, 5.0)
+    assert saturated == 1.0
+    # Ohne verwertbare Gegenseite gibt es keine Erwartung.
+    assert _chance_rates(143.0, 1, 40.0, tolerance) == (0.0, 0.0)
+    assert _chance_rates(0.0, 100, 40.0, tolerance) == (0.0, 0.0)
+
+
+def test_tolerance_does_not_depend_on_the_load_rate() -> None:
+    """Derselbe Track darf nicht je nach `spectral_analysis`-Flag anders bewertet werden.
+
+    Der Router laedt mit 44100 Hz, wenn `spectral_analysis` gesetzt ist, sonst
+    mit 22050 (audio_router.py:2136). Die Toleranz wurde mit der tatsaechlichen
+    Rate gerechnet und war deshalb bei 44100 nur halb so gross. An der echten
+    Datei gemessen: dasselbe Signal, dieselbe Kick-Kette, dasselbe
+    94,67-BPM-Raster -> Trefferquote 0,0339 gegen 0,3054. Faktor 9 allein aus
+    einem Flag, das mit Beats nichts zu tun hat.
+    """
+    assert _kick_tolerance(44100) == pytest.approx(_kick_tolerance(22050))
+    assert _kick_tolerance(22050) == pytest.approx(3 * 512 / 22050)
+    assert _kick_tolerance(48000) == pytest.approx(3 * 512 / 22050)
+    # Wird groeber geladen, zaehlt die groebere Hop-Dauer - darunter misst man
+    # wieder Quantisierungsrauschen.
+    assert _kick_tolerance(11025) == pytest.approx(3 * 512 / 11025)
+    assert _kick_tolerance(0) == pytest.approx(3 * 512 / 22050)
+
+
+@pytest.mark.parametrize("sr", [22050, 44100])
+def test_same_material_is_judged_the_same_at_both_load_rates(sr: int) -> None:
+    """Verhaltensprobe zur Toleranz: Kicks 55 ms neben dem Anschlag.
+
+    55 ms liegt unter der Toleranz von 69,7 ms und ueber der halbierten von
+    34,8 ms. Vor der Korrektur trennte genau dieser Bereich die beiden
+    Laderaten; danach faellt das Urteil an beiden gleich aus.
+    """
+    rng = np.random.default_rng(20260831)
+    duration = 30.0
+    signal = rng.normal(0.0, 0.001, int(sr * duration)).astype(np.float32)
+    click = np.exp(-np.linspace(0.0, 12.0, int(sr * 0.02))).astype(np.float32)
+    interval = 60.0 / 128.0
+    times: list[float] = []
+    position = 0.0
+    while position < duration - 0.05:
+        start = int(position * sr)
+        signal[start:start + click.size] += click * 0.8
+        times.append(position)
+        position += interval
+
+    grid = estimate_beat_grid(signal, sr, kick_times=[t + 0.055 for t in times])
+
+    assert grid.kick_recall is not None and grid.kick_recall > 0.9, (
+        f"bei sr={sr} nur Trefferquote {grid.kick_recall} - die Toleranz haengt "
+        f"noch an der Laderate"
+    )
+    assert grid.status == "plausible"
+
+
+def test_a_cross_check_that_hits_nothing_is_reported_not_swallowed() -> None:
+    """Null Treffer ist ein Messwert, kein Grund zum Ueberspringen.
+
+    Die Oktavschleife uebersprang Versuche mit Trefferquote UND Praezision
+    gleich null. Traf keine einzige Oktave einen Kick, blieben beide Felder
+    deshalb `None` - und das ungepruefte Raster ging als `plausible` durch.
+    Der unguenstigste Fall wurde als der beste ausgegeben.
+    """
+    signal, times = _click_track(174.0, duration=30.0)
+    grid = estimate_beat_grid(signal, SR, kick_times=[t + 0.110 for t in times])
+    assert grid.kick_recall is not None and grid.kick_precision is not None, (
+        "Nullergebnis wurde verschluckt statt gemeldet"
+    )
 
 
 def test_silence_reports_unavailable() -> None:

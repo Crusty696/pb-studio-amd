@@ -858,6 +858,12 @@ _AUDIO_STAGE_RESULT_FIELDS = {
         "downbeats",
         "downbeat_provenance",
         "beat_grid_provenance",
+        # Ohne diesen Eintrag verwirft `_merge_audio_analysis_result` das
+        # Beatgrid still: es wird berechnet, geloggt und ins Ergebnisdict
+        # geschrieben - und diese Whitelist filtert es danach wieder heraus.
+        # Genau so ist es beim ersten Live-Lauf passiert (Log zeigte
+        # "Beatgrid ... 94.67 BPM", die API lieferte {}).
+        "beat_grid",
         "onset_times",
         "kick_times",
         "snare_times",
@@ -1348,6 +1354,8 @@ async def _analyze_audio_in_context(
                     stage_errors=snapshot.get("_stage_errors", {}),
                     downbeats=snapshot.get("downbeats"),
                     downbeat_provenance=snapshot.get("downbeat_provenance"),
+                    beat_grid_provenance=snapshot.get("beat_grid_provenance"),
+                    beat_grid=snapshot.get("beat_grid"),
                 )
 
         def _checkpoint_stream_chunk(fresh: dict[str, Any]) -> None:
@@ -1503,6 +1511,8 @@ async def _analyze_audio_in_context(
                 stage_errors=result.get("_stage_errors", {}),
                 downbeats=result.get("downbeats", []),
                 downbeat_provenance=result.get("downbeat_provenance"),
+                beat_grid_provenance=result.get("beat_grid_provenance"),
+                beat_grid=result.get("beat_grid"),
             )
 
         await publish_log(
@@ -2300,6 +2310,10 @@ def _run_audio_analysis(
         "tolerance_seconds": None,
         "window_median_bpm": None,
     }
+    # Das Grid als Regel (Anker + Tempo). Vorbelegt, damit jeder Ausgang -
+    # auch der frueh abbrechende - ein aussagefaehiges Feld liefert statt
+    # eines leeren Dicts, das man nicht von "nie versucht" unterscheiden kann.
+    beat_grid: dict = {"status": "unavailable", "method": "not_requested"}
 
     if request.detect_beats:
         try:
@@ -2575,6 +2589,72 @@ def _run_audio_analysis(
     elif request.detect_beats:
         beat_grid_provenance = {**beat_grid_provenance, "method": "no_beats"}
 
+    # 1d. Das Beatgrid als REGEL: Anker plus Tempo statt einer Zeitmarkenliste.
+    #
+    # Bewusst getrennt von `beats` und von `bpm`. Die Zeitmarken stammen aus
+    # `librosa.beat_track`, das seinen Prior aus start_bpm=120 baut; an
+    # 104 Fenstern mit BPM-Referenz gemessen traf es das Tempo in 39,4 % der
+    # Faelle und lieferte ueber alle Fenster nur sechs verschiedene Werte
+    # (docs/measurements/2026-08-30-downbeat-ableitung-befund.md). Der
+    # Estimator sucht sein Tempo ohne diesen Prior und prueft es
+    # verpflichtend auf Oktavfehler.
+    #
+    # Er ERSETZT vorerst nichts: `beats` und `bpm` bleiben unveraendert, das
+    # Grid kommt als eigenes Feld dazu. Erst wenn an echtem Material belegt
+    # ist, dass es besser trifft, darf es den Beat-Pfad speisen.
+    if request.detect_beats and not _use_streaming and y is not None:
+        try:
+            from pb_studio.audio.beat_grid import estimate_beat_grid
+
+            _grid = estimate_beat_grid(y, sr, kick_times=kick_times)
+            beat_grid = _grid.as_provenance()
+            logger.info(
+                "Beatgrid (clip_id=%s): %.2f BPM, Anker %.3f s, Kontrast %.2f, "
+                "Status %s, Kick-Recall %s / Praezision %s | zum Vergleich "
+                "beat_track: %.2f BPM",
+                clip_id, _grid.bpm, _grid.anchor_s, _grid.contrast, _grid.status,
+                _grid.kick_recall, _grid.kick_precision, bpm,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Fail-soft mit Spur: das Grid ist eine Zusatzangabe, sein
+            # Ausfall darf die Analyse nicht kippen - aber er darf auch
+            # nicht stumm bleiben.
+            logger.warning("Beatgrid-Schaetzung fehlgeschlagen: %s", exc)
+            beat_grid = {"status": "unavailable", "method": "estimator_failed"}
+    elif request.detect_beats and _use_streaming:
+        # Lange Datei: EIN Tempo waere hier strukturell falsch, nicht nur
+        # ungenau. An 800 Segmenten aus 20 echten Mixen gemessen sitzt ein
+        # globales Raster in 19 % der Segmente, ein je Segment bestimmtes in
+        # 95 % (docs/measurements/2026-08-31-mix-tempo-drift.json).
+        #
+        # Der Segmentierer laedt fensterweise aus der Datei statt am Stueck -
+        # ein 188-Minuten-Mix waere bei 22050 Hz sonst 995 MB float32, also
+        # genau das OOM-Szenario aus Audit-Befund H-5.
+        try:
+            from pb_studio.audio.beat_grid_segments import (
+                segment_beat_grids_from_file,
+                segments_as_payload,
+            )
+
+            _segments = segment_beat_grids_from_file(
+                str(audio_path), sr=22050, kick_times=kick_times
+            )
+            beat_grid = segments_as_payload(_segments)
+            if _segments:
+                logger.info(
+                    "Segmentiertes Beatgrid (clip_id=%s): %d Abschnitte, "
+                    "dominant %.2f BPM ueber %.0f s, Tempi %s",
+                    clip_id, len(_segments),
+                    beat_grid.get("dominant_bpm", 0.0),
+                    beat_grid.get("dominant_span_s", 0.0),
+                    beat_grid.get("distinct_tempi"),
+                )
+        except Exception as exc:  # noqa: BLE001
+            # Fail-soft mit Spur: das Grid ist eine Zusatzangabe, sein
+            # Ausfall darf die Analyse eines langen Mixes nicht kippen.
+            logger.warning("Segmentiertes Beatgrid fehlgeschlagen: %s", exc)
+            beat_grid = {"status": "unavailable", "method": "segmentation_failed"}
+
     if request.detect_beats:
         _checkpoint(
             "beats",
@@ -2586,6 +2666,7 @@ def _run_audio_analysis(
                 "downbeats": downbeats,
                 "downbeat_provenance": downbeat_provenance,
                 "beat_grid_provenance": beat_grid_provenance,
+                "beat_grid": beat_grid,
                 "onset_times": onset_times,
                 "kick_times": kick_times,
                 "snare_times": snare_times,
@@ -2795,6 +2876,7 @@ def _run_audio_analysis(
         "downbeats": downbeats,
         "downbeat_provenance": downbeat_provenance,
         "beat_grid_provenance": beat_grid_provenance,
+        "beat_grid": beat_grid,
         "key": key,
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,
