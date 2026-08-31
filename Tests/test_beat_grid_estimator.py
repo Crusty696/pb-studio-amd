@@ -70,7 +70,11 @@ def test_tempo_is_not_pulled_towards_120(bpm: float) -> None:
     von 120 BPM nicht dorthin ziehen.
     """
     signal, _ = _click_track(bpm)
-    grid = estimate_beat_grid(signal, SR)
+    # Eigener Suchbereich: der Default `TEMPO_RANGE` ist auf das Material
+    # dieses Projekts eingestellt (100-150 BPM) und schliesst 92 und 174
+    # bewusst aus. Dieser Test prueft die Eigenschaft "kein 120-BPM-Prior",
+    # nicht die Genre-Einstellung - er setzt den Bereich deshalb selbst.
+    grid = estimate_beat_grid(signal, SR, tempo_range=(60.0, 200.0))
     assert abs(grid.bpm - bpm) / bpm < 0.02, f"{bpm} BPM wurde als {grid.bpm} erkannt"
 
 

@@ -77,7 +77,119 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-29 (Funktionsaudit + Reparaturplan 01 abgearbeitet)
+- **Date:** 2026-08-31 (Beat-/Tempo-Audit, Beatgrid verdrahtet und segmentiert)
+- **Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
+  Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
+  Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).
+  - **C-1** Energy-Trigger lagen bei exakt doppelter Zeit — die gecachte
+    Energiekurve entsteht bei `analysis_sr` (Default 44100), die Engine rechnete
+    mit `sr=22050` zurück. An echter Datei: Dauer 544,2 s, wahre Peak-Zeit
+    327,98 s, gemeldet 655,96 s, also jenseits des Dateiendes.
+  - **H-3 war größer als gemeldet: VIER divergierende Parametersätze**, nicht
+    drei. `_extract_drum_triggers_from_stem` lief ohne `n_mels`, also mit dem
+    librosa-Default von 128 Filtern auf ~14 Bins im Kick-Band. Dabei zwei
+    weitere Divergenzen: Router und Streaming rechneten für 20–150 Hz,
+    übergaben aber nur `fmax` ohne `fmin`; das HiHat-Band hing an der
+    Abtastrate (Router 5000–22050 Hz, Engine 5000–11025 Hz). Alle vier Pfade
+    beziehen die Parameter jetzt aus `src/pb_studio/audio/band_params.py`.
+  - **Außerhalb der Auditliste:** die Streaming-Dedup verglich gegen das letzte
+    statt erste Gruppenelement — aus einer durchgehenden 16tel-HiHat wurde
+    **genau ein** Zeitpunkt, bei jedem Tempo.
+  - **M-3 bewusst nicht verdrahtet**, sondern dokumentiert: `_tempo_at_time`
+    hat keinen produktiven Aufrufer, und eine Verdrahtung im `generate()`-Pfad
+    wäre eine Verschlechterung. Produktentscheidung, nicht still erfunden.
+- **Beatgrid ist verdrahtet** (`src/pb_studio/audio/beat_grid.py`): Schema →
+  Router → Merge-Whitelist → AppState → `_load_index` → OpenAPI → C#-Record →
+  ViewModel → XAML-Binding, Wächter in `Tests/test_beat_grid_wiring.py`.
+  Der erste Live-Lauf lieferte `beat_grid: {}`, obwohl das Log das Ergebnis
+  zeigte — `_AUDIO_STAGE_RESULT_FIELDS["beats"]` filterte es nach der
+  Berechnung wieder heraus. **Der erste Wächter bemerkte das nicht, weil er nur
+  prüfte, ob der Feldname vorkommt. Vorkommen ist nicht Durchleitung.**
+  Es **ersetzt bewusst nichts** — `beats` und `bpm` bleiben unverändert; bei
+  48,8 % Tempo-Trefferquote gegen 37,0 % wäre alles andere unverantwortlich.
+- **DJ-Mixe bekommen mehrere Grid-Abschnitte** (`beat_grid_segments.py`):
+  Kontrast an sechs echten Mixen **1,12–1,75 → 2,15–2,85**. Der Router benutzt
+  `segment_beat_grids_from_file`, die fensterweise liest — die Array-Variante
+  hätte bei einem 188-Minuten-Mix 995 MB angefordert, also genau H-5.
+- **Drei eigene Behauptungen an Messungen widerlegt:**
+  1. Die **0,75-Kick-Schwelle** meldete 125 von 127 Fenstern als `suspect`,
+     darunter 96 % der korrekt erkannten. Ursache: systematischer Versatz von
+     genau einer Hop-Länge (+23,2 ms), nur 4 % der Kicks liegen innerhalb
+     ±23 ms eines Beats. Die Gegenprobe entscheidet nicht mehr über den Status.
+  2. Die **33-%-Tempostreuung in Mixen** ist ein Vielfachfehler des Schätzers,
+     keine echte Tempoänderung: 97,2 % liegen auf einfachen Vielfachen des
+     Datei-Medians, nach Faltung bleiben 0,1 %. Die Mixe sind tempostabil.
+  3. **`tempogram_ratio`** als Vielfachkorrektur repariert 0 Fälle und macht
+     4 kaputt (48,8 % → 45,7 %). Verworfen, nicht eingebaut.
+- **Die BPM-Attraktoren sind erklärt:** die drei häufigsten Werte des alten
+  Pfads (143,55 / 136,00 / 92,29) sind exakt die Tempogramm-Frequenzen
+  `60·sr/hop / k` für k = 18, 19, 28. Im EDM-Bereich ist dieses Gitter
+  6,8–7,6 BPM grob; ein 126-BPM-Track ist damit **prinzipiell** nicht treffbar.
+- **Prozesslehre dieser Sitzung:** die erwartete Richtung *vor* der Messung
+  aufschreiben. Sie hat drei eigene Fehler gefangen, darunter einen Kommentar,
+  der etwas behauptete, das die nächste Zeile nicht einlöste. Und einmal wurde
+  gegen eine **erfundene** Zahl gemessen („50 Abschnitte sind zu viele", aus
+  geschätzten 15–25 Tracks pro Mix) — es gibt keine Annotation dieser Mixe.
+- **Messbelege:** `docs/measurements/2026-08-30-beatgrid-machbarkeit.md`,
+  `2026-08-31-kick-gegenprobe-befund.md`, `2026-08-31-mix-segmentierung.md`.
+  Musiktheorie-Grundlagen: `docs/musiktheorie/GRUNDLAGEN.md`.
+- **⚠️ DIE BPM IN DEN BEATPORT-DATEINAMEN IST BEI 40 % DER TRACKS FALSCH.**
+  Belegt über einen unabhängigen Schiedsrichter (Fourier-Tempogramm ohne Prior
+  und ohne k-quantisiertes Kandidatengitter, teilt sich mit keinem der
+  Verfahren etwas), 35 Tracks:
+  **Beat This! 34/35 = 97,1 % · Dateiname-BPM 21/35 = 60,0 %.**
+  Beispiele: Label 122 → real 137,8; Label 100 → real 140,3; Label 92 → real
+  137,2. Zwei Dateien desselben Stücks tragen 140 und 103.
+  **Konsequenz: alle Trefferquoten dieser Sitzung (35 % / 48,8 % / 55 %) sind
+  gegen eine Referenz gemessen, die selbst nur zu 60 % stimmt.** Sie messen
+  überwiegend die Labels, nicht den Algorithmus. Künftige Tempo-Messungen
+  brauchen entweder GiantSteps oder den Fourier-Schiedsrichter als Referenz.
+  Rohdaten: `docs/measurements/beat_this_onnx_arbiter.json`.
+- **Beat This! (ISMIR 2024) läuft auf dieser Maschine — VERIFIZIERT.**
+  ONNX, MIT-Lizenz (`musetric/beat-this-onnx`, alle drei SHA-256 gegen das
+  Manifest geprüft), **keine neue Abhängigkeit**. Node-Placement per
+  ORT-Profiling belegt: 2568 Knoten auf `DmlExecutionProvider` gegen 940 auf
+  CPU — 96 % der Rechenzeit wirklich auf der GPU, kein stiller Fallback.
+  0,41 s je 120-s-Fenster gegen 4,75 s auf CPU. Modell in `models/beat_this/`
+  (83,4 MB, gitignoriert). **Downbeats:** 29/35 Tracks mit Median-Taktlänge
+  exakt 4,00 Beats, mittlere Abweichung von ganzzahligem Beat-Abstand 0,024 —
+  eine andere Größenordnung als die verworfene Ableitung (9 von 520).
+  Noch nicht verdrahtet; braucht Bar-Grid-Regularisierung (nur 6/35 haben
+  ≥ 90 % der Downbeat-Abstände als Vielfaches von 4).
+  Werkzeug: `scripts/dev/measure_neural_beat_tracker.py`.
+- **`TEMPO_RANGE` ist genrespezifisch und war zu weit.** Nutzerangabe „meine
+  Mixe sind nie schneller als 145 BPM", gemessen an 20 Tracks: 50–220 BPM
+  → 35,0 %, 70–145 → 50,0 %, **100–150 → 55,0 %**. Ein weiter Suchraum liefert
+  mehr Kandidaten, und der Kontrast bevorzugt darunter systematisch das
+  langsamere Raster. Default jetzt (100, 150); `estimate_beat_grid` nimmt
+  `tempo_range` als Parameter — für DnB (~174) oder langsamen HipHop (~85)
+  muss er gesetzt werden.
+- **Zwei WPF-Defekte an der laufenden App gefunden und behoben:**
+  1. **Absturz beim Analysieren.** `CaptureOperationContext()` wirft bei
+     instabilem Projektkontext; elf Aufrufstellen fingen das ab, **vier
+     nicht** — ausgerechnet die, die lange Arbeit starten (beide
+     Analysepfade, Stem-Separation, Cut-Liste). Unbehandelte UI-Exception,
+     Fenster weg. Wächter: `Tests/test_wpf_operation_context_guarded.py`.
+  2. **Backend-Start-Timeout 30 s, Bedarf 60 s.** Das Backend kontaktiert beim
+     Start Ollama und LM Studio und läuft in deren Timeouts, wenn sie nicht
+     laufen. Die App gab auf und räumte ein funktionierendes Backend ab.
+     Jetzt 120 s.
+- **Die Beatgrid-Anzeige ist im laufenden GUI belegt** (UIA-Auslesung,
+  Screenshot, Gegenprobe vorher leer): `docs/evidence/beatgrid-gui-final/`.
+  Sie heißt „Zweitschätzung", ist optisch untergeordnet und nennt Abweichungen
+  vom angezeigten Tempo samt Verdacht auf Oktavfehler — zwei gleichrangige
+  Tempi ohne Erklärung waren schlechter als eines.
+  Prüfwerkzeug: `scripts/dev/verify_beatgrid_in_gui.py` (prüft auf **Änderung**
+  des Textes, nicht nur auf Anwesenheit — die erste Fassung hätte einen
+  stehengebliebenen alten Wert als Erfolg gemeldet).
+- **⚠️ `Stop-Process -Force` gilt auch für die WPF, nicht nur fürs Backend.**
+  In dieser Sitzung selbst ausgelöst: die App hart beendet → ihr
+  Backend-Kindprozess starb mit → `RUNTIME_DIRTY` blieb stehen → der nächste
+  Start stellte die Recovery-Generation von 02:58 wieder her. Analysewerte
+  zurückgesetzt, DB-Zählstände unbeschädigt. App immer über
+  `CloseMainWindow()`, Backend über `POST /shutdown` und dann auf das
+  **Verschwinden von `RUNTIME_DIRTY`** warten (gemessen 36 s).
+- **Historischer Stand:** 2026-08-29 (Funktionsaudit + Reparaturplan 01)
 - **Audit 2026-08-29:** ~243 Befunde (18 CRITICAL, 61 HIGH, 74 MEDIUM).
   Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Kernbefund: die Ketten brechen an den
   Übergabestellen zwischen Domänen, nicht innerhalb — und die Tests sind

@@ -307,7 +307,22 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var operation = _projectService.CaptureOperationContext();
+        // Ohne stabilen Projektkontext wirft CaptureOperationContext eine
+        // InvalidOperationException. Ungefangen killt sie die App - genau das
+        // ist am 2026-08-31 beim Klick auf "Analysieren" passiert
+        // (unbehandelte UI-Exception, Fenster weg). Elf andere Aufrufstellen
+        // fangen sie bereits ab und melden sie als Status; diese hier waren
+        // vergessen worden.
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Cut-Liste nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
         var audioClip = SelectedAudioClip;
         IsGenerating = true;
         _activePacingAudioClipId = audioClip.Id;

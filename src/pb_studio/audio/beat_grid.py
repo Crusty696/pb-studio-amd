@@ -81,9 +81,32 @@ logger = logging.getLogger(__name__)
 HOP_LENGTH = 512
 PHASE_STEPS = 64
 
-# Suchraum fuer die Tempokandidaten. Unten 50, damit halbe Tempi langsamer
-# Stuecke noch im Raster liegen und die Oktavpruefung sie sehen kann.
-TEMPO_RANGE = (50.0, 220.0)
+# Suchraum fuer die Tempokandidaten.
+#
+# Frueher (50, 220) mit der Begruendung, halbe Tempi langsamer Stuecke muessten
+# noch im Raster liegen. Das war zu weit gefasst und hat mehr geschadet als
+# genutzt: an 20 gemasterten Tracks gemessen, je ein 120-s-Fenster,
+# oktavnormiert mit 2 % Toleranz:
+#
+#     50-220 BPM   ->  7/20 = 35,0 %
+#     70-145 BPM   -> 10/20 = 50,0 %
+#    100-150 BPM   -> 11/20 = 55,0 %
+#
+# Ein weiter Suchraum liefert mehr Kandidaten, und der Kontrast bevorzugt unter
+# ihnen systematisch das duennere (langsamere) Raster - die zusaetzlichen
+# Kandidaten sind also ueberwiegend Fehlerquellen, keine Chancen.
+#
+# ACHTUNG, das ist genrespezifisch: der Bereich stammt aus der Angabe des
+# Projektinhabers ("meine Mixe sind nie schneller als 145 BPM") und ist an
+# dessen Material (Psy-/Progressive-Trance, 136-145 BPM) gemessen. Fuer
+# Drum'n'Bass (~174), Footwork (~160) oder langsamen HipHop (~85) ist er
+# falsch. Deshalb Konstante und kein Literal - wer anderes Material hat, muss
+# ihn anpassen und die Messung wiederholen.
+#
+# Die Untergrenze 100 statt 70 kostet nichts, solange oktavnormiert verglichen
+# wird: ein 69-BPM-Track wird als 138 gefunden. Sie schuetzt aber davor, dass
+# das halbe Tempo ueberhaupt erst als Kandidat antritt.
+TEMPO_RANGE = (100.0, 150.0)
 TEMPO_CANDIDATES = 6
 
 # Feinsuche um jeden Kandidaten.
@@ -267,7 +290,10 @@ def _contrast(scores: np.ndarray) -> tuple[float, float]:
     return float(scores[best] / mean), best / PHASE_STEPS
 
 
-def _tempo_candidates(envelope: np.ndarray, sr: int) -> list[float]:
+def _tempo_candidates(
+    envelope: np.ndarray, sr: int,
+    tempo_range: tuple[float, float] | None = None,
+) -> list[float]:
     """Tempospitzen aus dem Tempogramm - ohne den 120-BPM-Prior."""
     import librosa
 
@@ -278,7 +304,8 @@ def _tempo_candidates(envelope: np.ndarray, sr: int) -> list[float]:
         tempogram.shape[0], hop_length=HOP_LENGTH, sr=sr
     )
     strength = np.mean(tempogram, axis=1)
-    usable = (frequencies >= TEMPO_RANGE[0]) & (frequencies <= TEMPO_RANGE[1])
+    low, high = tempo_range or TEMPO_RANGE
+    usable = (frequencies >= low) & (frequencies <= high)
     if not np.any(usable):
         return []
     order = np.argsort(strength[usable])[::-1]
@@ -352,6 +379,7 @@ def estimate_beat_grid(
     sr: int,
     *,
     kick_times: Optional[list[float]] = None,
+    tempo_range: Optional[tuple[float, float]] = None,
 ) -> BeatGrid:
     """Schaetzt Tempo und Anker eines Beatgrids.
 
@@ -360,6 +388,11 @@ def estimate_beat_grid(
         sr: Abtastrate.
         kick_times: Unabhaengig gewonnene Kick-Zeitpunkte. Ohne sie wird das
             Tempo nicht auf Oktavfehler geprueft - der haeufigste Fehlerfall.
+        tempo_range: Suchbereich in BPM. Ohne Angabe gilt `TEMPO_RANGE`, das
+            auf das Material dieses Projekts eingestellt ist (Psy-/Progressive
+            -Trance, 136-145 BPM). Wer anderes Material analysiert - DnB,
+            Footwork, langsamen HipHop - muss ihn hier setzen; ein zu weiter
+            Bereich kostet nachweislich Genauigkeit (35 % gegen 55 %).
 
     Returns:
         Ein `BeatGrid`. `status` ist ``"plausible"``, wenn der Kontrast die
@@ -370,6 +403,7 @@ def estimate_beat_grid(
     """
     import librosa
 
+    _low, _high = tempo_range or TEMPO_RANGE
     envelope = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
     if envelope.size < 16 or float(np.mean(envelope)) <= 0.0:
         return BeatGrid(0.0, 0.0, 0.0, "onset_envelope_empty", "unavailable")
@@ -378,7 +412,7 @@ def estimate_beat_grid(
     span = float(times[-1])
 
     scored: list[tuple[float, float, float]] = []
-    for candidate in _tempo_candidates(envelope, sr):
+    for candidate in _tempo_candidates(envelope, sr, tempo_range):
         refined = _refine(envelope, times, candidate, span, sr)
         if refined[2] > 0.0:
             scored.append(refined)
@@ -428,7 +462,7 @@ def estimate_beat_grid(
         # den eine reine Halb/Doppel-Pruefung nicht erreicht.
         for factor in (1.0 / 3.0, 0.5, 1.0, 2.0, 3.0):
             trial_bpm = bpm * factor
-            if not (TEMPO_RANGE[0] <= trial_bpm <= TEMPO_RANGE[1]):
+            if not (_low <= trial_bpm <= _high):
                 continue
             trial = _refine(envelope, times, trial_bpm, span, sr)
             if trial[2] <= 0.0:

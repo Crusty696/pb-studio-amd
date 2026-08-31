@@ -1,0 +1,328 @@
+{
+  "summary": {
+    "arbiter": "phase-invariant Fourier tempogram, 0.01 BPM grid, 60-200 BPM",
+    "n_tracks": 35,
+    "tolerance": 0.02,
+    "beat_this_agrees": 34,
+    "beat_this_agreement": 0.9714,
+    "label_agrees": 21,
+    "label_agreement": 0.6
+  },
+  "results": [
+    {
+      "file": ".Khainz_-_Excuse_Me_(Extended_Mix)_126__(Melodic_House_&_Techno)_E_Major_02_11.aiff",
+      "label_bpm_norm": 126.0,
+      "beat_this_bpm_norm": 127.427,
+      "fourier_bpm_norm": 125.98,
+      "fourier_salience": 0.122,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Antinomy_-_Imagination_(Kalki_remix)_143__(Psy-Trance)_G_Major_02_21.aiff",
+      "label_bpm_norm": 143.0,
+      "beat_this_bpm_norm": 142.024,
+      "fourier_bpm_norm": 142.22,
+      "fourier_salience": 0.0681,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Aqualize_-_Land_of_2_Suns_(Liquid_Soul_remix)_122__(Psy-Trance)_Gb_Major_02_27.aiff",
+      "label_bpm_norm": 122.0,
+      "beat_this_bpm_norm": 138.023,
+      "fourier_bpm_norm": 137.76,
+      "fourier_salience": 0.0426,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Aura_Vortex,_Blazy_-_Horizons_(Phaxe_Remix)_140__(Psy-Trance)_A_Minor_02_25.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 142.563,
+      "fourier_bpm_norm": 140.38,
+      "fourier_salience": 0.0977,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Bellatrix,_Psyberspace_-_Who_Am_I_(Original_Mix)_71__(Psy-Trance)_Eb_Major_02_05.aiff",
+      "label_bpm_norm": 142.0,
+      "beat_this_bpm_norm": 140.0,
+      "fourier_bpm_norm": 140.1,
+      "fourier_salience": 0.0383,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Bellatrix_-_Lost_in_the_Universe_(Original_Mix)_144__(Psy-Trance)_Eb_Minor_02_09.aiff",
+      "label_bpm_norm": 144.0,
+      "beat_this_bpm_norm": 142.568,
+      "fourier_bpm_norm": 142.08,
+      "fourier_salience": 0.078,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Bellatrix_-_Miracle_(Original_Mix)_143__(Psy-Trance)_Ab_Major_02_26.aiff",
+      "label_bpm_norm": 143.0,
+      "beat_this_bpm_norm": 141.95,
+      "fourier_bpm_norm": 142.15,
+      "fourier_salience": 0.0803,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Bellatrix_-_Modern_Music_(Original_Mix)_69__(Psy-Trance)_B_Major_02_19.aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 142.142,
+      "fourier_bpm_norm": 142.19,
+      "fourier_salience": 0.0914,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Deliriant_-_Echoes_in_the_Infinite_(Original_Mix)_145__(Psy-Trance)_Gb_Major_02_13.aiff",
+      "label_bpm_norm": 145.0,
+      "beat_this_bpm_norm": 150.158,
+      "fourier_bpm_norm": 143.22,
+      "fourier_salience": 0.0863,
+      "beat_this_agrees": false,
+      "label_agrees": true
+    },
+    {
+      "file": "Disconect_-_Utopia_(Original_Mix)_100__(Psy-Trance)_Gb_Minor_02_09.aiff",
+      "label_bpm_norm": 100.0,
+      "beat_this_bpm_norm": 139.99,
+      "fourier_bpm_norm": 140.25,
+      "fourier_salience": 0.0486,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Formula_None_-_Sky_Spirit_(Original_mix)_140__(Psy-Trance)_Bb_Major_02_02.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 140.0,
+      "fourier_bpm_norm": 140.28,
+      "fourier_salience": 0.0673,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Inner_Sphere_-_Astronomia_(Side_Effects_remix)_129__(Psy-Trance)_Gb_Major_02_17.aiff",
+      "label_bpm_norm": 129.0,
+      "beat_this_bpm_norm": 140.0,
+      "fourier_bpm_norm": 140.16,
+      "fourier_salience": 0.0599,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Interium_-_Ascend_(Original_Mix)_137__(Psy-Trance)_A_Major_02_08.aiff",
+      "label_bpm_norm": 137.0,
+      "beat_this_bpm_norm": 142.095,
+      "fourier_bpm_norm": 142.17,
+      "fourier_salience": 0.0628,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Introspective_(PT)_-_Time_and_God_(Original_Mix)_70__(Psy-Trance)_E_Major_02_07.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 140.023,
+      "fourier_bpm_norm": 140.0,
+      "fourier_salience": 0.0571,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Kaya_Project_-_Breathe_Again_(IK\u00d8N_remix)_92__(Psy-Trance)_Gb_Major_02_15.aiff",
+      "label_bpm_norm": 92.0,
+      "beat_this_bpm_norm": 137.023,
+      "fourier_bpm_norm": 137.19,
+      "fourier_salience": 0.04,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Liquid_Soul,_Neodyne_-_Believe_(Bellatrix_Remix)_97__(Psy-Trance)_E_Major_02_29.aiff",
+      "label_bpm_norm": 97.0,
+      "beat_this_bpm_norm": 140.0,
+      "fourier_bpm_norm": 140.1,
+      "fourier_salience": 0.0921,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Mercuroid_-_Satinka_(Misaya_Remix)_142__(Psy-Trance)_G_Major_02_25.aiff",
+      "label_bpm_norm": 142.0,
+      "beat_this_bpm_norm": 143.93,
+      "fourier_bpm_norm": 142.09,
+      "fourier_salience": 0.0571,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Misaya_-_Alien_Presence_(Original_Mix)_90__(Psy-Trance)_D_Major_02_31.aiff",
+      "label_bpm_norm": 90.0,
+      "beat_this_bpm_norm": 141.95,
+      "fourier_bpm_norm": 142.42,
+      "fourier_salience": 0.053,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Misaya_-_Night_Sky_(Original_Mix)_143__(Psy-Trance)_E_Minor_02_13.aiff",
+      "label_bpm_norm": 143.0,
+      "beat_this_bpm_norm": 143.0,
+      "fourier_bpm_norm": 143.39,
+      "fourier_salience": 0.057,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Ace_Ventura,_Zen_Mechanics_-_Come_with_Us_(Asgard_remix)_103__(Psy-Trance)_Ab_Major_18_30.aiff",
+      "label_bpm_norm": 103.0,
+      "beat_this_bpm_norm": 142.245,
+      "fourier_bpm_norm": 142.1,
+      "fourier_salience": 0.0829,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Charlotte_de_Witte_-_High_Street_(Astrix_Remix)_138__(Psy-Trance)_Gb_Major_18_28.aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.046,
+      "fourier_bpm_norm": 137.6,
+      "fourier_salience": 0.0982,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Loud_-_Station_42_(Zen_Mechanics_Remix)_138__(Psy-Trance)_A_Major_18_30.aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.023,
+      "fourier_bpm_norm": 137.96,
+      "fourier_salience": 0.0737,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Divination_-_Mechanation_(Original_Mix)_138__(Psy-Trance)_F_Major_18_01 (1).aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.0,
+      "fourier_bpm_norm": 138.1,
+      "fourier_salience": 0.0428,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Divination_-_Mechanation_(Original_Mix)_138__(Psy-Trance)_F_Major_18_01 (2).aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.0,
+      "fourier_bpm_norm": 138.1,
+      "fourier_salience": 0.0428,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Egorythmia_-_Dragonfruit_(E-Clip_Remix)_138__(Psy-Trance)_F#_Minor_18_05.aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.006,
+      "fourier_bpm_norm": 138.23,
+      "fourier_salience": 0.0524,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Egorythmia_-_Primal_Sphere_(Album_Mix)_140__(Psy-Trance)_Bb_Major_18_04.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 138.023,
+      "fourier_bpm_norm": 137.73,
+      "fourier_salience": 0.0634,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Egorythmia_-_Primal_Sphere_(Original_Mix)_103__(Psy-Trance)_Bb_Major_18_18.aiff",
+      "label_bpm_norm": 103.0,
+      "beat_this_bpm_norm": 138.023,
+      "fourier_bpm_norm": 137.72,
+      "fourier_salience": 0.0649,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Zen_Mechanics,_Egorythmia_-_Shores_of_the_Subconscious_(E-Clip_Remix)_92__(Psy-Trance)_B_Minor_18_27.aiff",
+      "label_bpm_norm": 92.0,
+      "beat_this_bpm_norm": 140.0,
+      "fourier_bpm_norm": 139.88,
+      "fourier_salience": 0.0551,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Zen_Mechanics,_Sonic_Species_-_Spice_Travel_(Imagine_Mars_Remix)_140__(Psy-Trance)_F_Major_18_24.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 142.182,
+      "fourier_bpm_norm": 141.68,
+      "fourier_salience": 0.0831,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics,_Yestermorrow_-_Escape_the_Simulation_(Original_mix)_95__(Psy-Trance)_Gb_Major_18_15.aiff",
+      "label_bpm_norm": 95.0,
+      "beat_this_bpm_norm": 139.943,
+      "fourier_bpm_norm": 139.56,
+      "fourier_salience": 0.0375,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Zen_Mechanics,_Yestermorrow_-_Escape_the_Simulation_(Original_mix)_95__(Psy-Trance)_Gb_Major_18_29.aiff",
+      "label_bpm_norm": 95.0,
+      "beat_this_bpm_norm": 139.943,
+      "fourier_bpm_norm": 139.56,
+      "fourier_salience": 0.0375,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Zen_Mechanics,_Yestermorrow_-_Solarians_(Original_Mix)_138__(Psy-Trance)_F_Major_18_13.aiff",
+      "label_bpm_norm": 138.0,
+      "beat_this_bpm_norm": 138.046,
+      "fourier_bpm_norm": 138.22,
+      "fourier_salience": 0.0434,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Zen_Mechanics_-_Hallucination_Generation_(LOUD_Remix)_142__(Psy-Trance)_Gb_Major_18_01.aiff",
+      "label_bpm_norm": 142.0,
+      "beat_this_bpm_norm": 141.973,
+      "fourier_bpm_norm": 141.89,
+      "fourier_salience": 0.1285,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    },
+    {
+      "file": "Valar_(UK)_-_Desert_Storm_(Original_mix)_107__(Psy-Trance)_E_Major_02_16.aiff",
+      "label_bpm_norm": 107.0,
+      "beat_this_bpm_norm": 142.0,
+      "fourier_bpm_norm": 142.02,
+      "fourier_salience": 0.0793,
+      "beat_this_agrees": true,
+      "label_agrees": false
+    },
+    {
+      "file": "Zen_Mechanics,_Protonica_-_Flowstate_(Original_mix)_140__(Psy-Trance)_E_Major_02_14.aiff",
+      "label_bpm_norm": 140.0,
+      "beat_this_bpm_norm": 139.967,
+      "fourier_bpm_norm": 140.04,
+      "fourier_salience": 0.0763,
+      "beat_this_agrees": true,
+      "label_agrees": true
+    }
+  ]
+}

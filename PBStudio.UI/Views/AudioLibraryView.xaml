@@ -371,7 +371,11 @@
                              NEBEN der BPM-Anzeige und ersetzt sie nicht: die
                              eigene Schaetzung trifft das Tempo in 48,8 % der
                              Faelle gegen 37,0 % des bisherigen Pfads - besser,
-                             aber nicht gut genug, um allein zu stehen. -->
+                             aber nicht gut genug, um allein zu stehen.
+                             Optisch klar untergeordnet (kleiner, gedimmt) und
+                             im Text als "Zweitschaetzung" benannt: zwei
+                             gleichrangig wirkende Tempi ohne Erklaerung sind
+                             schlechter als eines. -->
                         <TextBlock Text="{Binding BeatGridText}" FontSize="11"
                                    Margin="0,6,0,0" TextWrapping="Wrap"
                                    Foreground="{StaticResource AbletonTextDim}"

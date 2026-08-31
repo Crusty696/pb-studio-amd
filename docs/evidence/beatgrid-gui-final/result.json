@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "marker": "Zweitschätzung:",
+  "window_title": "PB Studio AMD",
+  "before_analysis": [],
+  "clip_list": "AudioClipList",
+  "clip_selected": true,
+  "analyse_button": "Ausgewählten Audio-Clip analysieren",
+  "analysis_triggered": true,
+  "after_analysis": [
+    "Zweitschätzung: 142.0 BPM · Anker 0.020 s · Güte 4.35 · Kick 30%/21% · unsicher"
+  ],
+  "changed": true,
+  "verdict": "present"
+}
