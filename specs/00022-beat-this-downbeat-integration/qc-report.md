@@ -2,7 +2,7 @@
 
 ## Authoritative OBJ-79 Gate
 
-- **Overall result:** **REOPENED / NOT RELEASE-READY**.
+- **Overall result:** **PASSED / RELEASE-READY**.
 - Native Beat-This-Zeitpunkte ersetzen bei validierter Ausgabe das Legacy-Raster;
   Legacy-BPM und -Beatanzahl bleiben nachvollziehbar in Provenance.
 - Hashfehler, ungültige Ausgabe oder fehlende Assets bewahren den Legacy-Pfad
