@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "repository": "musetric/beat-this-onnx",
+  "revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+  "license": "MIT",
+  "upstream": "https://github.com/CPJKU/beat_this",
+  "runtime_transform": "Fix spect input to [1, actual_window_frames, 128] in memory; infer output shapes; disable CPU EP fallback",
+  "files": {
+    "beat_this.onnx": {
+      "size": 83177894,
+      "sha256": "3472a3957f25f4c3a2d68b46ee4b784e065a8ebd46132796c1a6bdd817229253"
+    },
+    "config.json": {
+      "size": 1024,
+      "sha256": "56cc961ddc588c57787c20c01ec6ab483b23af1049e65bd33d599a81803acd69"
+    },
+    "mel-filterbank.bin": {
+      "size": 262656,
+      "sha256": "1ee975d96f44ccf2c3bfe37825c1c1f0b089f5703c7a12a84b1f0a3bce004533"
+    }
+  }
+}

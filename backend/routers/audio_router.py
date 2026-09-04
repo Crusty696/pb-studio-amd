@@ -14,6 +14,9 @@ Endpoints:
 import asyncio
 import logging
 import threading
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +60,9 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
 _stem_partial_marker_lock = threading.RLock()
+# Outer DSP workers can wait for loop-owned GPU work. They must never occupy
+# the default executor that with_gpu_task uses to run that work.
+_audio_analysis_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio-analysis")
 _LONG_STEM_TIMEOUT_RATIO = 0.75
 def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
     """Allow long mixes enough wall time while retaining the configured floor."""
@@ -1416,6 +1422,28 @@ async def _analyze_audio_in_context(
                 _checkpoint_state.update(merged)
                 _checkpoint_finished.add(stage)
 
+        def _neural_downbeats(path: str, duration: float):
+            """Bridge only neural inference to the loop-owned shared GPU lock."""
+            def guard():
+                _checkpoint_stage("__stream_guard__", {})
+
+            guard()
+            future = asyncio.run_coroutine_threadsafe(
+                _track_neural_downbeats(path, duration, guard, _analysis_progress),
+                _loop,
+            )
+            try:
+                while True:
+                    guard()
+                    try:
+                        return future.result(timeout=0.2)
+                    except TimeoutError:
+                        if future.done():
+                            raise
+            finally:
+                if not future.done():
+                    future.cancel()
+
         stems_paths = clip.get("stems_paths") or {}
         if isinstance(stems_paths, str):
             try:
@@ -1433,16 +1461,15 @@ async def _analyze_audio_in_context(
             worker_kwargs: dict[str, Any] = {
                 "on_stage_checkpoint": _checkpoint_stage,
             }
+            if planned_request.detect_beats:
+                worker_kwargs["neural_downbeat_runner"] = _neural_downbeats
             if stream_resume:
                 worker_kwargs["stream_resume"] = stream_resume
-            fresh_result = await asyncio.to_thread(
-                _run_audio_analysis,
-                audio_path,
-                request.clip_id,
-                planned_request,
-                stems_paths,
-                _analysis_progress,
-                **worker_kwargs,
+            fresh_result = await _loop.run_in_executor(
+                _audio_analysis_pool,
+                partial(_run_audio_analysis, audio_path, request.clip_id,
+                        planned_request, stems_paths, _analysis_progress,
+                        **worker_kwargs),
             )
         else:
             fresh_result = {
@@ -2024,6 +2051,69 @@ def _emit_analysis_progress(
         pass
 
 
+async def _track_neural_downbeats(path, duration, guard, progress):
+    """A cancelled/timed-out worker keeps its lock until its session closes."""
+    stop = threading.Event()
+
+    def check():
+        if stop.is_set():
+            raise _AudioAnalysisInterrupted("Neural downbeat analysis cancelled")
+        guard()
+
+    def infer():
+        from pb_studio.audio.beat_this_tracker import BeatThisTracker
+        from pb_studio.core.vram_budget_manager import get_vram_manager
+        from uuid import uuid4
+
+        check()
+        tracker = BeatThisTracker()
+        manager = None
+        registered = False
+        model_id = f"beat-this-{uuid4().hex}"
+        try:
+            manager = get_vram_manager()
+            # Conservative workspace budget for one attention window.
+            manager.register_model(model_id, "Beat This ONNX", 2048)
+            registered = True
+            if not manager.reserve(model_id):
+                raise RuntimeError("Beat This VRAM reservation unavailable")
+            if not manager.commit(model_id):
+                raise RuntimeError("Beat This VRAM commit failed")
+            beats, downbeats = tracker.track_file(
+                path, check,
+                lambda pct: progress("downbeats", 40.0 + pct * 0.04,
+                                     f"Beat This Downbeats {pct:.1f}%"),
+            )
+            check()
+            return beats, downbeats, tracker.manifest["revision"]
+        except BaseException as exc:
+            # ORT's unwound Python frames can retain a session through their
+            # local `self`, even after tracker.close(). Drop these references
+            # before releasing the shared GPU lock and budget.
+            traceback.clear_frames(exc.__traceback__)
+            raise
+        finally:
+            try:
+                tracker.close()
+            finally:
+                if registered:
+                    try:
+                        manager.release(model_id)
+                    finally:
+                        try:
+                            manager.cancel_reservation(model_id)
+                        finally:
+                            manager.unregister_model(model_id)
+
+    try:
+        return await with_gpu_task(
+            infer, model_id="beat-this", manage_vram=False,
+            timeout_seconds=max(float(config.gpu_timeout_seconds), duration * 3.0),
+        )
+    finally:
+        stop.set()
+
+
 def _run_audio_analysis(
     audio_path: str,
     clip_id: int,
@@ -2032,6 +2122,7 @@ def _run_audio_analysis(
     _loop=None,
     on_stage_checkpoint=None,
     stream_resume: dict[str, dict] | None = None,
+    neural_downbeat_runner=None,
 ) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
@@ -2557,6 +2648,59 @@ def _run_audio_analysis(
         except Exception as e:
             logger.warning(f"Drum-Onset-Detection fehlgeschlagen: {e}")
 
+    if request.detect_beats and neural_downbeat_runner is not None:
+        _stream_guard()
+        try:
+            from pb_studio.audio.downbeat_alignment import validate_neural_events
+            from pb_studio.audio.beat_detector import BeatDetector
+
+            neural_beats, neural_downbeats, revision = neural_downbeat_runner(
+                str(audio_path), duration
+            )
+            times, measured_downbeats, neural_bpm = validate_neural_events(
+                neural_beats, neural_downbeats, duration
+            )
+            snapshot_duration = len(y) / sr
+            snapshot_times = [t for t in times if t < snapshot_duration]
+            strengths = iter(BeatDetector.compute_beat_strengths(y, sr, snapshot_times))
+            marked = set(measured_downbeats)
+            measured_beats = [
+                {"time": t, "strength": float(next(strengths, 1.0)) if t < snapshot_duration else 1.0,
+                 "beat_type": "downbeat" if t in marked else "beat"}
+                for t in times
+            ]
+            provenance = {
+                "status": "measured" if marked else "unavailable",
+                "method": "beat_this_onnx_native", "synthetic": False,
+                "measured_count": len(marked), "model_revision": revision,
+                "legacy_bpm": bpm, "legacy_beat_count": len(beats),
+                "legacy_method": _bpm_method, "beat_times_replaced": True,
+                "strength_measured_until_seconds": snapshot_duration,
+            }
+            _stream_guard()
+            # Authorised on 2026-09-04: retain native neural timing. Snapping
+            # it to the incompatible legacy grid destroyed measured downbeats.
+            beats, downbeats, bpm = measured_beats, measured_downbeats, neural_bpm
+            downbeat_provenance = provenance
+            _bpm_method = "beat_this_beat_interval_median"
+        except (_AudioAnalysisInterrupted, ProjectContextChangedError, PersistenceError):
+            raise
+        except Exception as exc:
+            from pb_studio.audio.downbeat_alignment import BeatThisUnavailable
+
+            downbeats = []
+            for beat in beats:
+                beat["beat_type"] = "beat"
+            downbeat_provenance = {
+                "status": "unavailable" if isinstance(exc, (BeatThisUnavailable, ImportError)) else "failed",
+                "method": "beat_this_onnx_native", "synthetic": False,
+                "measured_count": 0, "reason": str(exc), "beat_times_replaced": False,
+            }
+        _stream_guard()
+        if downbeat_provenance["status"] != "measured":
+            logger.warning("Beat This Downbeats %s: %s",
+                           downbeat_provenance["status"], downbeat_provenance.get("reason"))
+
     # 1c. C-3: Plausibilitaet des Beat-Rasters. Erst hier, weil die kick_times
     # als unabhaengige Gegenprobe vorliegen muessen. Gemeldet, nicht erzwungen.
     if request.detect_beats and beats:
@@ -2591,17 +2735,16 @@ def _run_audio_analysis(
 
     # 1d. Das Beatgrid als REGEL: Anker plus Tempo statt einer Zeitmarkenliste.
     #
-    # Bewusst getrennt von `beats` und von `bpm`. Die Zeitmarken stammen aus
-    # `librosa.beat_track`, das seinen Prior aus start_bpm=120 baut; an
+    # Bewusst getrennt von `beats` und von `bpm`. Der Legacy-Fallback
+    # `librosa.beat_track` baut seinen Prior aus start_bpm=120; an
     # 104 Fenstern mit BPM-Referenz gemessen traf es das Tempo in 39,4 % der
     # Faelle und lieferte ueber alle Fenster nur sechs verschiedene Werte
     # (docs/measurements/2026-08-30-downbeat-ableitung-befund.md). Der
     # Estimator sucht sein Tempo ohne diesen Prior und prueft es
     # verpflichtend auf Oktavfehler.
     #
-    # Er ERSETZT vorerst nichts: `beats` und `bpm` bleiben unveraendert, das
-    # Grid kommt als eigenes Feld dazu. Erst wenn an echtem Material belegt
-    # ist, dass es besser trifft, darf es den Beat-Pfad speisen.
+    # Dieser Fourier-Estimator ersetzt nichts. Beat This kann seit OBJ-79
+    # native Beat-Zeitpunkte liefern; das unabhaengige Grid bleibt separat.
     if request.detect_beats and not _use_streaming and y is not None:
         try:
             from pb_studio.audio.beat_grid import estimate_beat_grid

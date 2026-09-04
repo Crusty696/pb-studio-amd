@@ -29,7 +29,7 @@ jobs:
       - name: Select and validate the active SDD phase
         shell: pwsh
         run: |
-          $feature = "specs/00019-deep-app-audit-resume-pacing"
+          $feature = "specs/00022-beat-this-downbeat-integration"
           $tasks = Get-Content -LiteralPath "$feature/tasks.md" -Raw
           if (Test-Path -LiteralPath "$feature/.qc-passed") {
             $phase = if ($tasks -match '(?m)^- \[X\] T415 ') { "release" } else { "qc" }

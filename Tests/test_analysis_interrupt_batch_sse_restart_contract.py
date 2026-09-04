@@ -109,6 +109,7 @@ def test_interrupt_sse_restart_runs_only_missing_stage(monkeypatch) -> None:
         _stems,
         _loop,
         on_stage_checkpoint=None,
+        neural_downbeat_runner=None,
     ):
         try:
             on_stage_checkpoint("beats", _beat_checkpoint(clip_id))
@@ -182,6 +183,7 @@ def test_interrupt_sse_restart_runs_only_missing_stage(monkeypatch) -> None:
         _stems,
         _loop,
         on_stage_checkpoint=None,
+        neural_downbeat_runner=None,
     ):
         planned_requests.append(planned)
         fresh = {

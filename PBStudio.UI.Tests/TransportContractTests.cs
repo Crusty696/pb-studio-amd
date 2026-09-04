@@ -23,11 +23,14 @@ public sealed class TransportContractTests
         var transport = new Generated.AudioAnalysisResult(
             analysis_status: "partial",
             beat_count: null,
+            beat_grid: null,
+            beat_grid_provenance: null,
             beats: [new Generated.BeatData("kick", 0.75, 1.25)],
             bpm: null,
             chunk_evidence: evidence,
             clip_id: 17,
-            downbeat_provenance: null,
+            downbeat_provenance: JsonSerializer.Deserialize<JsonElement>(
+                """{"status":"measured","method":"beat_this_onnx_native","legacy_bpm":120.0,"model_revision":"fixture"}"""),
             downbeats: [0.5],
             duration_seconds: 42.0,
             energy_curve: [0.1, 0.9],
@@ -50,6 +53,10 @@ public sealed class TransportContractTests
         Assert.AreEqual(1, result.BeatCount);
         Assert.AreEqual("kick", result.Beats.Single().BeatType);
         Assert.AreEqual("partial", result.AnalysisStatus);
+        Assert.AreEqual("beat_this_onnx_native",
+            result.DownbeatProvenance!["method"].GetString());
+        Assert.AreEqual(120.0, result.DownbeatProvenance["legacy_bpm"].GetDouble());
+        Assert.AreEqual("fixture", result.DownbeatProvenance["model_revision"].GetString());
         Assert.AreEqual("completed", result.StageStatus!["beats"]);
         Assert.AreEqual("unavailable", result.StageErrors!["spectral"]);
         Assert.AreEqual(

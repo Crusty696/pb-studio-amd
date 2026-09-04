@@ -379,6 +379,7 @@
                         <TextBlock Text="{Binding BeatGridText}" FontSize="11"
                                    Margin="0,6,0,0" TextWrapping="Wrap"
                                    Foreground="{StaticResource AbletonTextDim}"
+                                   AutomationProperties.HelpText="{Binding BeatGridStatus}"
                                    Visibility="{Binding BeatGridText,
                                                 Converter={StaticResource NullToVisibilityConverter}}"/>
                     </StackPanel>

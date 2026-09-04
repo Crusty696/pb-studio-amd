@@ -1,4 +1,4 @@
-"""Regression coverage for the active OBJ-74 SDD workspace."""
+"""Regression coverage for the active OBJ-79 SDD workspace."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +7,7 @@ from scripts.validate_sdd import validate_feature
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-FEATURE = WORKSPACE / "specs" / "00019-deep-app-audit-resume-pacing"
+FEATURE = WORKSPACE / "specs" / "00022-beat-this-downbeat-integration"
 
 
 def test_completed_tasks_use_canonical_uppercase_checkbox():
@@ -38,6 +38,7 @@ def test_ci_selects_qc_progress_after_qc_execution_starts():
     )[1].split("      - name: Validate lock and security configuration syntax", 1)[0]
 
     assert "'(?m)^- \\[X\\] T404 '" in phase_selection
+    assert FEATURE.relative_to(WORKSPACE).as_posix() in phase_selection
     assert '"qc-progress"' in phase_selection
     assert "T415" in phase_selection
     assert '"release"' in phase_selection

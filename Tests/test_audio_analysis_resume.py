@@ -96,6 +96,7 @@ def test_retry_runs_only_missing_stage_and_preserves_completed_data(
         _stems,
         _loop,
         on_stage_checkpoint=None,
+        neural_downbeat_runner=None,
     ):
         calls.append(request)
         return {
@@ -205,6 +206,7 @@ def test_force_recomputes_only_explicitly_requested_stage(
         _stems,
         _loop,
         on_stage_checkpoint=None,
+        neural_downbeat_runner=None,
     ):
         calls.append(request)
         return {
@@ -299,6 +301,7 @@ def test_cancel_preserves_checkpoint_and_blocks_late_worker_commit(
         _stems,
         _loop,
         on_stage_checkpoint=None,
+        neural_downbeat_runner=None,
     ):
         try:
             on_stage_checkpoint(
