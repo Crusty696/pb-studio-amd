@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "objective": "OBJ-79",
+  "task_range": "T001-T008",
+  "commit_sha": "fdd0e0ef7dec15ca17daea3e82032b24614cb813",
+  "receipts": [
+    { "task_id": "T001", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T002", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T003", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T004", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T005", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T006", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T007", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
+    { "task_id": "T008", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" }
+  ],
+  "artifact_hashes": [
+    { "path": "tasks.md", "sha256": "18e48efe6c9dc42e5b8b96135f43e94db14973dc6b83ed12c5954ecf1fc2ba8c" },
+    { "path": "qc-report.md", "sha256": "d3560f8aff5aacc0b25f0d7c96e4ac9199249909e5f830daf2b921b063459b09" },
+    { "path": ".completed", "sha256": "69e09e7e39399d0b812b8a67420347b2545ea156bdfb7136259a99b938c67171" }
+  ],
+  "review_status": "PASS",
+  "open_blockers": []
+}
