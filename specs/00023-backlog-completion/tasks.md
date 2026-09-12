@@ -6,9 +6,9 @@
 
 - [ ] T001 [OBJ-76] Reales Tagging, Degradation, Shutdown, Restart/Resume; Evidence in specs/00021-live-runtime-truth-and-observability/evidence/
 - [ ] T002 [OBJ-76] Zehn Canary-Clips mit unveränderten validen Stage-Hashes; gleicher Evidence-Pfad
-- [ ] T003 Pacing-Degradation ohne Video-Audio live prüfen; evidence/
-- [ ] T004 audio_key unavailable/failed real unterscheiden; evidence/
-- [ ] T005 Beschädigte Video-Stage-Schlüssel inventarisieren und gezielt heilen; evidence/
+- [X] T003 Pacing-Degradation ohne Video-Audio live prüfen; evidence/pacing-degradation-without-audio-key.md
+- [X] T004 audio_key unavailable/failed real unterscheiden; evidence/audio-key-unavailable-failed.md
+- [X] T005 Beschädigte Video-Stage-Schlüssel inventarisieren und gezielt heilen; evidence/video-stage-keys-audit.md (0 von 706 beschädigt, sauber)
 - [ ] T006 WPF mit echtem Backend vollständig sichtbar prüfen; evidence/
 - [X] T007 [P] has_audio_embedding entlang Cache/Analyse/Reload/Listing korrigieren; evidence/audio-embedding-flag.md
 - [X] T008 [P] peak-Struktur vollständig und konsistent gewichten; evidence/peak-regression.md
