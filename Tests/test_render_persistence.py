@@ -26,6 +26,8 @@ import pytest
 from pb_studio.data.database_core import DatabaseCore
 from pb_studio.rendering import render_queue as rq_module
 from pb_studio.rendering.render_queue import (
+    DEFAULT_MAX_TERMINAL_JOBS,
+    DEFAULT_RETENTION_DAYS,
     RenderQueue,
     STATE_CANCELLED,
     STATE_COMPLETED,
@@ -37,7 +39,11 @@ from pb_studio.rendering.render_queue import (
     compute_settings_hash,
     get_render_queue,
     reset_for_tests,
+    select_terminal_retention,
 )
+from backend.app_state import AppState
+from backend.routers.render_router import _cleanup_old_render_tasks
+from backend.schemas.render_schemas import RenderProgress
 
 
 # ---------------------------------------------------------------------------
@@ -446,3 +452,160 @@ def test_hash_helpers_are_deterministic() -> None:
     h_win = compute_job_hash("media-1", r"C:\proj\out.mp4", "ssh1")
     h_posix = compute_job_hash("media-1", "C:/proj/out.mp4", "ssh1")
     assert h_win == h_posix
+
+
+# ---------------------------------------------------------------------------
+# Spec 00024: Render-Retention und Fortschritts-Parität
+# ---------------------------------------------------------------------------
+
+def test_select_terminal_retention_rules() -> None:
+    """Prüft Alters- und Mengen-Grenzwerte, Schutz aktiver Jobs und ungültiger Zeitstempel."""
+    now = 1_700_000_000.0  # Fester Testzeitpunkt (> _MIN_VALID_UTC_EPOCH)
+    day = 86_400.0
+
+    records = [
+        # Zu alt (>30 Tage):
+        {"job_id": "old-1", "status": "completed", "finished_at": now - (35 * day)},
+        {"job_id": "old-2", "status": "failed", "finished_at": now - (31 * day)},
+        # Jünger als 30 Tage:
+        {"job_id": "recent-1", "status": "completed", "finished_at": now - (5 * day)},
+        {"job_id": "recent-2", "status": "cancelled", "finished_at": now - (2 * day)},
+        {"job_id": "recent-3", "status": "completed", "finished_at": now - (1 * day)},
+        # Nicht terminal (muss geschützt werden):
+        {"job_id": "active-1", "status": "running", "finished_at": now - (40 * day)},
+        {"job_id": "active-2", "status": "queued", "finished_at": now - (40 * day)},
+        {"job_id": "active-3", "status": "interrupted", "finished_at": now - (40 * day)},
+        # Explizit geschützt:
+        {"job_id": "protected-1", "status": "completed", "finished_at": now - (40 * day)},
+        # Ungültige/fehlende finished_at:
+        {"job_id": "invalid-none", "status": "completed", "finished_at": None},
+        {"job_id": "invalid-monotonic", "status": "failed", "finished_at": 12345.6},  # < 946684800.0
+        {"job_id": "invalid-text", "status": "cancelled", "finished_at": "not-a-number"},
+    ]
+
+    # Test 1: retention_days=30, max_terminal_jobs=5
+    # old-1 und old-2 fallen durch Altersgrenze raus. recent-1..3 bleiben (<= 5).
+    deleted, invalid = select_terminal_retention(
+        records,
+        now_epoch=now,
+        retention_days=30,
+        max_terminal_jobs=5,
+        protected_ids=frozenset({"protected-1"}),
+    )
+    assert set(deleted) == {"old-1", "old-2"}
+    assert set(invalid) == {"invalid-none", "invalid-monotonic", "invalid-text"}
+
+    # Test 2: max_terminal_jobs=1: Nach Altersprüfung bleiben recent-1, 2, 3 (3 Stück).
+    # Bei max=1 müssen die 2 ältesten ("recent-1", "recent-2") zusätzlich gelöscht werden.
+    deleted2, invalid2 = select_terminal_retention(
+        records,
+        now_epoch=now,
+        retention_days=30,
+        max_terminal_jobs=1,
+        protected_ids=frozenset({"protected-1"}),
+    )
+    assert deleted2 == ["old-1", "old-2", "recent-1", "recent-2"]
+
+
+def test_render_queue_cleanup_terminal(queue: RenderQueue, tmp_path: Path) -> None:
+    """Queue.cleanup_terminal löscht ausschließlich gewählte terminale Metadaten aus SQLite."""
+    now = 1_700_000_000.0
+    day = 86_400.0
+
+    # Job anlegen & manuell auf completed mit altem Zeitstempel setzen
+    job1 = queue.enqueue("hash-1", str(tmp_path / "1.mp4"), _settings())
+    queue.update_status(job1.job_id, STATE_RUNNING)
+    queue.update_status(job1.job_id, STATE_COMPLETED)
+    with queue._db.transaction(immediate=True) as conn:
+        conn.execute(
+            "UPDATE render_queue SET finished_at = ? WHERE job_id = ?",
+            (now - (35 * day), job1.job_id),
+        )
+
+    # Neuerer Job
+    job2 = queue.enqueue("hash-2", str(tmp_path / "2.mp4"), _settings())
+    queue.update_status(job2.job_id, STATE_RUNNING)
+    queue.update_status(job2.job_id, STATE_COMPLETED)
+    with queue._db.transaction(immediate=True) as conn:
+        conn.execute(
+            "UPDATE render_queue SET finished_at = ? WHERE job_id = ?",
+            (now - (2 * day), job2.job_id),
+        )
+
+    # Aktiver Job (darf nicht gelöscht werden)
+    job3 = queue.enqueue("hash-3", str(tmp_path / "3.mp4"), _settings())
+
+    res = queue.cleanup_terminal(
+        retention_days=30,
+        max_terminal_jobs=50,
+        now_epoch=now,
+    )
+    assert res["deleted"] == [job1.job_id]
+    assert queue.get(job1.job_id) is None
+    assert queue.get(job2.job_id) is not None
+    assert queue.get(job3.job_id) is not None
+
+
+def test_cleanup_old_render_tasks_syncs_memory_and_queue(tmp_path: Path) -> None:
+    """_cleanup_old_render_tasks bereinigt AppState.render_tasks und Queue synchron."""
+    now = 1_700_000_000.0
+    day = 86_400.0
+    state = AppState()
+    state.render_tasks = {
+        "task-expired": {
+            "status": "completed",
+            "percent": 100.0,
+            "progress_percent": 100.0,
+            "finished_at": now - (40 * day),
+        },
+        "task-recent": {
+            "status": "completed",
+            "percent": 100.0,
+            "progress_percent": 100.0,
+            "finished_at": now - (1 * day),
+        },
+        "task-running": {
+            "status": "running",
+            "percent": 50.0,
+            "progress_percent": 50.0,
+        },
+        "task-invalid-time": {
+            "status": "failed",
+            "percent": 20.0,
+            "progress_percent": 20.0,
+            "finished_at": 50.0,  # < _MIN_VALID_UTC_EPOCH
+        },
+    }
+    state.cancel_flags["task-expired"] = False
+    state.cancel_flags["task-running"] = False
+
+    res = _cleanup_old_render_tasks(
+        state,
+        max_tasks=50,
+        retention_days=30,
+        now_epoch=now,
+    )
+    assert "task-expired" in res["deleted"]
+    assert "task-expired" not in state.render_tasks
+    assert "task-expired" not in state.cancel_flags  # > 1h alt -> gepoppt
+    assert "task-recent" in state.render_tasks
+    assert "task-running" in state.render_tasks
+    assert "task-invalid-time" in state.render_tasks  # geschützt vor Löschung
+    assert "task-invalid-time" in res["invalid_finished_at"]
+
+
+def test_render_progress_schema_bidirectional_sync() -> None:
+    """RenderProgress synchronisiert percent und progress_percent bidirektional."""
+    p1 = RenderProgress(task_id="t1", percent=45.5)
+    assert p1.progress_percent == 45.5
+    assert p1.percent == 45.5
+
+    p2 = RenderProgress(task_id="t2", progress_percent=88.2)
+    assert p2.percent == 88.2
+    assert p2.progress_percent == 88.2
+
+    # Beide angegeben -> progress_percent gewinnt
+    p3 = RenderProgress(task_id="t3", percent=10.0, progress_percent=20.0)
+    assert p3.progress_percent == 20.0
+    assert p3.percent == 20.0
+

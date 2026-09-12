@@ -64,6 +64,7 @@ class RenderProgress(BaseModel):
     task_id: str
     status: str = "running"  # pending, running, completed, failed, cancelled
     percent: float = 0.0
+    progress_percent: float = 0.0
     current_frame: int = 0
     total_frames: int = 0
     fps: float = 0.0
@@ -78,6 +79,18 @@ class RenderProgress(BaseModel):
     validation_path: Optional[str] = None
     progress_end: bool = False
     validation_status: Optional[str] = None
+
+    @model_validator(mode="after")
+    def sync_progress_percents(self) -> "RenderProgress":
+        fields_set = self.__pydantic_fields_set__
+        if "progress_percent" in fields_set and "percent" not in fields_set:
+            self.percent = self.progress_percent
+        elif "percent" in fields_set and "progress_percent" not in fields_set:
+            self.progress_percent = self.percent
+        elif "progress_percent" in fields_set and "percent" in fields_set:
+            # FR-004: progress_percent ist kanonisch
+            self.percent = self.progress_percent
+        return self
 
 
 class RenderResult(BaseModel):
