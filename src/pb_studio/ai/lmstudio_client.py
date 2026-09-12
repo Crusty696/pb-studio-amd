@@ -935,6 +935,10 @@ class LMStudioClient:
                     }
                     if is_done:
                         return
+                if not terminal_emitted:
+                    raise LMStudioError(
+                        "chat_stream: Stream vorzeitig ohne Finish-Signal beendet (EOF)"
+                    )
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
             raise LMStudioConnectionError(
                 f"chat_stream: LM Studio nicht erreichbar: {exc}"

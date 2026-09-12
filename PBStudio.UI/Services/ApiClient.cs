@@ -1152,6 +1152,7 @@ public class ApiClient : IApiClient
         {
             "model" => ChatEventType.Model,
             "text" => ChatEventType.Text,
+            "text_delta" => ChatEventType.TextDelta,
             "tool_call" => ChatEventType.ToolCall,
             "tool_confirmation_required" => ChatEventType.ToolConfirmationRequired,
             "tool_result" => ChatEventType.ToolResult,
@@ -1167,6 +1168,7 @@ public class ApiClient : IApiClient
         {
             ChatEventType.Model => new ChatStreamEvent(type, eventName!, ModelName: Str("model"), ModelReason: Str("reason")),
             ChatEventType.Text => new ChatStreamEvent(type, eventName!, Text: Str("content")),
+            ChatEventType.TextDelta => new ChatStreamEvent(type, eventName!, Text: Str("delta") ?? Str("content")),
             ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments")),
             ChatEventType.ToolConfirmationRequired => new ChatStreamEvent(
                 type,
@@ -1562,4 +1564,5 @@ public record RenderProgress(
     string? EvidencePath = null,
     string? ValidationPath = null,
     bool ProgressEnd = false,
-    string? ValidationStatus = null);
+    string? ValidationStatus = null,
+    double ProgressPercent = 0.0);

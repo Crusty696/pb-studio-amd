@@ -378,6 +378,8 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
                             content = ev.payload.get("content", "")
                             final_text = content
                             yield _sse_frame("text", {"content": content})
+                        elif ev.type == "text_delta":
+                            yield _sse_frame("text_delta", ev.payload)
                         elif ev.type == "tool_call":
                             await publish_log(
                                 "Chat-Toolaufruf gestartet",
@@ -402,17 +404,18 @@ async def post_message(request: ChatMessageRequest) -> StreamingResponse:
                             )
                             yield _sse_frame("error", ev.payload)
                         elif ev.type == "done":
-                            if save_history and final_text:
+                            done_text = ev.payload.get("final_text") or final_text
+                            if save_history and done_text:
                                 await _history_store.append(
                                     "assistant",
-                                    final_text,
+                                    done_text,
                                     project_key=project_key,
                                     commit_guard=commit_guard,
                                 )
                             await publish_log(
                                 "Chat-Antwort abgeschlossen",
                                 level="info",
-                                detail=f"characters={len(final_text)}",
+                                detail=f"characters={len(done_text)}",
                                 source="chat.assistant",
                             )
                             yield _sse_frame("done", ev.payload)

@@ -425,7 +425,8 @@ public class SSEClient : IDisposable
 
                 case StreamKind.Progress when eventType is "analysis_progress" or "render_progress" or "stem_progress" or "import_progress" or "pacing_progress" or "gpu_error":
                     {
-                        var pct = TryGetDouble(root, "percent");
+                        var pctRaw = TryGetDouble(root, "progress_percent");
+                        var pct = pctRaw >= 0.0 ? pctRaw : TryGetDouble(root, "percent");
                         var status = NormalizeStatus(root);
                         var taskId = FirstNonEmpty(TryGetString(root, "task_id"), TryGetString(root, "job_id"));
                         var msg = FirstNonEmpty(
@@ -465,6 +466,7 @@ public class SSEClient : IDisposable
                             {
                                 EventType = eventType,
                                 Percent = pct,
+                                ProgressPercent = pctRaw >= 0.0 ? pctRaw : pct,
                                 Message = msg,
                                 TaskId = taskId,
                                 Status = status,
@@ -621,6 +623,7 @@ public class ProgressEventArgs : EventArgs
 {
     public string EventType { get; init; } = "";
     public double Percent { get; init; } = -1.0; // -1 = nicht gesetzt (0 ist gueltig)
+    public double ProgressPercent { get; init; } = -1.0;
     public string Message { get; init; } = "";
     public string TaskId { get; init; } = "";
     public string Status { get; init; } = "";

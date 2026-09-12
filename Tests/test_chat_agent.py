@@ -74,6 +74,62 @@ class FakeLMStudioClient(LMStudioClient):
             return {"message": {"role": "assistant", "content": "(no more mock responses)"}}
         return self._responses.pop(0)
 
+    async def chat_stream(self, model, messages, **kwargs):
+        resp = await self.chat(model, messages, **kwargs)
+        message = resp.get("message") or {}
+        content = message.get("content") or ""
+        reasoning = message.get("reasoning_content") or ""
+        tool_calls = message.get("tool_calls") or []
+        if content:
+            mid = max(1, len(content) // 2) if len(content) > 1 else 1
+            if mid < len(content):
+                yield {
+                    "model": resp.get("model", model),
+                    "message": {
+                        "role": "assistant",
+                        "content": content[:mid],
+                        "reasoning_content": reasoning,
+                        "tool_calls": [],
+                    },
+                    "done": False,
+                    "done_reason": None,
+                }
+                yield {
+                    "model": resp.get("model", model),
+                    "message": {
+                        "role": "assistant",
+                        "content": content[mid:],
+                        "reasoning_content": "",
+                        "tool_calls": tool_calls,
+                    },
+                    "done": True,
+                    "done_reason": "stop" if not tool_calls else "tool_calls",
+                }
+            else:
+                yield {
+                    "model": resp.get("model", model),
+                    "message": {
+                        "role": "assistant",
+                        "content": content,
+                        "reasoning_content": reasoning,
+                        "tool_calls": tool_calls,
+                    },
+                    "done": True,
+                    "done_reason": "stop" if not tool_calls else "tool_calls",
+                }
+        else:
+            yield {
+                "model": resp.get("model", model),
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning_content": reasoning,
+                    "tool_calls": tool_calls,
+                },
+                "done": True,
+                "done_reason": "stop" if not tool_calls else "tool_calls",
+            }
+
     async def aclose(self) -> None:
         return None
 
@@ -552,9 +608,9 @@ def test_agent_legacy_ollama_client_alias_still_works(monkeypatch):
 def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
     """Wenn im Chat ein LMStudioError auftritt, weicht der Agent autonom auf den anderen Provider aus."""
     # Erste Client: wirft Fehler beim chat()
-    class FailingLMStudioClient(LMStudioClient):
+    class FailingLMStudioClient(FakeLMStudioClient):
         def __init__(self):
-            super().__init__(base_url="http://127.0.0.1:1234/v1")
+            super().__init__(responses=[])
 
         async def list_models(self):
             return [LMStudioModelInfo(name="failed-model", size_bytes=1, modified_at="", digest="")]
@@ -635,9 +691,9 @@ def test_agent_model_retry_on_non_connection_error(monkeypatch):
     """
     call_count = 0
 
-    class ModelRetryClient(LMStudioClient):
+    class ModelRetryClient(FakeLMStudioClient):
         def __init__(self):
-            super().__init__(base_url="http://127.0.0.1:12341/v1")
+            super().__init__(responses=[])
 
         async def list_models(self):
             return [
@@ -701,9 +757,9 @@ def test_agent_readtimeout_does_not_churn_models(monkeypatch):
     """
     call_count = 0
 
-    class TimeoutClient(LMStudioClient):
+    class TimeoutClient(FakeLMStudioClient):
         def __init__(self):
-            super().__init__(base_url="http://127.0.0.1:12341/v1")
+            super().__init__(responses=[])
 
         async def list_models(self):
             return [
@@ -913,3 +969,344 @@ def test_project_capability_and_commit_are_stale_after_epoch_change(tmp_path):
         with state.project_commit(context):
             state.current_timeline.append({"wrong": "project-b"})
     assert state.current_timeline == []
+
+
+def test_chat_streaming_text_deltas_before_final_text():
+    """FR-001: Stream delivers text_delta events before the terminal text event."""
+    class CustomStreamingClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            yield {
+                "model": model,
+                "message": {"role": "assistant", "content": "Hallo ", "reasoning_content": "", "tool_calls": []},
+                "done": False,
+                "done_reason": None,
+            }
+            yield {
+                "model": model,
+                "message": {"role": "assistant", "content": "Welt!", "reasoning_content": "", "tool_calls": []},
+                "done": True,
+                "done_reason": "stop",
+            }
+
+    client = CustomStreamingClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    deltas = [e for e in events if e.type == "text_delta"]
+    texts = [e for e in events if e.type == "text"]
+
+    assert len(deltas) == 2
+    assert deltas[0].payload["delta"] == "Hallo "
+    assert deltas[0].payload["content"] == "Hallo "
+    assert deltas[1].payload["delta"] == "Welt!"
+    assert deltas[1].payload["content"] == "Hallo Welt!"
+
+    assert len(texts) == 1
+    assert texts[0].payload["content"] == "Hallo Welt!"
+    assert events[-1].type == "done"
+    assert events[-1].payload["final_text"] == "Hallo Welt!"
+
+
+def test_chat_reasoning_content_is_isolated_from_content():
+    """FR-002: Reasoning content is not published in text_delta, text, or final_text."""
+    class ReasoningClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            yield {
+                "model": model,
+                "message": {
+                    "role": "assistant",
+                    "content": "Sichtbarer Text",
+                    "reasoning_content": "Geheime Gedanken ueber Quantenphysik",
+                    "tool_calls": [],
+                },
+                "done": True,
+                "done_reason": "stop",
+            }
+
+    client = ReasoningClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    deltas = [e for e in events if e.type == "text_delta"]
+    texts = [e for e in events if e.type == "text"]
+
+    assert len(deltas) == 1
+    assert "Geheime Gedanken" not in deltas[0].payload["content"]
+    assert deltas[0].payload["content"] == "Sichtbarer Text"
+
+    assert len(texts) == 1
+    assert "Geheime Gedanken" not in texts[0].payload["content"]
+    assert texts[0].payload["content"] == "Sichtbarer Text"
+    assert events[-1].payload["final_text"] == "Sichtbarer Text"
+
+
+def test_chat_fragmented_tool_calls_assembled_and_executed_once():
+    """FR-003: Tool call fragments assembled across stream chunks and dispatched only once upon terminal event."""
+    calls = []
+    class FragmentedToolClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            if any(m.get("role") == "tool" for m in messages):
+                yield {
+                    "model": model,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Tool ausgeführt.",
+                        "reasoning_content": "",
+                        "tool_calls": [],
+                    },
+                    "done": True,
+                    "done_reason": "stop",
+                }
+                return
+
+            yield {
+                "model": model,
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning_content": "",
+                    "tool_calls": [{
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "test_tool", "arguments": '{"query": "pb_studio"}'},
+                    }],
+                },
+                "done": True,
+                "done_reason": "tool_calls",
+            }
+
+    async def mock_handler(args, http_client=None):
+        calls.append(args)
+        return {"result": "success"}
+
+    reg = ToolRegistry()
+    reg.register(Tool(
+        name="test_tool",
+        description="test tool",
+        parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+        handler=mock_handler,
+        destructive=False,
+    ))
+
+    client = FragmentedToolClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            registry=reg,
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Run test tool"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    tool_calls = [e for e in events if e.type == "tool_call"]
+    tool_results = [e for e in events if e.type == "tool_result"]
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].payload["id"] == "call_123"
+    assert tool_calls[0].payload["name"] == "test_tool"
+
+    assert len(tool_results) == 1
+    assert tool_results[0].payload["result"] == {"result": "success"}
+    assert len(calls) == 1
+    assert calls[0] == {"query": "pb_studio"}
+
+
+def test_chat_invalid_json_tool_arguments_rejected_without_dispatch():
+    """FR-003: Invalid JSON tool arguments are rejected with an error and never dispatched to handler."""
+    calls = []
+    class BadJsonToolClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            if any(m.get("role") == "tool" for m in messages):
+                yield {
+                    "model": model,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Fehler verstanden.",
+                        "reasoning_content": "",
+                        "tool_calls": [],
+                    },
+                    "done": True,
+                    "done_reason": "stop",
+                }
+                return
+            yield {
+                "model": model,
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning_content": "",
+                    "tool_calls": [{
+                        "id": "call_bad",
+                        "type": "function",
+                        "function": {"name": "test_tool", "arguments": '{"unclosed_json: '},
+                    }],
+                },
+                "done": True,
+                "done_reason": "tool_calls",
+            }
+
+    async def mock_handler(args, http_client=None):
+        calls.append(args)
+        return {"result": "should not be called"}
+
+    reg = ToolRegistry()
+    reg.register(Tool(
+        name="test_tool",
+        description="test tool",
+        parameters={"type": "object"},
+        handler=mock_handler,
+        destructive=False,
+    ))
+
+    client = BadJsonToolClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            registry=reg,
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Test bad json"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    assert len(calls) == 0  # Handler was NOT called!
+    error_events = [e for e in events if e.type == "error" and e.payload.get("stage") == "tool_dispatch"]
+    assert len(error_events) >= 1
+    assert "kein gueltiges JSON" in error_events[0].payload["message"]
+
+
+def test_chat_stream_interrupted_after_published_content_prevents_fallback(monkeypatch):
+    """FR-004: If error occurs after content delta was published, no fallback/retry occurs; stream is aborted as stream_interrupted."""
+    class FailingMidStreamClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            yield {
+                "model": model,
+                "message": {"role": "assistant", "content": "Erste Hälfte... ", "reasoning_content": "", "tool_calls": []},
+                "done": False,
+                "done_reason": None,
+            }
+            raise LMStudioConnectionError("Connection lost mid-stream!")
+
+    _install_chat_inventory(
+        monkeypatch,
+        _chat_model("lmstudio", "main-model", loaded=True),
+        _chat_model("ollama", "fallback-model"),
+    )
+
+    client = FailingMidStreamClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            agent._owned_llm = True
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    stages = [e.payload.get("stage") for e in events if e.type == "error"]
+    assert "stream_interrupted" in stages
+    assert "fallback" not in stages
+
+    done_event = next(e for e in events if e.type == "done")
+    assert done_event.payload["reason"] == "stream_interrupted"
+    assert done_event.payload["final_text"] == "Erste Hälfte... "
+
+    model_events = [e for e in events if e.type == "model"]
+    assert len(model_events) == 1
+    assert model_events[0].payload["model"] == "main-model"
+
+
+def test_chat_stream_unexpected_eof_raises_error():
+    """FR-006: Stream EOF without finish signal is treated as error, not clean completion."""
+    class EofWithoutFinishClient(FakeLMStudioClient):
+        def __init__(self):
+            super().__init__(responses=[])
+
+        async def chat_stream(self, model, messages, **kwargs):
+            yield {
+                "model": model,
+                "message": {"role": "assistant", "content": "Halber Text", "reasoning_content": "", "tool_calls": []},
+                "done": False,
+                "done_reason": None,
+            }
+            raise LMStudioError("chat_stream: Stream vorzeitig ohne Finish-Signal beendet (EOF)")
+
+    client = EofWithoutFinishClient()
+    http = _mock_backend({})
+
+    async def go():
+        events = []
+        async with ChatAgent(
+            lmstudio_client=client,
+            http_client=http,
+            model_registry=ModelRegistry({}, client=client),
+        ) as agent:
+            async for ev in agent.process_message("Hi"):
+                events.append(ev)
+        await http.aclose()
+        return events
+
+    events = _run(go())
+    assert any(e.type == "error" for e in events)
+    done_event = next(e for e in events if e.type == "done")
+    assert done_event.payload["reason"] == "stream_interrupted"
+

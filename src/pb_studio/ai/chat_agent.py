@@ -388,11 +388,14 @@ class ChatAgent:
         if isinstance(raw_args, dict):
             args = raw_args
         elif isinstance(raw_args, str):
-            try:
-                parsed = json.loads(raw_args)
-                args = parsed if isinstance(parsed, dict) else {"value": parsed}
-            except json.JSONDecodeError:
-                args = {"_raw_arguments": raw_args}
+            if not raw_args.strip():
+                args = {}
+            else:
+                try:
+                    parsed = json.loads(raw_args)
+                    args = parsed if isinstance(parsed, dict) else {"value": parsed}
+                except json.JSONDecodeError as exc:
+                    args = {"_invalid_json": str(exc), "_raw_arguments": raw_args}
         else:
             args = {}
         return name, args, self._registry.get(name)
@@ -415,6 +418,11 @@ class ChatAgent:
             if tool_call is None:
                 return {"error": "Tool-Aufruf fehlt"}
             name, args, tool = self._parse_tool_call(tool_call)
+        if "_invalid_json" in args:
+            return {
+                "error": f"Tool-Argumente fuer {name!r} sind kein gueltiges JSON: {args['_invalid_json']}",
+                "raw_arguments": args.get("_raw_arguments"),
+            }
         if tool is None:
             return {
                 "error": f"Unbekanntes Tool: {name!r}",
@@ -467,6 +475,43 @@ class ChatAgent:
         if len(text) <= max_chars:
             return text
         return text[: max_chars - 50] + " ...[TRUNCATED]"
+
+    async def _stream_llm_call(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]],
+    ) -> AsyncIterator[dict[str, Any]]:
+        assert self._llm is not None
+        if hasattr(self._llm, "chat_stream"):
+            async for chunk in self._llm.chat_stream(
+                model=model,
+                messages=messages,
+                tools=tools,
+                options={"temperature": 0.2},
+            ):
+                yield chunk
+        else:
+            resp = await self._llm.chat(
+                model=model,
+                messages=messages,
+                tools=tools,
+                options={"temperature": 0.2},
+            )
+            msg = resp.get("message") or {}
+            content = msg.get("content") or ""
+            tool_calls = msg.get("tool_calls") or []
+            yield {
+                "model": resp.get("model", model),
+                "message": {
+                    "role": msg.get("role", "assistant"),
+                    "content": content,
+                    "reasoning_content": msg.get("reasoning_content", ""),
+                    "tool_calls": tool_calls,
+                },
+                "done": True,
+                "done_reason": "stop" if not tool_calls else "tool_calls",
+            }
 
     async def process_message(
         self,
@@ -525,14 +570,46 @@ class ChatAgent:
 
         try:
             for turn in range(self._max_tool_turns):
+                published_content = False
+                accumulated_content: list[str] = []
+                tool_calls: list[dict[str, Any]] = []
+
                 try:
-                    response = await self._llm.chat(
-                        model=model,
-                        messages=messages,
-                        tools=tools_schema,
-                        options={"temperature": 0.2},
-                    )
+                    async for chunk in self._stream_llm_call(model, messages, tools_schema):
+                        msg = chunk.get("message") or {}
+                        delta_text = msg.get("content") or ""
+                        if delta_text:
+                            accumulated_content.append(delta_text)
+                            published_content = True
+                            yield ChatEvent("text_delta", {
+                                "delta": delta_text,
+                                "content": "".join(accumulated_content),
+                            })
+                        if chunk.get("done"):
+                            tool_calls = msg.get("tool_calls") or []
                 except LMStudioError as exc:
+                    if published_content:
+                        provider = self._current_provider()
+                        logger.warning(
+                            "Stream nach teilweisem Content im Turn %s unterbrochen: %s",
+                            turn,
+                            exc,
+                        )
+                        yield ChatEvent("error", {
+                            "message": (
+                                f"Antwort-Stream nach teilweiser Ausgabe unterbrochen ({type(exc).__name__}: {exc}). "
+                                "Bitte Anfrage wiederholen."
+                            ),
+                            "stage": "stream_interrupted",
+                            "provider": provider,
+                            "model": model,
+                        })
+                        partial_text = "".join(accumulated_content)
+                        _publish_status(model, "failed", 0.0, provider=active_provider)
+                        _status_final_published = True
+                        yield ChatEvent("done", {"reason": "stream_interrupted", "final_text": partial_text})
+                        return
+
                     msg_lower = str(exc).lower()
                     status_code = getattr(exc, "status_code", None)
                     tools_retry_succeeded = False
@@ -544,15 +621,32 @@ class ChatAgent:
                     ):
                         logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
                         try:
-                            response = await self._llm.chat(
-                                model=model,
-                                messages=messages,
-                                options={"temperature": 0.2},
-                            )
+                            async for chunk in self._stream_llm_call(model, messages, None):
+                                msg = chunk.get("message") or {}
+                                delta_text = msg.get("content") or ""
+                                if delta_text:
+                                    accumulated_content.append(delta_text)
+                                    published_content = True
+                                    yield ChatEvent("text_delta", {
+                                        "delta": delta_text,
+                                        "content": "".join(accumulated_content),
+                                    })
+                                if chunk.get("done"):
+                                    tool_calls = msg.get("tool_calls") or []
                         except LMStudioError as exc2:
-                            # Der Retry ohne Tool-Schema ist ein normaler
-                            # Provider-Call. Sein Fehler muss durch dieselbe
-                            # statusbasierte Kette wie der erste Call laufen.
+                            if published_content:
+                                provider = self._current_provider()
+                                yield ChatEvent("error", {
+                                    "message": f"Antwort-Stream nach teilweiser Ausgabe unterbrochen ({type(exc2).__name__}: {exc2}). Bitte Anfrage wiederholen.",
+                                    "stage": "stream_interrupted",
+                                    "provider": provider,
+                                    "model": model,
+                                })
+                                partial_text = "".join(accumulated_content)
+                                _publish_status(model, "failed", 0.0, provider=active_provider)
+                                _status_final_published = True
+                                yield ChatEvent("done", {"reason": "stream_interrupted", "final_text": partial_text})
+                                return
                             exc = exc2
                             msg_lower = str(exc2).lower()
                             status_code = getattr(exc2, "status_code", None)
@@ -672,13 +766,32 @@ class ChatAgent:
                                     provider=active_provider,
                                 )
 
-                                response = await self._llm.chat(
-                                    model=model,
-                                    messages=messages,
-                                    tools=tools_schema,
-                                    options={"temperature": 0.2},
-                                )
+                                async for chunk in self._stream_llm_call(model, messages, tools_schema):
+                                    msg = chunk.get("message") or {}
+                                    delta_text = msg.get("content") or ""
+                                    if delta_text:
+                                        accumulated_content.append(delta_text)
+                                        published_content = True
+                                        yield ChatEvent("text_delta", {
+                                            "delta": delta_text,
+                                            "content": "".join(accumulated_content),
+                                        })
+                                    if chunk.get("done"):
+                                        tool_calls = msg.get("tool_calls") or []
                             except Exception as exc_fallback:
+                                if published_content:
+                                    provider = self._current_provider()
+                                    yield ChatEvent("error", {
+                                        "message": f"Antwort-Stream nach teilweiser Ausgabe unterbrochen ({type(exc_fallback).__name__}: {exc_fallback}).",
+                                        "stage": "stream_interrupted",
+                                        "provider": provider,
+                                        "model": model,
+                                    })
+                                    partial_text = "".join(accumulated_content)
+                                    _publish_status(model, "failed", 0.0, provider=active_provider)
+                                    _status_final_published = True
+                                    yield ChatEvent("done", {"reason": "stream_interrupted", "final_text": partial_text})
+                                    return
                                 fallback_provider = self._current_provider()
                                 yield ChatEvent("error", {
                                     "message": (
@@ -805,10 +918,7 @@ class ChatAgent:
                             yield ChatEvent("done", {"reason": "no_model"})
                             return
 
-                message = response.get("message") or {}
-                content = message.get("content") or ""
-                tool_calls = message.get("tool_calls") or []
-
+                content = "".join(accumulated_content)
                 if content and not tool_calls:
                     final_text = content
                     yield ChatEvent("text", {"content": content})
@@ -834,7 +944,13 @@ class ChatAgent:
                         })
 
                         _parsed_name, parsed_args, parsed_tool = self._parse_tool_call(tc)
-                        if parsed_tool is not None and parsed_tool.destructive:
+                        if "_invalid_json" in parsed_args:
+                            result = {
+                                "error": f"Tool-Argumente fuer {tool_name!r} sind kein gueltiges JSON: {parsed_args['_invalid_json']}",
+                                "tool": tool_name,
+                                "raw_arguments": parsed_args.get("_raw_arguments"),
+                            }
+                        elif parsed_tool is not None and parsed_tool.destructive:
                             pending = await tool_confirmation_broker.request(
                                 stream_id=self._confirmation_stream_id,
                                 tool_name=parsed_tool.name,
@@ -889,108 +1005,135 @@ class ChatAgent:
                 yield ChatEvent("text", {"content": ""})
                 break
             else:
+                summary_messages = messages + [{
+                    "role": "user",
+                    "content": (
+                        "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
+                        "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
+                    ),
+                }]
+                published_summary_content = False
+                accumulated_summary_chunks: list[str] = []
                 try:
-                    response = await self._llm.chat(
-                        model=model,
-                        messages=messages + [{
-                            "role": "user",
-                            "content": (
-                                "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
-                                "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
-                            ),
-                        }],
-                        options={"temperature": 0.2},
-                    )
-                    final_text = (response.get("message") or {}).get("content") or ""
+                    async for chunk in self._stream_llm_call(model, summary_messages, None):
+                        msg = chunk.get("message") or {}
+                        delta_text = msg.get("content") or ""
+                        if delta_text:
+                            accumulated_summary_chunks.append(delta_text)
+                            published_summary_content = True
+                            yield ChatEvent("text_delta", {
+                                "delta": delta_text,
+                                "content": "".join(accumulated_summary_chunks),
+                            })
+                    final_text = "".join(accumulated_summary_chunks)
                     yield ChatEvent("text", {"content": final_text})
                 except LMStudioError as exc:
-                    logger.warning(
-                        "LMStudioError bei finaler Zusammenfassung: %s",
-                        exc,
-                    )
-                    failed_provider = self._current_provider()
-                    _failed_models.add((failed_provider, model))
-                    if not is_provider_failure(exc):
+                    if published_summary_content:
+                        provider = self._current_provider()
                         yield ChatEvent("error", {
-                            "message": (
-                                "Zusammenfassung von "
-                                f"{self._provider_label(failed_provider)} "
-                                f"abgelehnt ({type(exc).__name__}: {exc})."
-                            ),
-                            "stage": "summary",
-                            "provider": failed_provider,
+                            "message": f"Zusammenfassung nach teilweiser Ausgabe unterbrochen ({type(exc).__name__}: {exc}).",
+                            "stage": "stream_interrupted",
+                            "provider": provider,
                             "model": model,
-                            "status_code": getattr(exc, "status_code", None),
                         })
-                    elif await self._attempt_fallback():
-                        try:
-                            model, reason = await self._pick_chat_model(
-                                mode,
-                                explicit_model=model_override,
-                                exclude=_failed_models,
-                            )
-                            model_payload = self._selection_event_payload(
-                                model,
-                                reason,
-                                mode,
-                            )
-                            active_provider = model_payload["provider"] or ""
-                            selected_provider = active_provider or "unknown"
-                            yield ChatEvent("error", {
-                                "message": (
-                                    f"{self._provider_label(failed_provider)} ist "
-                                    "beim Zusammenfassen fehlgeschlagen. "
-                                    f"Versuche {selected_provider} mit '{model}'."
-                                ),
-                                "stage": "fallback",
-                                "provider": failed_provider,
-                                "fallback_provider": selected_provider,
-                                "model": model,
-                            })
-                            yield ChatEvent("model", model_payload)
-                            _publish_status(
-                                model,
-                                "loading",
-                                50.0,
-                                provider=active_provider,
-                            )
-
-                            response = await self._llm.chat(
-                                model=model,
-                                messages=messages + [{
-                                    "role": "user",
-                                    "content": (
-                                        "Bitte fasse das Ergebnis der bisherigen Tool-Aufrufe "
-                                        "in 1-3 Saetzen zusammen - keine weiteren Tool-Calls."
-                                    ),
-                                }],
-                                options={"temperature": 0.2},
-                            )
-                            final_text = (response.get("message") or {}).get("content") or ""
-                            yield ChatEvent("text", {"content": final_text})
-                        except Exception as exc_fallback:
-                            fallback_provider = self._current_provider()
-                            yield ChatEvent("error", {
-                                "message": (
-                                    "Zusammenfassung nach Live-Inventar-Refresh mit "
-                                    f"{self._provider_label(fallback_provider)} "
-                                    f"fehlgeschlagen ({type(exc_fallback).__name__})."
-                                ),
-                                "stage": "summary_fallback",
-                                "provider": fallback_provider,
-                                "model": model,
-                            })
+                        final_text = "".join(accumulated_summary_chunks)
                     else:
-                        yield ChatEvent("error", {
-                            "message": (
-                                f"{self._provider_label(failed_provider)} ist beim "
-                                "Zusammenfassen fehlgeschlagen; das aktualisierte "
-                                "Live-Inventar enthaelt keinen weiteren Kandidaten."
-                            ),
-                            "stage": "summary",
-                            "provider": failed_provider,
-                            "model": model,
-                        })
+                        logger.warning(
+                            "LMStudioError bei finaler Zusammenfassung: %s",
+                            exc,
+                        )
+                        failed_provider = self._current_provider()
+                        _failed_models.add((failed_provider, model))
+                        if not is_provider_failure(exc):
+                            yield ChatEvent("error", {
+                                "message": (
+                                    "Zusammenfassung von "
+                                    f"{self._provider_label(failed_provider)} "
+                                    f"abgelehnt ({type(exc).__name__}: {exc})."
+                                ),
+                                "stage": "summary",
+                                "provider": failed_provider,
+                                "model": model,
+                                "status_code": getattr(exc, "status_code", None),
+                            })
+                        elif await self._attempt_fallback():
+                            try:
+                                model, reason = await self._pick_chat_model(
+                                    mode,
+                                    explicit_model=model_override,
+                                    exclude=_failed_models,
+                                )
+                                model_payload = self._selection_event_payload(
+                                    model,
+                                    reason,
+                                    mode,
+                                )
+                                active_provider = model_payload["provider"] or ""
+                                selected_provider = active_provider or "unknown"
+                                yield ChatEvent("error", {
+                                    "message": (
+                                        f"{self._provider_label(failed_provider)} ist "
+                                        "beim Zusammenfassen fehlgeschlagen. "
+                                        f"Versuche {selected_provider} mit '{model}'."
+                                    ),
+                                    "stage": "fallback",
+                                    "provider": failed_provider,
+                                    "fallback_provider": selected_provider,
+                                    "model": model,
+                                })
+                                yield ChatEvent("model", model_payload)
+                                _publish_status(
+                                    model,
+                                    "loading",
+                                    50.0,
+                                    provider=active_provider,
+                                )
+
+                                async for chunk in self._stream_llm_call(model, summary_messages, None):
+                                    msg = chunk.get("message") or {}
+                                    delta_text = msg.get("content") or ""
+                                    if delta_text:
+                                        accumulated_summary_chunks.append(delta_text)
+                                        published_summary_content = True
+                                        yield ChatEvent("text_delta", {
+                                            "delta": delta_text,
+                                            "content": "".join(accumulated_summary_chunks),
+                                        })
+                                final_text = "".join(accumulated_summary_chunks)
+                                yield ChatEvent("text", {"content": final_text})
+                            except Exception as exc_fallback:
+                                if published_summary_content:
+                                    provider = self._current_provider()
+                                    yield ChatEvent("error", {
+                                        "message": f"Zusammenfassung nach teilweiser Ausgabe unterbrochen ({type(exc_fallback).__name__}: {exc_fallback}).",
+                                        "stage": "stream_interrupted",
+                                        "provider": provider,
+                                        "model": model,
+                                    })
+                                    final_text = "".join(accumulated_summary_chunks)
+                                else:
+                                    fallback_provider = self._current_provider()
+                                    yield ChatEvent("error", {
+                                        "message": (
+                                            "Zusammenfassung nach Live-Inventar-Refresh mit "
+                                            f"{self._provider_label(fallback_provider)} "
+                                            f"fehlgeschlagen ({type(exc_fallback).__name__})."
+                                        ),
+                                        "stage": "summary_fallback",
+                                        "provider": fallback_provider,
+                                        "model": model,
+                                    })
+                        else:
+                            yield ChatEvent("error", {
+                                "message": (
+                                    f"{self._provider_label(failed_provider)} ist beim "
+                                    "Zusammenfassen fehlgeschlagen; das aktualisierte "
+                                    "Live-Inventar enthaelt keinen weiteren Kandidaten."
+                                ),
+                                "stage": "summary",
+                                "provider": failed_provider,
+                                "model": model,
+                            })
 
             # Audit 2026-08-05 (M-5): Bei Erfolg wurde "active" gesendet und nie
             # zurueckgesetzt -- der Statusbalken blieb dauerhaft gruen auf "Aktiv",
