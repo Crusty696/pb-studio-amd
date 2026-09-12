@@ -4657,6 +4657,11 @@
             "title": "Percent",
             "default": 0.0
           },
+          "progress_percent": {
+            "type": "number",
+            "title": "Progress Percent",
+            "default": 0.0
+          },
           "current_frame": {
             "type": "integer",
             "title": "Current Frame",
