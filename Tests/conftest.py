@@ -16,6 +16,8 @@ import httpx
 import pytest
 import tempfile
 import json
+import hashlib
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -141,12 +143,32 @@ def isolated_test_database(tmp_path, monkeypatch):
 
     test_db_path = tmp_path / "test_pb_studio.db"
 
-    def _load_test_config(self):
-        self.config_file = tmp_path / "config.test.json"
+    def _load_test_config(self, *args, **kwargs):
+        config_file = kwargs.get("config_file") or (args[0] if args else None)
+        self.config_file = Path(config_file) if config_file is not None else (tmp_path / "config.test.json")
         self._config = ConfigManager._deep_merge(
             ConfigManager.DEFAULTS,
             {"paths": {"db_path": str(test_db_path)}},
         )
+        if self.config_file.exists():
+            try:
+                content = self.config_file.read_bytes()
+                self._file_digest = hashlib.sha256(content).hexdigest()
+                user_config = json.loads(content.decode("utf-8"))
+                if isinstance(user_config, dict):
+                    self._config = ConfigManager._deep_merge(self._config, user_config)
+            except Exception:
+                self._file_digest = ""
+        else:
+            self._file_digest = ""
+        self._revision = 1
+        self._subscribers = []
+        self._watcher_thread = None
+        self._stop_event = threading.Event()
+        self._last_reload_time = None
+        self._last_error = None
+        self._last_error_digest = None
+        self._last_error_time = None
 
     # Singletons vor jedem Test hart zurücksetzen
     if DatabaseCore._instance is not None:

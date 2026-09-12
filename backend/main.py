@@ -244,6 +244,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
 
+    try:
+        from pb_studio.config_manager import ConfigManager
+        ConfigManager().start_watcher()
+        logger.info("  ConfigManager Watcher aktiv")
+    except Exception as e:
+        logger.warning(f"  ConfigManager Watcher konnte nicht gestartet werden: {e}")
+
     # Gate B: Nach Config, aber vor Render-Resume und neuer Produktarbeit wird
     # ein vollständiger, owner-validierter Wiederanlaufpunkt publiziert.
     if "PYTEST_CURRENT_TEST" not in os.environ:
@@ -409,6 +416,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("  AI Director Ressourcen freigegeben")
     except Exception as e:
         logger.debug(f"Director shutdown cleanup skipped: {e}")
+
+    try:
+        from pb_studio.config_manager import ConfigManager
+        ConfigManager().stop_watcher()
+        logger.info("  ConfigManager Watcher gestoppt")
+    except Exception as e:
+        logger.debug(f"ConfigManager Watcher shutdown cleanup skipped: {e}")
 
 
 # FastAPI App erstellen
