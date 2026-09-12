@@ -160,4 +160,50 @@ public sealed class TransportContractTests
         Assert.AreEqual("TEILANALYSE", model.AnalysisStatusText);
         StringAssert.Contains(model.AnalysisDetail, "embedding: interrupted");
     }
+
+    [TestMethod]
+    public void AnchorDtos_DeserializeCorrectlyAndMatchGeneratedSchema()
+    {
+        var json = """{"anchors":[{"time":12.5,"label":"Drop 1","video_clip_id":42}],"count":1}""";
+        var manual = JsonSerializer.Deserialize<AnchorListResponse>(json, SnakeCaseJson);
+        var generated = JsonSerializer.Deserialize<Generated.AnchorListResponse>(json, SnakeCaseJson);
+
+        Assert.IsNotNull(manual);
+        Assert.AreEqual(1, manual.Count);
+        Assert.AreEqual(12.5, manual.Anchors!.First().Time);
+        Assert.AreEqual("Drop 1", manual.Anchors!.First().Label);
+        Assert.AreEqual(42, manual.Anchors!.First().VideoClipId);
+
+        Assert.IsNotNull(generated);
+        Assert.AreEqual(1, generated.Count);
+        Assert.AreEqual(12.5, generated.Anchors!.First().Time);
+        Assert.AreEqual("Drop 1", generated.Anchors!.First().Label);
+        Assert.AreEqual(42, generated.Anchors!.First().Video_clip_id);
+    }
+
+    [TestMethod]
+    public void ModelDtos_DeserializeBackendJsonTruth()
+    {
+        var listJson = """{"ollama_available":false,"base_url":"http://127.0.0.1:1234","models":[{"name":"qwen2.5-7b","description":"test","vision":true,"installed":true,"usable":true}],"lmstudio_available":true}""";
+        var list = JsonSerializer.Deserialize<ModelListResponse>(listJson, SnakeCaseJson);
+        Assert.IsNotNull(list);
+        Assert.IsTrue(list.LmstudioAvailable);
+        Assert.IsFalse(list.OllamaAvailable);
+        Assert.AreEqual(1, list.Models.Count);
+        Assert.AreEqual("qwen2.5-7b", list.Models[0].Name);
+        Assert.IsTrue(list.Models[0].Vision);
+
+        var recJson = """{"task":"video_captioning","mode":"balance","model":"qwen2.5-7b","reason":"active default","preference_list":["qwen2.5-7b"],"installed":["qwen2.5-7b"]}""";
+        var rec = JsonSerializer.Deserialize<ModelRecommendationResponse>(recJson, SnakeCaseJson);
+        Assert.IsNotNull(rec);
+        Assert.AreEqual("video_captioning", rec.Task);
+        Assert.AreEqual("qwen2.5-7b", rec.Model);
+
+        var testJson = """{"success":true,"latency_ms":125.4,"response":"pong","selection_receipt":{"provider":"lmstudio","model_id":"qwen2.5-7b","task":"test","mode":"balance","source":"auto","reason":"default","selected_at":"2026-09-12T12:00:00Z"}}""";
+        var testResp = JsonSerializer.Deserialize<ModelTestResponse>(testJson, SnakeCaseJson);
+        Assert.IsNotNull(testResp);
+        Assert.IsTrue(testResp.Success);
+        Assert.AreEqual(125.4, testResp.LatencyMs);
+        Assert.AreEqual("lmstudio", testResp.SelectionReceipt!.Provider);
+    }
 }
