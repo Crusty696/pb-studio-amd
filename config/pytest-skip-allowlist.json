@@ -138,6 +138,18 @@
       "owner": "audio",
       "expires_on": "2026-09-30",
       "reason": "Legacy external audio fixture is not present in clean checkout."
+    },
+    {
+      "nodeid": "Tests/test_runtime_contract.py::test_lhm_runtime_manifest_binds_the_active_files_by_sha256",
+      "owner": "gpu",
+      "expires_on": "2026-09-30",
+      "reason": "Local LibreHardwareMonitor binary bundle is gitignored and verified on the hardware lane."
+    },
+    {
+      "nodeid": "Tests/test_runtime_contract.py::test_live_directml_selection_and_lhm_identity_use_current_dxgi_truth",
+      "owner": "gpu",
+      "expires_on": "2026-09-30",
+      "reason": "Physical AMD GPU and DXGI enumeration belongs to the physical hardware lane."
     }
   ]
 }
