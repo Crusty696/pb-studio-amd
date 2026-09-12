@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 
@@ -20,3 +22,12 @@ def test_vision_ready_does_not_claim_caption_pipeline():
 
     assert analyzer.is_vision_ready is True
     assert analyzer.is_ready is False
+
+
+def test_tokenizer_initialization_has_no_vulnerable_save_pretrained_sink():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "pb_studio" / "video" / "moondream.py"
+    ).read_text(encoding="utf-8")
+
+    assert ".save_pretrained(" not in source

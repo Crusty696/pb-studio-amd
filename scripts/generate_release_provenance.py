@@ -245,6 +245,27 @@ def _asset_components(manifest_path: Path) -> list[dict[str, object]]:
     return components
 
 
+def _dotnet_sdk_matches_policy(selected: str, sdk_config: dict[str, object]) -> bool:
+    """Match the SDK selected by dotnet against the declared roll-forward policy."""
+    expected = str(sdk_config["version"])
+    if selected == expected:
+        return True
+    if str(sdk_config.get("rollForward", "patch")) != "latestPatch":
+        return False
+    try:
+        selected_parts = tuple(int(part) for part in selected.split("."))
+        expected_parts = tuple(int(part) for part in expected.split("."))
+    except ValueError:
+        return False
+    if len(selected_parts) != 3 or len(expected_parts) != 3:
+        return False
+    return (
+        selected_parts[:2] == expected_parts[:2]
+        and selected_parts[2] // 100 == expected_parts[2] // 100
+        and selected_parts[2] >= expected_parts[2]
+    )
+
+
 def _dotnet_state(root: Path) -> dict[str, object]:
     return {
         "selected_sdk": _run(root, "dotnet", "--version"),
@@ -409,13 +430,15 @@ def main() -> int:
             raise ValueError("DirectML release archive does not match its manifest")
 
     dotnet_state = _dotnet_state(root)
-    expected_dotnet = json.loads(
+    sdk_config = json.loads(
         (root / "global.json").read_text(encoding="utf-8")
-    )["sdk"]["version"]
-    if dotnet_state["selected_sdk"] != expected_dotnet:
+    )["sdk"]
+    expected_dotnet = sdk_config["version"]
+    if not _dotnet_sdk_matches_policy(dotnet_state["selected_sdk"], sdk_config):
         raise ValueError(
-            "Selected .NET SDK does not match global.json: "
-            f"{dotnet_state['selected_sdk']} != {expected_dotnet}"
+            "Selected .NET SDK does not satisfy global.json: "
+            f"{dotnet_state['selected_sdk']} vs {expected_dotnet} "
+            f"(rollForward={sdk_config.get('rollForward', 'patch')})"
         )
     if sys.version_info[:2] != (3, 11):
         raise ValueError(f"Release provenance requires Python 3.11, got {sys.version}")
