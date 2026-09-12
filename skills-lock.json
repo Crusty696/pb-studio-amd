@@ -48,6 +48,12 @@
       "sourceType": "local",
       "skillPath": "skills/consulting-team/SKILL.md",
       "computedHash": "c80bc96349a75c74dcc806d7a9dd5b4de8c33f51d79dea2d077f7859a919e3bb"
+    },
+    "audio-video-pacing-specialist": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": "skills/audio-video-pacing-specialist/SKILL.md",
+      "computedHash": "152e581a8fad0cb1352781d51ec97e402fc1519fed85389a987aef80d0b5c676"
     }
   }
 }

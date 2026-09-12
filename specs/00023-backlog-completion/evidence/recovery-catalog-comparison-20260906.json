@@ -1,0 +1,53 @@
+{
+  "snapshot": {
+    "integrity": [
+      "ok"
+    ],
+    "counts": {
+      "media": 713,
+      "media_import_guard": 713,
+      "projects": 8,
+      "render_queue": 0,
+      "schema_migrations": 4,
+      "sqlite_sequence": 2,
+      "vector_map": 500,
+      "vector_operation_outbox": 500
+    },
+    "table_content_hashes": {
+      "media": "48ea82e5c32b0217513b7d6887f741263320b538225bd7b2f859b4e73c3d7aba",
+      "media_import_guard": "cb63748c86af9dd6f02a9bd05185a13aba3d27b897af9b13651f8f4fba601a96",
+      "projects": "d8d86b2e6e7ee8ec0419de72729dd593ff473476d2cfd9b91d31615caa4ba845",
+      "render_queue": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "schema_migrations": "02f21c100df3ac572f64a658569531851efcd6b5c4ff7f6508772540057b78f0",
+      "sqlite_sequence": "551280cf756812aa70886425cc18e29d1898b2b31e0a4fc2695376fd39849c87",
+      "vector_map": "a534c381a539240a36c12a438d5487183c147452680dcd8026b6a262c6c51cb2",
+      "vector_operation_outbox": "ccea1863d6d7cc3574ff6fee1ac666aa0d08abfc92515f98212403388dd1f920"
+    }
+  },
+  "current": {
+    "integrity": [
+      "ok"
+    ],
+    "counts": {
+      "media": 713,
+      "media_import_guard": 713,
+      "projects": 8,
+      "render_queue": 0,
+      "schema_migrations": 4,
+      "sqlite_sequence": 2,
+      "vector_map": 500,
+      "vector_operation_outbox": 500
+    },
+    "table_content_hashes": {
+      "media": "48ea82e5c32b0217513b7d6887f741263320b538225bd7b2f859b4e73c3d7aba",
+      "media_import_guard": "cb63748c86af9dd6f02a9bd05185a13aba3d27b897af9b13651f8f4fba601a96",
+      "projects": "d8d86b2e6e7ee8ec0419de72729dd593ff473476d2cfd9b91d31615caa4ba845",
+      "render_queue": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "schema_migrations": "02f21c100df3ac572f64a658569531851efcd6b5c4ff7f6508772540057b78f0",
+      "sqlite_sequence": "551280cf756812aa70886425cc18e29d1898b2b31e0a4fc2695376fd39849c87",
+      "vector_map": "a534c381a539240a36c12a438d5487183c147452680dcd8026b6a262c6c51cb2",
+      "vector_operation_outbox": "ccea1863d6d7cc3574ff6fee1ac666aa0d08abfc92515f98212403388dd1f920"
+    }
+  },
+  "different_tables": []
+}

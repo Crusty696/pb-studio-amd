@@ -583,6 +583,12 @@
                         </Style>
                     </controls:ProgressBarWithLabel.Style>
                 </controls:ProgressBarWithLabel>
+                <TextBlock Text="{Binding CurrentStep}" FontSize="11"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           TextWrapping="Wrap" Margin="0,0,0,4"
+                           Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                           AutomationProperties.Name="Aktueller Generierungsschritt"
+                           AutomationProperties.LiveSetting="Polite"/>
 
             </StackPanel>
         </ScrollViewer>

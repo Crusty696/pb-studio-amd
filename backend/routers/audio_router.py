@@ -694,6 +694,9 @@ async def list_clips(
     for clip in clips[start:end]:
         analysis = state.get_audio_analysis(clip["id"])
         merged = dict(clip)
+        merged["has_audio_embedding"] = _has_current_audio_embedding(
+            merged.get("audio_hash")
+        )
         merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
@@ -780,11 +783,37 @@ async def delete_clips_batch(
 _band_stft_params = band_stft_params
 
 
+def _has_current_audio_embedding(audio_hash: str | None) -> bool:
+    """Return true only for a present current-model audio cache entry."""
+    if not audio_hash:
+        return False
+    try:
+        from pb_studio.audio import audio_embedder
+        from pb_studio.brain.brain_service import BrainService
+
+        cache = getattr(BrainService.get().brain, "cache", None)
+        if cache is None:
+            return False
+        entry = cache.lookup(
+            str(audio_hash),
+            audio_embedder.CURRENT_MODEL_NAME,
+            audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        return entry is not None and entry.media_type == "audio"
+    except Exception as exc:  # noqa: BLE001 - availability stays fail-closed
+        logger.warning(
+            "CLAP-Cache-Verfuegbarkeit konnte nicht gelesen werden: %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+        return False
+
+
 async def _store_audio_embedding_in_brain_cache(
     *,
     audio_path: str,
     audio_hash: str | None,
-) -> None:
+) -> bool:
     """
     Erzeugt das CLAP-Audio-Embedding und legt es im Brain-EmbeddingCache ab.
 
@@ -800,7 +829,7 @@ async def _store_audio_embedding_in_brain_cache(
     """
     if not audio_hash:
         logger.debug("CLAP-Cache-Write uebersprungen: kein audio_hash")
-        return
+        return False
 
     try:
         from pb_studio.audio import audio_embedder
@@ -808,7 +837,7 @@ async def _store_audio_embedding_in_brain_cache(
 
         cache = getattr(BrainService.get().brain, "cache", None)
         if cache is None:
-            return
+            return False
 
         existing = cache.lookup(
             str(audio_hash),
@@ -816,7 +845,7 @@ async def _store_audio_embedding_in_brain_cache(
             audio_embedder.CURRENT_MODEL_VERSION,
         )
         if existing is not None:
-            return
+            return existing.media_type == "audio"
 
         from pb_studio.ai.clap_wrapper import CLAPAnalyzer
 
@@ -828,7 +857,7 @@ async def _store_audio_embedding_in_brain_cache(
                 "Semantik-Achse bleibt fuer diesen Clip unavailable",
                 Path(audio_path).name,
             )
-            return
+            return False
 
         cache.store(
             media_hash=str(audio_hash),
@@ -841,12 +870,14 @@ async def _store_audio_embedding_in_brain_cache(
             "CLAP-Audio-Embedding im Brain-Cache abgelegt (dim=%d)",
             int(getattr(embedding, "size", 0)),
         )
+        return True
     except Exception as exc:  # noqa: BLE001 - darf die Analyse nie abbrechen
         logger.warning(
             "CLAP-Cache-Write fehlgeschlagen (Analyse bleibt gueltig): %s: %r",
             type(exc).__name__,
             exc,
         )
+        return False
 
 
 _AUDIO_STAGE_REQUEST_FIELDS = {
@@ -1505,7 +1536,7 @@ async def _analyze_audio_in_context(
         # war das der Grund, warum `semantic_match_weight` in 0 von 2576 Cuts
         # auftauchte und der Cross-Modal-Projektor nie Trainingspaare bekam.
         if _audio_plan_has_work(planned_request):
-            await _store_audio_embedding_in_brain_cache(
+            clip["has_audio_embedding"] = await _store_audio_embedding_in_brain_cache(
                 audio_path=audio_path,
                 audio_hash=clip.get("audio_hash"),
             )

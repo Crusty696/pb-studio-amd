@@ -1,0 +1,7 @@
+interface:
+  display_name: "Audio-Video Pacing Specialist"
+  short_description: "PB Studio KI-Regie Pacing (Caveman-Mode & Token-sparend)"
+  default_prompt: "Aktiviere Caveman-Modus (token-sparend) und nutze $audio-video-pacing-specialist fuer Audio-Video-Pacing, Beat-Grid und Schnitt-Optimierung."
+
+policy:
+  allow_implicit_invocation: true

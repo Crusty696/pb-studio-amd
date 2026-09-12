@@ -174,6 +174,29 @@
             </DockPanel>
         </md:Card>
 
+        <WrapPanel DockPanel.Dock="Top">
+            <StackPanel Orientation="Horizontal" Margin="0,0,16,8"
+                        Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ProgressBar Width="72" Height="4" Margin="0,0,8,0"
+                             VerticalAlignment="Center" IsIndeterminate="True"
+                             Foreground="{StaticResource AbletonAccent}"
+                             AutomationProperties.Name="Timeline wird geladen"/>
+                <TextBlock Text="Timeline wird geladen …" FontSize="11"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,16,8"
+                        Visibility="{Binding IsLoadingWaveform, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ProgressBar Width="72" Height="4" Margin="0,0,8,0"
+                             VerticalAlignment="Center" IsIndeterminate="True"
+                             Foreground="{StaticResource AbletonAccent}"
+                             AutomationProperties.Name="Wellenform wird geladen"/>
+                <TextBlock Text="Wellenform wird geladen …" FontSize="11"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
+        </WrapPanel>
+
         <!-- ══ Motion-Curve Sparkline (Audit L-M5) ══
              Konsument fuer GET /video/motion/{id}. Zeigt motion_curve des aktuell
              selektierten Timeline-Entries als kompakte Bar-Sparkline (Hoehe 36px).

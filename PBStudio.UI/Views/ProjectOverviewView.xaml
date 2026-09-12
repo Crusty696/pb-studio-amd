@@ -18,6 +18,16 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ProgressBar Width="72" Height="4" Margin="0,0,8,0"
+                             VerticalAlignment="Center" IsIndeterminate="True"
+                             Foreground="{StaticResource AbletonAccent}"
+                             AutomationProperties.Name="Projektstatus wird geladen"/>
+                <TextBlock Text="Projektstatus wird geladen …" FontSize="11"
+                           Foreground="{StaticResource AbletonTextDim}"
+                           AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
             
             <!-- ══════ Header / Banner ══════ -->
             <md:Card Style="{StaticResource AbletonCard}" Padding="20,16" Margin="0,0,0,24">

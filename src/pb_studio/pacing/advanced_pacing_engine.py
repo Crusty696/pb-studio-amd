@@ -36,6 +36,7 @@ STRUCTURE_INTENSITY_MULTIPLIERS = {
     "chorus": 1.2,
     "bridge": 0.7,
     "drop": 1.5,
+    "peak": 1.5,
     "buildup": 1.0,
     "breakdown": 0.5,
     "outro": 0.6
@@ -58,6 +59,8 @@ LONG_AUDIO_FULL_LOAD_LIMIT_SEC = 600.0
 DEFAULT_ONSET_SENSITIVITY = 0.5
 ONSET_DELTA_MIN = 0.02
 ONSET_DELTA_MAX = 0.12
+EXPECTED_BPM_RELATIVE_TOLERANCE = 0.03
+EXPECTED_BPM_SNAP_FRACTION = 0.20
 
 # =============================================================================
 # Audit E1: Camelot-Wheel Key Compatibility (Tonart-Matching)
@@ -1194,28 +1197,25 @@ class AdvancedPacingEngine:
             sr = self._cached_sr
             duration = librosa.get_duration(y=y, sr=sr) if duration <= 0 else duration
 
-        # --- BPM schätzen ---
-        # H-1 (Audit 2026-08-30): dieser Wert wird derzeit von KEINEM
-        # Trigger-Pfad gelesen. `_build_beat_triggers`, `_build_triggers_from_cache`
-        # und `_extract_other_triggers` leiten keine Zeitspanne aus BPM ab —
-        # die Schnittzeitpunkte kommen ausschliesslich aus der Beat-Zeitliste
-        # bzw. aus Onset-/Drum-/Energie-Zeiten. `bpm` dient hier nur noch der
-        # Protokollierung. Der `expected_bpm is None`-Zweig ist im Produktiv-
-        # betrieb unerreichbar: alle fuenf Aufrufer in `services/pacing_service.py`
-        # uebergeben `pacing_config.get("expected_bpm", 120)`.
-        if expected_bpm is None:
-            # G2/HIGH: Read injected _pre_cached_bpm from audio analysis
-            if hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
-                bpm = float(self._pre_cached_bpm)
-                logger.info(f"BPM aus gecachter Audio-Analyse: {bpm:.1f}")
-            elif len(beats) >= 2:
-                intervals = np.diff(beats)
-                median_interval = float(np.median(intervals))
-                bpm = 60.0 / median_interval if median_interval > 0 else 120.0
-            else:
-                bpm = 120.0
-        else:
-            bpm = expected_bpm
+        # --- BPM schätzen und optional manuell korrigieren ---
+        detected_bpm: Optional[float] = None
+        if hasattr(self, "_pre_cached_bpm") and self._pre_cached_bpm:
+            detected_bpm = float(self._pre_cached_bpm)
+            logger.info(f"BPM aus gecachter Audio-Analyse: {detected_bpm:.1f}")
+        elif len(beats) >= 2:
+            intervals = np.diff(beats)
+            median_interval = float(np.median(intervals))
+            if median_interval > 0:
+                detected_bpm = 60.0 / median_interval
+
+        bpm = float(expected_bpm) if expected_bpm is not None else (detected_bpm or 120.0)
+        beats, downbeats = self._apply_expected_bpm_grid(
+            beats,
+            downbeats,
+            expected_bpm=expected_bpm,
+            detected_bpm=detected_bpm,
+            duration=duration,
+        )
 
         logger.info(f"BPM: {bpm:.1f}, Dauer: {duration:.1f}s")
 
@@ -1257,7 +1257,8 @@ class AdvancedPacingEngine:
             triggers = self._apply_structure_weights(triggers, song_sections)
 
         triggers.sort(key=lambda x: x.time)
-        filtered = self._enforce_minimum_interval(triggers, min_cut_interval)
+        effective_min, effective_max = self._effective_cut_intervals(min_cut_interval)
+        filtered = self._enforce_minimum_interval(triggers, effective_min)
 
         # Audit L-M7: Filter angewendet -> ca. 80%
         _emit(80.0, force=True)
@@ -1274,8 +1275,8 @@ class AdvancedPacingEngine:
         # bei sehr langen Mixen UI nicht 20s blockt.
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
-            min_length=ts.min_clip_length,
-            max_length=self._effective_max_cut_interval(),
+            min_length=effective_min,
+            max_length=effective_max,
             audio_duration=duration,
             variation=ts.clip_length_variation,
             on_progress=lambda local_pct: _emit(80.0 + (local_pct / 100.0) * 20.0),
@@ -1723,7 +1724,8 @@ class AdvancedPacingEngine:
         all_triggers = base_cuts + gap_triggers
         all_triggers.sort(key=lambda x: x.time)
 
-        filtered = self._enforce_minimum_interval(all_triggers, min_cut_interval)
+        effective_min, effective_max = self._effective_cut_intervals(min_cut_interval)
+        filtered = self._enforce_minimum_interval(all_triggers, effective_min)
 
         _emit(85.0, force=True)
 
@@ -1737,8 +1739,8 @@ class AdvancedPacingEngine:
 
         filtered = self._enforce_clip_lengths(
             cuts=filtered,
-            min_length=ts.min_clip_length,
-            max_length=self._effective_max_cut_interval(),
+            min_length=effective_min,
+            max_length=effective_max,
             audio_duration=duration,
             variation=ts.clip_length_variation,
             on_progress=lambda local_pct: _emit(85.0 + (local_pct / 100.0) * 15.0),
@@ -1933,10 +1935,76 @@ class AdvancedPacingEngine:
     def _effective_max_cut_interval(self) -> float:
         """Resolve both upper cut-spacing constraints without violating min length."""
         ts = self.trigger_settings
-        return max(
+        return self._effective_cut_intervals(float(ts.min_cut_interval))[1]
+
+    def _effective_cut_intervals(self, requested_min: float) -> tuple[float, float]:
+        """Resolve all duplicated interval controls to one valid pair."""
+        ts = self.trigger_settings
+        effective_min = max(
+            float(requested_min),
+            float(ts.min_cut_interval),
             float(ts.min_clip_length),
-            min(float(ts.max_clip_length), float(ts.max_cut_interval)),
         )
+        effective_max = min(
+            float(ts.max_cut_interval),
+            float(ts.max_clip_length),
+        )
+        if effective_max < effective_min:
+            raise ValueError(
+                "max_cut_interval/max_clip_length must be >= the effective minimum "
+                f"({effective_max:.3f} < {effective_min:.3f})"
+            )
+        return effective_min, effective_max
+
+    def _apply_expected_bpm_grid(
+        self,
+        beats: List[float],
+        downbeats: List[float],
+        *,
+        expected_bpm: Optional[float],
+        detected_bpm: Optional[float],
+        duration: float,
+    ) -> tuple[List[float], List[float]]:
+        """Apply a manual tempo only when it materially corrects detection."""
+        self._expected_bpm_synthetic_times: set[float] = set()
+        if expected_bpm is None or expected_bpm <= 0.0 or duration <= 0.0:
+            return list(beats), list(downbeats)
+        if detected_bpm and abs(expected_bpm - detected_bpm) / detected_bpm <= EXPECTED_BPM_RELATIVE_TOLERANCE:
+            return list(beats), list(downbeats)
+
+        interval = 60.0 / float(expected_bpm)
+        anchor = float(downbeats[0] if downbeats else (beats[0] if beats else 0.0))
+        measured = sorted(float(value) for value in beats if 0.0 <= float(value) <= duration)
+        measured_downbeats = set(float(value) for value in downbeats)
+        snap_window = interval * EXPECTED_BPM_SNAP_FRACTION
+        corrected: List[float] = []
+        corrected_downbeats: List[float] = []
+        step = 0
+        while True:
+            grid_time = anchor + step * interval
+            if grid_time > duration + 1e-9:
+                break
+            chosen = grid_time
+            if measured:
+                nearest = min(measured, key=lambda value: abs(value - grid_time))
+                if abs(nearest - grid_time) <= snap_window:
+                    chosen = nearest
+            chosen = max(0.0, min(duration, float(chosen)))
+            if not corrected or chosen - corrected[-1] > 1e-6:
+                corrected.append(chosen)
+                if chosen in measured_downbeats:
+                    corrected_downbeats.append(chosen)
+                if all(abs(chosen - value) > 1e-6 for value in measured):
+                    self._expected_bpm_synthetic_times.add(chosen)
+            step += 1
+
+        logger.info(
+            "Expected-BPM-Korrektur aktiv: erkannt=%s erwartet=%.1f Rasterpunkte=%d",
+            f"{detected_bpm:.1f}" if detected_bpm else "unbekannt",
+            expected_bpm,
+            len(corrected),
+        )
+        return corrected, corrected_downbeats
 
     def _extract_drum_triggers_from_stem(self, stem_path: str) -> List["PacingCut"]:
         """Extrahiert Kick/Snare/HiHat aus Drums-Stem (Librosa-basiert)."""
@@ -2097,6 +2165,14 @@ class AdvancedPacingEngine:
                     time=float(t),
                     trigger_type="downbeat" if is_downbeat else "beat",
                     strength=strength,
+                    provenance=(
+                        {"source": "expected_bpm", "synthetic": True}
+                        if any(
+                            abs(float(t) - value) <= 1e-6
+                            for value in getattr(self, "_expected_bpm_synthetic_times", set())
+                        )
+                        else {}
+                    ),
                 ))
             return built
 

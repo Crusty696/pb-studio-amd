@@ -116,6 +116,69 @@ router = APIRouter(
 )
 
 
+def _collect_runtime_degradations(
+    cuts: list[dict[str, Any]],
+    *,
+    use_semantic_matching: bool,
+    use_brain: bool,
+) -> list[ModeDegradationSchema]:
+    """Collapse per-cut selector provenance to one safe message per mode."""
+    eligible: list[dict[str, Any]] = []
+    for cut in cuts:
+        metadata = cut.get("metadata") if isinstance(cut, dict) else None
+        provenance = metadata.get("selection_provenance") if isinstance(metadata, dict) else None
+        if isinstance(provenance, dict):
+            eligible.append(metadata)
+
+    total = len(eligible)
+    if total == 0:
+        return []
+
+    semantic_affected = 0
+    brain_affected = 0
+    for metadata in eligible:
+        provenance = metadata["selection_provenance"]
+        fallback = str(provenance.get("fallback_reason") or "")
+        semantic_status = metadata.get("semantic_status")
+        if use_semantic_matching and (
+            fallback.startswith("semantic_")
+            or (
+                semantic_status is not None
+                and str(semantic_status) not in {"available", "measured"}
+            )
+        ):
+            semantic_affected += 1
+        if use_brain and (
+            fallback == "brain_unavailable"
+            or fallback.startswith("brain_error:")
+            or fallback == "brain_no_scored_candidates"
+        ):
+            brain_affected += 1
+
+    result: list[ModeDegradationSchema] = []
+    if semantic_affected:
+        result.append(ModeDegradationSchema(
+            mode="semantic_matching",
+            reason=(
+                "Semantische Merkmale waren nicht für alle Auswahlentscheidungen "
+                "verfügbar; die robuste Bewegungs-/Strategieauswahl wurde verwendet."
+            ),
+            scored_clips=total - semantic_affected,
+            total_clips=total,
+        ))
+    if brain_affected:
+        result.append(ModeDegradationSchema(
+            mode="brain_reranking",
+            reason=(
+                "Die Brain-Neubewertung war nicht für alle Auswahlentscheidungen "
+                "verfügbar; die konfigurierte Basisstrategie wurde verwendet."
+            ),
+            scored_clips=total - brain_affected,
+            total_clips=total,
+        ))
+    return result
+
+
 def _load_ui_anchors(state) -> list[dict]:
     """
     Laedt die im Projekt gespeicherten manuellen Anker.
@@ -465,6 +528,15 @@ async def _generate_cut_list_for_project(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
             cached_analysis, video_analysis_snapshot, _loop, _ui_anchors,
         )
+        runtime_degradations = _collect_runtime_degradations(
+            cuts,
+            use_semantic_matching=config.use_semantic_matching,
+            use_brain=config.use_brain,
+        )
+        existing_modes = {item.mode for item in degradations}
+        degradations.extend(
+            item for item in runtime_degradations if item.mode not in existing_modes
+        )
         _t_pacing_elapsed_ms = (_time.perf_counter() - _t_pacing_start) * 1000.0
         _t_brain_elapsed_ms = 0.0
 
@@ -538,6 +610,16 @@ async def _generate_cut_list_for_project(
                 raise
             except Exception as brain_e:
                 logger.warning(f"Brain post-processor failed: {brain_e}", exc_info=True)
+                if not any(item.mode == "brain_postprocessor" for item in degradations):
+                    degradations.append(ModeDegradationSchema(
+                        mode="brain_postprocessor",
+                        reason=(
+                            "Die Brain-Auswertung der fertigen Cuts war nicht "
+                            "verfügbar; die erzeugte Timeline bleibt verwendbar."
+                        ),
+                        scored_clips=0,
+                        total_clips=len(cuts),
+                    ))
         else:
             # R-Brain: use_brain ist False. Alte Timelines deaktivieren, um Geister-Daten
             # bei /brain/suggest und /brain/learning_session zu verhindern

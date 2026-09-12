@@ -28,6 +28,7 @@ Dieses Skill-System wurde für **PB Studio** entwickelt und optimiert für:
 | **Video Engineering** | `video-engineering.md` | FFmpeg, CLIP, Frame Extraction |
 | **GUI Framework** | `gui-framework.md` | PyQt6, Signals/Slots, Threading |
 | **Data Persistence** | `data-persistence.md` | SQLite, FAISS Vektoren |
+| **Audio-Video Pacing** | `audio-video-pacing-specialist/SKILL.md` | BPM, Beat-Grid, EDM-Groove & Mood (21+ Genres), Speech-Pace & Cuts |
 
 ### Infrastructure Skills
 
@@ -120,6 +121,7 @@ generic-workflow ────────────────────┬
 | ...Feature planen | `generic-workflow` | `research-docs` |
 | ...Code testen | `verification` | `debugging` |
 | ...Hardware erkennen | `hardware-control` | `ai-inference` |
+| ...Audio-Pacing & Cuts optimieren | `audio-video-pacing-specialist` | `audio-engineering`, `video-engineering` |
 
 ---
 

@@ -239,6 +239,7 @@ class ClipSelector:
         self.brain_video_features_by_clip: dict = {}
         self.brain_min_confidence: float = 0.0
         self.brain_feature_adapter = None
+        self.brain_requested: bool = False
 
         # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
         # use_key_matching: Master-Switch (vom PacingService gesetzt).
@@ -511,6 +512,16 @@ class ClipSelector:
             selected = self._fallback_select(
                 candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
             )
+            if self.brain_requested:
+                fallback_details = dict(self._selection_details)
+                self._record_selection_details(
+                    f"brain_fallback_{fallback_details.get('selection_path', 'unknown')}",
+                    score_components={
+                        "brain": {"status": "unavailable"},
+                        "fallback": fallback_details,
+                    },
+                    fallback_reason="brain_unavailable",
+                )
 
         selected = self._attach_selection_provenance(
             selected,

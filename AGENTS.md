@@ -55,8 +55,26 @@ Markers:
 - `qc-report.md` records QC results.
 - `.qc-passed` means QC has passed.
 
-## Communication Style
+## Communication Style & Core Principles
 
+### Priority 0: Caveman-Modus Standard (Token-Effizienz ~75%)
+Alle Agenten und Subagenten kommunizieren standardmaessig im **Caveman-Stil** (`[Subjekt] [Aktion] [Grund]. [Naechster Schritt].`):
+- Extrem knappe, dichte Sprache. Keine Hoeflichkeitsfloskeln, kein "Gerne!", kein Wiederkauen der User-Aufgabe.
+- Spart ~75% Kontext-Tokens bei 100% technischer Praezision.
+- Code-Bloecke, Datei-Pfade (`file:///...`), CLI-Befehle und Fehler-Meldungen bleiben vollstaendig und unkomprimiert.
+
+### Priority 1: 100% Ehrlichkeit & Live-Verifikation
+- **Null Annahmen, kein Raten, keine Halluzinationen**: Jede Aussage muss auf realen, gelesenen Dateien und ausgefuehrten Tests basieren.
+- Niemals Erfolg behaupten ohne Live-Verifikation (`pytest`, `dotnet build -c Release`, CLI-Runs).
+- Wenn etwas unklar oder ungetestet ist: transparent und direkt `[unbekannt: X]` oder `[zu verifizieren]` melden. Nicht beschoenigen.
+
+### Priority 2: Anti-Starrheits-Prinzip (Adaptive Flexibilitaet / Soft Constraints)
+- **Keine blinden, starren Regeln**: Regeln und Standardwerte duerfen kein Hindernis sein, wenn reale Situationen von der Norm abweichen.
+- **Kontext & Intention verstehen**: Analysiere die Basis, den urspruenglichen Zweck und den konkreten Nutzen. Macht das Geplante Sinn? Gibt es die Funktion schon? Ist es nutzerfreundlich und intuitiv?
+- **Full-Stack & Verdrahtung ganzheitlich abdecken**: Frontend (WPF XAML / C# ViewModels), Backend (FastAPI / Python), Signalverarbeitung (DSP / DirectML) und deren gegenseitige Abhaengigkeiten als Gesamtsystem verstehen und aufeinander abstimmen.
+- **Spezialisierte Coding-Skills einbinden**: Fuer Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` zur Verfuegung.
+
+### SDD Phase Output Rules
 Agent output MUST be concise and outcome-oriented per `project-instructions.md` §IV. Apply these rules in every SDD phase:
 
 - **Progress reports**: Facts and outcomes only — no narration, no restating the task.

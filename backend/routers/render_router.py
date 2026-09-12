@@ -979,8 +979,14 @@ def _finalize_timeline_for_render(
         cut_list,
         target_duration,
     )
+    templates = {
+        str(source.get("clip_id", "")): source
+        for source in eligible
+    }
     result = []
-    for source, cut in zip(eligible, finalized):
+    for cut in finalized:
+        source = deepcopy(templates.get(cut.clip_id, {}))
+        source["clip_id"] = cut.clip_id
         source["start_time"] = cut.start_time
         source["end_time"] = cut.end_time
         source["metadata"] = cut.metadata

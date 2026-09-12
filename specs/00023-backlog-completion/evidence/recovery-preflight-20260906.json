@@ -1,0 +1,10 @@
+{
+  "generation": "20260831T031423616857Z-3b979e8e632f415289b588cf0c34b72c",
+  "artifact_count": 410,
+  "invalid_snapshot_artifacts": [],
+  "missing_current_targets": [],
+  "different_current_bytes": [
+    "catalog:pb-studio"
+  ],
+  "note": "Read-only byte comparison; SQLite WAL not folded, so differences are not semantic corruption proof. No restore performed."
+}

@@ -471,14 +471,19 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         if (degradations == null || degradations.Count == 0)
             return "";
 
-        var names = degradations.Select(d => d.Mode switch
+        var details = degradations.Select(d =>
         {
-            "key_matching" => "Tonart-Matching",
-            _ => d.Mode
+            var name = d.Mode switch
+            {
+                "key_matching" => "Tonart-Matching",
+                "semantic_matching" => "Semantik-Matching",
+                "brain_reranking" => "Brain-Auswahl",
+                "brain_postprocessor" => "Brain-Auswertung",
+                _ => d.Mode
+            };
+            return $"{name} ({d.ScoredClips}/{d.TotalClips} Clips bewertbar)";
         });
-        var first = degradations[0];
-        return $" — ohne Wirkung: {string.Join(", ", names)} "
-             + $"({first.ScoredClips}/{first.TotalClips} Clips bewertbar)";
+        return $" — ohne Wirkung: {string.Join(", ", details)}";
     }
 
     /// <summary>Macht den Preflight-422 lesbar.

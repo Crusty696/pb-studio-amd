@@ -74,11 +74,26 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
    - **Refactor:** erst Caller/Dependents via `full-stack-auditor` oder Grep prüfen, dann anwenden
    - **Config/Doc-Change:** mindestens current state lesen + auf Konflikte prüfen, dann anwenden
    - **Hintergrund:** heute (2026-05-15) mehrere Edit-Versuche an Files ohne ausreichende Vorverifizierung → mid-edit Truncations und broken Files. Diese Regel verhindert das.
+14. **CAVEMAN-MODUS & TOKEN-EFFIZIENZ (Standard-Kommunikation):**
+   - Standardmäßig im **Caveman-Stil** antworten (`[Subjekt] [Aktion] [Grund]. [Nächster Schritt].`).
+   - Spart ~75% Token durch Weglassen von Floskeln, Wiederholungen und narrativer Prosa.
+   - 100% Präzision bei Pfaden (`file:///...`), Code-Blöcken, Shell-Befehlen und Fehlermeldungen bleibt unberührt.
+15. **ADAPTIVE FLEXIBILITÄT & ANTI-STARRHEITS-PRINZIP (Soft Constraints):**
+   - **Keine blinden, starren Regeln**: Regeln und Standardparameter sind Leitplanken, keine Dogmen. Bei Abweichungen von der Norm flexibel anpassen.
+   - **Ganzheitliche Full-Stack-Betrachtung**: Frontend (WPF XAML, C# ViewModels), Backend (FastAPI, Python), Signalverarbeitung (DSP, DirectML) und deren Verdrahtung gemeinsam verstehen.
+   - **Ergonomie & Nutzen**: Prüfen ob bestehende oder geplante Ansätze echten Nutzen stiften und nutzerfreundlich sind, statt stur Parameter einzufordern.
+   - **Spezialisierte Coding-Skills**: Für Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` bereit.
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-31 (Beat-/Tempo-Audit, Beatgrid verdrahtet und segmentiert)
-- **Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
+- **Date:** 2026-09-12 (Spec 00029 Pacing-Audit-Fixes release-verifiziert)
+- **Current Status:** Vier Pacing-/Director-Befunde behoben: source-sichere
+  Finalisierung, wirksame Expected-BPM-Korrektur, konsistente Cut-Intervalle
+  und sichtbare Semantic-/Brain-Degradation. Verifiziert: Python 1800 passed /
+  14 skipped, C# 57/57, WPF Release 0 Warnungen / 0 Fehler.
+- **Next Task:** Keine offene Aufgabe in Spec 00029; menschlicher GUI-/Hörtest
+  bleibt außerhalb der automatisierten Release-QC.
+- **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
   Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).
   - **C-1** Energy-Trigger lagen bei exakt doppelter Zeit — die gecachte
@@ -531,6 +546,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *SSE Fan-out:* `publish_event` broadcastet an ALLE registrierten Queues
 - *Path-Traversal-Schutz:* `Path.is_relative_to()` in project_router + render_router
 - *Brain-Modul:* 17 Bridge-Achsen · Beta-Bernoulli WeightStore · 5-Level Hierarchical Backoff · SigLIP-ONNX (1152-D) und registriertes CLAP-ONNX via ONNX Runtime DirectML, fail-closed ohne Asset · 6 REST-Endpoints `/brain/{suggest,feedback,learning_session,stats,reset,explain}` · WPF HIRN-Tab + Confidence-Balken
+- *Pacing Specialist Skill:* `.claude/skills/audio-video-pacing-specialist` (BPM, Beat-Grid, EDM-Groove, 21+ Mood-Profile, Speech-WPM/CPS & Cut-Optimierung; kompatibel mit Claude, Codex & Antigravity)
 
 ---
 

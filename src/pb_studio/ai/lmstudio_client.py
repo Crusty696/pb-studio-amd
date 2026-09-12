@@ -827,14 +827,11 @@ class LMStudioClient:
         tools: Optional[list[dict[str, Any]]] = None,
         format: Optional[str] = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Streaming-Chat. Yieldet Ollama-Style Events::
+        """Stream chat deltas with separate content, reasoning and tool fields.
 
-            {"model": str, "message": {"role": "assistant", "content": str,
-             "tool_calls": [...]?}, "done": bool, "done_reason": str?}
-
-        Pro OpenAI-SSE-Event wird ein Ollama-Event erzeugt. Tool-Calls werden
-        ueber Delta-Aggregation gesammelt (OpenAI streamt sie inkrementell).
-        ``done=True`` kommt einmal am Ende, mit ``done_reason`` aus ``finish_reason``.
+        Exactly one terminal event is emitted. Tool-call fragments are assembled
+        by their OpenAI index and exposed only on that terminal event.
+        reasoning_content is never copied into user-visible content.
         """
         client = await self._ensure_client()
         msgs = _messages_with_images(messages, images)
@@ -849,8 +846,8 @@ class LMStudioClient:
         if format == "json":
             body["response_format"] = {"type": "json_object"}
 
-        # Tool-Call-Aggregation across deltas
         tool_calls_buf: dict[int, dict[str, Any]] = {}
+        terminal_emitted = False
 
         try:
             async with client.stream(
@@ -858,68 +855,76 @@ class LMStudioClient:
             ) as response:
                 self._raise_for_status(response, "chat_stream")
                 async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                    if not line.startswith("data:"):
+                    if not line or not line.startswith("data:"):
                         continue
                     payload = line[5:].strip()
                     if payload == "[DONE]":
-                        # Final flush mit aggregierten tool_calls
-                        final_calls = [
-                            tc for _, tc in sorted(tool_calls_buf.items())
-                        ]
-                        yield {
-                            "model": model,
-                            "message": {
-                                "role": "assistant",
-                                "content": "",
-                                "tool_calls": final_calls,
-                            },
-                            "done": True,
-                            "done_reason": "stop",
-                        }
+                        if not terminal_emitted:
+                            terminal_emitted = True
+                            yield {
+                                "model": model,
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "",
+                                    "reasoning_content": "",
+                                    "tool_calls": [
+                                        tc for _, tc in sorted(tool_calls_buf.items())
+                                    ],
+                                },
+                                "done": True,
+                                "done_reason": "stop",
+                            }
                         return
                     try:
                         ev = json.loads(payload)
                     except json.JSONDecodeError:
-                        logger.debug("chat_stream: konnte SSE-Zeile nicht parsen: %r", line)
+                        logger.debug(
+                            "chat_stream: konnte SSE-Zeile nicht parsen: %r", line
+                        )
                         continue
+
                     choices = ev.get("choices") or []
                     if not choices:
                         continue
-                    delta = choices[0].get("delta") or {}
-                    finish = choices[0].get("finish_reason")
-                    # Aggregate tool_calls deltas
-                    for tc in (delta.get("tool_calls") or []):
+                    choice = choices[0]
+                    delta = choice.get("delta") or {}
+                    finish = choice.get("finish_reason")
+
+                    for tc in delta.get("tool_calls") or []:
                         idx = int(tc.get("index", 0))
-                        if idx not in tool_calls_buf:
-                            tool_calls_buf[idx] = {
-                                "id": tc.get("id", ""),
+                        buffered = tool_calls_buf.setdefault(
+                            idx,
+                            {
+                                "id": "",
                                 "type": tc.get("type", "function"),
                                 "function": {"name": "", "arguments": ""},
-                            }
+                            },
+                        )
                         fn = tc.get("function") or {}
-                        if fn.get("name"):
-                            tool_calls_buf[idx]["function"]["name"] = fn["name"]
-                        if fn.get("arguments"):
-                            tool_calls_buf[idx]["function"]["arguments"] += fn["arguments"]
                         if tc.get("id"):
-                            tool_calls_buf[idx]["id"] = tc["id"]
-                    # Manche Modelle (Reasoning-Modelle wie gemma-3-thinking)
-                    # streamen Inhalt unter ``reasoning_content`` bevor sie
-                    # zu ``content`` umsteigen. Wir aggregieren beides damit
-                    # Aufrufer eine kontinuierliche content-Spur sehen.
-                    content = (
-                        delta.get("content")
-                        or delta.get("reasoning_content")
-                        or ""
-                    )
+                            buffered["id"] += str(tc["id"])
+                        if tc.get("type"):
+                            buffered["type"] = tc["type"]
+                        if fn.get("name"):
+                            buffered["function"]["name"] += str(fn["name"])
+                        if fn.get("arguments"):
+                            buffered["function"]["arguments"] += str(fn["arguments"])
+
+                    content = delta.get("content")
+                    reasoning = delta.get("reasoning_content")
+                    content = content if isinstance(content, str) else ""
+                    reasoning = reasoning if isinstance(reasoning, str) else ""
                     is_done = finish is not None
+                    if is_done:
+                        if terminal_emitted:
+                            continue
+                        terminal_emitted = True
                     yield {
                         "model": ev.get("model", model),
                         "message": {
                             "role": delta.get("role", "assistant"),
                             "content": content,
+                            "reasoning_content": reasoning,
                             "tool_calls": (
                                 [tc for _, tc in sorted(tool_calls_buf.items())]
                                 if is_done else []

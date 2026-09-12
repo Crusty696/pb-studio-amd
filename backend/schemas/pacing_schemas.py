@@ -1,6 +1,6 @@
 """Pacing-bezogene Schemas."""
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, Any
 
 
@@ -42,6 +42,17 @@ class TriggerSettingsSchema(BaseModel):
             raise ValueError(f"max_clip_length ({v}) muss >= min_clip_length ({info.data['min_clip_length']}) sein")
         return v
 
+    @model_validator(mode="after")
+    def cut_intervals_must_be_consistent(self) -> "TriggerSettingsSchema":
+        effective_min = max(self.min_cut_interval, self.min_clip_length)
+        effective_max = min(self.max_cut_interval, self.max_clip_length)
+        if effective_max < effective_min:
+            raise ValueError(
+                "max_cut_interval und max_clip_length müssen mindestens so groß "
+                "wie min_cut_interval und min_clip_length sein"
+            )
+        return self
+
 class PacingConfigSchema(BaseModel):
     """Request: Pacing-Konfiguration."""
     audio_clip_id: int
@@ -68,6 +79,22 @@ class PacingConfigSchema(BaseModel):
     # Plan Phase 4: brain integration toggles
     use_brain: bool = False
     brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def request_intervals_must_be_consistent(self) -> "PacingConfigSchema":
+        settings = self.trigger_settings or TriggerSettingsSchema()
+        effective_max = min(settings.max_cut_interval, settings.max_clip_length)
+        effective_min = max(
+            self.min_cut_interval,
+            settings.min_cut_interval,
+            settings.min_clip_length,
+        )
+        if effective_max < effective_min:
+            raise ValueError(
+                "min_cut_interval/min_clip_length darf das effektive Maximum "
+                "aus max_cut_interval/max_clip_length nicht überschreiten"
+            )
+        return self
 
 
 class CutListEntrySchema(BaseModel):

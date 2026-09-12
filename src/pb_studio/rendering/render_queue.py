@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import threading
 import time
 import uuid
@@ -77,6 +78,70 @@ TERMINAL_STATES: frozenset[str] = frozenset({
     STATE_FAILED,
     STATE_CANCELLED,
 })
+
+DEFAULT_RETENTION_DAYS = 30
+DEFAULT_MAX_TERMINAL_JOBS = 50
+_MIN_VALID_UTC_EPOCH = 946684800.0  # 2000-01-01; rejects legacy monotonic values.
+
+
+def normalize_progress_percent(
+    value: Any,
+    *,
+    completed: bool = False,
+) -> float:
+    """Return finite canonical render progress within the public contract."""
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        normalized = 0.0
+    if not math.isfinite(normalized):
+        normalized = 0.0
+    normalized = min(max(normalized, 0.0), 100.0)
+    if completed:
+        return 100.0
+    return min(normalized, 99.9)
+
+
+def select_terminal_retention(
+    records: list[dict[str, Any]],
+    *,
+    now_epoch: float,
+    retention_days: int = DEFAULT_RETENTION_DAYS,
+    max_terminal_jobs: int = DEFAULT_MAX_TERMINAL_JOBS,
+    protected_ids: frozenset[str] = frozenset(),
+    id_key: str = "job_id",
+) -> tuple[list[str], list[str]]:
+    """Select oldest removable terminal metadata; never select invalid timestamps."""
+    if retention_days < 0:
+        raise ValueError("retention_days muss >= 0 sein")
+    if max_terminal_jobs < 0:
+        raise ValueError("max_terminal_jobs muss >= 0 sein")
+    cutoff = float(now_epoch) - (float(retention_days) * 86400.0)
+    candidates: list[tuple[float, str]] = []
+    invalid: list[str] = []
+    for record in records:
+        if str(record.get("status") or "") not in TERMINAL_STATES:
+            continue
+        record_id = str(record.get(id_key) or "")
+        if not record_id or record_id in protected_ids:
+            continue
+        try:
+            finished_at = float(record.get("finished_at"))
+        except (TypeError, ValueError):
+            invalid.append(record_id)
+            continue
+        if not math.isfinite(finished_at) or finished_at < _MIN_VALID_UTC_EPOCH:
+            invalid.append(record_id)
+            continue
+        candidates.append((finished_at, record_id))
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    age_expired = [item for item in candidates if item[0] <= cutoff]
+    remaining = [item for item in candidates if item[0] > cutoff]
+    excess = max(len(remaining) - max_terminal_jobs, 0)
+    selected = age_expired + remaining[:excess]
+    return [record_id for _, record_id in selected], sorted(invalid)
+
 
 _ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     STATE_QUEUED: frozenset({
@@ -324,7 +389,12 @@ class RenderQueue:
 
         if progress_percent is not None:
             sets.append("progress_percent = ?")
-            params.append(float(progress_percent))
+            params.append(
+                normalize_progress_percent(
+                    progress_percent,
+                    completed=status == STATE_COMPLETED,
+                )
+            )
 
         if error is not None:
             sets.append("error = ?")
@@ -417,6 +487,45 @@ class RenderQueue:
             (STATE_QUEUED, STATE_INTERRUPTED),
         ).fetchall()
         return [self._row_to_job(r) for r in rows if r is not None]
+
+    @recovery_write_operation("render-queue")
+    def cleanup_terminal(
+        self,
+        *,
+        retention_days: int = DEFAULT_RETENTION_DAYS,
+        max_terminal_jobs: int = DEFAULT_MAX_TERMINAL_JOBS,
+        protected_job_ids: frozenset[str] = frozenset(),
+        now_epoch: Optional[float] = None,
+    ) -> dict[str, list[str]]:
+        """Delete only selected terminal metadata, atomically and idempotently."""
+        effective_now = time.time() if now_epoch is None else float(now_epoch)
+        with self._db.transaction(immediate=True) as conn:
+            rows = conn.execute(
+                "SELECT job_id, status, finished_at FROM render_queue"
+            ).fetchall()
+            records = [dict(row) for row in rows]
+            deleted, invalid = select_terminal_retention(
+                records,
+                now_epoch=effective_now,
+                retention_days=retention_days,
+                max_terminal_jobs=max_terminal_jobs,
+                protected_ids=protected_job_ids,
+            )
+            for job_id in deleted:
+                conn.execute(
+                    "DELETE FROM render_queue WHERE job_id = ? AND status IN (?, ?, ?)",
+                    (job_id, STATE_COMPLETED, STATE_FAILED, STATE_CANCELLED),
+                )
+        if invalid:
+            logger.warning(
+                "RenderQueue retention schützt %d terminale Job(s) ohne "
+                "gültigen UTC-Abschlusszeitpunkt: %s",
+                len(invalid),
+                invalid,
+            )
+        if deleted:
+            logger.info("RenderQueue retention entfernte %d Job(s)", len(deleted))
+        return {"deleted": deleted, "invalid_finished_at": invalid}
 
     @recovery_write_operation("render-queue")
     def restore_running_as_interrupted(self) -> list[str]:
