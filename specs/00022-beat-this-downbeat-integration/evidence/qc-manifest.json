@@ -2,7 +2,7 @@
   "schema_version": 1,
   "objective": "OBJ-79",
   "task_range": "T001-T008",
-  "commit_sha": "0952130b93c33011891ebfc2583db7559a07668f",
+  "commit_sha": "37d78392cb7ffa582b448ca12d8ee9a0ac3d8e71",
   "receipts": [
     { "task_id": "T001", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
     { "task_id": "T002", "path": "evidence/final-verification-2026-09-04.md", "sha256": "9539c020cad4c502870c2403e8f399ab225f6f1770b1044b9ac153084cce6479" },
