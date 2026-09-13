@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
+import pytest
 
 from pb_studio.core.directml_adapter import (
     enumerate_dxgi_adapters,
