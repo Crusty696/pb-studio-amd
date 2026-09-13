@@ -18,6 +18,7 @@ AMD-Anpassung v2:
 """
 
 import logging
+from bisect import bisect_left
 import numpy as np
 from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass, field
@@ -1979,14 +1980,22 @@ class AdvancedPacingEngine:
         snap_window = interval * EXPECTED_BPM_SNAP_FRACTION
         corrected: List[float] = []
         corrected_downbeats: List[float] = []
+
+        def _nearest_measured(value: float) -> Optional[float]:
+            if not measured:
+                return None
+            index = bisect_left(measured, value)
+            candidates = measured[max(0, index - 1):min(len(measured), index + 1)]
+            return min(candidates, key=lambda candidate: abs(candidate - value))
+
         step = 0
         while True:
             grid_time = anchor + step * interval
             if grid_time > duration + 1e-9:
                 break
             chosen = grid_time
-            if measured:
-                nearest = min(measured, key=lambda value: abs(value - grid_time))
+            nearest = _nearest_measured(grid_time)
+            if nearest is not None:
                 if abs(nearest - grid_time) <= snap_window:
                     chosen = nearest
             chosen = max(0.0, min(duration, float(chosen)))
@@ -1994,7 +2003,8 @@ class AdvancedPacingEngine:
                 corrected.append(chosen)
                 if chosen in measured_downbeats:
                     corrected_downbeats.append(chosen)
-                if all(abs(chosen - value) > 1e-6 for value in measured):
+                nearest_to_chosen = _nearest_measured(chosen)
+                if nearest_to_chosen is None or abs(chosen - nearest_to_chosen) > 1e-6:
                     self._expected_bpm_synthetic_times.add(chosen)
             step += 1
 
@@ -2167,10 +2177,7 @@ class AdvancedPacingEngine:
                     strength=strength,
                     provenance=(
                         {"source": "expected_bpm", "synthetic": True}
-                        if any(
-                            abs(float(t) - value) <= 1e-6
-                            for value in getattr(self, "_expected_bpm_synthetic_times", set())
-                        )
+                        if float(t) in getattr(self, "_expected_bpm_synthetic_times", set())
                         else {}
                     ),
                 ))

@@ -1,6 +1,7 @@
 """Regressions for spec 00029: verified Pacing/Director audit findings."""
 
 from pathlib import Path
+from time import perf_counter
 
 import pytest
 from pydantic import ValidationError
@@ -90,6 +91,25 @@ def test_expected_bpm_near_detected_preserves_measured_grid() -> None:
 
     assert corrected == beats
     assert corrected_downbeats == downbeats
+
+
+def test_expected_bpm_long_grid_scales_without_quadratic_scan() -> None:
+    engine = AdvancedPacingEngine(trigger_settings={"beat_weight": 1.0})
+    measured = [index * 0.5 + 0.01 for index in range(12_000)]
+
+    started = perf_counter()
+    corrected, _ = engine._apply_expected_bpm_grid(
+        measured,
+        [],
+        expected_bpm=120.0,
+        detected_bpm=60.0,
+        duration=measured[-1],
+    )
+    elapsed = perf_counter() - started
+
+    assert corrected == pytest.approx(measured)
+    assert not engine._expected_bpm_synthetic_times
+    assert elapsed < 2.0
 
 
 @pytest.mark.parametrize(
