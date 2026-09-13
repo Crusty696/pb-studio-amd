@@ -45,6 +45,12 @@ def test_agent_driver_uses_canonical_runtime_and_owner_scripts():
     assert 'Log "Owner capability' not in source
     assert "$script:BackendStartedByDriver = $false" in source
     assert "current driver session does not own backend" in source
+    assert "ProtectedData]::Protect" in source
+    assert "ProtectedData]::Unprotect" in source
+    assert "Save-BackendOwnerState -ProcessId $p.Id" in source
+    assert "$listenerPids -notcontains $ownerState.ProcessId" in source
+    assert "Get-BackendPids | Where-Object { $_ -eq $ownerState.ProcessId }" in source
+    assert "Shutdown refused: current listener is not owned by this driver" in source
 
 
 def test_agent_driver_checks_locked_runtime_and_adapter_identity():

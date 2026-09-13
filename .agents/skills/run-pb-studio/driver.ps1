@@ -47,6 +47,7 @@ $script:Runtime = $null
 $script:BackendStartedByDriver = $false
 $LogsDir = Join-Path $ProjectRoot 'logs'
 if (-not (Test-Path $LogsDir)) { New-Item -ItemType Directory -Path $LogsDir -Force | Out-Null }
+$BackendOwnerStatePath = Join-Path $LogsDir 'driver_backend.owner.json'
 
 function Log($msg, $color = 'Cyan') {
     Write-Host "[driver] " -NoNewline -ForegroundColor $color
@@ -54,37 +55,84 @@ function Log($msg, $color = 'Cyan') {
 }
 
 function Initialize-DriverSession {
-    if ($null -ne $script:Runtime) {
-        return $script:Runtime
-    }
+    param([switch]$CreateOwnerCapability)
 
     $runtimeScript = Join-Path $ScriptsDir 'runtime_contract.ps1'
     $ownerScript = Join-Path $ScriptsDir 'owner_capability.ps1'
-    if (-not (Test-Path -LiteralPath $runtimeScript -PathType Leaf)) {
-        throw "Runtime contract missing: $runtimeScript"
-    }
     if (-not (Test-Path -LiteralPath $ownerScript -PathType Leaf)) {
         throw "Owner capability script missing: $ownerScript"
     }
 
-    . $runtimeScript
-    $script:Runtime = Get-PBStudioRuntimeContract `
-        -ProjectRoot $ProjectRoot `
-        -RequirePython `
-        -RequireFFmpeg `
-        -ApplyEnvironment
+    if ($null -eq $script:Runtime) {
+        if (-not (Test-Path -LiteralPath $runtimeScript -PathType Leaf)) {
+            throw "Runtime contract missing: $runtimeScript"
+        }
+        . $runtimeScript
+        $script:Runtime = Get-PBStudioRuntimeContract `
+            -ProjectRoot $ProjectRoot `
+            -RequirePython `
+            -RequireFFmpeg `
+            -ApplyEnvironment
+    }
 
-    $ownerCapability = [string](& $ownerScript)
-    try {
-        $ownerCapabilityBytes = [Convert]::FromBase64String($ownerCapability)
-    } catch {
-        throw 'Owner capability script returned an invalid value'
+    if ($CreateOwnerCapability) {
+        $ownerCapability = [string](& $ownerScript)
+        try {
+            $ownerCapabilityBytes = [Convert]::FromBase64String($ownerCapability)
+        } catch {
+            throw 'Owner capability script returned an invalid value'
+        }
+        if ($ownerCapabilityBytes.Length -ne 32) {
+            throw 'Owner capability script must return a base64-encoded 32-byte value'
+        }
+        $env:PBSTUDIO_OWNER_CAPABILITY = $ownerCapability
     }
-    if ($ownerCapabilityBytes.Length -ne 32) {
-        throw 'Owner capability script must return a base64-encoded 32-byte value'
-    }
-    $env:PBSTUDIO_OWNER_CAPABILITY = $ownerCapability
     return $script:Runtime
+}
+
+function Save-BackendOwnerState([int]$ProcessId, [string]$OwnerCapability) {
+    $plainBytes = [Text.Encoding]::UTF8.GetBytes($OwnerCapability)
+    $protectedBytes = [Security.Cryptography.ProtectedData]::Protect(
+        $plainBytes,
+        $null,
+        [Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    @{
+        process_id = $ProcessId
+        protected_capability = [Convert]::ToBase64String($protectedBytes)
+        active = $true
+    } | ConvertTo-Json | Set-Content -LiteralPath $BackendOwnerStatePath -Encoding UTF8
+}
+
+function Get-BackendOwnerState {
+    if (-not (Test-Path -LiteralPath $BackendOwnerStatePath -PathType Leaf)) {
+        return $null
+    }
+    try {
+        $state = Get-Content -LiteralPath $BackendOwnerStatePath -Raw | ConvertFrom-Json
+        if (-not [bool]$state.active -or [int]$state.process_id -le 0) {
+            return $null
+        }
+        $protectedBytes = [Convert]::FromBase64String([string]$state.protected_capability)
+        $plainBytes = [Security.Cryptography.ProtectedData]::Unprotect(
+            $protectedBytes,
+            $null,
+            [Security.Cryptography.DataProtectionScope]::CurrentUser
+        )
+        return @{
+            ProcessId = [int]$state.process_id
+            OwnerCapability = [Text.Encoding]::UTF8.GetString($plainBytes)
+        }
+    } catch {
+        Log "Backend ownership state invalid: $($_.Exception.Message)" 'Yellow'
+        return $null
+    }
+}
+
+function Disable-BackendOwnerState {
+    if (Test-Path -LiteralPath $BackendOwnerStatePath -PathType Leaf) {
+        @{ active = $false } | ConvertTo-Json | Set-Content -LiteralPath $BackendOwnerStatePath -Encoding UTF8
+    }
 }
 
 function Test-Health {
@@ -236,6 +284,7 @@ function Invoke-StartBackend {
         Log "Backend already running (PIDs: $($pids -join ','))" 'Yellow'
         return
     }
+    [void](Initialize-DriverSession -CreateOwnerCapability)
     $py = Resolve-Python
     Log "Starting uvicorn on $BackendPort..."
     $stdout = Join-Path $LogsDir 'driver_backend.out.log'
@@ -248,6 +297,7 @@ function Invoke-StartBackend {
         -RedirectStandardError $stderr `
         -PassThru
     $script:BackendStartedByDriver = $true
+    Save-BackendOwnerState -ProcessId $p.Id -OwnerCapability $env:PBSTUDIO_OWNER_CAPABILITY
     Log "Backend PID: $($p.Id) | logs: $stdout"
     $deadline = (Get-Date).AddSeconds($BackendStartupDeadlineSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -267,6 +317,13 @@ function Invoke-StopBackend {
         Log "Backend already stopped" 'Yellow'
         return
     }
+    $ownerState = Get-BackendOwnerState
+    $listenerPids = @(Get-BackendPids)
+    if ($null -eq $ownerState -or $listenerPids -notcontains $ownerState.ProcessId) {
+        Log "Shutdown refused: current listener is not owned by this driver" 'Red'
+        exit 5
+    }
+    $env:PBSTUDIO_OWNER_CAPABILITY = $ownerState.OwnerCapability
     Log "POST $BaseUrl/shutdown ..."
     try {
         Invoke-RestMethod -Uri "$BaseUrl/shutdown" -Method Post -TimeoutSec 5 `
@@ -277,12 +334,12 @@ function Invoke-StopBackend {
     while ((Get-Date) -lt $shutdownDeadline -and (Get-BackendPids).Count -gt 0) {
         Start-Sleep -Milliseconds 500
     }
-    foreach ($p in Get-BackendPids) {
+    foreach ($p in @(Get-BackendPids | Where-Object { $_ -eq $ownerState.ProcessId })) {
         Log "taskkill /T /F /PID $p"
         Start-Process taskkill -ArgumentList '/PID',$p,'/T','/F' -WindowStyle Hidden -Wait | Out-Null
     }
     Start-Sleep -Milliseconds 500
-    if (Test-Health) { Log "Backend STILL alive" 'Red'; exit 3 } else { Log "Backend stopped" 'Green' }
+    if (Test-Health) { Log "Backend STILL alive" 'Red'; exit 3 } else { Disable-BackendOwnerState; Log "Backend stopped" 'Green' }
 }
 
 function Invoke-Health {
