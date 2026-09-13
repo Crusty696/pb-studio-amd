@@ -7,6 +7,6 @@
   "completed_marker_sha256": "69e09e7e39399d0b812b8a67420347b2545ea156bdfb7136259a99b938c67171",
   "qc_report_sha256": "d3560f8aff5aacc0b25f0d7c96e4ac9199249909e5f830daf2b921b063459b09",
   "evidence_manifest": "evidence/qc-manifest.json",
-  "evidence_manifest_sha256": "b03053008015564f584a9848184d7acf21471cd2bd5a184330ffe1ba233d0d4a",
-  "commit_sha": "37d78392cb7ffa582b448ca12d8ee9a0ac3d8e71"
+  "evidence_manifest_sha256": "02ea15a20ed4bad3afdcc101dbf5842b42d648905f8f725c29d019f903cd2bf2",
+  "commit_sha": "83bdf5b8ed8b55ab91920c177d4c0b4a25e30cdf"
 }
