@@ -204,3 +204,22 @@ def test_viewmodel_consumes_and_view_binds_it() -> None:
         "BeatGridText ist an kein XAML-Element gebunden - der Wert waere "
         "gesetzt, aber unsichtbar"
     )
+
+
+def test_viewmodel_handles_segmented_grid_and_clears_stale_selection_state() -> None:
+    source = VIEW_MODEL.read_text(encoding="utf-8")
+    selection = source[
+        source.index("partial void OnSelectedClipChanged") :
+        source.index("partial void OnIsAnalyzingChanged")
+    ]
+    reset = source[
+        source.index("private void ResetProjectState()") :
+        source.index("private static string FormatStageErrors")
+    ]
+
+    assert 'method == "segmented_beat_grid"' in source
+    assert 'Number(grid, "dominant_bpm")' in source
+    assert 'Number(grid, "dominant_span_s")' in source
+    assert 'Number(grid, "segment_count")' in source
+    assert "ApplyBeatGrid(null);" in selection
+    assert "ApplyBeatGrid(null);" in reset

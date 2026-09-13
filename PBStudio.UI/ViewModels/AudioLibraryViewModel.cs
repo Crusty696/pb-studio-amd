@@ -241,6 +241,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedClipChanged(AudioClipModel? value)
     {
+        ApplyBeatGrid(null);
         if (value == null) return;
         Bpm = value.Bpm;
         BeatCount = value.BeatCount;
@@ -716,6 +717,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         BeatCount = 0;
         Key = string.Empty;
         DurationSeconds = 0;
+        ApplyBeatGrid(null);
     }
 
     private static string FormatStageErrors(Dictionary<string, string>? errors)
@@ -777,13 +779,27 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         var status = Text(grid, "status");
         BeatGridStatus = status;
 
-        var bpm = Number(grid, "bpm");
+        var method = Text(grid, "method");
+        var bpm = method == "segmented_beat_grid"
+            ? Number(grid, "dominant_bpm")
+            : Number(grid, "bpm");
         if (status is "unavailable" or "" || bpm is null or <= 0)
         {
-            var method = Text(grid, "method");
             BeatGridText = method.Length > 0
                 ? $"Zweitschätzung: nicht verfügbar ({method})"
                 : "Zweitschätzung: nicht verfügbar";
+            return;
+        }
+
+        if (method == "segmented_beat_grid")
+        {
+            var segmentCount = Number(grid, "segment_count") ?? 0;
+            var dominantSpan = Number(grid, "dominant_span_s") ?? 0;
+            BeatGridText = $"Segmentraster: {bpm.Value:F1} BPM dominant"
+                + $" · {segmentCount:F0} Abschnitte"
+                + $" · längster Abschnitt {dominantSpan:F1} s";
+            if (status == "suspect")
+                BeatGridText += " · unsicher";
             return;
         }
 
