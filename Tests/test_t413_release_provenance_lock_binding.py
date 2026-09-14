@@ -22,6 +22,22 @@ REQUIRED_T413_INPUTS = {
 }
 
 
+def test_dotnet_latest_patch_accepts_same_feature_band() -> None:
+    config = {"version": "9.0.316", "rollForward": "latestPatch"}
+
+    assert generate_release_provenance._dotnet_sdk_matches_policy("9.0.318", config)
+    assert not generate_release_provenance._dotnet_sdk_matches_policy("9.0.315", config)
+    assert not generate_release_provenance._dotnet_sdk_matches_policy("9.0.400", config)
+    assert not generate_release_provenance._dotnet_sdk_matches_policy("9.1.316", config)
+
+
+def test_dotnet_default_policy_keeps_exact_version_contract() -> None:
+    config = {"version": "9.0.316"}
+
+    assert generate_release_provenance._dotnet_sdk_matches_policy("9.0.316", config)
+    assert not generate_release_provenance._dotnet_sdk_matches_policy("9.0.318", config)
+
+
 def test_release_provenance_binds_t413_supply_chain_inputs() -> None:
     lock_paths = tuple(generate_release_provenance.LOCK_PATHS)
 

@@ -221,7 +221,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
                 ApplyProgressUpdate(
                     result.TaskId,
                     result.Status,
-                    result.Percent,
+                    result.ProgressPercent > 0.0 ? result.ProgressPercent : result.Percent,
                     result.Message ?? "Render-Task registriert",
                     result.CurrentFrame,
                     result.TotalFrames,
@@ -312,7 +312,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             ApplyProgressUpdate(
                 e.TaskId,
                 e.Status,
-                e.Percent,
+                e.ProgressPercent >= 0.0 ? e.ProgressPercent : e.Percent,
                 e.Message,
                 e.CurrentFrame,
                 e.TotalFrames,

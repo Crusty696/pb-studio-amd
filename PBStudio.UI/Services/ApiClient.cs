@@ -1152,6 +1152,7 @@ public class ApiClient : IApiClient
         {
             "model" => ChatEventType.Model,
             "text" => ChatEventType.Text,
+            "text_delta" => ChatEventType.TextDelta,
             "tool_call" => ChatEventType.ToolCall,
             "tool_confirmation_required" => ChatEventType.ToolConfirmationRequired,
             "tool_result" => ChatEventType.ToolResult,
@@ -1167,6 +1168,7 @@ public class ApiClient : IApiClient
         {
             ChatEventType.Model => new ChatStreamEvent(type, eventName!, ModelName: Str("model"), ModelReason: Str("reason")),
             ChatEventType.Text => new ChatStreamEvent(type, eventName!, Text: Str("content")),
+            ChatEventType.TextDelta => new ChatStreamEvent(type, eventName!, Text: Str("delta") ?? Str("content")),
             ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments")),
             ChatEventType.ToolConfirmationRequired => new ChatStreamEvent(
                 type,
@@ -1355,7 +1357,17 @@ public record AudioAnalysisResult(
     Dictionary<string, string>? StageErrors = null,
     Dictionary<string, JsonElement>? ChunkEvidence = null,
     List<double>? Downbeats = null,
-    Dictionary<string, JsonElement>? DownbeatProvenance = null)
+    Dictionary<string, JsonElement>? DownbeatProvenance = null,
+    // Herkunft und Plausibilitaet des Beat-Rasters (Audit 2026-08-30, C-3).
+    // Bis dahin trug ausschliesslich der Downbeat-Pfad eine Provenance,
+    // waehrend BPM und Beats - die Werte, die die Schnittzeitpunkte setzen -
+    // ohne jede Herkunftsangabe ausgeliefert wurden.
+    Dictionary<string, JsonElement>? BeatGridProvenance = null,
+    // Das Beatgrid als Regel: Anker plus Tempo, aus denen jede Beat-Position
+    // folgt - getrennt von der Zeitmarkenliste in Beats, die aus
+    // librosa.beat_track stammt und den Anschlaegen folgt statt eine Regel
+    // zu sein.
+    Dictionary<string, JsonElement>? BeatGrid = null)
 {
     public static AudioAnalysisResult FromTransport(
         PBStudio.UI.Generated.AudioAnalysisResult value)
@@ -1402,7 +1414,9 @@ public record AudioAnalysisResult(
                 : new Dictionary<string, string>(value.Stage_errors),
             ToJsonDictionary(value.Chunk_evidence),
             value.Downbeats?.ToList(),
-            ToJsonDictionary(value.Downbeat_provenance));
+            ToJsonDictionary(value.Downbeat_provenance),
+            ToJsonDictionary(value.Beat_grid_provenance),
+            ToJsonDictionary(value.Beat_grid));
     }
 
     private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)
@@ -1472,7 +1486,10 @@ public record VideoAnalysisResult(
     string Status = "completed",
     Dictionary<string, string>? StageStatus = null,
     Dictionary<string, string>? StageErrors = null);
-public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration);
+public record CutListResponse(List<CutListEntry> Cuts, double TotalDuration, int CutCount, double AverageCutDuration, List<ModeDegradation>? Degradations = null);
+// FR-362: ein angeforderter Pacing-Modus, der mangels Datengrundlage nicht wirkte.
+// Leere/fehlende Liste = jeder angeforderte Modus hatte eine echte Grundlage.
+public record ModeDegradation(string Mode, string Reason, int ScoredClips, int TotalClips);
 public record CutListEntry(string ClipId, double StartTime, double EndTime, Dictionary<string, object>? Metadata);
 public record TimelineResponse(List<TimelineEntry> Entries, double TotalDuration, string? AudioPath);
 public record TimelineEntry(
@@ -1547,4 +1564,5 @@ public record RenderProgress(
     string? EvidencePath = null,
     string? ValidationPath = null,
     bool ProgressEnd = false,
-    string? ValidationStatus = null);
+    string? ValidationStatus = null,
+    double ProgressPercent = 0.0);

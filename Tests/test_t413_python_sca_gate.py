@@ -202,7 +202,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "2.11.0+cpu",
                 "alias": "GHSA-RRMF-RVHW-RF47",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-01",
+                "expires_on": "2026-09-29",
                 "reason": (
                     "Affected torch.jit.script is absent in the shipped repository; "
                     "fresh-target compatibility and runtime tests remain required."
@@ -214,21 +214,39 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                 "version": "81.0.0",
                 "alias": "GHSA-H35F-9H28-MQ5C",
                 "owner": "PB Studio Release Owner",
-                "expires_on": "2026-09-01",
+                "expires_on": "2026-09-29",
                 "reason": (
                     "The release target is Windows x64 with wheel-only installation, "
                     "which defeats the macOS sdist precondition."
                 ),
             },
+            {
+                "id": "T413-TRANSFORMERS-CVE-2026-9856",
+                "package": "transformers",
+                "version": "5.5.4",
+                "alias": "GHSA-XRQW-3RRV-VX5W",
+                "owner": "PB Studio Release Owner",
+                "expires_on": "2026-09-29",
+                "reason": (
+                    "The only production save_pretrained call was removed; all "
+                    "remaining Transformers loads are local_files_only and no "
+                    "affected serialization sink remains reachable."
+                ),
+            },
         ],
     }
-    assert date.fromisoformat("2026-09-01") - date(2026, 8, 2) == timedelta(days=30)
-    assert len(security_gate._load_python_sca_exceptions(SCA_EXCEPTIONS)) == 2
+    # Die Ausnahmen sind am 2026-08-30 neu ausgestellt worden, nachdem die
+    # urspruengliche Frist (2026-08-02 + 30 Tage) auslief. Das 30-Tage-Fenster
+    # ist die eigentliche Zusicherung dieser Zeile - eine Verlaengerung darf
+    # es nicht stillschweigend dehnen.
+    assert date.fromisoformat("2026-09-29") - date(2026, 8, 30) == timedelta(days=30)
+    assert len(security_gate._load_python_sca_exceptions(SCA_EXCEPTIONS)) == 3
 
     lock = tmp_path / "approved-exceptions.lock"
     lock.write_text(
         "setuptools==81.0.0 --hash=sha256:" + "1" * 64 + "\n"
-        "torch==2.11.0+cpu --hash=sha256:" + "2" * 64 + "\n",
+        "torch==2.11.0+cpu --hash=sha256:" + "2" * 64 + "\n"
+        "transformers==5.5.4 --hash=sha256:" + "3" * 64 + "\n",
         encoding="utf-8",
     )
     report = tmp_path / "approved-exceptions-report.json"
@@ -259,6 +277,17 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
                         }
                     ],
                 },
+                {
+                    "name": "transformers",
+                    "version": "5.5.4",
+                    "vulns": [
+                        {
+                            "id": "GHSA-xrqw-3rrv-vx5w",
+                            "aliases": ["CVE-2026-9856", "PYSEC-2026-3929"],
+                            "fix_versions": ["5.10.0"],
+                        }
+                    ],
+                },
             ],
             "fixes": [],
         },
@@ -279,6 +308,7 @@ def test_python_sca_registered_exceptions_are_exact_and_consumed(
     ] == [
         "T413-SETUPTOOLS-CVE-2026-59890",
         "T413-TORCH-CVE-2025-3000",
+        "T413-TRANSFORMERS-CVE-2026-9856",
     ]
 
 

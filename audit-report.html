@@ -1,0 +1,693 @@
+<title>PB Studio Funktionsaudit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+:root{
+  --ground:#F2F4F6;
+  --surface:#FFFFFF;
+  --surface-2:#E9ECF0;
+  --ink:#15181E;
+  --ink-2:#3D4550;
+  --muted:#666F7D;
+  --rule:#D6DBE2;
+  --rule-soft:#E4E8ED;
+  --accent:#1F5F6B;
+  --accent-soft:#DCEAEC;
+  --crit:#A4243B;
+  --crit-soft:#F7E3E6;
+  --high:#A85A18;
+  --high-soft:#FAE9DB;
+  --med:#7E6A16;
+  --med-soft:#F6F0D6;
+  --low:#5C6472;
+  --low-soft:#E7EAEE;
+  --good:#2C6247;
+  --good-soft:#DEEDE5;
+  --shadow:0 1px 2px rgba(21,24,30,.06),0 4px 14px rgba(21,24,30,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1216;
+    --surface:#171B21;
+    --surface-2:#1F252D;
+    --ink:#E8EBEF;
+    --ink-2:#BFC7D1;
+    --muted:#8B94A1;
+    --rule:#2C333C;
+    --rule-soft:#232A32;
+    --accent:#63B3C0;
+    --accent-soft:#16323A;
+    --crit:#E8879A;
+    --crit-soft:#3A1C22;
+    --high:#E0A268;
+    --high-soft:#372414;
+    --med:#CBB65E;
+    --med-soft:#312C15;
+    --low:#9AA3B0;
+    --low-soft:#242A32;
+    --good:#7BC79F;
+    --good-soft:#172E23;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1216;
+  --surface:#171B21;
+  --surface-2:#1F252D;
+  --ink:#E8EBEF;
+  --ink-2:#BFC7D1;
+  --muted:#8B94A1;
+  --rule:#2C333C;
+  --rule-soft:#232A32;
+  --accent:#63B3C0;
+  --accent-soft:#16323A;
+  --crit:#E8879A;
+  --crit-soft:#3A1C22;
+  --high:#E0A268;
+  --high-soft:#372414;
+  --med:#CBB65E;
+  --med-soft:#312C15;
+  --low:#9AA3B0;
+  --low-soft:#242A32;
+  --good:#7BC79F;
+  --good-soft:#172E23;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;
+  font-size:16.5px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,.ui{font-family:"IBM Plex Sans",system-ui,sans-serif}
+code,kbd,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+.prose{max-width:70ch}
+
+/* ── masthead ─────────────────────────────── */
+header.top{
+  background:var(--surface);
+  border-bottom:1px solid var(--rule);
+  padding:52px 0 40px;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);font-weight:500;margin:0 0 18px;
+}
+h1{
+  font-size:clamp(30px,4.6vw,46px);line-height:1.1;margin:0 0 18px;
+  font-weight:700;letter-spacing:-.022em;text-wrap:balance;
+}
+.dek{font-size:19px;color:var(--ink-2);margin:0;max-width:64ch}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:26px;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ── stat rail ────────────────────────────── */
+.stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  margin:34px 0 0;border-radius:3px;overflow:hidden;
+}
+.stat{background:var(--surface);padding:15px 16px 14px}
+.stat .n{
+  font-family:"IBM Plex Sans",sans-serif;font-weight:700;
+  font-size:27px;line-height:1.05;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;
+}
+.stat .l{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:5px;
+}
+.stat.c .n{color:var(--crit)} .stat.h .n{color:var(--high)}
+.stat.m .n{color:var(--med)}  .stat.l2 .n{color:var(--low)}
+.stat.g .n{color:var(--good)}
+
+/* ── sections ─────────────────────────────── */
+main{padding:0 0 90px}
+section{padding:56px 0 0}
+.sechead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+h2{
+  font-size:25px;font-weight:600;letter-spacing:-.018em;margin:0;
+  text-wrap:balance;
+}
+.secnum{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--accent);
+  font-weight:500;letter-spacing:.08em;
+}
+.lede{color:var(--ink-2);margin:14px 0 26px;max-width:70ch}
+
+/* ── truth boundary ───────────────────────── */
+.boundary{
+  border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--surface);border-radius:3px;padding:24px 26px;margin-top:8px;
+}
+.boundary h3{
+  margin:0 0 12px;font-size:14px;font-weight:600;letter-spacing:.02em;
+  color:var(--accent);
+}
+.boundary ul{margin:0;padding-left:19px}
+.boundary li{margin:8px 0;color:var(--ink-2)}
+.boundary li b{color:var(--ink);font-weight:600}
+
+/* ── chain table ──────────────────────────── */
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+thead th{
+  font-family:"IBM Plex Sans",sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:12px 16px;border-bottom:1px solid var(--rule);
+  background:var(--surface-2);white-space:nowrap;
+}
+tbody td{padding:12px 16px;border-bottom:1px solid var(--rule-soft);vertical-align:top;color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:none}
+td.brk{color:var(--crit);font-weight:600;font-family:"IBM Plex Sans",sans-serif;font-size:13px;white-space:nowrap}
+td .mono{font-size:12.5px;color:var(--ink)}
+
+/* ── filter bar ───────────────────────────── */
+.filterbar{
+  position:sticky;top:0;z-index:20;background:var(--ground);
+  border-bottom:1px solid var(--rule);padding:12px 0;margin-top:34px;
+}
+.filterinner{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.fbtn{
+  font-family:"IBM Plex Sans",sans-serif;font-size:12.5px;font-weight:500;
+  padding:6px 13px;border-radius:100px;border:1px solid var(--rule);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;
+  transition:background .13s,border-color .13s,color .13s;
+}
+.fbtn:hover{border-color:var(--muted)}
+.fbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.fbtn[data-sev="CRITICAL"][aria-pressed="true"]{background:var(--crit);border-color:var(--crit);color:#fff}
+.fbtn[data-sev="HIGH"][aria-pressed="true"]{background:var(--high);border-color:var(--high);color:#fff}
+.count{font-family:"IBM Plex Mono",monospace;font-size:11px;opacity:.72;margin-left:5px}
+.hits{
+  margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:12px;
+  color:var(--muted);font-variant-numeric:tabular-nums;
+}
+
+/* ── finding cards ────────────────────────── */
+.findings{display:flex;flex-direction:column;gap:14px;margin-top:24px}
+.f{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  border-left:3px solid var(--low);padding:20px 22px;box-shadow:var(--shadow);
+}
+.f[data-sev="CRITICAL"]{border-left-color:var(--crit)}
+.f[data-sev="HIGH"]{border-left-color:var(--high)}
+.f.hide{display:none}
+.fhead{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;margin-bottom:9px}
+.fid{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;
+  color:var(--muted);letter-spacing:.03em;
+}
+.sev{
+  font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;padding:2.5px 8px;border-radius:2px;
+}
+.sev.CRITICAL{background:var(--crit-soft);color:var(--crit)}
+.sev.HIGH{background:var(--high-soft);color:var(--high)}
+.f h3{
+  font-size:17.5px;font-weight:600;margin:0;flex:1 1 100%;
+  letter-spacing:-.012em;line-height:1.32;text-wrap:balance;
+}
+.f p{margin:0 0 11px;color:var(--ink-2);font-size:15.5px}
+.f p:last-child{margin-bottom:0}
+.f strong{color:var(--ink);font-weight:600}
+.loc{
+  display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:12px;
+  background:var(--surface-2);color:var(--ink);padding:1.5px 7px;border-radius:2px;
+  border:1px solid var(--rule-soft);white-space:nowrap;
+}
+pre{
+  margin:12px 0;padding:13px 15px;background:var(--surface-2);
+  border:1px solid var(--rule-soft);border-radius:3px;overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.62;
+  color:var(--ink);
+}
+.dom{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);margin-left:auto;
+}
+
+/* ── good list ────────────────────────────── */
+.goodgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:12px;margin-top:8px}
+.g{
+  background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--good);border-radius:3px;padding:16px 18px;
+}
+.g h4{
+  margin:0 0 6px;font-size:14.5px;font-weight:600;color:var(--good);
+  letter-spacing:-.008em;
+}
+.g p{margin:0;font-size:14.5px;color:var(--ink-2);line-height:1.55}
+
+/* ── plan ─────────────────────────────────── */
+.stage{margin-top:22px}
+.stagehead{
+  display:flex;align-items:baseline;gap:11px;margin-bottom:11px;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+}
+.stagehead .sn{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;
+  color:var(--surface);background:var(--accent);padding:2px 8px;border-radius:2px;
+  letter-spacing:.06em;
+}
+.stagehead h3{margin:0;font-size:16px;font-weight:600}
+.stage ol{margin:0;padding-left:22px}
+.stage li{margin:7px 0;color:var(--ink-2)}
+.stage li b{color:var(--ink)}
+
+/* ── footer ───────────────────────────────── */
+footer{
+  border-top:1px solid var(--rule);background:var(--surface);
+  padding:34px 0;margin-top:70px;
+}
+footer p{margin:0 0 9px;font-size:14px;color:var(--muted);max-width:74ch}
+footer p:last-child{margin-bottom:0}
+footer b{color:var(--ink-2);font-weight:600}
+
+@media (max-width:640px){
+  .wrap{padding:0 18px}
+  header.top{padding:36px 0 30px}
+  .hits{margin-left:0;width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Forensik-Audit · 2026-08-29 · 15 Agenten, 2 Teams</p>
+    <h1>PB Studio Funktionsaudit</h1>
+    <p class="dek">Funktions&shy;weise Prüfung von 64.164 Zeilen Python und 18.423 Zeilen C#. Read-only, vollständige Lektüre statt Stichprobe, jeder Befund mit <span class="mono">file:line</span>-Beleg.</p>
+    <div class="meta">
+      <span>Branch <b>codex/obj76-runtime-truth</b> @ <b>8328d49</b></span>
+      <span>Arbeitsbaum <b>schmutzig</b> — 892 Z. / 24 Dateien</span>
+      <span>376 Python-, 86 C#-, 204 Testdateien</span>
+    </div>
+    <div class="stats">
+      <div class="stat c"><div class="n">18</div><div class="l">Critical</div></div>
+      <div class="stat h"><div class="n">61</div><div class="l">High</div></div>
+      <div class="stat m"><div class="n">74</div><div class="l">Medium</div></div>
+      <div class="stat l2"><div class="n">~90</div><div class="l">Low</div></div>
+      <div class="stat"><div class="n">5.480</div><div class="l">tote LOC</div></div>
+      <div class="stat"><div class="n">10&#8202;%</div><div class="l">der Codebasis</div></div>
+      <div class="stat g"><div class="n">0</div><div class="l">Iron-Rule-Verstöße</div></div>
+      <div class="stat c"><div class="n">7</div><div class="l">Tests rot (sauber)</div></div>
+      <div class="stat g"><div class="n">1497</div><div class="l">Tests grün</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <section>
+    <div class="sechead"><span class="secnum">00</span><h2>Wahrheitsgrenze</h2></div>
+    <p class="lede">Was dieser Bericht <em>nicht</em> belegt — bewusst vorne, nicht im Anhang.</p>
+    <div class="boundary">
+      <h3>Nicht verifiziert</h3>
+      <ul>
+        <li><b>Kein Live-Backend.</b> Backend (8765), LM Studio (1234) und Ollama waren durchgehend offline — <span class="mono">netstat</span> zeigte keinen Listener. Jede Laufzeitaussage stammt aus gelesenem Code oder pytest, nicht aus einem laufenden System.</li>
+        <li><b>Keine WPF-Laufzeit.</b> Build und 57 native Tests belegen Kompilierbarkeit, nicht Funktion. Ein XAML-Binding auf den falschen Typ mit gleichem Namen bliebe unentdeckt.</li>
+        <li><b>Keine Modell-ID verifiziert.</b> LM Studio antwortete nicht; Dateisystem- und Logbelege sind als sekundär gekennzeichnet.</li>
+        <li><b>Ungelesen:</b> <span class="mono">audio_router.py</span> Zeilen 2134–2320, 2400–2482, 2585–2612.</li>
+        <li><b>Nicht gemessen:</b> alle Laufzeit- und Größenordnungsaussagen — Frame-Dekodierung, Transcode-Volumen, Recovery-Wachstum.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead"><span class="secnum">01</span><h2>Der Kernbefund</h2></div>
+    <p class="lede prose">Die Ketten brechen fast ausschließlich <strong>an der Übergabestelle zwischen zwei Domänen</strong>, praktisch nie innerhalb einer. Jede Domäne für sich ist überwiegend solide gebaut: die Beta-Bernoulli-Mathematik stimmt, der SGD-Gradient ist korrekt, die FAISS-Persistenz ist eine saubere Journal-Generation. Die Tests sind aber durchgehend domänenintern — und decken damit genau die Stellen nicht ab, an denen es bricht.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Producer</th><th>Consumer</th><th>Bruch</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">get_downbeats(path)</span></td><td><span class="mono">audio_router:2255</span> ruft ohne Argument</td><td class="brk">TypeError, verschluckt</td></tr>
+          <tr><td>Router schreibt <span class="mono">"available"</span></td><td><span class="mono">pacing_service:389</span> prüft <span class="mono">"measured"</span></td><td class="brk">Vokabular</td></tr>
+          <tr><td>SigLIP schreibt Vektor in FAISS</td><td><span class="mono">clip_selector:591</span> liest <span class="mono">audio_embedding</span></td><td class="brk">Schlüssel fehlt</td></tr>
+          <tr><td><span class="mono">result["motion"]["motion_category"]</span></td><td><span class="mono">pacing_router:984</span> liest Top-Level</td><td class="brk">immer „medium"</td></tr>
+          <tr><td>Schema definiert <span class="mono">rejected_clips</span></td><td>C#-Record kennt es nicht, Reflection → <span class="mono">null</span></td><td class="brk">3 Ebenen</td></tr>
+          <tr><td>Backend liefert <span class="mono">archived_observations</span></td><td><span class="mono">ApiClient:1516</span> verwirft es</td><td class="brk">UI blind</td></tr>
+          <tr><td><span class="mono">embedding_cache.store()</span> bei jedem Import</td><td><span class="mono">enforce_size_limit()</span> — 0 Aufrufer</td><td class="brk">wächst unbegrenzt</td></tr>
+          <tr><td>Outbox tombstoned direkt</td><td>Kompaktierung in <span class="mono">mark_tombstoned</span> — 0 Aufrufer</td><td class="brk">nie bereinigt</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="befunde">
+    <div class="sechead"><span class="secnum">02</span><h2>Befunde</h2></div>
+    <p class="lede">Die 18 CRITICAL vollständig, HIGH nach Thema gebündelt. Filtern oder suchen.</p>
+  </section>
+</div>
+
+<div class="filterbar">
+  <div class="wrap filterinner">
+    <button class="fbtn" data-sev="ALL" aria-pressed="true">Alle<span class="count">24</span></button>
+    <button class="fbtn" data-sev="CRITICAL" aria-pressed="false">Critical<span class="count">18</span></button>
+    <button class="fbtn" data-sev="HIGH" aria-pressed="false">High<span class="count">6</span></button>
+    <span class="hits" id="hits">24 Befunde</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="findings" id="list">
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-01</span><span class="sev CRITICAL">Critical</span><span class="dom">Audio → Pacing</span>
+      <h3>Downbeat-Erkennung permanent tot — dreifach gebrochen</h3></div>
+      <pre>downbeat_times = detector.get_downbeats()                       # ohne Argument
+def get_downbeats(self, audio_path: str | Path) -> List[float]  # beat_detector.py:306</pre>
+      <p>Live reproduziert: <span class="mono">TypeError: missing 1 required positional argument: 'audio_path'</span>. <strong>BEATNET_AVAILABLE ist True</strong> — madmom 0.16.1 ist installiert, die Downbeats wären verfügbar. <span class="mono">git diff</span> zeigt die Zeile als <span class="mono">+</span>: im uncommitteten Stand neu hinzugefügt und von Anfang an tot.</p>
+      <p>Drei unabhängige Brüche in einer Kette: der falsche Aufruf, das Vokabular <span class="mono">available</span> gegen <span class="mono">measured</span>, und <span class="mono">beats</span> wird nach dem Anhängen nie sortiert (<span class="mono">beat_count</span> zählt doppelt). <strong>Ein Fix an nur einer Stelle macht es schlimmer.</strong> Wirkung: <span class="mono">beat_trigger_mode="downbeat_only"</span> verwirft alle Beats → leere Cut-Liste.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-02</span><span class="sev CRITICAL">Critical</span><span class="dom">Persistenz</span>
+      <h3>zlib-Diff zerstört <span class="mono">spectral_data</span> aller vorhandenen Clips</h3></div>
+      <pre>def _decomp(val):
+    if not val: return []
+    if isinstance(val, list): return val
+    if isinstance(val, str): ...
+    return []          # dict landet HIER</pre>
+      <p>Zwei Fehlerwirkungen, von zwei Agenten unabhängig gefunden: <span class="mono">None</span> → <span class="mono">[]</span> → Pydantic-ValidationError → <strong>HTTP 500</strong> bei <span class="mono">/audio/analyze</span>. Und <span class="mono">dict</span> → <span class="mono">[]</span> → <strong>stiller Datenverlust</strong>.</p>
+      <p>Gegen die Live-DB reproduziert: alle 5 Clips mit Spektraldaten haben <span class="mono">type=dict, len=8</span>. Folge: Bass-Curve-Injektion tot, Spectral-Stage rechnet jedesmal neu, Brain-Achsen ohne Kontext. <strong>Fix ist eine Zeile:</strong> <span class="mono">isinstance(val, (list, dict))</span>.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-03</span><span class="sev CRITICAL">Critical</span><span class="dom">Brain</span>
+      <h3>Aktives Lernen konvergiert nie — Varianz ist immer 0</h3></div>
+      <pre>unberührt   (α=0,  β=0): posterior=1.0     variance=0.25
+1 Klick     (α=0.5,β=0): posterior=1.0     variance=0.0
+12× perfect (α=24, β=0): posterior=0.9615  variance=0.0</pre>
+      <p><span class="loc">weight_store.py:249</span> rechnet <span class="mono">Var(Beta(α,β))</span> <strong>ohne</strong> den Laplace-Prior, den der Posterior 13 Zeilen darüber verwendet. Die Learning-Session rankt damit genau die Kontexte ans Ende, die gerade zu lernen begonnen haben — sie schaut nach dem ersten Klick weg.</p>
+      <p><span class="loc">brain_router.py:475</span> rechnet für <span class="mono">/brain/stats</span> die <strong>richtige</strong> Formel. Drei Stellen, zwei Formeln. Kein Test fängt es: alle 12 Sampler-Tests nutzen die Fixture <span class="mono">empty_weights</span>, in der jedes Bucket 0.25 liefert.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-04</span><span class="sev CRITICAL">Critical</span><span class="dom">Backend → WPF</span>
+      <h3><span class="mono">rejected_clips</span> — Kette auf drei Ebenen halbfertig</h3></div>
+      <p>Schema definiert die Felder, der Router <strong>befüllt sie nirgends</strong>, der Snapshot kennt sie nicht, der C#-Record auch nicht — und <span class="loc">DirectorViewModel.cs:380</span> liest sie <strong>per Reflection</strong>. <span class="mono">GetProperty()</span> liefert garantiert <span class="mono">null</span>, <span class="mono">RejectedClipCount</span> ist konstant 0.</p>
+      <p>Die Reflection umgeht exakt die Compilerprüfung, die den Fehler sofort gezeigt hätte. <strong>Zwei projekteigene Guard-Tests sind deswegen rot</strong> — beide 2026-08-05 gegen genau dieses Muster gebaut. Sie funktionieren.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-05</span><span class="sev CRITICAL">Critical</span><span class="dom">Brain → Pacing</span>
+      <h3>Brain-Reranker entscheidet ohne Semantik-Achse</h3></div>
+      <p><span class="loc">clip_selector.py:591</span> liest <span class="mono">audio_embedding</span> und <span class="mono">video_embedding</span> aus Dicts, die diese Schlüssel nie tragen. Grep über <span class="mono">backend/</span> und <span class="mono">src/</span>: ausschließlich Leser, kein einziger Schreiber. Der Vektor existiert in FAISS und im Brain-Cache — er erreicht diesen Consumer nur nicht.</p>
+      <p>Dazu <span class="loc">pacing_service.py:521</span>: <span class="mono">brain_context_keys = [""]</span>, hart auf Level 0. Die gesamte Backoff-Hierarchie wirkt nur in der <em>nachgelagerten</em> Annotation. <strong>Timeline und Feedback zeigen Semantik-Scores für eine Auswahl, die ohne Semantik getroffen wurde</strong> — das vergiftet spätere Lernrunden.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-06</span><span class="sev CRITICAL">Critical</span><span class="dom">GPU</span>
+      <h3>Latenter Selbst-Deadlock, gehalten von einem fehlenden Asset</h3></div>
+      <p><span class="loc">core/gpu_lock.py:13</span> ist ein <span class="mono">threading.Lock()</span> — nicht reentrant. <span class="mono">SmartDirector</span> hält ihn an vier Stellen und ruft darin SigLIP-Methoden, die denselben Lock erneut nehmen.</p>
+      <p>Feuert heute nur nicht, weil <span class="mono">models/siglip_text.onnx</span> fehlt und <span class="mono">encode_text</span> vorher zurückkehrt. Dieselbe Falle ist für CLAP in <span class="loc">smart_director.py:555</span> erkannt und korrekt vermieden — für SigLIP wurde sie nicht angewandt. <strong>Sobald das Asset bereitsteht, hängt die Cut-List-Generierung.</strong></p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-07</span><span class="sev CRITICAL">Critical</span><span class="dom">GPU</span>
+      <h3>Pacing erreicht DirectML ohne jede VRAM-Buchführung</h3></div>
+      <p><span class="mono">pacing_router.py</span> enthält <strong>null</strong> <span class="mono">with_gpu_task</span>. Zwei belegte Ketten laufen trotzdem in ONNX-Inferenz: CLAP über <span class="loc">pacing_service.py:105</span> und SigLIP über <span class="loc">clip_selector.py:1297</span>. Serialisiert wird über den geteilten Lock — aber ohne Reservierung, ohne Eviction-Chance, ohne Telemetrie.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-08</span><span class="sev CRITICAL">Critical</span><span class="dom">GPU</span>
+      <h3>Die VRAM-Reserve-Logik läuft im heutigen Betrieb nie</h3></div>
+      <p>Es gibt genau drei produktive <span class="mono">with_gpu_task</span>-Aufrufe. Zwei setzen <span class="mono">manage_vram=False</span>. Der dritte ist unerreichbar, weil <span class="mono">moondream_decoder.onnx</span> nicht auf der Platte liegt.</p>
+      <p>Der gesamte Reservierungscode inklusive Retry-Schleife, Sensor-Abgleich und Eviction-Auslösung wird damit <strong>nie betreten</strong>. Die Budgetierung passiert dezentral in den Modell-Ownern.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-09</span><span class="sev CRITICAL">Critical</span><span class="dom">Render</span>
+      <h3>Jeder Clip wird in voller Quelllänge transkodiert</h3></div>
+      <p><span class="loc">render_service.py:681</span> — <span class="mono">_transcode_clip</span> hat <strong>kein <span class="mono">-ss</span> und kein <span class="mono">-t</span></strong>. Der Schnitt passiert erst später im Concat-Demuxer. Und <span class="mono">_check_needs_normalization</span> liefert für praktisch jedes reale Video <span class="mono">True</span>, weil schon ein Audio-Stream genügt.</p>
+      <p>60 Cuts über 15 Quelldateien à 5 Minuten, Ziel 3 Minuten: <strong>~75 Minuten Encodier-Material und ~6,7 GB Temp</strong> — plus zwei verlustbehaftete Encodes pro Frame. Größter Performance-Hebel im Repo.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-10</span><span class="sev CRITICAL">Critical</span><span class="dom">Video</span>
+      <h3>Frame-Sampling dekodiert das gesamte Video sequenziell</h3></div>
+      <p><span class="loc">video_router.py:1716</span> springt nur rückwärts mit <span class="mono">CAP_PROP_POS_FRAMES</span>; vorwärts geht es Frame für Frame mit <span class="mono">cap.grab()</span>. Bei 120 Sample-Punkten über die volle Länge heißt das: <strong>jedes einzelne Frame wird dekodiert</strong>. 5 min @ 30 fps = 9000 Aufrufe für 120 verwertete Frames.</p>
+      <p>Dasselbe Muster an zwei weiteren Stellen. Wahrscheinlich der dominante Zeitanteil der Analyse — <em>nicht</em> die GPU. Größenordnung geschätzt, nicht gemessen.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-11</span><span class="sev CRITICAL">Critical</span><span class="dom">Video</span>
+      <h3>Event-Loop-Blockade — „Backend nicht erreichbar" mitten in der Analyse</h3></div>
+      <p><span class="loc">video_router.py:2267</span>, aufgerufen mit direktem <span class="mono">await</span>. Eine <span class="mono">async def</span>-Funktion dekodiert Video und rechnet KMeans <strong>direkt auf dem Event-Loop</strong>. Kein <span class="mono">to_thread</span>.</p>
+      <p>Der gesamte Loop steht still: <span class="mono">/health</span> antwortet nicht, die SSE-Keepalives laufen aus, der Client geht in den Reconnect-Backoff. Der Nutzer sieht einen Verbindungsabbruch während einer laufenden Analyse. <strong>Liegt in der für OBJ-76 reservierten Zone — Änderung nur mit Freigabe.</strong></p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-12</span><span class="sev CRITICAL">Critical</span><span class="dom">Audio</span>
+      <h3>Trigger-Dedup kollabiert 34 Events auf einen Wert</h3></div>
+      <pre>16tel-HiHats @128 BPM:  34 Events → 1 Wert
+8tel @140 BPM:          20 Events → 20 Werte  (korrekt)</pre>
+      <p><span class="loc">streaming_analyzer.py:114</span> vergleicht gegen <span class="mono">current_group[-1]</span> statt gegen den Gruppenanfang — eine Kette von Events mit je ≤150 ms Abstand kollabiert auf einen Mittelwert. Betrifft Onset, Kick, Snare und HiHat. <strong>Für jeden Techno- oder House-Mix ab 128 BPM haben die entsprechenden Regler nichts mehr zu gewichten.</strong></p>
+      <p>Der Nicht-Streaming-Pfad dedupliziert gar nicht → zwei Datensemantiken je nach Dateilänge. Und <strong>ein Test zementiert den Bug</strong>: <span class="mono">test_streaming_analyzer.py:202</span> prüft den verketteten Mittelwert und würde bei einem Fix rot.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-13</span><span class="sev CRITICAL">Critical</span><span class="dom">Audio</span>
+      <h3>Sub-Track-Grenzen aus einem synthetischen 120-Sekunden-Raster</h3></div>
+      <p><span class="loc">subtrack_detector.py:175</span> legt pro 120-s-Chunk <em>einen</em> Tempowert ab und broadcastet ihn über alle Bins. Die Tempo-Differenz ist dadurch überall null außer an den Chunk-Grenzen — nach der Normalisierung sind genau diese Spikes 1.0, mit 20 % Gewicht in der Fusion.</p>
+      <p><strong>Jeder lange Mix bekommt einen Grenzhinweis bei 120 s, 240 s, 360 s — unabhängig von der Musik.</strong> Das ist der einzige Pfad, den DJ-Mixe nehmen.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-14</span><span class="sev CRITICAL">Critical</span><span class="dom">Persistenz</span>
+      <h3>177 Zeilen Persistenzlogik ohne Produktions-Aufrufer</h3></div>
+      <pre>grep -rn "update_video_analysis" --include=*.py .
+  backend/app_state.py:1109          (Definition)
+  Tests/test_app_state_truth_source.py:121
+  Tests/test_video_embedding_persist.py:36,47,83,85</pre>
+      <p>Produktion schreibt stattdessen direkt über <span class="loc">video_router.py:358</span>. Die in der toten Methode gepflegten Invarianten — <span class="mono">has_embedding</span> aus <span class="mono">embedding_dim</span> ableiten, Cache-Spiegelung — <strong>greifen im Produktionspfad nicht</strong>. Vier Tests melden einen toten Pfad grün.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-15</span><span class="sev CRITICAL">Critical</span><span class="dom">Infrastruktur</span>
+      <h3>Die venv wurde nie aus <span class="mono">requirements.txt</span> gebaut</h3></div>
+      <pre>torch            Lock 2.11.0+cpu   →  installiert 2.4.1+cpu
+torchvision      Lock 0.26.0+cpu   →  installiert 0.19.1+cpu
+transformers     Lock 5.5.4        →  installiert 4.49.0
+huggingface-hub  Lock 1.5.0        →  installiert 0.36.2
+starlette        Lock 1.3.1        →  installiert 1.0.0
+setuptools       Lock 81.0.0       →  installiert 82.0.1  (höher als Pin)</pre>
+      <p>Sechs weitere Pakete aus dem Lock fehlen ganz; <span class="mono">torch-directml</span> ist installiert und steht in keiner Requirements-Datei. <strong>CLAUDE.md §5 „LOCKED VERSIONS" ist falsch.</strong></p>
+      <p>Konsequenz: Ein Clean-Install nach <span class="mono">setup.bat</span> erzeugt eine <em>andere</em> Umgebung als die, in der die Testsuite grün gemeldet wurde. Die Iron Rules selbst bleiben eingehalten — torch ist ein CPU-Build, kein CUDA/ROCm im System.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-16</span><span class="sev CRITICAL">Critical</span><span class="dom">Tests</span>
+      <h3>Die Suite zerstört ihr eigenes Temp-Verzeichnis</h3></div>
+      <p><span class="mono">pytest.ini</span> setzt <span class="mono">--basetemp=.pytest_tmp2</span> — einen relativen, geteilten, repo-lokalen Pfad, den pytest beim Sessionstart <em>vollständig löscht</em>. Zwei gleichzeitige pytest-Prozesse zerstören sich damit gegenseitig die Temp-Verzeichnisse.</p>
+      <p><strong>Korrektur nach eigener Gegenprüfung.</strong> Der Audit führte fünf Fehler auf Produktionscode zurück, der das Verzeichnis löscht. Das ist falsch — die Ursache waren die sieben parallel laufenden Audit-Agenten selbst. Der saubere Lauf belegt es exakt: <span class="mono">7 failed / 1497 passed / 0 errors</span> statt <span class="mono">10 / 1492 / 2 errors</span>, Differenz genau die fünf Tests.</p>
+      <p><strong>Und der naheliegende Fix ist falsch.</strong> Nach Entfernen der Option lief kein einziger Test mehr: <span class="mono">PermissionError [WinError 5] … pytest-current</span> — pytest legt ohne explizites basetemp einen Symlink an, der unter Windows Entwicklermodus braucht. Die Option ist eine Narbe. Zurückgenommen; die Einschränkung steht jetzt als Kommentar in <span class="mono">pytest.ini</span>. C-16 ist damit <em>kein</em> Blocker — ein sequenzieller Lauf war immer sauber.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-17</span><span class="sev CRITICAL">Critical</span><span class="dom">Tests</span>
+      <h3>Die Suite beweist nichts über die GPU</h3></div>
+      <p><span class="loc">conftest.py:25</span> injiziert per autouse-Fixture einen <strong>erfundenen</strong> DirectML-Adapter: LUID <span class="mono">0x00000000_0x00000001</span>, Name „AMD DirectML Test Adapter", 8 GB VRAM. Der einzige echte Hardware-Kontrakt ist hinter einer Umgebungsvariablen geskippt.</p>
+      <p><strong>IRON RULE 1 ist testseitig unbelegt.</strong> Eine grüne Suite auf einer NVIDIA-Maschine ohne AMD-GPU wäre exakt genauso grün.</p>
+    </article>
+
+    <article class="f" data-sev="CRITICAL">
+      <div class="fhead"><span class="fid">C-18</span><span class="sev CRITICAL">Critical</span><span class="dom">Tests</span>
+      <h3>Die Sicherheitsgrenze ist für 99,6 % der Suite abgeschaltet</h3></div>
+      <p><span class="loc">conftest.py:56</span> monkeypatcht <span class="mono">TestClient.request</span> <strong>global</strong> und injiziert die Owner-Capability in jeden Request. Nur eine einzige Datei mit sechs Tests nimmt sich aus.</p>
+      <p>Ein Regress, der versehentlich eine Route öffentlich macht, wird von rund 1500 Tests nicht bemerkt.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Security</span><span class="sev HIGH">High</span><span class="dom">Recovery</span>
+      <h3>Dateischreibzugriff vor jeder Authentifizierung</h3></div>
+      <p><span class="loc">recovery_bootstrap.py:174</span>: für <span class="mono">restore_policy="delete_if_present"</span> erzwingt der Code eine strenge Owner-Scope-Bindung mit Dateinamen-Allowlist. Für <span class="mono">"replace"</span> — den <strong>Default</strong> — fehlt sie vollständig. Geprüft wird nur „absolut" und „nicht im Control-Root".</p>
+      <p>Erreichbar über <span class="loc">main.py:32</span>, auf <em>Modulebene</em> — vor Config, Logging, App und jeder Middleware. Kein Privilegien-Übergang, aber ein <strong>Persistenz-Primitiv</strong>: ein Prozess mit Schreibrecht im Benutzerprofil kann PB Studio dazu bringen, beim nächsten Start eine beliebige Datei an beliebiger Stelle abzulegen. Es gibt Tests für Delete-Scope-Escape — aber keinen für <span class="mono">replace</span>.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Daten</span><span class="sev HIGH">High</span><span class="dom">Projekt</span>
+      <h3>Timeline ist bis zum manuellen Speichern flüchtig</h3></div>
+      <p><span class="mono">close_project</span> speichert nicht, der Projektwechsel auch nicht, und die Pacing-Engine schreibt ihr Ergebnis nur nach RAM. Save-on-Exit existiert, Save-on-Switch nicht. <strong>Wer nach einem Pacing-Lauf das Projekt wechselt, verliert die generierte Timeline ersatzlos.</strong></p>
+      <p>Dazu ein Parallel-Save-Race: <span class="loc">project_router.py:700</span> nutzt <em>feste</em> Stage-Dateinamen, sodass ein Rollback den bereits committeten Save des anderen Laufs überschreiben kann. Die Fix-Vorlage steht 200 Zeilen tiefer in derselben Datei — <span class="mono">set_anchors</span> nutzt <span class="mono">uuid4()</span>.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Regler</span><span class="sev HIGH">High</span><span class="dom">Pacing</span>
+      <h3>Sechs Regler wirken nur über einen Teil ihres Wegs</h3></div>
+      <div class="tablewrap" style="margin:12px 0">
+        <table>
+          <thead><tr><th>Regler</th><th>Toter Bereich</th><th>Ursache</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">BeatWeight 0–2</td><td>Downbeats ab 1.0</td><td>Clamp in <span class="mono">__post_init__</span></td></tr>
+            <tr><td class="mono">KickWeight 0–2</td><td>ab 1.11 (~45 %)</td><td>×0.9 vor Clamp</td></tr>
+            <tr><td class="mono">SnareWeight 0–2</td><td>ab 1.18 (~41 %)</td><td>×0.85</td></tr>
+            <tr><td class="mono">MinCutInterval</td><td>untere Hälfte</td><td><span class="mono">min_clip_length</span> erneut</td></tr>
+            <tr><td class="mono">MaxCutInterval</td><td>8–30</td><td><span class="mono">min(max_clip_length,…)</span></td></tr>
+            <tr><td class="mono">min_cut_interval</td><td>komplett</td><td>0 Engine-Leser</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Dazu: <span class="mono">enable_motion_matching()</span> ist ein <strong>No-Op mit Aufrufer</strong> — es setzt ein Feld, das grep-belegt nirgends gelesen wird, und erzeugt produktiv nur den Logeintrag „Motion-Matching: aktiviert". Und <span class="mono">beat_trigger_mode="strong_only"</span> degeneriert ohne Beat-Stärken exakt zu <span class="mono">downbeat_only</span>: zwei ComboBox-Einträge, dieselbe Cut-Liste.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Modelle</span><span class="sev HIGH">High</span><span class="dom">LLM</span>
+      <h3>Ein Klick auf „Aktivieren" biegt Chat, Tool-Use und HIRN um</h3></div>
+      <p><span class="mono">config.json</span> zeigt für <strong>alle sechs</strong> Tasks auf <span class="mono">qwen2.5-vl-7b-instruct</span> — auch für Chat, Tool-Use und Brain-Erklärung. Chat und Function-Calling laufen damit auf einem 7B-<em>Vision</em>-Modell; die gepflegten <span class="mono">task_preferences</span> sind Laufzeit-Totdaten.</p>
+      <p>Die Ursache ist ein UI-Defekt: <span class="loc">models_router.py:935</span> schreibt bei <span class="mono">activate_model</span> ohne <span class="mono">task</span>-Parameter das Modell in <em>jeden</em> capability-passenden Task — und <span class="loc">ModelManagerViewModel.cs:301</span> ruft genau so auf. Der Receipt meldet das ehrlich; falsch ist die Datenlage, nicht der Code.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Wachstum</span><span class="sev HIGH">High</span><span class="dom">Storage</span>
+      <h3>Drei Begrenzer ohne Aufrufer</h3></div>
+      <p><span class="mono">enforce_size_limit()</span> — 0 Aufrufer, während der Produzent bei jedem Import läuft. <span class="mono">mark_tombstoned</span> / <span class="mono">clean_tombstones</span> — 0 Aufrufer, der Docstring behauptet welche; die Outbox schreibt direkt in die interne Menge, sodass der Kompaktierungs-Trigger nie greift und <strong>der FAISS-Index nie physisch bereinigt wird</strong>.</p>
+      <p>Und der komplette Restore-Anforderungspfad: <span class="mono">request_restore_generation</span>, <span class="mono">plan_protected_retention</span>, <span class="mono">apply_protected_retention</span> — je 0 Aufrufer. Der Restore-Zweig läuft bei jedem Start, aber es gibt <strong>keinen Weg, einen Restore anzufordern</strong>, und keinen, Generationen aufzuräumen. Jede enthält eine volle Kopie der 31,4-MB-Datenbank.</p>
+    </article>
+
+    <article class="f" data-sev="HIGH">
+      <div class="fhead"><span class="fid">H · Fake</span><span class="sev HIGH">High</span><span class="dom">Querschnitt</span>
+      <h3>Erfolgsmeldungen für nicht erfolgte Arbeit</h3></div>
+      <p><strong>Pacing:</strong> vier Pfade fangen <span class="mono">Exception</span> und fallen auf ein festes Zeitraster zurück, das Beats, Trigger, Struktur und Anker ignoriert. Der Router meldet <span class="mono">cut_count=N</span>, die UI zeigt „N Cuts generiert" — für eine Timeline ohne jeden Musikbezug.</p>
+      <p><strong>Waveform:</strong> <span class="loc">audio_router.py:2650</span> gibt bei jedem Fehler <span class="mono">[]</span> zurück → HTTP 200 mit leeren Bändern. Der 500er-Zweig des Endpunkts ist unerreichbar.</p>
+      <p><strong>Samplerate:</strong> <span class="loc">audio_router.py:1881</span> fällt still auf 44100 zurück und <em>persistiert das als Clip-Metadatum</em>. Eine 48-kHz-Datei wird dauerhaft als 44,1 kHz geführt — mit falscher Zeitbasis in jeder Beat-Berechnung. Ein erfundener Wert ist schädlicher als ein fehlender.</p>
+    </article>
+
+  </div>
+</div>
+
+<div class="wrap">
+  <section>
+    <div class="sechead"><span class="secnum">03</span><h2>Was nachweislich gut ist</h2></div>
+    <p class="lede prose">Gemessen, nicht höflich. Ein Bericht, der nur Defekte nennt, ist genauso unehrlich wie einer, der keine nennt.</p>
+    <div class="goodgrid">
+      <div class="g"><h4>Iron Rules: 0 Verstöße</h4><p>Alle vier ONNX-Session-Erzeugungen setzen beide Flags. <span class="mono">enforce_directml_session()</span> liest sie an der <em>realisierten</em> Session zurück und wirft bei Abweichung — echter Schutz, kein Docstring-Versprechen.</p></div>
+      <div class="g"><h4>Keine Injektionsfläche</h4><p>Null <span class="mono">shell=True</span>, null SQL-Injektion, null unsichere Deserialisierung, null Secrets, null Wildcard-CORS. Der FFmpeg-Concat-Escape ist die korrekte <span class="mono">av_get_token</span>-Form.</p></div>
+      <div class="g"><h4>Owner-Capability</h4><p>32 Byte CSPRNG, Übergabe per Environment statt Kommandozeile, <span class="mono">os.environ.pop()</span> beidseitig, <span class="mono">compare_digest</span>, Redirects überall aus. Alle 66 Routen enumeriert — zwei ungeschützt, beide bewusst.</p></div>
+      <div class="g"><h4>Datenintegrität live sauber</h4><p>FAISS 500 = Metadaten 500 = <span class="mono">vector_map</span> 500. Null Orphans in beide Richtungen, <span class="mono">quick_check: ok</span>, Outbox 500/500. Alle fünf Projekte: DB-Blob und <span class="mono">project.json</span> exakt deckungsgleich.</p></div>
+      <div class="g"><h4>FAISS-Persistenz</h4><p>Drei-Datei-Generation mit <span class="mono">.bak</span>, Journal und Wiederaufsetzen nach unvollständigem Snapshot. Das sauberste Stück Code im gesamten Audit.</p></div>
+      <div class="g"><h4>Render-Validierung</h4><p>Codec, Auflösung, Containerdauer ±1 Frame, Framezahl ±1, True-Peak ≤ −1 dBTP, Endstille gegen die Quelle. Kehrt <span class="mono">render_timeline</span> zurück, ist das Artefakt verifiziert.</p></div>
+      <div class="g"><h4>Cancel ist echt</h4><p>Prozess-Kill an allen sechs Subprozess-Stellen, keine Lücke gefunden. Der Bridge-Service nutzt ein Kill-on-Close-JobObject — kein verwaister uvicorn bei Absturz.</p></div>
+      <div class="g"><h4>Chat-Agent abgesichert</h4><p>Alle 33 Tools registriert und erreichbar, <span class="mono">destructive</span>-Klassifikation erzwungen, Confirmation-Broker stream-gebunden mit Einmal-Autorität. Prompt-Injection greift nicht durch.</p></div>
+      <div class="g"><h4>SigLIP-Dimension geheilt</h4><p><span class="mono">_fit_to_size</span> existiert nicht mehr, Defaults kommen aus den Embedder-Modulen, falsche Dimensionen werden abgelehnt statt still gekürzt. Der Fall von 2026-07-10 kann nicht wiederkehren.</p></div>
+      <div class="g"><h4>Saubere Codebasis</h4><p>Null TODO, FIXME, HACK oder XXX im gesamten Produktionscode. Null auskommentierte Codeblöcke — geprüft per Dekommentierung und <span class="mono">ast.parse</span>, nicht per Augenmaß.</p></div>
+      <div class="g"><h4>Acht echte Wiring-Guards</h4><p>Prüfen Produzenten statt Features. Zwei davon haben in diesem Lauf tatsächlich Defekte gefunden — sie tun genau das, wofür sie gebaut wurden.</p></div>
+      <div class="g"><h4>Kein Blocking in async</h4><p>Alle schweren Backend-Pfade laufen über <span class="mono">asyncio.to_thread</span> — mit der einen Ausnahme C-11.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead"><span class="secnum">04</span><h2>Reihenfolge</h2></div>
+    <p class="lede prose">Nicht nach Schwere sortiert, sondern nach Abhängigkeit: was die Messbarkeit wiederherstellt, kommt vor dem, was gemessen werden soll.</p>
+
+    <div class="stage">
+      <div class="stagehead"><span class="sn">Stufe 0</span><h3>Bevor irgendetwas anderes passiert</h3></div>
+      <ol>
+        <li><b>C-16</b> — <span class="mono">--basetemp</span> aus <span class="mono">pytest.ini</span> entfernen, <span class="mono">AppState</span> in der autouse-Fixture zurücksetzen. Solange die Suite ihre eigenen Ergebnisse verunreinigt, ist jede Messung wertlos.</li>
+        <li><b>C-02</b> — <span class="mono">_decomp</span> reparieren. Ohne das ist ein Commit von <span class="mono">app_state.py</span> ein Datenverlust-Commit.</li>
+        <li><b>C-15</b> entscheiden — Lock an die Realität anpassen oder venv neu bauen. CLAUDE.md §5 korrigieren.</li>
+      </ol>
+    </div>
+
+    <div class="stage">
+      <div class="stagehead"><span class="sn">Stufe 1</span><h3>Datenverlust und Sicherheit</h3></div>
+      <ol start="4">
+        <li>Recovery-<span class="mono">replace</span> an den Owner-Scope binden, mit Regressionstest</li>
+        <li>Verschluckte Fehler in <span class="mono">_brain_singleton</span> und <span class="mono">vector_store</span> sichtbar machen</li>
+        <li>Timeline-Save vor Projektwechsel; <span class="mono">uuid4()</span>-Stage-Namen im Save-Pfad</li>
+        <li>Die drei Begrenzer verdrahten</li>
+      </ol>
+    </div>
+
+    <div class="stage">
+      <div class="stagehead"><span class="sn">Stufe 2</span><h3>Sichtbare Funktionsdefekte</h3></div>
+      <ol start="8">
+        <li><b>C-01 als Einheit</b> — Aufruf, Sortierung, Zähler und Vokabular gemeinsam</li>
+        <li><b>C-03</b> — Varianzformel angleichen, <em>vorher</em> einen Regressionstest mit befülltem Store schreiben, der ohne Fix rot ist</li>
+        <li><b>C-04</b> — Kette durchziehen oder ersatzlos zurücknehmen</li>
+        <li><b>C-12</b> — Dedup korrigieren und den zementierenden Test mit umschreiben</li>
+      </ol>
+    </div>
+
+    <div class="stage">
+      <div class="stagehead"><span class="sn">Stufe 3</span><h3>Performance und Aufräumen</h3></div>
+      <ol start="12">
+        <li><b>C-09 / C-10</b> — Frame-Seek statt Voll-Dekodierung, <span class="mono">-ss</span>/<span class="mono">-t</span> im Transcode</li>
+        <li><b>C-11</b> — Farbanalyse in <span class="mono">to_thread</span> <em>(OBJ-76-Zone, Freigabe nötig)</em></li>
+        <li>~5.480 LOC toter Code, ~300 MB Repo-Ballast, vier tote Config-Schlüssel</li>
+        <li>T4.5 entscheiden — die doppelte Vertragsschicht hat zwei belegte Defekte produziert</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="sechead"><span class="secnum">05</span><h2>Der uncommittete Stand</h2></div>
+    <p class="lede prose"><strong>Nicht committfähig</strong> — übereinstimmendes Urteil von vier unabhängigen Agenten.</p>
+    <p class="prose">Der Diff ist <strong>maschinell erzeugt</strong>: <span class="mono">patch.py</span> im Repo-Root ist ein String-Replace-Skript, dessen Zielstrings byte-identisch mit dem heutigen <span class="mono">git diff</span> sind. Das erklärt die Schadensklasse — ein Textersetzer kennt keine Aufrufketten.</p>
+    <p class="prose"><span class="loc">spectral_analyzer.py:158</span> trägt einen <strong>Duplikat-Dict-Key mit 12 statt 16 Spaces Einrückung</strong>. Kein Syntaxfehler, aber die Mel-Matrix wird zweimal materialisiert — bei einem 60-Minuten-Mix rund 40 Millionen Floats, für Daten, die <em>niemand liest</em>. Das erklärt plausibel, warum in derselben Änderung eine zlib-Kompression erfunden wurde: ein selbstverursachtes Problem, mit einer Kompressionsschicht kaschiert statt behoben.</p>
+    <p class="prose">Fünf getrennte Baustellen, davon eine sauber, dokumentiert und getestet. Drei neue tote Ketten. Zwei projekteigene Guard-Tests rot.</p>
+  </section>
+
+  <section>
+    <div class="sechead"><span class="secnum">06</span><h2>Aufstellung</h2></div>
+    <p class="lede prose">Zwei Teams, alle Agenten read-only, jede Domäne vollständig gelesen statt stichprobenartig geprüft.</p>
+    <div class="goodgrid">
+      <div class="g" style="border-left-color:var(--accent)"><h4 style="color:var(--accent)">Team A — Consulting</h4><p>Acht Domänen-Analysten: Audio, Video/Vision, Pacing/KI-Regie, Brain, GPU/VRAM/DirectML, Render/Export, LLM/Chat/Modelle, Projekt/Persistenz.</p></div>
+      <div class="g" style="border-left-color:var(--accent)"><h4 style="color:var(--accent)">Team B — Forensik</h4><p>Sieben Querschnitts-Spezialisten: WPF-Frontend, Backend-Kern &amp; API-Vertrag, Dead-Code &amp; Duplikate, Test-Qualität, Security &amp; Robustheit, Infrastruktur &amp; Build, <span class="mono">audio_router</span>-Restaudit.</p></div>
+    </div>
+    <p class="prose" style="margin-top:22px"><strong>Kreuzvalidierung.</strong> Fünf Befunde wurden von zwei oder mehr Agenten unabhängig gefunden. Ein Widerspruch zwischen zwei Agenten — ob der Downbeat-Aufruf repariert sei — wurde am Quelltext selbst aufgelöst: der zweite hatte das umgebende <span class="mono">try/except</span> gesehen und daraus fälschlich „repariert" geschlossen.</p>
+    <p class="prose"><strong>Selbstkorrektur.</strong> Mehrere Agenten haben ihre eigenen Werkzeuge korrigiert und das offengelegt: 353 → 8 verwaiste Module, 489 → 21 tote Funktionen, 88 → 12 ungenutzte Imports, 50 → 0 auskommentierte Blöcke. Die erste Zahl war jedesmal die bequemere.</p>
+  </section>
+
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Testlage — sauberer Lauf.</b> <span class="mono">7 failed · 1497 passed · 13 skipped · 0 errors</span> in 27:08 min. Der erste Lauf war kontaminiert (<span class="mono">10 / 1492 / 2 errors</span>): sieben Audit-Agenten liefen gleichzeitig mit dem geteilten <span class="mono">--basetemp</span>. Die Differenz geht exakt auf — 2 errors + 3 failures verschwunden = 5, und 1492+5 = 1497. Alle sieben Restfehler sind echt und zuordenbar; <b>fünf davon stammen aus dem uncommitteten <span class="mono">patch.py</span>-Stand</b>. Native C#: 57/57. WPF Release: 0 Warnungen, 0 Fehler.</p>
+    <p><b>Umgesetzt seit Berichtserstellung.</b> C-02 ist gefixt — <span class="mono">_decomp</span> typerhaltend, feldrichtiger Leerwert, Logzeile statt stillem Verwerfen; Regressionstest vor dem Fix 3 rot, danach 6/6 grün, Nachbarschaft 57/57. Dabei eine <b>zweite</b> Quelle desselben HTTP 500 gefunden, die im Audit fehlte: <span class="mono">media_json_schema.py:102</span> setzt <span class="mono">{}</span> als Default, und <span class="mono">{}</span> bricht <span class="mono">Optional[SpectralData]</span> genauso wie <span class="mono">[]</span>.</p>
+    <p><b>Korrektur zu C-16.</b> Die Ursachenanalyse war falsch: nicht Produktionscode löschte das Temp-Verzeichnis, sondern die parallelen Audit-Läufe. Und <span class="mono">--basetemp</span> darf <b>nicht</b> aus <span class="mono">pytest.ini</span> entfernt werden — ohne die Option scheitert jeder Lauf an <span class="mono">PermissionError [WinError 5]</span> beim <span class="mono">pytest-current</span>-Symlink. Die Option ist eine Narbe, kein Versehen. Zurückgenommen, Einschränkung dokumentiert.</p>
+    <p><b>Nebenbefund.</b> 96 Commits über drei Branches (OBJ-77, OBJ-78, Requirements-Remediation) liegen nur lokal und ungepusht — nicht in <span class="mono">main</span>, nicht im aktiven Branch. Die Projektdokumentation führt diese Arbeit als abgeschlossen.</p>
+    <p>Vollständiger Bericht mit allen ~243 Befunden: <span class="mono">FUNKTIONSAUDIT_2026-08-29.md</span> im Repo-Root.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var btns = document.querySelectorAll('.fbtn');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.f'));
+  var hits = document.getElementById('hits');
+
+  function apply(sev){
+    var n = 0;
+    cards.forEach(function(c){
+      var show = (sev === 'ALL') || (c.getAttribute('data-sev') === sev);
+      c.classList.toggle('hide', !show);
+      if (show) n++;
+    });
+    hits.textContent = n + (n === 1 ? ' Befund' : ' Befunde');
+    btns.forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-sev') === sev));
+    });
+  }
+
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ apply(b.getAttribute('data-sev')); });
+  });
+})();
+</script>

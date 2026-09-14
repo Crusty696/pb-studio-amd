@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from backend import owner_capability
+from backend.app_state import get_app_state
 from backend.main import app
+from backend.middleware.owner_capability import _call_next_or_shutdown
 
 
 CAPABILITY = "test-owner-capability"
@@ -20,7 +24,12 @@ pytestmark = pytest.mark.unauthorized_backend
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(owner_capability, "_OWNER_CAPABILITY", CAPABILITY)
-    return TestClient(app)
+    state = get_app_state()
+    state.start_accepting_requests()
+    try:
+        yield TestClient(app)
+    finally:
+        state.start_accepting_requests()
 
 
 def test_health_is_public_but_all_other_global_routes_require_capability(client):
@@ -68,3 +77,36 @@ def test_options_bypasses_gate_and_allows_capability_header(client):
 
     assert response.status_code == 200
     assert HEADER.lower() in response.headers["access-control-allow-headers"].lower()
+
+
+def test_shutdown_gate_authenticates_before_rejecting_new_intake(client):
+    get_app_state().begin_shutdown()
+
+    assert client.get("/openapi.json", headers={HEADER: "wrong"}).status_code == 403
+    response = client.get("/openapi.json", headers={HEADER: CAPABILITY})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "backend_shutting_down"
+    assert client.get("/health").status_code == 200
+
+
+def test_no_response_is_normalized_only_during_shutdown():
+    state = get_app_state()
+    request = Request({"type": "http", "method": "POST", "path": "/video/analyze"})
+
+    async def no_response(_request):
+        raise RuntimeError("No response returned.")
+
+    state.start_accepting_requests()
+    with pytest.raises(RuntimeError, match="No response returned"):
+        asyncio.run(_call_next_or_shutdown(request, no_response))
+
+    state.begin_shutdown()
+    response = asyncio.run(_call_next_or_shutdown(request, no_response))
+    state.start_accepting_requests()
+
+    assert response.status_code == 503
+    assert response.body == (
+        b'{"detail":"Backend wird heruntergefahren",'
+        b'"code":"backend_shutting_down"}'
+    )

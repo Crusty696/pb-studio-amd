@@ -243,19 +243,19 @@ class StructureAnalyzer:
                             elif avg > global_rms * 1.5:
                                 label = "peak"
                             elif avg > global_rms * 1.2:
-                                label = "high_energy"
+                                label = "chorus"
                             elif trend > global_rms * 0.02:
-                                label = "rising"
+                                label = "buildup"
                             elif trend < -global_rms * 0.02:
-                                label = "falling"
+                                label = "breakdown"
                             elif avg < global_rms * 0.7:
-                                label = "low_energy"
+                                label = "verse"
                             else:
-                                label = "plateau"
+                                label = "bridge"
                         else:
-                            label = "high_energy" if segment_rms > global_rms * 1.3 else "plateau"
+                            label = "chorus" if segment_rms > global_rms * 1.3 else "bridge"
                     else:
-                        label = "high_energy" if segment_rms > global_rms * 1.3 else "plateau"
+                        label = "chorus" if segment_rms > global_rms * 1.3 else "bridge"
             else:
                 if relative_pos < 0.08:
                     label = "intro"
@@ -325,15 +325,15 @@ class StructureAnalyzer:
             elif index == segment_count - 1:
                 label = "outro"
             elif local_mean > global_mean * 1.25:
-                label = "high_energy"
+                label = "chorus"
             elif local_mean < global_mean * 0.70:
-                label = "low_energy"
+                label = "verse"
             elif local_mean > previous_mean * 1.15:
-                label = "rising"
+                label = "buildup"
             elif local_mean < previous_mean * 0.85:
-                label = "falling"
+                label = "breakdown"
             else:
-                label = "plateau"
+                label = "bridge"
             segments.append(
                 {
                     "segment_id": index + 1,

@@ -1,0 +1,25 @@
+{
+  "total_duration_ms": 48000,
+  "total_words": 320,
+  "total_chars": 1920.0,
+  "wpm": 150.0,
+  "cps": 6.0,
+  "avg_pause_between_phrases_ms": 480.0,
+  "long_silence_ratio": 0.12,
+  "pace_variance": 0.85,
+  "segments_count": 16,
+  "segments": [
+    {"start_ms": 0, "end_ms": 3000, "text": "Willkommen zu diesem Talk über Audio Pacing und wie es die Zuschauerbindung beeinflusst.", "word_count": 28, "char_count": 154.0, "avg_word_rate": 6.9},
+    {"start_ms": 3300, "end_ms": 7200, "text": "Die meisten Creator unterschätzen das Tempo ihres Contents komplett und wundern sich dann über niedrige Watchtimes.", "word_count": 18, "char_count": 154.0, "avg_word_rate": 7.6},
+    {"start_ms": 7500, "end_ms": 11400, "text": "Hier gibt es zwei Hauptbereiche: die Sprechrate und die Cut-Strategie.", "word_count": 12, "char_count": 98.0, "avg_word_rate": 6.9},
+    {"start_ms": 11700, "end_ms": 15600, "text": "Zuerst die Sprechrate: Ideal ist zwischen einhundertdreißig und sechzehnzig Wörter pro Minute.", "word_count": 13, "char_count": 142.0, "avg_word_rate": 7.9},
+    {"start_ms": 15900, "end_ms": 19800, "text": "Das liegt im sogenannten optimalen Flow-Bereich für Podcasts und Talkshows.", "word_count": 13, "char_count": 128.0, "avg_word_rate": 6.4},
+    {"start_ms": 20100, "end_ms": 24000, "text": "Zu schnell über zweiundzwanzig WPM verlieren die Zuhörer die Faden.", "word_count": 13, "char_count": 89.0, "avg_word_rate": 7.6},
+    {"start_ms": 24300, "end_ms": 28200, "text": "Zu langsam unter einhundertzwanzig WPM führt zu langweiligen Lücken.", "word_count": 12, "char_count": 107.0, "avg_word_rate": 6.3},
+    {"start_ms": 28500, "end_ms": 32400, "text": "Dann kommt die Cut-Strategie: Schnitte sollten auf Beat-Landmarks setzen.", "word_count": 12, "char_count": 109.0, "avg_word_rate": 6.7},
+    {"start_ms": 32700, "end_ms": 36600, "text": "Energie-Spikes im Audio sind natürliche Schnittpunkte für visuelle Übergänge.", "word_count": 13, "char_count": 148.0, "avg_word_rate": 5.9},
+    {"start_ms": 36900, "end_ms": 40800, "text": "Besonders bei Musikvideos und Tanz-Content ist die Synchronisation zum Rhythmus entscheidend.", "word_count": 14, "char_count": 157.0, "avg_word_rate": 6.3},
+    {"start_ms": 41100, "end_ms": 45000, "text": "Abschließend: Teste deinen Content mit unseren Analyse-Tools und optimiere basierend auf den Metriken.", "word_count": 14, "char_count": 138.0, "avg_word_rate": 6.2},
+    {"start_ms": 45300, "end_ms": 48000, "text": "Viel Erfolg beim Pacing-Optimieren und bis zum nächsten Mal!", "word_count": 11, "char_count": 91.0, "avg_word_rate": 6.2}
+  ]
+}

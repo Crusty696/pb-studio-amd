@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,6 +33,14 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _bpm;
     [ObservableProperty] private int _beatCount;
     [ObservableProperty] private string _key = "";
+    // Beatgrid als Regel (Anker + Tempo), getrennt von der Beat-Zeitmarkenliste.
+    // Der Wert stammt aus einer eigenen Schaetzung ohne den 120-BPM-Prior von
+    // librosa; an 127 Fenstern gemessen trifft sie das Tempo in 48,8 % der
+    // Faelle gegen 37,0 % des bisherigen Pfads, und das Raster sitzt in 100 %
+    // der Fenster besser. Sie ERSETZT die BPM-Anzeige bewusst nicht - dafuer
+    // ist die Trefferquote noch zu niedrig -, sondern steht daneben.
+    [ObservableProperty] private string _beatGridText = "";
+    [ObservableProperty] private string _beatGridStatus = "";
     [ObservableProperty] private double _durationSeconds;
     [ObservableProperty] private bool _isDeleting;
     [ObservableProperty] private string _currentStep = "";
@@ -230,6 +241,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedClipChanged(AudioClipModel? value)
     {
+        ApplyBeatGrid(null);
         if (value == null) return;
         Bpm = value.Bpm;
         BeatCount = value.BeatCount;
@@ -412,7 +424,22 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanAnalyzeAll))]
     private async Task AnalyzeAllAsync()
     {
-        var operation = _projectService.CaptureOperationContext();
+        // Ohne stabilen Projektkontext wirft CaptureOperationContext eine
+        // InvalidOperationException. Ungefangen killt sie die App - genau das
+        // ist am 2026-08-31 beim Klick auf "Analysieren" passiert
+        // (unbehandelte UI-Exception, Fenster weg). Elf andere Aufrufstellen
+        // fangen sie bereits ab und melden sie als Status; diese hier waren
+        // vergessen worden.
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Analyse nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
         IsAnalyzing = true;
         AnalysisProgress = 0.01;  // sichtbarer Start
         CurrentStep = "init";
@@ -508,7 +535,22 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var operation = _projectService.CaptureOperationContext();
+        // Ohne stabilen Projektkontext wirft CaptureOperationContext eine
+        // InvalidOperationException. Ungefangen killt sie die App - genau das
+        // ist am 2026-08-31 beim Klick auf "Analysieren" passiert
+        // (unbehandelte UI-Exception, Fenster weg). Elf andere Aufrufstellen
+        // fangen sie bereits ab und melden sie als Status; diese hier waren
+        // vergessen worden.
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Analyse nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
         var clip = SelectedClip;
         _activeAnalysisClipId = clip.Id;
         IsAnalyzing = true;
@@ -532,6 +574,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
                 Bpm = result.Bpm;
                 BeatCount = result.BeatCount;
                 Key = result.Key ?? "";
+                ApplyBeatGrid(result.BeatGrid);
                 StatusText = result.AnalysisStatus == "partial"
                     ? $"Analyse partiell: {FormatStageErrors(result.StageErrors)}"
                     : $"Analyse vollständig: {result.Bpm:F1} BPM | {result.BeatCount} Beats | Tonart: {result.Key ?? "–"}";
@@ -564,7 +607,22 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var operation = _projectService.CaptureOperationContext();
+        // Ohne stabilen Projektkontext wirft CaptureOperationContext eine
+        // InvalidOperationException. Ungefangen killt sie die App - genau das
+        // ist am 2026-08-31 beim Klick auf "Analysieren" passiert
+        // (unbehandelte UI-Exception, Fenster weg). Elf andere Aufrufstellen
+        // fangen sie bereits ab und melden sie als Status; diese hier waren
+        // vergessen worden.
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Stem-Separation nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
         var clip = SelectedClip;
         _activeStemClipId = clip.Id;
         IsSeparating = true;
@@ -659,6 +717,7 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         BeatCount = 0;
         Key = string.Empty;
         DurationSeconds = 0;
+        ApplyBeatGrid(null);
     }
 
     private static string FormatStageErrors(Dictionary<string, string>? errors)
@@ -685,5 +744,107 @@ public partial class AudioLibraryViewModel : ObservableObject, IDisposable
         _sseClient.ProgressReceived -= OnSseProgressReceived;
         _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
+    }
+
+    /// <summary>
+    /// Uebernimmt das Beatgrid aus der Analyse in die Anzeige.
+    /// </summary>
+    /// <remarks>
+    /// Das Grid ist eine Regel (Anker + Tempo), keine Zeitmarkenliste. Ein
+    /// leeres oder fehlendes Feld wird als solches gezeigt und nicht still
+    /// verschwiegen - der Streaming-Pfad liefert bewusst kein Grid.
+    /// </remarks>
+    private void ApplyBeatGrid(Dictionary<string, JsonElement>? grid)
+    {
+        if (grid is null || grid.Count == 0)
+        {
+            BeatGridText = "";
+            BeatGridStatus = "";
+            return;
+        }
+
+        static double? Number(Dictionary<string, JsonElement> source, string name)
+            => source.TryGetValue(name, out var value)
+               && value.ValueKind == JsonValueKind.Number
+               && value.TryGetDouble(out var number)
+                ? number
+                : null;
+
+        static string Text(Dictionary<string, JsonElement> source, string name)
+            => source.TryGetValue(name, out var value)
+               && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? ""
+                : "";
+
+        var status = Text(grid, "status");
+        BeatGridStatus = status;
+
+        var method = Text(grid, "method");
+        var bpm = method == "segmented_beat_grid"
+            ? Number(grid, "dominant_bpm")
+            : Number(grid, "bpm");
+        if (status is "unavailable" or "" || bpm is null or <= 0)
+        {
+            BeatGridText = method.Length > 0
+                ? $"Zweitschätzung: nicht verfügbar ({method})"
+                : "Zweitschätzung: nicht verfügbar";
+            return;
+        }
+
+        if (method == "segmented_beat_grid")
+        {
+            var segmentCount = Number(grid, "segment_count") ?? 0;
+            var dominantSpan = Number(grid, "dominant_span_s") ?? 0;
+            BeatGridText = $"Segmentraster: {bpm.Value:F1} BPM dominant"
+                + $" · {segmentCount:F0} Abschnitte"
+                + $" · längster Abschnitt {dominantSpan:F1} s";
+            if (status == "suspect")
+                BeatGridText += " · unsicher";
+            return;
+        }
+
+        var anchor = Number(grid, "anchor_s") ?? 0.0;
+        var contrast = Number(grid, "contrast") ?? 0.0;
+
+        // Zwei Tempi nebeneinander ohne Erklärung sind schlechter als eines.
+        // Über der Anzeige steht die BPM aus dem Produktionspfad; das Grid ist
+        // ein zweiter, unabhängiger Schätzer, der an 127 Fenstern gemessen in
+        // 48,8 % der Fälle richtig lag gegen 37,0 % des alten Pfads — besser,
+        // aber weit von verlässlich. Deshalb wird es ausdrücklich als
+        // Zweitmeinung ausgewiesen und nicht als gleichwertige Zahl.
+        var parts = new List<string>
+        {
+            $"Zweitschätzung: {bpm.Value:F1} BPM",
+            $"Anker {anchor:F3} s",
+            $"Güte {contrast:F2}",
+        };
+
+        var recall = Number(grid, "kick_recall");
+        var precision = Number(grid, "kick_precision");
+        if (recall is not null && precision is not null)
+            parts.Add($"Kick {recall.Value:P0}/{precision.Value:P0}");
+
+        // Widerspricht die Zweitschätzung dem angezeigten Tempo deutlich,
+        // muss das dranstehen. Sonst rätselt der Nutzer, welche der beiden
+        // Zahlen gilt — genau der Zustand, den diese Anzeige erzeugt hat.
+        var reference = Bpm;
+        if (reference > 0)
+        {
+            var ratio = bpm.Value / reference;
+            var isSimpleMultiple =
+                Math.Abs(ratio - 0.5) < 0.03 || Math.Abs(ratio - 2.0) < 0.06 ||
+                Math.Abs(ratio - 1.5) < 0.05 || Math.Abs(ratio - 2.0 / 3.0) < 0.03;
+            if (Math.Abs(ratio - 1.0) > 0.02)
+            {
+                parts.Add(isSimpleMultiple
+                    ? $"weicht ab (×{ratio:F2} — Vielfaches, wahrscheinlich Oktavfehler)"
+                    : $"weicht ab (×{ratio:F2})");
+            }
+        }
+
+        if (status == "suspect")
+            parts.Add("unsicher");
+
+        BeatGridText = string.Join(" · ", parts);
     }
 }

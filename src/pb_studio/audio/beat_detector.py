@@ -109,6 +109,22 @@ except ImportError as e:
     logger.warning(f"BeatNet nicht verfügbar: {e}. Verwende librosa Fallback.")
 
 
+# Hier stand bis 2026-08-30 `derive_downbeats_from_strengths` samt der
+# Schwelle DOWNBEAT_PHASE_CONTRAST. Zurueckgenommen, weil die Ableitung an
+# 68 Stuecken kein belastbares Ergebnis lieferte: 8 von 750 Messwerten
+# bestanden ein korrektes Gatter, waehrend allein das Vielfachtesten auf dem
+# 5-%-Niveau rund 38 erwarten laesst, und die gefundene Phase war nicht
+# einmal zwischen den beiden Haelften desselben Fensters stabil (18,5 %
+# Uebereinstimmung bei 25 % Zufall).
+#
+# Ursache im Verfahren: das Mass max(4 Phasen)/mean(uebrige) kann Periode 2
+# (Off-Beat-HiHat, Backbeat - traegt keine Taktinformation) nicht von
+# Periode 4 unterscheiden. Belege, Rohdaten und Messwerkzeug:
+#   docs/measurements/2026-08-30-downbeat-ableitung-befund.md
+#   scripts/dev/measure_downbeat_phase_contrast.py
+# Wiederherstellbar aus Commit 6187eb2, falls eine Messung das je rechtfertigt.
+
+
 class BeatDetector:
     """KI-basierte Beat-Detection mit BeatNet.
 
@@ -240,6 +256,37 @@ class BeatDetector:
     ) -> List[float]:
         """Detect beats und emit Progress (0..100) via on_progress.
 
+        Duenne Huelle um :meth:`detect_beats_with_downbeats`, damit die
+        bestehenden Aufrufer ihre flache Liste behalten.
+        """
+        return self.detect_beats_with_downbeats(
+            audio_path=audio_path,
+            duration=duration,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+        )[0]
+
+    def detect_beats_with_downbeats(
+        self,
+        audio_path: str | Path,
+        duration: float | None = None,
+        progress_callback: ProgressCallback = None,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> Tuple[List[float], List[float]]:
+        """Beats UND Downbeats aus genau einem BeatNet-Durchlauf.
+
+        BeatNet liefert in `output[:, 1]` die Position im Takt; `1.0` markiert
+        den Taktanfang. Beides steckt in derselben Matrix - ein separater
+        `get_downbeats()`-Aufruf wuerde `self._estimator.process()` ein zweites
+        Mal ueber dieselbe Datei fahren und die Beat-Erkennung damit verdoppeln.
+
+        Die Downbeats sind eine **Teilmenge** der Beats und tragen dieselben
+        Zeitstempel. Aufrufer duerfen sie der Beat-Liste nicht anhaengen,
+        sondern markieren die betroffenen Eintraege.
+
+        Der librosa-Fallback kennt keine Taktanfaenge und liefert deshalb eine
+        leere Downbeat-Liste - nichts wird erfunden.
+
         Args:
             audio_path: Pfad zum Audio.
             duration: Optionale Limit-Dauer (Sekunden).
@@ -271,12 +318,12 @@ class BeatDetector:
             total_dur = 0.0
         if total_dur > 600:
             logger.info(f"Lange Datei ({total_dur:.0f}s) -> direkt Librosa")
-            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress), []
 
         if not BEATNET_AVAILABLE:
-            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress), []
         if not self._init_estimator():
-            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress)
+            return self._detect_beats_librosa(audio_path, duration=duration, on_progress=on_progress), []
 
         try:
             logger.info(f"Starte BeatNet Analysis: {Path(audio_path).name}")
@@ -291,17 +338,22 @@ class BeatDetector:
             self._report_progress("beatnet_done", 1.0)
 
             if output is None or len(output) == 0:
-                return self._detect_beats_librosa(audio_path, on_progress=on_progress)
+                return self._detect_beats_librosa(audio_path, on_progress=on_progress), []
 
             beat_times = output[:, 0].tolist()
-            logger.info(f"BeatNet: {len(beat_times)} Beats erkannt")
+            # Spalte 1 ist die Position im Takt; 1.0 == Taktanfang.
+            downbeat_times = [float(row[0]) for row in output if row[1] == 1.0]
+            logger.info(
+                f"BeatNet: {len(beat_times)} Beats, "
+                f"{len(downbeat_times)} Downbeats erkannt"
+            )
 
             # Stage 3/4: Beats extrahiert
             self._safe_emit(on_progress, 100.0)
-            return beat_times
+            return beat_times, downbeat_times
         except Exception as e:
             logger.error(f"BeatNet Error: {e}")
-            return self._detect_beats_librosa(audio_path, on_progress=on_progress)
+            return self._detect_beats_librosa(audio_path, on_progress=on_progress), []
 
     def get_downbeats(self, audio_path: str | Path) -> List[float]:
         audio_path = str(audio_path)

@@ -53,6 +53,16 @@
                                    FontWeight="Bold"
                                    Foreground="{StaticResource AbletonAccent}"/>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ProgressBar Width="72" Height="4" Margin="0,0,8,0"
+                                     VerticalAlignment="Center" IsIndeterminate="True"
+                                     Foreground="{StaticResource AbletonAccent}"
+                                     AutomationProperties.Name="Hirn-Daten werden geladen"/>
+                        <TextBlock Text="Hirn-Daten werden geladen …" FontSize="11"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   AutomationProperties.LiveSetting="Polite"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <Button Grid.Column="1"

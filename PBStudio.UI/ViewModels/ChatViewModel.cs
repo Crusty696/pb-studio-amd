@@ -187,6 +187,13 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                         StatusText = $"Modell: {ev.ModelName} ({ev.ModelReason})";
                         assistantVm.UpdateModelName(ev.ModelName);
                         break;
+                    case ChatEventType.TextDelta:
+                        if (!string.IsNullOrEmpty(ev.Text))
+                        {
+                            textBuilder.Append(ev.Text);
+                            assistantVm.UpdateContent(textBuilder.ToString());
+                        }
+                        break;
                     case ChatEventType.Text:
                         if (!string.IsNullOrEmpty(ev.Text))
                         {

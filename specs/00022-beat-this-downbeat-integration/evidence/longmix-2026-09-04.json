@@ -1,0 +1,15 @@
+{
+  "file": "02 Mai Podcast 19 - Kopie.wav",
+  "duration_seconds": 5531.005351473923,
+  "revision": "45ba973e6c1fbee08a8a75b485e1c5adf45d2bc4",
+  "repeat_equal": true,
+  "beat_count": 12618,
+  "downbeat_count": 3768,
+  "sorted_unique": true,
+  "downbeats_subset": true,
+  "median_bar_in_beats": 4.0952380952358265,
+  "raw_neural_pacing_trigger_count": 3768,
+  "raw_neural_pacing_exact": true,
+  "scope": "Neural producer and actual pacing method; not legacy-grid mapping or human beat-one validation",
+  "elapsed_seconds": 58.82423449999624
+}

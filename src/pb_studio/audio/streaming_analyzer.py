@@ -26,6 +26,13 @@ from typing import Callable, Optional
 
 import numpy as np
 
+from pb_studio.audio.band_params import (
+    HIHAT_BAND,
+    KICK_BAND,
+    SNARE_BAND,
+    band_stft_params,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,30 +95,72 @@ class _RunningBPMEstimator:
 class _BeatAccumulator:
     """Sammelt Beats aller Chunks und dedupliziert an Window-Boundaries."""
 
-    __slots__ = ('_beats', '_dedup_threshold')
+    __slots__ = ('_beats', '_dedup_threshold', '_window_floor')
 
     def __init__(self, dedup_threshold: float = 0.15) -> None:
         self._beats: list[float] = []
         self._dedup_threshold = dedup_threshold
+        self._window_floor: Optional[float] = None
+
+    def set_window_floor(self, min_time: Optional[float]) -> None:
+        """Untergrenze fuer das gerade verarbeitete Fenster setzen.
+
+        H-2 (Audit 2026-08-30): Fenster ueberlappen sich um overlap_sec. Ohne
+        Untergrenze liefert jeder Chunk ab dem zweiten auch Ergebnisse fuer die
+        Overlap-Region, die der Vorgaenger bereits vollstaendig abgedeckt hat —
+        20 % der Timeline werden doppelt gezaehlt. Analog zu
+        `_EnergyAggregator.add_chunk_rms` (ueberspringt overlap_frames) und
+        `_extract_representative_features` (skip_seconds) verwirft der
+        Akkumulator daher alle Zeitpunkte vor `min_time`. `None` = keine
+        Untergrenze (erstes Fenster, das keinen Vorgaenger hat).
+
+        Wichtig: verworfen werden nur die ERGEBNISSE. Der Detektor bekommt
+        weiterhin den vollen Chunk inklusive Overlap als Kontext.
+        """
+        self._window_floor = None if min_time is None else float(min_time)
 
     def add_chunk_beats(self, beat_times_abs: list[float]) -> None:
         """Fuegt absolute Beat-Zeiten hinzu (bereits offset-korrigiert)."""
-        self._beats.extend(beat_times_abs)
+        floor = self._window_floor
+        if floor is None:
+            self._beats.extend(beat_times_abs)
+            return
+        self._beats.extend(
+            value for value in beat_times_abs if float(value) >= floor
+        )
 
     def get_deduplicated(self) -> list[float]:
         """Sortiert und dedupliziert Beats (merge bei <threshold Abstand, indem nahegelegene gemittelt werden)."""
         if not self._beats:
             return []
+        # H-2 (2026-08-30): seit `set_window_floor` tilen sich die Fenster
+        # ueberschneidungsfrei, die Dedup ist NICHT mehr die Overlap-Abwehr.
+        # Sie bleibt fuer zwei Faelle: (a) Resume-Checkpoints, die noch von
+        # einer Version vor dem Fix stammen und Overlap-Duplikate enthalten,
+        # (b) den frame-genauen Nahtpunkt an der Fenstergrenze.
         self._beats.sort()
-        # Hinweis (Review 2026-07-09): Chained Grouping — Vergleich gegen das
-        # LETZTE Element der Gruppe. Ketten mit je <=threshold Abstand
-        # kollabieren zu EINEM Beat; erst ab effektiv >400 BPM relevant, fuer
-        # Overlap-Jitter-Dedup gewollt. Bei Problemen: gegen current_group[0]
-        # vergleichen.
+        # Vergleich gegen das ERSTE Element der Gruppe, nicht gegen das letzte.
+        #
+        # Bis 2026-08-30 wurde gegen `current_group[-1]` verglichen. Damit
+        # kollabiert jede Kette, deren Nachbarabstaende einzeln unter der
+        # Schwelle liegen, zu EINEM Wert - unabhaengig von ihrer Gesamtlaenge.
+        # Der Kommentar von 2026-07-09 hielt das fuer "erst ab >400 BPM
+        # relevant" und uebersah, dass dieselbe Klasse auch die Trigger-Listen
+        # (Onset/Kick/Snare/HiHat) fuehrt. Gemessen mit 64 gleichmaessigen
+        # Anschlaegen:
+        #
+        #     120 BPM  8tel  0.250s -> 64 bleiben 64
+        #     120 BPM 16tel  0.125s -> 64 werden  1
+        #     174 BPM 16tel  0.086s -> 64 werden  1
+        #
+        # Eine durchgehende 16tel-HiHat war im Streaming-Pfad also auf einen
+        # einzigen Zeitpunkt reduziert. Gegen `current_group[0]` verglichen
+        # umfasst eine Gruppe hoechstens ein Fenster von `threshold`, womit
+        # Ketten erhalten bleiben und der Naht-Jitter weiterhin zusammenfaellt.
         deduped: list[float] = []
         current_group: list[float] = [self._beats[0]]
         for b in self._beats[1:]:
-            if (b - current_group[-1]) <= self._dedup_threshold:
+            if (b - current_group[0]) <= self._dedup_threshold:
                 current_group.append(b)
             else:
                 deduped.append(sum(current_group) / len(current_group))
@@ -161,8 +210,11 @@ class _EnergyAggregator:
         if chunk_max > self._global_max:
             self._global_max = chunk_max
 
-        # Downsample: ~10 Werte pro Sekunde statt ~43
-        # (hop_length=512, sr=22050 → 43.07 frames/sec, Faktor 4 → ~10/sec)
+        # Downsample: ~21.5 Werte pro Sekunde statt ~86
+        # (hop_length=512, sr=44100 → 86.13 frames/sec, Faktor 4 → ~21.5/sec)
+        # L-5 (Audit 2026-08-30): stand vorher auf sr=22050 → 43.07/10; die
+        # Klasse laeuft aber auf SR = 44100. Der stale Kommentar war die
+        # dokumentarische Wurzel eines Faktor-2-Fehlers stromabwaerts.
         downsample_factor = 4
         if len(rms) > downsample_factor:
             n_out = len(rms) // downsample_factor
@@ -227,6 +279,15 @@ class StreamingAudioAnalyzer:
     DEFAULT_WINDOW_SEC = 30.0   # 30 Sekunden Chunks
     DEFAULT_OVERLAP_SEC = 5.0   # 5 Sekunden Overlap
     BEAT_DEDUP_THRESHOLD_SEC = 0.15  # 150ms Deduplizierung
+
+    # Trigger (Onset/Kick/Snare/HiHat) brauchen eine deutlich kleinere Schwelle
+    # als Beats. 150 ms sind bei Beats unkritisch - selbst 300 BPM haelt 200 ms
+    # Abstand -, verschlucken aber jede 16tel-Figur: 128 BPM 16tel liegen
+    # 117 ms auseinander, 174 BPM 16tel nur 86 ms. Seit H-2 (Window-Floor)
+    # entstehen ohnehin keine Overlap-Duplikate mehr; zu deduplizieren bleibt
+    # allein der Jitter an der Fensternaht, und der liegt in der
+    # Groessenordnung einer Hop-Laenge (512/44100 = 11.6 ms).
+    TRIGGER_DEDUP_THRESHOLD_SEC = 0.025
 
     # STFT-Parameter
     # Full-duration spectral summaries include the 12–20 kHz "air" band.
@@ -650,10 +711,12 @@ class StreamingAudioAnalyzer:
         # Aggregations-Objekte
         bpm_est = _RunningBPMEstimator()
         beat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
-        onset_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
-        kick_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
-        snare_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
-        hihat_acc = _BeatAccumulator(self.BEAT_DEDUP_THRESHOLD_SEC)
+        # Trigger mit eigener, viel kleinerer Schwelle - siehe
+        # TRIGGER_DEDUP_THRESHOLD_SEC: 150 ms verschlucken jede 16tel-Figur.
+        onset_acc = _BeatAccumulator(self.TRIGGER_DEDUP_THRESHOLD_SEC)
+        kick_acc = _BeatAccumulator(self.TRIGGER_DEDUP_THRESHOLD_SEC)
+        snare_acc = _BeatAccumulator(self.TRIGGER_DEDUP_THRESHOLD_SEC)
+        hihat_acc = _BeatAccumulator(self.TRIGGER_DEDUP_THRESHOLD_SEC)
         energy_agg = _EnergyAggregator()
         chroma_sum = np.zeros(12, dtype=np.float64)
         chroma_weight = 0
@@ -705,6 +768,22 @@ class StreamingAudioAnalyzer:
             start_sample = int(i * step * native_sr)
             chunk_start = start_sample / native_sr
             chunk_dur = min(self.window_sec, duration - chunk_start)
+
+            # H-2: Fenster i deckt [chunk_start, chunk_start+window) ab, aber
+            # die ersten overlap_sec hat Fenster i-1 bereits vollstaendig
+            # geliefert. Beats/Trigger aus dieser Zone werden verworfen, damit
+            # jede Zeitposition von genau einem Fenster stammt. Das erste
+            # Fenster hat keinen Vorgaenger und behaelt alles.
+            window_floor = None if i == 0 else chunk_start + self.overlap_sec
+            for accumulator in (
+                beat_acc,
+                onset_acc,
+                kick_acc,
+                snare_acc,
+                hihat_acc,
+            ):
+                accumulator.set_window_floor(window_floor)
+
             resume_row = resume_rows.get(i)
             if resume_row is not None and self._checkpoint_row_is_valid(
                 resume_row,
@@ -1214,25 +1293,31 @@ class StreamingAudioAnalyzer:
             sr=self.SR,
         ).tolist()
 
-        def _band_times(*, signal: np.ndarray, fmin=None, fmax=None) -> list[float]:
-            lower = float(fmin or 0.0)
-            upper = float(fmax) if fmax is not None else float(self.SR) / 2.0
-            span = max(1.0, upper - lower)
-            n_fft = 2048
-            while n_fft < 8192 and (span / (self.SR / n_fft)) < 24.0:
-                n_fft *= 2
-            bins_in_band = max(1, int(span / (self.SR / n_fft)))
+        # H-3 (Audit 2026-08-30): Bandgrenzen und Filterbank aus der
+        # gemeinsamen Quelle `pb_studio.audio.band_params`. Vorher rechnete
+        # diese Funktion eine eigene, dritte Fassung derselben Formel; das
+        # Kick-Band bekam trotz Parametrierung fuer 20-150 Hz kein `fmin`
+        # uebergeben, und dem Kick fehlte das `aggregate=np.median`, das
+        # Router und Pacing-Engine beide setzen.
+        def _band_times(
+            *,
+            signal: np.ndarray,
+            band: tuple[float, float],
+            aggregate=None,
+        ) -> list[float]:
+            fmin, fmax = band
+            n_fft, n_mels = band_stft_params(self.SR, fmin, fmax)
             kwargs = {
                 "y": signal,
                 "sr": self.SR,
                 "hop_length": hop,
                 "n_fft": n_fft,
-                "n_mels": max(4, min(64, bins_in_band // 2)),
+                "n_mels": n_mels,
+                "fmin": fmin,
+                "fmax": fmax,
             }
-            if fmin is not None:
-                kwargs["fmin"] = fmin
-            if fmax is not None:
-                kwargs["fmax"] = fmax
+            if aggregate is not None:
+                kwargs["aggregate"] = aggregate
             envelope = librosa.onset.onset_strength(**kwargs)
             frames = librosa.onset.onset_detect(
                 onset_envelope=envelope,
@@ -1247,10 +1332,11 @@ class StreamingAudioAnalyzer:
 
         kick_times = _band_times(
             signal=librosa.effects.preemphasis(chunk),
-            fmax=150,
+            band=KICK_BAND,
+            aggregate=np.median,
         )
-        snare_times = _band_times(signal=chunk, fmin=200, fmax=400)
-        hihat_times = _band_times(signal=chunk, fmin=5000)
+        snare_times = _band_times(signal=chunk, band=SNARE_BAND)
+        hihat_times = _band_times(signal=chunk, band=HIHAT_BAND)
         return onset_times, kick_times, snare_times, hihat_times
 
     def _process_triggers(

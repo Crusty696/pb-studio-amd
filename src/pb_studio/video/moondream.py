@@ -202,14 +202,6 @@ class MoondreamAnalyzer:
                     self.tokenizer = CodeGenTokenizerFast.from_pretrained("vikhyat/moondream2", local_files_only=True)
                     logger.info("Loaded tokenizer from HuggingFace Hub")
 
-                    # Speichere lokal fuer zukuenftige Verwendung
-                    try:
-                        local_tokenizer_path.mkdir(parents=True, exist_ok=True)
-                        self.tokenizer.save_pretrained(str(local_tokenizer_path))
-                        logger.info(f"Cached tokenizer to: {local_tokenizer_path}")
-                    except Exception as e:
-                        logger.warning(f"Could not cache tokenizer: {e}")
-
                 except Exception as e:
                     logger.warning(f"Could not load tokenizer from hub: {e}")
                     return False

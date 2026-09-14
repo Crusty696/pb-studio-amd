@@ -1,3 +1,16 @@
+"""
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+Stammt aus der PyQt-Oberflaeche; einziger Importeur ist
+`src/pb_studio/ui_legacy_archived/`. Das Modul ist nicht einmal importierbar -
+es braucht PyQt6, das in keiner Umgebung dieses Projekts installiert ist.
+Der reale Analysepfad laeuft ueber `backend/routers/audio_router.py` und
+`video_router.py`.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`:
+neue Produktionsaufrufer schlagen dort fehl.
+"""
+
 import logging
 from pb_studio.audio.analyzer import AudioAnalyzer
 from pb_studio.video.scene_detect import SceneDetector

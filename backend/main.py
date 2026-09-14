@@ -11,6 +11,8 @@ Kein Auth, kein HTTPS, kein Multi-User.
 import asyncio
 import logging
 import os
+import re
+import shutil
 import sys
 import threading
 import time
@@ -127,9 +129,54 @@ def get_uptime() -> float:
     return time.time() - _start_time
 
 
+_STALE_TEMP_MAX_AGE_SECONDS = 24 * 3600
+
+# Genau die Stage-Dateien unserer eigenen atomaren Schreibpfade:
+# ".<name>.<uuid4().hex>.tmp" bzw. ".<name>.<uuid4().hex>.rollback.tmp".
+# Der Basename enthaelt selbst Punkte ("timeline.json"), deshalb wird der
+# ganze Name geprueft und nicht das Suffix. Bewusst eng: ein liegen-
+# gebliebener Fremd-Dotfile ist harmlos, eine geloeschte Fremddatei nicht.
+_STALE_STAGE_NAME = re.compile(r"^\..+\.[0-9a-f]{32}(\.rollback)?\.tmp$")
+
+
+def _sweep_stale_temp_artifacts(proj_root: Path) -> int:
+    """Entfernt verwaiste Render-Temp-Dirs und Stage-Dateien aelter als 24h.
+
+    Die Altersgrenze ist nicht optional: ohne sie wuerde der Sweep die
+    Stage-Datei eines gerade laufenden Saves loeschen.
+    """
+    threshold = time.time() - _STALE_TEMP_MAX_AGE_SECONDS
+    cleaned = 0
+    if not proj_root.exists():
+        return cleaned
+    for temp_dir in proj_root.rglob(".temp_render"):
+        try:
+            mtime = temp_dir.stat().st_mtime
+            if mtime < threshold:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                cleaned += 1
+        except Exception as cleanup_err:
+            logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
+    # Verwaiste Stage-Dateien der atomaren Schreibpfade.
+    # pathlib.rglob matcht Dotfiles, glob.glob nicht.
+    for stale in proj_root.rglob(".*.tmp"):
+        try:
+            if not _STALE_STAGE_NAME.match(stale.name):
+                continue
+            if stale.is_file() and stale.stat().st_mtime < threshold:
+                stale.unlink(missing_ok=True)
+                cleaned += 1
+        except Exception as cleanup_err:
+            logger.debug(f"  stage-cleanup skipped {stale}: {cleanup_err}")
+    return cleaned
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup und Shutdown Events."""
+    from .app_state import get_app_state
+
+    get_app_state().start_accepting_requests()
     logger.info("=" * 60)
     logger.info("PB Studio AMD Backend startet...")
     logger.info(f"  Host: {config.host}:{config.port}")
@@ -196,6 +243,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"  Projekt-Verzeichnis bereit: {config.project_dir}")
     except Exception as e:
         logger.warning(f"  Projekt-Verzeichnis konnte nicht angelegt werden: {e}")
+
+    try:
+        from pb_studio.config_manager import ConfigManager
+        ConfigManager().start_watcher()
+        logger.info("  ConfigManager Watcher aktiv")
+    except Exception as e:
+        logger.warning(f"  ConfigManager Watcher konnte nicht gestartet werden: {e}")
 
     # Gate B: Nach Config, aber vor Render-Resume und neuer Produktarbeit wird
     # ein vollständiger, owner-validierter Wiederanlaufpunkt publiziert.
@@ -264,26 +318,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # M8-Fix (I-M2, 2026-05-20): Startup-Cleanup von verwaisten temp-Dirs aelter
     # als 24h. Vor Fix: temp/ wurde nur bei Render-Cancel/Fail aufgeraeumt
     # (_cleanup_render_temps), nach Crash blieben .temp_render-Verzeichnisse mit
-    # Stale-Files liegen. Jetzt: Startup-sweep aller .temp_render-Dirs > 24h.
+    # Stale-Files liegen. Seit die Save-Pfade eindeutige uuid4-Stage-Namen
+    # benutzen, ueberschreibt kein spaeterer Save mehr die Leiche eines harten
+    # Abbruchs; der Sweep greift deshalb auch verwaiste ".<name>.<uuid>.tmp".
     try:
-        import time
-        import shutil
-        from pathlib import Path
-        threshold = time.time() - 24 * 3600
-        cleaned = 0
-        # Project-Dir scan nach .temp_render
-        proj_root = Path(config.project_dir)
-        if proj_root.exists():
-            for temp_dir in proj_root.rglob(".temp_render"):
-                try:
-                    mtime = temp_dir.stat().st_mtime
-                    if mtime < threshold:
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-                        cleaned += 1
-                except Exception as cleanup_err:
-                    logger.debug(f"  temp-cleanup skipped {temp_dir}: {cleanup_err}")
+        cleaned = _sweep_stale_temp_artifacts(Path(config.project_dir))
         if cleaned:
-            logger.info(f"  Stale temp-Dirs entfernt: {cleaned} (älter als 24h)")
+            logger.info(f"  Stale temp-Artefakte entfernt: {cleaned} (älter als 24h)")
     except Exception as e:
         logger.warning(f"  temp-Cleanup-on-Startup übersprungen: {e}")
 
@@ -375,6 +416,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("  AI Director Ressourcen freigegeben")
     except Exception as e:
         logger.debug(f"Director shutdown cleanup skipped: {e}")
+
+    try:
+        from pb_studio.config_manager import ConfigManager
+        ConfigManager().stop_watcher()
+        logger.info("  ConfigManager Watcher gestoppt")
+    except Exception as e:
+        logger.debug(f"ConfigManager Watcher shutdown cleanup skipped: {e}")
 
 
 # FastAPI App erstellen
@@ -648,7 +696,11 @@ async def shutdown(
     authorize_owner(owner_capability, operation="Backend-Shutdown")
     from .app_state import get_app_state
 
-    completed, pending = await get_app_state().cancel_and_drain_project_tasks()
+    state = get_app_state()
+    if not state.begin_shutdown():
+        return {"status": "shutting_down"}
+
+    completed, pending = await state.cancel_and_drain_project_tasks()
     if completed or pending:
         logger.info(
             "Shutdown unterbrach %d Projektoperation(en); %d Task(s) laufen "

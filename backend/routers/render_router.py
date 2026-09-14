@@ -56,6 +56,9 @@ from pb_studio.rendering.render_queue import (
     STATE_FAILED as _RQ_FAILED,
     STATE_CANCELLED as _RQ_CANCELLED,
     STATE_INTERRUPTED as _RQ_INTERRUPTED,
+    DEFAULT_RETENTION_DAYS as _DEFAULT_RETENTION_DAYS,
+    DEFAULT_MAX_TERMINAL_JOBS as _DEFAULT_MAX_TERMINAL_JOBS,
+    select_terminal_retention as _select_terminal_retention,
     get_render_queue as _get_render_queue,
 )
 
@@ -601,6 +604,7 @@ async def _resume_render_queue_on_startup(
                 "task_id": task_id,
                 "status": TaskStatus.PENDING.value,
                 "percent": 0.0,
+                "progress_percent": 0.0,
                 "current_frame": 0,
                 "total_frames": max(int(round(total_seconds * request.fps)), 0),
                 "fps": 0.0,
@@ -839,6 +843,7 @@ async def _start_render_for_project(
         "task_id": task_id,
         "status": TaskStatus.PENDING.value,
         "percent": 0.0,
+        "progress_percent": 0.0,
         "current_frame": 0,
         "total_frames": estimated_total_frames,
         "fps": 0.0,
@@ -916,39 +921,73 @@ async def render_status(
     return RenderProgress(**task)
 
 
-def _cleanup_old_render_tasks(state: AppState, max_tasks: int = 50) -> None:
-    """Entfernt abgeschlossene Render-Tasks wenn mehr als max_tasks vorhanden.
+def _cleanup_old_render_tasks(
+    state: AppState,
+    max_tasks: int = _DEFAULT_MAX_TERMINAL_JOBS,
+    retention_days: int = _DEFAULT_RETENTION_DAYS,
+    now_epoch: Optional[float] = None,
+) -> dict[str, list[str]]:
+    """Entfernt terminale Render-Tasks aus DB-Queue und In-Memory-State per Retention-Regel.
 
-    P-H1 (Audit V2): Time-Gate fuer cancel_flags pop — nur Tasks loeschen die
-    TERMINAL + >1h alt sind. Sonst Race: aktive Render-Threads pruefen ihren
-    Flag und kriegen False statt True nach pop. (MEDIUM-015 Kommentar in
-    app_state.py war bekannt, Fix-Implementation jetzt komplett.)
+    Begrenzt ausschließlich abgeschlossene (completed/failed/cancelled) Tasks.
+    Aktive/laufende Tasks sind geschützt. Ungültige/fehlende finished_at schützen
+    den Task vor Löschung und erzeugen eine Warnung.
     """
-    import time as _t
+    effective_now = time.time() if now_epoch is None else float(now_epoch)
+
+    # 1. Persistente DB-Queue bereinigen
+    try:
+        _get_render_queue().cleanup_terminal(
+            retention_days=retention_days,
+            max_terminal_jobs=max_tasks,
+            now_epoch=effective_now,
+        )
+    except Exception as queue_exc:
+        logger.warning("RenderQueue cleanup_terminal fehlgeschlagen: %s", queue_exc)
+
+    # 2. In-Memory state.render_tasks bereinigen (unter state._state_lock)
     with state._state_lock:
-        if len(state.render_tasks) <= max_tasks:
-            return
-        # Sortiere nach Status: completed/failed/cancelled zuerst entfernen
-        terminal_statuses = {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}
-        now = _t.monotonic()
-        removable = [
-            tid for tid, t in state.render_tasks.items()
-            if t.get("status") in terminal_statuses
+        if not state.render_tasks:
+            return {"deleted": [], "invalid_finished_at": []}
+
+        records = [
+            dict(task_data, task_id=tid)
+            for tid, task_data in state.render_tasks.items()
+            if isinstance(task_data, dict)
         ]
-        # Älteste zuerst entfernen (bis max_tasks erreicht)
-        to_remove = len(state.render_tasks) - max_tasks
-        for tid in removable[:to_remove]:
-            task = state.render_tasks.get(tid, {})
-            del state.render_tasks[tid]
-            # P-H1: nur Flag poppen wenn Task >1h alt (race-safe).
-            # finished_at als monotonic-timestamp gesetzt beim Übergang in terminal.
+        protected_tids = frozenset(
+            tid for tid, task in _render_runtime_tasks.items() if not task.done()
+        )
+        removable_ids, invalid_ids = _select_terminal_retention(
+            records,
+            now_epoch=effective_now,
+            retention_days=retention_days,
+            max_terminal_jobs=max_tasks,
+            protected_ids=protected_tids,
+            id_key="task_id",
+        )
+
+        if invalid_ids:
+            logger.warning(
+                "Render-Task Retention schützt %d in-memory Task(s) ohne gültigen UTC-Abschlusszeitpunkt: %s",
+                len(invalid_ids),
+                invalid_ids,
+            )
+
+        for tid in removable_ids:
+            task = state.render_tasks.pop(tid, None) or {}
             finished_at = task.get("finished_at")
-            if finished_at is not None and (now - finished_at) > 3600:
+            try:
+                finished_num = float(finished_at) if finished_at is not None else None
+            except (TypeError, ValueError):
+                finished_num = None
+            if finished_num is not None and (effective_now - finished_num) > 3600.0:
                 state.cancel_flags.pop(tid, None)
-            # Sonst Flag stehen lassen — Memory-Leak ist akzeptabel (max 50 keys),
-            # vermeidet Race wo aktive Thread False statt True sieht.
-        if to_remove > 0:
-            logger.info(f"Render-Task Cleanup: {min(to_remove, len(removable))} alte Tasks entfernt")
+
+        if removable_ids:
+            logger.info("Render-Task Retention: %d alte Tasks aus Speicher entfernt", len(removable_ids))
+
+        return {"deleted": removable_ids, "invalid_finished_at": invalid_ids}
 
 
 def _finalize_timeline_for_render(
@@ -979,8 +1018,14 @@ def _finalize_timeline_for_render(
         cut_list,
         target_duration,
     )
+    templates = {
+        str(source.get("clip_id", "")): source
+        for source in eligible
+    }
     result = []
-    for source, cut in zip(eligible, finalized):
+    for cut in finalized:
+        source = deepcopy(templates.get(cut.clip_id, {}))
+        source["clip_id"] = cut.clip_id
         source["start_time"] = cut.start_time
         source["end_time"] = cut.end_time
         source["metadata"] = cut.metadata
@@ -1055,7 +1100,7 @@ async def _run_render_task_bound(
                 "status": TaskStatus.FAILED.value,
                 "error": str(exc),
                 "message": "Render-Projektkontext ist nicht mehr aktuell",
-                "finished_at": time.monotonic(),
+                "finished_at": time.time(),
             },
         )
 
@@ -1116,6 +1161,7 @@ async def _run_render_task(
         state.update_render_task(task_id, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
+            "progress_percent": 100.0,
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
             "message": "Rendering abgeschlossen",
@@ -1124,12 +1170,13 @@ async def _run_render_task(
             "evidence_path": result.get("evidence_path"),
             "validation_path": result.get("validation_path"),
             "validation_status": result.get("validation_status"),
-            "finished_at": time.monotonic(),  # P-H1: enable time-gated cancel_flag cleanup
+            "finished_at": time.time(),  # UTC epoch seconds for retention
         })
 
         await publish_event("render_progress", {
             "task_id": task_id,
             "percent": 100.0,
+            "progress_percent": 100.0,
             "status": "completed",
             "message": "Rendering abgeschlossen",
             "queue_job_id": queue_job_id,
@@ -1152,6 +1199,7 @@ async def _run_render_task(
         elapsed = time.monotonic() - start_time
         shutdown_interrupted = task_id in _shutdown_cancelled_task_ids
         task_snapshot = state.get_render_task(task_id) or {}
+        last_pct = float(task_snapshot.get("progress_percent", task_snapshot.get("percent", 0.0)) or 0.0)
         target_queue_status = (
             _RQ_INTERRUPTED if shutdown_interrupted else _RQ_CANCELLED
         )
@@ -1169,15 +1217,18 @@ async def _run_render_task(
                 "status": TaskStatus.FAILED.value,
                 "error": str(persist_exc),
                 "message": "Render-Abbruch konnte nicht gespeichert werden",
+                "percent": last_pct,
+                "progress_percent": last_pct,
                 "elapsed_seconds": round(elapsed, 1),
                 "eta_seconds": 0.0,
                 "progress_end": False,
                 "validation_status": "failed",
-                "finished_at": time.monotonic(),
+                "finished_at": time.time(),
             })
             await publish_event("render_progress", {
                 "task_id": task_id,
-                "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
+                "percent": last_pct,
+                "progress_percent": last_pct,
                 "status": "failed",
                 "message": str(persist_exc),
                 "error": str(persist_exc),
@@ -1190,6 +1241,8 @@ async def _run_render_task(
         state.update_render_task(task_id, {
             "status": TaskStatus.CANCELLED.value,
             "message": "Rendering abgebrochen",
+            "percent": last_pct,
+            "progress_percent": last_pct,
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
             "run_id": exc.run_id,
@@ -1197,13 +1250,14 @@ async def _run_render_task(
             "validation_path": exc.validation_path,
             "progress_end": False,
             "validation_status": "cancelled",
-            "finished_at": time.monotonic(),  # P-H1
+            "finished_at": time.time(),  # UTC epoch seconds for retention
         })
         logger.info(f"Render {task_id} abgebrochen nach {elapsed:.1f}s")
 
         await publish_event("render_progress", {
             "task_id": task_id,
-            "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
+            "percent": last_pct,
+            "progress_percent": last_pct,
             "status": "cancelled",
             "message": "Rendering abgebrochen",
             "queue_job_id": queue_job_id,
@@ -1223,6 +1277,7 @@ async def _run_render_task(
     except Exception as e:
         elapsed = time.monotonic() - start_time
         task_snapshot = state.get_render_task(task_id) or {}
+        fail_pct = float(task_snapshot.get("progress_percent", task_snapshot.get("percent", 0.0)) or 0.0)
         run_id = getattr(e, "run_id", None)
         evidence_path = getattr(e, "evidence_path", None)
         validation_path = getattr(e, "validation_path", None)
@@ -1230,6 +1285,8 @@ async def _run_render_task(
             "status": TaskStatus.FAILED.value,
             "error": str(e),
             "message": "Rendering fehlgeschlagen",
+            "percent": fail_pct,
+            "progress_percent": fail_pct,
             "elapsed_seconds": round(elapsed, 1),
             "eta_seconds": 0.0,
             "run_id": run_id,
@@ -1237,14 +1294,15 @@ async def _run_render_task(
             "validation_path": validation_path,
             "progress_end": False,
             "validation_status": "failed",
-            "finished_at": time.monotonic(),  # P-H1
+            "finished_at": time.time(),  # UTC epoch seconds for retention
         })
         _safe_queue_update(queue_job_id, _RQ_FAILED, error=str(e))
         logger.error(f"Render {task_id} fehlgeschlagen: {e}", exc_info=True)
 
         await publish_event("render_progress", {
             "task_id": task_id,
-            "percent": float(task_snapshot.get("percent", 0.0) or 0.0),
+            "percent": fail_pct,
+            "progress_percent": fail_pct,
             "status": "failed",
             "message": str(e),
             "error": str(e),
@@ -1342,6 +1400,7 @@ def _execute_render(
         payload = {
             "task_id": task_id,
             "percent": round(percent, 1),
+            "progress_percent": round(percent, 1),
             "status": task_snapshot.get("status", TaskStatus.RUNNING.value),
             "message": message,
             "output_path": str(output_p),
@@ -1378,6 +1437,7 @@ def _execute_render(
             "status": TaskStatus.RUNNING.value,
             "message": message,
             "percent": percent,
+            "progress_percent": percent,
             "fps": round(float(telemetry.get("fps", 0.0) or 0.0), 2),
             "current_frame": max(int(telemetry.get("current_frame", 0) or 0), 0),
             "total_frames": max(int(telemetry.get("total_frames", 0) or 0), 0),
@@ -1484,6 +1544,7 @@ def _execute_render(
         state.update_render_task(task_id, {
             "status": TaskStatus.COMPLETED.value,
             "percent": 100.0,
+            "progress_percent": 100.0,
             "eta_seconds": 0.0,
             "output_path": str(output_p),
             "error": None,
@@ -1505,7 +1566,7 @@ def _execute_render(
                 / "validation.json"
             ),
             "validation_status": "validated",
-            "finished_at": time.monotonic(),  # P-H1
+            "finished_at": time.time(),  # UTC epoch seconds for retention
         })
         return {
             "output_path": result_path,

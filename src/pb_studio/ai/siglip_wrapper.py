@@ -6,7 +6,10 @@ This module provides image and text embedding using the SigLIP model
 Optimized for AMD GPUs via DirectML.
 """
 
+import hashlib
+import json
 import logging
+import threading
 import numpy as np
 from pathlib import Path
 from typing import Optional, List, Union, Tuple
@@ -37,6 +40,85 @@ SIGLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
 SIGLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 EMBEDDING_DIM = 1152
 
+_TEXT_CAPABILITY_WARN_LOCK = threading.Lock()
+_WARNED_TEXT_CAPABILITY_GENERATIONS: set[str] = set()
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _siglip_text_capability(
+    models_path: Path,
+    config,
+) -> tuple[bool, str]:
+    """Return manifest-bound availability and a stable warning generation."""
+    manifest_path = config.resolve_path("config/directml-model-assets.json")
+    text_path = models_path / "siglip_text.onnx"
+    fingerprints: list[str] = []
+
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+        fingerprints.append(hashlib.sha256(manifest_bytes).hexdigest())
+
+        if manifest.get("release_provenance", {}).get("status") != "approved":
+            raise ValueError("DirectML asset manifest is not approved")
+
+        target = "models/siglip_text.onnx"
+        asset = next(
+            (
+                item
+                for item in manifest.get("assets", [])
+                if str(item.get("target", "")).replace("\\", "/") == target
+            ),
+            None,
+        )
+        if asset is None:
+            raise ValueError("SigLIP text is not registered")
+
+        expected_hash = str(asset.get("target_sha256", "")).lower()
+        if len(expected_hash) != 64:
+            raise ValueError("SigLIP text manifest hash is invalid")
+
+        bundle_ref = manifest.get("release_provenance", {}).get("bundle_manifest")
+        if not bundle_ref:
+            raise ValueError("DirectML bundle manifest is missing")
+        bundle_path = config.resolve_path(bundle_ref)
+        bundle_bytes = bundle_path.read_bytes()
+        bundle = json.loads(bundle_bytes)
+        fingerprints.append(hashlib.sha256(bundle_bytes).hexdigest())
+        if bundle.get("approval_status") != "approved":
+            raise ValueError("DirectML asset bundle is not approved")
+        bundle_asset = next(
+            (
+                item
+                for item in bundle.get("files", [])
+                if str(item.get("target", "")).replace("\\", "/") == target
+            ),
+            None,
+        )
+        if (
+            bundle_asset is None
+            or str(bundle_asset.get("sha256", "")).lower() != expected_hash
+        ):
+            raise ValueError("SigLIP text bundle receipt does not match")
+
+        if not text_path.is_file():
+            raise ValueError("SigLIP text asset is missing")
+        actual_hash = _sha256(text_path)
+        fingerprints.append(actual_hash)
+        if actual_hash != expected_hash:
+            raise ValueError("SigLIP text asset hash does not match")
+        return True, ":".join(fingerprints)
+    except (OSError, ValueError, json.JSONDecodeError):
+        fingerprints.append("present" if text_path.is_file() else "missing")
+        return False, ":".join(fingerprints) or "manifest-unavailable"
+
 
 class SigLIPWrapper:
     """SigLIP Image and Text Encoder with DirectML acceleration."""
@@ -64,10 +146,14 @@ class SigLIPWrapper:
         except Exception:
             return False
 
-    def _init_text_fallback(self) -> bool:
+    def _init_text_fallback(self, capability_generation: str) -> bool:
+        with _TEXT_CAPABILITY_WARN_LOCK:
+            if capability_generation in _WARNED_TEXT_CAPABILITY_GENERATIONS:
+                return False
+            _WARNED_TEXT_CAPABILITY_GENERATIONS.add(capability_generation)
         logger.warning(
-            "SigLIP text ONNX asset unavailable; text semantics remain "
-            "disabled (DirectML-only, no runtime fallback)."
+            "SigLIP text ONNX asset unavailable or untrusted; text semantics "
+            "remain disabled (DirectML-only, no runtime fallback)."
         )
         return False
 
@@ -82,7 +168,10 @@ class SigLIPWrapper:
             loader = ModelLoader()
 
             vision_path = models_path / "siglip_vision.onnx"
-            text_path = models_path / "siglip_text.onnx"
+            text_available, text_generation = _siglip_text_capability(
+                models_path,
+                self.config,
+            )
 
             if vision_path.exists():
                 self.vision_session = loader.load_model("siglip_vision", force=True)
@@ -95,10 +184,10 @@ class SigLIPWrapper:
                 self.vision_session = enforce_directml_session(self.vision_session)
                 self._active_provider = "DmlExecutionProvider"
                 
-                if text_path.exists():
+                if text_available:
                     self.text_session = loader.load_model("siglip_text", force=True)
                     if self.text_session is None:
-                        self._init_text_fallback()
+                        self._init_text_fallback(text_generation)
                     else:
                         loader.register_session_owner(
                             "siglip_text",
@@ -106,7 +195,7 @@ class SigLIPWrapper:
                         )
                         self.text_session = enforce_directml_session(self.text_session)
                 else:
-                    self._init_text_fallback()
+                    self._init_text_fallback(text_generation)
                 
                 self._initialized = True
                 return True

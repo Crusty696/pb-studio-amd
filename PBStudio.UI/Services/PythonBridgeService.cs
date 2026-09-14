@@ -30,7 +30,20 @@ public class PythonBridgeService : IDisposable
     private static readonly string? PythonExe = ResolvePythonExe();
     private static readonly bool PreferExternalBackend = IsEnabled(Environment.GetEnvironmentVariable("PBSTUDIO_BACKEND_MANAGED_EXTERNALLY"));
     private const int Port = 8765;
-    private const int StartupTimeoutMs = 30_000;
+    // Startfrist des Backends.
+    //
+    // Stand 2026-08-31 auf 30 s - zu knapp. Am selben Tag gemessen: das
+    // Backend meldet sich nach rund 60 s bereit, weil es beim Hochfahren
+    // Ollama und LM Studio kontaktiert und beide in ihre Verbindungstimeouts
+    // laufen, wenn sie nicht gestartet sind. Die App gab dann auf
+    // ("Python Backend Health- oder Owner-Proof-Check fehlgeschlagen"),
+    // raeumte den Kindprozess ueber das Kill-on-Close JobObject ab - und
+    // stand ohne Backend da, obwohl das Backend voellig in Ordnung war.
+    //
+    // 120 s decken den gemessenen Fall mit Reserve ab. Die Frist kostet nur
+    // im Fehlerfall Zeit: die Schleife prueft alle 500 ms und bricht ab,
+    // sobald das Backend antwortet.
+    private const int StartupTimeoutMs = 120_000;
     private const int HealthCheckIntervalMs = 500;
 
     public static void ApplyRuntimeEnvironment(PbSettings settings)

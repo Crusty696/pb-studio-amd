@@ -1,6 +1,7 @@
 """Test: PacingService nutzt cached structure_segments statt redundanter Re-Analyse (Audit A3)."""
 import numpy as np
 import pytest
+from unittest.mock import Mock
 
 
 def _default_pacing_config(**overrides):
@@ -29,6 +30,45 @@ def _make_test_audio(tmp_path):
     silence = np.zeros(sample_rate * 2, dtype=np.float32)  # 2s
     sf.write(str(audio_path), silence, sample_rate)
     return audio_path
+
+
+@pytest.mark.parametrize("source", ["analyzer", "cache"])
+def test_peak_structure_boosts_trigger_and_wins_interval_filter(source, monkeypatch):
+    from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
+    from pb_studio.pacing.pacing_models import PacingCut
+
+    segments = [
+        {"start_time": 0.0, "end_time": 1.0, "label": "verse", "energy_score": 0.9},
+        {"start_time": 1.0, "end_time": 2.0, "label": "peak", "energy_score": 0.2},
+    ]
+    engine = AdvancedPacingEngine()
+    if source == "analyzer":
+        import librosa
+        from pb_studio.audio.structure_analyzer import StructureAnalyzer
+
+        load = Mock(return_value=(np.zeros(2, dtype=np.float32), 22050))
+        analyze = Mock(return_value={"segments": segments})
+        monkeypatch.setattr(librosa, "load", load)
+        monkeypatch.setattr(StructureAnalyzer, "analyze_song_structure", analyze)
+        sections = engine.analyze_song_structure("structure-regression.wav")
+        load.assert_called_once_with("structure-regression.wav", sr=22050, mono=True)
+        analyze.assert_called_once()
+    else:
+        sections = engine._coerce_song_structure(segments)
+
+    assert [section.name for section in sections] == ["verse", "peak"]
+    assert [section.energy_level for section in sections] == pytest.approx([0.8, 1.5])
+    assert [(section.start_time, section.end_time) for section in sections] == [
+        (0.0, 1.0), (1.0, 2.0),
+    ]
+    triggers = [
+        PacingCut(time=0.9, trigger_type="beat", strength=0.6),
+        PacingCut(time=1.1, trigger_type="beat", strength=0.5),
+    ]
+    weighted = engine._apply_structure_weights(triggers, sections)
+    assert [cut.strength for cut in weighted] == pytest.approx([0.48, 0.75])
+    retained = engine._enforce_minimum_interval(weighted, min_interval=0.5)
+    assert [cut.time for cut in retained] == [1.1]
 
 
 def test_pacing_uses_cached_structure_segments(tmp_path):

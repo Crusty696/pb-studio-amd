@@ -14,6 +14,9 @@ Endpoints:
 import asyncio
 import logging
 import threading
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +46,12 @@ from ..schemas.audio_schemas import (
 )
 from ..schemas.common import BatchDeleteRequest, DeleteResponse
 from pb_studio.storage.recovery_barrier import recovery_write_operation
+from pb_studio.audio.band_params import (
+    HIHAT_BAND,
+    KICK_BAND,
+    SNARE_BAND,
+    band_stft_params,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio"])
@@ -51,6 +60,9 @@ router = APIRouter(prefix="/audio", tags=["Audio"])
 _beat_detector: "Any | None" = None
 _beat_detector_lock = __import__("threading").Lock()
 _stem_partial_marker_lock = threading.RLock()
+# Outer DSP workers can wait for loop-owned GPU work. They must never occupy
+# the default executor that with_gpu_task uses to run that work.
+_audio_analysis_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio-analysis")
 _LONG_STEM_TIMEOUT_RATIO = 0.75
 def _stem_timeout_for_duration(duration_seconds: float, configured_timeout: float) -> float:
     """Allow long mixes enough wall time while retaining the configured floor."""
@@ -682,6 +694,9 @@ async def list_clips(
     for clip in clips[start:end]:
         analysis = state.get_audio_analysis(clip["id"])
         merged = dict(clip)
+        merged["has_audio_embedding"] = _has_current_audio_embedding(
+            merged.get("audio_hash")
+        )
         merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
         merged["key"] = analysis.get("key") if analysis else clip.get("key")
         merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
@@ -760,42 +775,45 @@ async def delete_clips_batch(
     return DeleteResponse(deleted_count=deleted, not_found_ids=not_found)
 
 
-def _band_stft_params(
-    sr: int,
-    fmin: float,
-    fmax: float | None,
-    max_mels: int = 64,
-) -> tuple[int, int]:
-    """
-    Waehlt ``n_fft`` und ``n_mels`` passend zur Bandbreite.
+# H-3 (Audit 2026-08-30): die Berechnung stand hier als eine von drei
+# unabhaengigen Fassungen. Sie lebt jetzt in `pb_studio.audio.band_params`,
+# gemeinsam mit den Bandgrenzen, und wird von Router, Streaming-Analyzer und
+# Pacing-Engine gleichermassen benutzt. Der Name bleibt als Alias erhalten,
+# damit bestehende Aufrufer und Tests unveraendert weiterlaufen.
+_band_stft_params = band_stft_params
 
-    Audit 2026-08-05 (M-2): Eine feste Filterzahl ueber ein schmales Band
-    erzeugt leere Mel-Filter — das Band liefert dann keine oder eine
-    unbrauchbare Onset-Envelope. Regel: erst die FFT-Auflousung so waehlen,
-    dass genug Bins im Band liegen, dann hoechstens halb so viele Filter wie
-    Bins vergeben.
 
-    Returns:
-        ``(n_fft, n_mels)`` — ``n_fft`` als Zweierpotenz, ``n_mels`` mindestens 4.
-    """
-    upper = float(fmax) if fmax else float(sr) / 2.0
-    span = max(1.0, upper - float(fmin))
+def _has_current_audio_embedding(audio_hash: str | None) -> bool:
+    """Return true only for a present current-model audio cache entry."""
+    if not audio_hash:
+        return False
+    try:
+        from pb_studio.audio import audio_embedder
+        from pb_studio.brain.brain_service import BrainService
 
-    n_fft = 2048
-    # Mindestens 24 Bins im Band anstreben, aber nicht ueber 8192 gehen.
-    while n_fft < 8192 and (span / (sr / n_fft)) < 24.0:
-        n_fft *= 2
-
-    bins_in_band = max(1, int(span / (sr / n_fft)))
-    n_mels = max(4, min(max_mels, bins_in_band // 2))
-    return n_fft, n_mels
+        cache = getattr(BrainService.get().brain, "cache", None)
+        if cache is None:
+            return False
+        entry = cache.lookup(
+            str(audio_hash),
+            audio_embedder.CURRENT_MODEL_NAME,
+            audio_embedder.CURRENT_MODEL_VERSION,
+        )
+        return entry is not None and entry.media_type == "audio"
+    except Exception as exc:  # noqa: BLE001 - availability stays fail-closed
+        logger.warning(
+            "CLAP-Cache-Verfuegbarkeit konnte nicht gelesen werden: %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+        return False
 
 
 async def _store_audio_embedding_in_brain_cache(
     *,
     audio_path: str,
     audio_hash: str | None,
-) -> None:
+) -> bool:
     """
     Erzeugt das CLAP-Audio-Embedding und legt es im Brain-EmbeddingCache ab.
 
@@ -811,7 +829,7 @@ async def _store_audio_embedding_in_brain_cache(
     """
     if not audio_hash:
         logger.debug("CLAP-Cache-Write uebersprungen: kein audio_hash")
-        return
+        return False
 
     try:
         from pb_studio.audio import audio_embedder
@@ -819,7 +837,7 @@ async def _store_audio_embedding_in_brain_cache(
 
         cache = getattr(BrainService.get().brain, "cache", None)
         if cache is None:
-            return
+            return False
 
         existing = cache.lookup(
             str(audio_hash),
@@ -827,7 +845,7 @@ async def _store_audio_embedding_in_brain_cache(
             audio_embedder.CURRENT_MODEL_VERSION,
         )
         if existing is not None:
-            return
+            return existing.media_type == "audio"
 
         from pb_studio.ai.clap_wrapper import CLAPAnalyzer
 
@@ -839,7 +857,7 @@ async def _store_audio_embedding_in_brain_cache(
                 "Semantik-Achse bleibt fuer diesen Clip unavailable",
                 Path(audio_path).name,
             )
-            return
+            return False
 
         cache.store(
             media_hash=str(audio_hash),
@@ -852,12 +870,14 @@ async def _store_audio_embedding_in_brain_cache(
             "CLAP-Audio-Embedding im Brain-Cache abgelegt (dim=%d)",
             int(getattr(embedding, "size", 0)),
         )
+        return True
     except Exception as exc:  # noqa: BLE001 - darf die Analyse nie abbrechen
         logger.warning(
             "CLAP-Cache-Write fehlgeschlagen (Analyse bleibt gueltig): %s: %r",
             type(exc).__name__,
             exc,
         )
+        return False
 
 
 _AUDIO_STAGE_REQUEST_FIELDS = {
@@ -874,6 +894,13 @@ _AUDIO_STAGE_RESULT_FIELDS = {
         "energy_curve",
         "downbeats",
         "downbeat_provenance",
+        "beat_grid_provenance",
+        # Ohne diesen Eintrag verwirft `_merge_audio_analysis_result` das
+        # Beatgrid still: es wird berechnet, geloggt und ins Ergebnisdict
+        # geschrieben - und diese Whitelist filtert es danach wieder heraus.
+        # Genau so ist es beim ersten Live-Lauf passiert (Log zeigte
+        # "Beatgrid ... 94.67 BPM", die API lieferte {}).
+        "beat_grid",
         "onset_times",
         "kick_times",
         "snare_times",
@@ -890,6 +917,148 @@ class _AudioAnalysisInterrupted(RuntimeError):
     """Stops the worker after its owning async request was cancelled."""
 
 
+# --- C-3: Plausibilitaetspruefung des Beat-Rasters ---------------------------
+# Vor diesem Block gab es im gesamten Beat-Pfad genau eine numerische Pruefung:
+# `30.0 < bpm < 300.0` in streaming_analyzer.py:71. Dieses Fenster laesst jeden
+# Oktavfehler durch (143,6 statt 71,8 besteht es genauso wie der wahre Wert).
+#
+# Beide Schwellen unten leiten sich aus DERSELBEN Ueberlegung ab und sind
+# deshalb dieselbe Zahl: eine Abweichung von einer Viertel-Beat-Laenge ist genau
+# der Punkt, an dem eine Zeitmarke nicht mehr eindeutig naeher an "ihrem" Beat
+# liegt als an der naechsten Zwischenposition (Achtel-Offbeat). Darunter ist es
+# Jitter, darueber ist die Zuordnung willkuerlich.
+_BEAT_GRID_QUARTER_BEAT = 0.25
+
+# Kick-Zeiten entstehen weiter unten aus `librosa.onset.onset_detect` mit
+# hop_length=512. Der Router laedt mit analysis_sr 22050 oder 44100; die
+# groebere der beiden Aufloesungen ist 512/22050 = 23,2 ms pro Frame. Eine
+# Toleranz unterhalb weniger Frames misst Quantisierungsrauschen statt
+# Trefferquote, deshalb drei Frames als Untergrenze. Sie ist bewusst an die
+# groebere Rate gebunden, damit dieselbe Datei nicht je nach
+# `spectral_analysis`-Flag anders bewertet wird.
+_BEAT_GRID_KICK_TOLERANCE_FLOOR = 3.0 * 512.0 / 22050.0  # ~0,0696 s
+
+# Trennwert der Gegenprobe. Ursprungsbegruendung: die Pruefung unterscheide
+# zwei Hypothesen - korrektes Raster trifft nahezu jeden Kick (~1,0), ein um
+# Faktor zwei zu langsames nur jeden zweiten (~0,5); 0,75 als Mittelpunkt.
+#
+# An echtem Material gemessen ist diese Begruendung WIDERLEGT (127 Fenster,
+# 35 Tracks, siehe docs/measurements/2026-08-31-kick-gegenprobe-befund.md):
+# bei korrektem Tempo liegt der Median nicht bei 1,0, sondern bei 0,433, und
+# 0,75 meldete 96 % der korrekt erkannten Raster als verdaechtig.
+#
+# Der Wert bleibt stehen, weil `kick_cross_check` weiterhin ausgeliefert wird -
+# aber er entscheidet seit 2026-08-31 NICHT mehr ueber `status`. Wer ihn
+# wieder ins Urteil aufnehmen will, muss vorher eine Metrik zeigen, die an
+# echtem Material trennt; diese hier tut es nachweislich nicht.
+_BEAT_GRID_KICK_ALIGNMENT_MIN = 0.75
+
+
+def _evaluate_beat_grid(
+    beat_times: list[float],
+    kick_times: list[float],
+    *,
+    bpm: float,
+    method: str,
+    window_median_bpm: float | None = None,
+) -> dict[str, Any]:
+    """Bewertet das Beat-Raster und meldet das Ergebnis, ohne es zu erzwingen.
+
+    Gemessen werden zwei unabhaengige Dinge:
+
+    1. Gleichmaessigkeit — robuste Streuung (Median Absolute Deviation) der
+       Beat-Intervalle relativ zum Median-Intervall.
+    2. Gegenprobe gegen eine zweite Quelle — Anteil der `kick_times`, die nahe
+       an einer Beat-Position liegen. Die Kicks stammen aus einer eigenen
+       Onset-Kette auf dem Mix und nicht aus dem Beat-Detektor, sind also
+       unabhaengig.
+
+    Bewusste Grenze der Gegenprobe: ein um Faktor zwei ZU SCHNELLES Raster
+    enthaelt alle wahren Beats als Teilmenge und trifft die Kicks weiterhin zu
+    ~100 %. Der Test faengt Halbtempo-Fehler, keine Doppeltempo-Fehler.
+
+    Das Ergebnis ist rein informativ: kein Wurf, kein Verwerfen, keine
+    Korrektur — es gibt derzeit keinen belegten Ersatzwert.
+    """
+    import numpy as np
+
+    provenance: dict[str, Any] = {
+        "status": "unavailable",
+        "method": method,
+        "bpm": float(bpm or 0.0),
+        "beat_count": len(beat_times),
+        "kick_count": len(kick_times),
+        "interval_regularity": None,
+        "regular": None,
+        "kick_alignment": None,
+        "kick_cross_check": "not_possible",
+        "tolerance_seconds": None,
+        "window_median_bpm": (
+            float(window_median_bpm) if window_median_bpm else None
+        ),
+    }
+
+    times = np.asarray(sorted(float(t) for t in beat_times), dtype=np.float64)
+    if times.size < 2:
+        return provenance
+
+    intervals = np.diff(times)
+    median_interval = float(np.median(intervals))
+    if median_interval <= 0.0:
+        return provenance
+
+    rel_mad = float(np.median(np.abs(intervals - median_interval))) / median_interval
+    regular = bool(rel_mad <= _BEAT_GRID_QUARTER_BEAT)
+    provenance["interval_regularity"] = rel_mad
+    provenance["regular"] = regular
+
+    tolerance = min(
+        _BEAT_GRID_KICK_TOLERANCE_FLOOR,
+        _BEAT_GRID_QUARTER_BEAT * median_interval,
+    )
+    provenance["tolerance_seconds"] = float(tolerance)
+
+    if len(kick_times) > 0:
+        kicks = np.asarray([float(k) for k in kick_times], dtype=np.float64)
+        idx = np.searchsorted(times, kicks)
+        left = np.clip(idx - 1, 0, times.size - 1)
+        right = np.clip(idx, 0, times.size - 1)
+        distance = np.minimum(
+            np.abs(kicks - times[left]), np.abs(kicks - times[right])
+        )
+        alignment = float(np.mean(distance <= tolerance))
+        provenance["kick_alignment"] = alignment
+        provenance["kick_cross_check"] = (
+            "failed" if alignment < _BEAT_GRID_KICK_ALIGNMENT_MIN else "passed"
+        )
+
+    # Der Status stuetzt sich AUSSCHLIESSLICH auf die Gleichmaessigkeit.
+    #
+    # Die Kick-Gegenprobe wird weiterhin berechnet und ausgeliefert, geht aber
+    # nicht mehr in das Urteil ein. Gemessen an 127 Fenstern aus 35 gemasterten
+    # Tracks mit BPM-Referenz im Dateinamen
+    # (docs/measurements/2026-08-31-kick-gegenprobe-befund.md):
+    #
+    #   * bei der Schwelle 0,75 wurden 125 von 127 Fenstern als `suspect`
+    #     gemeldet - darunter 96 % derjenigen mit korrekt erkanntem Tempo.
+    #     Ein Alarm, der fast immer angeht, traegt keine Information.
+    #   * die Annahme "korrektes Raster trifft die Kicks zu ~100 %" ist falsch:
+    #     der Median liegt bei korrektem Tempo bei 0,433.
+    #   * die Toleranz von 3 Hop-Frames deckt bei 143 BPM ein Drittel der
+    #     Zeitachse ab; die Zufallserwartung betraegt entsprechend 0,274.
+    #   * ein Toleranz-Sweep ueber 1/2/3/4/6 Frames findet keine Einstellung,
+    #     die brauchbar trennt - der beste Youden-Index liegt bei 0,35.
+    #   * Ursache: zwischen den beiden Detektionsketten liegt ein
+    #     systematischer Versatz von genau einer Hop-Laenge (+23,2 ms), und nur
+    #     4 % aller Kicks liegen ueberhaupt innerhalb von +-23 ms eines Beats.
+    #
+    # Der Wert bleibt sichtbar, weil er als Beobachtung richtig ist - er ist
+    # nur kein Gueteurteil. Ihn stillschweigend weiter ins Urteil einzurechnen
+    # hiesse, eine gemessen wertlose Groesse als Wahrheit auszugeben.
+    provenance["status"] = "suspect" if not regular else "plausible"
+    return provenance
+
+
 def _audio_stage_result_is_valid(stage: str, analysis: dict[str, Any]) -> bool:
     """Return whether a completed cached stage still has its required payload."""
     if stage == "beats":
@@ -902,9 +1071,21 @@ def _audio_stage_result_is_valid(stage: str, analysis: dict[str, Any]) -> bool:
             "snare_times",
             "hihat_times",
         )
+        # H-4: Reine Typpruefungen liessen `bpm=0.0`, `beat_count=0` und lauter
+        # leere Listen als gueltige Beat-Stufe durch. Ein Clip, bei dem die
+        # Erkennung nichts geliefert hat, galt damit dauerhaft als analysiert
+        # und wurde nie erneut versucht — sichtbar als "0,0 BPM | 0 Beats" ohne
+        # Fehlerhinweis. Eine Beats-Stufe ist nur dann wiederverwendbar, wenn
+        # tatsaechlich ein Raster vorliegt.
+        beats = analysis.get("beats")
+        bpm = analysis.get("bpm")
         return (
-            isinstance(analysis.get("bpm"), (int, float))
+            isinstance(bpm, (int, float))
+            and not isinstance(bpm, bool)
+            and float(bpm) > 0.0
             and isinstance(analysis.get("beat_count"), int)
+            and isinstance(beats, list)
+            and len(beats) > 0
             and all(isinstance(analysis.get(name), list) for name in required_lists)
             and isinstance(analysis.get("downbeat_provenance"), dict)
         )
@@ -1210,6 +1391,8 @@ async def _analyze_audio_in_context(
                     stage_errors=snapshot.get("_stage_errors", {}),
                     downbeats=snapshot.get("downbeats"),
                     downbeat_provenance=snapshot.get("downbeat_provenance"),
+                    beat_grid_provenance=snapshot.get("beat_grid_provenance"),
+                    beat_grid=snapshot.get("beat_grid"),
                 )
 
         def _checkpoint_stream_chunk(fresh: dict[str, Any]) -> None:
@@ -1270,6 +1453,28 @@ async def _analyze_audio_in_context(
                 _checkpoint_state.update(merged)
                 _checkpoint_finished.add(stage)
 
+        def _neural_downbeats(path: str, duration: float):
+            """Bridge only neural inference to the loop-owned shared GPU lock."""
+            def guard():
+                _checkpoint_stage("__stream_guard__", {})
+
+            guard()
+            future = asyncio.run_coroutine_threadsafe(
+                _track_neural_downbeats(path, duration, guard, _analysis_progress),
+                _loop,
+            )
+            try:
+                while True:
+                    guard()
+                    try:
+                        return future.result(timeout=0.2)
+                    except TimeoutError:
+                        if future.done():
+                            raise
+            finally:
+                if not future.done():
+                    future.cancel()
+
         stems_paths = clip.get("stems_paths") or {}
         if isinstance(stems_paths, str):
             try:
@@ -1287,16 +1492,15 @@ async def _analyze_audio_in_context(
             worker_kwargs: dict[str, Any] = {
                 "on_stage_checkpoint": _checkpoint_stage,
             }
+            if planned_request.detect_beats:
+                worker_kwargs["neural_downbeat_runner"] = _neural_downbeats
             if stream_resume:
                 worker_kwargs["stream_resume"] = stream_resume
-            fresh_result = await asyncio.to_thread(
-                _run_audio_analysis,
-                audio_path,
-                request.clip_id,
-                planned_request,
-                stems_paths,
-                _analysis_progress,
-                **worker_kwargs,
+            fresh_result = await _loop.run_in_executor(
+                _audio_analysis_pool,
+                partial(_run_audio_analysis, audio_path, request.clip_id,
+                        planned_request, stems_paths, _analysis_progress,
+                        **worker_kwargs),
             )
         else:
             fresh_result = {
@@ -1332,7 +1536,7 @@ async def _analyze_audio_in_context(
         # war das der Grund, warum `semantic_match_weight` in 0 von 2576 Cuts
         # auftauchte und der Cross-Modal-Projektor nie Trainingspaare bekam.
         if _audio_plan_has_work(planned_request):
-            await _store_audio_embedding_in_brain_cache(
+            clip["has_audio_embedding"] = await _store_audio_embedding_in_brain_cache(
                 audio_path=audio_path,
                 audio_hash=clip.get("audio_hash"),
             )
@@ -1365,6 +1569,8 @@ async def _analyze_audio_in_context(
                 stage_errors=result.get("_stage_errors", {}),
                 downbeats=result.get("downbeats", []),
                 downbeat_provenance=result.get("downbeat_provenance"),
+                beat_grid_provenance=result.get("beat_grid_provenance"),
+                beat_grid=result.get("beat_grid"),
             )
 
         await publish_log(
@@ -1876,6 +2082,69 @@ def _emit_analysis_progress(
         pass
 
 
+async def _track_neural_downbeats(path, duration, guard, progress):
+    """A cancelled/timed-out worker keeps its lock until its session closes."""
+    stop = threading.Event()
+
+    def check():
+        if stop.is_set():
+            raise _AudioAnalysisInterrupted("Neural downbeat analysis cancelled")
+        guard()
+
+    def infer():
+        from pb_studio.audio.beat_this_tracker import BeatThisTracker
+        from pb_studio.core.vram_budget_manager import get_vram_manager
+        from uuid import uuid4
+
+        check()
+        tracker = BeatThisTracker()
+        manager = None
+        registered = False
+        model_id = f"beat-this-{uuid4().hex}"
+        try:
+            manager = get_vram_manager()
+            # Conservative workspace budget for one attention window.
+            manager.register_model(model_id, "Beat This ONNX", 2048)
+            registered = True
+            if not manager.reserve(model_id):
+                raise RuntimeError("Beat This VRAM reservation unavailable")
+            if not manager.commit(model_id):
+                raise RuntimeError("Beat This VRAM commit failed")
+            beats, downbeats = tracker.track_file(
+                path, check,
+                lambda pct: progress("downbeats", 40.0 + pct * 0.04,
+                                     f"Beat This Downbeats {pct:.1f}%"),
+            )
+            check()
+            return beats, downbeats, tracker.manifest["revision"]
+        except BaseException as exc:
+            # ORT's unwound Python frames can retain a session through their
+            # local `self`, even after tracker.close(). Drop these references
+            # before releasing the shared GPU lock and budget.
+            traceback.clear_frames(exc.__traceback__)
+            raise
+        finally:
+            try:
+                tracker.close()
+            finally:
+                if registered:
+                    try:
+                        manager.release(model_id)
+                    finally:
+                        try:
+                            manager.cancel_reservation(model_id)
+                        finally:
+                            manager.unregister_model(model_id)
+
+    try:
+        return await with_gpu_task(
+            infer, model_id="beat-this", manage_vram=False,
+            timeout_seconds=max(float(config.gpu_timeout_seconds), duration * 3.0),
+        )
+    finally:
+        stop.set()
+
+
 def _run_audio_analysis(
     audio_path: str,
     clip_id: int,
@@ -1884,6 +2153,7 @@ def _run_audio_analysis(
     _loop=None,
     on_stage_checkpoint=None,
     stream_resume: dict[str, dict] | None = None,
+    neural_downbeat_runner=None,
 ) -> dict[str, Any]:
     """Führt die vollständige Audio-Analyse durch (blockierend)."""
     import librosa
@@ -2144,6 +2414,28 @@ def _run_audio_analysis(
     }
     bpm: float = 0.0
     energy_curve: list[float] = []
+    # M-1: Zweitwert aus dem Streaming-Schaetzer (Median der Pro-Fenster-Tempi).
+    # Er ist NICHT mehr der ausgelieferte `bpm`, wird aber in der Provenance
+    # mitgefuehrt, damit die Divergenz sichtbar statt ununterscheidbar ist.
+    _window_median_bpm: float | None = None
+    _bpm_method: str = "not_requested"
+    beat_grid_provenance: dict = {
+        "status": "unavailable",
+        "method": "not_requested",
+        "bpm": 0.0,
+        "beat_count": 0,
+        "kick_count": 0,
+        "interval_regularity": None,
+        "regular": None,
+        "kick_alignment": None,
+        "kick_cross_check": "not_possible",
+        "tolerance_seconds": None,
+        "window_median_bpm": None,
+    }
+    # Das Grid als Regel (Anker + Tempo). Vorbelegt, damit jeder Ausgang -
+    # auch der frueh abbrechende - ein aussagefaehiges Feld liefert statt
+    # eines leeren Dicts, das man nicht von "nie versucht" unterscheiden kann.
+    beat_grid: dict = {"status": "unavailable", "method": "not_requested"}
 
     if request.detect_beats:
         try:
@@ -2172,7 +2464,13 @@ def _run_audio_analysis(
                         "strength": float(s),
                         "beat_type": "beat",
                     })
-                bpm = float(_stream_bpm or 0.0)
+                # M-1: `_stream_bpm` ist der Median der Pro-Fenster-Tempi aus
+                # streaming_analyzer.py:75-78 — eine ANDERE Groesse als
+                # 60/median(diff(beats)). Beide standen bisher ununterscheidbar
+                # im selben Objekt. Der ausgelieferte Wert wird jetzt fuer beide
+                # Zweige einheitlich aus dem Raster berechnet (unten); der
+                # Fensterwert bleibt als Zweitwert erhalten.
+                _window_median_bpm = float(_stream_bpm or 0.0)
                 energy_curve = list(_stream_energy or [])
                 downbeat_provenance = {
                     "status": "unavailable",
@@ -2195,12 +2493,19 @@ def _run_audio_analysis(
                 # detect_beats gibt list[float] zurück - BeatNet oder Librosa-Fallback
                 beat_detect_path = drums_path if drums_path and Path(drums_path).exists() and Path(drums_path).stat().st_size > 0 else (instrumental_path if instrumental_path and Path(instrumental_path).exists() else audio_path)
                 logger.info(f"Beat-Detection verwendet Pfad: {beat_detect_path}")
+                # detect_beats_with_downbeats liefert beides aus EINEM
+                # BeatNet-Durchlauf. get_downbeats() waere ein zweiter Lauf
+                # ueber dieselbe Datei gewesen.
                 try:
-                    beat_times = detector.detect_beats(beat_detect_path, on_progress=_beat_progress)
+                    beat_times, downbeat_times = detector.detect_beats_with_downbeats(
+                        beat_detect_path, on_progress=_beat_progress
+                    )
                 except Exception as e:
                     if beat_detect_path != audio_path:
                         logger.warning(f"Beat-Detection mit {beat_detect_path} fehlgeschlagen: {e}. Versuche Fallback auf Original-Mix...")
-                        beat_times = detector.detect_beats(audio_path, on_progress=_beat_progress)
+                        beat_times, downbeat_times = detector.detect_beats_with_downbeats(
+                            audio_path, on_progress=_beat_progress
+                        )
                     else:
                         raise
                 if beat_times:
@@ -2212,27 +2517,72 @@ def _run_audio_analysis(
                     from pb_studio.audio.beat_detector import BeatDetector as _BD
                     strengths = _BD.compute_beat_strengths(y, sr, arr.tolist())
 
+                    # Downbeats tragen dieselben Zeitstempel wie die Beats,
+                    # aus denen sie stammen. Sie werden deshalb MARKIERT und
+                    # nicht angehaengt - Anhaengen verdoppelte jeden
+                    # Taktanfang und brachte beats/strengths ausser Tritt.
+                    downbeat_set = {float(t) for t in downbeat_times}
                     for t, s in zip(arr, strengths):
+                        beat_time = float(t)
                         beats.append({
-                            "time": float(t),
+                            "time": beat_time,
                             "strength": float(s),
-                            "beat_type": "beat",
+                            "beat_type": (
+                                "downbeat" if beat_time in downbeat_set else "beat"
+                            ),
                         })
-                    if len(arr) > 1:
-                        intervals = np.diff(arr)
-                        avg_interval = float(np.median(intervals))
-                        bpm = 60.0 / avg_interval if avg_interval > 0 else 0.0
-                downbeat_provenance = {
-                    "status": "unavailable",
-                    "method": "beat_time_only_detector",
-                    "synthetic": False,
-                    "measured_count": 0,
-                }
+                    downbeats = sorted(
+                        beat_time
+                        for beat_time in downbeat_set
+                        if any(beat_time == float(t) for t in arr)
+                    )
+                if downbeats:
+                    # "measured" ist echten Taktpositionen aus dem Detektor
+                    # vorbehalten.
+                    downbeat_provenance = {
+                        "status": "measured",
+                        "method": "beatnet_native",
+                        "synthetic": False,
+                        "measured_count": len(downbeats),
+                    }
+                else:
+                    # Ehrlich: der librosa-Fallback kennt keine Taktanfaenge.
+                    downbeat_provenance = {
+                        "status": "unavailable",
+                        "method": "beat_time_only_detector",
+                        "synthetic": False,
+                        "measured_count": 0,
+                    }
 
                 # Energy-Curve via librosa (unabhängig von BeatNet-Verfügbarkeit)
                 rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
                 rms_max = float(np.max(rms)) if len(rms) > 0 else 1.0
                 energy_curve = (rms / rms_max).tolist() if rms_max > 0 else rms.tolist()
+            # H-4: Der librosa-Fallback gibt bei einem Ladefehler eine leere
+            # Liste zurueck, ohne zu werfen (beat_detector.py:438). Ohne diesen
+            # Zweig lief `_mark_stage_completed` trotzdem, und ein Clip ganz
+            # ohne Beat-Information galt dauerhaft als analysiert.
+            if not beats:
+                raise RuntimeError(
+                    "Beat-Erkennung lieferte kein Raster (0 Beats) — "
+                    "Stufe wird nicht als abgeschlossen persistiert"
+                )
+
+            # M-1: EINE Definition fuer beide Zweige — BPM ist ab hier immer
+            # 60/median(diff(beats)) auf genau dem Raster, das mit ausgeliefert
+            # wird. Vorher galt im Streaming-Zweig der Fenster-Median, der dem
+            # mitgelieferten Raster systematisch widersprach.
+            _beat_time_list = [float(b["time"]) for b in beats]
+            _bpm_method = "beat_interval_median"
+            if len(_beat_time_list) > 1:
+                _intervals = np.diff(np.asarray(sorted(_beat_time_list)))
+                _median_interval = float(np.median(_intervals))
+                bpm = 60.0 / _median_interval if _median_interval > 0 else 0.0
+            if bpm <= 0.0 and _window_median_bpm:
+                # Einzelner Beat oder entartete Intervalle: der Fensterwert ist
+                # dann die einzige verfuegbare Quelle. Wird als solche benannt.
+                bpm = float(_window_median_bpm)
+                _bpm_method = "streaming_window_median"
             _mark_stage_completed("beats", ("load", "beats", "energy"))
         except Exception as e:
             logger.warning(f"Beat-Analyse fehlgeschlagen: {e}")
@@ -2245,6 +2595,11 @@ def _run_audio_analysis(
             "method": "beat_detection_disabled",
             "synthetic": False,
             "measured_count": 0,
+        }
+        _bpm_method = "beat_detection_disabled"
+        beat_grid_provenance = {
+            **beat_grid_provenance,
+            "method": "beat_detection_disabled",
         }
 
     # 1b. Onset/Drum-Trigger-Kandidaten (Audit-Fix 2026-07-10, Sweep-Finding HIGH-1):
@@ -2283,28 +2638,38 @@ def _run_audio_analysis(
             # Rows leer, und onset/snare/hihat kollabierten auf identische
             # Trefferzahlen (15/15/15) — die Bandtrennung fand faktisch nicht
             # statt. Filterzahl und FFT-Groesse haengen jetzt an der Bandbreite.
-            _kick_fft, _kick_mels = _band_stft_params(sr, 20.0, 150.0)
+            # H-3 (Audit 2026-08-30): Bandgrenzen aus der gemeinsamen Quelle.
+            # Vorher wurden die Filterparameter fuer 20-150 Hz gerechnet, an
+            # `onset_strength` aber nur `fmax=150` ohne `fmin` uebergeben -
+            # gemessen wurde also 0-150 Hz, passend parametriert war 20-150 Hz.
+            _kick_fft, _kick_mels = _band_stft_params(sr, *KICK_BAND)
             kick_env = librosa.onset.onset_strength(
                 y=librosa.effects.preemphasis(y), sr=sr, hop_length=_hop,
-                aggregate=np.median, fmax=150,
+                aggregate=np.median, fmin=KICK_BAND[0], fmax=KICK_BAND[1],
                 n_fft=_kick_fft, n_mels=_kick_mels,
             )
             kick_times = librosa.frames_to_time(
                 librosa.onset.onset_detect(onset_envelope=kick_env, sr=sr, hop_length=_hop),
                 sr=sr, hop_length=_hop,
             ).tolist()
-            _snare_fft, _snare_mels = _band_stft_params(sr, 200.0, 400.0)
+            _snare_fft, _snare_mels = _band_stft_params(sr, *SNARE_BAND)
             snare_env = librosa.onset.onset_strength(
-                y=y, sr=sr, hop_length=_hop, fmin=200, fmax=400,
+                y=y, sr=sr, hop_length=_hop,
+                fmin=SNARE_BAND[0], fmax=SNARE_BAND[1],
                 n_fft=_snare_fft, n_mels=_snare_mels,
             )
             snare_times = librosa.frames_to_time(
                 librosa.onset.onset_detect(onset_envelope=snare_env, sr=sr, hop_length=_hop),
                 sr=sr, hop_length=_hop,
             ).tolist()
-            _hihat_fft, _hihat_mels = _band_stft_params(sr, 5000.0, None)
+            # Feste Obergrenze statt Nyquist: hier ist sr = analysis_sr (44100
+            # oder 22050, je nach `spectral_analysis`), die Engine laedt mit
+            # 22050. Ohne `fmax` mass dieser Pfad 5000-22050 Hz und die Engine
+            # 5000-11025 Hz - zwei verschiedene Baender fuer dieselbe Aufgabe.
+            _hihat_fft, _hihat_mels = _band_stft_params(sr, *HIHAT_BAND)
             hihat_env = librosa.onset.onset_strength(
-                y=y, sr=sr, hop_length=_hop, fmin=5000,
+                y=y, sr=sr, hop_length=_hop,
+                fmin=HIHAT_BAND[0], fmax=HIHAT_BAND[1],
                 n_fft=_hihat_fft, n_mels=_hihat_mels,
             )
             hihat_times = librosa.frames_to_time(
@@ -2313,6 +2678,156 @@ def _run_audio_analysis(
             ).tolist()
         except Exception as e:
             logger.warning(f"Drum-Onset-Detection fehlgeschlagen: {e}")
+
+    if request.detect_beats and neural_downbeat_runner is not None:
+        _stream_guard()
+        try:
+            from pb_studio.audio.downbeat_alignment import validate_neural_events
+            from pb_studio.audio.beat_detector import BeatDetector
+
+            neural_beats, neural_downbeats, revision = neural_downbeat_runner(
+                str(audio_path), duration
+            )
+            times, measured_downbeats, neural_bpm = validate_neural_events(
+                neural_beats, neural_downbeats, duration
+            )
+            snapshot_duration = len(y) / sr
+            snapshot_times = [t for t in times if t < snapshot_duration]
+            strengths = iter(BeatDetector.compute_beat_strengths(y, sr, snapshot_times))
+            marked = set(measured_downbeats)
+            measured_beats = [
+                {"time": t, "strength": float(next(strengths, 1.0)) if t < snapshot_duration else 1.0,
+                 "beat_type": "downbeat" if t in marked else "beat"}
+                for t in times
+            ]
+            provenance = {
+                "status": "measured" if marked else "unavailable",
+                "method": "beat_this_onnx_native", "synthetic": False,
+                "measured_count": len(marked), "model_revision": revision,
+                "legacy_bpm": bpm, "legacy_beat_count": len(beats),
+                "legacy_method": _bpm_method, "beat_times_replaced": True,
+                "strength_measured_until_seconds": snapshot_duration,
+            }
+            _stream_guard()
+            # Authorised on 2026-09-04: retain native neural timing. Snapping
+            # it to the incompatible legacy grid destroyed measured downbeats.
+            beats, downbeats, bpm = measured_beats, measured_downbeats, neural_bpm
+            downbeat_provenance = provenance
+            _bpm_method = "beat_this_beat_interval_median"
+        except (_AudioAnalysisInterrupted, ProjectContextChangedError, PersistenceError):
+            raise
+        except Exception as exc:
+            from pb_studio.audio.downbeat_alignment import BeatThisUnavailable
+
+            downbeats = []
+            for beat in beats:
+                beat["beat_type"] = "beat"
+            downbeat_provenance = {
+                "status": "unavailable" if isinstance(exc, (BeatThisUnavailable, ImportError)) else "failed",
+                "method": "beat_this_onnx_native", "synthetic": False,
+                "measured_count": 0, "reason": str(exc), "beat_times_replaced": False,
+            }
+        _stream_guard()
+        if downbeat_provenance["status"] != "measured":
+            logger.warning("Beat This Downbeats %s: %s",
+                           downbeat_provenance["status"], downbeat_provenance.get("reason"))
+
+    # 1c. C-3: Plausibilitaet des Beat-Rasters. Erst hier, weil die kick_times
+    # als unabhaengige Gegenprobe vorliegen muessen. Gemeldet, nicht erzwungen.
+    if request.detect_beats and beats:
+        beat_grid_provenance = _evaluate_beat_grid(
+            [float(b["time"]) for b in beats],
+            kick_times,
+            bpm=bpm,
+            method=_bpm_method,
+            window_median_bpm=_window_median_bpm,
+        )
+        if beat_grid_provenance["status"] != "plausible":
+            logger.warning(
+                "Beat-Raster unplausibel (clip_id=%s): bpm=%.2f regularity=%s "
+                "kick_alignment=%s (%s) — Wert wird unveraendert ausgeliefert",
+                clip_id,
+                bpm,
+                beat_grid_provenance.get("interval_regularity"),
+                beat_grid_provenance.get("kick_alignment"),
+                beat_grid_provenance.get("kick_cross_check"),
+            )
+        else:
+            logger.info(
+                "Beat-Raster plausibel (clip_id=%s): bpm=%.2f regularity=%.3f "
+                "kick_alignment=%s",
+                clip_id,
+                bpm,
+                beat_grid_provenance.get("interval_regularity") or 0.0,
+                beat_grid_provenance.get("kick_alignment"),
+            )
+    elif request.detect_beats:
+        beat_grid_provenance = {**beat_grid_provenance, "method": "no_beats"}
+
+    # 1d. Das Beatgrid als REGEL: Anker plus Tempo statt einer Zeitmarkenliste.
+    #
+    # Bewusst getrennt von `beats` und von `bpm`. Der Legacy-Fallback
+    # `librosa.beat_track` baut seinen Prior aus start_bpm=120; an
+    # 104 Fenstern mit BPM-Referenz gemessen traf es das Tempo in 39,4 % der
+    # Faelle und lieferte ueber alle Fenster nur sechs verschiedene Werte
+    # (docs/measurements/2026-08-30-downbeat-ableitung-befund.md). Der
+    # Estimator sucht sein Tempo ohne diesen Prior und prueft es
+    # verpflichtend auf Oktavfehler.
+    #
+    # Dieser Fourier-Estimator ersetzt nichts. Beat This kann seit OBJ-79
+    # native Beat-Zeitpunkte liefern; das unabhaengige Grid bleibt separat.
+    if request.detect_beats and not _use_streaming and y is not None:
+        try:
+            from pb_studio.audio.beat_grid import estimate_beat_grid
+
+            _grid = estimate_beat_grid(y, sr, kick_times=kick_times)
+            beat_grid = _grid.as_provenance()
+            logger.info(
+                "Beatgrid (clip_id=%s): %.2f BPM, Anker %.3f s, Kontrast %.2f, "
+                "Status %s, Kick-Recall %s / Praezision %s | zum Vergleich "
+                "beat_track: %.2f BPM",
+                clip_id, _grid.bpm, _grid.anchor_s, _grid.contrast, _grid.status,
+                _grid.kick_recall, _grid.kick_precision, bpm,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Fail-soft mit Spur: das Grid ist eine Zusatzangabe, sein
+            # Ausfall darf die Analyse nicht kippen - aber er darf auch
+            # nicht stumm bleiben.
+            logger.warning("Beatgrid-Schaetzung fehlgeschlagen: %s", exc)
+            beat_grid = {"status": "unavailable", "method": "estimator_failed"}
+    elif request.detect_beats and _use_streaming:
+        # Lange Datei: EIN Tempo waere hier strukturell falsch, nicht nur
+        # ungenau. An 800 Segmenten aus 20 echten Mixen gemessen sitzt ein
+        # globales Raster in 19 % der Segmente, ein je Segment bestimmtes in
+        # 95 % (docs/measurements/2026-08-31-mix-tempo-drift.json).
+        #
+        # Der Segmentierer laedt fensterweise aus der Datei statt am Stueck -
+        # ein 188-Minuten-Mix waere bei 22050 Hz sonst 995 MB float32, also
+        # genau das OOM-Szenario aus Audit-Befund H-5.
+        try:
+            from pb_studio.audio.beat_grid_segments import (
+                segment_beat_grids_from_file,
+                segments_as_payload,
+            )
+
+            _segments = segment_beat_grids_from_file(
+                str(audio_path), sr=22050, kick_times=kick_times
+            )
+            beat_grid = segments_as_payload(_segments)
+            if _segments:
+                logger.info(
+                    "Segmentiertes Beatgrid (clip_id=%s): %d Abschnitte, "
+                    "dominant %.2f BPM ueber %.0f s, Tempi %s",
+                    clip_id, len(_segments),
+                    beat_grid.get("dominant_bpm", 0.0),
+                    beat_grid.get("dominant_span_s", 0.0),
+                    beat_grid.get("distinct_tempi"),
+                )
+        except Exception as exc:  # noqa: BLE001
+            # Fail-soft mit Spur: das Grid ist eine Zusatzangabe, sein
+            # Ausfall darf die Analyse eines langen Mixes nicht kippen.
+            logger.warning("Segmentiertes Beatgrid fehlgeschlagen: %s", exc)
+            beat_grid = {"status": "unavailable", "method": "segmentation_failed"}
 
     if request.detect_beats:
         _checkpoint(
@@ -2324,6 +2839,8 @@ def _run_audio_analysis(
                 "energy_curve": energy_curve,
                 "downbeats": downbeats,
                 "downbeat_provenance": downbeat_provenance,
+                "beat_grid_provenance": beat_grid_provenance,
+                "beat_grid": beat_grid,
                 "onset_times": onset_times,
                 "kick_times": kick_times,
                 "snare_times": snare_times,
@@ -2532,6 +3049,8 @@ def _run_audio_analysis(
         "beats": beats,
         "downbeats": downbeats,
         "downbeat_provenance": downbeat_provenance,
+        "beat_grid_provenance": beat_grid_provenance,
+        "beat_grid": beat_grid,
         "key": key,
         "energy_curve": energy_curve,
         "structure_segments": structure_segments,

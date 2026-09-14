@@ -398,6 +398,33 @@ class BrainService:
                 connection_to_close = self._retire_slot_locked(current_slot)
         self._close_state_connection(connection_to_close)
 
+    def force_unbind_project_state(self, *, lock_timeout: float = 2.0) -> bool:
+        """Fail-closed-Notausgang, wenn unbind_project_state gescheitert ist.
+
+        Raeumt so weit wie moeglich regulaer auf: Slot retiren und Verbindung
+        schliessen, damit weder ein Slot noch ein sqlite3-Handle leckt (unter
+        Windows blockiert ein offenes Handle das Loeschen des Projektordners).
+        Nur wenn das Lock nicht binnen ``lock_timeout`` erworben werden kann,
+        wird die Bindung ohne Lock gekappt - Datenschutz vor Aufraeumen.
+
+        Gibt True zurueck, wenn regulaer unter dem Lock aufgeraeumt wurde."""
+        self._ensure_state_lease_runtime()
+        connection_to_close: Optional[sqlite3.Connection] = None
+        acquired = self._state_binding_lock.acquire(timeout=lock_timeout)
+        try:
+            slot = self._current_state_slot
+            # state_conn zuerst - der Lease-Pfad revalidiert vor jedem Write,
+            # der direkte feedback_logger-Pfad nicht. Reihenfolge nicht tauschen.
+            self.state_conn = None
+            self._current_state_slot = None
+            if acquired and slot is not None:
+                connection_to_close = self._retire_slot_locked(slot)
+        finally:
+            if acquired:
+                self._state_binding_lock.release()
+        self._close_state_connection(connection_to_close)
+        return acquired
+
     def _is_current_project_state_lease(self, lease: BrainStateLease) -> bool:
         self._ensure_state_lease_runtime()
         with self._state_binding_lock:

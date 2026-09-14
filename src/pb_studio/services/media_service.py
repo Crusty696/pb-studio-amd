@@ -1,3 +1,13 @@
+"""
+LEGACY — kein Produktionsaufrufer (Zustandsaufnahme 2026-08-30, E-3).
+
+Stammt aus der PyQt-Oberflaeche; einziger Importeur ist
+`src/pb_studio/ui_legacy_archived/`. Medien laufen produktiv ueber
+`MediaRepository` und die Router.
+
+Bewacht von `Tests/test_legacy_symbols_have_no_production_callers.py`.
+"""
+
 import hashlib
 import logging
 import subprocess

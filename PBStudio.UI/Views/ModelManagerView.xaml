@@ -80,6 +80,16 @@
                                Foreground="{StaticResource AbletonTextDim}"
                                FontSize="10" Margin="0,2,0,0"
                                TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ProgressBar Width="72" Height="4" Margin="0,0,8,0"
+                                     VerticalAlignment="Center" IsIndeterminate="True"
+                                     Foreground="{StaticResource AbletonAccent}"
+                                     AutomationProperties.Name="Modellstatus wird geladen"/>
+                        <TextBlock Text="Modellstatus wird geladen …" FontSize="11"
+                                   Foreground="{StaticResource AbletonTextDim}"
+                                   AutomationProperties.LiveSetting="Polite"/>
+                    </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>

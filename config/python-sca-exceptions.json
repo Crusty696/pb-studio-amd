@@ -7,7 +7,7 @@
       "version": "2.11.0+cpu",
       "alias": "GHSA-RRMF-RVHW-RF47",
       "owner": "PB Studio Release Owner",
-      "expires_on": "2026-09-01",
+      "expires_on": "2026-09-29",
       "reason": "Affected torch.jit.script is absent in the shipped repository; fresh-target compatibility and runtime tests remain required."
     },
     {
@@ -16,8 +16,17 @@
       "version": "81.0.0",
       "alias": "GHSA-H35F-9H28-MQ5C",
       "owner": "PB Studio Release Owner",
-      "expires_on": "2026-09-01",
+      "expires_on": "2026-09-29",
       "reason": "The release target is Windows x64 with wheel-only installation, which defeats the macOS sdist precondition."
+    },
+    {
+      "id": "T413-TRANSFORMERS-CVE-2026-9856",
+      "package": "transformers",
+      "version": "5.5.4",
+      "alias": "GHSA-XRQW-3RRV-VX5W",
+      "owner": "PB Studio Release Owner",
+      "expires_on": "2026-09-29",
+      "reason": "The only production save_pretrained call was removed; all remaining Transformers loads are local_files_only and no affected serialization sink remains reachable."
     }
   ]
 }

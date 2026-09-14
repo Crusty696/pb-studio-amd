@@ -244,10 +244,33 @@ def _read_project_meta(project_path: Path) -> dict:
         return {}
 
 
+def _meta_name(meta: dict, *fallbacks: str | None) -> str:
+    """Erster brauchbarer Projektname aus project.json, sonst aus den Fallbacks.
+
+    ``meta.get("name", fallback)`` greift nur bei FEHLENDEM Schluessel. Ein
+    extern editiertes oder von Hand kopiertes project.json mit ``"name": null``
+    lieferte damit None, und ``ProjectInfo`` verlangt einen ``str`` - das
+    Projekt war per HTTP 500 unoeffenbar.
+
+    Der leere String als letzte Rueckgabe ist bewusst und in der Praxis
+    unerreichbar: der letzte Fallback ist stets ``project_path.name``, und der
+    ist nur fuer ein Dateisystem-Wurzelverzeichnis leer. Ein Projekt ist immer
+    ein Ordner unterhalb von ``config.project_dir``. Lieber ein leerer Name als
+    ein erfundener, der so in den DB-Record wandern wuerde.
+    """
+    for candidate in (meta.get("name"), *fallbacks):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate
+    return ""
+
+
 def _write_project_meta(project_path: Path, meta: dict) -> None:
     import os
     meta_path = _project_meta_path(project_path)
-    tmp_path = meta_path.with_suffix(".tmp")
+    # Hauskonvention wie ``set_anchors``: versteckt, eindeutig, Endung
+    # angehaengt statt ersetzt (``with_suffix`` machte aus project.json ein
+    # festes, sichtbares project.tmp).
+    tmp_path = meta_path.with_name(f".{meta_path.name}.{uuid.uuid4().hex}.tmp")
     try:
         tmp_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(str(tmp_path), str(meta_path))
@@ -258,7 +281,7 @@ def _write_project_meta(project_path: Path, meta: dict) -> None:
 
 def _restore_file_snapshot(path: Path, snapshot: bytes | None) -> None:
     """Restore one save-owned file to its exact pre-save bytes."""
-    rollback_path = path.with_suffix(f"{path.suffix}.rollback.tmp")
+    rollback_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.rollback.tmp")
     try:
         if snapshot is None:
             path.unlink(missing_ok=True)
@@ -351,6 +374,91 @@ def _load_timeline_into_state(project_path: Path, state: AppState) -> bool:
         return False
 
 
+def _timeline_payload(timeline: list[dict], audio_path: str | None) -> dict:
+    """Einziges Dateiformat fuer timeline.json — von /project/save und vom Close-Pfad geteilt.
+
+    Der einzige Leser (``_load_timeline_into_state``) erwartet ein Dict. Eine
+    nackte Liste wuerde dort still verworfen, deshalb darf das Format nur an
+    dieser einen Stelle entstehen.
+    """
+    return {
+        "audio_path": audio_path,
+        "timeline": timeline,
+        "saved_at": _utc_now_iso(),
+    }
+
+
+def persist_timeline_for_context(state: AppState, project_root: Path) -> bool:
+    """Sichert die RAM-Timeline nach timeline.json, bevor der State verworfen wird.
+
+    Die Pacing-Engine schreibt ihr Ergebnis nur ueber ``state.set_timeline(...)``.
+    Ohne diesen Aufruf verliert jeder Projektwechsel und jedes Close die
+    generierte Timeline ersatzlos.
+
+    Bewusst OHNE ``state.project_commit(...)``-Guard: an beiden Aufrufstellen
+    (``close_project``, ``_activate_project``) existiert kein
+    ``ProjectOperationContext`` — der Kontext wird dort gerade invalidiert. Der
+    Schreibvorgang gehoert zum alten Projekt und darf deshalb nicht an dessen
+    Epoch-Guard haengen, sonst waere er per Konstruktion immer blockiert.
+
+    Bewusste Asymmetrie zu ``_save_project_in_context``: bei leerer Timeline
+    loescht der Save-Pfad die Datei, dieser Pfad laesst sie stehen. Ein leerer
+    ``current_timeline`` entsteht auch nach einem fehlgeschlagenen Pacing-Lauf
+    oder vor dem Laden eines Projekts; ein Close-Pfad, der daraufhin still
+    Nutzdaten loescht, waere der schlimmere Fehler. Die Falle bleibt: wer alle
+    Cuts entfernt und dann nur schliesst, findet die alte Timeline wieder —
+    zum Loeschen ist ``/project/save`` zustaendig.
+
+    Legt bewusst KEIN Verzeichnis an (anders als ``set_anchors``, das unter
+    ``project_operation()`` laeuft und dessen Existenz garantiert ist). Sonst
+    liesse ein extern geloeschter Projektordner sich hier als Geisterprojekt
+    mit einer einsamen timeline.json wiederauferstehen.
+
+    Returns:
+        True wenn geschrieben wurde, False wenn es nichts zu sichern gab.
+    """
+    # Timeline und audio_path gehoeren zusammen und werden in EINER
+    # Lock-Akquise gelesen; zwei getrennte Snapshots waeren nicht konsistent.
+    with state._state_lock:
+        raw_timeline = list(state.current_timeline)
+        audio_path = state.current_audio_path
+
+    timeline = _normalize_timeline_entries(raw_timeline)
+    if not timeline:
+        if _timeline_path(project_root).exists():
+            logger.info(
+                "Leere RAM-Timeline: vorhandene timeline.json in %s bleibt erhalten. "
+                "Zum Loeschen /project/save verwenden.",
+                project_root,
+            )
+        return False
+
+    if not project_root.is_dir():
+        logger.warning(
+            "Timeline nicht gesichert: Projektordner fehlt (%s)",
+            project_root,
+        )
+        return False
+
+    path = _timeline_path(project_root)
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(
+            json.dumps(
+                _timeline_payload(timeline, audio_path),
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        os.replace(str(tmp), str(path))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    logger.info("Timeline gesichert: %d Cuts in %s", len(timeline), path)
+    return True
+
+
 async def _activate_project(
     state: AppState,
     project_path: Path,
@@ -359,6 +467,29 @@ async def _activate_project(
 ) -> None:
     """Serialisiert Brain-Bind, Epoch-Wechsel, Task-Drain und State-Swap."""
     async with state.project_lifecycle_lock:
+        # Timeline des NOCH aktiven alten Projekts sichern, bevor der Kontext
+        # invalidiert und der Runtime-State ersetzt wird. current_project zeigt
+        # hier noch auf A; genullt wird es erst in state.reset().
+        with state._state_lock:
+            previous_project = dict(state.current_project or {})
+        previous_root = previous_project.get("path")
+        # Reopen desselben Projekts ist KEIN Wechsel: open_project hat die alte
+        # timeline.json bereits in candidate_state geladen und wuerde sie
+        # gleich in den RAM setzen. Ein Schreiben des neuen RAM-Stands liesse
+        # Datei und UI auseinanderlaufen. open_project haelt seit 00f2c23
+        # selbst einen Same-Path-Guard; dieser Zweig bleibt als Absicherung
+        # gegen einen Projektwechsel zwischen jener Pruefung und dem
+        # project_lifecycle_lock.
+        if previous_root and Path(previous_root).resolve() != project_path.resolve():
+            try:
+                persist_timeline_for_context(state, Path(previous_root))
+            except Exception as exc:
+                logger.error(
+                    "Timeline des vorherigen Projekts konnte vor dem Wechsel "
+                    "nicht gesichert werden: %s",
+                    exc,
+                    exc_info=True,
+                )
         # Alte Commits zuerst sperren und registrierte Tasks beenden. Dadurch
         # kann während des externen Brain-Rebinds kein A-Job mehr nach B schreiben.
         state.invalidate_project_context()
@@ -527,7 +658,12 @@ async def open_project(
     request: ProjectOpen,
     state: AppState = Depends(get_app_state),
 ) -> ProjectInfo:
-    """Öffnet ein bestehendes Projekt."""
+    """Öffnet ein bestehendes Projekt.
+
+    Zeigt die Anfrage auf das bereits offene Projekt, ist der Aufruf ein
+    No-Op, der den aktuellen Laufzeitzustand zurueckmeldet - ein Neuladen von
+    Platte wuerde ungespeicherte Cuts verwerfen (siehe Guard unten).
+    """
 
     project_path = Path(request.path).resolve()
     # SEC-001: Path-Traversal-Schutz für Open (gegen globalen Basis-Ordner)
@@ -538,6 +674,50 @@ async def open_project(
         raise HTTPException(status_code=404, detail=f"Projekt nicht gefunden: {request.path}")
 
     meta = _read_project_meta(project_path)
+
+    # Reopen desselben Projekts ist KEIN Wechsel. Der weitere Verlauf laedt den
+    # Medienkatalog und die Datei-Timeline in einen candidate_state, den
+    # _activate_project ueber install_project_state als kompletten
+    # Laufzeitzustand einsetzt. Beim bereits offenen Projekt wuerde damit der
+    # aeltere Dateistand den RAM-Stand ersetzen - ein Pacing-Lauf, der noch
+    # nicht gespeichert wurde, waere ersatzlos weg.
+    # Der Guard steht bewusst VOR dem Laden: er soll den Austausch verhindern,
+    # nicht nachtraeglich reparieren.
+    # Alle Felder werden in EINER Lock-Akquise gelesen. install_project_state
+    # haelt _state_lock ueber den gesamten Austausch; mehrere Einzelzugriffe
+    # koennten sonst current_project von X mit den Zaehlern von Y mischen.
+    # Direkte len()/bool()-Zugriffe statt der Snapshot-Getter: identisch zur
+    # Semantik von /project/info und ohne die Deepcopy des ganzen Katalogs.
+    # Path.resolve() bleibt bewusst AUSSERHALB des Locks - es ist ein
+    # Dateisystemzugriff und hat unter einem Zustands-Lock nichts zu suchen.
+    with state._state_lock:
+        active_project = dict(state.current_project or {})
+        ram_audio_count = len(state.audio_clips)
+        ram_video_count = len(state.video_clips)
+        ram_has_timeline = bool(state.current_timeline)
+    active_path = active_project.get("path")
+    if active_path and Path(active_path).resolve() == project_path:
+        logger.info(
+            "Projekt ist bereits geoeffnet, Reopen bleibt folgenlos: %s",
+            project_path,
+        )
+        return ProjectInfo(
+            name=_meta_name(
+                meta, active_project.get("name"), project_path.name
+            ),
+            path=str(project_path),
+            db_project_id=active_project.get("db_project_id"),
+            audio_count=ram_audio_count,
+            video_count=ram_video_count,
+            # ODER-Semantik wie im Normalpfad ("has_timeline" weiter unten):
+            # der RAM-Stand ist der aktuellere, aber eine vorhandene
+            # timeline.json darf nicht verschwiegen werden, nur weil der RAM
+            # gerade leer ist.
+            has_timeline=ram_has_timeline or bool(meta.get("has_timeline")),
+            created_at=meta.get("created_at") or active_project.get("created_at"),
+            modified_at=meta.get("modified_at") or active_project.get("modified_at"),
+        )
+
     existing_project_id = _find_project_db_record_id(project_path)
     candidate_project_id = (
         existing_project_id if existing_project_id is not None else -1
@@ -591,12 +771,12 @@ async def open_project(
         if existing_project_id is not None
         else _find_or_create_project_db_record(
             project_path,
-            meta.get("name", project_path.name),
+            _meta_name(meta, project_path.name),
             meta,
         )
     )
     project_data = {
-        "name": meta.get("name", project_path.name),
+        "name": _meta_name(meta, project_path.name),
         "path": str(project_path),
         "db_project_id": db_project_id,
         "project_uuid": _catalog_project_uuid(
@@ -606,7 +786,11 @@ async def open_project(
         ),
         "audio_count": audio_count,
         "video_count": video_count,
-        "has_timeline": bool(meta.get("has_timeline", has_timeline)),
+        # I-1: `or` statt Default — create_project schreibt den Schluessel IMMER
+        # als False, der Default griff daher nie. Wurde eine timeline.json
+        # tatsaechlich geladen, gewinnt diese Beobachtung gegen stale Metadaten
+        # (Close ohne Save, manuell kopierte Projekte).
+        "has_timeline": bool(meta.get("has_timeline") or has_timeline),
         "created_at": meta.get("created_at"),
         "modified_at": meta.get("modified_at"),
     }
@@ -677,13 +861,7 @@ def _save_project_in_context(
     }
 
     timeline_payload = (
-        {
-            "audio_path": state.current_audio_path,
-            "timeline": timeline,
-            "saved_at": _utc_now_iso(),
-        }
-        if timeline
-        else None
+        _timeline_payload(timeline, state.current_audio_path) if timeline else None
     )
     meta_path = _project_meta_path(project_path)
     try:
@@ -697,8 +875,11 @@ def _save_project_in_context(
             "Bestehende Projektdateien konnten nicht gesichert werden",
             exc,
         ) from exc
-    timeline_stage = timeline_path.with_suffix(f"{timeline_path.suffix}.save.tmp")
-    meta_stage = meta_path.with_suffix(f"{meta_path.suffix}.save.tmp")
+    # Ein Token fuer beide Stages: im Fehlerfall bleibt erkennbar, dass beide
+    # Reste zum selben Saveversuch gehoeren. Vorbild: ``set_anchors``.
+    stage_token = uuid.uuid4().hex
+    timeline_stage = timeline_path.with_name(f".{timeline_path.name}.{stage_token}.tmp")
+    meta_stage = meta_path.with_name(f".{meta_path.name}.{stage_token}.tmp")
     durable_mutated = False
     try:
         if timeline_payload is not None:
@@ -765,6 +946,18 @@ async def close_project(state: AppState = Depends(get_app_state)) -> StatusRespo
             if not state.current_project:
                 raise HTTPException(status_code=400, detail="Kein Projekt geöffnet")
             name = state.current_project.get("name", "Unbekannt")
+            project_root = state.current_project.get("path")
+        # Timeline sichern, bevor state.reset() sie verwirft. Ein Schreibfehler
+        # darf das Schliessen nicht verhindern.
+        if project_root:
+            try:
+                persist_timeline_for_context(state, Path(project_root))
+            except Exception as exc:
+                logger.error(
+                    "Timeline konnte vor dem Schliessen nicht gesichert werden: %s",
+                    exc,
+                    exc_info=True,
+                )
         state.invalidate_project_context()
         _, pending = await state.cancel_and_drain_project_tasks()
         # In-flight Render-Threads nutzen weiterhin ihre bestehenden Cancel-Flags.

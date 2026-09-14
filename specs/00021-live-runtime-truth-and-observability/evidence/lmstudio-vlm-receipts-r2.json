@@ -1,0 +1,72 @@
+{
+  "configured_model": "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive",
+  "control_model": "qwen2.5-vl-7b-instruct",
+  "finished_at": "2026-08-11T00:22:36.088009+00:00",
+  "image_sha256": "fac25f6ac26389bd1d9a40ddacca3aab327bc747e965a6c6fa13b850713956d6",
+  "preexisting": [
+    {
+      "context_length": 65536,
+      "identifier": "agents-a1-uncensored-mtp-apex",
+      "model_key": "agents-a1-uncensored-mtp-apex"
+    }
+  ],
+  "raw_server_log": "obj76_lmstudio_server_20260811_r6.jsonl",
+  "restored": [
+    {
+      "context_length": 65536,
+      "identifier": "agents-a1-uncensored-mtp-apex",
+      "model_key": "agents-a1-uncensored-mtp-apex",
+      "size_bytes": 14273273248,
+      "status": "idle",
+      "vision": false
+    }
+  ],
+  "results": [
+    {
+      "calls": [],
+      "error": {
+        "message": "LM Studio SSE error: {\"message\":\"Model is unloaded.\"}",
+        "type": "RuntimeError"
+      },
+      "identifier": "obj76-configured-vlm",
+      "load": {
+        "cli_exit_code": null,
+        "state": {
+          "context_length": 8192,
+          "identifier": "obj76-configured-vlm",
+          "model_key": "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive",
+          "size_bytes": 12558518528,
+          "status": "idle",
+          "vision": true
+        }
+      },
+      "model_key": "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive",
+      "request_sha256": "0988e31dc2b9337dad453188cdc165b939d57523f1c2c0b285d6be4db6113dc8",
+      "total_elapsed_seconds": 3.157000000000153
+    },
+    {
+      "calls": [],
+      "error": {
+        "message": "LM Studio SSE error: {\"message\":\"Model is unloaded.\"}",
+        "type": "RuntimeError"
+      },
+      "identifier": "obj76-control-vlm",
+      "load": {
+        "cli_exit_code": null,
+        "state": {
+          "context_length": 8192,
+          "identifier": "obj76-control-vlm",
+          "model_key": "qwen2.5-vl-7b-instruct",
+          "size_bytes": 6037234944,
+          "status": "idle",
+          "vision": true
+        }
+      },
+      "model_key": "qwen2.5-vl-7b-instruct",
+      "request_sha256": "f22f55ecae781921b712da8cb7eb8b47cc936e0e404768a0f856e545a4eb1b7b",
+      "total_elapsed_seconds": 10.875
+    }
+  ],
+  "schema_version": 1,
+  "started_at": "2026-08-11T00:22:17.237670+00:00"
+}

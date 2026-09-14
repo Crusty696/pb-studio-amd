@@ -239,6 +239,7 @@ class ClipSelector:
         self.brain_video_features_by_clip: dict = {}
         self.brain_min_confidence: float = 0.0
         self.brain_feature_adapter = None
+        self.brain_requested: bool = False
 
         # Audit E1 + L-K4: Camelot-Wheel Tonart-Matching.
         # use_key_matching: Master-Switch (vom PacingService gesetzt).
@@ -511,6 +512,16 @@ class ClipSelector:
             selected = self._fallback_select(
                 candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state
             )
+            if self.brain_requested:
+                fallback_details = dict(self._selection_details)
+                self._record_selection_details(
+                    f"brain_fallback_{fallback_details.get('selection_path', 'unknown')}",
+                    score_components={
+                        "brain": {"status": "unavailable"},
+                        "fallback": fallback_details,
+                    },
+                    fallback_reason="brain_unavailable",
+                )
 
         selected = self._attach_selection_provenance(
             selected,
@@ -997,7 +1008,15 @@ class ClipSelector:
                     # Fallback: clip selbst kann audio_key Feld tragen (Test-Pfad).
                     video_key = clip.get("audio_key")
                 key_score = _key_score_fn(self.audio_key, video_key)
-                total_score *= key_score
+                # Apply monotonically in key_score for BOTH signs. A plain
+                # multiplication inverts the ranking as soon as total_score is
+                # negative (audio_state == "break" subtracts 0.50 above): a
+                # fitting clip (x1.0) would then rank below a clashing one
+                # (x0.3), because -0.4*0.3 > -0.4*1.0.
+                if total_score >= 0:
+                    total_score *= key_score
+                else:
+                    total_score /= max(key_score, 1e-6)
 
             if total_score > best_score:
                 best_score = total_score

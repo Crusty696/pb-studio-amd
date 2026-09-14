@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -307,7 +307,22 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var operation = _projectService.CaptureOperationContext();
+        // Ohne stabilen Projektkontext wirft CaptureOperationContext eine
+        // InvalidOperationException. Ungefangen killt sie die App - genau das
+        // ist am 2026-08-31 beim Klick auf "Analysieren" passiert
+        // (unbehandelte UI-Exception, Fenster weg). Elf andere Aufrufstellen
+        // fangen sie bereits ab und melden sie als Status; diese hier waren
+        // vergessen worden.
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Cut-Liste nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
         var audioClip = SelectedAudioClip;
         IsGenerating = true;
         _activePacingAudioClipId = audioClip.Id;
@@ -375,13 +390,16 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                     CutCount = result.CutCount;
                     TotalDuration = result.TotalDuration;
                 });
-                StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)";
+                // FR-362: ein Modus ohne Datengrundlage darf nicht als aktiv
+                // durchgehen. Das Backend schaltet ihn ab und meldet es hier.
+                StatusText = $"{result.CutCount} Cuts generiert ({result.TotalDuration:F1}s)"
+                    + FormatDegradations(result.Degradations);
                 WeakReferenceMessenger.Default.Send(new TimelineRefreshMessage());
             }
             else
             {
                 StatusText = result == null
-                    ? $"Pacing nicht möglich: {_api.LastErrorDetail ?? "Backend-Antwort ungültig"}"
+                    ? $"Pacing nicht möglich: {SummarizePacingError(_api.LastErrorDetail)}"
                     : "Warnung: Keine Schnitte generiert (Audio-Dauer prüfen)";
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
@@ -444,6 +462,74 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         finally
         {
             IsLoadingSuggestions = false;
+        }
+    }
+
+    /// <summary>Hängt abgeschaltete Modi an die Statuszeile an (FR-362).</summary>
+    private static string FormatDegradations(List<ModeDegradation>? degradations)
+    {
+        if (degradations == null || degradations.Count == 0)
+            return "";
+
+        var details = degradations.Select(d =>
+        {
+            var name = d.Mode switch
+            {
+                "key_matching" => "Tonart-Matching",
+                "semantic_matching" => "Semantik-Matching",
+                "brain_reranking" => "Brain-Auswahl",
+                "brain_postprocessor" => "Brain-Auswertung",
+                _ => d.Mode
+            };
+            return $"{name} ({d.ScoredClips}/{d.TotalClips} Clips bewertbar)";
+        });
+        return $" — ohne Wirkung: {string.Join(", ", details)}";
+    }
+
+    /// <summary>Macht den Preflight-422 lesbar.
+    ///
+    /// Das Backend listet dort jeden betroffenen Clip einzeln auf. Bei 104
+    /// Clips landete die komplette JSON ungefiltert in der Statuszeile.
+    /// </summary>
+    private static string SummarizePacingError(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return "Backend-Antwort ungültig";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(detail);
+            if (!doc.RootElement.TryGetProperty("code", out var code)
+                || code.GetString() != "pacing_analysis_incomplete")
+                return detail;
+
+            var missing = doc.RootElement.GetProperty("missing");
+            var stageCounts = new Dictionary<string, int>();
+            var clipCount = 0;
+            foreach (var domain in new[] { "audio", "video" })
+            {
+                if (!missing.TryGetProperty(domain, out var entries))
+                    continue;
+                foreach (var entry in entries.EnumerateArray())
+                {
+                    clipCount++;
+                    foreach (var stage in entry.GetProperty("stages").EnumerateArray())
+                    {
+                        var name = stage.GetProperty("stage").GetString() ?? "?";
+                        stageCounts[name] = stageCounts.GetValueOrDefault(name) + 1;
+                    }
+                }
+            }
+
+            if (stageCounts.Count == 0)
+                return "Analyse unvollständig";
+
+            var parts = stageCounts.Select(kv => $"{kv.Key} ({kv.Value}x)");
+            return $"Analyse unvollständig bei {clipCount} Clip(s): {string.Join(", ", parts)}";
+        }
+        catch (JsonException)
+        {
+            return detail;
         }
     }
 

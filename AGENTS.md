@@ -55,8 +55,26 @@ Markers:
 - `qc-report.md` records QC results.
 - `.qc-passed` means QC has passed.
 
-## Communication Style
+## Communication Style & Core Principles
 
+### Priority 0: Caveman-Modus Standard (Token-Effizienz ~75%)
+Alle Agenten und Subagenten kommunizieren standardmaessig im **Caveman-Stil** (`[Subjekt] [Aktion] [Grund]. [Naechster Schritt].`):
+- Extrem knappe, dichte Sprache. Keine Hoeflichkeitsfloskeln, kein "Gerne!", kein Wiederkauen der User-Aufgabe.
+- Spart ~75% Kontext-Tokens bei 100% technischer Praezision.
+- Code-Bloecke, Datei-Pfade (`file:///...`), CLI-Befehle und Fehler-Meldungen bleiben vollstaendig und unkomprimiert.
+
+### Priority 1: 100% Ehrlichkeit & Live-Verifikation
+- **Null Annahmen, kein Raten, keine Halluzinationen**: Jede Aussage muss auf realen, gelesenen Dateien und ausgefuehrten Tests basieren.
+- Niemals Erfolg behaupten ohne Live-Verifikation (`pytest`, `dotnet build -c Release`, CLI-Runs).
+- Wenn etwas unklar oder ungetestet ist: transparent und direkt `[unbekannt: X]` oder `[zu verifizieren]` melden. Nicht beschoenigen.
+
+### Priority 2: Anti-Starrheits-Prinzip (Adaptive Flexibilitaet / Soft Constraints)
+- **Keine blinden, starren Regeln**: Regeln und Standardwerte duerfen kein Hindernis sein, wenn reale Situationen von der Norm abweichen.
+- **Kontext & Intention verstehen**: Analysiere die Basis, den urspruenglichen Zweck und den konkreten Nutzen. Macht das Geplante Sinn? Gibt es die Funktion schon? Ist es nutzerfreundlich und intuitiv?
+- **Full-Stack & Verdrahtung ganzheitlich abdecken**: Frontend (WPF XAML / C# ViewModels), Backend (FastAPI / Python), Signalverarbeitung (DSP / DirectML) und deren gegenseitige Abhaengigkeiten als Gesamtsystem verstehen und aufeinander abstimmen.
+- **Spezialisierte Coding-Skills einbinden**: Fuer Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` zur Verfuegung.
+
+### SDD Phase Output Rules
 Agent output MUST be concise and outcome-oriented per `project-instructions.md` §IV. Apply these rules in every SDD phase:
 
 - **Progress reports**: Facts and outcomes only — no narration, no restating the task.
@@ -280,10 +298,10 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 4. 🧠 PROJECT BRAIN & STATUS
-- **Stand:** 2026-03-16
-- **Phase:** Production / Verified
-- **Status:** 20-Runden Deep-Audit abgeschlossen. 186 passed, 9 skipped, 0 failures.
-- **Next Task:** End-to-End Test (WPF App starten + alle 9 Views testen).
+- **Stand:** 2026-09-14
+- **Phase:** Production / Backlog Completed & Verified
+- **Status:** Spec 00021 (OBJ-76) und Spec 00023 (T001–T022) vollständig abgeschlossen und release-verifiziert. 1825 passed, 14 skipped, 0 failures. C# 64 passed. WPF Release 0/0. Coverage 66.8%. 14 Views live verifiziert (28/28 Tabs in 2 Runden PASS).
+- **Next Task:** Vollständiger Backlog abgeschlossen. Bereit für produktiven Einsatz und Nutzer-Freigabe.
 - **Bug-History:** `CHANGELOG.md` (BUG-001..046 → 2026-03-09, HIGH-001..006 → 2026-03-11, R16–R20 → 2026-03-16)
 
 **Kern-Architektur (ADR-konsolidiert):**

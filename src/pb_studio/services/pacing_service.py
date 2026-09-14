@@ -11,6 +11,7 @@ import logging
 import random
 import subprocess
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, List, Dict, Callable, Optional
 import numpy as np
@@ -227,6 +228,7 @@ class PacingService:
                 "file_path": file_path,
                 "clip_name": Path(clip_path).stem,
                 "clip_start": clip_start,
+                "source_duration": actual_clip_dur,
                 "trigger_type": current_cut.trigger_type,
                 "trigger_strength": current_cut.strength,
             }
@@ -299,27 +301,77 @@ class PacingService:
         if not cut_list:
             return cut_list
 
-        first = cut_list[0]
-        original_start = float(first.start_time)
-        if abs(original_start) > 0.001:
-            metadata = first.metadata if isinstance(first.metadata, dict) else {}
-            first.metadata = metadata
-            clip_start = float(metadata.get("clip_start", 0.0) or 0.0)
-            if original_start > 0.0:
-                metadata["clip_start"] = max(0.0, clip_start - original_start)
-            else:
-                metadata["clip_start"] = clip_start + abs(original_start)
-            metadata["boundary_original_start"] = original_start
-            metadata["boundary_normalized_start"] = 0.0
-            first.start_time = 0.0
+        originals = sorted(cut_list, key=lambda cut: float(cut.start_time))
+        finalized: list[CutListEntry] = []
 
-        last = cut_list[-1]
-        original_end = float(last.end_time)
-        last.end_time = target_duration
-        if isinstance(last.metadata, dict) and abs(original_end - target_duration) > 0.001:
-            last.metadata["boundary_original_end"] = original_end
-            last.metadata["boundary_normalized_end"] = target_duration
+        for index, original in enumerate(originals):
+            interval_start = 0.0 if index == 0 else max(
+                0.0, float(original.start_time)
+            )
+            if finalized:
+                interval_start = max(interval_start, finalized[-1].end_time)
+            interval_end = (
+                min(target_duration, float(originals[index + 1].start_time))
+                if index + 1 < len(originals)
+                else target_duration
+            )
+            if interval_end <= interval_start + 1e-9:
+                continue
 
+            base_metadata = deepcopy(
+                original.metadata if isinstance(original.metadata, dict) else {}
+            )
+            original_start = float(original.start_time)
+            original_end = float(original.end_time)
+            clip_start = max(0.0, float(base_metadata.get("clip_start", 0.0) or 0.0))
+            if index == 0 and abs(original_start) > 0.001:
+                if original_start > 0.0:
+                    clip_start = max(0.0, clip_start - original_start)
+                else:
+                    clip_start += abs(original_start)
+                base_metadata["boundary_original_start"] = original_start
+                base_metadata["boundary_normalized_start"] = 0.0
+
+            source_duration = float(base_metadata.get("source_duration", 0.0) or 0.0)
+            if source_duration <= 0.0:
+                file_path = str(base_metadata.get("file_path", "") or "")
+                if file_path and Path(file_path).is_file():
+                    source_duration = self._get_clip_duration(file_path)
+                    if source_duration > 0.0:
+                        base_metadata["source_duration"] = source_duration
+
+            cursor = interval_start
+            segment_clip_start = clip_start
+            while cursor < interval_end - 1e-9:
+                remaining = interval_end - cursor
+                if source_duration > 0.0:
+                    available = source_duration - segment_clip_start
+                    if available <= 1e-9:
+                        segment_clip_start = 0.0
+                        available = source_duration
+                    segment_duration = min(remaining, available)
+                else:
+                    # Legacy/manual entries can lack resolvable media metadata.
+                    # Preserve compatibility; generated entries always carry a
+                    # measured source_duration from the conversion step above.
+                    segment_duration = remaining
+
+                metadata = deepcopy(base_metadata)
+                metadata["clip_start"] = segment_clip_start
+                if index == len(originals) - 1 and abs(original_end - target_duration) > 0.001:
+                    metadata["boundary_original_end"] = original_end
+                    metadata["boundary_normalized_end"] = target_duration
+                segment_end = min(interval_end, cursor + segment_duration)
+                finalized.append(CutListEntry(
+                    clip_id=original.clip_id,
+                    start_time=cursor,
+                    end_time=segment_end,
+                    metadata=metadata,
+                ))
+                cursor = segment_end
+                segment_clip_start = 0.0
+
+        cut_list[:] = finalized
         return cut_list
 
     def _inject_cached_into_engine(
@@ -346,6 +398,13 @@ class PacingService:
         pre_cached_beats: List[float] = []
         pre_cached_beat_strengths: List[float] = []
         pre_cached_downbeats: List[float] = []
+        # Nur echte Taktpositionen aus dem Detektor. Der zuvor hier ebenfalls
+        # akzeptierte Status "derived" ist am 2026-08-30 zurueckgenommen
+        # worden: die Ableitung aus Anschlagstaerken hat an 68 Stuecken kein
+        # belastbares Ergebnis geliefert (8 von 750 Messwerten bestanden ein
+        # korrektes Gatter, waehrend allein Vielfachtesten rund 38 erwarten
+        # laesst). Siehe docs/measurements/2026-08-30-downbeat-ableitung-befund.md
+        USABLE_DOWNBEAT_STATES = {"measured"}
         downbeat_provenance = cached_analysis.get("downbeat_provenance") or {
             "status": "unavailable",
             "method": "cache_field_missing",
@@ -365,7 +424,7 @@ class PacingService:
                 beat_time = float(b.get("time", 0.0))
                 pre_cached_beats.append(beat_time)
                 if (
-                    downbeat_provenance.get("status") == "measured"
+                    downbeat_provenance.get("status") in USABLE_DOWNBEAT_STATES
                     and str(b.get("beat_type") or "").lower()
                     in {"downbeat", "bar"}
                 ):
@@ -386,7 +445,7 @@ class PacingService:
         if pre_cached_beats:
             pacing_engine._pre_cached_beats = pre_cached_beats
             measured_downbeats = cached_analysis.get("downbeats") or []
-            if downbeat_provenance.get("status") == "measured":
+            if downbeat_provenance.get("status") in USABLE_DOWNBEAT_STATES:
                 pre_cached_downbeats.extend(
                     float(value) for value in measured_downbeats
                 )
@@ -512,6 +571,7 @@ class PacingService:
         if not pacing_config.get("use_brain", False):
             return
 
+        pacing_engine.clip_selector.brain_requested = True
         try:
             from pb_studio.brain.brain_service import BrainService
             from pb_studio.brain.feature_adapter import CanonicalFeatureAdapter
@@ -1233,12 +1293,23 @@ class PacingService:
                 if cid is not None and ak:
                     video_keys_map[cid] = ak
             pacing_engine.clip_selector.video_keys = video_keys_map
-            logger.info(
-                "Audit E1 + L-K4: use_key_matching aktiviert (audio_key=%r, "
-                "%d/%d video_keys verfuegbar) — Camelot-Wheel Score in "
-                "clip_selector._key_compatibility_score wirksam",
-                cached_audio_key, len(video_keys_map), len(clips),
-            )
+            if video_keys_map and cached_audio_key:
+                logger.info(
+                    "Audit E1 + L-K4: use_key_matching aktiviert (audio_key=%r, "
+                    "%d/%d video_keys verfuegbar) — Camelot-Wheel Score in "
+                    "clip_selector._key_compatibility_score wirksam",
+                    cached_audio_key, len(video_keys_map), len(clips),
+                )
+            else:
+                # Reached only if a caller bypasses the router degrade above.
+                # Without a scorable clip every candidate gets the same neutral
+                # factor, so the mode cannot influence the ranking at all.
+                logger.warning(
+                    "use_key_matching ohne Wirkung: audio_key=%r, %d/%d "
+                    "video_keys verfuegbar — jeder Clip erhaelt denselben "
+                    "neutralen Faktor, das Ranking bleibt unveraendert",
+                    cached_audio_key, len(video_keys_map), len(clips),
+                )
         else:
             pacing_engine.clip_selector.use_key_matching = False
             pacing_engine.clip_selector.audio_key = None

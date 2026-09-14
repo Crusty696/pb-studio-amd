@@ -23,6 +23,7 @@ public enum ChatEventType
     Unknown,
     Model,
     Text,
+    TextDelta,
     ToolCall,
     ToolConfirmationRequired,
     ToolResult,

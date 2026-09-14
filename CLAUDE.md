@@ -33,7 +33,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 1. Read this file completely.
 2. Acknowledge the current task.
 3. Verify that your proposed solution respects the IRON RULES.
-4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-05-11"
+4. Output confirmation: "✅ BOOT OK | Task: [Current Task] | Brain: 2026-08-11"
 
 ---
 
@@ -74,10 +74,225 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
    - **Refactor:** erst Caller/Dependents via `full-stack-auditor` oder Grep prüfen, dann anwenden
    - **Config/Doc-Change:** mindestens current state lesen + auf Konflikte prüfen, dann anwenden
    - **Hintergrund:** heute (2026-05-15) mehrere Edit-Versuche an Files ohne ausreichende Vorverifizierung → mid-edit Truncations und broken Files. Diese Regel verhindert das.
+14. **CAVEMAN-MODUS & TOKEN-EFFIZIENZ (Standard-Kommunikation):**
+   - Standardmäßig im **Caveman-Stil** antworten (`[Subjekt] [Aktion] [Grund]. [Nächster Schritt].`).
+   - Spart ~75% Token durch Weglassen von Floskeln, Wiederholungen und narrativer Prosa.
+   - 100% Präzision bei Pfaden (`file:///...`), Code-Blöcken, Shell-Befehlen und Fehlermeldungen bleibt unberührt.
+15. **ADAPTIVE FLEXIBILITÄT & ANTI-STARRHEITS-PRINZIP (Soft Constraints):**
+   - **Keine blinden, starren Regeln**: Regeln und Standardparameter sind Leitplanken, keine Dogmen. Bei Abweichungen von der Norm flexibel anpassen.
+   - **Ganzheitliche Full-Stack-Betrachtung**: Frontend (WPF XAML, C# ViewModels), Backend (FastAPI, Python), Signalverarbeitung (DSP, DirectML) und deren Verdrahtung gemeinsam verstehen.
+   - **Ergonomie & Nutzen**: Prüfen ob bestehende oder geplante Ansätze echten Nutzen stiften und nutzerfreundlich sind, statt stur Parameter einzufordern.
+   - **Spezialisierte Coding-Skills**: Für Audio-Video-Pacing, BPM/Beat-Grid, EDM-Groove & Cut-Point-Kalkulation steht der Full-Stack-Coding-Skill `audio-video-pacing-specialist` bereit.
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-08-08 (OBJ-73 Remote PASS; geschützter Default-Branch `main`)
+- **Date:** 2026-09-14 (Spec 00021 OBJ-76 & Spec 00023 Backlog-Abschluss release-verifiziert)
+- **Current Status:** Alle 22 Backlog-Aufgaben (T001–T022) und OBJ-76 Gates vollständig implementiert und verifiziert: Live-Tagging & Restart/Resume mit 100% SHA-256 Hash-Erhaltung, 10 Canary-Clips Re-Analyse (10/10 PASS), Pacing-Degradation, Audio-Key-Unterscheidung, 706 Video-Stage-Keys intakt, 14-Tab WPF UI Live-Smoke (28/28 Tabs in 2 Runden PASS), Brain-Semantik Projector-Evaluation (20 reale Medienpaare). Verifiziert: Python 1825 passed / 14 skipped / 0 failed, C# 64/64, WPF Release 0/0, Coverage 66.8% (gefordert ≥ 53.0%).
+- **Next Task:** Vollständiger Backlog abgeschlossen. Bereit für produktiven Einsatz und Nutzer-Freigabe.
+- **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
+  Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
+  Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).
+  - **C-1** Energy-Trigger lagen bei exakt doppelter Zeit — die gecachte
+    Energiekurve entsteht bei `analysis_sr` (Default 44100), die Engine rechnete
+    mit `sr=22050` zurück. An echter Datei: Dauer 544,2 s, wahre Peak-Zeit
+    327,98 s, gemeldet 655,96 s, also jenseits des Dateiendes.
+  - **H-3 war größer als gemeldet: VIER divergierende Parametersätze**, nicht
+    drei. `_extract_drum_triggers_from_stem` lief ohne `n_mels`, also mit dem
+    librosa-Default von 128 Filtern auf ~14 Bins im Kick-Band. Dabei zwei
+    weitere Divergenzen: Router und Streaming rechneten für 20–150 Hz,
+    übergaben aber nur `fmax` ohne `fmin`; das HiHat-Band hing an der
+    Abtastrate (Router 5000–22050 Hz, Engine 5000–11025 Hz). Alle vier Pfade
+    beziehen die Parameter jetzt aus `src/pb_studio/audio/band_params.py`.
+  - **Außerhalb der Auditliste:** die Streaming-Dedup verglich gegen das letzte
+    statt erste Gruppenelement — aus einer durchgehenden 16tel-HiHat wurde
+    **genau ein** Zeitpunkt, bei jedem Tempo.
+  - **M-3 bewusst nicht verdrahtet**, sondern dokumentiert: `_tempo_at_time`
+    hat keinen produktiven Aufrufer, und eine Verdrahtung im `generate()`-Pfad
+    wäre eine Verschlechterung. Produktentscheidung, nicht still erfunden.
+- **Beatgrid ist verdrahtet** (`src/pb_studio/audio/beat_grid.py`): Schema →
+  Router → Merge-Whitelist → AppState → `_load_index` → OpenAPI → C#-Record →
+  ViewModel → XAML-Binding, Wächter in `Tests/test_beat_grid_wiring.py`.
+  Der erste Live-Lauf lieferte `beat_grid: {}`, obwohl das Log das Ergebnis
+  zeigte — `_AUDIO_STAGE_RESULT_FIELDS["beats"]` filterte es nach der
+  Berechnung wieder heraus. **Der erste Wächter bemerkte das nicht, weil er nur
+  prüfte, ob der Feldname vorkommt. Vorkommen ist nicht Durchleitung.**
+  Es **ersetzt bewusst nichts** — `beats` und `bpm` bleiben unverändert; bei
+  48,8 % Tempo-Trefferquote gegen 37,0 % wäre alles andere unverantwortlich.
+- **DJ-Mixe bekommen mehrere Grid-Abschnitte** (`beat_grid_segments.py`):
+  Kontrast an sechs echten Mixen **1,12–1,75 → 2,15–2,85**. Der Router benutzt
+  `segment_beat_grids_from_file`, die fensterweise liest — die Array-Variante
+  hätte bei einem 188-Minuten-Mix 995 MB angefordert, also genau H-5.
+- **Drei eigene Behauptungen an Messungen widerlegt:**
+  1. Die **0,75-Kick-Schwelle** meldete 125 von 127 Fenstern als `suspect`,
+     darunter 96 % der korrekt erkannten. Ursache: systematischer Versatz von
+     genau einer Hop-Länge (+23,2 ms), nur 4 % der Kicks liegen innerhalb
+     ±23 ms eines Beats. Die Gegenprobe entscheidet nicht mehr über den Status.
+  2. Die **33-%-Tempostreuung in Mixen** ist ein Vielfachfehler des Schätzers,
+     keine echte Tempoänderung: 97,2 % liegen auf einfachen Vielfachen des
+     Datei-Medians, nach Faltung bleiben 0,1 %. Die Mixe sind tempostabil.
+  3. **`tempogram_ratio`** als Vielfachkorrektur repariert 0 Fälle und macht
+     4 kaputt (48,8 % → 45,7 %). Verworfen, nicht eingebaut.
+- **Die BPM-Attraktoren sind erklärt:** die drei häufigsten Werte des alten
+  Pfads (143,55 / 136,00 / 92,29) sind exakt die Tempogramm-Frequenzen
+  `60·sr/hop / k` für k = 18, 19, 28. Im EDM-Bereich ist dieses Gitter
+  6,8–7,6 BPM grob; ein 126-BPM-Track ist damit **prinzipiell** nicht treffbar.
+- **Prozesslehre dieser Sitzung:** die erwartete Richtung *vor* der Messung
+  aufschreiben. Sie hat drei eigene Fehler gefangen, darunter einen Kommentar,
+  der etwas behauptete, das die nächste Zeile nicht einlöste. Und einmal wurde
+  gegen eine **erfundene** Zahl gemessen („50 Abschnitte sind zu viele", aus
+  geschätzten 15–25 Tracks pro Mix) — es gibt keine Annotation dieser Mixe.
+- **Messbelege:** `docs/measurements/2026-08-30-beatgrid-machbarkeit.md`,
+  `2026-08-31-kick-gegenprobe-befund.md`, `2026-08-31-mix-segmentierung.md`.
+  Musiktheorie-Grundlagen: `docs/musiktheorie/GRUNDLAGEN.md`.
+- **⚠️ DIE BPM IN DEN BEATPORT-DATEINAMEN IST BEI 40 % DER TRACKS FALSCH.**
+  Belegt über einen unabhängigen Schiedsrichter (Fourier-Tempogramm ohne Prior
+  und ohne k-quantisiertes Kandidatengitter, teilt sich mit keinem der
+  Verfahren etwas), 35 Tracks:
+  **Beat This! 34/35 = 97,1 % · Dateiname-BPM 21/35 = 60,0 %.**
+  Beispiele: Label 122 → real 137,8; Label 100 → real 140,3; Label 92 → real
+  137,2. Zwei Dateien desselben Stücks tragen 140 und 103.
+  **Konsequenz: alle Trefferquoten dieser Sitzung (35 % / 48,8 % / 55 %) sind
+  gegen eine Referenz gemessen, die selbst nur zu 60 % stimmt.** Sie messen
+  überwiegend die Labels, nicht den Algorithmus. Künftige Tempo-Messungen
+  brauchen entweder GiantSteps oder den Fourier-Schiedsrichter als Referenz.
+  Rohdaten: `docs/measurements/beat_this_onnx_arbiter.json`.
+- **Beat This! (ISMIR 2024) läuft auf dieser Maschine — VERIFIZIERT.**
+  ONNX, MIT-Lizenz (`musetric/beat-this-onnx`, alle drei SHA-256 gegen das
+  Manifest geprüft), **keine neue Abhängigkeit**. Node-Placement per
+  ORT-Profiling belegt: 2568 Knoten auf `DmlExecutionProvider` gegen 940 auf
+  CPU — 96 % der Rechenzeit wirklich auf der GPU, kein stiller Fallback.
+  0,41 s je 120-s-Fenster gegen 4,75 s auf CPU. Modell in `models/beat_this/`
+  (83,4 MB, gitignoriert). **Downbeats:** 29/35 Tracks mit Median-Taktlänge
+  exakt 4,00 Beats, mittlere Abweichung von ganzzahligem Beat-Abstand 0,024 —
+  eine andere Größenordnung als die verworfene Ableitung (9 von 520).
+  Noch nicht verdrahtet; braucht Bar-Grid-Regularisierung (nur 6/35 haben
+  ≥ 90 % der Downbeat-Abstände als Vielfaches von 4).
+  Werkzeug: `scripts/dev/measure_neural_beat_tracker.py`.
+- **`TEMPO_RANGE` ist genrespezifisch und war zu weit.** Nutzerangabe „meine
+  Mixe sind nie schneller als 145 BPM", gemessen an 20 Tracks: 50–220 BPM
+  → 35,0 %, 70–145 → 50,0 %, **100–150 → 55,0 %**. Ein weiter Suchraum liefert
+  mehr Kandidaten, und der Kontrast bevorzugt darunter systematisch das
+  langsamere Raster. Default jetzt (100, 150); `estimate_beat_grid` nimmt
+  `tempo_range` als Parameter — für DnB (~174) oder langsamen HipHop (~85)
+  muss er gesetzt werden.
+- **Zwei WPF-Defekte an der laufenden App gefunden und behoben:**
+  1. **Absturz beim Analysieren.** `CaptureOperationContext()` wirft bei
+     instabilem Projektkontext; elf Aufrufstellen fingen das ab, **vier
+     nicht** — ausgerechnet die, die lange Arbeit starten (beide
+     Analysepfade, Stem-Separation, Cut-Liste). Unbehandelte UI-Exception,
+     Fenster weg. Wächter: `Tests/test_wpf_operation_context_guarded.py`.
+  2. **Backend-Start-Timeout 30 s, Bedarf 60 s.** Das Backend kontaktiert beim
+     Start Ollama und LM Studio und läuft in deren Timeouts, wenn sie nicht
+     laufen. Die App gab auf und räumte ein funktionierendes Backend ab.
+     Jetzt 120 s.
+- **Die Beatgrid-Anzeige ist im laufenden GUI belegt** (UIA-Auslesung,
+  Screenshot, Gegenprobe vorher leer): `docs/evidence/beatgrid-gui-final/`.
+  Sie heißt „Zweitschätzung", ist optisch untergeordnet und nennt Abweichungen
+  vom angezeigten Tempo samt Verdacht auf Oktavfehler — zwei gleichrangige
+  Tempi ohne Erklärung waren schlechter als eines.
+  Prüfwerkzeug: `scripts/dev/verify_beatgrid_in_gui.py` (prüft auf **Änderung**
+  des Textes, nicht nur auf Anwesenheit — die erste Fassung hätte einen
+  stehengebliebenen alten Wert als Erfolg gemeldet).
+- **⚠️ `Stop-Process -Force` gilt auch für die WPF, nicht nur fürs Backend.**
+  In dieser Sitzung selbst ausgelöst: die App hart beendet → ihr
+  Backend-Kindprozess starb mit → `RUNTIME_DIRTY` blieb stehen → der nächste
+  Start stellte die Recovery-Generation von 02:58 wieder her. Analysewerte
+  zurückgesetzt, DB-Zählstände unbeschädigt. App immer über
+  `CloseMainWindow()`, Backend über `POST /shutdown` und dann auf das
+  **Verschwinden von `RUNTIME_DIRTY`** warten (gemessen 36 s).
+- **Historischer Stand:** 2026-08-29 (Funktionsaudit + Reparaturplan 01)
+- **Audit 2026-08-29:** ~243 Befunde (18 CRITICAL, 61 HIGH, 74 MEDIUM).
+  Bericht: `FUNKTIONSAUDIT_2026-08-29.md`. Kernbefund: die Ketten brechen an den
+  Übergabestellen zwischen Domänen, nicht innerhalb — und die Tests sind
+  durchgehend domänenintern.
+  Der uncommittete Stand (892 Z., maschinell via `patch.py` erzeugt) ist NICHT
+  committfähig und liegt weiterhin unangetastet im Arbeitsbaum (28 Einträge).
+  **Korrektur zur ersten Fassung:** die gemeldeten „10 failed / 2 errors" waren
+  ein Messartefakt aus sieben parallel laufenden Agenten mit geteiltem
+  `basetemp`. Sequenziell: 7 failed / 1497 passed / 0 errors, alle 7 zuordenbar,
+  5 davon aus dem `patch.py`-Stand. `--basetemp` wird NICHT vom Produktionscode
+  gelöscht und darf NICHT aus `pytest.ini` entfernt werden — ohne die Option legt
+  pytest einen `pytest-current`-Symlink an, der auf dieser Maschine jeden Lauf mit
+  `PermissionError: [WinError 5]` bricht. Bestehen bleibt: der DirectML-Adapter
+  ist testseitig gefakt, die Owner-Capability global gepatcht — „grün" beweist
+  keine Funktion auf der Hardware.
+- **Reparaturplan 01 (Datenverlust) — abgeschlossen, 8 lokale Commits:**
+  `Tests/`-Wächter gegen doppelte Dict-Schlüssel; drei verschluckte
+  Persistenzfehler laut gemacht (fail-closed Unbind über neues
+  `BrainService.force_unbind_project_state`, zwei atexit-Save-Handler melden und
+  hinterlassen einen in `_load_index` gelesenen Dirty-Marker); Timeline wird vor
+  Close und Projektwechsel persistiert (`persist_timeline_for_context`); Save-Pfad
+  auf eindeutige versteckte Stage-Namen gehärtet.
+  Vollsuite danach: **7 failed / 1522 passed / 13 skipped / 0 errors** (31:12) —
+  dieselben 7 Fehler wie vorher, keine neuen; +25 vollständig zugeordnet.
+  **Prozesslehre dieser Session:** von vier geplanten Tasks war genau einer
+  fachlich korrekt. Zwei hätten still nichts bewirkt, einer behob gar keinen
+  erreichbaren Bug. Zwei Fixes hätten neue Defekte erzeugt (Verbindungsleck,
+  Reopen-Datenverlust). Ein eigener Commit (`d1724f6`) hat eine fremde
+  Arbeitsbaum-Änderung mitgenommen und dabei einen Fix behauptet, der keiner war
+  — revertiert in `1d9a8d4`, Message bewusst nicht umgeschrieben.
+- **Reparaturplan 03 + `patch.py`-Stand — abgeschlossen und gepusht.**
+  Remote-SHA `0a7768c9db3d8131fed8ecb7db4e26b89cd1691b`, neun Commits.
+  Vollsuite danach: **2 failed / 1548 passed / 13 skipped / 0 errors** (26:46) —
+  von sieben Fehlern auf zwei. Die fünf verschwundenen sind exakt die, die der
+  Audit dem `patch.py`-Stand zuschrieb; damit ist jene Zuordnung bestätigt.
+  **Die zwei verbleibenden Fehler sind beide Infrastruktur, kein Produktdefekt:**
+  `test_audit_sdd_gate` prüft, ob `.qc-passed` für HEAD aktuell ist — der Marker
+  pinnt `commit_sha 20792e75`, also ist der Test nach *jedem* Commit rot und
+  trägt im Arbeitsalltag kein Signal. `test_t357::test_lhm_backup_restore_copy…`
+  löst über eine Evidence-Datei den Ordner
+  `tools/LibreHardwareMonitor.backup-20260730T0515+0200` auf; der fällt unter
+  `.gitignore:62 /tools/*`, war nie getrackt und existiert nicht mehr — der Test
+  kann in **keinem** Clone je grün werden.
+- **Der `patch.py`-Arbeitsstand war keine einheitliche Arbeit.** Zwei Schichten,
+  am Kommentarstil trennbar: eine handgeschriebene (verdrahtet, begründet,
+  getestet) und die maschinelle. **Beide roten Guard-Tests stammten aus der
+  maschinellen.** Übernommen: SDK-Pin (HEAD war mit `9.0.316` +
+  `rollForward: disable` auf dieser Maschine **gar nicht baubar**),
+  Tonart-Score-Vorzeichenfix, `audio_key`-Semantik, FR-362-Degrade,
+  Struktur-Labels. Verworfen mit Beleg: drei `*_receipt`-Feldergruppen ohne
+  Produzent *und* Konsument, `rejected_clips` samt einer C#-Reflection auf
+  nicht existierende Properties, ein Validator ohne Aufrufer, drei
+  `cap.grab()`-Schleifen (eine davon ~142.000 Aufrufe statt drei Seeks je Clip),
+  ein Teil-Revert des bewussten Fixes `c6b8cd0`.
+- **Live verifiziert am laufenden Backend** (`launch.ps1 -BackendOnly`,
+  `/health` → `gpu_available: true`): Projekt `12345` zweimal geöffnet, beide
+  Male HTTP 200, `/project/info` vorher und nachher byteidentisch, Logzeile
+  `Projekt ist bereits geoeffnet, Reopen bleibt folgenlos` (`project_router.py:701`).
+  **Grenze dieses Belegs, ausdrücklich:** er zeigt, dass der Reopen folgenlos
+  bleibt — er zeigt **nicht**, dass eine ungespeicherte Timeline erhalten
+  bliebe, denn das Projekt hat keine (`has_timeline: false`). Dafür wäre ein
+  echter Pacing-Lauf nötig. DB vor und nach allem: 6 Projekte, 711 Medien,
+  `integrity_check: ok`.
+- **Zwei Korrekturen an diesem Dokument selbst:**
+  - Die C-01-Beschreibung („`audio_router.py:2255` ruft `get_downbeats()` ohne
+    Pflichtargument") beschrieb den **Arbeitsbaum**, nicht HEAD. In HEAD gibt es
+    **überhaupt keinen** `get_downbeats`-Aufruf; `downbeat_provenance` ist
+    ausnahmslos `"unavailable"`. Der Defekt ist real, aber ein anderer: Downbeats
+    werden nie versucht. Und der naheliegende Fix ist falsch —
+    `get_downbeats(audio_path)` fährt einen **zweiten vollständigen
+    BeatNet-Lauf**; richtig ist `BeatDetector.scan()`, das beides in einem
+    Durchlauf liefert.
+  - Die LUID-Angaben unten (`0x0001185b`) sind keine Geräteidentität.
+    **DXGI-LUIDs werden pro Boot vergeben.** Heute live gemessen:
+    `0x00000000_0x314b3078`. Im Repo stehen vier verschiedene Werte für dieselbe
+    Karte; alle waren zum Zeitpunkt ihrer Aufnahme richtig. Kein
+    Produktionscode gated auf eine hartkodierte LUID (geprüft) — die Vergleiche
+    in `system_monitor.py`, `vram_arbiter.py` und `vram_budget_manager.py`
+    halten zwei zur Laufzeit gelesene Werte gegeneinander.
+- **Historischer Stand:** 2026-08-11 (OBJ-76 Runtime-Wahrheit; 18/20 Tasks belegt)
+- **Current Status:** Launcher/LHM/Capture, Shutdown-Persistenz, SigLIP-Gate,
+  Scene-Ground-Truth und Recovery-Dry-Run sind fokussiert und live belegt.
+  Der direkte LM-Studio-Load/SSE-Transport ist für qwen3.6 und qwen2.5-VL grün;
+  der reale PB-Studio-Pfad lieferte unter paralleler 14,27-GB-Fremdmodell-
+  Belegung noch keinen nutzbaren Tag-Commit. Der 64-Token-Diagnose-Request ist
+  nicht mit dem unbegrenzten Produktaufruf gleichzusetzen. Deshalb
+  bleiben T003 und der datenwirksame 10-Clip-Canary T019 offen. Bulk ist NO-GO;
+  465 taglose Videos wurden nur read-only inventarisiert. Der isolierte
+  Wiederholungslauf benötigt eine eigene Freigabe zum kurzen Pausieren des
+  externen Hermes-Research-Watchdogs, der sein 14,27-GB-Modell automatisch lädt.
+- **Historischer Stand:** 2026-08-08 (OBJ-73 Remote PASS; geschützter
+  Default-Branch `main`)
 - **Status (2026-08-08 — autoritativ):**
   - PR #22 mit allen Required Checks gemerged; `main` ist Default-Branch und
     gegen ungeprüfte Änderungen, Force-Pushes und Löschungen geschützt.
@@ -234,7 +449,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **2 Agent-Teams gebaut** (`dev-*`/`analyst-*` x 12 WPF-Tab-Domains = 24 Subagents + 12 Skills), siehe `docs/agent-teams/README.md`.
   - **Voller 24-Agent-Sweep** über alle 12 Domains, Fokus Pacing-Datennutzung. Kernfund: `advanced_pacing_engine.py:1022` importierte totes `core.session_manager`-Modul (existiert nicht im Repo), ImportError von `except Exception: pass` verschluckt → Onset/Kick/Snare/HiHat/Energy-Trigger im normalen (pre-cached) Pacing-Pfad wirkungslos. Volle priorisierte Findings-Liste (14 HIGH + 12 MEDIUM + 4 LOW) in `docs/agent-teams/README.md` Abschnitt "Sweep 2026-07-10".
   - **Selbstkorrektur:** eigener `CrossModalProjector`-Fix von Teil-1 dieser Session (768→1152) war falsch (SigLIP-Modell-Verwechslung `siglip_wrapper.py` vs. echtem Brain-Feeder `video_embedder.py`). Zurückgesetzt auf 768.
-  - **Onset-Caching-Fix umgesetzt** (User-Entscheid: größere Lösung statt Workaround): Audio-Pipeline (`audio_router.py`) berechnet jetzt Onset/Kick/Snare/HiHat-Trigger-Kandidaten einmalig beim `/audio/analyze`-Lauf (gleiche librosa-Parameter wie der Live-Fallback), persistiert über `app_state.py` (JSON-Blob, kein DB-Schema-Migration nötig), injiziert via `pacing_service._inject_cached_into_engine` in die Pacing-Engine. `advanced_pacing_engine.py`: toter SessionManager-Import entfernt, Audio-Load-Gate korrigiert (lädt Audio nur noch, wenn für eine AKTIVE Trigger-Gewichtung wirklich kein Cache existiert — sonst RAM-Optimierung für lange DJ-Mixes erhalten), `_build_triggers_from_cache` um Kick/Snare/HiHat erweitert. Neue Schema-Felder in `AudioAnalysisResult` (`onset_times`/`kick_times`/`snare_times`/`hihat_times`), C#-DTOs regeneriert.
+  - **Onset-Caching-Fix umgesetzt** (User-Entscheid: größere Lösung statt Workaround): Audio-Pipeline (`audio_router.py`) berechnet jetzt Onset/Kick/Snare/HiHat-Trigger-Kandidaten einmalig beim `/audio/analyze`-Lauf (~~gleiche librosa-Parameter wie der Live-Fallback~~ — **widerlegt im Audit 2026-08-29:** Cache-, Stem- und Fallback-Pfad nutzen drei divergierende Parametersätze; `n_mels` adaptiv/128/64, `n_fft` adaptiv/2048, `preemphasis` ja/nein/ja, `delta` ungesetzt/gesetzt/gesetzt. Dieselbe Datei liefert je nach Codepfad andere Trigger-Zeitpunkte), persistiert über `app_state.py` (JSON-Blob, kein DB-Schema-Migration nötig), injiziert via `pacing_service._inject_cached_into_engine` in die Pacing-Engine. `advanced_pacing_engine.py`: toter SessionManager-Import entfernt, Audio-Load-Gate korrigiert (lädt Audio nur noch, wenn für eine AKTIVE Trigger-Gewichtung wirklich kein Cache existiert — sonst RAM-Optimierung für lange DJ-Mixes erhalten), `_build_triggers_from_cache` um Kick/Snare/HiHat erweitert. Neue Schema-Felder in `AudioAnalysisResult` (`onset_times`/`kick_times`/`snare_times`/`hihat_times`), C#-DTOs regeneriert.
   - **Verifiziert:** pytest **749 passed**/12 skipped (voller Lauf); Release-Build 0 Fehler; Backend-Live-Smoke sauber (kein Import-/Wiring-Fehler); openapi-Snapshot aktualisiert + Drift-Test grün.
   - **Nicht verifiziert (offen):** kein Live-Test mit echter langer DJ-Mix-Datei, ob Onset/Kick/Snare/HiHat-Regler jetzt tatsächlich sichtbar unterschiedliche Cut-Listen erzeugen (nur Unit-Test-Ebene + Code-Pfad-Verifikation).
 - **Status (2026-07-10, Teil 2 — KI-Model-Wiring-Audit):**
@@ -253,21 +468,73 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
   - **Verifiziert:** pytest **750 passed**/11 skipped; Release-Build 0 Fehler; Live-Smoke mit pywinauto (Tab-Content im UIA-Tree, Widget rendert).
   - **`main` gemergt** (fast-forward auf `6c625f1`) + gepusht. EOL-Renormalisierung per `.gitattributes` committed. Audit-Zyklus FULL_AUDIT_2026-06-10 damit abgeschlossen (AUDIT_FIX_VERIFY erledigt durch Build+pytest+Live-Smoke).
   - **Zurückgestellt:** AP3.6 Video-Grid-Virtualisierung (NuGet → User-Entscheid); AP6-Backlog (~45 🟡/🟢); bewusst-offene Review-LOWs (Begründungen im Plan-Header).
-- **Next Task:** T415 nach expliziter Freigabe über PR, Required Checks und
-  geschützten Main-/Release-SHA belegen; anschließend T414 und `.qc-passed`
-  digestgebunden schließen. Moondream Caption bleibt bis zu einem
-  strict-DirectML-kompatiblen Decoder bewusst deaktiviert.
+- **Next Task (2026-08-30, Sitzungsende) — LIVE-VERIFIKATION.**
+  Runbook: `docs/handoff/2026-08-30-live-verifikation-startpunkt.md`.
+  Remote-SHA `b9bae5b7a41af3a9bacb09aaf6126b4d3e31b781`, 34 Commits, lokal ==
+  remote, Arbeitsbaum sauber. Vollsuite **2 failed / 1585 passed / 13 skipped /
+  0 errors**, WPF Release 0/0, DB 6/711/`ok`.
+  **Sieben Fixes und zwei Features sind gebaut und getestet, aber keiner davon
+  am laufenden Backend mit echten Projektdaten gesehen.** Genau das steht an:
+  V-1 Downbeat-Ableitung an echter Musik (wichtigster Punkt, inkl. Härtefall
+  Snare auf 2 und 4), V-2 FR-362-Degrade, V-3 `audio_key` unavailable vs.
+  failed, V-4 Heilung der Phantom-Stage-Schlüssel, V-5 die WPF gegen das neue
+  Backend (nach dem transformers-Major-Sprung nie gestartet), V-6 Entscheidung
+  über die zwei Dauerroten.
+  **Vier Betriebsregeln, in dieser Sitzung teuer gelernt:** (1) das Backend
+  **nie** hart beenden — `Stop-Process -Force` lässt `RUNTIME_DIRTY` stehen und
+  der nächste `backend.main`-Import rollt 398 Artefakte zurück, inklusive
+  `data/pb_studio.db`; (2) Fertigsignal des Shutdowns ist das Verschwinden von
+  `RUNTIME_DIRTY`, **nicht** der geschlossene Port — dazwischen liegen
+  gemessene 28 s; (3) jeder pytest-Lauf braucht ein eigenes `--basetemp`;
+  (4) DB-Zählstände vor und nach jedem Lauf prüfen.
+  Kleinigkeiten, wenn Zeit bleibt: `has_audio_embedding` wird nach der Analyse
+  nie aktualisiert; `"peak"` fehlt in `STRUCTURE_INTENSITY_MULTIPLIERS`; der
+  Binding-Wächter hat zwei belegte Falschgrün-Klassen. `.venv-pre-lock-20260830`
+  und `.venv-lock` sind Wegwerfstände.
+- **Next Task (älter, unverändert offen):** Hermes-Research-Watchdog nur mit eigener Freigabe kurz
+  pausieren, genau T003 isoliert live wiederholen und den Watchdog danach exakt
+  wieder starten. Nur wenn der echte Produktaufruf dann erneut keine Tags
+  liefert, die reservierte Videoanalyse-Zone minimal ändern. Erst nach
+  erfolgreichem Tag-Commit und separatem Canary-Go T019 ausführen;
+  bis dahin keine Bestandsnachanalyse und keine OBJ-76-Abschlussmarker.
 - **Bug-History:** siehe `CHANGELOG.md` (BUG-001..046 archiviert 2026-03-09, HIGH-001..006 gefixt 2026-03-11, R12–R20 gefixt 2026-03-16, Brain-Modul Phase 0–6 abgeschlossen 2026-05-06, BUG-200..205 gefixt 2026-05-08/09, **2026-05-11 Pipeline-Lueken-Plan komplett abgearbeitet** L-K1..K5 + L-M1..M8 + L-N2..N8 + L-TI-1..TI-7, **2026-05-21/22 QA-Loop+Hybrid-Audit** 3 Code-Fixes + 4 Hybrid-Bypass-Fixes, **2026-05-30 Epic 00013 Audit & Optimierungen**, **2026-06-09 Stems-Analyse-Bug & htdemucs Crash behoben**, **2026-06-10 Full-Audit + Epic 00015 K1–K11**, **2026-06-12 Audit-Fix Phase 3 AP1–AP5**).
 
 
 **Kern-Architektur-Entscheidungen:**
 - *AppState:* `backend/app_state.py` Singleton + SQLite-Persistenz + `current_project` (ADR-001+003)
-- *VRAM Arbiter:* `with_gpu_task(model_id=...)` prüft VRAMBudgetManager
+- *VRAM Arbiter:* `with_gpu_task(model_id=...)` prüft VRAMBudgetManager.
+  **Audit 2026-08-29:** die Klasse `VRAMArbiter` (264 Z.) ist vollständig toter
+  Code (0 Produktions-Aufrufer); die dort beschriebene Dual-Verification läuft
+  nicht. Von den 3 produktiven `with_gpu_task`-Aufrufen setzen 2 `manage_vram=False`
+  und der dritte ist unerreichbar (`moondream_decoder.onnx` fehlt) — der gesamte
+  Reservierungscode läuft im heutigen Betrieb nie. Pacing erreicht DirectML ganz
+  ohne `with_gpu_task`.
 - *Vision LLM:* Moondream ONNX (FP16) via DirectML
 - *Motion Analysis:* RAFT ONNX via DirectML (`raft.py → MotionAnalyzer`)
 - *Stem Separation:* htdemucs runs on CPU because PyTorch CPU is used in the pinned environment. DirectML acceleration only applies to ONNX-MDX paths in StemSeparator.
 - *Vector DB:* FAISS-CPU (1152-dim SigLIP SO400M embeddings) + sqlite-vec (Brain-Modul KNN)
-- *Beat Detection:* BeatNet (madmom) aktiv, librosa als Fallback. **Korrektur
+- *Beat Detection:* **librosa ist der reale Beat-Lieferant.** BeatNet/madmom
+  ist zur Laufzeit wirkungslos: `madmom/features/downbeats.py:287` ruft
+  `np.asarray(results)[:, 1]` auf eine ungleichförmige Ergebnisliste, was seit
+  NumPy 1.24 ein `ValueError` ist. Gegengeprüft mit `beats_per_bar=[4]` statt
+  `[2,3,4]` — wirft ebenfalls, keine Konfiguration umgeht den Pfad. BeatNet
+  wirft damit bei **jeder** Datei; der Wurf wird gefangen und librosa
+  übernimmt. Seit dem venv-Neubau ist `madmom` gar nicht mehr installiert.
+  **Downbeats werden seit `6187eb2` aus den Anschlagstärken abgeleitet** und
+  ausdrücklich als `status="derived"`, `synthetic=True` gekennzeichnet —
+  `"measured"` bleibt echten Detektor-Taktpositionen vorbehalten. Die
+  Ableitung verweigert die Auskunft, wenn sich keine Taktposition abhebt; das
+  hält FR-317 („keine pauschale jeder-vierte-Beat-Behauptung") ein. Der
+  T317-Wächter in `AdvancedPacingEngine._identify_downbeats` ist unangetastet.
+  *Historisch, jetzt überholt:*
+  **die Downbeats erreichen die Pacing-Engine nicht** (Audit 2026-08-29, C-01):
+  `audio_router.py:2255` ruft `detector.get_downbeats()` ohne das Pflichtargument
+  → `TypeError`, von `except Exception` verschluckt. Zusätzlich schreibt der Router
+  `downbeat_provenance="available"`, während `pacing_service.py:389` auf
+  `"measured"` prüft, und `beats` wird nach dem Anhängen der Downbeats nie
+  sortiert. Drei Brüche in einer Kette — ein Teilfix macht es schlimmer.
+  `beat_trigger_mode="downbeat_only"` liefert daher eine leere Cut-Liste.
+  librosa als Fallback. **Korrektur
   2026-08-06:** die frühere Angabe „madmom nicht installierbar auf 3.11" war
   falsch — madmom 0.16.1 baut auf 3.11.9, siehe `requirements-optional-beatnet.txt`.
   Ohne madmom liefert `get_downbeats()` hart `[]`, dann existieren keine Downbeats.
@@ -275,6 +542,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 - *SSE Fan-out:* `publish_event` broadcastet an ALLE registrierten Queues
 - *Path-Traversal-Schutz:* `Path.is_relative_to()` in project_router + render_router
 - *Brain-Modul:* 17 Bridge-Achsen · Beta-Bernoulli WeightStore · 5-Level Hierarchical Backoff · SigLIP-ONNX (1152-D) und registriertes CLAP-ONNX via ONNX Runtime DirectML, fail-closed ohne Asset · 6 REST-Endpoints `/brain/{suggest,feedback,learning_session,stats,reset,explain}` · WPF HIRN-Tab + Confidence-Balken
+- *Pacing Specialist Skill:* `.claude/skills/audio-video-pacing-specialist` (BPM, Beat-Grid, EDM-Groove, 21+ Mood-Profile, Speech-WPM/CPS & Cut-Optimierung; kompatibel mit Claude, Codex & Antigravity)
 
 ---
 
@@ -307,8 +575,8 @@ PBStudio.UI/
 | Python | 3.11.x | madmom/BeatNet |
 | NumPy | 1.26.4 | < 2.0 strict |
 | onnxruntime-directml | >=1.16.0 | GPU engine |
-| PyTorch (CPU) | 2.11.0+cpu | ML tensors |
-| BeatNet | 1.1.1 | Beat detection |
+| PyTorch (CPU) | 2.11.0+cpu | ML tensors. **2026-08-30: venv aus dem Lock neu gebaut**, Lock und Installation stimmen wieder überein. Vorher wich sie an 14 Versionen ab (torch 2.4.1, transformers 4.49, hf-hub 0.36.2, starlette 1.0.0), hatte 13 Zusatzpakete und 6 fehlende. Die alte Umgebung liegt als `.venv-pre-lock-20260830` daneben. `torch-directml` ist ersatzlos weg — es hatte null Nutzer im Code; DirectML läuft über `onnxruntime-directml`. |
+| BeatNet | 1.1.1 im Lock, **zur Laufzeit wirkungslos** | `madmom` steht nicht in `requirements.txt`, `BEATNET_AVAILABLE` ist seit dem venv-Neubau `False`. Kein Verlust: madmom 0.16.1 wirft auf NumPy ≥ 1.24 ohnehin bei jeder Datei (siehe §4). Beats kommen von librosa. |
 | FFmpeg | aktives Manifest: 6.1.1 Gyan.dev; T411-Hardware-QC bestanden | AMF encoders |
 | FAISS-CPU | 1.7.4 | cp311-win_amd64 |
 

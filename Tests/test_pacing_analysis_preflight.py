@@ -1,6 +1,7 @@
 """Pacing must reject missing analysis stages before starting its worker."""
 
 import asyncio
+import contextlib
 import importlib
 
 import pytest
@@ -93,6 +94,107 @@ def test_preflight_reports_mode_specific_missing_stages_and_clip_ids():
     ]
 
 
+def test_preflight_accepts_audio_key_that_the_source_cannot_provide():
+    """A video without an audio track can never carry a key — that is not a defect.
+
+    video_router marks this case "unavailable" and records no stage error. The
+    gate must let it pass and report the clip as unscored instead of blocking a
+    run that the selector handles natively (clip_selector.py, neutral factor).
+    """
+    config = PacingConfigSchema(
+        audio_clip_id=1,
+        video_clip_ids=[10],
+        use_key_matching=True,
+    )
+    silent_clip = _valid_video()
+    silent_clip["audio_key"] = None
+    silent_clip["stage_status"]["audio_key"] = "unavailable"
+    silent_clip["stage_errors"] = {}
+
+    report = pacing_router._validate_pacing_analysis_preflight(
+        config,
+        _valid_audio(key=True),
+        {10: silent_clip},
+    )
+
+    assert report["key_scored_clips"] == 0
+    assert report["key_unscored_clips"] == [10]
+
+
+def test_preflight_still_blocks_a_real_audio_key_failure():
+    """"unavailable" plus a recorded stage error is a defect, not a capability."""
+    config = PacingConfigSchema(
+        audio_clip_id=1,
+        video_clip_ids=[10],
+        use_key_matching=True,
+    )
+    broken_clip = _valid_video()
+    broken_clip["audio_key"] = None
+    broken_clip["stage_status"]["audio_key"] = "unavailable"
+    broken_clip["stage_errors"] = {"audio_key": "ffmpeg timeout"}
+
+    with pytest.raises(HTTPException) as caught:
+        pacing_router._validate_pacing_analysis_preflight(
+            config,
+            _valid_audio(key=True),
+            {10: broken_clip},
+        )
+
+    assert caught.value.detail["missing"]["video"] == [
+        {
+            "clip_id": 10,
+            "stages": [
+                {"stage": "audio_key", "status": "unavailable", "payload_valid": False}
+            ],
+        }
+    ]
+
+
+def test_preflight_reports_partially_scored_key_pools():
+    config = PacingConfigSchema(
+        audio_clip_id=1,
+        video_clip_ids=[10, 11],
+        use_key_matching=True,
+    )
+    silent_clip = _valid_video()
+    silent_clip["audio_key"] = None
+    silent_clip["stage_status"]["audio_key"] = "unavailable"
+    silent_clip["stage_errors"] = {}
+
+    report = pacing_router._validate_pacing_analysis_preflight(
+        config,
+        _valid_audio(key=True),
+        {10: _valid_video(), 11: silent_clip},
+    )
+
+    assert report["key_scored_clips"] == 1
+    assert report["key_unscored_clips"] == [11]
+
+
+@pytest.mark.parametrize("stage", ["motion", "embedding"])
+def test_preflight_never_waives_stages_that_are_always_producible(stage):
+    """Only audio_key may be absent by capability. Motion/embedding must not."""
+    config = PacingConfigSchema(
+        audio_clip_id=1,
+        video_clip_ids=[10],
+        use_motion_matching=True,
+        use_semantic_matching=True,
+    )
+    clip = _valid_video()
+    clip["stage_status"][stage] = "unavailable"
+    clip["stage_errors"] = {}
+
+    with pytest.raises(HTTPException) as caught:
+        pacing_router._validate_pacing_analysis_preflight(
+            config,
+            _valid_audio(),
+            {10: clip},
+        )
+
+    reported = [entry["stage"] for entry in caught.value.detail["missing"]["video"][0]["stages"]]
+    assert reported == [stage]
+
+
 def test_preflight_requires_truthful_status_and_valid_payload():
     config = PacingConfigSchema(audio_clip_id=1, video_clip_ids=[10])
     audio = _valid_audio()
@@ -139,6 +241,79 @@ def test_video_analysis_snapshot_is_loaded_for_all_consumers(field):
         **{field: True},
     )
     assert pacing_router._requires_video_analysis(config) is True
+
+
+def _state_with_one_silent_clip():
+    silent_clip = _valid_video()
+    silent_clip["audio_key"] = None
+    silent_clip["stage_status"]["audio_key"] = "unavailable"
+    silent_clip["stage_errors"] = {}
+
+    class _State:
+        current_audio_path = None
+
+        def get_audio_clips_snapshot(self):
+            return {1: {"id": 1, "path": "audio.wav", "duration_seconds": 10.0}}
+
+        def get_video_clips_snapshot(self):
+            return {10: {"id": 10, "name": "v", "path": "v.mp4", "duration_seconds": 10.0}}
+
+        def get_audio_analysis(self, _clip_id):
+            return _valid_audio(key=True)
+
+        def get_video_analysis_snapshot(self):
+            return {10: silent_clip}
+
+        def require_project_context_current(self, _context):
+            return None
+
+        @contextlib.contextmanager
+        def project_commit(self, _context):
+            yield
+
+        def set_timeline(self, _cuts):
+            return None
+
+    return _State()
+
+
+def test_unscorable_key_matching_is_switched_off_and_reported(monkeypatch):
+    """The run proceeds, and the response admits the mode did not apply."""
+    seen_config = {}
+
+    async def _publish(*_args, **_kwargs):
+        return None
+
+    def _fake_worker(config, *_args, **_kwargs):
+        seen_config["use_key_matching"] = config.use_key_matching
+        return [{"clip_id": "10", "start_time": 0.0, "end_time": 1.0, "metadata": {}}]
+
+    async def _to_thread(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(pacing_router, "publish_log", _publish)
+    monkeypatch.setattr(pacing_router, "publish_event", _publish)
+    monkeypatch.setattr(pacing_router, "_run_pacing_generation", _fake_worker)
+    monkeypatch.setattr(pacing_router, "_load_ui_anchors", lambda _s: [])
+    monkeypatch.setattr(pacing_router.asyncio, "to_thread", _to_thread)
+
+    response = asyncio.run(
+        pacing_router._generate_cut_list_for_project(
+            PacingConfigSchema(
+                audio_clip_id=1,
+                video_clip_ids=[10],
+                use_key_matching=True,
+            ),
+            _state_with_one_silent_clip(),
+            object(),
+        )
+    )
+
+    assert response.cut_count == 1
+    assert seen_config["use_key_matching"] is False, "no-op mode must not reach the engine"
+    assert [d.mode for d in response.degradations] == ["key_matching"]
+    assert response.degradations[0].scored_clips == 0
+    assert response.degradations[0].total_clips == 1
 
 
 def test_missing_beats_blocks_before_worker(monkeypatch):

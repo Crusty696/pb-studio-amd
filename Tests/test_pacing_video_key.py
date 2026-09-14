@@ -108,7 +108,7 @@ def test_video_analysis_includes_audio_key_field(tmp_path):
         video_mod._run_scene_detection = orig_scene
         video_mod._run_video_gpu_analysis = orig_gpu
         video_mod._run_color_and_caption_analysis = orig_color
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_app_state, None)
 
     assert r.status_code == 200
     body = r.json()
@@ -172,12 +172,82 @@ def test_video_analysis_audio_key_none_on_failure(tmp_path):
         video_mod._run_scene_detection = orig_scene
         video_mod._run_video_gpu_analysis = orig_gpu
         video_mod._run_color_and_caption_analysis = orig_color
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_app_state, None)
 
     assert r.status_code == 200
     body = r.json()
     assert "audio_key" in body
     assert body["audio_key"] is None
+    # A detector fault is a defect, not a missing capability. It must stay
+    # distinguishable, otherwise the Pacing gate waives real failures.
+    assert body["stage_status"]["audio_key"] == "failed"
+    assert "detect failed" in body["stage_errors"]["audio_key"]
+
+
+def test_video_without_audio_track_is_unavailable_not_failed(tmp_path):
+    """No audio track is a truthful capability result — no error recorded."""
+    import sys
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app_state import get_app_state, AppState
+
+    state = AppState(current_project={
+        "name": "VideoKeyTest",
+        "path": str(tmp_path),
+        "db_project_id": 1,
+    })
+    app.dependency_overrides[get_app_state] = lambda: state
+    client = TestClient(app)
+
+    video_mod = sys.modules.get("backend.routers.video_router")
+    if video_mod is None:
+        import importlib
+        video_mod = importlib.import_module("backend.routers.video_router")
+
+    orig_scene = video_mod._run_scene_detection
+    orig_gpu = video_mod._run_video_gpu_analysis
+    orig_color = video_mod._run_color_and_caption_analysis
+
+    async def fake_color(*a, **kw):
+        return {"dominant_colors": [], "tags": [], "tag_source": "mock"}
+
+    video_mod._run_scene_detection = lambda *a, **kw: {"scene_count": 0, "scenes": []}
+    video_mod._run_video_gpu_analysis = lambda *a, **kw: {
+        "avg_motion": 0.0, "motion": None, "embedding_dim": 0,
+        "embedding_samples": 0, "has_embedding": False,
+    }
+    video_mod._run_color_and_caption_analysis = fake_color
+
+    clip = {
+        "id": 1, "name": "clip_1", "path": "C:/clip.mp4",
+        "duration_seconds": 10.0, "width": 1920, "height": 1080,
+        "fps": 30.0, "codec": "h264", "thumbnail_available": False, "tags": [],
+    }
+    state.persist_video_clip(clip, project_id=1)
+    state.set_video_clip(1, clip)
+
+    from pathlib import Path as _Path
+    try:
+        with patch.object(_Path, "exists", return_value=True), \
+             patch("pb_studio.video.audio_key_detector.detect_video_audio_key", return_value=None):
+            r = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": True,
+                "analyze_motion": True,
+                "generate_embeddings": False,
+                "generate_captions": False,
+            })
+    finally:
+        video_mod._run_scene_detection = orig_scene
+        video_mod._run_video_gpu_analysis = orig_gpu
+        video_mod._run_color_and_caption_analysis = orig_color
+        app.dependency_overrides.pop(get_app_state, None)
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["audio_key"] is None
+    assert body["stage_status"]["audio_key"] == "unavailable"
+    assert "audio_key" not in body["stage_errors"]
 
 
 def test_pacing_service_forwards_video_audio_key():
@@ -275,3 +345,76 @@ def test_clip_selector_key_matching_disabled_ignores_keys():
     selected = selector.select_clip(clips, trigger_strength=0.5, trigger_type="beat")
     # Ohne key-multiplier sollte 101 (besseres Motion-Match) gewinnen
     assert selected.clip_id == "101"
+
+
+def test_audio_key_no_audio_stream_returns_none_unavailable(tmp_path):
+    """T004: Video ohne Audio-Stream liefert None (unavailable Capability, kein Fehler)."""
+    from pb_studio.video.audio_key_detector import detect_video_audio_key, has_video_audio_stream
+    dummy = tmp_path / "silent.mp4"
+    dummy.write_bytes(b"mock_mp4_bytes")
+
+    with patch("pb_studio.video.audio_key_detector.has_video_audio_stream", return_value=False):
+        assert has_video_audio_stream(dummy) is False
+        res = detect_video_audio_key(dummy)
+        assert res is None, "Video ohne Audio-Stream muss None liefern"
+
+
+def test_audio_key_stream_present_but_ffmpeg_fails_raises_error(tmp_path):
+    """T004: Video mit Audio-Stream, aber fehlschlagendem ffmpeg wirft RuntimeError (Defekt/failed)."""
+    import subprocess
+    from pb_studio.video.audio_key_detector import detect_video_audio_key
+
+    dummy = tmp_path / "corrupted_audio.mp4"
+    dummy.write_bytes(b"mock_mp4_bytes")
+
+    fake_res = subprocess.CompletedProcess(
+        args=["ffmpeg"],
+        returncode=1,
+        stdout=b"",
+        stderr=b"Corrupted audio packet header",
+    )
+
+    with patch("pb_studio.video.audio_key_detector.has_video_audio_stream", return_value=True), \
+         patch("subprocess.run", return_value=fake_res):
+        with pytest.raises(RuntimeError, match="ffmpeg audio-extract fail"):
+            detect_video_audio_key(dummy)
+
+
+def test_audio_key_stream_present_but_ffmpeg_times_out_raises_error(tmp_path):
+    """T004: Video mit Audio-Stream, aber ffmpeg Timeout wirft RuntimeError (Defekt/failed)."""
+    import subprocess
+    from pb_studio.video.audio_key_detector import detect_video_audio_key
+
+    dummy = tmp_path / "slow_audio.mp4"
+    dummy.write_bytes(b"mock_mp4_bytes")
+
+    with patch("pb_studio.video.audio_key_detector.has_video_audio_stream", return_value=True), \
+         patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ffmpeg", timeout=30)):
+        with pytest.raises(RuntimeError, match="ffmpeg timeout"):
+            detect_video_audio_key(dummy)
+
+
+def test_pacing_degradation_without_video_audio_key_neutral_score():
+    """T003: Wenn use_key_matching aktiv ist, aber Clips keine Tonspur haben (audio_key=None),
+    degradiert das Pacing neutral: alle Clips erhalten Score 0.5, Ranking folgt purem Motion/Energy."""
+    from pb_studio.pacing.clip_selector import ClipSelector
+
+    selector = ClipSelector(strategy="motion")
+    selector.use_key_matching = True
+    selector.audio_key = "A minor"
+    # Clips ohne Tonspur (None)
+    selector.video_keys = {
+        201: None,
+        202: None,
+    }
+
+    clips = [
+        {"id": 201, "file_path": "/clips/wan_silent_1.mp4", "motion_score": 0.8},
+        {"id": 202, "file_path": "/clips/wan_silent_2.mp4", "motion_score": 0.3},
+    ]
+
+    # Target motion 0.8 -> Clip 201 ist perfektes Match (diff=0.0)
+    selected = selector.select_clip(clips, trigger_strength=0.8, trigger_type="beat")
+    assert selected.clip_id == "201", "Clip 201 muss trotz fehlendem Audio-Key anhand Motion gewinnen"
+
+

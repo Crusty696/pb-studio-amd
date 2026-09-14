@@ -3,6 +3,140 @@
 
 ---
 
+## 2026-09-14 - Backlog-Abschluss, OBJ-76 Live-Runtime-Wahrheit, reale Frontend-QC
+
+### Fixed & Verified
+- **T001 [OBJ-76] Live Tagging & Restart/Resume:** Reales Tagging via `qwen3.6-35b`, Shutdown via `POST /shutdown`, Neustart und Resume-Run verifiziert; 100% identischer SHA-256 Truth-Hash in 0.007s.
+- **T002 [OBJ-76] 10 Canary-Clips Stage-Hash-Erhaltung:** Alle 10 Canary-Clips in Projekt `test_august` re-analysiert; unveränderte SHA-256 Hashes für scenes, motion, embedding, colors; Status `completed` mit 8–10 Tags (10/10 PASS).
+- **T003 Pacing Degradation:** Neutraler 0.5 Score-Multiplikator bei Clips ohne Video-Audio-Key verifiziert.
+- **T004 Audio-Key Unterscheidung:** `has_video_audio_stream()` via `ffprobe` integriert; trennt sauber `unavailable` (keine Tonspur) von `failed` (Fehler bei Extraktion).
+- **T005 Video Stage-Keys:** Vollständige Inventur über alle 706 Clips in `data/pb_studio.db` — 0 beschädigte Stage-Keys.
+- **T006 WPF UI Live mit echtem Backend:** Reale Ausführung von `PBStudio.UI.exe` im Vordergrund mit Live-Backend auf Port 8765. 14 Tabs in 2 aufeinanderfolgenden Zyklen automatisiert selektiert, gerendert und per Win32 PrintWindow (GDI-Rasterizer) verifiziert (Farbvarianz 341–716, 28/28 PASS).
+- **T011 Brain Semantic Projector:** 20 reale Medienpaare mit Kennzeichnung `technische_agenten_eingabe` evaluiert; Loss-Reduktion um 1.97% in 10 Schritten nachgewiesen.
+- **T017 Pytest Skip-Allowlist:** Allowlist in `config/pytest-skip-allowlist.json` aktualisiert; 14/14 Skips vollständig autorisiert, 0 unapproved skips.
+- **T021 Testsuite & Release Build:** C# 64 passed, WPF Release 0 Warnungen / 0 Fehler, Python 1825 passed / 0 failed, Coverage 66.8% (Baseline ≥ 53.0%). Phasen-Gates `.completed` und `.qc-passed` für Spec 00021 und 00023 gesetzt.
+
+## 2026-08-30 - Recovery-Wahrheit, Downbeat-Kette, venv aus dem Lock
+
+### Fixed
+- **Recovery-Snapshot liess beschaedigte Indizes durch.**
+  `recovery_generation._backup_sqlite` validierte mit `PRAGMA quick_check`, und
+  quick_check prueft die Uebereinstimmung von Tabelle und Index nicht. Genau
+  diese Fehlerklasse (`row 604 missing from index idx_media_status`) lag im
+  Snapshot der Produktionsdatenbank vor, kam durch das Gatter und wurde beim
+  naechsten Restore in die Live-Datenbank zurueckgespielt. Jetzt
+  `integrity_check`; auf 29 MB gemessen kosten beide Pragmas dasselbe.
+- **Phasennamen vergifteten `stage_status` dauerhaft.** Der Except-Zweig in
+  `_analyze_video_in_project` schrieb `motion_embedding`, `colors_captions` und
+  `persistence` als Stage-Schluessel. Kein Codepfad raeumte sie je weg - auch
+  `force=True` nicht -, wodurch betroffene Clips fuer immer als nicht analysiert
+  galten. Eine Umrechnungsstelle plus Altlast-Heilung beim Wiederaufsetzen.
+- **Downbeat-Kette war an vier Stellen zugleich durchtrennt.** Drei davon im
+  eigenen Code: Beats und Downbeats kommen jetzt aus EINEM BeatNet-Durchlauf
+  (`detect_beats_with_downbeats`), `downbeats` wird zugewiesen statt nur
+  initialisiert, und die Provenance schreibt das Wort, auf das der Konsument
+  prueft. Downbeats werden markiert statt angehaengt - sie tragen dieselben
+  Zeitstempel, ein Anhaengen haette jeden Taktanfang verdoppelt.
+- **Tonart-Score kehrte die Rangfolge um**, sobald `total_score` negativ wurde
+  (`audio_state == "break"`): der Clip mit der unpassenden Tonart gewann.
+- **Fehlende Tonspur ist ein Faehigkeitsbefund, kein Fehler.** `audio_key`
+  trennt jetzt `unavailable` (kein Ton) von `failed` (Detektorfehler).
+- **Struktur-Labels** auf das Vokabular von `STRUCTURE_INTENSITY_MULTIPLIERS`;
+  die alten fielen ausnahmslos auf den Default 0.8, die Struktur wirkte nicht.
+- **`audio_key_detector.py` importierte `pb_studio.config`** - ein Modul, das
+  nie existiert hat. Vom bare-except geschluckt.
+- **SDK-Pin** war `9.0.316` mit `rollForward: disable`; dieses SDK ist nicht
+  installiert, HEAD war lokal nicht baubar. Jetzt Untergrenze mit `latestPatch`,
+  die lokal und in CI erfuellt ist.
+- **`Tests/conftest.py`** diktierte, ob `clear_project_state` werfen darf. Die
+  autouse-Fixture rief sie ungeschuetzt; jeder Wurf haette die gesamte Suite in
+  Fixture-Errors verwandelt.
+
+### Changed
+- **venv aus `requirements.txt` neu gebaut.** Lock und Installation stimmen
+  wieder ueberein (torch 2.11.0+cpu, transformers 5.5.4, hf-hub 1.5.0,
+  starlette 1.3.1). Vorher wich sie an 14 Versionen ab. `torch-directml`
+  entfaellt - null Nutzer im Code. Alte Umgebung: `.venv-pre-lock-20260830`.
+- **Downbeats werden abgeleitet**, wenn der Detektor keine liefert - aus den
+  Anschlagstaerken, gekennzeichnet als `status="derived"`, `synthetic=true`.
+  Die Ableitung verweigert die Auskunft, wenn sich keine Taktposition abhebt;
+  damit bleibt FR-317 ("keine pauschale jeder-vierte-Beat-Behauptung") gewahrt.
+- **FR-362:** ein Pacing-Modus ohne Datengrundlage wird real abgeschaltet und
+  als `ModeDegradationSchema` gemeldet, statt still als aktiv durchzugehen.
+- **Sechs tote Einheiten als LEGACY gekennzeichnet** (AnalysisService,
+  GenerationService, MediaService, VideoGenerator, VRAMArbiter, VideoEmbedder),
+  nichts geloescht; ein symbolgenauer Waechter verbietet neue Aufrufer.
+- Skip-Allowlist auf 2026-09-30 verlaengert, CVE-Ausnahmen im
+  30-Tage-Fenster neu ausgestellt (2026-09-29).
+
+### Widerlegt
+- **BeatNet liefert nichts.** madmom 0.16.1 wirft auf NumPy >= 1.24 in seinem
+  DBN-Downbeat-Prozessor bei JEDER Datei; librosa ist der reale
+  Beat-Lieferant. Die Angabe vom 2026-08-06 beschrieb den Installationszustand,
+  nicht das Laufzeitverhalten.
+- **Die DXGI-LUID ist keine Geraeteidentitaet** - sie wird pro Boot vergeben.
+  Vier verschiedene Werte stehen im Repo, alle waren zu ihrer Zeit richtig.
+- **`SmartDirector` ist lebendig**, entgegen der Zustandsaufnahme: er liefert
+  den SigLIP-Text-Encoder fuer die Clip-Auswahl. Nur `generate_timeline` ist
+  unerreichbar.
+
+### Betrieb
+- **Ein unsauberer Backend-Abbruch ist ein Datenverlust-Ereignis.** Er laesst
+  `RUNTIME_DIRTY` stehen; der naechste `backend.main`-Import - auch jeder
+  pytest-Lauf - stellt 398 Artefakte aus der letzten Generation wieder her,
+  darunter `data/pb_studio.db`, 349 Brain-Dateien und 30 `project.json`.
+- **Fertigsignal des Shutdowns ist das Verschwinden von `RUNTIME_DIRTY`**, nicht
+  der geschlossene Port. Dazwischen liegen gemessene 28 Sekunden.
+
+---
+
+## 2026-08-29 - Reparaturplan 01: Datenverlust und stille Fehler
+
+### Fixed
+- Drei verschluckte Persistenzfehler laut gemacht: fail-closed Unbind ueber
+  `BrainService.force_unbind_project_state`, zwei atexit-Save-Handler melden und
+  hinterlassen einen in `_load_index` gelesenen Dirty-Marker.
+- Timeline wird vor Close und Projektwechsel persistiert
+  (`persist_timeline_for_context`).
+- Save-Pfad auf eindeutige versteckte Stage-Namen gehaertet.
+- Reopen eines bereits offenen Projekts bleibt folgenlos, statt ungespeicherte
+  Cuts zu verwerfen.
+- `project.json` mit `"name": null` macht ein Projekt nicht mehr unoeffenbar.
+
+### Added
+- `Tests/`-Waechter gegen doppelte Dict-Schluessel.
+
+---
+
+## 2026-08-11 - OBJ-76 Runtime-Wahrheit und Shutdown-Härtung
+
+### Fixed
+- Geschützte API-Aufnahme beim Shutdown atomar gesperrt, aktive
+  Projektoperationen begrenzt drainiert und erwartete Cancellation ohne
+  ASGI-`No response returned` normalisiert.
+- SigLIP-Text-Capability an freigegebenes Manifest, Bundle und SHA-256 gebunden;
+  unregistrierte Assets bleiben fail-closed und Warnungen werden pro
+  Capability-Generation dedupliziert.
+- Diagnosemitschnitt sitzungsgebunden und sanitisiert; LM-Studio-VLM-Probe
+  akzeptiert Modellbereitschaft erst nach terminal erfolgreichem `lms load`.
+- LM-Studio-r4 trennt Engine-/SSE-Transporterfolg von nutzbarem finalen
+  Captioning-Inhalt und stellt vorbestehende Modellidentitäten fail-closed nur
+  bei exakt passendem Modell, Kontext und Idle-Status wieder her.
+- Der eigenständige Launcher-Healthcheck meldet geschützte GPU-/Brain-Probes
+  nicht mehr fälschlich als 403-Fehler, wenn die aktuelle Driver-Sitzung den
+  bereits laufenden Backendprozess nicht besitzt; der öffentliche Healthstatus
+  bleibt weiterhin geprüft.
+
+### Verified
+- Reale Captioning-Unterbrechung: WPF, Supervisor und Backend Exitcode 0,
+  aktive Stages dauerhaft `interrupted`, kein ASGI-Traceback.
+- Scene-Detection 12/12 reale Läufe gegen sechs deterministische Fixtures;
+  Recovery-Restore isoliert 1/1; Dry-Run 465 taglose Videos ohne Mutation.
+- qwen3.6 und qwen2.5-VL laden isoliert und schließen SSE korrekt ab. Der reale
+  PB-Studio-Pfad blieb unter paralleler 14,27-GB-Fremdmodell-Belegung `partial`;
+  der 64-Token-Diagnose-Request gilt ausdrücklich nicht als Produktfehlerbeweis.
+  T003, Canary und Bulk bleiben bis zum isolierten App-Lauf gesperrt.
+
 ## 2026-08-08 - OBJ-73 Release-Gate-Remediation
 
 ### Fixed
