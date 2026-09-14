@@ -107,8 +107,8 @@ def main():
 
     # Connect
     print("\n[1] App verbinden...")
-    app = Application(backend="uia").connect(title_re=".*PB Studio.*", timeout=10)
-    win = app.window(title_re=".*PB Studio.*")
+    app = Application(backend="uia").connect(handle=hwnd, timeout=10)
+    win = app.window(handle=hwnd)
     win.wait("visible", timeout=5)
     rect = win.rectangle()
     print(f"  Rect: {rect.left},{rect.top} -> {rect.right},{rect.bottom}")

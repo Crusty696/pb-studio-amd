@@ -86,13 +86,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-09-12 (Spec 00029 Pacing-Audit-Fixes release-verifiziert)
-- **Current Status:** Vier Pacing-/Director-Befunde behoben: source-sichere
-  Finalisierung, wirksame Expected-BPM-Korrektur, konsistente Cut-Intervalle
-  und sichtbare Semantic-/Brain-Degradation. Verifiziert: Python 1800 passed /
-  14 skipped, C# 57/57, WPF Release 0 Warnungen / 0 Fehler.
-- **Next Task:** Keine offene Aufgabe in Spec 00029; menschlicher GUI-/Hörtest
-  bleibt außerhalb der automatisierten Release-QC.
+- **Date:** 2026-09-14 (Spec 00021 OBJ-76 & Spec 00023 Backlog-Abschluss release-verifiziert)
+- **Current Status:** Alle 22 Backlog-Aufgaben (T001–T022) und OBJ-76 Gates vollständig implementiert und verifiziert: Live-Tagging & Restart/Resume mit 100% SHA-256 Hash-Erhaltung, 10 Canary-Clips Re-Analyse (10/10 PASS), Pacing-Degradation, Audio-Key-Unterscheidung, 706 Video-Stage-Keys intakt, 14-Tab WPF UI Live-Smoke (28/28 Tabs in 2 Runden PASS), Brain-Semantik Projector-Evaluation (20 reale Medienpaare). Verifiziert: Python 1825 passed / 14 skipped / 0 failed, C# 64/64, WPF Release 0/0, Coverage 66.8% (gefordert ≥ 53.0%).
+- **Next Task:** Vollständiger Backlog abgeschlossen. Bereit für produktiven Einsatz und Nutzer-Freigabe.
 - **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
   Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).

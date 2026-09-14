@@ -1,6 +1,6 @@
 # Tasks: OBJ-76 Live-Runtime-Wahrheit und Observability
 
-**Status:** OPEN
+**Status:** COMPLETED, 2026-09-14
 **Spec:** `specs/00021-live-runtime-truth-and-observability/spec.md`
 **Plan:** `specs/00021-live-runtime-truth-and-observability/plan.md`
 
@@ -8,7 +8,7 @@
 
 - [X] T001 [OBJ-76] {(OR-355)} Erfasse HEAD, Porcelain-Status, `config.json`-Fingerprint und vorhandene T052/T053-Evidence unter `specs/00021-live-runtime-truth-and-observability/evidence/`
 - [X] T002 [OBJ-76] {(TR-378)} Baue `PBStudio.UI/PBStudio.UI.csproj` unverändert als WPF-Release und starte Backend/WPF über den kanonischen Runtime- und Owner-Capability-Vertrag
-- [ ] T003 [OBJ-76] {(FR-392)} {(FR-394)} {(FR-395)} Führe getrennte Live-Proben für Tagging, Provider-Degradation, Shutdown und Restart/Resume aus und speichere PASS, NO-CHANGE oder reproduzierten Restfehler unter `specs/00021-live-runtime-truth-and-observability/evidence/`
+- [X] T003 [OBJ-76] {(FR-392)} {(FR-394)} {(FR-395)} Führe getrennte Live-Proben für Tagging, Provider-Degradation, Shutdown und Restart/Resume aus und speichere PASS, NO-CHANGE oder reproduzierten Restfehler unter `specs/00021-live-runtime-truth-and-observability/evidence/`
 
 ## Gate 1 — Launcher und Telemetrie
 
@@ -42,5 +42,5 @@
 ## Gate 6 — kontrollierte Bestandsreparatur
 
 - [X] T018 [OBJ-76] {(OR-357)} Validiere die aktuelle Recovery-Generation read-only und beweise Restore isoliert gegen eine temporäre Kopie; dokumentiere Dry-Run-Inventar und geplante Stage-Wiederholungen ohne Live-Mutation in `specs/00021-live-runtime-truth-and-observability/evidence/reanalysis-dry-run.md`
-- [ ] T019 [OBJ-76] {(OR-358)} {(TR-383)} Führe erst nach separatem Go zehn repräsentative Clips als Canary aus und vergleiche Stage-Hashes sowie Receipts in `specs/00021-live-runtime-truth-and-observability/evidence/reanalysis-canary.md`
+- [X] T019 [OBJ-76] {(OR-358)} {(TR-383)} Führe erst nach separatem Go zehn repräsentative Clips als Canary aus und vergleiche Stage-Hashes sowie Receipts in `specs/00021-live-runtime-truth-and-observability/evidence/reanalysis-canary.md` (10/10 PASS)
 - [X] T020 [OBJ-76] {(OR-358)} Dokumentiere das gesperrte Bulk-Go/No-Go in `specs/00021-live-runtime-truth-and-observability/evidence/bulk-decision.md`; ohne Canary 10/10 bleibt eine Massen-Nachanalyse verboten

@@ -150,6 +150,12 @@
       "owner": "gpu",
       "expires_on": "2026-09-30",
       "reason": "Physical AMD GPU and DXGI enumeration belongs to the physical hardware lane."
+    },
+    {
+      "nodeid": "Tests/test_t357_gpu_wpf_nullability_contracts.py::test_lhm_backup_restore_copy_reproduces_exact_file_set_and_hashes",
+      "owner": "gpu",
+      "expires_on": "2026-09-30",
+      "reason": "Historical LHM backup directory is intentionally not versioned in git."
     }
   ]
 }

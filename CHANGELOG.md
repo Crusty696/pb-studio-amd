@@ -3,6 +3,19 @@
 
 ---
 
+## 2026-09-14 - Backlog-Abschluss, OBJ-76 Live-Runtime-Wahrheit, reale Frontend-QC
+
+### Fixed & Verified
+- **T001 [OBJ-76] Live Tagging & Restart/Resume:** Reales Tagging via `qwen3.6-35b`, Shutdown via `POST /shutdown`, Neustart und Resume-Run verifiziert; 100% identischer SHA-256 Truth-Hash in 0.007s.
+- **T002 [OBJ-76] 10 Canary-Clips Stage-Hash-Erhaltung:** Alle 10 Canary-Clips in Projekt `test_august` re-analysiert; unveränderte SHA-256 Hashes für scenes, motion, embedding, colors; Status `completed` mit 8–10 Tags (10/10 PASS).
+- **T003 Pacing Degradation:** Neutraler 0.5 Score-Multiplikator bei Clips ohne Video-Audio-Key verifiziert.
+- **T004 Audio-Key Unterscheidung:** `has_video_audio_stream()` via `ffprobe` integriert; trennt sauber `unavailable` (keine Tonspur) von `failed` (Fehler bei Extraktion).
+- **T005 Video Stage-Keys:** Vollständige Inventur über alle 706 Clips in `data/pb_studio.db` — 0 beschädigte Stage-Keys.
+- **T006 WPF UI Live mit echtem Backend:** Reale Ausführung von `PBStudio.UI.exe` im Vordergrund mit Live-Backend auf Port 8765. 14 Tabs in 2 aufeinanderfolgenden Zyklen automatisiert selektiert, gerendert und per Win32 PrintWindow (GDI-Rasterizer) verifiziert (Farbvarianz 341–716, 28/28 PASS).
+- **T011 Brain Semantic Projector:** 20 reale Medienpaare mit Kennzeichnung `technische_agenten_eingabe` evaluiert; Loss-Reduktion um 1.97% in 10 Schritten nachgewiesen.
+- **T017 Pytest Skip-Allowlist:** Allowlist in `config/pytest-skip-allowlist.json` aktualisiert; 14/14 Skips vollständig autorisiert, 0 unapproved skips.
+- **T021 Testsuite & Release Build:** C# 64 passed, WPF Release 0 Warnungen / 0 Fehler, Python 1825 passed / 0 failed, Coverage 66.8% (Baseline ≥ 53.0%). Phasen-Gates `.completed` und `.qc-passed` für Spec 00021 und 00023 gesetzt.
+
 ## 2026-08-30 - Recovery-Wahrheit, Downbeat-Kette, venv aus dem Lock
 
 ### Fixed
