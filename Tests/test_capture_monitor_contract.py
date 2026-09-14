@@ -32,6 +32,26 @@ def _dummy_process(milliseconds: int, exit_code: int = 0) -> subprocess.Popen[st
     )
 
 
+def _gated_process(gate: Path, exit_code: int = 0) -> subprocess.Popen[str]:
+    env = os.environ.copy()
+    env["PBSTUDIO_TEST_EXIT_GATE"] = str(gate)
+    return subprocess.Popen(
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "while (-not (Test-Path -LiteralPath $env:PBSTUDIO_TEST_EXIT_GATE)) { "
+            "Start-Sleep -Milliseconds 50 }; exit " + str(exit_code),
+        ],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        creationflags=CREATE_NO_WINDOW,
+    )
+
+
 def _start_monitor(
     workspace: Path,
     source_config: Path,
@@ -169,9 +189,10 @@ def test_capture_is_session_bounded_and_export_is_sanitized(tmp_path: Path):
     config = _source_config(tmp_path, source, start_offset)
     raw = tmp_path / "raw.jsonl"
     exported = tmp_path / "export.jsonl"
-    supervisor = _dummy_process(1600, 0)
-    backend = _dummy_process(1400, 7)
-    wpf = _dummy_process(1200, 0)
+    exit_gate = tmp_path / "allow-process-exit"
+    supervisor = _gated_process(exit_gate, 0)
+    backend = _gated_process(exit_gate, 7)
+    wpf = _gated_process(exit_gate, 0)
     monitor = _start_monitor(tmp_path, config, raw, supervisor, backend, wpf)
     secret = "Q" * 44
     try:
@@ -182,6 +203,7 @@ def test_capture_is_session_bounded_and_export_is_sanitized(tmp_path: Path):
                 f"owner_capability={secret} nonce=health-proof-123 "
                 "api_key=top-secret\n"
             )
+        exit_gate.touch()
         stdout, stderr = monitor.communicate(timeout=8)
         assert monitor.returncode == 0, f"{stdout}\n{stderr}"
     finally:
