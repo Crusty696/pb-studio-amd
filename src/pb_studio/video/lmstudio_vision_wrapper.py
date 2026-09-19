@@ -70,6 +70,12 @@ _WARM_WINDOW_SECONDS = 600.0
 _WARM_MODELS: dict[tuple[str, str], float] = {}
 _LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
 _TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+# Ein erfolgreicher Vision-Kandidat bleibt fuer den gesamten Prozess an
+# Task+Modus gebunden. Dadurch waehlt die Clip-/Frame-Schleife nicht bei jedem
+# Bild erneut und LM Studio kann genau dieses Modell warm halten. Ein Wechsel
+# erfolgt nur nach einem echten Provider-/Timeout-Fehler; inhaltlich leere
+# Antworten eines einzelnen Frames sind kein Grund, das Modell zu entladen.
+_PINNED_TASK_MODELS: dict[tuple[str, str], tuple[str, str]] = {}
 _COLD_START_STATE_LOCK = threading.RLock()
 _COLD_START_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 _COLD_START_LOCK_POLL_SECONDS = 0.05
@@ -349,6 +355,23 @@ async def _async_extract_tags(
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
 
+    pin_key = (task, mode)
+    with _COLD_START_STATE_LOCK:
+        pinned_provider, pinned_model = _PINNED_TASK_MODELS.get(
+            pin_key,
+            (None, None),
+        )
+    configured_model = registry.get_user_override(task)
+    if model_override:
+        requested_model = model_override
+        requested_provider = None
+    elif configured_model:
+        requested_model = None
+        requested_provider = None
+    else:
+        requested_model = pinned_model
+        requested_provider = pinned_provider
+
     class _NoUsableTagsError(RuntimeError):
         pass
 
@@ -468,13 +491,22 @@ async def _async_extract_tags(
             task,
             mode,
             _call,
+            # Eine leere/ungeeignete Antwort kann am Bildinhalt liegen. Sie
+            # darf keinen Modellwechsel mitten im Clip oder Batch ausloesen;
+            # der Aufrufer nutzt fuer genau diesen Frame Moondream als Fallback.
             is_retryable=lambda exc: isinstance(
                 exc,
-                (asyncio.TimeoutError, LMStudioError, _NoUsableTagsError),
+                (asyncio.TimeoutError, LMStudioError),
             ),
             is_provider_failure=is_provider_failure,
-            explicit_model=model_override,
+            explicit_model=requested_model,
+            explicit_provider=requested_provider,
         )
+        with _COLD_START_STATE_LOCK:
+            _PINNED_TASK_MODELS[pin_key] = (
+                receipt.provider,
+                receipt.model_id,
+            )
         return tags, receipt.model_id
     except ModelFailoverExhaustedError as exc:
         with _COLD_START_STATE_LOCK:
@@ -633,6 +665,7 @@ def clear_tag_cache() -> None:
         _WARM_MODELS.clear()
         _LOAD_BUDGET_SPENT.clear()
         _TASK_UNAVAILABLE_UNTIL.clear()
+        _PINNED_TASK_MODELS.clear()
         _COLD_START_LOCKS.clear()
 
 

@@ -635,6 +635,7 @@ _LMSTUDIO_MANAGEMENT_HINT = (
 
 async def ollama_pull_generator(model_name: str, ollama_url: str):
     import httpx
+    from pb_studio.ai.model_inventory import get_model_inventory_service
     # Rewrite base_url from OpenAI compat (e.g. /v1) to native Ollama api /api/pull
     pull_url = ollama_url
     if pull_url.endswith("/v1"):
@@ -659,9 +660,27 @@ async def ollama_pull_generator(model_name: str, ollama_url: str):
                     yield f"event: pull_progress\ndata: {json.dumps({'status': 'error', 'error': err_msg})}\n\n"
                     return
                 
+                completed = False
                 async for line in response.aiter_lines():
                     if line.strip():
+                        try:
+                            payload = json.loads(line)
+                            completed = (
+                                str(payload.get("status") or "").casefold()
+                                == "success"
+                                and not payload.get("error")
+                            )
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
                         yield f"event: pull_progress\ndata: {line.strip()}\n\n"
+                if completed:
+                    # Sonst liest der unmittelbar folgende UI-Refresh denselben
+                    # Cache-Snapshot und zeigt das fertige Modell weiter als
+                    # "verfuegbar" statt "installiert".
+                    get_model_inventory_service().invalidate()
+                    from pb_studio.ai.model_registry import reset_unloadable_models
+
+                    reset_unloadable_models()
     except Exception as exc:
         logger.error(f"Ollama pull failed: {exc}")
         error = {
@@ -772,14 +791,44 @@ async def delete_model(
                 )
                 if response.status_code == 200:
                     service.invalidate()
+                    from pb_studio.ai.model_registry import reset_unloadable_models
+
+                    reset_unloadable_models()
                     return JSONResponse(
                         content={
                             "status": "success",
                             "message": f"Model {selected.name} deleted.",
                         }
                     )
+                logger.error(
+                    "Ollama delete failed for %s: HTTP %s",
+                    selected.name,
+                    response.status_code,
+                )
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "error": "provider_delete_failed",
+                        "message": (
+                            "Ollama hat die Löschung des live verifizierten "
+                            "Modells abgelehnt."
+                        ),
+                        "provider_status_code": response.status_code,
+                        "requested_model": selected.name,
+                    },
+                )
         except Exception as exc:
             logger.error(f"Ollama delete failed: {exc}")
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "error": "provider_delete_failed",
+                    "message": (
+                        "Ollama war bei der Modell-Löschung nicht erreichbar."
+                    ),
+                    "requested_model": selected.name,
+                },
+            )
 
     return JSONResponse(
         status_code=404,
@@ -997,6 +1046,9 @@ async def activate_model(
                 "Provider-/Modellwahl konnte nicht dauerhaft verifiziert werden."
             )
         service.invalidate()
+        from pb_studio.ai.model_registry import reset_unloadable_models
+
+        reset_unloadable_models()
         await service.refresh()
         logger.info(
             "Modell '%s' von %s fuer Tasks aktiviert: %s",
@@ -1073,7 +1125,7 @@ async def test_model(
         alias=OWNER_CAPABILITY_HEADER,
     ),
 ) -> ModelTestResponse:
-    """Fuehrt einen minimalen Inferenz-Smoke-Test (max_tokens=1) auf der AMD-GPU durch, um die Funktion zu pruefen."""
+    """Fuehrt einen providergebundenen Chat- oder Vision-Inferenz-Smoke-Test aus."""
     authorize_owner(owner_capability, operation="Modell-Smoke-Test")
     import time
     from datetime import datetime, timezone
@@ -1088,7 +1140,7 @@ async def test_model(
         for model in snapshot.models
         if model.installed
         and model.usable
-        and "chat" in model.capabilities
+        and ({"chat", "vision"} & set(model.capabilities))
     ]
     matches = _resolve_inventory_matches(
         eligible,
@@ -1100,16 +1152,19 @@ async def test_model(
             success=False,
             error=(
                 "Modell/Provider ist nicht eindeutig als nutzbares "
-                "Chat-Modell verifiziert."
+                "Chat- oder Vision-Modell verifiziert."
             ),
         )
     selected = matches[0]
+    test_capability = (
+        "vision" if "vision" in selected.capabilities else "chat"
+    )
     receipt = ModelSelectionReceipt(
         provider=selected.provider,
         model_id=selected.name,
         task="model_smoke_test",
         mode="diagnostic",
-        required_capabilities=("chat",),
+        required_capabilities=(test_capability,),
         verified_capabilities=tuple(sorted(selected.capabilities)),
         source="explicit_smoke_test",
         reason="Explizit angeforderter, live verifizierter Modell-Smoke-Test.",
@@ -1134,13 +1189,28 @@ async def test_model(
     start_time = time.perf_counter()
     try:
         async with client as c:
-            # Minimaler Prompt, nur 1 Token generieren um VRAM und Zeit zu sparen
-            result = await c.generate(
-                model=selected.name,
-                prompt="Say 'ok'",
-                options={"max_tokens": 1, "temperature": 0.0}
-            )
-            response_text = result.get("response") or ""
+            if test_capability == "vision":
+                import numpy as np
+
+                frame = np.zeros((16, 16, 3), dtype=np.uint8)
+                result = await c.chat(
+                    model=selected.name,
+                    messages=[{"role": "user", "content": "Describe this image in one word."}],
+                    images=[frame],
+                    options={"max_tokens": 2, "temperature": 0.0},
+                )
+                response_text = (
+                    (result.get("message") or {}).get("content")
+                    or result.get("response")
+                    or ""
+                )
+            else:
+                result = await c.generate(
+                    model=selected.name,
+                    prompt="Say 'ok'",
+                    options={"max_tokens": 1, "temperature": 0.0},
+                )
+                response_text = result.get("response") or ""
 
         latency = (time.perf_counter() - start_time) * 1000.0
         return ModelTestResponse(

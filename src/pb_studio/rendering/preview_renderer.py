@@ -149,6 +149,7 @@ class PreviewGenerator:
                         f"Stderr: {result.stderr}\n"
                         f"Cmd: {' '.join(cmd)}"
                     )
+                    return False
 
             if not segment_files:
                 logger.error("Keine gültigen Segmente gerendert")

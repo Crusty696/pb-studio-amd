@@ -154,6 +154,7 @@ class ModelInventoryService:
         self._snapshot = ModelInventorySnapshot()
         self._generation = 0
         self._invalidated = True
+        self._invalidation_revision = 0
         self._last_refresh_monotonic = 0.0
         self._refresh_lock = asyncio.Lock()
 
@@ -163,6 +164,7 @@ class ModelInventoryService:
 
     def invalidate(self) -> None:
         """Make the next caller perform one provider refresh."""
+        self._invalidation_revision += 1
         self._invalidated = True
 
     def _cache_is_fresh(self) -> bool:
@@ -189,6 +191,7 @@ class ModelInventoryService:
         async with self._refresh_lock:
             if not force and self._cache_is_fresh():
                 return self._snapshot
+            refresh_revision = self._invalidation_revision
             provider_results = await asyncio.gather(
                 *(self._inventory_provider(name) for name in PROVIDER_NAMES)
             )
@@ -226,7 +229,9 @@ class ModelInventoryService:
                 verified_at=verified_at,
                 generation=self._generation,
             )
-            self._invalidated = False
+            # Eine Mutation kann waehrend der Provider-Probes invalidieren.
+            # Dieses Signal darf der gerade endende Refresh nicht verlieren.
+            self._invalidated = self._invalidation_revision != refresh_revision
             self._last_refresh_monotonic = time.monotonic()
             return self._snapshot
 

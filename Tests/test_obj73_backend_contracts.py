@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -126,7 +127,14 @@ def test_raft_session_failure_cancels_prior_reservation(tmp_path, monkeypatch):
 
 
 class _PreviewState:
-    current_timeline = [{"clip_id": "clip_1"}]
+    current_timeline = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 10.0}]
+
+    @asynccontextmanager
+    async def project_operation(self):
+        yield object()
+
+    def require_project_context_current(self, _context):
+        return None
 
     def get_timeline_snapshot(self):
         return list(self.current_timeline)

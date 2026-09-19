@@ -285,6 +285,24 @@ public sealed class Obj73UiRegressionTests
         StringAssert.Contains(xaml, "MediaEnded=\"OnMediaEnded\"");
     }
 
+    [TestMethod]
+    public void RenderedTimelinePreview_HasBoundedPlaybackAndSaveBarrier()
+    {
+        var root = RepositoryLayout.FindProjectRoot();
+        var view = File.ReadAllText(Path.Combine(
+            root, "PBStudio.UI", "Views", "TimelineView.xaml.cs"));
+        var timeline = File.ReadAllText(Path.Combine(
+            root, "PBStudio.UI", "ViewModels", "TimelineViewModel.cs"));
+        var production = File.ReadAllText(Path.Combine(
+            root, "PBStudio.UI", "ViewModels", "ProductionViewModel.cs"));
+
+        StringAssert.Contains(view, "_loadedClipEnd = duration;");
+        StringAssert.Contains(view, "if (_isRenderedPreview)");
+        StringAssert.Contains(timeline, "await SyncTimelineAsync();");
+        StringAssert.Contains(timeline, "PreviewReady?.Invoke(resp.PreviewPath, startSec, resp.Duration);");
+        StringAssert.Contains(production, "await _timelineState.WaitForPendingSaveAsync();");
+    }
+
     private static BrainSuggestion Suggestion(
         int cutId,
         string clipId,

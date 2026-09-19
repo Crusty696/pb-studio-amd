@@ -1917,6 +1917,7 @@ class AdvancedPacingEngine:
     def enable_motion_matching(self, enabled: bool = True) -> None:
         """NV-Kompatibilität: Aktiviert/Deaktiviert Motion-Matching."""
         self._use_motion_matching = enabled
+        self.clip_selector.use_motion_matching = enabled
         logger.info(f"Motion-Matching: {'aktiviert' if enabled else 'deaktiviert'}")
 
     # =========================================================================
@@ -2558,32 +2559,40 @@ class AdvancedPacingEngine:
             next_time = filtered[i + 1].time if i < len(filtered) - 1 else audio_duration
             clip_duration = next_time - cut.time
 
-            current_max = max_length
-            if variation > 0:
-                var_factor = random.uniform(-variation * 0.5, variation * 0.5)
-                current_max = max_length * (1.0 + var_factor)
+            if clip_duration > max_length:
+                next_boundary = min(next_time, audio_duration)
+                segment_count = max(2, int(np.ceil(clip_duration / max_length)))
 
-            if clip_duration > current_max:
-                num_splits = max(1, int(clip_duration / current_max))
-                split_duration = clip_duration / (num_splits + 1)
+                # Variation verschiebt nur innere Grenzen. Min/Max bleiben harte
+                # Produktgrenzen; jeder Schritt reserviert fuer alle restlichen
+                # Segmente weiterhin einen realisierbaren Bereich.
+                for segment_index in range(1, segment_count):
+                    remaining_segments = segment_count - segment_index
+                    previous_time = result[-1].time
+                    ideal_time = cut.time + clip_duration * (
+                        segment_index / segment_count
+                    )
+                    if variation > 0:
+                        base_length = clip_duration / segment_count
+                        ideal_time += base_length * random.uniform(
+                            -variation * 0.2,
+                            variation * 0.2,
+                        )
 
-                for j in range(num_splits):
-                    jitter = split_duration * random.uniform(-variation * 0.2, variation * 0.2) if variation > 0 else 0.0
-                    split_time = cut.time + (split_duration * (j + 1)) + jitter
-
-                    # L-TI-6: Strict bounds check gegen prev UND next.
-                    # prev = letzter platzierter Cut/Split (result[-1])
-                    # next = entweder der naechste echte Cut (next_time) ODER end-of-audio,
-                    #        je nachdem was naeher liegt.
-                    prev_time = result[-1].time
-                    next_boundary = min(next_time, audio_duration)
-                    dist_prev = split_time - prev_time
-                    dist_next = next_boundary - split_time
-
-                    if dist_prev < min_length or dist_next < min_length:
-                        # Split wuerde min_length verletzen -> skip
+                    lower_bound = max(
+                        previous_time + min_length,
+                        next_boundary - remaining_segments * max_length,
+                    )
+                    upper_bound = min(
+                        previous_time + max_length,
+                        next_boundary - remaining_segments * min_length,
+                    )
+                    if lower_bound > upper_bound + 1e-9:
+                        # Ein kurzer terminaler Rest kann mathematisch nicht
+                        # zugleich beide Grenzen erfuellen; keinen illegalen
+                        # Split erzeugen.
                         continue
-
+                    split_time = min(upper_bound, max(lower_bound, ideal_time))
                     result.append(PacingCut(
                         time=split_time,
                         trigger_type="auto_split",

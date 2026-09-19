@@ -48,6 +48,12 @@ from typing import Callable
 
 _status_publisher: Callable[[str, dict[str, Any]], None] | None = None
 
+# Neue ChatAgent-Instanzen entstehen pro HTTP-Request. Ohne prozessweite
+# Bindung kann die Auto-Auswahl deshalb bei jedem Turn einem anderen gerade
+# geladenen Modell folgen. Ein erfolgreicher Turn pinnt das exakte
+# Provider-/Modell-Paar pro Modus; harte Task-Overrides bleiben vorrangig.
+_PINNED_CHAT_MODELS: dict[str, tuple[str, str]] = {}
+
 
 def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> None:
     global _status_publisher
@@ -318,13 +324,32 @@ class ChatAgent:
         snapshot = await get_model_inventory_service().refresh()
         excluded = set(exclude or set())
 
+        pinned_provider: Optional[str] = None
+        pinned_model: Optional[str] = None
+        if explicit_model is None:
+            pinned_provider, pinned_model = _PINNED_CHAT_MODELS.get(
+                mode,
+                (None, None),
+            )
+
         for task in ("chat_tool_use", "chat_general", "chat"):
             try:
+                configured_model = self._model_registry.get_user_override(task)
+                if explicit_model:
+                    requested_model = explicit_model
+                    requested_provider = None
+                elif configured_model:
+                    requested_model = None
+                    requested_provider = None
+                else:
+                    requested_model = pinned_model
+                    requested_provider = pinned_provider
                 receipt = self._model_registry.select_receipt_for_task(
                     snapshot,
                     task,
                     mode,
-                    explicit_model=explicit_model,
+                    explicit_model=requested_model,
+                    explicit_provider=requested_provider,
                     exclude=excluded,
                 )
                 if self._active_client_provider != receipt.provider:
@@ -620,6 +645,15 @@ class ChatAgent:
                         and status_code in {None, 400, 422}
                     ):
                         logger.info("Modell %s unterstuetzt 'tools' nicht - Retry ohne Tool-Use", model)
+                        yield ChatEvent("error", {
+                            "message": (
+                                f"Modell '{model}' unterstützt keine Tool-Aufrufe; "
+                                "Antwort wird sichtbar ohne App-Tools fortgesetzt."
+                            ),
+                            "stage": "model_retry",
+                            "provider": self._current_provider(),
+                            "model": model,
+                        })
                         try:
                             async for chunk in self._stream_llm_call(model, messages, None):
                                 msg = chunk.get("message") or {}
@@ -1140,6 +1174,12 @@ class ChatAgent:
             # auch wenn seit einer halben Stunde nichts lief. Ein beendeter Turn
             # ist "idle", nicht "active".
             if final_text:
+                receipt = self._active_selection_receipt
+                if receipt is not None:
+                    _PINNED_CHAT_MODELS[mode] = (
+                        receipt.provider,
+                        receipt.model_id,
+                    )
                 _publish_status(model, "idle", 100.0, provider=active_provider)
             else:
                 _publish_status(model, "failed", 0.0, provider=active_provider)

@@ -292,7 +292,7 @@ def _build_axis_status(
     semantic_status: str,
     semantic_reason: str,
 ) -> dict[str, dict[str, str]]:
-    trigger_available = trigger_type in {
+    supported_trigger = trigger_type in {
         "beat", "onset", "kick", "snare", "hihat", "energy",
     }
 
@@ -302,12 +302,20 @@ def _build_axis_status(
             "reason": reason if available else f"{reason}_missing_or_synthetic",
         }
 
+    trigger_axes = {
+        "beat_weight": "beat",
+        "onset_weight": "onset",
+        "kick_weight": "kick",
+        "snare_weight": "snare",
+        "hihat_weight": "hihat",
+        "energy_weight": "energy",
+    }
     result = {
-        axis: status(trigger_available, "analyzed_trigger")
-        for axis in (
-            "beat_weight", "onset_weight", "kick_weight", "snare_weight",
-            "hihat_weight", "energy_weight",
+        axis: status(
+            supported_trigger and trigger_type == expected_trigger,
+            f"analyzed_{expected_trigger}_trigger",
         )
+        for axis, expected_trigger in trigger_axes.items()
     }
     result.update({
         "energy_threshold": status(

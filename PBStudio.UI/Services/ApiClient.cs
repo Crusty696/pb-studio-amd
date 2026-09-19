@@ -414,7 +414,10 @@ public class ApiClient : IApiClient
 
     public async Task<BrainFeedbackResponse?> BrainFeedbackAsync(int cutId, string rating)
     {
-        var operationKey = (Volatile.Read(ref _activeProjectIdentity), cutId, rating);
+        var operationKey = (
+            ProjectIdentity: Volatile.Read(ref _activeProjectIdentity),
+            CutId: cutId,
+            Rating: rating);
         var operationId = _pendingBrainFeedbackOperations.GetOrAdd(
             operationKey,
             static _ => Guid.NewGuid());
@@ -427,6 +430,7 @@ public class ApiClient : IApiClient
                     cut_id = cutId,
                     rating,
                     operation_id = operationId,
+                    project_identity = operationKey.ProjectIdentity,
                 },
                 JsonOptions,
                 _shutdownCts.Token).ConfigureAwait(false);
@@ -523,7 +527,7 @@ public class ApiClient : IApiClient
             new { confirmation_token = confirmationToken });
 
     // R-Brain-09: Erklaerung fuer Confidence-Balken in der Timeline.
-    // narrative=true (Default): Backend versucht LLM-Erklaerung via Ollama;
+    // narrative=true (Default): Backend versucht eine providergebundene LLM-Erklaerung;
     // bei Fehler bleibt response.Narrative=null und der Tooltip faellt auf die
     // strukturierte Anzeige zurueck (kein Breaking-Change).
     public Task<BrainExplainResponse?> BrainExplainAsync(int cutId, int topN = 3, bool narrative = true, CancellationToken ct = default)
@@ -674,10 +678,17 @@ public class ApiClient : IApiClient
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                LastErrorDetail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
                 _logger.LogInformation("DeleteModel: {Name} nicht gefunden", name);
                 return false;
             }
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                LastErrorDetail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false)
+                    ?? $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+                return false;
+            }
+            LastErrorDetail = null;
             return true;
         }
         catch (NotSupportedException)
@@ -787,7 +798,14 @@ public class ApiClient : IApiClient
                     "Bitte oeffne LM Studio -> Discover-Tab um das Modell herunterzuladen.");
             }
 
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                LastErrorDetail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false)
+                    ?? $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+                response.Dispose();
+                return null;
+            }
+            LastErrorDetail = null;
             return await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         }
         catch (NotSupportedException)
@@ -966,6 +984,8 @@ public class ApiClient : IApiClient
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await CaptureErrorDetailAsync(response, token).ConfigureAwait(false);
+                LastErrorDetail = detail
+                    ?? $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
                 _logger.LogWarning(
                     "POST {Url} fehlgeschlagen: {Status} — {Detail}",
                     url,
@@ -1169,7 +1189,7 @@ public class ApiClient : IApiClient
             ChatEventType.Model => new ChatStreamEvent(type, eventName!, ModelName: Str("model"), ModelReason: Str("reason")),
             ChatEventType.Text => new ChatStreamEvent(type, eventName!, Text: Str("content")),
             ChatEventType.TextDelta => new ChatStreamEvent(type, eventName!, Text: Str("delta") ?? Str("content")),
-            ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments")),
+            ChatEventType.ToolCall => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolArgumentsJson: RawJson("arguments"), ToolCallId: Str("id")),
             ChatEventType.ToolConfirmationRequired => new ChatStreamEvent(
                 type,
                 eventName!,
@@ -1178,8 +1198,8 @@ public class ApiClient : IApiClient
                 ConfirmationId: Str("confirmation_id"),
                 ConfirmationExpiresInSeconds: root.TryGetProperty("expires_in_seconds", out var expires)
                     && expires.TryGetDouble(out var seconds) ? seconds : null),
-            ChatEventType.ToolResult => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolResultJson: RawJson("result")),
-            ChatEventType.Error => new ChatStreamEvent(type, eventName!, ErrorMessage: Str("message"), ErrorStage: Str("stage")),
+            ChatEventType.ToolResult => new ChatStreamEvent(type, eventName!, ToolName: Str("name"), ToolResultJson: RawJson("result"), ToolCallId: Str("id")),
+            ChatEventType.Error => new ChatStreamEvent(type, eventName!, ErrorMessage: Str("message"), ErrorStage: Str("stage"), ToolCallId: Str("tool_call_id")),
             ChatEventType.Done => new ChatStreamEvent(type, eventName!, Text: Str("final_text"), DoneReason: Str("reason")),
             _ => new ChatStreamEvent(type, eventName ?? "unknown"),
         };
@@ -1510,7 +1530,7 @@ public record TimelineEntry(
     Dictionary<string, JsonElement>? TriggerProvenance = null,
     Dictionary<string, JsonElement>? BrainAxisStatus = null,
     Dictionary<string, JsonElement>? Metadata = null);
-public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false, string? CanvasPath = null);
+public record PacingConfig(int AudioClipId, List<int> VideoClipIds, double ExpectedBpm, bool UseMotionMatching, bool UseSemanticMatching, bool UseStructureAwareness, double? DurationLimit, double MinCutInterval = 0.5, TriggerSettings? TriggerSettings = null, bool UseBrain = false, double BrainMinConfidence = 0.0, bool UseKeyMatching = false, bool UseStemPacing = false, string? CanvasPath = null, string? RequestId = null);
 public record TriggerSettings(double BeatWeight = 1.0, double OnsetWeight = 0.5, double KickWeight = 1.2, double SnareWeight = 1.0, double HihatWeight = 0.3, double EnergyWeight = 0.8, double EnergyThreshold = 0.6, double MinClipLength = 1.0, double MaxClipLength = 8.0, double OnsetSensitivity = 0.5, double ClipLengthVariation = 0.0, double MaxCutInterval = 10.0, string BeatTriggerMode = "all");
 
 public record BrainSuggestion(int? CutId, string ClipId, double StartTime, double EndTime, double FinalScore, Dictionary<string, double> BrainScores);
@@ -1533,7 +1553,10 @@ public record BrainStatsResponse(
     int LearnedAxes,
     List<BrainStatsBucket> TopPositive,
     List<BrainStatsBucket> TopNegative,
-    List<string>? ColdStartAxesList = null);
+    List<string>? ColdStartAxesList = null,
+    string? WeightSemanticsVersion = null,
+    int ArchivedObservations = 0,
+    string? MigrationReason = null);
 public record BrainResetResponse(string Status, string? ConfirmationToken);
 public record WaveformData(int ClipId, int SampleRate, List<List<float>> Bands, double DurationSeconds);
 // AP3.3 (Audit 2026-06-10): SceneIndex client-seitig (Backend sendet keinen Index;

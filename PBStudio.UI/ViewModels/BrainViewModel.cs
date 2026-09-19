@@ -29,6 +29,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     private int _learningLoadVersion;
     private int _loadingVersion;
     private int _feedbackVersion;
+    private int _resetVersion;
 
     [ObservableProperty] private int _totalClicks;
     [ObservableProperty] private int _coldStartAxes = 17;
@@ -38,6 +39,17 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private BrainSuggestion? _selectedLearningSessionCut;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _isResetPending;
+    [ObservableProperty] private bool _isResetBusy;
+    [ObservableProperty] private string _historyStatus = "";
+
+    partial void OnIsResetPendingChanged(bool value) =>
+        NotifyResetCommandsCanExecuteChanged();
+
+    partial void OnIsResetBusyChanged(bool value) =>
+        NotifyResetCommandsCanExecuteChanged();
+
+    partial void OnIsLoadingChanged(bool value) =>
+        NotifyResetCommandsCanExecuteChanged();
 
     public ObservableCollection<BrainStatsBucket> TopPositive { get; } = new();
     public ObservableCollection<BrainStatsBucket> TopNegative { get; } = new();
@@ -70,7 +82,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         // RefreshStatsAsync/ResetForProjectClose mutieren an die UI gebundene ObservableCollections
         // → auf den Dispatcher marshallen, sonst NotSupportedException (Cross-Thread-Collection).
         WeakReferenceMessenger.Default.Register<ProjectOpenedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(() => _ = RefreshStatsAsync()));
+            System.Windows.Application.Current.Dispatcher.Invoke(HandleProjectOpened));
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
             System.Windows.Application.Current.Dispatcher.Invoke(ResetForProjectClose));
     }
@@ -82,6 +94,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _learningLoadVersion);
         Interlocked.Increment(ref _loadingVersion);
         Interlocked.Increment(ref _feedbackVersion);
+        Interlocked.Increment(ref _resetVersion);
         IsLoading = false;
         TotalClicks = 0;
         ColdStartAxes = 17;
@@ -93,17 +106,38 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         SelectedLearningSessionCut = null;
         SelectedCutId = 0;
         IsResetPending = false;
+        IsResetBusy = false;
         _pendingResetToken = null;
+        HistoryStatus = "";
         Status = "Kein Projekt geladen.";
+    }
+
+    private void HandleProjectOpened()
+    {
+        ClearProjectScopedState();
+        _ = RefreshStatsAsync();
+    }
+
+    private void ClearProjectScopedState()
+    {
+        Interlocked.Increment(ref _learningLoadVersion);
+        Interlocked.Increment(ref _feedbackVersion);
+        Interlocked.Increment(ref _resetVersion);
+        LearningSessionCuts.Clear();
+        SelectedLearningSessionCut = null;
+        SelectedCutId = 0;
+        IsResetPending = false;
+        IsResetBusy = false;
+        _pendingResetToken = null;
     }
 
     private void OnProjectTransitionStarted(object? sender, EventArgs e)
     {
         Interlocked.Increment(ref _statsLoadVersion);
-        Interlocked.Increment(ref _learningLoadVersion);
         Interlocked.Increment(ref _loadingVersion);
-        Interlocked.Increment(ref _feedbackVersion);
+        ClearProjectScopedState();
         IsLoading = false;
+        Status = "Projektwechsel — Brain-Daten werden verworfen.";
     }
 
     [RelayCommand]
@@ -138,6 +172,12 @@ public partial class BrainViewModel : ObservableObject, IDisposable
             {
                 foreach (var ax in stats.ColdStartAxesList) ColdStartAxesList.Add(ax);
             }
+            HistoryStatus = stats.ArchivedObservations > 0
+                ? $"Archivierte Beobachtungen aus älterer Gewichtssemantik: {stats.ArchivedObservations}. "
+                    + (stats.MigrationReason ?? "")
+                : string.IsNullOrWhiteSpace(stats.WeightSemanticsVersion)
+                    ? ""
+                    : $"Gewichtssemantik: {stats.WeightSemanticsVersion}";
             Status = $"{TotalClicks} Klicks gesamt, {LearnedAxes}/{LearnedAxes + ColdStartAxes} Achsen gelernt.";
         }
         finally
@@ -207,6 +247,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
     {
         _isFeedbackPending = value;
         NotifyFeedbackCommandsCanExecuteChanged();
+        NotifyResetCommandsCanExecuteChanged();
     }
 
     private void NotifyFeedbackCommandsCanExecuteChanged()
@@ -302,31 +343,78 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         return (timeline?.AudioPath, videoPaths);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRequestReset))]
     public async Task ResetRequestAsync()
     {
-        var resp = await _api.BrainResetRequestAsync();
-        if (resp?.ConfirmationToken != null)
+        if (_disposed)
+            return;
+        var version = Interlocked.Increment(ref _resetVersion);
+        IsResetBusy = true;
+        try
         {
-            _pendingResetToken = resp.ConfirmationToken;
-            IsResetPending = true;
-            Status = "Reset bestätigen? Klicke nochmal um auszuführen.";
+            var resp = await _api.BrainResetRequestAsync();
+            if (_disposed || version != Volatile.Read(ref _resetVersion))
+                return;
+            if (resp?.ConfirmationToken != null)
+            {
+                _pendingResetToken = resp.ConfirmationToken;
+                IsResetPending = true;
+                Status = "Globalen Beta-Gewichtsreset bestätigen? Der semantische Projektor bleibt erhalten.";
+            }
+            else
+            {
+                Status = "Reset-Anforderung fehlgeschlagen.";
+            }
+        }
+        finally
+        {
+            if (!_disposed && version == Volatile.Read(ref _resetVersion))
+                IsResetBusy = false;
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanConfirmReset))]
     public async Task ResetConfirmAsync()
     {
-        if (string.IsNullOrEmpty(_pendingResetToken))
-        {
-            await ResetRequestAsync();
+        if (_disposed || string.IsNullOrEmpty(_pendingResetToken))
             return;
+        var token = _pendingResetToken;
+        var version = Interlocked.Increment(ref _resetVersion);
+        IsResetBusy = true;
+        try
+        {
+            var resp = await _api.BrainResetConfirmAsync(token!);
+            if (_disposed || version != Volatile.Read(ref _resetVersion))
+                return;
+            _pendingResetToken = null;
+            IsResetPending = false;
+            var completed = resp?.Status == "reset_complete";
+            Status = completed
+                ? "Globale Beta-Gewichte zurückgesetzt; semantischer Projektor unverändert."
+                : "Reset fehlgeschlagen; neue Bestätigung erforderlich.";
+            if (completed)
+                await RefreshStatsAsync();
         }
-        var resp = await _api.BrainResetConfirmAsync(_pendingResetToken!);
-        _pendingResetToken = null;
-        IsResetPending = false;
-        Status = resp?.Status == "reset_complete" ? "Hirn-Reset abgeschlossen." : "Reset fehlgeschlagen.";
-        await RefreshStatsAsync();
+        finally
+        {
+            if (!_disposed && version == Volatile.Read(ref _resetVersion))
+                IsResetBusy = false;
+        }
+    }
+
+    private bool CanRequestReset() =>
+        !_disposed && !IsResetBusy && !IsResetPending
+        && !_isFeedbackPending && !IsLoading;
+
+    private bool CanConfirmReset() =>
+        !_disposed && !IsResetBusy && IsResetPending
+        && !_isFeedbackPending && !IsLoading
+        && !string.IsNullOrEmpty(_pendingResetToken);
+
+    private void NotifyResetCommandsCanExecuteChanged()
+    {
+        ResetRequestCommand.NotifyCanExecuteChanged();
+        ResetConfirmCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -342,6 +430,7 @@ public partial class BrainViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _learningLoadVersion);
         Interlocked.Increment(ref _loadingVersion);
         Interlocked.Increment(ref _feedbackVersion);
+        Interlocked.Increment(ref _resetVersion);
         if (_projectService != null)
             _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);

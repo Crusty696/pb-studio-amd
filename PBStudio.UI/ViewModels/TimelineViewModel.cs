@@ -73,7 +73,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     [ObservableProperty] private ObservableCollection<double>? _motionCurve;
     private int _motionLoadSequence;
 
-    public event Action<string>? PreviewReady;
+    public event Action<string, double, double>? PreviewReady;
+
+    public bool HasUnsavedChanges =>
+        Interlocked.Read(ref _editVersion) != Interlocked.Read(ref _savedEditVersion);
 
     private SpectralDataModel? _rawSpectralData;
     public ObservableCollection<Point> SpectralPoints { get; } = [];
@@ -242,8 +245,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         NextCutCommand.NotifyCanExecuteChanged();
 
         // Audit L-M5: Motion-Curve fuer selektierten Entry (fire-and-forget).
-        // ClipId ist string (z.B. "42") -> int.TryParse; bei Fehler -> Curve clearen.
-        if (value != null && int.TryParse(value.ClipId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cid))
+        if (value != null && TryParseVideoClipId(value.ClipId, out var cid))
         {
             _ = LoadMotionCurveAsync(cid);
         }
@@ -292,6 +294,19 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }
     }
 
+    private static bool TryParseVideoClipId(string? value, out int clipId)
+    {
+        const string generatedPrefix = "clip_";
+        var numericPart = value?.StartsWith(generatedPrefix, StringComparison.Ordinal) == true
+            ? value.AsSpan(generatedPrefix.Length)
+            : value.AsSpan();
+        return int.TryParse(
+            numericPart,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out clipId);
+    }
+
     /// <summary>
     /// Loads /video/thumbstrip and /video/clipwave for the entry's clip in parallel.
     /// Skips if already loaded. Fire-and-forget pattern: errors are logged and the
@@ -315,8 +330,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     private async Task LoadClipAssetsAsync(TimelineEntryModel entry, CancellationToken ct)
     {
         if (entry == null || entry.IsAssetsLoaded) return;
-        if (!int.TryParse(entry.ClipId.Replace("clip_", ""),
-                          NumberStyles.Integer, CultureInfo.InvariantCulture, out var cid))
+        if (!TryParseVideoClipId(entry.ClipId, out var cid))
         {
             entry.IsAssetsLoaded = true;
             return;
@@ -404,7 +418,10 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     public void MarkTimelineDirty()
     {
         if (_timelineReadyForMutation)
+        {
             Interlocked.Increment(ref _editVersion);
+            _timelineState.MarkSaveRequired();
+        }
     }
 
     public void UpdateViewport(double horizontalOffset, double viewportWidth)
@@ -844,6 +861,13 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             return;
         }
 
+        await SyncTimelineAsync();
+        if (HasUnsavedChanges)
+        {
+            PreviewStatus = "Preview abgebrochen — Timeline konnte nicht gespeichert werden.";
+            return;
+        }
+
         ProjectOperationContext operation;
         try
         {
@@ -870,7 +894,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 return;
             if (resp == null || string.IsNullOrEmpty(resp.PreviewPath))
             {
-                PreviewStatus = "Preview fehlgeschlagen — Backend lieferte keinen Pfad.";
+                PreviewStatus = string.IsNullOrWhiteSpace(_api.LastErrorDetail)
+                    ? "Preview fehlgeschlagen — Backend lieferte keinen Pfad."
+                    : "Preview abgelehnt: " + _api.LastErrorDetail;
                 return;
             }
 
@@ -882,7 +908,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
 
             PreviewVideoPath = resp.PreviewPath;
             PreviewStatus = $"Preview bereit: {resp.Resolution} · {resp.Duration:F1}s";
-            PreviewReady?.Invoke(resp.PreviewPath);
+            PreviewReady?.Invoke(resp.PreviewPath, startSec, resp.Duration);
         }
         catch (OperationCanceledException)
         {
@@ -901,20 +927,28 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task SyncTimelineAsync()
+    public Task SyncTimelineAsync()
+    {
+        var saveTask = SyncTimelineCoreAsync();
+        _timelineState.TrackPendingSave(saveTask);
+        return saveTask;
+    }
+
+    private async Task<bool> SyncTimelineCoreAsync()
     {
         await _syncGate.WaitAsync();
+        var saveSucceeded = false;
         try
         {
         if (!_timelineReadyForMutation)
         {
             StatusText = "Speichern übersprungen — Timeline wird noch geladen.";
-            return;
+            return false;
         }
 
         var editVersion = Interlocked.Read(ref _editVersion);
         if (editVersion == Interlocked.Read(ref _savedEditVersion))
-            return;
+            return true;
 
         ProjectOperationContext operation;
         try
@@ -924,7 +958,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         catch (InvalidOperationException)
         {
             StatusText = "Speichern abgebrochen — Projektwechsel läuft.";
-            return;
+            return false;
         }
 
         var entries = SnapshotTimelineEntries();
@@ -944,17 +978,22 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
                 TimelinePersistenceGate.Release();
             }
             if (!IsCurrentSync(sequence, operationCts, operation))
-                return;
+                return false;
 
             if (response?.Success == true)
             {
                 Interlocked.Exchange(ref _savedEditVersion, editVersion);
                 refreshCanonicalTimeline = editVersion == Interlocked.Read(ref _editVersion);
+                saveSucceeded = true;
                 StatusText = "Änderungen gespeichert";
             }
             else
             {
-                StatusText = "Speichern fehlgeschlagen: " + (response?.Message ?? "Unbekannter Fehler");
+                var reason = response?.Message;
+                if (string.IsNullOrWhiteSpace(reason))
+                    reason = _api.LastErrorDetail;
+                StatusText = "Speichern fehlgeschlagen: "
+                    + (string.IsNullOrWhiteSpace(reason) ? "Unbekannter Fehler" : reason);
             }
         }
         catch (OperationCanceledException)
@@ -972,6 +1011,7 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         }
         if (refreshCanonicalTimeline)
             await RefreshTimelineAsync();
+        return saveSucceeded;
         }
         finally
         {

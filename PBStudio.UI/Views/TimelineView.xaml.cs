@@ -26,6 +26,8 @@ public partial class TimelineView : UserControl
     private string? _loadedSourcePath;
     private double _loadedClipStart;
     private double _loadedClipEnd;
+    private bool _isRenderedPreview;
+    private double _renderedPreviewTimelineStart;
     private bool _mediaOpened;
     private bool _pendingSeek;
     private bool _wasPlayingBeforeReload;
@@ -200,7 +202,7 @@ public partial class TimelineView : UserControl
         }
     }
 
-    private void OnPreviewReady(string previewPath)
+    private void OnPreviewReady(string previewPath, double timelineStart, double duration)
     {
         Dispatcher.Invoke(() =>
         {
@@ -211,8 +213,11 @@ public partial class TimelineView : UserControl
                 PreviewPlayer.Source = new Uri(previewPath, UriKind.Absolute);
                 _loadedSourcePath = previewPath;
                 _loadedClipStart = 0.0;
-                _loadedClipEnd = 0.0;
+                _loadedClipEnd = duration;
+                _isRenderedPreview = true;
+                _renderedPreviewTimelineStart = timelineStart;
                 _mediaOpened = false;
+                _wasPlayingBeforeReload = true;
                 PreviewEmptyText.Visibility = Visibility.Collapsed;
                 PreviewPlayer.Play();
             }
@@ -225,6 +230,10 @@ public partial class TimelineView : UserControl
 
     private void ViewModel_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (_isRenderedPreview
+            && e.PropertyName == nameof(TimelineViewModel.SelectedTimelinePosition))
+            return;
+
         if (e.PropertyName is nameof(TimelineViewModel.SelectedEntry)
             or nameof(TimelineViewModel.SelectedTimelinePosition)
             or nameof(TimelineViewModel.CanPreviewSelectedClip))
@@ -831,6 +840,8 @@ public partial class TimelineView : UserControl
         _loadedSourcePath = sourcePath;
         _loadedClipStart = clipStart;
         _loadedClipEnd = clipEnd;
+        _isRenderedPreview = false;
+        _renderedPreviewTimelineStart = 0.0;
         PreviewEmptyText.Visibility = Visibility.Collapsed;
         PreviewStatusText.Text = $"Bereit: {System.IO.Path.GetFileName(sourcePath)}";
 
@@ -857,6 +868,8 @@ public partial class TimelineView : UserControl
         _loadedSourcePath = null;
         _loadedClipStart = 0;
         _loadedClipEnd = 0;
+        _isRenderedPreview = false;
+        _renderedPreviewTimelineStart = 0.0;
         _mediaOpened = false;
         _pendingSeek = false;
         _playbackTimer.Stop();
@@ -899,11 +912,22 @@ public partial class TimelineView : UserControl
         var relativePos = PreviewPlayer.Position.TotalSeconds - _loadedClipStart;
         if (relativePos >= 0)
         {
-            _viewModel.SelectedTimelinePosition = _viewModel.SelectedEntry?.StartTime + relativePos ?? 0;
+            _viewModel.SelectedTimelinePosition = _isRenderedPreview
+                ? _renderedPreviewTimelineStart + relativePos
+                : _viewModel.SelectedEntry?.StartTime + relativePos ?? 0;
         }
 
         if (PreviewPlayer.Position.TotalSeconds >= _loadedClipEnd - 0.05)
         {
+            if (_isRenderedPreview)
+            {
+                PreviewPlayer.Pause();
+                _playbackTimer.Stop();
+                PreviewPlayer.Position = TimeSpan.Zero;
+                PreviewStatusText.Text = "Preview beendet";
+                return;
+            }
+
             TimelineEntryModel? nextEntry = null;
             if (_viewModel.SelectedEntry != null)
             {

@@ -20,14 +20,15 @@ namespace PBStudio.UI.ViewModels;
 /// Zeigt zwei Listen: installierte Modelle (mit Delete-Button) und kuratierte Verfuegbare
 /// (mit Download-Button + Progress-Dialog). Nutzt <see cref="IApiClient"/>-Endpoints
 /// <c>/models/list</c>, <c>/models/available</c>, <c>/models/recommendations</c>.
-/// LM Studio Refactor 2026-05-17: <c>/models/pull</c> und <c>/models/{name}</c> liefern
-/// jetzt HTTP 501 — Downloads/Loeschungen muessen ueber die LM-Studio-App passieren.
+/// LM-Studio-Modelle werden in LM Studio verwaltet. Ollama unterstützt dagegen
+/// providergebundenes Laden und exaktes Löschen mit verifiziertem Backend-Ergebnis.
 /// </summary>
 public partial class ModelManagerViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly ILogger<ModelManagerViewModel>? _logger;
     private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _operationCts;
     private bool _disposed;
 
     [ObservableProperty] private bool _isLoading;
@@ -60,7 +61,26 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         if (value)
             _ = LoadAsync();
         else
+        {
             _loadCts?.Cancel();
+            _operationCts?.Cancel();
+        }
+    }
+
+    private CancellationTokenSource BeginModelOperation()
+    {
+        var previous = _operationCts;
+        var current = new CancellationTokenSource();
+        _operationCts = current;
+        previous?.Cancel();
+        return current;
+    }
+
+    private void EndModelOperation(CancellationTokenSource current)
+    {
+        if (ReferenceEquals(_operationCts, current))
+            _operationCts = null;
+        current.Dispose();
     }
 
     [RelayCommand]
@@ -218,13 +238,18 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             MessageBoxImage.Warning);
         if (info != MessageBoxResult.Yes) return;
 
+        var operation = BeginModelOperation();
         card.IsBusy = true;
         try
         {
-            var deleted = await _api.DeleteModelAsync(card.Name).ConfigureAwait(true);
+            var deleted = await _api.DeleteModelAsync(
+                card.Name,
+                operation.Token).ConfigureAwait(true);
+            if (operation.IsCancellationRequested) return;
             StatusText = deleted
                 ? $"Ollama-Modell '{card.Name}' geloescht."
-                : $"Ollama-Modell '{card.Name}' konnte nicht geloescht werden.";
+                : $"Ollama-Modell '{card.Name}' konnte nicht geloescht werden: "
+                    + (_api.LastErrorDetail ?? "kein Backend-Detail");
         }
         catch (Exception ex)
         {
@@ -233,8 +258,10 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         finally
         {
             card.IsBusy = false;
+            EndModelOperation(operation);
         }
-        await LoadAsync().ConfigureAwait(true);
+        if (!_disposed && IsActive)
+            await LoadAsync().ConfigureAwait(true);
     }
 
     /// <summary>Wird von einer providergebundenen AvailableModelCard aufgerufen.</summary>
@@ -263,12 +290,13 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             MessageBoxButton.OK,
             MessageBoxImage.Information);
 
+        var operation = BeginModelOperation();
         card.IsBusy = true;
         try
         {
             var receivedEvent = false;
-            await foreach (var progress in _api.PullModelAsync(card.Name)
-                .WithCancellation(default)
+            await foreach (var progress in _api.PullModelAsync(card.Name, operation.Token)
+                .WithCancellation(operation.Token)
                 .ConfigureAwait(true))
             {
                 receivedEvent = true;
@@ -276,36 +304,51 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
                     throw new InvalidOperationException(progress.Error);
                 StatusText = $"Ollama-Download '{card.Name}': {progress.Status ?? "laeuft"}";
             }
+            if (operation.IsCancellationRequested) return;
             if (!receivedEvent)
-                throw new InvalidOperationException("Backend lieferte keinen Downloadstatus.");
+                throw new InvalidOperationException(
+                    _api.LastErrorDetail ?? "Backend lieferte keinen Downloadstatus.");
             StatusText = $"Ollama-Modell '{card.Name}' heruntergeladen.";
+        }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
+        {
+            StatusText = "Modelloperation abgebrochen.";
         }
         catch (Exception ex)
         {
-            ErrorText = $"Download fehlgeschlagen fuer '{card.Name}': {ex.Message}";
+            if (!operation.IsCancellationRequested)
+                ErrorText = $"Download fehlgeschlagen fuer '{card.Name}': {ex.Message}";
         }
         finally
         {
             card.IsBusy = false;
+            EndModelOperation(operation);
         }
 
-        await LoadAsync().ConfigureAwait(true);
+        if (!_disposed && IsActive)
+            await LoadAsync().ConfigureAwait(true);
     }
 
     internal async Task ActivateInstalledAsync(InstalledModelCardViewModel card)
     {
         if (card.IsBusy) return;
+        var operation = BeginModelOperation();
         card.IsBusy = true;
         try
         {
-            var success = await _api.ActivateModelAsync(card.Name, card.Provider).ConfigureAwait(true);
+            var success = await _api.ActivateModelAsync(
+                card.Name,
+                card.Provider,
+                operation.Token).ConfigureAwait(true);
+            if (operation.IsCancellationRequested) return;
             if (success)
             {
                 StatusText = $"Modell '{card.Name}' erfolgreich aktiviert.";
             }
             else
             {
-                ErrorText = $"Aktivierung fehlgeschlagen fuer '{card.Name}'";
+                ErrorText = $"Aktivierung fehlgeschlagen fuer '{card.Name}': "
+                    + (_api.LastErrorDetail ?? "kein Backend-Detail");
                 StatusText = "Aktivierung fehlgeschlagen.";
             }
         }
@@ -317,19 +360,26 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         finally
         {
             card.IsBusy = false;
+            EndModelOperation(operation);
         }
-        await LoadAsync().ConfigureAwait(true);
+        if (!_disposed && IsActive)
+            await LoadAsync().ConfigureAwait(true);
     }
 
     internal async Task TestInstalledAsync(InstalledModelCardViewModel card)
     {
         if (card.IsTesting) return;
+        var operation = BeginModelOperation();
         card.IsTesting = true;
         card.TestStatus = "Wird getestet...";
         card.TestStatusColor = "#CCCCCC";
         try
         {
-            var resp = await _api.TestModelAsync(card.Name, card.Provider).ConfigureAwait(true);
+            var resp = await _api.TestModelAsync(
+                card.Name,
+                card.Provider,
+                operation.Token).ConfigureAwait(true);
+            if (operation.IsCancellationRequested) return;
             // Audit 2026-08-05 (H-2/T3.10): Der Auswahl-Beleg wird jetzt vom
             // Backend mitgeliefert und angezeigt — vorher landete er nur im
             // backend.log, das bis zu diesem Audit nicht einmal ein Datum im
@@ -357,6 +407,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         finally
         {
             card.IsTesting = false;
+            EndModelOperation(operation);
         }
     }
 
@@ -420,6 +471,8 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
         _disposed = true;
         _loadCts?.Cancel();
         _loadCts?.Dispose();
+        _operationCts?.Cancel();
+        _operationCts?.Dispose();
     }
 }
 

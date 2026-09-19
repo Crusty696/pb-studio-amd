@@ -31,8 +31,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     private int _streamGeneration;
     private bool _isClearing;
     private bool _isProjectTransitioning;
+    private bool _isHistoryLoading;
     private bool _disposed;
     private string? _projectPath;
+    private CancellationTokenSource? _historyLoadCts;
 
     [ObservableProperty] private string _inputText = string.Empty;
     [ObservableProperty] private bool _isStreaming;
@@ -55,7 +57,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _projectPath = projects.CurrentProjectPath;
         _projects.ProjectTransitionStarted += OnProjectTransitionStarted;
         _projects.ProjectChanged += OnProjectChanged;
-        AddWelcomeMessage();
+        if (string.IsNullOrWhiteSpace(_projectPath))
+            AddWelcomeMessage();
+        else
+            _ = LoadHistoryAsync(_projectPath);
     }
 
     private void OnProjectTransitionStarted(object? sender, EventArgs e)
@@ -64,8 +69,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
 
         _isProjectTransitioning = true;
         SendCommand.NotifyCanExecuteChanged();
+        ClearCommand.NotifyCanExecuteChanged();
         Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
+        _historyLoadCts?.Cancel();
         foreach (var message in Messages.Where(message => message.IsStreaming))
         {
             message.SetError("Abgebrochen: Projektwechsel");
@@ -81,6 +88,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
 
         _isProjectTransitioning = false;
         SendCommand.NotifyCanExecuteChanged();
+        ClearCommand.NotifyCanExecuteChanged();
         var nextPath = project?.Path;
         if (string.Equals(
                 _projectPath,
@@ -94,12 +102,78 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
         Messages.Clear();
-        AddWelcomeMessage();
         CurrentModel = null;
         IsStreaming = false;
         StatusText = project is null
             ? "Kein Projekt geoeffnet."
-            : "Bereit. Frag mich was zu deinem Projekt.";
+            : "Lade Projekt-Chat...";
+        if (project is null)
+            AddWelcomeMessage();
+        else
+            _ = LoadHistoryAsync(nextPath!);
+    }
+
+    private async Task LoadHistoryAsync(string expectedProjectPath)
+    {
+        var previous = _historyLoadCts;
+        var current = new CancellationTokenSource();
+        _historyLoadCts = current;
+        previous?.Cancel();
+        _isHistoryLoading = true;
+        SendCommand.NotifyCanExecuteChanged();
+        ClearCommand.NotifyCanExecuteChanged();
+        try
+        {
+            var response = await _api.GetAsync<ChatHistoryResponse>(
+                "/chat/history",
+                current.Token).ConfigureAwait(true);
+            if (_disposed
+                || current.IsCancellationRequested
+                || !string.Equals(_projectPath, expectedProjectPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            Messages.Clear();
+            foreach (var entry in response?.Entries ?? [])
+            {
+                var role = entry.Role.ToLowerInvariant() switch
+                {
+                    "user" => ChatRole.User,
+                    "assistant" => ChatRole.Assistant,
+                    "system" => ChatRole.System,
+                    _ => ChatRole.Tool,
+                };
+                if (role is ChatRole.User or ChatRole.Assistant)
+                {
+                    Messages.Add(new ChatMessageViewModel(new ChatMessage(
+                        role,
+                        entry.Content,
+                        DateTime.Now)));
+                }
+            }
+            if (Messages.Count == 0)
+                AddWelcomeMessage();
+            StatusText = "Bereit. Frag mich was zu deinem Projekt.";
+        }
+        catch (OperationCanceledException)
+        {
+            // Projektwechsel/Dispose: alte Ergebnisse bleiben unsichtbar.
+        }
+        finally
+        {
+            if (ReferenceEquals(_historyLoadCts, current))
+            {
+                _historyLoadCts = null;
+                _isHistoryLoading = false;
+                if (!_disposed)
+                {
+                    SendCommand.NotifyCanExecuteChanged();
+                    ClearCommand.NotifyCanExecuteChanged();
+                }
+            }
+            current.Dispose();
+        }
     }
 
     private void AddWelcomeMessage()
@@ -117,14 +191,22 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     public bool CanSend =>
         !IsStreaming &&
         !_isClearing &&
+        !_isHistoryLoading &&
         !_isProjectTransitioning &&
         !string.IsNullOrWhiteSpace(InputText);
+
+    public bool CanClear =>
+        !IsStreaming &&
+        !_isClearing &&
+        !_isHistoryLoading &&
+        !_isProjectTransitioning;
 
     partial void OnInputTextChanged(string value) => SendCommand.NotifyCanExecuteChanged();
     partial void OnIsStreamingChanged(bool value)
     {
         SendCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
+        ClearCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanSend))]
@@ -205,7 +287,8 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                     case ChatEventType.ToolCall:
                         var tc = new ToolCallInfo(
                             Name: ev.ToolName ?? "(unknown)",
-                            ArgumentsJson: ev.ToolArgumentsJson);
+                            ArgumentsJson: ev.ToolArgumentsJson,
+                            Id: ev.ToolCallId);
                         toolCalls.Add(tc);
                         assistantVm.AddOrUpdateToolCall(tc);
                         StatusText = $"Tool: {tc.Name}";
@@ -228,7 +311,11 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                             : "Bestaetigung nicht mehr gueltig.";
                         break;
                     case ChatEventType.ToolResult:
-                        var lastIdx = toolCalls.FindLastIndex(t => t.Name == (ev.ToolName ?? ""));
+                        var lastIdx = toolCalls.FindLastIndex(t =>
+                            (!string.IsNullOrWhiteSpace(ev.ToolCallId) && t.Id == ev.ToolCallId)
+                            || (string.IsNullOrWhiteSpace(ev.ToolCallId)
+                                && t.Name == (ev.ToolName ?? "")
+                                && !t.IsCompleted));
                         if (lastIdx >= 0)
                         {
                             var prev = toolCalls[lastIdx];
@@ -242,15 +329,24 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                                 Name: ev.ToolName ?? "(unknown)",
                                 ArgumentsJson: null,
                                 ResultJson: ev.ToolResultJson,
-                                IsCompleted: true);
+                                IsCompleted: true,
+                                Id: ev.ToolCallId);
                             toolCalls.Add(newTc);
                             assistantVm.AddOrUpdateToolCall(newTc);
                         }
                         break;
                     case ChatEventType.Error:
-                        errorMessage = ev.ErrorMessage ?? "Unbekannter Fehler";
-                        assistantVm.SetError(errorMessage);
-                        StatusText = $"Fehler: {errorMessage}";
+                        var eventError = ev.ErrorMessage ?? "Unbekannter Fehler";
+                        if (ev.ErrorStage is "model_retry" or "fallback")
+                        {
+                            StatusText = eventError;
+                        }
+                        else
+                        {
+                            errorMessage = eventError;
+                            assistantVm.SetError(eventError);
+                            StatusText = $"Fehler: {eventError}";
+                        }
                         break;
                     case ChatEventType.Done:
                         receivedDone = true;
@@ -323,13 +419,14 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _streamCts?.Cancel();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanClear))]
     public async Task ClearAsync()
     {
         if (_disposed || _isClearing) return;
 
         _isClearing = true;
         SendCommand.NotifyCanExecuteChanged();
+        ClearCommand.NotifyCanExecuteChanged();
         _streamCts?.Cancel();
         StatusText = "Lösche Chat-History...";
 
@@ -359,7 +456,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         {
             _isClearing = false;
             if (!_disposed)
+            {
                 SendCommand.NotifyCanExecuteChanged();
+                ClearCommand.NotifyCanExecuteChanged();
+            }
         }
     }
 
@@ -372,6 +472,9 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
         _streamCts = null;
+        _historyLoadCts?.Cancel();
+        _historyLoadCts?.Dispose();
+        _historyLoadCts = null;
     }
 }
 
@@ -438,7 +541,10 @@ public partial class ChatMessageViewModel : ObservableObject
         var idx = -1;
         for (int i = 0; i < ToolCalls.Count; i++)
         {
-            if (ToolCalls[i].Name == tc.Name && !ToolCalls[i].IsCompleted)
+            if ((!string.IsNullOrWhiteSpace(tc.Id) && ToolCalls[i].Id == tc.Id)
+                || (string.IsNullOrWhiteSpace(tc.Id)
+                    && ToolCalls[i].Name == tc.Name
+                    && !ToolCalls[i].IsCompleted))
             {
                 idx = i;
                 break;

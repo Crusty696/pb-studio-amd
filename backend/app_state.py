@@ -637,6 +637,11 @@ class AppState:
         with self._state_lock:
             return list(self.current_timeline)
 
+    def get_timeline_state_snapshot(self) -> tuple[list[dict], Optional[str]]:
+        """Timeline and its audio path from one atomic project-state read."""
+        with self._state_lock:
+            return list(self.current_timeline), self.current_audio_path
+
     def set_timeline(self, timeline: list[dict]) -> None:
         """Thread-safe Setzen der Timeline."""
         with self._state_lock:

@@ -25,6 +25,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private volatile bool _isShuttingDown;
     private bool _disposed;
     private int? _activePacingAudioClipId;
+    private string? _activePacingTaskId;
 
     [ObservableProperty] private double _expectedBpm = 120.0;
     [ObservableProperty] private double _beatWeight = 1.0;
@@ -324,8 +325,12 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             return;
         }
         var audioClip = SelectedAudioClip;
+        var pacingTaskId = $"pacing:{Guid.NewGuid():N}";
         IsGenerating = true;
         _activePacingAudioClipId = audioClip.Id;
+        _activePacingTaskId = pacingTaskId;
+        GenerationProgress = 0;
+        CurrentStep = string.Empty;
         StatusText = "Generiere Cut-Liste...";
 
         try
@@ -360,7 +365,8 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 BrainMinConfidence: BrainMinConfidence,
                 UseKeyMatching: UseKeyMatching,
                 UseStemPacing: UseStemPacing,
-                CanvasPath: CanvasPath
+                CanvasPath: CanvasPath,
+                RequestId: pacingTaskId
             );
 
             var result = await _api.GenerateCutListAsync(config, operation.CancellationToken);
@@ -401,12 +407,6 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
                 StatusText = result == null
                     ? $"Pacing nicht möglich: {SummarizePacingError(_api.LastErrorDetail)}"
                     : "Warnung: Keine Schnitte generiert (Audio-Dauer prüfen)";
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    CutList.Clear();
-                    CutCount = 0;
-                    TotalDuration = 0;
-                });
             }
         }
         catch (Exception ex)
@@ -419,6 +419,7 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             if (_projectService.IsCurrent(operation))
             {
                 _activePacingAudioClipId = null;
+                _activePacingTaskId = null;
                 IsGenerating = false;
             }
         }
@@ -434,16 +435,37 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
 
         var videoIds = AvailableVideoClips.Where(c => c.IsSelected).Select(c => c.Id).ToList();
+        ProjectOperationContext operation;
+        try
+        {
+            operation = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            SuggestionsStatus = "Vorschläge nicht geladen: kein stabiler Projektkontext.";
+            return;
+        }
 
         IsLoadingSuggestions = true;
         SuggestionsStatus = "Lade Top-N Vorschläge…";
         try
         {
             var resp = await _api.BrainSuggestAsync(SelectedAudioClip.Id, videoIds, BrainSuggestTopN);
+            if (!_projectService.IsCurrent(operation))
+                return;
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
+                if (!_projectService.IsCurrent(operation))
+                    return;
                 BrainSuggestions.Clear();
-                if (resp?.Suggestions == null || resp.Suggestions.Count == 0)
+                if (resp == null)
+                {
+                    SuggestionsStatus = string.IsNullOrWhiteSpace(_api.LastErrorDetail)
+                        ? "Vorschläge konnten nicht geladen werden."
+                        : "Vorschläge abgelehnt: " + _api.LastErrorDetail;
+                    return;
+                }
+                if (resp.Suggestions == null || resp.Suggestions.Count == 0)
                 {
                     SuggestionsStatus = "Keine Vorschläge — Pacing zuerst mit Brain (Lern-Modus) laufen lassen.";
                     return;
@@ -457,11 +479,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            SuggestionsStatus = "Fehler: " + ex.Message;
+            if (_projectService.IsCurrent(operation))
+                SuggestionsStatus = "Fehler: " + ex.Message;
         }
         finally
         {
-            IsLoadingSuggestions = false;
+            if (_projectService.IsCurrent(operation))
+                IsLoadingSuggestions = false;
         }
     }
 
@@ -477,6 +501,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
             {
                 "key_matching" => "Tonart-Matching",
                 "semantic_matching" => "Semantik-Matching",
+                "stem_pacing" => "Stem-Pacing",
+                "canvas_anchors" => "Storyboard-Anker",
+                "pacing_engine" => "Pacing-Engine",
                 "brain_reranking" => "Brain-Auswahl",
                 "brain_postprocessor" => "Brain-Auswertung",
                 _ => d.Mode
@@ -569,6 +596,11 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
         CutCount = 0;
         TotalDuration = 0;
         IsGenerating = false;
+        GenerationProgress = 0;
+        CurrentStep = string.Empty;
+        BrainSuggestions.Clear();
+        IsLoadingSuggestions = false;
+        SuggestionsStatus = string.Empty;
         StatusText = "Kein Projekt geöffnet";
     }
 
@@ -576,7 +608,9 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     {
         if (e.EventType != "pacing_progress" || !IsGenerating ||
             !_activePacingAudioClipId.HasValue ||
-            e.ClipId != _activePacingAudioClipId.Value)
+            e.ClipId != _activePacingAudioClipId.Value ||
+            string.IsNullOrEmpty(_activePacingTaskId) ||
+            !string.Equals(e.TaskId, _activePacingTaskId, StringComparison.Ordinal))
             return;
 
         Application.Current.Dispatcher.Invoke(() =>
@@ -590,9 +624,13 @@ public partial class DirectorViewModel : ObservableObject, IDisposable
     private void OnProjectTransitionStarted(object? sender, EventArgs e)
     {
         _activePacingAudioClipId = null;
+        _activePacingTaskId = null;
         IsGenerating = false;
         GenerationProgress = 0;
         CurrentStep = string.Empty;
+        BrainSuggestions.Clear();
+        IsLoadingSuggestions = false;
+        SuggestionsStatus = string.Empty;
     }
 
     public void Dispose()

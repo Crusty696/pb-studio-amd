@@ -8,7 +8,9 @@ Endpoints:
 """
 
 import asyncio
+import json
 import logging
+import math
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -121,18 +123,47 @@ def _collect_runtime_degradations(
     *,
     use_semantic_matching: bool,
     use_brain: bool,
+    canvas_requested: bool,
 ) -> list[ModeDegradationSchema]:
     """Collapse per-cut selector provenance to one safe message per mode."""
     eligible: list[dict[str, Any]] = []
+    fallback_cut_count = 0
+    canvas_cut_count = 0
     for cut in cuts:
         metadata = cut.get("metadata") if isinstance(cut, dict) else None
+        if isinstance(metadata, dict):
+            if metadata.get("trigger_type") == "time_grid_fallback":
+                fallback_cut_count += 1
+            if metadata.get("anchor_source") == "canvas":
+                canvas_cut_count += 1
         provenance = metadata.get("selection_provenance") if isinstance(metadata, dict) else None
         if isinstance(provenance, dict):
             eligible.append(metadata)
 
     total = len(eligible)
+    result: list[ModeDegradationSchema] = []
+    if fallback_cut_count:
+        result.append(ModeDegradationSchema(
+            mode="pacing_engine",
+            reason=(
+                "Die rhythmische Generierung war nicht verfügbar; ein sicheres "
+                "gleichmäßiges Zeitraster wurde verwendet."
+            ),
+            scored_clips=len(cuts) - fallback_cut_count,
+            total_clips=len(cuts),
+        ))
+    if canvas_requested and not canvas_cut_count:
+        result.append(ModeDegradationSchema(
+            mode="canvas_anchors",
+            reason=(
+                "Das angegebene Storyboard enthielt keine nutzbare Zuordnung "
+                "für die ausgewählten Clips und den erzeugten Zeitraum."
+            ),
+            scored_clips=0,
+            total_clips=1,
+        ))
     if total == 0:
-        return []
+        return result
 
     semantic_affected = 0
     brain_affected = 0
@@ -155,7 +186,6 @@ def _collect_runtime_degradations(
         ):
             brain_affected += 1
 
-    result: list[ModeDegradationSchema] = []
     if semantic_affected:
         result.append(ModeDegradationSchema(
             mode="semantic_matching",
@@ -177,6 +207,51 @@ def _collect_runtime_degradations(
             total_clips=total,
         ))
     return result
+
+
+def _resolve_stem_paths(
+    config: PacingConfigSchema,
+    audio_clips: dict[int, dict[str, Any]],
+) -> tuple[dict[str, str], str | None]:
+    """Resolve and validate persisted stem files for one pacing request."""
+    if not config.use_stem_pacing:
+        return {}, None
+
+    raw_stems = audio_clips.get(config.audio_clip_id, {}).get("stems_paths") or {}
+    if isinstance(raw_stems, str):
+        try:
+            raw_stems = json.loads(raw_stems)
+        except (TypeError, ValueError):
+            return {}, "Die gespeicherten Stem-Pfade sind ungültig."
+    if not isinstance(raw_stems, dict) or not raw_stems:
+        return {}, "Für den Audio-Clip sind keine analysierten Stems verfügbar."
+
+    from pb_studio.config_manager import ConfigManager
+
+    config_manager = ConfigManager()
+    stem_root = config_manager.resolve_path(
+        config_manager.get("paths", {}).get("temp_dir", "./temp")
+    )
+    try:
+        stems = {
+            str(role): validate_owned_media_file(
+                str(stem_path),
+                stem_root,
+                label=f"Stem-Pacing {role}",
+            )
+            for role, stem_path in raw_stems.items()
+            if stem_path
+        }
+    except MediaPathPolicyError as exc:
+        logger.warning(
+            "Unsichere stems_paths fuer Clip %s verworfen: %s",
+            config.audio_clip_id,
+            exc,
+        )
+        return {}, "Die gespeicherten Stem-Dateien sind nicht mehr sicher verfügbar."
+    if not stems:
+        return {}, "Für den Audio-Clip sind keine verwendbaren Stems verfügbar."
+    return stems, None
 
 
 def _load_ui_anchors(state) -> list[dict]:
@@ -514,6 +589,24 @@ async def _generate_cut_list_for_project(
             detail=f"scored=0/{unscored} Clips",
         )
 
+    stem_paths, stem_degradation = _resolve_stem_paths(config, audio_clips_snapshot)
+    if config.use_stem_pacing and not stem_paths:
+        degradations.append(
+            ModeDegradationSchema(
+                mode="stem_pacing",
+                reason=stem_degradation or "Stem-Pacing war für diesen Lauf nicht verfügbar.",
+                scored_clips=0,
+                total_clips=1,
+            )
+        )
+        config = config.model_copy(update={"use_stem_pacing": False})
+        await publish_log(
+            "Stem-Pacing abgeschaltet",
+            level="warning",
+            source="pacing.generate",
+            detail=stem_degradation,
+        )
+
     try:
         import time as _time
         _t_pacing_start = _time.perf_counter()
@@ -526,12 +619,18 @@ async def _generate_cut_list_for_project(
         _ui_anchors = _load_ui_anchors(state)
         cuts = await asyncio.to_thread(
             _run_pacing_generation, config, audio_clips_snapshot, video_clips_snapshot,
-            cached_analysis, video_analysis_snapshot, _loop, _ui_anchors,
+            cached_analysis, video_analysis_snapshot, _loop, _ui_anchors, stem_paths,
         )
+        if not cuts:
+            raise HTTPException(
+                status_code=500,
+                detail="Generierung lieferte keine verwendbaren Schnitte",
+            )
         runtime_degradations = _collect_runtime_degradations(
             cuts,
             use_semantic_matching=config.use_semantic_matching,
             use_brain=config.use_brain,
+            canvas_requested=bool(config.canvas_path),
         )
         existing_modes = {item.mode for item in degradations}
         degradations.extend(
@@ -673,7 +772,7 @@ async def _generate_cut_list_for_project(
         avg_dur = sum(c["end_time"] - c["start_time"] for c in cuts) / len(cuts) if cuts else 0.0
 
         await publish_event("pacing_progress", {
-            "task_id": f"pacing:{config.audio_clip_id}",
+            "task_id": config.request_id or f"pacing:{config.audio_clip_id}",
             "clip_id": config.audio_clip_id,
             "step": "pacing",
             "percent": 100.0,
@@ -723,8 +822,9 @@ async def _generate_cut_list_for_project(
 )
 async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResponse:
     """Gibt die aktuelle Timeline zurück."""
+    timeline_snapshot, audio_path = state.get_timeline_state_snapshot()
     entries = []
-    for cut in state.get_timeline_snapshot():
+    for cut in timeline_snapshot:
         meta = cut.get("metadata", {})
         entries.append(TimelineEntrySchema(
             clip_id=cut.get("clip_id", ""),
@@ -750,7 +850,7 @@ async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResp
     return TimelineResponse(
         entries=entries,
         total_duration=total,
-        audio_path=state.current_audio_path,
+        audio_path=audio_path,
     )
 
 
@@ -782,7 +882,7 @@ async def _update_timeline_for_project(
     context: ProjectOperationContext,
 ) -> StatusResponse:
     """Aktualisiert die Timeline im State."""
-    current_audio_path = state.current_audio_path
+    _, current_audio_path = state.get_timeline_state_snapshot()
     internal_cuts = []
     for entry in request.entries:
         metadata = dict(entry.metadata)
@@ -869,30 +969,81 @@ async def generate_preview(
     request: PreviewRequest,
     state: AppState = Depends(get_app_state),
 ) -> PreviewResponse:
-    """Generiert ein Preview-Video für einen Timeline-Abschnitt."""
-    if not state.current_timeline:
+    """Generiert ein Preview-Video im unveraenderlichen Projektkontext."""
+    try:
+        async with state.project_operation() as context:
+            return await _generate_preview_for_project(request, state, context)
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProjectContextUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _generate_preview_for_project(
+    request: PreviewRequest,
+    state: AppState,
+    context: ProjectOperationContext,
+) -> PreviewResponse:
+    """Rendert den gueltigen Restbereich und haelt den GPU-Lock bis Worker-Ende."""
+    timeline = state.get_timeline_snapshot()
+    if not timeline:
         raise HTTPException(status_code=400, detail="Keine Timeline vorhanden")
 
     try:
         timeline_snapshot = validate_timeline_media_paths(
-            state.get_timeline_snapshot(),
+            timeline,
             state.get_video_clips_snapshot(),
         )
     except MediaPathPolicyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
+        timeline_end = max(float(entry.get("end_time", 0.0)) for entry in timeline_snapshot)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Timeline enthält ungültige Zeitwerte") from exc
+    if not math.isfinite(timeline_end) or timeline_end <= 0.0:
+        raise HTTPException(status_code=400, detail="Timeline enthält ungültige Zeitwerte")
+    if request.start_sec >= timeline_end:
+        raise HTTPException(
+            status_code=400,
+            detail="Preview-Start liegt außerhalb der Timeline",
+        )
+
+    actual_duration = min(request.duration, timeline_end - request.start_sec)
+    state.require_project_context_current(context)
+
+    try:
         async with gpu_lock:
-            preview_path = await asyncio.to_thread(
-                _render_preview, timeline_snapshot, request.start_sec, request.duration
+            render_task = asyncio.create_task(
+                asyncio.to_thread(
+                    _render_preview,
+                    timeline_snapshot,
+                    request.start_sec,
+                    actual_duration,
+                )
             )
+            try:
+                preview_path = await asyncio.shield(render_task)
+            except asyncio.CancelledError:
+                try:
+                    await asyncio.shield(render_task)
+                except Exception:
+                    logger.exception("Preview-Worker schlug nach Request-Abbruch fehl")
+                raise
         if not preview_path:
             raise RuntimeError("Preview-Rendering lieferte keine Ausgabedatei")
+        state.require_project_context_current(context)
         return PreviewResponse(
             preview_path=preview_path,
-            duration=request.duration,
+            duration=actual_duration,
             resolution="640x360",
         )
+    except asyncio.CancelledError:
+        raise
+    except ProjectContextChangedError:
+        raise
     except HTTPException:
         raise
     except Exception as e:
@@ -982,7 +1133,12 @@ def _cap_entries_against_source(
     return entries
 
 
-def _emit_pacing_progress(loop, pct: float, audio_clip_id: int) -> None:
+def _emit_pacing_progress(
+    loop,
+    pct: float,
+    audio_clip_id: int,
+    request_id: str | None = None,
+) -> None:
     """Audit L-M7: Sendet ein pacing_progress SSE-Event aus dem Worker-Thread
     (fire-and-forget). loop ist der asyncio-Event-Loop des Request-Handlers.
     """
@@ -991,7 +1147,7 @@ def _emit_pacing_progress(loop, pct: float, audio_clip_id: int) -> None:
     try:
         asyncio.run_coroutine_threadsafe(
             publish_event("pacing_progress", {
-                "task_id": f"pacing:{audio_clip_id}",
+                "task_id": request_id or f"pacing:{audio_clip_id}",
                 "clip_id": audio_clip_id,
                 "percent": float(pct),
                 "message": f"Pacing {pct:.1f}%",
@@ -1010,6 +1166,7 @@ def _run_pacing_generation(
     video_analysis_cache: dict[int, dict[str, Any]] | None = None,
     loop: Any | None = None,
     ui_anchors: list[dict[str, Any]] | None = None,
+    validated_stems: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Generiert Cut-Liste via PacingService (blockierend).
 
@@ -1024,7 +1181,7 @@ def _run_pacing_generation(
 
     # Audit L-M7: on_progress callback fuer Engine -> Router -> SSE.
     def _on_pacing_progress(pct: float) -> None:
-        _emit_pacing_progress(loop, pct, config.audio_clip_id)
+        _emit_pacing_progress(loop, pct, config.audio_clip_id, config.request_id)
 
     audio_path = ""
     audio_dur = 0.0
@@ -1049,7 +1206,10 @@ def _run_pacing_generation(
             if video_analysis_cache and vid in video_analysis_cache:
                 va = video_analysis_cache[vid]
                 motion = va.get("motion", {})
-                clip_data["motion_score"] = va.get("avg_motion", 0.0)
+                clip_data["motion_score"] = va.get(
+                    "avg_motion",
+                    motion.get("avg_motion", 0.0) if motion else 0.0,
+                )
                 clip_data["avg_motion"] = motion.get("avg_motion", 0.0) if motion else 0.0
                 clip_data["peak_motion"] = motion.get("peak_motion", 0.0) if motion else 0.0
                 clip_data["peak_frames"] = motion.get("peak_frames", []) if motion else []
@@ -1095,42 +1255,9 @@ def _run_pacing_generation(
     # stems_paths hat (Demucs-Stems vorhanden), dann zur generate_cut_list_with_stems
     # routen. Sonst (oder als fallback bei fehlenden Stems) Standard-Pfad.
     use_stem_pacing = bool(getattr(config, "use_stem_pacing", False))
-    stems: dict[str, str] = {}
-    if use_stem_pacing:
-        ac_data = audio_clips.get(config.audio_clip_id, {})
-        raw_stems = ac_data.get("stems_paths") or {}
-        # stems_paths kann JSON-String oder dict sein -> normalisieren
-        if isinstance(raw_stems, str):
-            try:
-                import json as _json
-                raw_stems = _json.loads(raw_stems)
-            except Exception:
-                logger.warning("L-K5 stems_paths JSON ungueltig fuer clip %s", config.audio_clip_id)
-                raw_stems = {}
-        if isinstance(raw_stems, dict):
-            from pb_studio.config_manager import ConfigManager
-
-            config_manager = ConfigManager()
-            stem_root = config_manager.resolve_path(
-                config_manager.get("paths", {}).get("temp_dir", "./temp")
-            )
-            try:
-                stems = {
-                    str(role): validate_owned_media_file(
-                        str(stem_path),
-                        stem_root,
-                        label=f"Stem-Pacing {role}",
-                    )
-                    for role, stem_path in raw_stems.items()
-                    if stem_path
-                }
-            except MediaPathPolicyError as exc:
-                logger.warning(
-                    "L-K5 unsichere stems_paths fuer clip %s verworfen: %s",
-                    config.audio_clip_id,
-                    exc,
-                )
-                stems = {}
+    stems = dict(validated_stems or {})
+    if use_stem_pacing and validated_stems is None:
+        stems, _ = _resolve_stem_paths(config, audio_clips)
 
     if use_stem_pacing and stems:
         logger.info("L-K5 Stem-Pacing aktiviert, stems=%s", list(stems.keys()))

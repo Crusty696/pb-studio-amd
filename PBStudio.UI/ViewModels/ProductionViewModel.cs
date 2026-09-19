@@ -181,6 +181,11 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!await _timelineState.WaitForPendingSaveAsync())
+        {
+            StatusText = "Render abgebrochen: Timeline konnte nicht gespeichert werden.";
+            return;
+        }
         await SyncAudioPathFromTimelineAsync();
         if (string.IsNullOrWhiteSpace(AudioPath))
         {

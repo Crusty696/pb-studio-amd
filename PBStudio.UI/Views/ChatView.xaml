@@ -257,7 +257,7 @@
                          md:HintAssist.Hint="Frag mich was — z.B. 'Liste meine Audio-Clips'"
                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                          AutomationProperties.Name="Chat-Nachricht"
-                         AutomationProperties.HelpText="Nachricht eingeben. Strg+Eingabe sendet; Eingabe allein erzeugt eine neue Zeile."
+                         AutomationProperties.HelpText="Nachricht eingeben. Eingabe sendet; Umschalt+Eingabe erzeugt eine neue Zeile."
                          KeyDown="InputBox_KeyDown"/>
                 <Button Grid.Column="1"
                         Command="{Binding StopCommand}"

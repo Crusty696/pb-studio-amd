@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -17,12 +18,15 @@ namespace PBStudio.UI.ViewModels;
 public partial class LearningSessionViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
+    private readonly ProjectService? _projectService;
     private List<BrainSuggestion> _cuts = new();
     private string? _projectAudioPath;
     private IReadOnlyDictionary<string, string> _projectVideoPaths =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
     private bool _isRating;
+    private int _sessionVersion;
+    private int _loadVersion;
 
     public event Action? RequestClose;
     public event Action<double, double>? PlayRequested;
@@ -47,19 +51,32 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     partial void OnIsPlayingChanged(bool value) =>
         OnPropertyChanged(nameof(PlayPauseLabel));
 
-    public LearningSessionViewModel(IApiClient api)
+    public LearningSessionViewModel(
+        IApiClient api,
+        ProjectService? projectService = null)
     {
         _api = api;
+        _projectService = projectService;
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
     }
 
     public async Task LoadAsync(
         string? audioPath = null,
         IReadOnlyDictionary<string, string>? videoPaths = null)
     {
+        if (_disposed)
+            return;
+        var loadVersion = Interlocked.Increment(ref _loadVersion);
+        var sessionVersion = Volatile.Read(ref _sessionVersion);
         _projectAudioPath = audioPath;
         _projectVideoPaths = videoPaths
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var resp = await _api.BrainLearningSessionAsync();
+        if (_disposed
+            || loadVersion != Volatile.Read(ref _loadVersion)
+            || sessionVersion != Volatile.Read(ref _sessionVersion))
+            return;
         if (resp?.Cuts == null || resp.Cuts.Count == 0)
         {
             Status = "Keine Cuts in der aktuellen Lern-Session.";
@@ -149,6 +166,7 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
             return;
         var c = _cuts[CurrentIndex];
         var ratedIndex = CurrentIndex;
+        var sessionVersion = Volatile.Read(ref _sessionVersion);
         var cutId = c.CutId;
         if (cutId == null)
         {
@@ -162,7 +180,10 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
         try
         {
             var resp = await _api.BrainFeedbackAsync(cutId.Value, rating);
-            if (_disposed || CurrentIndex != ratedIndex || CurrentCutId != cutId.Value)
+            if (_disposed
+                || sessionVersion != Volatile.Read(ref _sessionVersion)
+                || CurrentIndex != ratedIndex
+                || CurrentCutId != cutId.Value)
                 return;
             if (resp == null)
             {
@@ -244,6 +265,22 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void Close() => RequestClose?.Invoke();
 
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+    {
+        Interlocked.Increment(ref _sessionVersion);
+        Interlocked.Increment(ref _loadVersion);
+        _cuts.Clear();
+        TotalCount = 0;
+        CurrentCutId = 0;
+        CurrentVideoUri = null;
+        CurrentAudioUri = null;
+        PauseRequested?.Invoke();
+        IsPlaying = false;
+        Status = "Projektwechsel — Lern-Session geschlossen.";
+        NotifyRatingCommandsCanExecuteChanged();
+        RequestClose?.Invoke();
+    }
+
     /// <summary>
     /// L-FE-7: Event-Subscriptions aufloesen damit der LearningSessionDialog
     /// nach Close korrekt GCd werden kann (Lambdas in xaml.cs capturen sonst
@@ -253,6 +290,10 @@ public partial class LearningSessionViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Interlocked.Increment(ref _sessionVersion);
+        Interlocked.Increment(ref _loadVersion);
+        if (_projectService != null)
+            _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         RequestClose = null;
         PlayRequested = null;
         PauseRequested = null;

@@ -250,6 +250,18 @@ def run_v2_fit_step(
                 ))
 
         ready.sort(key=lambda item: (item[0], item[1]))
+        if not ready:
+            return {
+                "loss_before": 0.0,
+                "loss_after": 0.0,
+                "n_pairs": 0,
+                "n_steps": 0,
+                "applied_events": len(active_applied),
+                "new_events": 0,
+                "pending_events": len(pending),
+                "generation_uuid": projector.generation_uuid,
+                "saved": False,
+            }
         candidate = projector.clone()
         fit_result = candidate.fit_pairs(
             [(item[2], item[3], item[4]) for item in ready],

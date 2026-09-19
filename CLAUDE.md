@@ -86,9 +86,9 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 ---
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
-- **Date:** 2026-09-14 (Spec 00021 OBJ-76 & Spec 00023 Backlog-Abschluss release-verifiziert)
-- **Current Status:** Alle 22 Backlog-Aufgaben (T001–T022) und OBJ-76 Gates vollständig implementiert und verifiziert: Live-Tagging & Restart/Resume mit 100% SHA-256 Hash-Erhaltung, 10 Canary-Clips Re-Analyse (10/10 PASS), Pacing-Degradation, Audio-Key-Unterscheidung, 706 Video-Stage-Keys intakt, 14-Tab WPF UI Live-Smoke (28/28 Tabs in 2 Runden PASS), Brain-Semantik Projector-Evaluation (20 reale Medienpaare). Verifiziert: Python 1825 passed / 14 skipped / 0 failed, C# 64/64, WPF Release 0/0, Coverage 66.8% (gefordert ≥ 53.0%).
-- **Next Task:** Vollständiger Backlog abgeschlossen. Bereit für produktiven Einsatz und Nutzer-Freigabe.
+- **Date:** 2026-09-19 (Spec 00033 VIDEO/VISION-Fixphase abgeschlossen; QC ausstehend)
+- **Current Status:** VIDEO/VISION F-11.1–F-11.22 vollständig per Quellpfad auditiert; Projektleases für Medien-/Delete-Pfade, wahrheitsgetreue Scene/Motion-Verfügbarkeit, residente RAFT-/SigLIP-Stufen, finite Embedding-/Motion-Gates sowie WPF-Import-/Projektwechsel-Lifecycle repariert. Nutzer hat Tests, Builds und GUI-Läufe bis zur ausdrücklichen Freigabe untersagt. Kein PASS-/Release-Claim für Spec 00030–00033.
+- **Next Task:** Nutzerbericht zu VIDEO/VISION-Fixes; nächster Funktionsbereich nur auf Anweisung. Verifikation von Pacing, KI, Brain und Video bleibt separat gesperrt.
 - **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
   Regressionstest und ausgeführter Gegenprobe (Fix zurückgerollt, Test fällt).

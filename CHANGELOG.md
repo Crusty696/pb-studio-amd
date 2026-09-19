@@ -892,4 +892,13 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 ### Open (User-Action)
 - AMD Adrenalin Driver Update fuer h264_amf (siehe test-report/2026-05-14-AMD-DRIVER-UPDATE-required.md)
 
+## 2026-09-19 — VIDEO/VISION source-fix phase (Spec 00033)
+
+- Added project leases to thumbstrip, clip-wave, scene, motion, and video-delete routes; stale project work now fails closed.
+- Scene/motion reads no longer fabricate successful empty/static data for unavailable stages.
+- RAFT and SigLIP sessions remain resident across model-centric clip passes; real failures discard the affected cached owner.
+- Non-finite motion/embedding results are rejected before persistence; missing DirectML capability is explicit `unavailable`.
+- Video imports deduplicate canonical input paths; WPF import/progress publication is project- and sequence-bound.
+- Verification intentionally deferred by user instruction; no PASS/QC claim.
+
 ---
