@@ -87,7 +87,7 @@ dotnet build PBStudio.UI\PBStudio.UI.csproj
 
 ## 3. 🧠 PROJECT BRAIN & CURRENT STATUS
 - **Date:** 2026-09-19 (Spec 00033 VIDEO/VISION-Fixphase abgeschlossen; QC ausstehend)
-- **Current Status:** VIDEO/VISION F-11.1–F-11.22 vollständig per Quellpfad auditiert; Projektleases für Medien-/Delete-Pfade, wahrheitsgetreue Scene/Motion-Verfügbarkeit, residente RAFT-/SigLIP-Stufen, finite Embedding-/Motion-Gates sowie WPF-Import-/Projektwechsel-Lifecycle repariert. Nutzer hat Tests, Builds und GUI-Läufe bis zur ausdrücklichen Freigabe untersagt. Kein PASS-/Release-Claim für Spec 00030–00033.
+- **Current Status:** VIDEO/VISION F-11.1–F-11.22 vollständig per Quellpfad auditiert; Projektleases für Medien-/Delete-Pfade, wahrheitsgetreue Scene/Motion-Verfügbarkeit, residente RAFT-/SigLIP-Stufen, finite Embedding-/Motion-Gates sowie WPF-Import-/Projektwechsel-Lifecycle repariert. Gesamtstand Spec 00030–00033 ist als Commit `69a4a10` auf `codex/source-functional-completion` gepusht und in PR #31. Nutzer hat lokale Tests, Builds und GUI-Läufe bis zur ausdrücklichen Freigabe untersagt. Kein PASS-/Release-Claim.
 - **Next Task:** Nutzerbericht zu VIDEO/VISION-Fixes; nächster Funktionsbereich nur auf Anweisung. Verifikation von Pacing, KI, Brain und Video bleibt separat gesperrt.
 - **Historischer Stand 2026-08-31 — Remote-SHA `d499b58`, gepusht.**
   Audit des Beat-/Tempo-Pfads: **11 von 12 Befunden behoben**, jeder mit
