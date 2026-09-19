@@ -18,6 +18,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
 {
     private readonly IApiClient _api;
     private readonly IDialogService _dialogService;
+    private readonly ProjectService _projectService;
     private bool _disposed;
 
     [ObservableProperty] private string _statusText = "Bereit für Import";
@@ -28,10 +29,15 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     public ObservableCollection<AudioClipModel> ImportedAudio { get; } = [];
     public ObservableCollection<VideoClipModel> ImportedVideo { get; } = [];
 
-    public MediaIngestViewModel(IApiClient api, IDialogService dialogService)
+    public MediaIngestViewModel(
+        IApiClient api,
+        IDialogService dialogService,
+        ProjectService projectService)
     {
         _api = api;
         _dialogService = dialogService;
+        _projectService = projectService;
+        _projectService.ProjectTransitionStarted += OnProjectTransitionStarted;
 
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
             System.Windows.Application.Current.Dispatcher.Invoke(ResetProjectState));
@@ -59,6 +65,17 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
 
         if (files.Count == 0) return;
 
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Import nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
         ImportProgress = 0;
         IsImporting = true;
 
@@ -70,7 +87,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
             try
             {
                 using var fs = File.OpenRead(file);
-                validFiles.Add(file);
+                validFiles.Add(Path.GetFullPath(file));
             }
             catch (Exception)
             {
@@ -78,6 +95,7 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
             }
         }
 
+        validFiles = validFiles.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (validFiles.Count == 0)
         {
             StatusText = $"Import fehlgeschlagen: Alle {files.Count} Dateien konnten nicht gelesen werden (Berechtigung oder Dateisperre).";
@@ -91,27 +109,41 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
 
         try
         {
+            var existingIds = ImportedAudio.Select(a => a.Id).ToHashSet();
             for (int i = 0; i < validFiles.Count; i++)
             {
+                if (!_projectService.IsCurrent(projectContext))
+                    return;
                 try
                 {
                     var result = await _api.ImportAudioAsync(validFiles[i]);
+                    if (!_projectService.IsCurrent(projectContext))
+                        return;
                     if (result != null)
                     {
                         importedCount++;
-                        ImportedAudio.Add(new AudioClipModel
+                        if (existingIds.Add(result.Id))
                         {
-                            Id = result.Id,
-                            Name = result.Name,
-                            Path = result.Path,
-                            DurationSeconds = result.DurationSeconds,
-                            SampleRate = result.SampleRate,
-                            Format = result.Format,
-                        });
+                            ImportedAudio.Add(new AudioClipModel
+                            {
+                                Id = result.Id,
+                                Name = result.Name,
+                                Path = result.Path,
+                                DurationSeconds = result.DurationSeconds,
+                                SampleRate = result.SampleRate,
+                                Format = result.Format,
+                            });
+                        }
+                    }
+                    else
+                    {
+                        failedImport++;
                     }
                 }
                 catch (Exception ex)
                 {
+                    if (!_projectService.IsCurrent(projectContext))
+                        return;
                     failedImport++;
                     StatusText = $"Fehler bei {Path.GetFileName(validFiles[i])}: {ex.Message}";
                 }
@@ -132,11 +164,13 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Kritischer Audio-Import-Fehler: {ex.Message}";
+            if (_projectService.IsCurrent(projectContext))
+                StatusText = $"Kritischer Audio-Import-Fehler: {ex.Message}";
         }
         finally
         {
-            IsImporting = false;
+            if (_projectService.IsCurrent(projectContext))
+                IsImporting = false;
         }
     }
 
@@ -327,10 +361,14 @@ public partial class MediaIngestViewModel : ObservableObject, IDisposable
     private static string QuoteIfNeeded(string path)
         => path.Contains(' ') ? $"\"{path}\"" : path;
 
+    private void OnProjectTransitionStarted(object? sender, EventArgs e)
+        => ResetProjectState();
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        _projectService.ProjectTransitionStarted -= OnProjectTransitionStarted;
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

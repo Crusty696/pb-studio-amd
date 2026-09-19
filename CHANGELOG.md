@@ -3,6 +3,18 @@
 
 ---
 
+## 2026-09-19 - AUDIO source-functional completion (Spec 00034)
+
+### Fixed (verification deferred by user directive)
+- Audio list/read/delete/waveform endpoints now hold the initiating project lease; deletes cross the guarded commit boundary.
+- Beat, onset, structure, and spectral reads reject unavailable/partial stages instead of fabricating successful empty results.
+- Waveform failures are explicit and sample-rate metadata is no longer hard-coded; invalid non-finite ffprobe metadata is rejected.
+- BeatNet-to-librosa fallback preserves caller duration bounds.
+- Audio response collections use isolated Pydantic factories instead of mutable class defaults.
+- Audio Library and Media Import now deduplicate paths/rows, continue per-file failures, correlate import progress to the current project, suppress stale results, reset full selection/progress state on transitions, and block duplicate import/stem commands.
+- `separator.py` remained unchanged; validated marker/resume/project-guard callers were retained.
+- Tests, builds, GUI/audio/provider runs and QC markers remain intentionally unexecuted until explicit authorization.
+
 ## 2026-09-14 - Backlog-Abschluss, OBJ-76 Live-Runtime-Wahrheit, reale Frontend-QC
 
 ### Fixed & Verified

@@ -338,7 +338,11 @@ class BeatDetector:
             self._report_progress("beatnet_done", 1.0)
 
             if output is None or len(output) == 0:
-                return self._detect_beats_librosa(audio_path, on_progress=on_progress), []
+                return self._detect_beats_librosa(
+                    audio_path,
+                    duration=duration,
+                    on_progress=on_progress,
+                ), []
 
             beat_times = output[:, 0].tolist()
             # Spalte 1 ist die Position im Takt; 1.0 == Taktanfang.
@@ -353,7 +357,11 @@ class BeatDetector:
             return beat_times, downbeat_times
         except Exception as e:
             logger.error(f"BeatNet Error: {e}")
-            return self._detect_beats_librosa(audio_path, on_progress=on_progress), []
+            return self._detect_beats_librosa(
+                audio_path,
+                duration=duration,
+                on_progress=on_progress,
+            ), []
 
     def get_downbeats(self, audio_path: str | Path) -> List[float]:
         audio_path = str(audio_path)
