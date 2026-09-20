@@ -2101,12 +2101,40 @@ def _require_completed_audio_stage(
     if analysis is None:
         raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
     stage_status = dict(analysis.get("_stage_status") or {})
-    if stage_status.get(stage) != "completed":
+    legacy_payload_available = (
+        stage not in stage_status
+        and analysis.get("_analysis_status") == "completed"
+        and _legacy_audio_stage_payload_available(stage, analysis)
+    )
+    if stage_status.get(stage) != "completed" and not legacy_payload_available:
         raise HTTPException(
             status_code=409,
             detail=f"Audio-Stufe '{stage}' für Clip {clip_id} ist nicht vollständig verfügbar",
         )
     return analysis
+
+
+def _legacy_audio_stage_payload_available(
+    stage: str,
+    analysis: dict[str, Any],
+) -> bool:
+    """Infer old completed records only from payloads persisted before stage status."""
+    if stage == "beats":
+        bpm = analysis.get("bpm")
+        beats = analysis.get("beats")
+        return (
+            isinstance(bpm, (int, float))
+            and not isinstance(bpm, bool)
+            and float(bpm) > 0.0
+            and isinstance(beats, list)
+            and bool(beats)
+        )
+    if stage == "structure":
+        return bool(analysis.get("structure_segments"))
+    if stage == "spectral":
+        spectral = analysis.get("spectral_data")
+        return isinstance(spectral, dict) and bool(spectral.get("times"))
+    return False
 
 def _probe_audio_info(path: str) -> dict[str, Any]:
     """Ermittelt Audio-Dauer, Sample-Rate und Channels via ffprobe."""
