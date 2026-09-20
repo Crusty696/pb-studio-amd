@@ -39,6 +39,14 @@ class GPULockMiddleware(BaseHTTPMiddleware):
             start = time.monotonic()
             logger.info(f"GPU-Request: {request.method} {path}")
 
+            vision_lease = path == "/video/analyze"
+            if vision_lease:
+                from pb_studio.video.lmstudio_vision_wrapper import (
+                    begin_vision_task_lease,
+                )
+
+                begin_vision_task_lease()
+
             try:
                 response = await call_next(request)
             except Exception as e:
@@ -60,6 +68,13 @@ class GPULockMiddleware(BaseHTTPMiddleware):
                     status_code=503,
                     content={"error": str(e), "detail": "GPU-Operation fehlgeschlagen"},
                 )
+            finally:
+                if vision_lease:
+                    from pb_studio.video.lmstudio_vision_wrapper import (
+                        end_vision_task_lease,
+                    )
+
+                    end_vision_task_lease()
 
             elapsed = time.monotonic() - start
             logger.info(f"GPU-Request fertig: {path} ({elapsed:.2f}s)")
