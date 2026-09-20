@@ -7,6 +7,6 @@
 - [X] T005 [US2] {FR-410,FR-412} Audit and repair suggest, feedback, learning-session, stats, reset, and explain endpoint lifecycles.
 - [X] T006 [US3] {FR-413} Audit and repair HIRN WPF loading, refresh, selection, feedback, explanation, reset, cancellation, error, and project-transition state.
 - [X] T007 [OBJ1] {FR-414,TR-383} Write implementation-only evidence and update Brain records without running verification.
-- [ ] T008 [OBJ1] {TR-383} After explicit user authorization only: run focused/full automated verification and record evidence.
-- [ ] T009 [OBJ1] {TR-383} After explicit user authorization only: run live API/GUI/learning verification without destructive reset.
-- [ ] T010 [OBJ1] {FR-408,FR-409,FR-410,FR-411,FR-412,FR-413,FR-414} Create completion/QC markers only after T008–T009 pass.
+- [X] T008 [OBJ1] {TR-383} After explicit user authorization only: run focused/full automated verification and record evidence.
+- [X] T009 [OBJ1] {TR-383} After explicit user authorization only: run live API/GUI/learning verification without destructive reset.
+- [X] T010 [OBJ1] {FR-408,FR-409,FR-410,FR-411,FR-412,FR-413,FR-414} Create completion/QC markers only after T008–T009 pass.
