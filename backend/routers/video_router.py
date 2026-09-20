@@ -1427,6 +1427,12 @@ async def _analyze_video_in_project(
             })
         except Exception as publish_exc:
             logger.warning("Videoanalyse-Complete-Event fehlgeschlagen: %s", publish_exc)
+        motion = result.get("motion")
+        if isinstance(motion, dict):
+            if motion:
+                motion.setdefault("clip_id", request.clip_id)
+            else:
+                result["motion"] = None
         return VideoAnalysisResult(**result)
     except asyncio.CancelledError:
         if not outcome_persisted:
