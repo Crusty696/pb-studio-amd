@@ -615,19 +615,33 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     }
 
     public bool TrimSelectedCutStartBy(double deltaSeconds)
+        => TrimSelectedCutStartTo((SelectedEntry?.StartTime ?? 0) + deltaSeconds);
+
+    public bool TrimSelectedCutStartTo(double requestedStart)
     {
         if (SelectedEntry == null)
             return false;
 
         var entry = SelectedEntry;
         var previous = FindPreviousEntry(entry);
-        var minimumStart = Math.Max(
-            previous?.EndTime ?? 0,
-            entry.StartTime - entry.ClipStart);
+        if (previous == null && Math.Abs(entry.StartTime) < TimelineEditEpsilon)
+            return false;
+
+        var minimumStart = Math.Max(0, entry.StartTime - entry.ClipStart);
         var maximumStart = entry.EndTime - MinClipDuration;
+        if (previous != null)
+        {
+            minimumStart = Math.Max(minimumStart, previous.StartTime + MinClipDuration);
+            var previousSourceDuration = GetSourceDuration(previous);
+            if (previousSourceDuration > 0)
+                maximumStart = Math.Min(
+                    maximumStart,
+                    previous.EndTime + previousSourceDuration
+                        - previous.ClipStart - previous.Duration);
+        }
         maximumStart = Math.Max(minimumStart, maximumStart);
         var newStart = ClampRoundedTimelineTime(
-            entry.StartTime + deltaSeconds,
+            requestedStart,
             minimumStart,
             maximumStart);
         if (Math.Abs(newStart - entry.StartTime) < TimelineEditEpsilon)
@@ -641,6 +655,11 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         entry.ClipStart = Math.Max(
             0,
             RoundTimelineTime(entry.ClipStart + actualDelta));
+        if (previous != null)
+        {
+            previous.EndTime = newStart;
+            previous.NotifyPositionChanged();
+        }
         entry.NotifyPositionChanged();
         SetSelectionPositionWithoutChangingEntry(newStart);
         StatusText = $"Linke Schnittkante: {newStart:F1}s";
@@ -648,6 +667,9 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
     }
 
     public bool TrimSelectedCutEndBy(double deltaSeconds)
+        => TrimSelectedCutEndTo((SelectedEntry?.EndTime ?? 0) + deltaSeconds);
+
+    public bool TrimSelectedCutEndTo(double requestedEnd)
     {
         if (SelectedEntry == null)
             return false;
@@ -655,11 +677,18 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
         var entry = SelectedEntry;
         var next = FindNextEntry(entry);
         var minimumEnd = entry.StartTime + MinClipDuration;
-        var maximumEnd = next?.StartTime
+        var maximumEnd = next?.EndTime - MinClipDuration
             ?? (TotalDuration > 0 ? TotalDuration : double.PositiveInfinity);
+        if (next != null)
+            minimumEnd = Math.Max(minimumEnd, entry.EndTime - next.ClipStart);
+        var sourceDuration = GetSourceDuration(entry);
+        if (sourceDuration > 0)
+            maximumEnd = Math.Min(
+                maximumEnd,
+                entry.EndTime + sourceDuration - entry.ClipStart - entry.Duration);
         maximumEnd = Math.Max(minimumEnd, maximumEnd);
         var newEnd = ClampRoundedTimelineTime(
-            entry.EndTime + deltaSeconds,
+            requestedEnd,
             minimumEnd,
             maximumEnd);
         if (Math.Abs(newEnd - entry.EndTime) < TimelineEditEpsilon)
@@ -668,10 +697,29 @@ public partial class TimelineViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        var actualDelta = newEnd - entry.EndTime;
         entry.EndTime = newEnd;
+        if (next != null)
+        {
+            next.StartTime = newEnd;
+            next.ClipStart = Math.Max(0, RoundTimelineTime(next.ClipStart + actualDelta));
+            next.NotifyPositionChanged();
+        }
         entry.NotifyPositionChanged();
         StatusText = $"Rechte Schnittkante: {newEnd:F1}s";
         return true;
+    }
+
+    private static double GetSourceDuration(TimelineEntryModel entry)
+    {
+        if (entry.Metadata != null
+            && entry.Metadata.TryGetValue("source_duration", out var value)
+            && value.ValueKind == System.Text.Json.JsonValueKind.Number
+            && value.TryGetDouble(out var duration))
+        {
+            return duration;
+        }
+        return 0;
     }
 
     public void RejectUnsafeTimelineRemoval()

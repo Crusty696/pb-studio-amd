@@ -12,7 +12,7 @@ namespace PBStudio.UI.Services;
 /// Typisierter HTTP Client für Kommunikation mit dem Python FastAPI Backend.
 /// Alle Methoden sind async und blockieren das UI nicht.
 /// </summary>
-public class ApiClient : IApiClient
+public class ApiClient : IApiClient, IProviderSelectionApi
 {
     private readonly HttpClient _http;
     private readonly ILogger<ApiClient> _logger;
@@ -588,6 +588,25 @@ public class ApiClient : IApiClient
 
     public Task<AvailableModelsResponse?> GetAvailableModelsAsync(CancellationToken ct = default)
         => GetAsync<AvailableModelsResponse>("/models/available", ct);
+
+    public async Task<bool> SelectProviderAsync(
+        string provider,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await PostOwnerAuthorizedAsync<object>(
+                "/models/provider",
+                new { provider },
+                ct).ConfigureAwait(false);
+            return result != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SelectProviderAsync {Provider} fehlgeschlagen", provider);
+            return false;
+        }
+    }
 
     public Task<ModelRecommendationResponse?> GetModelRecommendationAsync(
         string task = "video_captioning",

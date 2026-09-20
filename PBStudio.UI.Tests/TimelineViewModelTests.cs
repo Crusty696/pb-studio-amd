@@ -71,7 +71,7 @@ public sealed class TimelineViewModelTests
         Assert.AreEqual(0.0, selected.ClipStart);
         Assert.IsFalse(fixture.ViewModel.TrimSelectedCutStartBy(-0.1));
         Assert.IsTrue(fixture.ViewModel.TrimSelectedCutEndBy(5));
-        Assert.AreEqual(5.0, selected.EndTime);
+        Assert.AreEqual(6.9, selected.EndTime);
         Assert.IsFalse(fixture.ViewModel.TrimSelectedCutEndBy(0.1));
     }
 

@@ -79,6 +79,9 @@ public sealed class AnalysisResumeContractTests
         viewModel.VideoClips.Add(pending);
         viewModel.SelectedClip = completed;
         viewModel.SelectedSortOption = "Name A-Z";
+        viewModel.StepAnalyzeMotion = false;
+        viewModel.StepGenerateEmbeddings = false;
+        viewModel.StepGenerateCaptions = false;
 
         var sorted = viewModel.VideoClipsView.Cast<VideoClipModel>().ToList();
         Assert.AreSame(pending, sorted[0]);
