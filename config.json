@@ -15,8 +15,8 @@
     },
     "ai": {
         "task_overrides": {
-            "video_captioning": "qwen3.5-9b",
-            "image_captioning": "qwen3.5-9b",
+            "video_captioning": "qwen2.5-vl-7b-instruct",
+            "image_captioning": "qwen2.5-vl-7b-instruct",
             "chat": "qwen3.5-9b",
             "chat_general": "qwen3.5-9b",
             "chat_tool_use": "qwen3.5-9b",

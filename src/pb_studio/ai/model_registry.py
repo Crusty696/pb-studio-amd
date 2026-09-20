@@ -396,7 +396,7 @@ class ModelRegistry:
             )
 
         configured_provider = str(
-            self._config.get("provider") or "auto"
+            self._config.get("provider") or ""
         ).strip().lower()
         preferred_provider = (
             configured_provider
