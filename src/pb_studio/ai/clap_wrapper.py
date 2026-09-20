@@ -210,7 +210,7 @@ class CLAPAnalyzer:
             raise RuntimeError("CLAP processor is not initialized")
 
         features = self._processor(
-            audios=np.asarray(audio, dtype=np.float32),
+            audio=np.asarray(audio, dtype=np.float32),
             sampling_rate=CLAP_SAMPLE_RATE,
             return_tensors="np",
         )["input_features"].astype(np.float32)
