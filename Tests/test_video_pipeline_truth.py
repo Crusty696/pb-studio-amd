@@ -60,10 +60,13 @@ def test_gpu_stage_failures_are_explicit(monkeypatch):
             pass
 
     class FailedSiglip:
-        is_ready = False
+        is_ready = True
 
         def __init__(self, *args, **kwargs):
             pass
+
+        def encode_image(self, *args, **kwargs):
+            raise RuntimeError("SigLIP inference crashed")
 
         def unload(self):
             pass

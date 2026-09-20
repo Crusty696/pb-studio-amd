@@ -188,7 +188,9 @@ class TestAudioRouter:
         assert r.status_code == 404
 
     def test_spektral_cache_mit_clip_id_crasht_nicht(self, client, fresh_state):
+        fresh_state.audio_clips[1] = {"id": 1, "path": "/test.mp3", "duration_seconds": 10.0}
         fresh_state.audio_analysis_cache[1] = {
+            "_stage_status": {"spectral": "completed"},
             "spectral_data": {
                 "clip_id": 1,
                 "bands": {"bass": [0.1, 0.2]},
@@ -455,8 +457,11 @@ class TestVideoRouter:
         assert body["motion"]["avg_motion"] == 12.5
 
     def test_motion_endpoint_akzeptiert_cache_mit_clip_id(self, client, fresh_state):
+        fresh_state.video_clips[1] = {"id": 1, "path": "/test.mp4", "duration_seconds": 10.0}
         fresh_state.video_analysis_cache[1] = {
             "clip_id": 1,
+            "stage_status": {"motion": "completed"},
+            "_stage_status": {"motion": "completed"},
             "motion": {
                 "clip_id": 1,
                 "avg_motion": 7.5,
@@ -473,6 +478,39 @@ class TestVideoRouter:
         assert body["clip_id"] == 1
         assert body["avg_motion"] == 7.5
         assert body["motion_category"] == "low"
+
+    def test_analyse_normalisiert_leeren_legacy_motion_block(self, client, fresh_state):
+        video_mod = _get_module("backend.routers.video_router")
+        clip = {
+            "id": 1, "name": "legacy", "path": "C:/legacy.mp4",
+            "duration_seconds": 10.0, "width": 1920, "height": 1080,
+            "fps": 30.0, "codec": "h264", "thumbnail_available": False,
+            "tags": [], "is_analyzed": False,
+        }
+        fresh_state.persist_video_clip(clip, project_id=1)
+        fresh_state.set_video_clip(1, clip)
+        fresh_state.video_analysis_cache[1] = {
+            "clip_id": 1,
+            "motion": {},
+            "stage_status": {"motion": "unavailable"},
+        }
+
+        from pathlib import Path as _Path
+        from unittest.mock import patch as _patch
+
+        with _patch.object(_Path, "exists", return_value=True):
+            response = client.post("/video/analyze", json={
+                "clip_id": 1,
+                "detect_scenes": False,
+                "analyze_motion": False,
+                "generate_embeddings": False,
+                "generate_captions": False,
+                "analyze_colors": False,
+                "analyze_audio_key": False,
+            })
+
+        assert response.status_code == 200
+        assert response.json()["motion"] is None
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -510,6 +548,8 @@ class TestPacingRouter:
             video_analysis_cache=None,
             loop=None,
             ui_anchors=None,
+            *args,
+            **kwargs,
         ):
             # Audit L-M7: _run_pacing_generation hat jetzt optionalen loop Param fuer
             # per-iteration pacing_progress callback (SSE).
@@ -551,7 +591,7 @@ class TestPacingRouter:
         assert fresh_state.current_audio_path == "/audio.mp3"
 
     def test_generate_leere_clips_gibt_leere_timeline(self, client, fresh_state):
-        """Pacing mit gültigen IDs aber leerem Ergebnis → leere Cut-Liste, kein Crash."""
+        """Pacing mit gültigen IDs aber leerem Ergebnis → Fail-Closed (HTTP 500)."""
         pacing_mod = _get_module("backend.routers.pacing_router")
         orig_run = pacing_mod._run_pacing_generation
         orig_pub = pacing_mod.publish_event
@@ -575,8 +615,8 @@ class TestPacingRouter:
             pacing_mod._run_pacing_generation = orig_run
             pacing_mod.publish_event = orig_pub
 
-        assert r.status_code == 200
-        assert r.json()["cut_count"] == 0
+        assert r.status_code == 500
+        assert "keine verwendbaren Schnitte" in r.json()["detail"]
 
 
 # ─────────────────────────────────────────────────────────────────

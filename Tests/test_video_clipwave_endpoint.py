@@ -1,8 +1,19 @@
-"""GET /video/clipwave/{clip_id} liefert downsampled mono peaks."""
+import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 from backend.main import app
+
+
+@pytest.fixture(autouse=True)
+def active_project(tmp_path):
+    from backend.app_state import get_app_state
+    state = get_app_state()
+    proj_dir = tmp_path / "proj"
+    proj_dir.mkdir()
+    state.current_project = {"db_project_id": 1, "path": str(proj_dir), "name": "proj"}
+    yield
+    state.current_project = None
 
 
 def test_clipwave_returns_peaks(monkeypatch):
