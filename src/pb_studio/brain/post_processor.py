@@ -43,7 +43,9 @@ def annotate_cuts_with_brain(
 ) -> list[dict[str, Any]]:
     """Annotate cuts with brain_scores + context_keys.
 
-    Cuts unter `min_confidence` werden gefiltert.
+    ``min_confidence`` wird als Diagnose gespeichert. Die fertige Timeline
+    darf dadurch keine Intervalle verlieren; die Auswahl-Schwelle greift im
+    BrainReranker vor der Post-Processor-Annotation.
 
     Args:
         embedding_cache: optional EmbeddingCache (BrainStore.cache).
@@ -82,27 +84,41 @@ def annotate_cuts_with_brain(
             logger.warning("Cross-modal projector unavailable: %s", e)
             projector = None
 
+    semantic_block_reason: Optional[str] = None
+    if projector is None:
+        semantic_block_reason = "cross_modal_projector_unavailable"
+    elif not bool(getattr(projector, "is_trained", True)):
+        semantic_block_reason = "cross_modal_projector_untrained"
+
     audio_embedding_raw = _load_audio_embedding(embedding_cache, audio_hash)
     audio_embedding = None
-    if projector is not None and audio_embedding_raw is not None:
+    if (
+        projector is not None
+        and semantic_block_reason is None
+        and audio_embedding_raw is not None
+    ):
         audio_embedding = projector.project_audio_for_hash(
             audio_hash, audio_embedding_raw
         )
 
-    video_embedding_by_clip: dict[str, np.ndarray] = {}
-    if (
-        projector is not None
-        and embedding_cache is not None
-        and video_hashes_by_clip
-    ):
+    video_embedding_raw_by_clip: dict[str, np.ndarray] = {}
+    if embedding_cache is not None and video_hashes_by_clip:
         for cid, vh in video_hashes_by_clip.items():
             emb = _load_video_embedding(embedding_cache, vh)
             if emb is None:
                 continue
-            emb = projector.project_video_for_hash(vh, emb)
-            if emb is None:
+            video_embedding_raw_by_clip[cid] = emb
+
+    video_embedding_by_clip: dict[str, np.ndarray] = {}
+    if projector is not None and semantic_block_reason is None:
+        for cid, emb in video_embedding_raw_by_clip.items():
+            projected = projector.project_video_for_hash(
+                video_hashes_by_clip.get(cid),
+                emb,
+            )
+            if projected is None:
                 continue
-            video_embedding_by_clip[cid] = emb
+            video_embedding_by_clip[cid] = projected
 
     out: list[dict[str, Any]] = []
 
@@ -115,7 +131,10 @@ def annotate_cuts_with_brain(
                 new_cut = _annotate_and_maybe_persist_cut(
                     idx, cut, bridge, resolver, adapter, subtrack_segments,
                     audio_embedding, video_embedding_by_clip,
-                    weight_store, min_confidence, persist_to_state_conn, timeline_id
+                    weight_store, min_confidence, persist_to_state_conn, timeline_id,
+                    semantic_block_reason,
+                    audio_embedding_raw is not None,
+                    set(video_embedding_raw_by_clip),
                 )
                 if new_cut is not None:
                     out.append(new_cut)
@@ -124,23 +143,20 @@ def annotate_cuts_with_brain(
             if persist_to_state_conn.in_transaction:
                 persist_to_state_conn.execute("ROLLBACK")
             logger.error(f"Failed to persist annotated cuts to state db: {e}", exc_info=True)
-            # Robustheits-Fallback: RAM-only im Fehlerfall, damit die Generierung nie fehlschlägt
-            out = []
-            for idx, cut in enumerate(cuts):
-                new_cut = _annotate_and_maybe_persist_cut(
-                    idx, cut, bridge, resolver, adapter, subtrack_segments,
-                    audio_embedding, video_embedding_by_clip,
-                    weight_store, min_confidence, None, None
-                )
-                if new_cut is not None:
-                    out.append(new_cut)
+            raise RuntimeError(
+                "Brain annotations could not be persisted; refusing transient "
+                "scores that cannot receive feedback"
+            ) from e
     else:
         # RAM-only Modus
         for idx, cut in enumerate(cuts):
             new_cut = _annotate_and_maybe_persist_cut(
                 idx, cut, bridge, resolver, adapter, subtrack_segments,
                 audio_embedding, video_embedding_by_clip,
-                weight_store, min_confidence, None, None
+                weight_store, min_confidence, None, None,
+                semantic_block_reason,
+                audio_embedding_raw is not None,
+                set(video_embedding_raw_by_clip),
             )
             if new_cut is not None:
                 out.append(new_cut)
@@ -161,6 +177,9 @@ def _annotate_and_maybe_persist_cut(
     min_confidence: float,
     conn: Optional[sqlite3.Connection],
     timeline_id: Optional[int],
+    semantic_block_reason: Optional[str],
+    audio_embedding_raw_available: bool,
+    video_embedding_raw_available: set[str],
 ) -> Optional[dict[str, Any]]:
     """Helper method: processes a single cut list entry and optionally persists it (R-2 / G-2)."""
     start = float(cut.get("start_time", 0.0))
@@ -169,6 +188,21 @@ def _annotate_and_maybe_persist_cut(
 
     sub_start, sub_end = _enclosing_subtrack(start, subtrack_segments)
     cut_meta = dict(cut.get("metadata") or {})
+    semantic_status: Optional[str] = None
+    semantic_reason: Optional[str] = None
+    video_raw_available = clip_id in video_embedding_raw_available
+    if not audio_embedding_raw_available and not video_raw_available:
+        semantic_status = "unavailable"
+        semantic_reason = "audio_and_video_embeddings_missing"
+    elif not audio_embedding_raw_available:
+        semantic_status = "partial"
+        semantic_reason = "audio_embedding_missing_or_invalid"
+    elif not video_raw_available:
+        semantic_status = "partial"
+        semantic_reason = "video_embedding_missing_or_invalid"
+    elif semantic_block_reason is not None:
+        semantic_status = "unavailable"
+        semantic_reason = semantic_block_reason
     feats = adapter.candidate_features(
         clip_id=clip_id,
         trigger_type=str(cut_meta.get("trigger_type") or ""),
@@ -178,6 +212,8 @@ def _annotate_and_maybe_persist_cut(
         segment_type=cut_meta.get("segment_type"),
         audio_embedding=audio_embedding,
         video_embedding=video_embedding_by_clip.get(clip_id),
+        semantic_status=semantic_status,
+        semantic_reason=semantic_reason,
     )
 
     ctx = resolver.resolve(
@@ -202,14 +238,12 @@ def _annotate_and_maybe_persist_cut(
 
     final_score = sum(scores.values()) / len(scores) if scores else 0.0
 
-    if feats.confidence < min_confidence:
-        return None
-
     new_cut = dict(cut)
     meta = dict(new_cut.get("metadata") or {})
     meta["brain_scores"] = scores
     meta["context_keys"] = ctx.context_keys
     meta["brain_final_score"] = round(final_score, 6)
+    meta["brain_meets_min_confidence"] = final_score >= min_confidence
     meta["bridge_values"] = bridge_values
     meta["feature_confidence"] = round(feats.confidence, 6)
     meta["feature_provenance"] = feats.feature_provenance

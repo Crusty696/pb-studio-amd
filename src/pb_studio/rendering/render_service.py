@@ -833,7 +833,9 @@ class RenderService:
 
         if include_audio:
             cmd.extend([
-                "-filter:a", f"volume={self._AAC_PRE_ENCODE_GAIN_DB:.1f}dB",
+                "-filter:a",
+                f"volume={self._AAC_PRE_ENCODE_GAIN_DB:.1f}dB,"
+                "alimiter=limit=0.89125:level=disabled",
                 "-c:a", "aac",
                 "-b:a", "320k",
             ])

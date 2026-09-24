@@ -13,25 +13,25 @@ TIMELINE_UPDATE_MAX_ENTRIES = 144_000
 class PreviewRequest(BaseModel):
     """Request: Timeline-Preview generieren."""
     # BUG-062 FIX: ge=0.0 validation
-    start_sec: float = Field(0.0, ge=0.0)
-    duration: float = Field(10.0, gt=0.0)
+    start_sec: float = Field(0.0, ge=0.0, allow_inf_nan=False)
+    duration: float = Field(10.0, gt=0.0, allow_inf_nan=False)
 
 
 class TriggerSettingsSchema(BaseModel):
     """Trigger-Einstellungen für Pacing."""
-    beat_weight: float = Field(1.0, ge=0.0, le=2.0)
-    onset_weight: float = Field(0.5, ge=0.0, le=2.0)
-    kick_weight: float = Field(1.2, ge=0.0, le=2.0)
-    snare_weight: float = Field(1.0, ge=0.0, le=2.0)
-    hihat_weight: float = Field(0.3, ge=0.0, le=2.0)
-    energy_weight: float = Field(0.8, ge=0.0, le=2.0)
-    energy_threshold: float = Field(0.6, ge=0.0, le=1.0)
-    min_clip_length: float = Field(1.0, ge=0.1)
-    max_clip_length: float = Field(8.0, ge=0.5)
-    onset_sensitivity: float = Field(0.5, ge=0.0, le=1.0)
-    clip_length_variation: float = Field(0.0, ge=0.0, le=1.0)
-    min_cut_interval: float = Field(0.5, ge=0.0)
-    max_cut_interval: float = Field(10.0, gt=0.0)
+    beat_weight: float = Field(1.0, ge=0.0, le=2.0, allow_inf_nan=False)
+    onset_weight: float = Field(0.5, ge=0.0, le=2.0, allow_inf_nan=False)
+    kick_weight: float = Field(1.2, ge=0.0, le=2.0, allow_inf_nan=False)
+    snare_weight: float = Field(1.0, ge=0.0, le=2.0, allow_inf_nan=False)
+    hihat_weight: float = Field(0.3, ge=0.0, le=2.0, allow_inf_nan=False)
+    energy_weight: float = Field(0.8, ge=0.0, le=2.0, allow_inf_nan=False)
+    energy_threshold: float = Field(0.6, ge=0.0, le=1.0, allow_inf_nan=False)
+    min_clip_length: float = Field(1.0, ge=0.1, allow_inf_nan=False)
+    max_clip_length: float = Field(8.0, ge=0.5, allow_inf_nan=False)
+    onset_sensitivity: float = Field(0.5, ge=0.0, le=1.0, allow_inf_nan=False)
+    clip_length_variation: float = Field(0.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    min_cut_interval: float = Field(0.5, ge=0.0, allow_inf_nan=False)
+    max_cut_interval: float = Field(10.0, gt=0.0, allow_inf_nan=False)
     beat_trigger_mode: str = Field("all", pattern="^(all|downbeat_only|strong_only)$")
 
     @field_validator("max_clip_length")
@@ -57,9 +57,15 @@ class PacingConfigSchema(BaseModel):
     """Request: Pacing-Konfiguration."""
     audio_clip_id: int
     video_clip_ids: list[int] = []
+    request_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9:_-]+$",
+    )
     # S-H2 (Audit V2): defense-in-depth bounds — Pacing-Engine bricht bei BPM<=0
     # mit DivisionByZero. 250 BPM ist musikalisch oberes Maximum (Speedcore).
-    expected_bpm: float = Field(120.0, gt=0.0, le=400.0)
+    expected_bpm: float = Field(120.0, gt=0.0, le=400.0, allow_inf_nan=False)
     trigger_settings: Optional[TriggerSettingsSchema] = None
     use_motion_matching: bool = False
     use_semantic_matching: bool = False
@@ -73,12 +79,12 @@ class PacingConfigSchema(BaseModel):
     # aufgerufen. Default False -> bestehende Calls bleiben unveraendert.
     use_stem_pacing: bool = False
     # S-H2 (Audit V2): duration_limit cap muss positiv sein, sonst Render-Pfad NoOp.
-    duration_limit: Optional[float] = Field(None, gt=0.0)
+    duration_limit: Optional[float] = Field(None, gt=0.0, allow_inf_nan=False)
     canvas_path: Optional[str] = Field(None, max_length=32767)
-    min_cut_interval: float = Field(0.5, ge=0.0)
+    min_cut_interval: float = Field(0.5, ge=0.0, allow_inf_nan=False)
     # Plan Phase 4: brain integration toggles
     use_brain: bool = False
-    brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0)
+    brain_min_confidence: float = Field(0.0, ge=0.0, le=1.0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def request_intervals_must_be_consistent(self) -> "PacingConfigSchema":
@@ -100,8 +106,8 @@ class PacingConfigSchema(BaseModel):
 class CutListEntrySchema(BaseModel):
     """Ein Eintrag in der Cut-Liste."""
     clip_id: str
-    start_time: float
-    end_time: float
+    start_time: float = Field(ge=0.0, allow_inf_nan=False)
+    end_time: float = Field(ge=0.0, allow_inf_nan=False)
     metadata: dict[str, Any] = {}
 
     @property
@@ -125,9 +131,9 @@ class ModeDegradationSchema(BaseModel):
 class CutListResponse(BaseModel):
     """Response: Generierte Cut-Liste."""
     cuts: list[CutListEntrySchema] = []
-    total_duration: float = 0.0
+    total_duration: float = Field(0.0, allow_inf_nan=False)
     cut_count: int = 0
-    average_cut_duration: float = 0.0
+    average_cut_duration: float = Field(0.0, allow_inf_nan=False)
     # Leer = jeder angeforderte Modus hatte eine echte Datengrundlage.
     degradations: list[ModeDegradationSchema] = []
 
@@ -137,16 +143,16 @@ class TimelineEntrySchema(BaseModel):
     clip_id: str
     clip_name: str
     file_path: str
-    start_time: float
-    end_time: float
-    clip_start: float = 0.0
+    start_time: float = Field(ge=0.0, allow_inf_nan=False)
+    end_time: float = Field(ge=0.0, allow_inf_nan=False)
+    clip_start: float = Field(0.0, ge=0.0, allow_inf_nan=False)
     trigger_type: str = ""
-    trigger_strength: float = 0.0
+    trigger_strength: float = Field(0.0, allow_inf_nan=False)
     segment_type: Optional[str] = None
     # Plan Phase 5: brain confidence + DB cut id (when use_brain=true)
-    brain_confidence: float = 0.0
+    brain_confidence: float = Field(0.0, allow_inf_nan=False)
     cut_id: Optional[int] = None
-    feature_confidence: float = 0.0
+    feature_confidence: float = Field(0.0, allow_inf_nan=False)
     semantic_status: str = "unavailable"
     semantic_reason: Optional[str] = None
     trigger_provenance: dict[str, Any] = Field(default_factory=dict)
@@ -157,7 +163,7 @@ class TimelineEntrySchema(BaseModel):
 class TimelineResponse(BaseModel):
     """Response: Aktuelle Timeline."""
     entries: list[TimelineEntrySchema] = []
-    total_duration: float = 0.0
+    total_duration: float = Field(0.0, allow_inf_nan=False)
     audio_path: Optional[str] = None
 
 
@@ -169,5 +175,5 @@ class TimelineUpdateRequest(BaseModel):
 class PreviewResponse(BaseModel):
     """Response: Preview-Datei."""
     preview_path: str
-    duration: float
+    duration: float = Field(allow_inf_nan=False)
     resolution: str = "640x360"

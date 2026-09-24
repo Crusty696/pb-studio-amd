@@ -757,6 +757,7 @@ def build_default_registry() -> ToolRegistry:
         handler=_h_audio_analyze,
         category="audio",
         destructive=True,
+        long_running=True,
     ))
     reg.register(Tool(
         name="audio.get_beats",
@@ -840,6 +841,7 @@ def build_default_registry() -> ToolRegistry:
         handler=_h_video_analyze,
         category="video",
         destructive=True,
+        long_running=True,
     ))
     reg.register(Tool(
         name="video.get_scenes",
@@ -907,6 +909,7 @@ def build_default_registry() -> ToolRegistry:
         handler=_h_pacing_preview,
         category="pacing",
         destructive=True,
+        long_running=True,
     ))
 
     # Brain -------------------------------------------------------------

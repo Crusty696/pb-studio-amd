@@ -38,11 +38,18 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _activeAnalysisCts;
     private ProjectOperationContext? _activeAnalysisProjectContext;
     private long _analysisSequence;
+    private long _importSequence;
     private int _sceneLoadSequence;
 
     private const int ThumbnailBatchSize = 12;
     private static readonly TimeSpan ThumbnailBatchPause = TimeSpan.FromMilliseconds(150);
     private readonly record struct AnalysisTarget(int Id, string Name, string Path);
+    private readonly record struct AnalysisPass(
+        string Name,
+        bool DetectScenes,
+        bool AnalyzeMotion,
+        bool GenerateEmbeddings,
+        bool GenerateCaptions);
     private readonly record struct AnalysisScope(
         long Sequence,
         ProjectOperationContext Project,
@@ -227,33 +234,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
         if (paths.Count == 0) return;
 
-        IsAnalyzingAll = true;
-        IsImporting = true;
-        ImportProgress = 0.0;
-        StatusText = $"Importiere {paths.Count} Videos von Pfad...";
-
-        try
-        {
-            var result = await _api.ImportVideosAsync(paths);
-            if (result != null)
-            {
-                StatusText = $"{result.Count} Videos erfolgreich importiert";
-                VideoImportPath = string.Empty;
-                await LoadClipsAsync();
-                WeakReferenceMessenger.Default.Send(new VideoImportedMessage());
-                WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
-                WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Fehler beim Pfad-Import: {ex.Message}";
-        }
-        finally
-        {
-            IsAnalyzingAll = false;
-            IsImporting = false;
-        }
+        await ProcessVideoImportAsync(paths);
     }
 
     private void OnSseProgressReceived(object? sender, ProgressEventArgs e)
@@ -638,6 +619,136 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     private static AnalysisTarget CaptureAnalysisTarget(VideoClipModel clip)
         => new(clip.Id, clip.Name, clip.Path);
 
+    private IReadOnlyList<AnalysisPass> BuildBatchAnalysisPasses()
+    {
+        var passes = new List<AnalysisPass>();
+        if (StepDetectScenes)
+            passes.Add(new("Szenen", true, false, false, false));
+        if (StepAnalyzeMotion)
+            passes.Add(new("Motion/RAFT", false, true, false, false));
+        if (StepGenerateEmbeddings)
+            passes.Add(new("Embedding/SigLIP", false, false, true, false));
+        if (StepGenerateCaptions)
+            passes.Add(new("Vision-Tags", false, false, false, true));
+
+        // Der bestehende Einzelrequest analysiert auch Farben und Audio-Key.
+        // Sind alle sichtbaren Optionen aus, bleibt dieser Basislauf erhalten.
+        if (passes.Count == 0)
+            passes.Add(new("Farben/Audio", false, false, false, false));
+        return passes;
+    }
+
+    private async Task RunBatchAnalysisAsync(
+        AnalysisScope scope,
+        IReadOnlyList<AnalysisTarget> targets,
+        string label)
+    {
+        var passes = BuildBatchAnalysisPasses();
+        var totalOperations = targets.Count * passes.Count;
+        var completedOperations = 0;
+        var latestResults = new Dictionary<int, VideoAnalysisResult>();
+        var requestFailures = new Dictionary<int, string>();
+
+        AnalyzeAllProgress = 0.0;
+        foreach (var pass in passes)
+        {
+            for (var index = 0; index < targets.Count; index++)
+            {
+                var target = targets[index];
+                scope.Cancellation.Token.ThrowIfCancellationRequested();
+                if (ResolveAnalysisTarget(scope, target) == null)
+                    return;
+                if (!SetActiveAnalysisClip(scope, target.Id))
+                    return;
+
+                StatusText = $"{label}: {pass.Name} {index + 1}/{targets.Count}: {target.Name}...";
+                AnalyzeAllProgress = (double)completedOperations / totalOperations * 100.0;
+                try
+                {
+                    var result = await _api.AnalyzeVideoAsync(
+                        target.Id,
+                        pass.DetectScenes,
+                        pass.AnalyzeMotion,
+                        pass.GenerateEmbeddings,
+                        pass.GenerateCaptions,
+                        scope.Cancellation.Token);
+                    scope.Cancellation.Token.ThrowIfCancellationRequested();
+                    if (!IsAnalysisScopeCurrent(scope))
+                        return;
+
+                    if (result == null)
+                    {
+                        requestFailures[target.Id] = $"{pass.Name}: leere Backend-Antwort";
+                    }
+                    else if (!ApplyAnalysisResult(scope, target, result, out _))
+                    {
+                        requestFailures[target.Id] = $"{pass.Name}: Antwort passt nicht zu Zielclip/Projekt";
+                    }
+                    else
+                    {
+                        latestResults[target.Id] = result;
+                    }
+                }
+                catch (OperationCanceledException) when (scope.Cancellation.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    requestFailures[target.Id] = $"{pass.Name}: {ex.Message}";
+                }
+                completedOperations++;
+            }
+        }
+
+        if (!IsAnalysisScopeCurrent(scope))
+            return;
+
+        var succeeded = 0;
+        var failures = new List<string>();
+        foreach (var target in targets)
+        {
+            if (requestFailures.TryGetValue(target.Id, out var requestFailure))
+            {
+                failures.Add($"{target.Name}: {requestFailure}");
+                continue;
+            }
+            if (!latestResults.TryGetValue(target.Id, out var result))
+            {
+                failures.Add($"{target.Name}: kein Analyse-Ergebnis");
+                continue;
+            }
+            if (!IsCompleted(result))
+            {
+                failures.Add($"{target.Name}: {AnalysisFailure(result)}");
+                continue;
+            }
+            succeeded++;
+        }
+
+        if (SelectedClip is { } selected
+            && latestResults.TryGetValue(selected.Id, out var selectedResult)
+            && IsCompleted(selectedResult))
+        {
+            try
+            {
+                await LoadScenesAsync(selected.Id);
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{selected.Name}: Szenenansicht {ex.Message}");
+            }
+        }
+
+        WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
+        WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
+        AnalyzeAllProgress = 100.0;
+        StatusText = $"{label} fertig: {targets.Count} verarbeitet, {succeeded} erfolgreich, "
+            + $"{targets.Count - succeeded} fehlgeschlagen."
+            + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
+        UpdateAnalyzedCounts();
+    }
+
     private bool ApplyAnalysisResult(
         AnalysisScope scope,
         AnalysisTarget target,
@@ -695,85 +806,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         if (markedClips.Count == 0 || IsAnalyzing) return;
         await ExecuteAnalysisAsync(isBatch: true, async scope =>
         {
-            var total = markedClips.Count;
-            var done = 0;
-            var succeeded = 0;
-            var failed = 0;
-            var failures = new List<string>();
-            AnalyzeAllProgress = 0.0;
-            foreach (var target in markedClips)
-            {
-                scope.Cancellation.Token.ThrowIfCancellationRequested();
-                if (ResolveAnalysisTarget(scope, target) == null)
-                    return;
-                if (!SetActiveAnalysisClip(scope, target.Id))
-                    return;
-                StatusText = $"Markierte: Analysiere {done + 1}/{total}: {target.Name}...";
-                AnalyzeAllProgress = (double)done / total * 100.0;
-                try
-                {
-                    var result = await _api.AnalyzeVideoAsync(
-                        target.Id,
-                        StepDetectScenes,
-                        StepAnalyzeMotion,
-                        StepGenerateEmbeddings,
-                        StepGenerateCaptions,
-                        scope.Cancellation.Token
-                    );
-                    scope.Cancellation.Token.ThrowIfCancellationRequested();
-                    if (!IsAnalysisScopeCurrent(scope))
-                        return;
-                    if (result == null)
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: leere Backend-Antwort");
-                    }
-                    else if (!ApplyAnalysisResult(scope, target, result, out var appliedClip))
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: Antwort passt nicht zu Zielclip/Projekt");
-                    }
-                    else if (!IsCompleted(result))
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: {AnalysisFailure(result)}");
-                    }
-                    else
-                    {
-                        succeeded++;
-                        if (SelectedClip?.Id == target.Id
-                            && ReferenceEquals(SelectedClip, appliedClip))
-                        {
-                            try
-                            {
-                                await LoadScenesAsync(target.Id);
-                            }
-                            catch (Exception ex)
-                            {
-                                failures.Add($"{target.Name}: Szenenansicht {ex.Message}");
-                            }
-                        }
-                    }
-                }
-                catch (OperationCanceledException) when (scope.Cancellation.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    failed++;
-                    failures.Add($"{target.Name}: {ex.Message}");
-                }
-                done++;
-            }
-            if (!IsAnalysisScopeCurrent(scope))
-                return;
-            WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
-            WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
-            AnalyzeAllProgress = 100.0;
-            StatusText = $"Markierte fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
-                + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
-            UpdateAnalyzedCounts();
+            await RunBatchAnalysisAsync(scope, markedClips, "Markierte");
         });
     }
 
@@ -839,6 +872,21 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
 
     private async Task ProcessVideoImportAsync(List<string> files)
     {
+        if (IsImporting || files.Count == 0)
+            return;
+
+        ProjectOperationContext projectContext;
+        try
+        {
+            projectContext = _projectService.CaptureOperationContext();
+        }
+        catch (InvalidOperationException)
+        {
+            StatusText = "Import nicht gestartet: kein stabiler Projektkontext.";
+            return;
+        }
+
+        var importSequence = Interlocked.Increment(ref _importSequence);
         IsAnalyzingAll = true;
         IsImporting = true;
         ImportProgress = 0.0;
@@ -872,6 +920,12 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
             // setzt ImportProgress automatisch waehrend ImportVideosAsync laeuft.
             var result = await _api.ImportVideosAsync(validFiles);
 
+            if (importSequence != Volatile.Read(ref _importSequence)
+                || !_projectService.IsCurrent(projectContext))
+            {
+                return;
+            }
+
             if (result != null)
             {
                 StatusText = $"{result.Count} Videos erfolgreich importiert";
@@ -887,14 +941,29 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 StatusText = "Import fehlgeschlagen (Backend meldet Fehler)";
             }
         }
+        catch (OperationCanceledException)
+        {
+            if (importSequence == Volatile.Read(ref _importSequence)
+                && _projectService.IsCurrent(projectContext))
+            {
+                StatusText = "Import abgebrochen.";
+            }
+        }
         catch (Exception ex)
         {
-            StatusText = $"Kritischer Import-Fehler: {ex.Message}";
+            if (importSequence == Volatile.Read(ref _importSequence)
+                && _projectService.IsCurrent(projectContext))
+            {
+                StatusText = $"Kritischer Import-Fehler: {ex.Message}";
+            }
         }
         finally
         {
-            IsAnalyzingAll = false;
-            IsImporting = false;
+            if (importSequence == Volatile.Read(ref _importSequence))
+            {
+                IsAnalyzingAll = false;
+                IsImporting = false;
+            }
         }
     }
 
@@ -1096,89 +1165,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         var targets = VideoClips.Select(CaptureAnalysisTarget).ToList();
         await ExecuteAnalysisAsync(isBatch: true, async scope =>
         {
-            var total = targets.Count;
-            var done = 0;
-            var succeeded = 0;
-            var failed = 0;
-            var failures = new List<string>();
-            AnalyzeAllProgress = 0.0;
-
-            foreach (var target in targets)
-            {
-                scope.Cancellation.Token.ThrowIfCancellationRequested();
-                if (ResolveAnalysisTarget(scope, target) == null)
-                    return;
-                if (!SetActiveAnalysisClip(scope, target.Id))
-                    return;
-
-                StatusText = $"Analysiere {done + 1}/{total}: {target.Name}...";
-                AnalyzeAllProgress = (double)done / total * 100;
-
-                try
-                {
-                    var result = await _api.AnalyzeVideoAsync(
-                        target.Id,
-                        StepDetectScenes,
-                        StepAnalyzeMotion,
-                        StepGenerateEmbeddings,
-                        StepGenerateCaptions,
-                        scope.Cancellation.Token
-                    );
-                    scope.Cancellation.Token.ThrowIfCancellationRequested();
-                    if (!IsAnalysisScopeCurrent(scope))
-                        return;
-                    if (result == null)
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: leere Backend-Antwort");
-                    }
-                    else if (!ApplyAnalysisResult(scope, target, result, out var appliedClip))
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: Antwort passt nicht zu Zielclip/Projekt");
-                    }
-                    else if (!IsCompleted(result))
-                    {
-                        failed++;
-                        failures.Add($"{target.Name}: {AnalysisFailure(result)}");
-                    }
-                    else
-                    {
-                        succeeded++;
-                        if (SelectedClip?.Id == target.Id
-                            && ReferenceEquals(SelectedClip, appliedClip))
-                        {
-                            try
-                            {
-                                await LoadScenesAsync(target.Id);
-                            }
-                            catch (Exception ex)
-                            {
-                                failures.Add($"{target.Name}: Szenenansicht {ex.Message}");
-                            }
-                        }
-                    }
-                }
-                catch (OperationCanceledException) when (scope.Cancellation.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    failed++;
-                    failures.Add($"{target.Name}: {ex.Message}");
-                }
-                done++;
-            }
-
-            if (!IsAnalysisScopeCurrent(scope))
-                return;
-            WeakReferenceMessenger.Default.Send(new VideoLibraryRefreshMessage());
-            WeakReferenceMessenger.Default.Send(new MediaLibraryRefreshMessage());
-            AnalyzeAllProgress = 100;
-            StatusText = $"Batch fertig: {done} verarbeitet, {succeeded} erfolgreich, {failed} fehlgeschlagen."
-                + (failures.Count > 0 ? $" Fehler: {string.Join(" | ", failures.Take(3))}" : "");
-            UpdateAnalyzedCounts();
+            await RunBatchAnalysisAsync(scope, targets, "Batch");
         });
     }
 
@@ -1250,6 +1237,7 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
     {
         CancelActiveLoad();
         CancelActiveAnalysis();
+        Interlocked.Increment(ref _importSequence);
         Interlocked.Increment(ref _loadVersion);
         Interlocked.Increment(ref _sceneLoadSequence);
         _reloadQueued = false;
@@ -1264,6 +1252,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         DeleteSelectedCommand.NotifyCanExecuteChanged();
         AnalyzeMarkedCommand.NotifyCanExecuteChanged();
         StatusText = "Kein Projekt geöffnet";
+        CurrentStep = string.Empty;
+        CurrentStepIndex = 0;
+        CurrentStepTotal = 0;
+        CurrentClipProgress = 0.0;
+        ImportProgress = 0.0;
+        SelectedClipScenes.Clear();
+        IsLoadingScenes = false;
+        IsImporting = false;
         IsLoadingClips = false;
         IsLoadingThumbnails = false;
         IsAnalyzing = false;
@@ -1278,11 +1274,14 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
         _isShuttingDown = true;
         CancelActiveLoad();
         CancelActiveAnalysis();
+        Interlocked.Increment(ref _importSequence);
         Interlocked.Increment(ref _loadVersion);
         Interlocked.Increment(ref _sceneLoadSequence);
         _reloadQueued = false;
         IsLoadingClips = false;
         IsLoadingThumbnails = false;
+        IsLoadingScenes = false;
+        IsImporting = false;
     }
 
     private CancellationTokenSource ReplaceActiveLoadCts()

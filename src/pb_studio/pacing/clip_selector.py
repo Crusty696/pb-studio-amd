@@ -13,6 +13,7 @@ Motion-Analyzer: Nutzt RAFT ONNX wenn verfügbar, sonst Librosa-Fallback.
 from __future__ import annotations
 
 import logging
+import math
 import random
 from collections import OrderedDict, deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -206,6 +207,7 @@ class ClipSelector:
         self.strategy = strategy
         self.motion_tolerance = motion_tolerance
         self.use_semantic = use_semantic
+        self.use_motion_matching = True
         self.blacklist_percentage = max(0.0, min(1.0, blacklist_percentage))
 
         # Round-Robin Zustand
@@ -611,10 +613,15 @@ class ClipSelector:
             min_confidence=self.brain_min_confidence,
         )
         if not scored:
+            audio_state = "normal"
+            if current_time is not None:
+                audio_state = self.get_audio_state_at_time(current_time)
             selected = self._fallback_select(
                 candidates,
                 trigger_strength,
                 trigger_type,
+                current_time=current_time,
+                audio_state=audio_state,
             )
             fallback_details = dict(self._selection_details)
             self._record_selection_details(
@@ -784,6 +791,19 @@ class ClipSelector:
         diff = abs(motion_norm - intensity)
         return 1.0 - diff
 
+    @staticmethod
+    def _normalize_motion_score(value: Any) -> float:
+        """Normalize persisted RAFT scalars to the selector's 0..1 domain."""
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return 0.5
+        if not math.isfinite(score):
+            return 0.5
+        if score > 1.0:
+            score /= 30.0
+        return max(0.0, min(1.0, score))
+
     def _embedding_from_vector_store(self, target_absolute: str):
         """
         Holt den Vektor eines Clips direkt aus dem VectorStore.
@@ -909,16 +929,21 @@ class ClipSelector:
                 _key_score_fn = None
 
         for clip in clips:
-            clip_motion = clip.get("motion_score", 0.5)
+            clip_motion = self._normalize_motion_score(clip.get("motion_score", 0.5))
             motion_diff = abs(target_motion - clip_motion)
-            motion_score = 1.0 - min(motion_diff / (self.motion_tolerance + 0.01), 1.0)
+            motion_score = 1.0
+            if self.use_motion_matching:
+                motion_score = 1.0 - min(
+                    motion_diff / (self.motion_tolerance + 0.01),
+                    1.0,
+                )
             motion_curve_match_score = None
 
             # L-M3: motion_curve-aware boost. trigger_strength dient als Proxy für
             # die aktuelle Audio-Intensität (energy-curve nicht direkt im Selector
             # verfügbar — bewusst keine position-aware-Logic hardcodet).
             mc = clip.get("motion_curve") if isinstance(clip, dict) else None
-            if mc:
+            if self.use_motion_matching and mc:
                 motion_curve_boost = self._motion_curve_score(
                     mc,
                     float(clip.get("duration", 1.0) or 1.0),
@@ -929,7 +954,7 @@ class ClipSelector:
 
             # Roter Faden: Continuity-Bonus für ähnliche Motion zum letzten Clip
             continuity_bonus = 0.0
-            if self._last_clip_path:
+            if self.use_motion_matching and self._last_clip_path:
                 last_motion = self._last_clip_motion_score
                 motion_continuity = 1.0 - abs(last_motion - clip_motion)
                 continuity_bonus = motion_continuity * self._continuity_weight * 0.5
@@ -938,7 +963,7 @@ class ClipSelector:
             audio_state_adjustment = 0.0
 
             # Stufe 2: Audio-Heuristik Scoring-Verstärker
-            if audio_state == "break":
+            if self.use_motion_matching and audio_state == "break":
                 if clip_motion < 0.3:
                     total_score += 0.25
                     audio_state_adjustment += 0.25
@@ -948,7 +973,7 @@ class ClipSelector:
                 else:
                     total_score -= 0.50
                     audio_state_adjustment -= 0.50
-            elif audio_state == "drop":
+            elif self.use_motion_matching and audio_state == "drop":
                 if clip_motion >= 0.6:
                     total_score += 0.40
                     audio_state_adjustment += 0.40
@@ -1057,7 +1082,9 @@ class ClipSelector:
             clip_id=str(best_clip.get("id", "unknown")),
             clip_path=best_clip.get("file_path", best_clip.get("path", "")),
             score=best_score,
-            motion_score=best_clip.get("motion_score", 0.5),
+            motion_score=self._normalize_motion_score(
+                best_clip.get("motion_score", 0.5)
+            ),
         )
 
     def _select_semantic(

@@ -42,4 +42,11 @@ public record ToolCallInfo(
     string? ArgumentsJson,
     string? ResultJson = null,
     bool IsCompleted = false,
-    string? Error = null);
+    string? Error = null,
+    string? Id = null);
+
+public record ChatHistoryEntry(string Role, string Content);
+
+public record ChatHistoryResponse(
+    IReadOnlyList<ChatHistoryEntry> Entries,
+    int Count);

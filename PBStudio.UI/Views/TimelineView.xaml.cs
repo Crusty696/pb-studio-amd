@@ -26,6 +26,8 @@ public partial class TimelineView : UserControl
     private string? _loadedSourcePath;
     private double _loadedClipStart;
     private double _loadedClipEnd;
+    private bool _isRenderedPreview;
+    private double _renderedPreviewTimelineStart;
     private bool _mediaOpened;
     private bool _pendingSeek;
     private bool _wasPlayingBeforeReload;
@@ -200,7 +202,7 @@ public partial class TimelineView : UserControl
         }
     }
 
-    private void OnPreviewReady(string previewPath)
+    private void OnPreviewReady(string previewPath, double timelineStart, double duration)
     {
         Dispatcher.Invoke(() =>
         {
@@ -211,8 +213,11 @@ public partial class TimelineView : UserControl
                 PreviewPlayer.Source = new Uri(previewPath, UriKind.Absolute);
                 _loadedSourcePath = previewPath;
                 _loadedClipStart = 0.0;
-                _loadedClipEnd = 0.0;
+                _loadedClipEnd = duration;
+                _isRenderedPreview = true;
+                _renderedPreviewTimelineStart = timelineStart;
                 _mediaOpened = false;
+                _wasPlayingBeforeReload = true;
                 PreviewEmptyText.Visibility = Visibility.Collapsed;
                 PreviewPlayer.Play();
             }
@@ -225,6 +230,10 @@ public partial class TimelineView : UserControl
 
     private void ViewModel_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (_isRenderedPreview
+            && e.PropertyName == nameof(TimelineViewModel.SelectedTimelinePosition))
+            return;
+
         if (e.PropertyName is nameof(TimelineViewModel.SelectedEntry)
             or nameof(TimelineViewModel.SelectedTimelinePosition)
             or nameof(TimelineViewModel.CanPreviewSelectedClip))
@@ -562,7 +571,6 @@ public partial class TimelineView : UserControl
                 var deltaSec = totalDeltaX / _viewModel.PixelsPerSecond;
 
                 var newStart = _originalStartTime + deltaSec;
-                var newClipStart = _originalClipStart + deltaSec;
 
                 // SHIFT deaktiviert Snap (gleiche Konvention wie Drag)
                 if (Keyboard.Modifiers != ModifierKeys.Shift)
@@ -571,39 +579,14 @@ public partial class TimelineView : UserControl
                     var snapped = _snapEngine.FindSnapPoint(newStart, allSnapPoints);
                     if (snapped != null)
                     {
-                        var snapDelta = snapped.Time - newStart;
                         newStart = snapped.Time;
-                        newClipStart += snapDelta;
                         snapTime = snapped.Time;
                         isSnapped = true;
                     }
                 }
 
-                // Constraints: StartTime >= 0, min Dauer, Nachbar-Grenzen
-                if (newStart < 0)
-                {
-                    newStart = 0;
-                }
-                if (_originalEndTime - newStart < MinClipDuration)
-                {
-                    newStart = _originalEndTime - MinClipDuration;
-                }
-
-                // Nachbar-Clamping vornehmen
-                newStart = Math.Max(ClampStartToNeighbours(_draggedEntry, newStart, _originalEndTime - newStart), newStart);
-
-                // ClipStart-Limitierung: darf nicht kleiner als 0 werden (sonst wuerden wir vor den Videoanfang trimmen)
-                var actualDelta = newStart - _originalStartTime;
-                var finalClipStart = _originalClipStart + actualDelta;
-                if (finalClipStart < 0)
-                {
-                    finalClipStart = 0;
-                    newStart = _originalStartTime - _originalClipStart;
-                }
-
-                _draggedEntry.StartTime = newStart;
-                _draggedEntry.EndTime = _originalEndTime;
-                _draggedEntry.ClipStart = finalClipStart;
+                _viewModel.SelectedEntry = _draggedEntry;
+                _viewModel.TrimSelectedCutStartTo(newStart);
             }
             // L-TI-2: Trim-Right — bewegt die rechte Kante. StartTime + ClipStart
             // bleiben fix, nur EndTime aendert sich (= Duration aendert sich).
@@ -626,23 +609,8 @@ public partial class TimelineView : UserControl
                     }
                 }
 
-                // Min-Dauer enforce: EndTime - StartTime >= MIN
-                if (newEnd - _originalStartTime < MinClipDuration)
-                    newEnd = _originalStartTime + MinClipDuration;
-
-                // Clamp end so we don't overlap the next clip.
-                if (_viewModel != null)
-                {
-                    double maxEnd = double.PositiveInfinity;
-                    foreach (var other in _viewModel.TimelineEntries)
-                    {
-                        if (ReferenceEquals(other, _draggedEntry)) continue;
-                        if (other.StartTime >= _draggedEntry.StartTime + 0.0001 && other.StartTime < maxEnd)
-                            maxEnd = other.StartTime;
-                    }
-                    if (newEnd > maxEnd) newEnd = maxEnd;
-                }
-                _draggedEntry.EndTime = newEnd;
+                _viewModel.SelectedEntry = _draggedEntry;
+                _viewModel.TrimSelectedCutEndTo(newEnd);
             }
 
             // Visual Feedback: Snap Line
@@ -831,6 +799,8 @@ public partial class TimelineView : UserControl
         _loadedSourcePath = sourcePath;
         _loadedClipStart = clipStart;
         _loadedClipEnd = clipEnd;
+        _isRenderedPreview = false;
+        _renderedPreviewTimelineStart = 0.0;
         PreviewEmptyText.Visibility = Visibility.Collapsed;
         PreviewStatusText.Text = $"Bereit: {System.IO.Path.GetFileName(sourcePath)}";
 
@@ -857,6 +827,8 @@ public partial class TimelineView : UserControl
         _loadedSourcePath = null;
         _loadedClipStart = 0;
         _loadedClipEnd = 0;
+        _isRenderedPreview = false;
+        _renderedPreviewTimelineStart = 0.0;
         _mediaOpened = false;
         _pendingSeek = false;
         _playbackTimer.Stop();
@@ -899,11 +871,22 @@ public partial class TimelineView : UserControl
         var relativePos = PreviewPlayer.Position.TotalSeconds - _loadedClipStart;
         if (relativePos >= 0)
         {
-            _viewModel.SelectedTimelinePosition = _viewModel.SelectedEntry?.StartTime + relativePos ?? 0;
+            _viewModel.SelectedTimelinePosition = _isRenderedPreview
+                ? _renderedPreviewTimelineStart + relativePos
+                : _viewModel.SelectedEntry?.StartTime + relativePos ?? 0;
         }
 
         if (PreviewPlayer.Position.TotalSeconds >= _loadedClipEnd - 0.05)
         {
+            if (_isRenderedPreview)
+            {
+                PreviewPlayer.Pause();
+                _playbackTimer.Stop();
+                PreviewPlayer.Position = TimeSpan.Zero;
+                PreviewStatusText.Text = "Preview beendet";
+                return;
+            }
+
             TimelineEntryModel? nextEntry = null;
             if (_viewModel.SelectedEntry != null)
             {

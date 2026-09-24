@@ -290,7 +290,12 @@ def _with_selection(
         shared_system_memory_bytes=adapter.shared_system_memory_bytes,
         is_software=adapter.is_software,
         is_discrete=adapter.is_discrete,
-        high_performance_preferred=adapter.high_performance_preferred,
+        # Selection policy is authoritative when Windows' DXGI preference
+        # points at an integrated adapter but PB Studio deliberately selects
+        # the discrete AMD adapter with highest VRAM.
+        high_performance_preferred=(
+            adapter.high_performance_preferred or adapter.is_discrete
+        ),
         selection_policy=policy,
         selection_reason=reason,
     )

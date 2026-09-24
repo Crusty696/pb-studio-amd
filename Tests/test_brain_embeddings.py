@@ -15,12 +15,14 @@ import pytest
 from pb_studio.brain import BRIDGE_AXES
 from pb_studio.brain.brain_service import BrainService
 from pb_studio.brain.cross_modal_projector import (
+    CrossModalProjector,
     DEFAULT_AUDIO_DIM,
     DEFAULT_AUDIO_MODEL_NAME,
     DEFAULT_AUDIO_MODEL_VERSION,
     DEFAULT_VIDEO_DIM,
     DEFAULT_VIDEO_MODEL_NAME,
     DEFAULT_VIDEO_MODEL_VERSION,
+    PROJECTOR_ARTIFACT_VERSION,
 )
 from pb_studio.brain.loader_cache import clear_default_loader_cache
 from pb_studio.brain.post_processor import (
@@ -141,6 +143,9 @@ def test_annotate_uses_embeddings_when_cache_provided(brain_svc, tmp_path):
             "end_time": 1.0,
             "metadata": {"trigger_type": "kick", "trigger_strength": 1.0},
         }]
+        projector = CrossModalProjector()
+        projector.artifact_version = PROJECTOR_ARTIFACT_VERSION
+        projector.applied_event_uuids = ("event-1",)
         out = annotate_cuts_with_brain(
             cuts,
             weight_store=brain_svc.weights,
@@ -151,11 +156,14 @@ def test_annotate_uses_embeddings_when_cache_provided(brain_svc, tmp_path):
             embedding_cache=cache,
             audio_hash="ahash",
             video_hashes_by_clip={"clip_1": "vhash1"},
+            cross_modal_projector=projector,
         )
 
         assert len(out) == 1
         scores = out[0]["metadata"]["brain_scores"]
-        assert set(scores.keys()) == set(BRIDGE_AXES)
+        assert set(scores.keys()).issubset(BRIDGE_AXES)
+        assert "kick_weight" in scores
+        assert "semantic_match_weight" in scores
         assert scores["semantic_match_weight"] > 0.0
     finally:
         cache.close()

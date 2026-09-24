@@ -50,7 +50,7 @@ def test_export_maps_source_audio_without_synthesizing_silence(
     assert command.count(str(source_audio)) == 1
     assert command[command.index("-map") + 1] == "0:v"
     assert command[command.index("-map", command.index("-map") + 1) + 1] == "1:a"
-    assert command[command.index("-filter:a") + 1] == "volume=-2.0dB"
+    assert command[command.index("-filter:a") + 1] == "volume=-2.0dB,alimiter=limit=0.89125:level=disabled"
     assert command[command.index("-t") + 1] == f"{FULL_LENGTH_SECONDS:.3f}"
     forbidden_silence_sources = ("anullsrc", "aevalsrc", "apad", "adelay")
     assert not any(

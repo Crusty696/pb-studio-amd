@@ -3,6 +3,44 @@
 
 ---
 
+## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
+
+### Fixed & Verified
+- **Full Test Suite:** 1854 passed, 12 skipped, 0 failures across the entire Python repository (`pytest Tests/ -q`).
+- **C# / WPF:** 70 passed in `dotnet test PBStudio.UI.Tests`; Release build clean with 0 warnings, 0 errors (`dotnet build -c Release`).
+- **SDD Governance:** 31 passed in `test_validate_sdd.py` and `test_audit_sdd_gate.py`; merge ancestry check allows fast-forward commits post-PR merge.
+- **Specs 00030–00034 Completed:** All 5 functional completion workspaces (Pacing 00030, AI Models/Chat 00031, Brain 00032, Video/Vision 00033, Audio 00034) verified and marked with `.completed` and `.qc-passed`.
+- **Exclusive LLM Provider & Standby (ADR 2026-09-20):** Aligned model inventory receipts and persistence test suites with exclusive provider mode. ChatAgent intra-provider candidate retry verified; vision failover retryability and task lock restored.
+- **Audio & Video Project Leases:** Test suites updated for project context requirement on clipwave, thumbstrip, motion, and onset/spectral endpoints.
+- **Iron Rules R1–R8:** Verified with 0 violations across all source code.
+
+## 2026-09-20 - PR #32 review corrections
+
+### Fixed & live-start verified
+- LM Studio/Ollama inference is now globally exclusive: the MODELLE tab requires a deliberate provider choice, switching unloads both runtimes into standby, and the registry/test/activation paths reject the inactive provider.
+- Chat and Brain narrator release stale automatic model pins before capability fallback; explicit narrator model overrides no longer inherit a pinned provider.
+- Timeline trims move the adjacent boundary and preserve continuity; source duration is exposed to the editor for safe clamping.
+- Chat history transport failures keep persisted context protected and expose an explicit reload action.
+- Ollama pull invalidates model inventory before publishing terminal success.
+- Legacy completed audio analyses remain readable when their persisted stage payload exists.
+- WPF Release build passed with 0 warnings/errors; backend health and the current WPF executable completed one live startup/render smoke. Scenario-specific provider, pull, legacy-project, and timeline interaction checks were not executed.
+- Exclusive provider switching was subsequently verified through the WPF UI with project `12345`: LM Studio → Ollama → LM Studio, both runtimes confirmed at zero resident models, and all 14 tabs passed the GUI release gate.
+- Vision analysis now holds one provider/model lease for the complete `/video/analyze` request plus the short GUI batch gap; provider changes, activations, and model smoke tests return 409 while that lease is active.
+- The newest usable installed Qwen vision model, `qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive`, is persisted as the LM Studio override for vision, chat, and Brain narration tasks.
+- Full WPF functional run with project `12345`: audio analysis returned 139.7 BPM/E minor/6205 beats; a fresh uncached clip completed scenes, RAFT, 1152-dim SigLIP, and three Qwen 3.6 vision calls (HTTP 200) with 5 colors/10 tags; real chat returned the requested live marker through Qwen 3.6. Both runtimes ended with zero loaded models. Evidence: `logs/gui_functional_12345_20260920_041747/complete_functional_run.log`.
+
+## 2026-09-19 - AUDIO source-functional completion (Spec 00034)
+
+### Fixed (verification deferred by user directive)
+- Audio list/read/delete/waveform endpoints now hold the initiating project lease; deletes cross the guarded commit boundary.
+- Beat, onset, structure, and spectral reads reject unavailable/partial stages instead of fabricating successful empty results.
+- Waveform failures are explicit and sample-rate metadata is no longer hard-coded; invalid non-finite ffprobe metadata is rejected.
+- BeatNet-to-librosa fallback preserves caller duration bounds.
+- Audio response collections use isolated Pydantic factories instead of mutable class defaults.
+- Audio Library and Media Import now deduplicate paths/rows, continue per-file failures, correlate import progress to the current project, suppress stale results, reset full selection/progress state on transitions, and block duplicate import/stem commands.
+- `separator.py` remained unchanged; validated marker/resume/project-guard callers were retained.
+- Tests, builds, GUI/audio/provider runs and QC markers remain intentionally unexecuted until explicit authorization.
+
 ## 2026-09-14 - Backlog-Abschluss, OBJ-76 Live-Runtime-Wahrheit, reale Frontend-QC
 
 ### Fixed & Verified
@@ -891,5 +929,14 @@ pytest: 511 passed / 8 skipped / 0 failed. dotnet build Release: clean.
 
 ### Open (User-Action)
 - AMD Adrenalin Driver Update fuer h264_amf (siehe test-report/2026-05-14-AMD-DRIVER-UPDATE-required.md)
+
+## 2026-09-19 — VIDEO/VISION source-fix phase (Spec 00033)
+
+- Added project leases to thumbstrip, clip-wave, scene, motion, and video-delete routes; stale project work now fails closed.
+- Scene/motion reads no longer fabricate successful empty/static data for unavailable stages.
+- RAFT and SigLIP sessions remain resident across model-centric clip passes; real failures discard the affected cached owner.
+- Non-finite motion/embedding results are rejected before persistence; missing DirectML capability is explicit `unavailable`.
+- Video imports deduplicate canonical input paths; WPF import/progress publication is project- and sequence-bound.
+- Verification intentionally deferred by user instruction; no PASS/QC claim.
 
 ---

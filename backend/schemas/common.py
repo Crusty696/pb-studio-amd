@@ -1,6 +1,7 @@
 """Gemeinsame Schemas für alle Router."""
 
 from pydantic import BaseModel, Field
+import math
 from typing import Optional, Any
 from enum import Enum
 
@@ -83,7 +84,7 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
           - warnings: nicht-kritische Probleme (z.B. kurze Cuts, fehlender file_path)
           - errors:   kritische Fehler die ein Rendering blockieren:
               * end_time <= start_time
-              * Überlappende Cuts (> 10ms Toleranz)
+              * Lücken oder überlappende Cuts (> 10ms Toleranz)
               * Timeline > Audio-Dauer (> 0.5s Toleranz)
 
     L-TI-5 (Audit Timeline-Integrity 2026-05-11): Overlap + Audio-Overflow
@@ -97,9 +98,19 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
     if not entries:
         return warnings, errors
 
+    invalid_time_values = False
     for i, entry in enumerate(entries):
         start = entry.get("start_time", 0.0)
         end = entry.get("end_time", 0.0)
+        if (
+            not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or not math.isfinite(float(start))
+            or not math.isfinite(float(end))
+        ):
+            errors.append(f"Cut {i}: ungültige oder nicht-endliche Zeitwerte")
+            invalid_time_values = True
+            continue
         if end <= start:
             errors.append(f"Cut {i}: end_time ({end}) <= start_time ({start})")
         elif end - start < 0.1:
@@ -108,11 +119,20 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
         if not fp:
             warnings.append(f"Cut {i}: Kein file_path")
 
-    # Überlappungs-Check — L-TI-5: jetzt Error statt Warning.
+    if invalid_time_values:
+        return warnings, errors
+
+    # Kontinuitäts-Check — L-TI-5: Lücken/Überlappungen sind Renderfehler.
     # Toleranz 10ms (relaxierter als der frueher 1ms-Wert), damit Sub-
     # Millisekunden-Float-Drift aus Beat-Berechnungen nicht zum Block fuehrt,
     # aber echte UI-Drag-Overlaps verlaesslich erkannt werden.
     sorted_entries = sorted(entries, key=lambda e: e.get("start_time", 0.0))
+    first_start = sorted_entries[0].get("start_time", 0.0)
+    if first_start < -0.01:
+        errors.append(f"Cut 0: negativer Timeline-Start ({first_start:.3f})")
+    elif first_start > 0.01:
+        errors.append(f"Cut 0: Lücke vor Timeline-Start ({first_start:.3f}s)")
+
     for i in range(1, len(sorted_entries)):
         prev = sorted_entries[i - 1]
         curr = sorted_entries[i]
@@ -123,6 +143,11 @@ def validate_timeline(entries: list[dict], audio_duration: float | None = None) 
         if curr_start < prev_end - 0.01:  # 10ms Toleranz
             errors.append(
                 f"Cut {i}: Überlappung mit vorherigem Cut "
+                f"(prev_end={prev_end:.3f}, curr_start={curr_start:.3f})"
+            )
+        elif curr_start > prev_end + 0.01:
+            errors.append(
+                f"Cut {i}: Lücke zum vorherigen Cut "
                 f"(prev_end={prev_end:.3f}, curr_start={curr_start:.3f})"
             )
 

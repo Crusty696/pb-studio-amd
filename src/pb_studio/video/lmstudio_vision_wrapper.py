@@ -70,6 +70,15 @@ _WARM_WINDOW_SECONDS = 600.0
 _WARM_MODELS: dict[tuple[str, str], float] = {}
 _LOAD_BUDGET_SPENT: set[tuple[str, str]] = set()
 _TASK_UNAVAILABLE_UNTIL: dict[str, float] = {}
+# Ein erfolgreicher Vision-Kandidat bleibt fuer den gesamten Prozess an
+# Task+Modus gebunden. Dadurch waehlt die Clip-/Frame-Schleife nicht bei jedem
+# Bild erneut und LM Studio kann genau dieses Modell warm halten. Ein Wechsel
+# erfolgt nur nach einem echten Provider-/Timeout-Fehler; inhaltlich leere
+# Antworten eines einzelnen Frames sind kein Grund, das Modell zu entladen.
+_PINNED_TASK_MODELS: dict[tuple[str, str], tuple[str, str]] = {}
+_TASK_LEASE_COUNTS: dict[str, int] = {}
+_TASK_LEASE_IDLE_UNTIL: dict[str, float] = {}
+_TASK_LEASE_IDLE_GRACE_SECONDS = 15.0
 _COLD_START_STATE_LOCK = threading.RLock()
 _COLD_START_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 _COLD_START_LOCK_POLL_SECONDS = 0.05
@@ -98,6 +107,59 @@ def _ist_warm(model_key: tuple[str, str]) -> bool:
 def _cold_start_lock_for(model_key: tuple[str, str]) -> threading.Lock:
     with _COLD_START_STATE_LOCK:
         return _COLD_START_LOCKS.setdefault(model_key, threading.Lock())
+
+
+def begin_vision_task_lease(task: str = DEFAULT_TASK) -> None:
+    """Protect one complete video request from external model switches."""
+    with _COLD_START_STATE_LOCK:
+        _TASK_LEASE_COUNTS[task] = _TASK_LEASE_COUNTS.get(task, 0) + 1
+        _TASK_LEASE_IDLE_UNTIL.pop(task, None)
+
+
+def end_vision_task_lease(task: str = DEFAULT_TASK) -> None:
+    """Keep a short inter-request grace so GUI batches retain one model."""
+    with _COLD_START_STATE_LOCK:
+        remaining = max(0, _TASK_LEASE_COUNTS.get(task, 0) - 1)
+        if remaining:
+            _TASK_LEASE_COUNTS[task] = remaining
+            return
+        _TASK_LEASE_COUNTS.pop(task, None)
+        _TASK_LEASE_IDLE_UNTIL[task] = (
+            time.monotonic() + _TASK_LEASE_IDLE_GRACE_SECONDS
+        )
+
+
+def active_vision_task_lease(task: str = DEFAULT_TASK) -> dict[str, Any] | None:
+    """Return the active/pending batch lease, if model switching is unsafe."""
+    with _COLD_START_STATE_LOCK:
+        active = _TASK_LEASE_COUNTS.get(task, 0)
+        idle_until = _TASK_LEASE_IDLE_UNTIL.get(task, 0.0)
+        if active <= 0 and idle_until <= time.monotonic():
+            _TASK_LEASE_IDLE_UNTIL.pop(task, None)
+            return None
+        pinned = next(
+            (
+                value
+                for (pinned_task, _mode), value in _PINNED_TASK_MODELS.items()
+                if pinned_task == task
+            ),
+            (None, None),
+        )
+        return {
+            "task": task,
+            "active_requests": active,
+            "provider": pinned[0],
+            "model": pinned[1],
+            "grace_seconds": max(0.0, idle_until - time.monotonic()),
+        }
+
+
+def reset_pinned_vision_models(task: str | None = None) -> None:
+    """Apply a deliberate post-batch model/provider choice to the next job."""
+    with _COLD_START_STATE_LOCK:
+        for key in list(_PINNED_TASK_MODELS):
+            if task is None or key[0] == task:
+                _PINNED_TASK_MODELS.pop(key, None)
 
 
 async def _acquire_cold_start_lock(lock: threading.Lock) -> None:
@@ -349,6 +411,22 @@ async def _async_extract_tags(
     ai_cfg = _load_ai_config()
     registry = ModelRegistry(ai_cfg)
 
+    pin_key = (task, mode)
+    with _COLD_START_STATE_LOCK:
+        pinned_provider, pinned_model = _PINNED_TASK_MODELS.get(
+            pin_key,
+            (None, None),
+        )
+    if model_override:
+        requested_model = model_override
+        requested_provider = None
+    elif pinned_model:
+        requested_model = pinned_model
+        requested_provider = pinned_provider
+    else:
+        requested_model = None
+        requested_provider = None
+
     class _NoUsableTagsError(RuntimeError):
         pass
 
@@ -468,13 +546,22 @@ async def _async_extract_tags(
             task,
             mode,
             _call,
+            # Eine leere/ungeeignete Antwort kann am Bildinhalt liegen. Sie
+            # darf keinen Modellwechsel mitten im Clip oder Batch ausloesen;
+            # der Aufrufer nutzt fuer genau diesen Frame Moondream als Fallback.
             is_retryable=lambda exc: isinstance(
                 exc,
                 (asyncio.TimeoutError, LMStudioError, _NoUsableTagsError),
             ),
             is_provider_failure=is_provider_failure,
-            explicit_model=model_override,
+            explicit_model=requested_model,
+            explicit_provider=requested_provider,
         )
+        with _COLD_START_STATE_LOCK:
+            _PINNED_TASK_MODELS[pin_key] = (
+                receipt.provider,
+                receipt.model_id,
+            )
         return tags, receipt.model_id
     except ModelFailoverExhaustedError as exc:
         with _COLD_START_STATE_LOCK:
@@ -633,7 +720,10 @@ def clear_tag_cache() -> None:
         _WARM_MODELS.clear()
         _LOAD_BUDGET_SPENT.clear()
         _TASK_UNAVAILABLE_UNTIL.clear()
+        _PINNED_TASK_MODELS.clear()
         _COLD_START_LOCKS.clear()
+        _TASK_LEASE_COUNTS.clear()
+        _TASK_LEASE_IDLE_UNTIL.clear()
 
 
 # Backwards-compatibility-Alias: alter Name funktioniert noch (Deprecated).
@@ -647,6 +737,10 @@ __all__ = [
     "extract_tags_via_lmstudio",
     "extract_tags_via_ollama",  # deprecated alias
     "clear_tag_cache",
+    "begin_vision_task_lease",
+    "end_vision_task_lease",
+    "active_vision_task_lease",
+    "reset_pinned_vision_models",
     "DEFAULT_TASK",
     "DEFAULT_MODE",
     "DEFAULT_PROMPT",

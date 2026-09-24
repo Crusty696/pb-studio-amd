@@ -1,4 +1,4 @@
-"""LLM-Provider-Factory fuer Hybrid Ollama + LM Studio Setup.
+"""LLM-Provider-Factory fuer exklusiv gewähltes Ollama oder LM Studio.
 
 Beide Backends sprechen OpenAI-kompatible APIs:
 - LM Studio: http://localhost:1234/v1  (Default)
@@ -7,7 +7,8 @@ Beide Backends sprechen OpenAI-kompatible APIs:
 Der gemeinsame Client ist ``LMStudioClient`` — er funktioniert via base_url
 gegen beide Backends. Die Factory waehlt anhand der Config-Direktive
 ``config.ai.provider`` zwischen den base_urls und unterstuetzt einen
-"auto"-Modus mit Fallback (LM Studio first, Ollama bei Connection-Error).
+Legacy-"auto" wird sicher auf LM Studio normalisiert; paralleler Provider-
+Fallback ist bewusst deaktiviert, damit nie beide Runtimes Modelle resident halten.
 
 Usage::
 
@@ -17,12 +18,11 @@ Usage::
         models = await client.list_models()
 
 Config-Keys (config.json::ai):
-- provider: "lmstudio" | "ollama" | "auto"  (default: "auto")
+- provider: "lmstudio" | "ollama"
 - lmstudio_base_url: str  (default: http://localhost:1234/v1)
 - ollama_base_url: str  (default: http://localhost:11434/v1)
 
-User-Direktive 2026-05-19: "ollama und lmStudio nutzen koennen" — private app,
-hybrid Modus default-on.
+Beide Dienste dürfen erreichbar sein; nur der bewusst gewählte Provider inferiert.
 """
 from __future__ import annotations
 
@@ -58,9 +58,9 @@ def _load_config() -> dict:
 
 
 def get_provider() -> str:
-    """Liefert konfigurierten Provider — auto/lmstudio/ollama."""
+    """Liefert den exklusiv gewählten Provider; legacy ``auto`` wird LM Studio."""
     p = _load_config().get("provider", "auto").lower().strip()
-    return p if p in VALID_PROVIDERS else "auto"
+    return p if p in {"lmstudio", "ollama"} else "lmstudio"
 
 
 def get_base_url(provider: Optional[str] = None) -> str:
@@ -85,9 +85,7 @@ def get_llm_client(
 ) -> LMStudioClient:
     """Erstellt LMStudioClient gegen den gewaehlten Provider.
 
-    Bei provider="auto" wird LM Studio default-base_url genutzt — fuer Fallback
-    auf Ollama sollten Caller ``is_alive()`` pruefen und bei False
-    ``get_llm_client(provider="ollama")`` erneut aufrufen.
+    Legacy provider="auto" wird auf LM Studio normalisiert.
 
     Args:
         provider: Override fuer Config — "lmstudio" | "ollama" | "auto".
@@ -117,7 +115,7 @@ async def get_alive_client(
     client_timeout_seconds: float = DEFAULT_GENERATION_TIMEOUT,
     required_capability: str = "chat",
 ) -> Optional[LMStudioClient]:
-    """Auto-Mode mit Fallback: LM Studio first, Ollama wenn LM Studio down.
+    """Prüft ausschließlich den bewusst gewählten Provider.
 
     Liefert einen frischen Client mit Generierungs-Timeout
     (``client_timeout_seconds``) oder None wenn beide Provider unerreichbar
@@ -129,11 +127,7 @@ async def get_alive_client(
     mit ReadTimeout abbrechen (Reasoning-Modelle denken laenger als 5s).
     """
     provider = get_provider()
-    candidates: list[str]
-    if provider == "auto":
-        candidates = ["lmstudio", "ollama"]
-    else:
-        candidates = [provider]
+    candidates = [provider]
 
     async def _probe(candidate: str) -> tuple[str, bool]:
         probe = get_llm_client(

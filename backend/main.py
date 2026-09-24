@@ -280,6 +280,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         else:
             logger.info("  Recovery-DIRTY-Marker: noch keine Basisgeneration")
 
+    # Beide externen LLM-Dienste duerfen laufen, beginnen aber ohne residenten
+    # Runner. Erst die erste Aufgabe laedt beim bewusst gewaehlten Provider.
+    try:
+        from .routers.models_router import unload_all_llm_runtimes_for_standby
+
+        unloaded = await unload_all_llm_runtimes_for_standby()
+        logger.info(
+            "  LLM-Standby hergestellt: lmstudio=%d ollama=%d entladen",
+            len(unloaded["lmstudio"]),
+            len(unloaded["ollama"]),
+        )
+    except Exception as e:  # noqa: BLE001 - Start bleibt fuer Diagnose erreichbar
+        logger.warning("  LLM-Standby konnte nicht vollstaendig hergestellt werden: %s", e)
+
     # Provider-/Modellwahrheit einmal pro Backendstart neu erfassen. Der
     # Service bündelt LM-Studio- und Ollama-Abfragen und publiziert atomar.
     try:

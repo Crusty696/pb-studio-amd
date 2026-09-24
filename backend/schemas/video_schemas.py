@@ -20,7 +20,7 @@ class VideoClipInfo(BaseModel):
     fps: float = 30.0
     codec: str = ""
     thumbnail_available: bool = False
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     is_analyzed: bool = False
     # L-N3: SHA256 media_hash fuer Embedding-Cache-Reuse. None wenn Hashing
     # fehlgeschlagen oder Clip aus aelterer DB ohne Hash geladen wurde.
@@ -76,19 +76,19 @@ class VideoAnalysisResult(BaseModel):
     clip_id: int
     scene_count: int = 0
     avg_motion: float = 0.0
-    dominant_colors: list[str] = []
-    tags: list[str] = []
+    dominant_colors: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     embedding_dim: int = 0  # SigLIP; 0 = kein Embedding vorhanden
     embedding_samples: int = 0  # L-M8: Anzahl der gemittelten Frames
     has_embedding: bool = False
-    scenes: list["SceneInfo"] = []
+    scenes: list["SceneInfo"] = Field(default_factory=list)
     motion: Optional["MotionData"] = None
     # L-K4: Tonart des Audio-Tracks (vom Video extrahiert via ffmpeg + Krumhansl-Kessler).
     # None wenn Video keinen Audio-Track hat oder Detection fehlschlaegt.
     # Wird im Pacing fuer use_key_matching (Camelot-Wheel Compatibility) genutzt.
     audio_key: Optional[str] = None
     tag_source: Optional[str] = None
-    mood_tags: list[str] = []
+    mood_tags: list[str] = Field(default_factory=list)
     avg_brightness: float = 0.5
     avg_saturation: float = 0.5
     avg_color_temp: float = 0.0
@@ -113,9 +113,9 @@ class MotionData(BaseModel):
     # von MotionData(**motion) silent gedropped weil das Feld im Schema fehlte.
     # Bricht /video/motion/{id} REST + UI MOTION-Card PEAK-Anzeige.
     peak_motion: float = 0.0
-    motion_curve: list[float] = []
+    motion_curve: list[float] = Field(default_factory=list)
     # peak_frames: dict-Liste von MotionAnalyzer ({"frame_index": int, "confidence": float})
-    peak_frames: list[dict] = []
+    peak_frames: list[dict] = Field(default_factory=list)
     motion_category: str = "medium"  # low, medium, high, extreme
 
 

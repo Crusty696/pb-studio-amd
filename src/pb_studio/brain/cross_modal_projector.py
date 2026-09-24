@@ -86,6 +86,7 @@ class CrossModalProjector:
         self.pending_events: dict[str, dict] = {}
         self.project_checkpoints: dict[str, dict] = {}
         self.inventory_digest = ""
+        self._loaded_from_artifact = False
 
         self._init_random_matrices()
         # R-Brain-08
@@ -94,6 +95,13 @@ class CrossModalProjector:
         self._proj_cache_misses = 0
         if self.weights_path and self.weights_path.is_file():
             self._load_weights()
+
+    @property
+    def is_trained(self) -> bool:
+        """Whether semantic similarity is backed by learned matrices."""
+        if self.artifact_version == PROJECTOR_ARTIFACT_VERSION:
+            return bool(self.applied_event_uuids)
+        return self._loaded_from_artifact
 
     # ---------- public projection API ----------
 
@@ -272,6 +280,7 @@ class CrossModalProjector:
         clone.pending_events = json.loads(json.dumps(self.pending_events))
         clone.project_checkpoints = json.loads(json.dumps(self.project_checkpoints))
         clone.inventory_digest = self.inventory_digest
+        clone._loaded_from_artifact = self._loaded_from_artifact
         clone.clear_projection_cache()
         return clone
 
@@ -475,6 +484,7 @@ class CrossModalProjector:
             self.pending_events = pending_events
             self.project_checkpoints = project_checkpoints
             self.inventory_digest = inventory_digest
+            self._loaded_from_artifact = True
             if artifact_version == PROJECTOR_ARTIFACT_VERSION:
                 self._validate_v2_metadata()
             self._projection_cache.clear()

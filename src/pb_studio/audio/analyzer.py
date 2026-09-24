@@ -97,7 +97,39 @@ class AudioAnalyzer:
             logger.info(f"Running BeatNet on: {analyze_path}")
 
             # BeatNet processing
-            output = self.estimator.process(analyze_path)
+            try:
+                output = self.estimator.process(analyze_path)
+            except Exception as beatnet_error:
+                # BeatNet/madmom can fail on very short or irregular clips
+                # before producing a rectangular result. Keep analysis usable
+                # through librosa instead of returning a hard error.
+                logger.warning(
+                    "BeatNet failed; using librosa beat fallback: %s",
+                    beatnet_error,
+                )
+                try:
+                    import librosa
+
+                    fallback_audio, fallback_sr = librosa.load(
+                        analyze_path, sr=22050, mono=True
+                    )
+                    _, fallback_frames = librosa.beat.beat_track(
+                        y=fallback_audio,
+                        sr=fallback_sr,
+                    )
+                    fallback_times = librosa.frames_to_time(
+                        fallback_frames,
+                        sr=fallback_sr,
+                    )
+                    output = np.column_stack(
+                        (
+                            fallback_times,
+                            np.ones(len(fallback_times), dtype=float),
+                        )
+                    )
+                except Exception as fallback_error:
+                    logger.warning("Librosa beat fallback failed: %s", fallback_error)
+                    output = np.empty((0, 2), dtype=float)
 
             # RMS-Energie extrahieren (vor Temp-Cleanup!)
             energy_curve = []

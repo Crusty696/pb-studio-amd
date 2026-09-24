@@ -1,5 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PBStudio.UI.Services;
@@ -24,7 +28,48 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         Closing += OnClosing;
+        AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnUiButtonClicked), true);
+        AddHandler(Selector.SelectionChangedEvent, new SelectionChangedEventHandler(OnUiSelectionChanged), true);
+        AddHandler(UIElement.LostKeyboardFocusEvent, new KeyboardFocusChangedEventHandler(OnUiInputCommitted), true);
         _logger.LogInformation("MainWindow initialisiert.");
+    }
+
+    private static string ControlLabel(FrameworkElement element)
+    {
+        var accessibleName = AutomationProperties.GetName(element);
+        if (!string.IsNullOrWhiteSpace(accessibleName))
+            return accessibleName;
+        if (!string.IsNullOrWhiteSpace(element.Name))
+            return element.Name;
+        return "(ohne Namen)";
+    }
+
+    private void OnUiButtonClicked(object sender, RoutedEventArgs e)
+    {
+        if (e.Source is FrameworkElement element)
+            _logger.LogInformation(
+                "UI-Aktion: Klick; Control={Control}; Name={Name}",
+                element.GetType().Name,
+                ControlLabel(element));
+    }
+
+    private void OnUiSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source is Selector selector)
+            _logger.LogInformation(
+                "UI-Aktion: Auswahl; Control={Control}; Name={Name}; Hinzu={Added}; Entfernt={Removed}",
+                selector.GetType().Name,
+                ControlLabel(selector),
+                e.AddedItems.Count,
+                e.RemovedItems.Count);
+    }
+
+    private void OnUiInputCommitted(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (e.Source is TextBox textBox)
+            _logger.LogInformation(
+                "UI-Aktion: Eingabe abgeschlossen; Control=TextBox; Name={Name}",
+                ControlLabel(textBox));
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

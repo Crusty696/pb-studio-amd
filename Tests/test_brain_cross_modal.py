@@ -33,6 +33,7 @@ from pb_studio.brain.cross_modal_projector import (
     DEFAULT_VIDEO_MODEL_NAME,
     DEFAULT_VIDEO_MODEL_VERSION,
     DEFAULT_VIDEO_DIM,
+    PROJECTOR_ARTIFACT_VERSION,
 )
 from pb_studio.brain.post_processor import (
     _load_audio_embedding,
@@ -223,6 +224,8 @@ def test_post_processor_uses_projector_for_clap_siglip_dim_mismatch(
                     model_version=DEFAULT_VIDEO_MODEL_VERSION)
 
         projector = CrossModalProjector(seed=42)
+        projector.artifact_version = PROJECTOR_ARTIFACT_VERSION
+        projector.applied_event_uuids = ("event-dim-mismatch",)
         cuts = [{"clip_id": "clip_1", "start_time": 0.0, "end_time": 1.0,
                  "metadata": {"trigger_type": "kick", "trigger_strength": 1.0}}]
         out = annotate_cuts_with_brain(
@@ -239,7 +242,8 @@ def test_post_processor_uses_projector_for_clap_siglip_dim_mismatch(
         )
         assert len(out) == 1
         scores = out[0]["metadata"]["brain_scores"]
-        assert set(scores.keys()) == set(BRIDGE_AXES)
+        assert set(scores.keys()).issubset(BRIDGE_AXES)
+        assert "semantic_match_weight" in scores
         sm = scores["semantic_match_weight"]
         assert 0.0 < sm <= 1.0
     finally:
@@ -252,8 +256,14 @@ def test_auto_projector_resolved_when_cache_provided(
 ):
     """Wenn cross_modal_projector=None und cache gegeben, soll der
     post_processor get_default_projector(weights_path=cache.parent/...) nutzen."""
+    from pb_studio.brain.cross_modal_projector import reset_default_projector
     cache = _make_cache(tmp_path)
     state = _make_state_conn(tmp_path)
+    wp = Path(cache.embeddings_dir).parent / "cross_modal_projector.npz"
+    p = CrossModalProjector(seed=42, weights_path=wp)
+    p.applied_event_uuids = ("event-auto-1",)
+    p.save()
+    reset_default_projector()
     try:
         a_emb = np.random.RandomState(1).rand(DEFAULT_AUDIO_DIM).astype(np.float32)
         v_emb = np.random.RandomState(2).rand(DEFAULT_VIDEO_DIM).astype(np.float32)
@@ -279,9 +289,12 @@ def test_auto_projector_resolved_when_cache_provided(
             # cross_modal_projector NICHT gesetzt -> auto-resolve
         )
         assert len(out) == 1
-        sm = out[0]["metadata"]["brain_scores"]["semantic_match_weight"]
+        scores = out[0]["metadata"]["brain_scores"]
+        assert "semantic_match_weight" in scores
+        sm = scores["semantic_match_weight"]
         assert 0.0 < sm <= 1.0
     finally:
+        reset_default_projector()
         cache.close()
         state.close()
 

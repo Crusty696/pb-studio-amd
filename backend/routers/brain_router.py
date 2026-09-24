@@ -50,6 +50,12 @@ router = APIRouter(prefix="/brain", tags=["Brain"])
 _pending_reset_tokens: dict[str, tuple[float, str]] = {}
 
 
+def _project_identity_for_context(context: ProjectOperationContext) -> str:
+    path = str(context.project_root.resolve()).rstrip("\\/")
+    normalized = path.replace("/", "\\").upper()
+    return "path:" + normalized
+
+
 def _acquire_project_state_lease(
     svc,
     context: ProjectOperationContext | None = None,
@@ -149,6 +155,14 @@ async def feedback(
     svc = get_brain_service()
     try:
         async with state.project_operation() as context:
+            if (
+                req.project_identity is not None
+                and req.project_identity != _project_identity_for_context(context)
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Project changed before Brain feedback was accepted",
+                )
             lease = _acquire_project_state_lease(svc, context)
             try:
                 feedback_logger = svc.feedback_logger_for_lease(lease)
@@ -307,9 +321,24 @@ async def learning_session(
                 for r in rows:
                     meta = _json.loads(r[5]) if r[5] else {}
                     ck = meta.get("context_keys") or [""]
+                    scores = _json.loads(r[4]) if r[4] else {}
+                    axis_status = meta.get("brain_axis_status") or {}
+                    strict_status = meta.get("brain_axis_status_version") == 1
+                    available_axes = tuple(
+                        axis
+                        for axis in scores
+                        if (
+                            not strict_status
+                            or (
+                                isinstance(axis_status.get(axis), dict)
+                                and axis_status[axis].get("status") == "available"
+                            )
+                        )
+                    )
                     cuts_for_samp.append(CutForSampling(
                         cut_id=int(r[0]),
                         context_keys=ck,
+                        available_axes=available_axes,
                     ))
                     by_id[int(r[0])] = r
 
@@ -694,11 +723,15 @@ async def explain(
                     contributions: list[BrainAxisContribution] = []
                     cold_axes: list[str] = []
                     for axis, score in scores.items():
-                        posterior = float(
-                            svc.weights.get_posterior_mean(
-                                axis,
-                                context_keys,
-                            )
+                        (
+                            posterior,
+                            effective_samples,
+                            _level,
+                            _key,
+                            is_cold_start,
+                        ) = svc.weights.get_posterior_diagnostics(
+                            axis,
+                            context_keys,
                         )
 
                         if raw_bridge_values:
@@ -716,12 +749,7 @@ async def explain(
                                 bridge_value = 0.0
                             current_score = score
 
-                        n_samples = _n_samples_at_most_specific(
-                            svc,
-                            axis,
-                            context_keys,
-                        )
-                        if n_samples < 10:
+                        if is_cold_start:
                             cold_axes.append(axis)
 
                         contributions.append(BrainAxisContribution(
@@ -735,7 +763,7 @@ async def explain(
                                 ),
                                 6,
                             ),
-                            n_samples=n_samples,
+                            n_samples=int(round(effective_samples)),
                         ))
                     contributions.sort(
                         key=lambda contribution: contribution.score,
@@ -746,15 +774,20 @@ async def explain(
                         contributions[-top_n:][::-1]
                         if len(contributions) >= top_n else []
                     )
-                    return top, bottom, cold_axes
+                    current_final = (
+                        sum(item.score for item in contributions)
+                        / len(contributions)
+                        if contributions else 0.0
+                    )
+                    return top, bottom, cold_axes, current_final
 
-                top_axes, bottom_axes, cold_start = await asyncio.to_thread(
+                (
+                    top_axes,
+                    bottom_axes,
+                    cold_start,
+                    final_score,
+                ) = await asyncio.to_thread(
                     _read_contributions,
-                )
-
-                final_score = (
-                    sum(scores.values()) / len(scores)
-                    if scores else 0.0
                 )
 
                 # ---- LLM-Narrator (optional) ----
@@ -818,16 +851,3 @@ async def explain(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ProjectContextUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-def _n_samples_at_most_specific(svc, axis: str, context_keys: list[str]) -> int:
-    """Wie viele Klicks sind in den spezifischsten verfuegbaren Bucket fuer
-    (axis, context) geflossen? Spiegelt WeightStore.get_posterior_mean Backoff.
-    """
-    for level in range(len(context_keys) - 1, -1, -1):
-        row = svc.weights.get_alpha_beta(axis, level, context_keys[level])
-        if row is None:
-            continue
-        alpha, beta = row
-        return int(round(alpha + beta))
-    return 0

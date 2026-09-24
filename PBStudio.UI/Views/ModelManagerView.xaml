@@ -37,6 +37,22 @@
                 Padding="14,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Command="{Binding SwitchProviderCommand}"
+                            CommandParameter="lmstudio"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Padding="8,4" Height="28" Margin="0,0,6,0"
+                            ToolTip="LM Studio exklusiv wählen; beide Runtimes werden vorher entladen."
+                            AutomationProperties.Name="LM Studio als Provider wählen">
+                        <TextBlock Text="LM Studio" FontSize="11"/>
+                    </Button>
+                    <Button Command="{Binding SwitchProviderCommand}"
+                            CommandParameter="ollama"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Padding="8,4" Height="28" Margin="0,0,12,0"
+                            ToolTip="Ollama exklusiv wählen; beide Runtimes werden vorher entladen."
+                            AutomationProperties.Name="Ollama als Provider wählen">
+                        <TextBlock Text="Ollama" FontSize="11"/>
+                    </Button>
                     <TextBlock VerticalAlignment="Center" FontSize="11"
                                Foreground="{StaticResource AbletonTextDim}"
                                Margin="0,0,12,0"
@@ -352,13 +368,13 @@
                                             <!-- GPU-Test Button links -->
                                             <Button DockPanel.Dock="Left"
                                                     Command="{Binding TestCommand}"
+                                                    IsEnabled="{Binding IsProviderSelected}"
                                                     Style="{StaticResource MaterialDesignFlatButton}"
                                                     Foreground="{StaticResource AbletonAccent}"
                                                     Padding="6,2" Height="26"
-                                                    IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
-                                                    AutomationProperties.Name="{Binding Name, StringFormat=DirectML-Test für {0}}"
-                                                    AutomationProperties.HelpText="Führt eine kurze, providergebundene Test-Inferenz auf der ausgewählten AMD-GPU aus."
-                                                    ToolTip="DirectML GPU-Smoke-Test&#x0a;• Was es macht: Führt eine kleine Test-Inferenz auf deiner AMD-Grafikkarte über die DirectML-Schnittstelle aus.&#x0a;• Wozu es dient: Verifiziert blitzschnell, ob das Modell auf deiner GPU fehlerfrei und beschleunigt läuft.&#x0a;• Wann &amp; wie nutzen: Direkt nach der ersten Installation oder Aktivierung eines Modells ausführen, um Kompatibilitätsprobleme sofort aufzudecken.">
+                                                    AutomationProperties.Name="{Binding Name, StringFormat=Provider-Test für {0}}"
+                                                    AutomationProperties.HelpText="Führt eine kurze, providergebundene Chat- oder Vision-Inferenz aus."
+                                                    ToolTip="Provider-Inferenztest&#x0a;• Prüft das exakte Modell beim angezeigten Provider.&#x0a;• Vision-Modelle erhalten ein Testbild; Chat-Modelle einen kurzen Textprompt.&#x0a;• LM Studio und Ollama verwalten ihre jeweilige Hardware-Runtime selbst.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <icon:PackIconMaterial Kind="PlayCircleOutline" Width="14" Height="14"
                                                                            VerticalAlignment="Center" Margin="0,0,4,0"
@@ -369,19 +385,19 @@
                                                                  Width="12" Height="12" Margin="0,0,4,0"
                                                                  Foreground="{StaticResource AbletonAccent}"
                                                                  Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                                    <TextBlock Text="GPU-Test" FontSize="11" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Inferenz-Test" FontSize="11" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
 
                                             <!-- Aktivieren Button rechts (ausblenden, wenn bereits aktiv) -->
                                             <Button DockPanel.Dock="Right"
                                                     Command="{Binding ActivateCommand}"
+                                                    IsEnabled="{Binding IsProviderSelected}"
                                                     Foreground="Black"
                                                     Background="{StaticResource AbletonGreen}"
                                                     BorderBrush="{StaticResource AbletonGreen}"
                                                     Padding="12,2" Height="26"
                                                     HorizontalAlignment="Right"
-                                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
                                                     AutomationProperties.Name="{Binding Name, StringFormat=Modell {0} aktivieren}"
                                                     AutomationProperties.HelpText="Aktiviert dieses Modell als bevorzugtes Hauptmodell und bestätigt die persistierte Auswahl."
                                                     ToolTip="Als Hauptmodell aktivieren&#x0a;• Was es macht: Setzt das gewählte Modell als Standard-Modell für alle zukünftigen Chat- und Analyse-Aufgaben fest.&#x0a;• Wozu es dient: Stellt sicher, dass PB Studio für den KI-Chat und die Director-Analysen immer dein bevorzugtes Modell anspricht.&#x0a;• Wann &amp; wie nutzen: Anklicken, wenn du ein anderes Modell (z.B. ein größeres für bessere Qualität oder ein kleineres für mehr Performance) standardmäßig verwenden möchtest.">

@@ -14,8 +14,10 @@ import asyncio
 from copy import deepcopy
 import json
 import logging
+import math
 import os
 from pathlib import Path
+import threading
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -56,6 +58,9 @@ CAPTION_PRIMARY_PROGRESS_END_PERCENT = 75.0
 CAPTION_PROGRESS_END_PERCENT = 85.0
 CAPTION_PROGRESS_TERMINAL_MARGIN = 0.1
 SIGLIP_EMBEDDING_DIM = 1152
+_VIDEO_MODEL_CACHE_LOCK = threading.RLock()
+_CACHED_MOTION_ANALYZER: Any = None
+_CACHED_SIGLIP_WRAPPER: Any = None
 VIDEO_ANALYSIS_STATES = {"completed", "partial", "failed"}
 VIDEO_ANALYSIS_STAGE_FIELDS = {
     "scenes": ("scene_count", "scenes"),
@@ -71,6 +76,55 @@ VIDEO_ANALYSIS_STAGE_FIELDS = {
     "captions": ("tags", "tag_source"),
     "audio_key": ("audio_key",),
 }
+
+
+def _capability_is_unavailable(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return (
+        "stage unavailable" in message
+        or "model initialization failed" in message
+        or "directml model initialization failed" in message
+    )
+
+
+def _get_cached_motion_analyzer() -> Any:
+    """Keep RAFT resident across the complete model-centric clip pass."""
+    global _CACHED_MOTION_ANALYZER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        if _CACHED_MOTION_ANALYZER is None:
+            from pb_studio.video.raft import MotionAnalyzer
+
+            _CACHED_MOTION_ANALYZER = MotionAnalyzer()
+        return _CACHED_MOTION_ANALYZER
+
+
+def _discard_cached_motion_analyzer() -> None:
+    global _CACHED_MOTION_ANALYZER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        analyzer = _CACHED_MOTION_ANALYZER
+        _CACHED_MOTION_ANALYZER = None
+    if analyzer is not None:
+        analyzer.unload()
+
+
+def _get_cached_siglip_wrapper() -> Any:
+    """Keep SigLIP resident until the VRAM manager evicts its owned session."""
+    global _CACHED_SIGLIP_WRAPPER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        if _CACHED_SIGLIP_WRAPPER is None:
+            from pb_studio.ai.siglip_wrapper import SigLIPWrapper
+
+            _CACHED_SIGLIP_WRAPPER = SigLIPWrapper(lazy_load=False)
+        return _CACHED_SIGLIP_WRAPPER
+
+
+def _discard_cached_siglip_wrapper() -> None:
+    global _CACHED_SIGLIP_WRAPPER
+    with _VIDEO_MODEL_CACHE_LOCK:
+        wrapper = _CACHED_SIGLIP_WRAPPER
+        _CACHED_SIGLIP_WRAPPER = None
+    if wrapper is not None:
+        wrapper.unload()
 
 
 def _empty_video_analysis_result(clip_id: int) -> dict[str, Any]:
@@ -588,6 +642,7 @@ async def _import_videos_in_project(
     imported = []
     supported = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".wmv", ".flv"}
     input_total = len(request.paths)
+    seen_paths: set[str] = set()
 
     async def _publish_input_progress(
         input_index: int,
@@ -615,6 +670,15 @@ async def _import_videos_in_project(
                 f"Uebersprungen {input_index}/{input_total}: unsicherer Pfad",
             )
             continue
+        canonical_key = os.path.normcase(str(video_path))
+        if canonical_key in seen_paths:
+            logger.info("Doppelter Video-Importeintrag uebersprungen: %s", video_path)
+            await _publish_input_progress(
+                input_index,
+                f"Uebersprungen {input_index}/{input_total}: Duplikat",
+            )
+            continue
+        seen_paths.add(canonical_key)
         if video_path.suffix.lower() not in supported:
             logger.warning(f"Format nicht unterstützt: {video_path.suffix}")
             await _publish_input_progress(
@@ -902,12 +966,24 @@ async def get_thumbstrip(
     n: int = 8,
     state: AppState = Depends(get_app_state),
 ) -> ThumbstripResponse:
-    clip = state.get_video_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
-    n = max(1, min(32, n))
     try:
-        frames = await asyncio.to_thread(_extract_thumbstrip, clip["path"], n, (160, 90))
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            n = max(1, min(32, n))
+            frames = await asyncio.to_thread(
+                _extract_thumbstrip,
+                clip["path"],
+                n,
+                (160, 90),
+                clip.get("duration_seconds"),
+            )
+            state.require_project_context_current(context)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Thumbstrip-Erzeugung fehlgeschlagen: {e}")
 
@@ -922,10 +998,20 @@ async def get_thumbstrip(
     return ThumbstripResponse(clip_id=clip_id, count=len(data_urls), frames=data_urls)
 
 
-def _extract_thumbstrip(video_path: str, n: int, size: tuple) -> list:
+def _extract_thumbstrip(
+    video_path: str,
+    n: int,
+    size: tuple,
+    duration_seconds: Optional[float] = None,
+) -> list:
     """Indirection so tests can monkeypatch the heavy work."""
     from pb_studio.video.frame_extractor import FrameGrabber
-    return FrameGrabber().extract_thumbnail_strip(video_path, n=n, size=size)
+    return FrameGrabber().extract_thumbnail_strip(
+        video_path,
+        n=n,
+        size=size,
+        duration_seconds=duration_seconds,
+    )
 
 
 @router.get(
@@ -942,12 +1028,18 @@ async def get_clipwave(
     n: int = 256,
     state: AppState = Depends(get_app_state),
 ) -> ClipwaveResponse:
-    clip = state.get_video_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
-    n = max(1, min(2048, n))
     try:
-        peaks = await asyncio.to_thread(_extract_clip_peaks, clip["path"], n)
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            n = max(1, min(2048, n))
+            peaks = await asyncio.to_thread(_extract_clip_peaks, clip["path"], n)
+            state.require_project_context_current(context)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Peaks-Erzeugung fehlgeschlagen: {e}")
     return ClipwaveResponse(clip_id=clip_id, count=len(peaks), peaks=peaks)
@@ -970,10 +1062,16 @@ async def delete_clip(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Loescht einen einzelnen Video-Clip aus In-Memory + SQLite + FAISS-Cache."""
-    if state.delete_video_clip(clip_id):
-        await publish_log(f"Video-Clip {clip_id} geloescht", level="info", source="video.delete")
-        return DeleteResponse(deleted_count=1, not_found_ids=[])
-    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    try:
+        async with state.project_operation() as context:
+            with state.project_commit(context):
+                deleted = state.delete_video_clip(clip_id)
+            if deleted:
+                await publish_log(f"Video-Clip {clip_id} geloescht", level="info", source="video.delete")
+                return DeleteResponse(deleted_count=1, not_found_ids=[])
+            return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -987,13 +1085,18 @@ async def delete_clips_batch(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Batch-Delete: loescht alle in clip_ids aufgefuehrten Video-Clips."""
-    deleted = 0
-    not_found = []
-    for cid in request.clip_ids:
-        if state.delete_video_clip(cid):
-            deleted += 1
-        else:
-            not_found.append(cid)
+    try:
+        async with state.project_operation() as context:
+            deleted = 0
+            not_found = []
+            with state.project_commit(context):
+                for cid in request.clip_ids:
+                    if state.delete_video_clip(cid):
+                        deleted += 1
+                    else:
+                        not_found.append(cid)
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if deleted:
         await publish_log(
             f"{deleted} Video-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
@@ -1324,6 +1427,12 @@ async def _analyze_video_in_project(
             })
         except Exception as publish_exc:
             logger.warning("Videoanalyse-Complete-Event fehlgeschlagen: %s", publish_exc)
+        motion = result.get("motion")
+        if isinstance(motion, dict):
+            if motion:
+                motion.setdefault("clip_id", request.clip_id)
+            else:
+                result["motion"] = None
         return VideoAnalysisResult(**result)
     except asyncio.CancelledError:
         if not outcome_persisted:
@@ -1458,22 +1567,29 @@ async def get_scenes(
     state: AppState = Depends(get_app_state),
 ) -> list[SceneInfo]:
     """Gibt Scene-Cuts für einen Clip zurück."""
-    analysis = state.get_video_analysis(clip_id)
-    if analysis is None:
-        clip = state.get_video_clip(clip_id)
-        if clip is not None:
-            try:
+    try:
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            analysis = state.get_video_analysis(clip_id)
+            if analysis is None:
                 analysis = _load_persisted_video_analysis(
                     state,
                     clip,
-                    state.require_current_project_db_id(),
+                    context.project_id,
                 )
-            except (ProjectContextUnavailableError, RuntimeError):
-                analysis = None
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    scenes = analysis.get("scenes", [])
-    return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
+            if not analysis:
+                raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+            if analysis.get("stage_status", {}).get("scenes") != "completed":
+                raise HTTPException(status_code=409, detail=f"Szenenanalyse für Clip {clip_id} ist nicht verfügbar")
+            scenes = analysis.get("scenes", [])
+            state.require_project_context_current(context)
+            return [SceneInfo(**s) if isinstance(s, dict) else s for s in scenes]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1490,26 +1606,33 @@ async def get_motion(
     state: AppState = Depends(get_app_state),
 ) -> MotionData:
     """Gibt Motion-Analyse Daten zurück."""
-    analysis = state.get_video_analysis(clip_id)
-    if analysis is None:
-        clip = state.get_video_clip(clip_id)
-        if clip is not None:
-            try:
+    try:
+        async with state.project_operation() as context:
+            clip = state.get_video_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Video-Clip {clip_id} nicht gefunden")
+            analysis = state.get_video_analysis(clip_id)
+            if analysis is None:
                 analysis = _load_persisted_video_analysis(
                     state,
                     clip,
-                    state.require_current_project_db_id(),
+                    context.project_id,
                 )
-            except (ProjectContextUnavailableError, RuntimeError):
-                analysis = None
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    motion = analysis.get("motion", {})
-    if not motion:
-        return MotionData(clip_id=clip_id)
-    if "clip_id" not in motion:
-        motion = {**motion, "clip_id": clip_id}
-    return MotionData(**motion)
+            if not analysis:
+                raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+            if analysis.get("stage_status", {}).get("motion") != "completed":
+                raise HTTPException(status_code=409, detail=f"Motion-Analyse für Clip {clip_id} ist nicht verfügbar")
+            motion = analysis.get("motion") or {}
+            if not motion:
+                raise HTTPException(status_code=409, detail=f"Motion-Daten für Clip {clip_id} fehlen")
+            if "clip_id" not in motion:
+                motion = {**motion, "clip_id": clip_id}
+            state.require_project_context_current(context)
+            return MotionData(**motion)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 # --- Private Hilfsfunktionen ---
@@ -1890,8 +2013,6 @@ def _run_video_gpu_analysis(
     if request.analyze_motion:
         try:
             import cv2
-            from pb_studio.video.raft import MotionAnalyzer
-
             cap = cv2.VideoCapture(video_path)
             try:
                 reported_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -1949,7 +2070,7 @@ def _run_video_gpu_analysis(
                     f"RAFT sampling produced {len(frames)} readable frames"
                 )
 
-            motion_analyzer = MotionAnalyzer()
+            motion_analyzer = _get_cached_motion_analyzer()
             try:
                 def _motion_progress(pct: float) -> None:
                     if _loop is None:
@@ -1977,11 +2098,13 @@ def _run_video_gpu_analysis(
                     float(value)
                     for value in motion_result.get("frame_motions", [])
                 ]
-                if not motion_curve_vals:
-                    raise RuntimeError("RAFT returned no motion samples")
+                if not motion_curve_vals or not all(math.isfinite(value) for value in motion_curve_vals):
+                    raise RuntimeError("RAFT returned no finite motion samples")
 
                 peak_motion_value = float(max(motion_curve_vals))
                 average_motion = float(motion_result.get("avg_motion", 0.0))
+                if not math.isfinite(average_motion):
+                    raise RuntimeError("RAFT returned a non-finite average motion")
                 result["motion"] = {
                     "clip_id": clip_id,
                     "avg_motion": average_motion,
@@ -1996,15 +2119,16 @@ def _run_video_gpu_analysis(
                 }
                 result["avg_motion"] = average_motion
                 result["stage_status"]["motion"] = "completed"
-            finally:
-                motion_analyzer.unload()
-                import gc; gc.collect()
-                del motion_analyzer
+            except Exception:
+                _discard_cached_motion_analyzer()
+                raise
         except ProjectContextChangedError:
             raise
         except Exception as e:
             logger.error(f"Motion-Analyse fehlgeschlagen: {e}")
-            result["stage_status"]["motion"] = "failed"
+            result["stage_status"]["motion"] = (
+                "unavailable" if _capability_is_unavailable(e) else "failed"
+            )
             result["stage_errors"]["motion"] = str(e)
     else:
         result["stage_status"]["motion"] = "skipped"
@@ -2036,9 +2160,7 @@ def _run_video_gpu_analysis(
 
         try:
             import cv2
-            from pb_studio.ai.siglip_wrapper import SigLIPWrapper
-
-            wrapper = SigLIPWrapper(lazy_load=False)
+            wrapper = _get_cached_siglip_wrapper()
             try:
                 if not wrapper.is_ready:
                     raise RuntimeError(
@@ -2108,8 +2230,10 @@ def _run_video_gpu_analysis(
                                 f"SigLIP embedding dimension {embedding.shape} != "
                                 f"({SIGLIP_EMBEDDING_DIM},)"
                             )
+                        if not _np.isfinite(embedding).all():
+                            raise RuntimeError("SigLIP returned non-finite values")
                         norm = float(_np.linalg.norm(embedding))
-                        if norm > 1e-3:
+                        if math.isfinite(norm) and norm > 1e-3:
                             embedding = embedding / norm
                             if state is None or context is None:
                                 raise RuntimeError(
@@ -2156,20 +2280,17 @@ def _run_video_gpu_analysis(
                 else:
                     logger.info("SigLIP ONNX-Modell nicht gefunden — Embedding übersprungen.")
                     result["has_embedding"] = False
-            finally:
-                if 'wrapper' in locals() and wrapper is not None:
-                    try:
-                        wrapper.unload()
-                    except Exception as unload_err:
-                        logger.warning(f"Failed to unload SigLIPWrapper: {unload_err}")
-                del wrapper
-                import gc; gc.collect()
+            except Exception:
+                _discard_cached_siglip_wrapper()
+                raise
         except ProjectContextChangedError:
             raise
         except Exception as e:
             logger.error(f"Embedding-Generierung fehlgeschlagen: {e}")
             result["has_embedding"] = False
-            result["stage_status"]["embedding"] = "failed"
+            result["stage_status"]["embedding"] = (
+                "unavailable" if _capability_is_unavailable(e) else "failed"
+            )
             result["stage_errors"]["embedding"] = str(e)
     else:
         result["stage_status"]["embedding"] = "skipped"

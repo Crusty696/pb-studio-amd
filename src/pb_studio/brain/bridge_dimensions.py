@@ -130,8 +130,12 @@ class BridgeDimensions:
     def compute_all(self, features: CandidateFeatures) -> dict[str, float]:
         out: dict[str, float] = {}
         for axis in AUDIO_AXES:
+            if not _axis_is_available(features, axis):
+                continue
             out[axis] = self._audio_axis(axis, features)
         for axis in VIDEO_AXES:
+            if not _axis_is_available(features, axis):
+                continue
             value = self._video_axis(axis, features)
             if value is not None:
                 out[axis] = value
@@ -197,6 +201,17 @@ def _clip01(x: float) -> float:
     if x != x:  # NaN
         return 0.0
     return max(0.0, min(1.0, float(x)))
+
+
+def _axis_is_available(features: CandidateFeatures, axis: str) -> bool:
+    """Honor explicit provenance while keeping legacy feature objects usable."""
+    status = features.axis_status.get(axis)
+    if status is None:
+        return True
+    return (
+        isinstance(status, dict)
+        and str(status.get("status") or "").lower() == "available"
+    )
 
 
 def _audio_mood_score(tags: list[str]) -> float:

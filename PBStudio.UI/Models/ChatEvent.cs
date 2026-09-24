@@ -45,4 +45,5 @@ public record ChatStreamEvent(
     string? ToolResultJson = null,
     string? ErrorMessage = null,
     string? ErrorStage = null,
-    string? DoneReason = null);
+    string? DoneReason = null,
+    string? ToolCallId = null);

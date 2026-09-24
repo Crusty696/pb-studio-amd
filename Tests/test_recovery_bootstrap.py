@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 
 import pytest
 import backend.recovery_bootstrap as recovery_bootstrap
@@ -67,6 +69,30 @@ def _generation(
 def test_missing_control_root_is_uninitialized(tmp_path: Path) -> None:
     result = ensure_recovery_ready(tmp_path / "missing")
     assert result.status == "uninitialized"
+
+
+def test_atomic_json_write_uses_independent_temp_files_under_concurrency(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "journal.json"
+    barrier = threading.Barrier(2)
+    original_fsync_file = recovery_bootstrap._fsync_file
+
+    def synchronized_fsync(handle: object) -> None:
+        barrier.wait(timeout=5)
+        original_fsync_file(handle)
+
+    monkeypatch.setattr(recovery_bootstrap, "_fsync_file", synchronized_fsync)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(recovery_bootstrap._atomic_write_json, target, {"writer": i})
+            for i in range(2)
+        ]
+        for future in futures:
+            future.result()
+
+    assert json.loads(target.read_text(encoding="utf-8"))["writer"] in {0, 1}
 
 
 def test_backend_runs_bootstrap_before_config_and_logging() -> None:
