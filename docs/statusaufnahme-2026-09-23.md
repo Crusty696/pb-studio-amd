@@ -74,6 +74,9 @@ Toolchain-Reparatur: Python 3.11, madmom 0.16.1, projektlokales FFmpeg/AMF, venv
 - Health-Check: PASS; Python 3.11.9, NumPy 1.26.4, DirectML, RX 7800 XT, AMF, LHM, Release-EXE.
 - LM-Studio-Livecheck: Modell `qwen3-4b-computer-science`, REST-Antwort `PB_STUDIO_LM_OK`.
 - Reale Medien-E2E: 4-s WAV analysiert, 4-s MP4 via `h264_amf` gerendert, Ausgabe 1,107,553 Bytes; PASS.
+- Archivmedien-Praxisprobe: 135-s AAC/M4A analysiert (`BPM 143.55`, kein Fehler); 8.27-s H.264-MP4 via `h264_amf` transkodiert, Ausgabe 1,546,938 Bytes; PASS.
+- Skip-Audit: optionale SigLIP-Modelle, explizites T357-Hardware-Gate, fehlende Testfixtures/Annotationen und deprecated Ollama-Test dokumentiert; kein ungeklärter Produktfehler.
+- Warning-Triage: eigener ungültiger Python-Escape im Low-VRAM-Verify-Skript behoben; verbleibende Warnings stammen aus gesperrten/externalen Dependencies oder absichtlichen Fallbacktests.
 - Recovery-Bootstrap-Fokustest: 31 passed, 6 warnings; parallele JSON-Schreibzugriffe ohne Temp-Datei-Kollision.
 - Vollsuite vor Recovery-Concurrency-Fix: 1855 passed, 12 skipped, 0 failed, 37 warnings, 37:03 Minuten.
 - Recovery-Security-Test: Junction außerhalb Control-Root wird mit `Recovery generation escapes control root` blockiert.
