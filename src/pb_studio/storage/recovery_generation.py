@@ -210,12 +210,29 @@ def _volume_id(path: Path) -> str:
     return (resolved.drive or resolved.anchor or "unknown").casefold()
 
 
+def _is_reparse_point(path: Path) -> bool:
+    """Detect Windows junctions/symlinks without resolving virtualized paths."""
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attributes & 0x400)
+
+
 def _generation_dir(control_root: Path, generation_id: str) -> Path:
     safe_id = _validate_generation_id(generation_id)
-    generations_root = (control_root / "generations").resolve()
-    result = (generations_root / safe_id).resolve()
+    # Keep containment lexical. Windows AppX/Codex virtualization can resolve
+    # a valid concrete child through the package cache, making resolve() report
+    # a false escape although the generation ID is basename-safe.
+    generations_root = (control_root / "generations").absolute()
+    result = (generations_root / safe_id).absolute()
     if not result.is_relative_to(generations_root):
         raise RecoveryGenerationError("Generation path escapes control root")
+    if _is_reparse_point(result) or _is_reparse_point(generations_root):
+        resolved_result = result.resolve()
+        resolved_root = generations_root.resolve()
+        if not resolved_result.is_relative_to(resolved_root):
+            raise RecoveryGenerationError("Generation path escapes control root")
     return result
 
 

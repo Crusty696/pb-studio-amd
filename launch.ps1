@@ -24,10 +24,73 @@ $ErrorActionPreference = 'Continue'
 
 $LogsDir = Join-Path $PSScriptRoot 'logs'
 if (-not (Test-Path $LogsDir)) { New-Item -ItemType Directory -Path $LogsDir -Force | Out-Null }
-$LaunchLog = Join-Path $LogsDir ("launch_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
+$RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$LaunchLog = Join-Path $LogsDir ("launch_" + $RunTimestamp + ".log")
+$UnifiedRunLog = Join-Path $LogsDir ("e2e_" + $RunTimestamp + ".log")
+$BackendAppLog = Join-Path $LogsDir 'backend.log'
+$NativeCrashLog = Join-Path $LogsDir 'native_crash.log'
+$BackendStdOutLog = Join-Path $LogsDir 'backend_live.out.log'
+$BackendStdErrLog = Join-Path $LogsDir 'backend_live.err.log'
+$BackendAppLogOffset = if (Test-Path $BackendAppLog) { (Get-Item $BackendAppLog).Length } else { 0 }
+$NativeCrashLogOffset = if (Test-Path $NativeCrashLog) { (Get-Item $NativeCrashLog).Length } else { 0 }
 
 function Append-Log([string]$msg) {
-    Add-Content -Path $LaunchLog -Value "[$(Get-Date -Format HH:mm:ss)] $msg" -Encoding utf8
+    $line = "[$(Get-Date -Format HH:mm:ss)] $msg"
+    Add-Content -LiteralPath $LaunchLog -Value $line -Encoding utf8
+    # Unified log is opened before any runtime work; launcher events are written
+    # immediately so startup failures are never lost.
+    if (Test-Path -LiteralPath $UnifiedRunLog) {
+        Add-Content -LiteralPath $UnifiedRunLog -Value "[LAUNCHER] $line" -Encoding utf8
+    }
+}
+
+function Add-LogSection {
+    param(
+        [string]$Title,
+        [string]$Path,
+        [long]$Offset = 0
+    )
+
+    Add-Content -LiteralPath $UnifiedRunLog -Value "`r`n===== $Title =====" -Encoding utf8
+    if (-not (Test-Path $Path)) {
+        Add-Content -LiteralPath $UnifiedRunLog -Value '[keine Datei erzeugt]' -Encoding utf8
+        return
+    }
+
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        if ($Offset -gt 0 -and $Offset -lt $stream.Length) {
+            [void]$stream.Seek($Offset, [IO.SeekOrigin]::Begin)
+        } elseif ($Offset -ge $stream.Length) {
+            return
+        }
+        $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::UTF8, $true, 4096, $true)
+        try {
+            Add-Content -LiteralPath $UnifiedRunLog -Value $reader.ReadToEnd() -Encoding utf8
+        } finally {
+            $reader.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+function Complete-UnifiedRunLog {
+    if (Test-Path -LiteralPath "$UnifiedRunLog.completed") {
+        return
+    }
+    Add-Content -LiteralPath $UnifiedRunLog -Value @(
+        '',
+        '===== RUNTIME LOGS =====',
+        "Start: $RunTimestamp"
+    ) -Encoding utf8
+    Add-LogSection -Title 'BACKEND STDOUT' -Path $BackendStdOutLog
+    Add-LogSection -Title 'BACKEND STDERR' -Path $BackendStdErrLog
+    Add-LogSection -Title 'BACKEND APPLICATION LOG' -Path $BackendAppLog -Offset $BackendAppLogOffset
+    Add-LogSection -Title 'WPF APPLICATION LOG' -Path (Join-Path $LogsDir 'wpf_app.log')
+    Add-LogSection -Title 'NATIVE CRASH LOG' -Path $NativeCrashLog -Offset $NativeCrashLogOffset
+    Add-Content -LiteralPath $UnifiedRunLog -Value "`r`n===== ENDE $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') =====" -Encoding utf8
+    New-Item -ItemType File -Path "$UnifiedRunLog.completed" -Force | Out-Null
 }
 
 # Globaler Trap: schreibt Fehler ins Log und haelt Fenster offen
@@ -35,6 +98,7 @@ trap {
     $err = $_
     $msg = "FATAL: $($err.Exception.Message)`n$($err.ScriptStackTrace)"
     Append-Log $msg
+    Complete-UnifiedRunLog
     Write-Host ""
     Write-Host "  [FATAL] Unbehandelter Fehler - Log: $LaunchLog" -ForegroundColor Red
     Write-Host "  $($err.Exception.Message)" -ForegroundColor Red
@@ -54,9 +118,15 @@ $backendProcess = $null
 $backendWasAlreadyRunning = $false
 $previousExternalBackendFlag = $env:PBSTUDIO_BACKEND_MANAGED_EXTERNALLY
 $previousBackendDir = $env:PBSTUDIO_BACKEND_DIR
-# $LogsDir already set above; $BackendStdOutLog + $BackendStdErrLog follow
-$BackendStdOutLog = Join-Path $LogsDir 'backend_live.out.log'
-$BackendStdErrLog = Join-Path $LogsDir 'backend_live.err.log'
+# Create unified log before runtime-contract, provider, backend, or UI startup.
+Set-Content -LiteralPath $UnifiedRunLog -Value @(
+    'PB Studio AMD — kompletter manueller E2E-Lauf',
+    "Start: $RunTimestamp",
+    "Projekt-Root: $PSScriptRoot",
+    '===== LAUNCHER (LIVE) ====='
+) -Encoding utf8
+# Log-Pfade wurden vor dem globalen Trap initialisiert, damit auch ein
+# Startabbruch ein vollständiges E2E-Log erzeugen kann.
 
 function Initialize-OwnerCapability {
     if (-not [string]::IsNullOrWhiteSpace($env:PBSTUDIO_OWNER_CAPABILITY)) {
@@ -73,6 +143,7 @@ function Initialize-OwnerCapability {
 }
 
 function Write-Status($msg, $color = 'Cyan') {
+    Append-Log ([string]$msg)
     Write-Host '[PB Studio] ' -NoNewline -ForegroundColor $color
     Write-Host $msg
 }
@@ -403,6 +474,7 @@ function Resolve-FrontendExe {
 }
 
 Write-Status '=== PB Studio AMD Launcher ===' 'Yellow'
+Write-Status "Komplettes E2E-Log nach App-Ende: $UnifiedRunLog" 'Green'
 $backendWasAlreadyRunning = Test-BackendHealth
 $Runtime = Get-PBStudioRuntimeContract -ProjectRoot $ProjectRoot -RequirePython -RequireFFmpeg -ApplyEnvironment
 $PythonExe = $Runtime.PythonExe
@@ -671,3 +743,5 @@ if (-not $FrontendOnly -and $startedBackend -and ((Test-BackendHealth) -or ((Get
 }
 
 Write-Status '=== PB Studio beendet ===' 'Yellow'
+Complete-UnifiedRunLog
+Write-Status "Komplettes E2E-Log: $UnifiedRunLog" 'Green'

@@ -65,6 +65,33 @@ def _uses_advanced_pacing(pacing_config: dict, semantic_enabled: bool) -> bool:
     )
 
 
+def _repair_legacy_trigger_settings(settings: dict | None) -> dict:
+    """Make persisted/Brain settings internally usable before engine creation.
+
+    API schemas reject this contradiction, but older snapshots can still carry
+    max values below the effective minimum. Preserve the requested minimum and
+    raise only the affected upper bounds; direct engine callers still receive
+    strict validation.
+    """
+    repaired = dict(settings or {})
+    effective_min = max(
+        float(repaired.get("min_cut_interval", 0.5)),
+        float(repaired.get("min_clip_length", 2.0)),
+    )
+    changed = False
+    for key in ("max_cut_interval", "max_clip_length"):
+        value = float(repaired.get(key, 8.0 if key == "max_clip_length" else 10.0))
+        if value < effective_min:
+            repaired[key] = effective_min
+            changed = True
+    if changed:
+        logger.warning(
+            "Pacing legacy settings normalized: upper bounds raised to %.3fs",
+            effective_min,
+        )
+    return repaired
+
+
 class PacingService:
     """Service-Layer für Cut-List-Generierung."""
 
@@ -951,7 +978,9 @@ class PacingService:
         )
 
         pacing_engine = AdvancedPacingEngine(
-            trigger_settings=pacing_config["trigger_settings"]
+            trigger_settings=_repair_legacy_trigger_settings(
+                pacing_config.get("trigger_settings")
+            )
         )
         pacing_engine.enable_motion_matching(
             bool(pacing_config.get("use_motion_matching", False))
@@ -1250,7 +1279,9 @@ class PacingService:
         )
 
         pacing_engine = AdvancedPacingEngine(
-            trigger_settings=pacing_config["trigger_settings"]
+            trigger_settings=_repair_legacy_trigger_settings(
+                pacing_config.get("trigger_settings")
+            )
         )
         pacing_engine.enable_motion_matching(
             bool(pacing_config.get("use_motion_matching", False))

@@ -3400,8 +3400,11 @@ def _run_stem_separation(
                         output_file.write(mixed)
                         remaining -= frame_count
                     output_file.flush()
-            with temp_inst_path.open("rb") as completed_file:
-                os.fsync(completed_file.fileno())
+            # The SoundFile writer is already closed/flushed here.  Calling
+            # fsync() on a read-only Windows descriptor raises EBADF/WinError 9
+            # and falsely turns a valid synthesized stem into a failed stem.
+            if temp_inst_path.stat().st_size <= 44:
+                raise ValueError("Synthetisierter Instrumental-Stem ist leer")
             _validated_stem_output_record(
                 Path(audio_path),
                 output_dir,
