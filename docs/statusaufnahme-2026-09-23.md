@@ -64,6 +64,7 @@ Toolchain-Reparatur: Python 3.11, madmom 0.16.1, projektlokales FFmpeg/AMF, venv
 
 ## Live-Artefakte
 
+- Manuelle Start-/Prüfanleitung: `docs/manual-verification.md`.
 - Backend-Smoke: `logs/driver_backend.out.log` / `logs/driver_backend.err.log`
 - WPF-Full-Smoke: `logs/status-full-smoke.png` — 1400×900, Backend Online, GPU DirectML sichtbar.
 - Finaler WPF-Full-Smoke: `logs/verification-all-20260924.png` — 1400×900, Backend Online, GPU DirectML sichtbar, PASS.
