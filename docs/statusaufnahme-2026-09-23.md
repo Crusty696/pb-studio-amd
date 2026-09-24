@@ -73,6 +73,8 @@ Toolchain-Reparatur: Python 3.11, madmom 0.16.1, projektlokales FFmpeg/AMF, venv
 - Python-Compile-Sweep: PASS; `git diff --check`: PASS.
 - Health-Check: PASS; Python 3.11.9, NumPy 1.26.4, DirectML, RX 7800 XT, AMF, LHM, Release-EXE.
 - LM-Studio-Livecheck: Modell `qwen3-4b-computer-science`, REST-Antwort `PB_STUDIO_LM_OK`.
+- Optionaler AMD-Hardware-Gate: `PBSTUDIO_RUN_T357_HARDWARE=1`, 19/19 Tests bestanden; aktuelle RX-7800-XT-LUID `0x00000000_0x000119f1` verifiziert.
+- Optionaler LM-Studio-Vision-Gate: vorhandenes Modell `qwen2.5-vl-7b-instruct` geladen; Bild-RESTprobe `PB_STUDIO_VISION_OK`.
 - Reale Medien-E2E: 4-s WAV analysiert, 4-s MP4 via `h264_amf` gerendert, Ausgabe 1,107,553 Bytes; PASS.
 - Archivmedien-Praxisprobe: 135-s AAC/M4A analysiert (`BPM 143.55`, kein Fehler); 8.27-s H.264-MP4 via `h264_amf` transkodiert, Ausgabe 1,546,938 Bytes; PASS.
 - Skip-Audit: optionale SigLIP-Modelle, explizites T357-Hardware-Gate, fehlende Testfixtures/Annotationen und deprecated Ollama-Test dokumentiert; kein ungeklärter Produktfehler.
