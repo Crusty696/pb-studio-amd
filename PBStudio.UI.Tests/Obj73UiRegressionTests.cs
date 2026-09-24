@@ -300,7 +300,7 @@ public sealed class Obj73UiRegressionTests
         StringAssert.Contains(view, "if (_isRenderedPreview)");
         StringAssert.Contains(timeline, "await SyncTimelineAsync();");
         StringAssert.Contains(timeline, "PreviewReady?.Invoke(resp.PreviewPath, startSec, resp.Duration);");
-        StringAssert.Contains(production, "await _timelineState.WaitForPendingSaveAsync();");
+        StringAssert.Contains(production, "await _timelineState.WaitForPendingSaveAsync()");
     }
 
     private static BrainSuggestion Suggestion(

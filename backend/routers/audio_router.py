@@ -686,50 +686,52 @@ async def list_clips(
     state: AppState = Depends(get_app_state),
 ) -> list[AudioClipInfo]:
     """Gibt die Audio-Clip-Liste zurück (paginiert)."""
-    clips = list(state.get_audio_clips_snapshot().values())
-    start = (page - 1) * limit
-    end = start + limit
+    try:
+        async with state.project_operation() as context:
+            clips = list(state.get_audio_clips_snapshot().values())
+            start = (page - 1) * limit
+            end = start + limit
 
-    items: list[AudioClipInfo] = []
-    for clip in clips[start:end]:
-        analysis = state.get_audio_analysis(clip["id"])
-        merged = dict(clip)
-        merged["has_audio_embedding"] = _has_current_audio_embedding(
-            merged.get("audio_hash")
-        )
-        merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
-        merged["key"] = analysis.get("key") if analysis else clip.get("key")
-        merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
-        cached_status = analysis.get("_analysis_status") if analysis else None
-        merged["analysis_status"] = cached_status or (
-            "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
-        )
-        merged["stage_status"] = (
-            dict(analysis.get("_stage_status") or {}) if analysis else {}
-        )
-        merged["stage_errors"] = (
-            dict(analysis.get("_stage_errors") or {}) if analysis else {}
-        )
-        merged["is_analyzed"] = (
-            cached_status == "completed"
-            if cached_status is not None
-            else bool(clip.get("is_analyzed", False))
-        )
-        # L-N4: stems_paths kann JSON-String oder dict sein (pacing_router-Logik analog).
-        # Pydantic-Schema erwartet Dict[str,str] -> normalisieren.
-        raw_stems = merged.get("stems_paths")
-        if isinstance(raw_stems, str):
-            try:
-                import json as _json
-                parsed = _json.loads(raw_stems)
-                merged["stems_paths"] = parsed if isinstance(parsed, dict) else None
-            except Exception:
-                merged["stems_paths"] = None
-        elif raw_stems is not None and not isinstance(raw_stems, dict):
-            merged["stems_paths"] = None
-        items.append(AudioClipInfo(**merged))
-
-    return items
+            items: list[AudioClipInfo] = []
+            for clip in clips[start:end]:
+                analysis = state.get_audio_analysis(clip["id"])
+                merged = dict(clip)
+                merged["has_audio_embedding"] = _has_current_audio_embedding(
+                    merged.get("audio_hash")
+                )
+                merged["bpm"] = float(analysis.get("bpm", 0.0)) if analysis else float(clip.get("bpm", 0.0) or 0.0)
+                merged["key"] = analysis.get("key") if analysis else clip.get("key")
+                merged["beat_count"] = int(analysis.get("beat_count", 0)) if analysis else int(clip.get("beat_count", 0) or 0)
+                cached_status = analysis.get("_analysis_status") if analysis else None
+                merged["analysis_status"] = cached_status or (
+                    "completed" if bool(clip.get("is_analyzed", False)) else "unavailable"
+                )
+                merged["stage_status"] = (
+                    dict(analysis.get("_stage_status") or {}) if analysis else {}
+                )
+                merged["stage_errors"] = (
+                    dict(analysis.get("_stage_errors") or {}) if analysis else {}
+                )
+                merged["is_analyzed"] = (
+                    cached_status == "completed"
+                    if cached_status is not None
+                    else bool(clip.get("is_analyzed", False))
+                )
+                raw_stems = merged.get("stems_paths")
+                if isinstance(raw_stems, str):
+                    try:
+                        import json as _json
+                        parsed = _json.loads(raw_stems)
+                        merged["stems_paths"] = parsed if isinstance(parsed, dict) else None
+                    except Exception:
+                        merged["stems_paths"] = None
+                elif raw_stems is not None and not isinstance(raw_stems, dict):
+                    merged["stems_paths"] = None
+                items.append(AudioClipInfo(**merged))
+            state.require_project_context_current(context)
+            return items
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -743,10 +745,16 @@ async def delete_clip(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Loescht einen einzelnen Audio-Clip aus In-Memory + SQLite."""
-    if state.delete_audio_clip(clip_id):
-        await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
-        return DeleteResponse(deleted_count=1, not_found_ids=[])
-    return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    try:
+        async with state.project_operation() as context:
+            with state.project_commit(context):
+                deleted = state.delete_audio_clip(clip_id)
+            if deleted:
+                await publish_log(f"Audio-Clip {clip_id} geloescht", level="info", source="audio.delete")
+                return DeleteResponse(deleted_count=1, not_found_ids=[])
+            return DeleteResponse(deleted_count=0, not_found_ids=[clip_id])
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -760,13 +768,18 @@ async def delete_clips_batch(
     state: AppState = Depends(get_app_state),
 ) -> DeleteResponse:
     """Batch-Delete: loescht alle in clip_ids aufgefuehrten Audio-Clips."""
-    deleted = 0
-    not_found = []
-    for cid in request.clip_ids:
-        if state.delete_audio_clip(cid):
-            deleted += 1
-        else:
-            not_found.append(cid)
+    try:
+        async with state.project_operation() as context:
+            deleted = 0
+            not_found = []
+            with state.project_commit(context):
+                for cid in request.clip_ids:
+                    if state.delete_audio_clip(cid):
+                        deleted += 1
+                    else:
+                        not_found.append(cid)
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if deleted:
         await publish_log(
             f"{deleted} Audio-Clips batch-geloescht (von {len(request.clip_ids)} angefragt)",
@@ -1687,11 +1700,16 @@ async def get_beats(
     state: AppState = Depends(get_app_state),
 ) -> list[BeatData]:
     """Gibt Beat-Daten für einen Clip zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    beats = analysis.get("beats", [])
-    return [BeatData(**b) if isinstance(b, dict) else b for b in beats]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "beats")
+            beats = analysis.get("beats") or []
+            state.require_project_context_current(context)
+            return [BeatData(**b) if isinstance(b, dict) else b for b in beats]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1705,10 +1723,16 @@ async def get_onsets(
     state: AppState = Depends(get_app_state),
 ) -> list[float]:
     """Gibt Onset-Daten für einen Clip zurück (Thread-safe)."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    return [float(value) for value in analysis.get("onset_times", [])]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "beats")
+            values = [float(value) for value in analysis.get("onset_times", [])]
+            state.require_project_context_current(context)
+            return values
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1726,17 +1750,34 @@ async def get_waveform(
     state: AppState = Depends(get_app_state),
 ) -> WaveformData:
     """Gibt Waveform-Daten für einen Clip zurück."""
-    clip = state.get_audio_clip(clip_id)
-    if clip is None:
-        raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
     try:
-        waveform = await asyncio.to_thread(_extract_waveform, clip["path"], bands)
-        return WaveformData(
-            clip_id=clip_id,
-            sample_rate=44100,
-            bands=waveform,
-            duration_seconds=clip["duration_seconds"],
-        )
+        async with state.project_operation() as context:
+            clip = state.get_audio_clip(clip_id)
+            if clip is None:
+                raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
+            audio_path = Path(str(clip["path"]))
+            if not audio_path.is_file():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Audio-Datei nicht gefunden: {str(audio_path)!r}",
+                )
+            waveform = await asyncio.to_thread(_extract_waveform, str(audio_path), bands)
+            state.require_project_context_current(context)
+            if not waveform or any(not band for band in waveform):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Waveform für Clip {clip_id} konnte nicht extrahiert werden",
+                )
+            return WaveformData(
+                clip_id=clip_id,
+                sample_rate=int(clip.get("sample_rate", 44100) or 44100),
+                bands=waveform,
+                duration_seconds=float(clip.get("duration_seconds", 0.0) or 0.0),
+            )
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Waveform-Extraktion fehlgeschlagen: {e}")
 
@@ -2001,11 +2042,16 @@ async def get_structure(
     state: AppState = Depends(get_app_state),
 ) -> list[StructureSegment]:
     """Gibt Struktur-Segmente für einen Clip zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    segments = analysis.get("structure_segments", [])
-    return [StructureSegment(**s) if isinstance(s, dict) else s for s in segments]
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "structure")
+            segments = analysis.get("structure_segments") or []
+            state.require_project_context_current(context)
+            return [StructureSegment(**s) if isinstance(s, dict) else s for s in segments]
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(
@@ -2022,20 +2068,78 @@ async def get_spectral(
     state: AppState = Depends(get_app_state),
 ) -> SpectralData:
     """Gibt Spektral-Analyse Daten zurück."""
-    analysis = state.get_audio_analysis(clip_id)
-    if analysis is None:
-        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
-    spectral = analysis.get("spectral_data", {}) or {}
-    if spectral.get("clip_id") != clip_id:
-        spectral = {**spectral, "clip_id": clip_id}
-    return SpectralData(**spectral)
+    try:
+        async with state.project_operation() as context:
+            analysis = _require_completed_audio_stage(state, clip_id, "spectral")
+            spectral = analysis.get("spectral_data") or {}
+            if not spectral:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Spektraldaten für Clip {clip_id} fehlen",
+                )
+            if spectral.get("clip_id") != clip_id:
+                spectral = {**spectral, "clip_id": clip_id}
+            state.require_project_context_current(context)
+            return SpectralData(**spectral)
+    except HTTPException:
+        raise
+    except (ProjectContextChangedError, ProjectContextUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 # --- Private Hilfsfunktionen (blockierend, werden via to_thread aufgerufen) ---
 
+def _require_completed_audio_stage(
+    state: AppState,
+    clip_id: int,
+    stage: str,
+) -> dict[str, Any]:
+    """Return one truthful stage payload or fail instead of fabricating empties."""
+    if state.get_audio_clip(clip_id) is None:
+        raise HTTPException(status_code=404, detail=f"Clip {clip_id} nicht gefunden")
+    analysis = state.get_audio_analysis(clip_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail=f"Keine Analyse für Clip {clip_id}")
+    stage_status = dict(analysis.get("_stage_status") or {})
+    legacy_payload_available = (
+        stage not in stage_status
+        and analysis.get("_analysis_status") == "completed"
+        and _legacy_audio_stage_payload_available(stage, analysis)
+    )
+    if stage_status.get(stage) != "completed" and not legacy_payload_available:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Audio-Stufe '{stage}' für Clip {clip_id} ist nicht vollständig verfügbar",
+        )
+    return analysis
+
+
+def _legacy_audio_stage_payload_available(
+    stage: str,
+    analysis: dict[str, Any],
+) -> bool:
+    """Infer old completed records only from payloads persisted before stage status."""
+    if stage == "beats":
+        bpm = analysis.get("bpm")
+        beats = analysis.get("beats")
+        return (
+            isinstance(bpm, (int, float))
+            and not isinstance(bpm, bool)
+            and float(bpm) > 0.0
+            and isinstance(beats, list)
+            and bool(beats)
+        )
+    if stage == "structure":
+        return bool(analysis.get("structure_segments"))
+    if stage == "spectral":
+        spectral = analysis.get("spectral_data")
+        return isinstance(spectral, dict) and bool(spectral.get("times"))
+    return False
+
 def _probe_audio_info(path: str) -> dict[str, Any]:
     """Ermittelt Audio-Dauer, Sample-Rate und Channels via ffprobe."""
     import json
+    import math
     import subprocess
     cmd = [
         str(config.ffprobe_path), "-v", "error",
@@ -2048,6 +2152,8 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
     data = json.loads(res)
 
     duration = float(data.get("format", {}).get("duration", 0.0))
+    if not math.isfinite(duration) or duration < 0.0:
+        raise ValueError("ffprobe lieferte keine gültige Audio-Dauer")
 
     # Sample-Rate und Channels aus dem ersten Audio-Stream
     sample_rate = 44100  # Fallback
@@ -2063,6 +2169,9 @@ def _probe_audio_info(path: str) -> dict[str, Any]:
             channels = int(stream.get("channels", 2))
         except (ValueError, TypeError):
             pass
+
+    if sample_rate <= 0 or channels <= 0:
+        raise ValueError("ffprobe lieferte ungültige Audio-Stream-Metadaten")
 
     return {"duration": duration, "sample_rate": sample_rate, "channels": channels}
 
@@ -3291,8 +3400,11 @@ def _run_stem_separation(
                         output_file.write(mixed)
                         remaining -= frame_count
                     output_file.flush()
-            with temp_inst_path.open("rb") as completed_file:
-                os.fsync(completed_file.fileno())
+            # The SoundFile writer is already closed/flushed here.  Calling
+            # fsync() on a read-only Windows descriptor raises EBADF/WinError 9
+            # and falsely turns a valid synthesized stem into a failed stem.
+            if temp_inst_path.stat().st_size <= 44:
+                raise ValueError("Synthetisierter Instrumental-Stem ist leer")
             _validated_stem_output_record(
                 Path(audio_path),
                 output_dir,

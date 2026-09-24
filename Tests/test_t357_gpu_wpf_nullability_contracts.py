@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ADAPTER_INDEX = 1
-EXPECTED_ADAPTER_LUID = "0x00000000_0x00012a2a"
+EXPECTED_ADAPTER_LUID = "0x00000000_0x000119f1"
 HARDWARE_PROBE_ENV = "PBSTUDIO_RUN_T357_HARDWARE"
 
 DIRECTML_CONSUMERS = (
@@ -551,8 +552,8 @@ def test_model_provider_identity_is_forwarded_from_card_to_backend():
     assert "AcquireRequestLeaseAsync" in owner_handler
     assert "TryAddWithoutValidation" in owner_handler
     assert "BackendOwnerCapability.HeaderName" in owner_handler
-    assert "ActivateModelAsync(card.Name, card.Provider)" in view_model
-    assert "TestModelAsync(card.Name, card.Provider)" in view_model
+    assert re.search(r"ActivateModelAsync\(\s*card\.Name,\s*card\.Provider", view_model)
+    assert re.search(r"TestModelAsync\(\s*card\.Name,\s*card\.Provider", view_model)
     assert "provider: Optional[str]" in router
     assert "if not provider or model.provider == provider" in router
     assert "provider=requested_provider" in router
@@ -609,52 +610,51 @@ def test_sceneinfo_confidence_is_nullable_across_all_contract_artifacts():
 
 
 @pytest.mark.parametrize(
-    ("method_marker", "next_marker", "status_prefix"),
+    ("method_marker", "next_marker", "label"),
     (
         (
             "private async Task AnalyzeMarkedAsync()",
             "private void UpdateAnalyzedCounts()",
-            "Markierte fertig:",
+            "Markierte",
         ),
         (
             "private async Task AnalyzeAllAsync()",
             "private async Task LoadAllThumbnailsAsync(",
-            "Batch fertig:",
+            "Batch",
         ),
     ),
 )
 def test_video_batch_retries_requested_stages_and_counts_success_only_after_non_null_analysis(
     method_marker: str,
     next_marker: str,
-    status_prefix: str,
+    label: str,
 ):
     source = _read("PBStudio.UI/ViewModels/VideoLibraryViewModel.cs")
     dto = _read("PBStudio.UI/Services/ApiClient.cs")
     method = _method_block(source, method_marker, next_marker)
+    batch_runner = _method_block(
+        source,
+        "private async Task RunBatchAnalysisAsync(",
+        "private bool ApplyAnalysisResult(",
+    )
 
     assert 'string Status = "completed"' in dto
     assert "Dictionary<string, string>? StageStatus = null" in dto
     assert "Dictionary<string, string>? StageErrors = null" in dto
 
-    null_branch = method.index("if (result == null)")
-    failure_increment = method.index("failed++;", null_branch)
-    partial_branch = method.index(
-        "else if (!IsCompleted(result))",
-        failure_increment,
-    )
-    partial_failure = method.index("failed++;", partial_branch)
-    else_branch = method.index("else", partial_failure)
-    success_increment = method.index("succeeded++;", else_branch)
-    apply_result = method.index("ApplyAnalysisResult(", failure_increment)
+    assert "RunBatchAnalysisAsync(scope, " in method
+    assert f'"{label}"' in method
 
-    assert null_branch < failure_increment < partial_branch < partial_failure
-    assert partial_failure < else_branch
-    assert apply_result < partial_branch < success_increment
+    null_branch = batch_runner.index("if (result == null)")
+    apply_result = batch_runner.index("ApplyAnalysisResult(scope, target, result, out _)", null_branch)
+    completed_branch = batch_runner.index("if (!IsCompleted(result))", apply_result)
+    success_increment = batch_runner.index("succeeded++;", completed_branch)
+
+    assert null_branch < apply_result < completed_branch < success_increment
     assert "clip.IsAnalyzed = IsCompleted(result);" in source
-    assert method.count("failed++;") >= 3
-    assert "if (target.IsAnalyzed)" not in method
-    assert "skipped++" not in method
-    assert status_prefix in method
-    assert "{succeeded} erfolgreich" in method
-    assert "{failed} fehlgeschlagen" in method
-    assert "{skipped}" not in method
+    assert "if (target.IsAnalyzed)" not in batch_runner
+    assert "skipped++" not in batch_runner
+    assert "{label} fertig:" in batch_runner
+    assert "{succeeded} erfolgreich" in batch_runner
+    assert "{targets.Count - succeeded} fehlgeschlagen" in batch_runner
+    assert "{skipped}" not in batch_runner

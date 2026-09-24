@@ -454,6 +454,7 @@ def test_activate_persists_model_and_provider_then_invalidates_inventory(
         config_copy,
         {
             "ai": {
+                "provider": "ollama",
                 "task_overrides": {"video_captioning": "legacy-vision"},
                 "task_provider_overrides": {},
             }
@@ -532,6 +533,10 @@ def test_model_smoke_request_uses_selected_provider_and_exact_model(
         ),
     )
     calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        "pb_studio.ai.llm_provider.get_provider",
+        lambda: "ollama",
+    )
     monkeypatch.setattr(
         "pb_studio.ai.llm_provider.get_llm_client",
         lambda *, provider: _GenerationClient(provider, calls),

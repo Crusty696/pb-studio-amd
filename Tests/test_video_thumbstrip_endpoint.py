@@ -1,8 +1,19 @@
-"""GET /video/thumbstrip/{clip_id} liefert n base64-Frames + duration."""
+import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
 from backend.main import app
+
+
+@pytest.fixture(autouse=True)
+def active_project(tmp_path):
+    from backend.app_state import get_app_state
+    state = get_app_state()
+    proj_dir = tmp_path / "proj"
+    proj_dir.mkdir()
+    state.current_project = {"db_project_id": 1, "path": str(proj_dir), "name": "proj"}
+    yield
+    state.current_project = None
 
 
 def test_thumbstrip_returns_n_base64_frames(monkeypatch):
@@ -44,7 +55,7 @@ def test_thumbstrip_n_clamped_to_safe_range(monkeypatch):
     monkeypatch.setattr(AppState, "get_video_clip", lambda self, cid: fake_clip)
 
     captured = {}
-    def fake_extract(path, n, size):
+    def fake_extract(path, n, size, duration_seconds=None):
         captured["n"] = n
         from PIL import Image
         return [Image.new("RGB", (160, 90)) for _ in range(n)]

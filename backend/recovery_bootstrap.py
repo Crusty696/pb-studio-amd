@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Any
+import uuid
 
 
 CONTROL_ROOT_PARTS = ("PB_Studio", "recovery-control", "v1")
@@ -89,7 +90,7 @@ def _fsync_parent(path: Path) -> None:
 
 def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as handle:
             json.dump(value, handle, ensure_ascii=False, sort_keys=True, indent=2)
@@ -102,13 +103,32 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _is_reparse_point(path: Path) -> bool:
+    """Detect Windows junctions/symlinks without resolving virtualized paths."""
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attributes & 0x400)
+
+
 def _generation_dir(control_root: Path, generation_id: str) -> Path:
     if not generation_id or Path(generation_id).name != generation_id:
         raise RecoveryBootstrapError("Invalid recovery generation ID")
-    path = (control_root / "generations" / generation_id).resolve()
-    generations_root = (control_root / "generations").resolve()
+    # Do not resolve the concrete generation directory here. Windows AppX/Codex
+    # virtualization can resolve an otherwise valid child through the package
+    # cache while its parent stays in LOCALAPPDATA, producing a false escape.
+    # The basename check above excludes traversal; absolute lexical containment
+    # keeps the recovery root boundary deterministic.
+    path = (control_root / "generations" / generation_id).absolute()
+    generations_root = (control_root / "generations").absolute()
     if not path.is_relative_to(generations_root):
         raise RecoveryBootstrapError("Recovery generation escapes control root")
+    if _is_reparse_point(path) or _is_reparse_point(generations_root):
+        resolved_path = path.resolve()
+        resolved_root = generations_root.resolve()
+        if not resolved_path.is_relative_to(resolved_root):
+            raise RecoveryBootstrapError("Recovery generation escapes control root")
     return path
 
 

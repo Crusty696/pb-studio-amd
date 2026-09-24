@@ -11,7 +11,9 @@ def test_onsets_endpoint_returns_persisted_candidates() -> None:
     from backend.routers.audio_router import get_onsets
 
     state = MagicMock()
+    state.get_audio_clip.return_value = {"id": 7, "path": "test.wav"}
     state.get_audio_analysis.return_value = {
+        "_stage_status": {"beats": "completed"},
         "onset_times": [0.125, 4.5, 99.75],
         "energy_curve": [0.0, 1.0, 0.0],
     }

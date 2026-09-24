@@ -32,6 +32,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
     private bool _isClearing;
     private bool _isProjectTransitioning;
     private bool _isHistoryLoading;
+    private bool _historyLoadFailed;
     private bool _disposed;
     private string? _projectPath;
     private CancellationTokenSource? _historyLoadCts;
@@ -70,6 +71,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _isProjectTransitioning = true;
         SendCommand.NotifyCanExecuteChanged();
         ClearCommand.NotifyCanExecuteChanged();
+        RetryHistoryCommand.NotifyCanExecuteChanged();
         Interlocked.Increment(ref _streamGeneration);
         _streamCts?.Cancel();
         _historyLoadCts?.Cancel();
@@ -89,6 +91,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _isProjectTransitioning = false;
         SendCommand.NotifyCanExecuteChanged();
         ClearCommand.NotifyCanExecuteChanged();
+        RetryHistoryCommand.NotifyCanExecuteChanged();
         var nextPath = project?.Path;
         if (string.Equals(
                 _projectPath,
@@ -120,8 +123,10 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _historyLoadCts = current;
         previous?.Cancel();
         _isHistoryLoading = true;
+        _historyLoadFailed = false;
         SendCommand.NotifyCanExecuteChanged();
         ClearCommand.NotifyCanExecuteChanged();
+        RetryHistoryCommand.NotifyCanExecuteChanged();
         try
         {
             var response = await _api.GetAsync<ChatHistoryResponse>(
@@ -134,8 +139,15 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            if (response == null)
+            {
+                _historyLoadFailed = true;
+                StatusText = "Chat-Verlauf konnte nicht geladen werden. Bitte erneut laden.";
+                return;
+            }
+
             Messages.Clear();
-            foreach (var entry in response?.Entries ?? [])
+            foreach (var entry in response.Entries)
             {
                 var role = entry.Role.ToLowerInvariant() switch
                 {
@@ -170,6 +182,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
                 {
                     SendCommand.NotifyCanExecuteChanged();
                     ClearCommand.NotifyCanExecuteChanged();
+                    RetryHistoryCommand.NotifyCanExecuteChanged();
                 }
             }
             current.Dispose();
@@ -192,6 +205,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         !IsStreaming &&
         !_isClearing &&
         !_isHistoryLoading &&
+        !_historyLoadFailed &&
         !_isProjectTransitioning &&
         !string.IsNullOrWhiteSpace(InputText);
 
@@ -199,7 +213,14 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         !IsStreaming &&
         !_isClearing &&
         !_isHistoryLoading &&
+        !_historyLoadFailed &&
         !_isProjectTransitioning;
+
+    public bool CanRetryHistory =>
+        _historyLoadFailed &&
+        !_isHistoryLoading &&
+        !_isProjectTransitioning &&
+        !string.IsNullOrWhiteSpace(_projectPath);
 
     partial void OnInputTextChanged(string value) => SendCommand.NotifyCanExecuteChanged();
     partial void OnIsStreamingChanged(bool value)
@@ -427,6 +448,7 @@ public partial class ChatViewModel : ObservableObject, IDisposable
         _isClearing = true;
         SendCommand.NotifyCanExecuteChanged();
         ClearCommand.NotifyCanExecuteChanged();
+        RetryHistoryCommand.NotifyCanExecuteChanged();
         _streamCts?.Cancel();
         StatusText = "Lösche Chat-History...";
 
@@ -459,9 +481,13 @@ public partial class ChatViewModel : ObservableObject, IDisposable
             {
                 SendCommand.NotifyCanExecuteChanged();
                 ClearCommand.NotifyCanExecuteChanged();
+                RetryHistoryCommand.NotifyCanExecuteChanged();
             }
         }
     }
+
+    [RelayCommand(CanExecute = nameof(CanRetryHistory))]
+    private Task RetryHistoryAsync() => LoadHistoryAsync(_projectPath!);
 
     public void Dispose()
     {

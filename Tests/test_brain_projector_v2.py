@@ -186,8 +186,9 @@ def test_v2_training_applies_event_once_and_retries_pending(
     assert active.applied_event_uuids == ()
 
     monkeypatch.setattr(post_processor, "_load_video_embedding", lambda *_: video)
+    current = published[-1] if published else active
     result = run_v2_fit_step(
-        published[-1],
+        current,
         sources=[source],
         embedding_cache=object(),
         publish_fn=published.append,

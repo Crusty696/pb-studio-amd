@@ -37,11 +37,12 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _errorText;
     [ObservableProperty] private string _baseUrl = "";
     [ObservableProperty] private bool _ollamaAvailable;
-    // W-QA-2 (2026-05-22): Hybrid-Provider-Status sichtbar machen.
+    // Beide Dienste bleiben sichtbar; Inferenz nutzt exklusiv SelectedProvider.
     [ObservableProperty] private bool _lmStudioAvailable;
     [ObservableProperty] private string _activeProvider = "unbekannt";
     [ObservableProperty] private string _providerBadge = "OFFLINE";
     [ObservableProperty] private string _providerStatusText = "Noch nicht verifiziert";
+    [ObservableProperty] private string _selectedProvider = "lmstudio";
     [ObservableProperty] private string _discoverActionsText = "Katalog nicht verifiziert";
     [ObservableProperty] private DateTime? _lastFetchedAt;
 
@@ -86,6 +87,45 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public Task RefreshAsync() => LoadAsync();
 
+    [RelayCommand]
+    private async Task SwitchProviderAsync(string? provider)
+    {
+        var normalized = (provider ?? string.Empty).Trim().ToLowerInvariant();
+        if (_disposed || IsLoading || normalized is not ("lmstudio" or "ollama"))
+            return;
+        if (_api is not IProviderSelectionApi providerApi)
+        {
+            ErrorText = "Provider-Umschaltung wird vom API-Client nicht unterstützt.";
+            return;
+        }
+
+        IsLoading = true;
+        ErrorText = null;
+        StatusText = $"Schalte auf {ProviderLabel(normalized)}; entlade beide Runtimes...";
+        var current = BeginModelOperation();
+        try
+        {
+            var switched = await providerApi.SelectProviderAsync(
+                normalized,
+                current.Token).ConfigureAwait(true);
+            if (!switched)
+            {
+                ErrorText = _api.LastErrorDetail ?? "Provider konnte nicht sicher umgeschaltet werden.";
+                StatusText = ErrorText;
+                return;
+            }
+            SelectedProvider = normalized;
+            StatusText = $"{ProviderLabel(normalized)} gewählt · beide Runtimes im Standby.";
+        }
+        finally
+        {
+            EndModelOperation(current);
+            if (!_disposed)
+                IsLoading = false;
+        }
+        await LoadAsync().ConfigureAwait(true);
+    }
+
     public async Task LoadAsync()
     {
         if (_disposed) return;
@@ -106,6 +146,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             if (token.IsCancellationRequested) return;
             var available = await _api.GetAvailableModelsAsync(token).ConfigureAwait(true);
 
+            SelectedProvider = installed?.SelectedProvider ?? "lmstudio";
             ApplyInstalled(installed);
             ApplyAvailable(available);
 
@@ -124,25 +165,15 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
                     $"{action.Label}: {CatalogLabel(action.CatalogStatus)}"))
                 : "Keine live verifizierte Discover-Aktion";
 
-            if (LmStudioAvailable && OllamaAvailable)
-            {
-                ActiveProvider = "Hybrid";
-                ProviderBadge = "HYBRID";
-            }
-            else if (LmStudioAvailable)
+            if (SelectedProvider == "lmstudio")
             {
                 ActiveProvider = "LM Studio";
                 ProviderBadge = "LM STUDIO";
             }
-            else if (OllamaAvailable)
+            else
             {
                 ActiveProvider = "Ollama";
                 ProviderBadge = "OLLAMA";
-            }
-            else
-            {
-                ActiveProvider = "offline";
-                ProviderBadge = "OFFLINE";
             }
 
             if (!OllamaAvailable && !LmStudioAvailable)
@@ -153,9 +184,7 @@ public partial class ModelManagerViewModel : ObservableObject, IDisposable
             }
             else
             {
-                var hybridHint = (OllamaAvailable && LmStudioAvailable) ? " (Hybrid: beide live)"
-                               : (OllamaAvailable ? " · LM Studio: offline" : " · Ollama: offline");
-                StatusText = $"{InstalledModels.Count} installiert  ·  {AvailableModels.Count} verfuegbar  ·  {ActiveProvider} @ {BaseUrl}{hybridHint}";
+                StatusText = $"{InstalledModels.Count} installiert · {ActiveProvider} gewählt · anderer Provider Standby";
             }
         }
         catch (OperationCanceledException) { /* erwartet */ }
@@ -524,6 +553,7 @@ public partial class InstalledModelCardViewModel : ObservableObject
     public bool Vision { get; }
     public bool Loaded { get; }
     public bool Usable { get; }
+    public bool IsProviderSelected { get; }
     public string StateColor { get; }
 
     [ObservableProperty] private bool _isBusy;
@@ -556,6 +586,9 @@ public partial class InstalledModelCardViewModel : ObservableObject
             : "Keine";
         HasActiveTasks = entry.IsActive;
         Provider = entry.Provider;
+        IsProviderSelected = entry.Provider.Equals(
+            parent.SelectedProvider,
+            StringComparison.OrdinalIgnoreCase);
         Loaded = entry.Loaded;
         Usable = entry.Usable;
         StateText = entry.Loaded

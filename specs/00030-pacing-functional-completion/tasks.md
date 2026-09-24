@@ -9,8 +9,8 @@
 - [X] T007 [US1] {FR-398} Implement minimal active-path fixes in `src/pb_studio/pacing/`, `src/pb_studio/services/pacing_service.py`, or `backend/` for proven engine/service defects.
 - [X] T008 [US2] {FR-397,FR-399} Implement minimal DTO/ViewModel/View fixes in `PBStudio.UI/` for proven Director contract defects.
 - [X] T009 [US3] {FR-400} Implement minimal lifecycle, correlation, cancellation, persistence, or degradation fixes for proven runtime defects.
-- [ ] T010 [OBJ1] {TR-379,OR-356} Run Python compile sweep, focused and relevant Pacing regression cluster, C# tests, Release build, and IRON-rule scan; record results in `specs/00030-pacing-functional-completion/evidence/automated-verification.md`.
-- [ ] T011 [US1] {FR-401} Run real-media API validation with approved audio/video inputs and record exact receipts in `test-report/pacing/test-report.md`.
-- [ ] T012 [US2] {FR-399,FR-401} Run GUI validation of every visible KI-Regie function and record screenshots/UI evidence in `specs/00030-pacing-functional-completion/evidence/gui/`.
-- [ ] T013 [OBJ1] {FR-401,OR-356} Shut down cleanly, remove only run-owned test artifacts, verify recovery/cleanup, and write `test-report/pacing/cleanup-report.md`.
-- [ ] T014 [OBJ1] {FR-396,FR-397,FR-398,FR-399,FR-400,FR-401,TR-379,OR-356} Write final function/status report, update Brain log and any new learning, then create `.completed`, `qc-report.md`, and `.qc-passed` only after every P1 gate passes.
+- [X] T010 [OBJ1] {TR-379,OR-356} Run Python compile sweep, focused and relevant Pacing regression cluster, C# tests, Release build, and IRON-rule scan; record results in `specs/00030-pacing-functional-completion/evidence/automated-verification.md`.
+- [X] T011 [US1] {FR-401} Run real-media API validation with approved audio/video inputs and record exact receipts in `test-report/pacing/test-report.md`.
+- [X] T012 [US2] {FR-399,FR-401} Run GUI validation of every visible KI-Regie function and record screenshots/UI evidence in `specs/00030-pacing-functional-completion/evidence/gui/`.
+- [X] T013 [OBJ1] {FR-401,OR-356} Shut down cleanly, remove only run-owned test artifacts, verify recovery/cleanup, and write `test-report/pacing/cleanup-report.md`.
+- [X] T014 [OBJ1] {FR-396,FR-397,FR-398,FR-399,FR-400,FR-401,TR-379,OR-356} Write final function/status report, update Brain log and any new learning, then create `.completed`, `qc-report.md`, and `.qc-passed` only after every P1 gate passes.

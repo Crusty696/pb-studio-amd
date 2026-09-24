@@ -2032,6 +2032,58 @@
         }
       }
     },
+    "/models/provider": {
+      "post": {
+        "tags": [
+          "Models (LM Studio)"
+        ],
+        "summary": "Select Provider",
+        "description": "Persist one exclusive provider and leave both runtimes unloaded.",
+        "operationId": "select_provider_models_provider_post",
+        "parameters": [
+          {
+            "name": "X-PBStudio-Owner-Capability",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "X-Pbstudio-Owner-Capability"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/models/list": {
       "get": {
         "tags": [
@@ -2371,7 +2423,7 @@
           "Models (LM Studio)"
         ],
         "summary": "Test Model",
-        "description": "Fuehrt einen minimalen Inferenz-Smoke-Test (max_tokens=1) auf der AMD-GPU durch, um die Funktion zu pruefen.",
+        "description": "Fuehrt einen providergebundenen Chat- oder Vision-Inferenz-Smoke-Test aus.",
         "operationId": "test_model_models_test_post",
         "parameters": [
           {
@@ -2709,8 +2761,7 @@
               "$ref": "#/components/schemas/BeatData"
             },
             "type": "array",
-            "title": "Beats",
-            "default": []
+            "title": "Beats"
           },
           "key": {
             "type": "string",
@@ -2722,16 +2773,14 @@
               "type": "number"
             },
             "type": "array",
-            "title": "Energy Curve",
-            "default": []
+            "title": "Energy Curve"
           },
           "structure_segments": {
             "items": {
               "$ref": "#/components/schemas/StructureSegment"
             },
             "type": "array",
-            "title": "Structure Segments",
-            "default": []
+            "title": "Structure Segments"
           },
           "spectral_data": {
             "$ref": "#/components/schemas/SpectralData",
@@ -2742,48 +2791,42 @@
               "$ref": "#/components/schemas/SubtrackSegment"
             },
             "type": "array",
-            "title": "Subtrack Segments",
-            "default": []
+            "title": "Subtrack Segments"
           },
           "tempo_curve": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Tempo Curve",
-            "default": []
+            "title": "Tempo Curve"
           },
           "onset_times": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Onset Times",
-            "default": []
+            "title": "Onset Times"
           },
           "kick_times": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Kick Times",
-            "default": []
+            "title": "Kick Times"
           },
           "snare_times": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Snare Times",
-            "default": []
+            "title": "Snare Times"
           },
           "hihat_times": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Hihat Times",
-            "default": []
+            "title": "Hihat Times"
           },
           "analysis_status": {
             "type": "string",
@@ -3202,7 +3245,7 @@
           "score"
         ],
         "title": "BrainAxisContribution",
-        "description": "Pro-Achse-Aufschluesselung: bridge_value (raw) * posterior (gelerntes\nGewicht) = score. Sortiert absteigend nach score in /brain/explain.\n\nbridge_value/posterior haben keine harte Obergrenze, weil einige Cold-Start\nDefaults (z.B. kick_weight=1.2, max_clip_length=8.0) ausserhalb 0..1 liegen.\nscore wird im Endpoint auf 0..1 geclippt."
+        "description": "Pro-Achse-Aufschluesselung: bridge_value (raw) * posterior (gelerntes\nGewicht) = score. Sortiert absteigend nach score in /brain/explain.\n\nbridge_value und posterior sind normalisiert. score wird im Endpoint\ndefensiv auf 0..1 geclippt."
       },
       "BrainExplainResponse": {
         "properties": {
@@ -3236,24 +3279,21 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Context Keys",
-            "default": []
+            "title": "Context Keys"
           },
           "top_axes": {
             "items": {
               "$ref": "#/components/schemas/BrainAxisContribution"
             },
             "type": "array",
-            "title": "Top Axes",
-            "default": []
+            "title": "Top Axes"
           },
           "bottom_axes": {
             "items": {
               "$ref": "#/components/schemas/BrainAxisContribution"
             },
             "type": "array",
-            "title": "Bottom Axes",
-            "default": []
+            "title": "Bottom Axes"
           },
           "cold_start_axes": {
             "items": {
@@ -3300,6 +3340,14 @@
             "nullable": true,
             "title": "Operation Id",
             "description": "Retry-stabile ID eines logischen Feedback-Klicks. Derselbe Wert mit derselben Nutzlast liefert die bestehende Quittung, ohne erneut zu lernen."
+          },
+          "project_identity": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 8,
+            "nullable": true,
+            "title": "Project Identity",
+            "description": "Vom Desktop erwartete Projektidentität; verhindert Feedback nach Projektwechsel."
           }
         },
         "type": "object",
@@ -3344,8 +3392,7 @@
               "$ref": "#/components/schemas/BrainSuggestion"
             },
             "type": "array",
-            "title": "Cuts",
-            "default": []
+            "title": "Cuts"
           }
         },
         "type": "object",
@@ -3443,16 +3490,14 @@
               "$ref": "#/components/schemas/BrainStatsBucket"
             },
             "type": "array",
-            "title": "Top Positive",
-            "default": []
+            "title": "Top Positive"
           },
           "top_negative": {
             "items": {
               "$ref": "#/components/schemas/BrainStatsBucket"
             },
             "type": "array",
-            "title": "Top Negative",
-            "default": []
+            "title": "Top Negative"
           },
           "cold_start_axes_list": {
             "items": {
@@ -3500,8 +3545,7 @@
               "type": "integer"
             },
             "type": "array",
-            "title": "Video Clip Ids",
-            "default": []
+            "title": "Video Clip Ids"
           },
           "top_n": {
             "type": "integer",
@@ -3524,8 +3568,7 @@
               "$ref": "#/components/schemas/BrainSuggestion"
             },
             "type": "array",
-            "title": "Suggestions",
-            "default": []
+            "title": "Suggestions"
           }
         },
         "type": "object",
@@ -3559,8 +3602,7 @@
               "type": "number"
             },
             "type": "object",
-            "title": "Brain Scores",
-            "default": {}
+            "title": "Brain Scores"
           }
         },
         "type": "object",
@@ -3667,10 +3709,12 @@
           },
           "start_time": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Start Time"
           },
           "end_time": {
             "type": "number",
+            "minimum": 0.0,
             "title": "End Time"
           },
           "metadata": {
@@ -4134,6 +4178,11 @@
             "type": "string",
             "nullable": true,
             "title": "Error"
+          },
+          "selected_provider": {
+            "type": "string",
+            "title": "Selected Provider",
+            "default": "lmstudio"
           }
         },
         "type": "object",
@@ -4254,8 +4303,7 @@
               "type": "number"
             },
             "type": "array",
-            "title": "Motion Curve",
-            "default": []
+            "title": "Motion Curve"
           },
           "peak_frames": {
             "items": {
@@ -4263,8 +4311,7 @@
               "type": "object"
             },
             "type": "array",
-            "title": "Peak Frames",
-            "default": []
+            "title": "Peak Frames"
           },
           "motion_category": {
             "type": "string",
@@ -4292,6 +4339,14 @@
             "type": "array",
             "title": "Video Clip Ids",
             "default": []
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9:_-]+$",
+            "nullable": true,
+            "title": "Request Id"
           },
           "expected_bpm": {
             "type": "number",
@@ -4495,6 +4550,20 @@
         ],
         "title": "ProjectOpen",
         "description": "Request: Bestehendes Projekt öffnen."
+      },
+      "ProviderRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "Exklusiver LLM-Provider: lmstudio|ollama"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "title": "ProviderRequest"
       },
       "ProviderStatusEntry": {
         "properties": {
@@ -4853,8 +4922,7 @@
               "type": "number"
             },
             "type": "array",
-            "title": "Times",
-            "default": []
+            "title": "Times"
           },
           "bands": {
             "additionalProperties": {
@@ -4864,16 +4932,14 @@
               "type": "array"
             },
             "type": "object",
-            "title": "Bands",
-            "default": {}
+            "title": "Bands"
           },
           "centroids": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Centroids",
-            "default": []
+            "title": "Centroids"
           },
           "frequency_ranges": {
             "additionalProperties": {
@@ -4883,24 +4949,21 @@
               "type": "array"
             },
             "type": "object",
-            "title": "Frequency Ranges",
-            "default": {}
+            "title": "Frequency Ranges"
           },
           "band_means": {
             "additionalProperties": {
               "type": "number"
             },
             "type": "object",
-            "title": "Band Means",
-            "default": {}
+            "title": "Band Means"
           },
           "band_variances": {
             "additionalProperties": {
               "type": "number"
             },
             "type": "object",
-            "title": "Band Variances",
-            "default": {}
+            "title": "Band Variances"
           },
           "events": {
             "items": {
@@ -4908,8 +4971,7 @@
               "type": "object"
             },
             "type": "array",
-            "title": "Events",
-            "default": []
+            "title": "Events"
           }
         },
         "type": "object",
@@ -5127,14 +5189,17 @@
           },
           "start_time": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Start Time"
           },
           "end_time": {
             "type": "number",
+            "minimum": 0.0,
             "title": "End Time"
           },
           "clip_start": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Clip Start",
             "default": 0.0
           },
@@ -5469,16 +5534,14 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Dominant Colors",
-            "default": []
+            "title": "Dominant Colors"
           },
           "tags": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Tags",
-            "default": []
+            "title": "Tags"
           },
           "embedding_dim": {
             "type": "integer",
@@ -5500,8 +5563,7 @@
               "$ref": "#/components/schemas/SceneInfo"
             },
             "type": "array",
-            "title": "Scenes",
-            "default": []
+            "title": "Scenes"
           },
           "motion": {
             "$ref": "#/components/schemas/MotionData",
@@ -5522,8 +5584,7 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Mood Tags",
-            "default": []
+            "title": "Mood Tags"
           },
           "avg_brightness": {
             "type": "number",
@@ -5670,8 +5731,7 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Tags",
-            "default": []
+            "title": "Tags"
           },
           "is_analyzed": {
             "type": "boolean",
@@ -6106,8 +6166,7 @@
               "type": "array"
             },
             "type": "array",
-            "title": "Bands",
-            "default": []
+            "title": "Bands"
           },
           "duration_seconds": {
             "type": "number",

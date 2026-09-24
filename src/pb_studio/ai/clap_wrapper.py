@@ -98,7 +98,9 @@ class CLAPAnalyzer:
             from pb_studio.core.model_loader import ModelLoader
             loader = ModelLoader()
 
-            self.combined_session = loader.load_model("clap_combined", force=True)
+            combined_path = Path(self._models_dir) / "clap_combined.onnx"
+            if combined_path.is_file():
+                self.combined_session = loader.load_model("clap_combined", force=True)
             if self.combined_session is not None:
                 loader.register_session_owner(
                     "clap_combined",
@@ -210,7 +212,7 @@ class CLAPAnalyzer:
             raise RuntimeError("CLAP processor is not initialized")
 
         features = self._processor(
-            audios=np.asarray(audio, dtype=np.float32),
+            audio=np.asarray(audio, dtype=np.float32),
             sampling_rate=CLAP_SAMPLE_RATE,
             return_tensors="np",
         )["input_features"].astype(np.float32)

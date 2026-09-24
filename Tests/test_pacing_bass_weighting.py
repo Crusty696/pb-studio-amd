@@ -115,3 +115,21 @@ def test_bass_weight_at_time_no_curve_returns_1():
     engine = AdvancedPacingEngine()
     # KEIN _pre_cached_bass_curve
     assert engine._bass_weight_at_time(0.5) == 1.0
+
+
+def test_structure_weighting_accepts_numpy_bass_curve():
+    """Persistierte Spektralkurven sind NumPy-Arrays und nie boolesch auszuwerten."""
+    from pb_studio.pacing.advanced_pacing_engine import AdvancedPacingEngine
+    from pb_studio.pacing.pacing_models import PacingCut, SongSection
+
+    engine = AdvancedPacingEngine()
+    engine._pre_cached_bass_curve = np.array([0.0, 0.5, 1.0], dtype=np.float32)
+    engine._pre_cached_duration = 2.0
+    triggers = [PacingCut(time=1.0, trigger_type="beat", strength=0.5)]
+    sections = [
+        SongSection(name="drop", start_time=0.0, end_time=2.0, energy_level=1.0)
+    ]
+
+    weighted = engine._apply_structure_weights(triggers, sections)
+
+    assert weighted[0].strength == pytest.approx(0.75)

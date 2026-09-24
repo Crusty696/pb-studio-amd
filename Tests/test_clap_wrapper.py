@@ -138,6 +138,9 @@ class TestCLAPAnalyzer:
 
         assert mel_spec.shape == (1, 1, 1024, CLAP_N_MELS)
         assert mel_spec.dtype == np.float32
+        processor_kwargs = analyzer_lazy._processor.call_args.kwargs
+        assert "audio" in processor_kwargs
+        assert "audios" not in processor_kwargs
 
     def test_encode_audio_mock(self, analyzer_lazy):
         """Test audio encoding with mocked model"""

@@ -38,6 +38,13 @@
                 Padding="14,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Command="{Binding RetryHistoryCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Padding="6,4" Height="28" Margin="0,0,8,0"
+                            ToolTip="Chat-Verlauf erneut laden"
+                            AutomationProperties.Name="Chat-Verlauf erneut laden">
+                        <icon:PackIconMaterial Kind="Refresh" Width="14" Height="14"/>
+                    </Button>
                     <TextBlock VerticalAlignment="Center" FontSize="11"
                                Foreground="{StaticResource AbletonTextDim}"
                                Margin="0,0,12,0"

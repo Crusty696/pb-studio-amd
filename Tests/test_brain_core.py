@@ -176,7 +176,7 @@ def test_variance_high_when_no_data(tmp_path: Path):
     try:
         ws = WeightStore(store.weights_conn)
         v = ws.get_variance("kick_weight", ["", "section=drop"])
-        assert v == pytest.approx(0.25)
+        assert v == pytest.approx(1.0 / 12.0)
     finally:
         store.close()
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import asyncio
 from typing import Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -23,6 +24,7 @@ from ..owner_capability import OWNER_CAPABILITY_HEADER, authorize_owner
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/models", tags=["Models (LM Studio)"])
+_provider_switch_lock = asyncio.Lock()
 
 
 # ----------------------------------------------------------------------
@@ -151,6 +153,7 @@ class ModelListResponse(BaseModel):
     inventory_generation: int = 0
     verified_at: str = ""
     error: Optional[str] = None
+    selected_provider: str = "lmstudio"
 
 
 class AvailableModelEntry(BaseModel):
@@ -212,6 +215,10 @@ class RecommendationResponse(BaseModel):
 
 class ModeRequest(BaseModel):
     mode: str = Field(..., min_length=1, description="KI-Modus: speed|balance|quality")
+
+
+class ProviderRequest(BaseModel):
+    provider: str = Field(..., description="Exklusiver LLM-Provider: lmstudio|ollama")
 
 
 class ActivateRequest(BaseModel):
@@ -413,6 +420,180 @@ def _resolve_inventory_matches(
     ]
 
 
+def _provider_root(provider: str) -> str:
+    from pb_studio.ai.llm_provider import get_base_url
+
+    root = get_base_url(provider).rstrip("/")
+    return root[:-3] if root.endswith("/v1") else root
+
+
+async def _unload_provider_models(provider: str) -> list[str]:
+    """Unload every resident model while leaving the provider service running."""
+    import httpx
+
+    root = _provider_root(provider)
+    unloaded: list[str] = []
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(20.0, connect=3.0),
+            follow_redirects=False,
+        ) as client:
+            if provider == "lmstudio":
+                response = await client.get(f"{root}/api/v1/models")
+                response.raise_for_status()
+                for model in response.json().get("models") or []:
+                    for instance in model.get("loaded_instances") or []:
+                        instance_id = str(instance.get("id") or "").strip()
+                        if not instance_id:
+                            continue
+                        result = await client.post(
+                            f"{root}/api/v1/models/unload",
+                            json={"instance_id": instance_id},
+                        )
+                        result.raise_for_status()
+                        unloaded.append(instance_id)
+            else:
+                response = await client.get(f"{root}/api/ps")
+                response.raise_for_status()
+                for model in response.json().get("models") or []:
+                    model_name = str(
+                        model.get("name") or model.get("model") or ""
+                    ).strip()
+                    if not model_name:
+                        continue
+                    result = await client.post(
+                        f"{root}/api/generate",
+                        json={
+                            "model": model_name,
+                            "prompt": "",
+                            "keep_alive": 0,
+                            "stream": False,
+                        },
+                    )
+                    result.raise_for_status()
+                    unloaded.append(model_name)
+    except httpx.ConnectError:
+        return []
+    return unloaded
+
+
+async def unload_all_llm_runtimes_for_standby() -> dict[str, list[str]]:
+    """Put both reachable external LLM runtimes into an unloaded standby state."""
+    return {
+        "lmstudio": await _unload_provider_models("lmstudio"),
+        "ollama": await _unload_provider_models("ollama"),
+    }
+
+
+def _require_selected_provider(provider: str) -> None:
+    from pb_studio.ai.llm_provider import get_provider
+
+    selected = get_provider()
+    if provider != selected:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Provider {provider!r} ist im Standby. Zuerst im MODELLE-Tab "
+                f"bewusst auf {provider} umschalten; aktiv ist {selected}."
+            ),
+        )
+
+
+def _require_idle_vision_runtime(action: str) -> None:
+    from pb_studio.video.lmstudio_vision_wrapper import active_vision_task_lease
+
+    lease = active_vision_task_lease()
+    if lease is None:
+        return
+    model = lease.get("model") or "Vision-Modell"
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"{action} ist gesperrt, solange die Videoanalyse {model!r} "
+            "für den aktuellen Clip/Batch verwendet. Nach Batch-Ende erneut versuchen."
+        ),
+    )
+
+
+@router.post("/provider")
+async def select_provider(
+    request: ProviderRequest,
+    owner_capability: Optional[str] = Header(
+        default=None,
+        alias=OWNER_CAPABILITY_HEADER,
+    ),
+) -> JSONResponse:
+    """Persist one exclusive provider and leave both runtimes unloaded."""
+    authorize_owner(owner_capability, operation="LLM-Provider-Umschaltung")
+    provider = request.provider.strip().lower()
+    if provider not in {"lmstudio", "ollama"}:
+        raise HTTPException(
+            status_code=400,
+            detail="provider muss 'lmstudio' oder 'ollama' sein",
+        )
+    _require_idle_vision_runtime("Provider-Wechsel")
+
+    async with _provider_switch_lock:
+        try:
+            unloaded = await unload_all_llm_runtimes_for_standby()
+
+            from pb_studio.config_manager import ConfigManager
+
+            cfg_manager = ConfigManager()
+            ai_cfg = cfg_manager.get("ai") or {}
+            if not isinstance(ai_cfg, dict):
+                ai_cfg = {}
+            ai_cfg["provider"] = provider
+            task_providers = ai_cfg.get("task_provider_overrides") or {}
+            if not isinstance(task_providers, dict):
+                task_providers = {}
+            for task in (
+                "video_captioning",
+                "image_captioning",
+                "chat",
+                "chat_general",
+                "chat_tool_use",
+                "brain_explanation",
+            ):
+                task_providers[task] = provider
+            ai_cfg["task_provider_overrides"] = task_providers
+            cfg_manager.set("ai", ai_cfg)
+
+            from pb_studio.ai.chat_agent import reset_pinned_chat_models
+            from pb_studio.brain.llm_narrator import reset_pinned_narrator_models
+            from pb_studio.ai.model_inventory import get_model_inventory_service
+            from pb_studio.ai.model_registry import reset_unloadable_models
+            from pb_studio.video.lmstudio_vision_wrapper import (
+                reset_pinned_vision_models,
+            )
+
+            reset_pinned_chat_models()
+            reset_pinned_narrator_models()
+            reset_pinned_vision_models()
+            reset_unloadable_models()
+            get_model_inventory_service().invalidate()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Provider-Umschaltung auf %s fehlgeschlagen: %s", provider, exc)
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Provider konnte nicht sicher umgeschaltet werden; "
+                    "Modelle wurden nicht als Standby bestätigt."
+                ),
+            ) from exc
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "provider": provider,
+            "state": "standby",
+            "unloaded": unloaded,
+        },
+    )
+
+
 # ----------------------------------------------------------------------
 # GET /models/list
 # ----------------------------------------------------------------------
@@ -422,6 +603,7 @@ async def list_models(
 ) -> ModelListResponse:
     """Liefert den zentralen, providergetrennten Inventar-Snapshot."""
     from pb_studio.ai.model_inventory import get_model_inventory_service
+    from pb_studio.ai.llm_provider import get_provider
 
     service = get_model_inventory_service()
     if refresh:
@@ -511,14 +693,8 @@ async def list_models(
         enriched.is_active = bool(active_tasks)
         entries.append(enriched)
 
-    active_provider = next(
-        (
-            provider
-            for provider in snapshot.providers
-            if provider.status in {"ready", "degraded", "online_empty"}
-        ),
-        None,
-    )
+    selected_provider = get_provider()
+    active_provider = provider_by_name.get(selected_provider)
     display_provider = active_provider or lmstudio_status or ollama_status
     return ModelListResponse(
         ollama_available=ollama_ok,
@@ -540,6 +716,7 @@ async def list_models(
             if lmstudio_ok or ollama_ok
             else "Kein LLM-Provider erreichbar (weder LM Studio noch Ollama)"
         ),
+        selected_provider=selected_provider,
     )
 
 
@@ -670,17 +847,14 @@ async def ollama_pull_generator(model_name: str, ollama_url: str):
                                 == "success"
                                 and not payload.get("error")
                             )
+                            if completed:
+                                get_model_inventory_service().invalidate()
+                                from pb_studio.ai.model_registry import reset_unloadable_models
+
+                                reset_unloadable_models()
                         except (json.JSONDecodeError, AttributeError):
                             pass
                         yield f"event: pull_progress\ndata: {line.strip()}\n\n"
-                if completed:
-                    # Sonst liest der unmittelbar folgende UI-Refresh denselben
-                    # Cache-Snapshot und zeigt das fertige Modell weiter als
-                    # "verfuegbar" statt "installiert".
-                    get_model_inventory_service().invalidate()
-                    from pb_studio.ai.model_registry import reset_unloadable_models
-
-                    reset_unloadable_models()
     except Exception as exc:
         logger.error(f"Ollama pull failed: {exc}")
         error = {
@@ -920,6 +1094,7 @@ async def activate_model(
 ) -> JSONResponse:
     """Persistiert eine live verifizierte Provider-/Modellwahl pro Aufgabe."""
     authorize_owner(owner_capability, operation="Modell-Aktivierung")
+    _require_idle_vision_runtime("Modell-Aktivierung")
     try:
         from pb_studio.ai.model_inventory import get_model_inventory_service
         from pb_studio.config_manager import ConfigManager
@@ -966,6 +1141,7 @@ async def activate_model(
                 ),
             )
         selected = matches[0]
+        _require_selected_provider(selected.provider)
         capabilities = set(selected.capabilities)
         task_capabilities = {
             "video_captioning": "vision",
@@ -1049,6 +1225,11 @@ async def activate_model(
         from pb_studio.ai.model_registry import reset_unloadable_models
 
         reset_unloadable_models()
+        from pb_studio.video.lmstudio_vision_wrapper import (
+            reset_pinned_vision_models,
+        )
+
+        reset_pinned_vision_models()
         await service.refresh()
         logger.info(
             "Modell '%s' von %s fuer Tasks aktiviert: %s",
@@ -1127,6 +1308,7 @@ async def test_model(
 ) -> ModelTestResponse:
     """Fuehrt einen providergebundenen Chat- oder Vision-Inferenz-Smoke-Test aus."""
     authorize_owner(owner_capability, operation="Modell-Smoke-Test")
+    _require_idle_vision_runtime("Modell-Smoke-Test")
     import time
     from datetime import datetime, timezone
 
@@ -1156,6 +1338,7 @@ async def test_model(
             ),
         )
     selected = matches[0]
+    _require_selected_provider(selected.provider)
     test_capability = (
         "vision" if "vision" in selected.capabilities else "chat"
     )

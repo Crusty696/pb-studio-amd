@@ -17,7 +17,8 @@ public record ModelListResponse(
     bool LmstudioAvailable = false,
     List<ProviderStatusEntry>? Providers = null,
     int InventoryGeneration = 0,
-    string VerifiedAt = "");
+    string VerifiedAt = "",
+    string SelectedProvider = "lmstudio");
 
 public record ProviderStatusEntry(
     string Provider,

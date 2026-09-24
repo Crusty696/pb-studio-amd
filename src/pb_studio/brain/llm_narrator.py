@@ -113,6 +113,10 @@ _NARRATIVE_CACHE: dict[tuple[int, str, str, str, str], str] = {}
 _PINNED_NARRATOR_MODELS: dict[str, tuple[str, str]] = {}
 
 
+def reset_pinned_narrator_models() -> None:
+    _PINNED_NARRATOR_MODELS.clear()
+
+
 def _cache_get(key: tuple[int, str, str, str, str]) -> Optional[str]:
     return _NARRATIVE_CACHE.get(key)
 
@@ -312,10 +316,9 @@ async def _async_generate_explanation(
         mode,
         ("", ""),
     )
-    effective_model = model_override or (
-        "" if configured_model else pinned_model
-    )
-    effective_provider = "" if configured_model else pinned_provider
+    automatic_pin = bool(not model_override and not configured_model and pinned_model)
+    effective_model = model_override or (pinned_model if automatic_pin else "")
+    effective_provider = pinned_provider if automatic_pin else ""
     chash = _content_hash(
         segment_type=segment_type,
         top_axes=top_axes,
@@ -503,11 +506,32 @@ async def _async_generate_explanation(
         )
         return get_offline_explanation()
     except ModelFailoverExhaustedError as exc:
-        logger.warning(
-            "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
-            exc,
-        )
-        return get_offline_explanation()
+        if automatic_pin and not exc.receipts:
+            _PINNED_NARRATOR_MODELS.pop(mode, None)
+            try:
+                text, receipt, _attempts = await execute_with_model_failover(
+                    registry,
+                    task,
+                    mode,
+                    _call,
+                    is_retryable=lambda error: isinstance(
+                        error,
+                        (asyncio.TimeoutError, LMStudioError),
+                    ),
+                    is_provider_failure=is_provider_failure,
+                )
+            except ModelFailoverExhaustedError as retry_exc:
+                logger.warning(
+                    "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+                    retry_exc,
+                )
+                return get_offline_explanation()
+        else:
+            logger.warning(
+                "LLM-Narrator: Receipt-Failover erschöpft (%s) — Offline-Text",
+                exc,
+            )
+            return get_offline_explanation()
     if not model_override and not configured_model:
         _PINNED_NARRATOR_MODELS[mode] = (
             receipt.provider,

@@ -159,14 +159,13 @@ public class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
     protected override void OnItemsChanged(object sender, ItemsChangedEventArgs args)
     {
         base.OnItemsChanged(sender, args);
-        switch (args.Action)
+        if (args.Action == NotifyCollectionChangedAction.Reset && InternalChildren.Count > 0)
         {
-            case NotifyCollectionChangedAction.Reset:
-            case NotifyCollectionChangedAction.Remove:
-            case NotifyCollectionChangedAction.Replace:
-            case NotifyCollectionChangedAction.Move:
-                CleanupAllContainers();
-                break;
+            // Der ItemContainerGenerator verarbeitet Move/Remove/Replace bereits
+            // waehrend des CollectionChanged-Ereignisses. Ein zusaetzliches
+            // generator.Remove hier verwendet dann veraltete Positionen und kann
+            // die komplette UI mit InvalidOperationException beenden.
+            RemoveInternalChildRange(0, InternalChildren.Count);
         }
         InvalidateMeasure();
     }

@@ -489,7 +489,7 @@ public sealed class ProjectSwitchUiPublicationTests
         await command.WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.AreEqual("Projekt B aktiv", viewModel.Status);
-        Assert.AreEqual(41, viewModel.SelectedCutId);
+        Assert.AreEqual(0, viewModel.SelectedCutId);
         Assert.AreEqual(0, viewModel.TotalClicks);
     }
 

@@ -67,19 +67,19 @@ class AudioAnalysisResult(BaseModel):
     duration_seconds: float
     bpm: float = 0.0
     beat_count: int = 0
-    beats: list[BeatData] = []
+    beats: list[BeatData] = Field(default_factory=list)
     key: Optional[str] = None
-    energy_curve: list[float] = []
-    structure_segments: list["StructureSegment"] = []
+    energy_curve: list[float] = Field(default_factory=list)
+    structure_segments: list["StructureSegment"] = Field(default_factory=list)
     spectral_data: Optional["SpectralData"] = None
-    subtrack_segments: list[SubtrackSegment] = []
-    tempo_curve: list[float] = []
+    subtrack_segments: list[SubtrackSegment] = Field(default_factory=list)
+    tempo_curve: list[float] = Field(default_factory=list)
     # Audit-Fix 2026-07-10: Onset/Drum-Trigger-Kandidaten fuer den Pacing-Cache-Pfad
     # (ersetzt den toten core.session_manager-Import in advanced_pacing_engine.py).
-    onset_times: list[float] = []
-    kick_times: list[float] = []
-    snare_times: list[float] = []
-    hihat_times: list[float] = []
+    onset_times: list[float] = Field(default_factory=list)
+    kick_times: list[float] = Field(default_factory=list)
+    snare_times: list[float] = Field(default_factory=list)
+    hihat_times: list[float] = Field(default_factory=list)
     analysis_status: str = "completed"
     stage_status: dict[str, str] = Field(default_factory=dict)
     stage_errors: dict[str, str] = Field(default_factory=dict)
@@ -111,7 +111,7 @@ class WaveformData(BaseModel):
     """Response: Waveform-Daten."""
     clip_id: int
     sample_rate: int
-    bands: list[list[float]] = []  # Pro Band eine Liste von Amplitude-Werten
+    bands: list[list[float]] = Field(default_factory=list)  # Pro Band eine Liste von Amplitude-Werten
     duration_seconds: float = 0.0
 
 
@@ -153,15 +153,15 @@ class StructureSegment(BaseModel):
 class SpectralData(BaseModel):
     """Response: Spektral-Analyse Daten."""
     clip_id: int
-    times: list[float] = []
-    bands: dict[str, list[float]] = {}  # Band-Name → Amplitude-Werte
-    centroids: list[float] = []
-    frequency_ranges: dict[str, list[float]] = {}
+    times: list[float] = Field(default_factory=list)
+    bands: dict[str, list[float]] = Field(default_factory=dict)  # Band-Name → Amplitude-Werte
+    centroids: list[float] = Field(default_factory=list)
+    frequency_ranges: dict[str, list[float]] = Field(default_factory=dict)
     # L-AUDIO-4: SpectralAnalyzer-Aggregate + Drop/Buildup/Breakdown-Events
     # mit-persistieren (waren zuvor im Mapping verworfen).
-    band_means: dict[str, float] = {}
-    band_variances: dict[str, float] = {}
-    events: list[dict] = []
+    band_means: dict[str, float] = Field(default_factory=dict)
+    band_variances: dict[str, float] = Field(default_factory=dict)
+    events: list[dict] = Field(default_factory=list)
 
 
 # Forward-References auflösen (StructureSegment/SpectralData nach AudioAnalysisResult definiert)

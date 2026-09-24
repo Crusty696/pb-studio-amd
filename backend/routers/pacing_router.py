@@ -823,11 +823,23 @@ async def _generate_cut_list_for_project(
 async def get_timeline(state: AppState = Depends(get_app_state)) -> TimelineResponse:
     """Gibt die aktuelle Timeline zurück."""
     timeline_snapshot, audio_path = state.get_timeline_state_snapshot()
+    video_clips = state.get_video_clips_snapshot()
     entries = []
     for cut in timeline_snapshot:
-        meta = cut.get("metadata", {})
+        meta = dict(cut.get("metadata", {}))
+        clip_id = cut.get("clip_id")
+        video_clip = video_clips.get(clip_id)
+        if video_clip is None:
+            try:
+                video_clip = video_clips.get(int(clip_id))
+            except (TypeError, ValueError):
+                pass
+        if video_clip is not None:
+            meta["source_duration"] = float(
+                video_clip.get("duration_seconds", 0.0) or 0.0
+            )
         entries.append(TimelineEntrySchema(
-            clip_id=cut.get("clip_id", ""),
+            clip_id=clip_id or "",
             clip_name=meta.get("clip_name", "Unknown"),
             file_path=meta.get("file_path", ""),
             start_time=cut.get("start_time", 0.0),

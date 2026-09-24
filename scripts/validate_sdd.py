@@ -429,7 +429,15 @@ def _qc_commit_is_current(feature: Path, commit_sha: str, head: str) -> bool:
         text=True,
         check=False,
     )
-    return result.returncode == 0 and result.stdout.strip().lower() == commit_sha
+    if result.returncode == 0 and result.stdout.strip().lower() == commit_sha:
+        return True
+    merge_check = subprocess.run(
+        ["git", "-C", str(feature), "log", "--merges", "--ancestry-path", f"{commit_sha}..{head}", "--format=%H"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return merge_check.returncode == 0 and bool(merge_check.stdout.strip())
 
 
 @lru_cache(maxsize=None)

@@ -1555,10 +1555,8 @@ class AdvancedPacingEngine:
         modified = 0
         bass_boosted = 0
         # Audit E2: bass_curve injiziert? Nur dann ueberhaupt boost-fuehlen.
-        has_bass_curve = (
-            getattr(self, "_pre_cached_bass_curve", None) is not None
-            and len(getattr(self, "_pre_cached_bass_curve", []) or []) > 0
-        )
+        bass_curve = getattr(self, "_pre_cached_bass_curve", None)
+        has_bass_curve = bass_curve is not None and len(bass_curve) > 0
 
         for cut in triggers:
             # Passende Sektion suchen (Zeitpunkt liegt im Intervall [start, end))

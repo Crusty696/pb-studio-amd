@@ -54,6 +54,7 @@ def test_motion_endpoint_forwards_peak_motion():
 
     state = AppState()
     state.reset()
+    state.current_project = {"db_project_id": 1, "path": "D:/proj", "name": "proj"}
 
     # Cache-Eintrag manuell setzen — simuliert abgeschlossene Analyse
     state.video_clips[1] = {
@@ -68,6 +69,7 @@ def test_motion_endpoint_forwards_peak_motion():
         "clip_id": 1,
         "scene_count": 0,
         "avg_motion": 12.5,
+        "stage_status": {"motion": "completed"},
         "motion": {
             "clip_id": 1,
             "avg_motion": 12.5,

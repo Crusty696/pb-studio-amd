@@ -37,7 +37,7 @@ def test_default_urls_constants():
 
 @patch("pb_studio.ai.llm_provider._load_config", return_value={})
 def test_provider_default_auto_when_config_missing(mock_cfg):
-    assert get_provider() == "auto"
+    assert get_provider() == "lmstudio"
 
 
 @patch("pb_studio.ai.llm_provider._load_config", return_value={"provider": "lmstudio"})
@@ -52,7 +52,7 @@ def test_provider_normalizes_case(mock_cfg):
 
 @patch("pb_studio.ai.llm_provider._load_config", return_value={"provider": "garbage"})
 def test_provider_invalid_falls_back_to_auto(mock_cfg):
-    assert get_provider() == "auto"
+    assert get_provider() == "lmstudio"
 
 
 @patch("pb_studio.ai.llm_provider._load_config", return_value={})
@@ -128,9 +128,8 @@ def test_load_config_uses_canonical_config_manager(monkeypatch):
     assert llm_provider._load_config() == {"provider": "ollama"}
 
 
-def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
+def test_exclusive_provider_probes_only_configured_provider():
     started: list[str] = []
-    both_started = asyncio.Event()
 
     class FakeClient:
         def __init__(self, provider: str):
@@ -140,10 +139,7 @@ def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
         async def supports_capability(self, capability: str) -> bool:
             assert capability == "vision"
             started.append(self.provider)
-            if len(started) == 2:
-                both_started.set()
-            await both_started.wait()
-            return self.provider == "ollama"
+            return True
 
         async def aclose(self) -> None:
             return None
@@ -152,7 +148,7 @@ def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
         return FakeClient(provider or "lmstudio")
 
     async def go():
-        with patch("pb_studio.ai.llm_provider.get_provider", return_value="auto"), \
+        with patch("pb_studio.ai.llm_provider.get_provider", return_value="lmstudio"), \
              patch("pb_studio.ai.llm_provider.get_llm_client", side_effect=fake_factory):
             return await get_alive_client(
                 timeout_seconds=0.2,
@@ -160,6 +156,6 @@ def test_auto_provider_probes_in_parallel_and_skips_embedding_only_lmstudio():
             )
 
     selected = asyncio.run(go())
-    assert set(started) == {"lmstudio", "ollama"}
+    assert started == ["lmstudio"]
     assert selected is not None
-    assert selected.provider == "ollama"
+    assert selected.provider == "lmstudio"

@@ -91,6 +91,7 @@ function Initialize-DriverSession {
 }
 
 function Save-BackendOwnerState([int]$ProcessId, [string]$OwnerCapability) {
+    Add-Type -AssemblyName System.Security
     $plainBytes = [Text.Encoding]::UTF8.GetBytes($OwnerCapability)
     $protectedBytes = [Security.Cryptography.ProtectedData]::Protect(
         $plainBytes,
@@ -109,6 +110,7 @@ function Get-BackendOwnerState {
         return $null
     }
     try {
+        Add-Type -AssemblyName System.Security
         $state = Get-Content -LiteralPath $BackendOwnerStatePath -Raw | ConvertFrom-Json
         if (-not [bool]$state.active -or [int]$state.process_id -le 0) {
             return $null
@@ -320,8 +322,20 @@ function Invoke-StopBackend {
     $ownerState = Get-BackendOwnerState
     $listenerPids = @(Get-BackendPids)
     if ($null -eq $ownerState -or $listenerPids -notcontains $ownerState.ProcessId) {
-        Log "Shutdown refused: current listener is not owned by this driver" 'Red'
-        exit 5
+        $isOwned = $false
+        if ($ownerState) {
+            foreach ($lp in $listenerPids) {
+                $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $lp" -ErrorAction SilentlyContinue
+                if ($proc -and $proc.ParentProcessId -eq $ownerState.ProcessId) {
+                    $isOwned = $true
+                    break
+                }
+            }
+        }
+        if (-not $isOwned) {
+            Log "Shutdown refused: current listener is not owned by this driver" 'Red'
+            exit 5
+        }
     }
     $env:PBSTUDIO_OWNER_CAPABILITY = $ownerState.OwnerCapability
     Log "POST $BaseUrl/shutdown ..."

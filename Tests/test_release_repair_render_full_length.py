@@ -404,7 +404,7 @@ def test_full_length_render_command_preserves_audio_duration_and_headroom(
     )
 
     audio_filter = command[command.index("-filter:a") + 1]
-    assert audio_filter == "volume=-2.0dB"
+    assert audio_filter == "volume=-2.0dB,alimiter=limit=0.89125:level=disabled"
     assert command[command.index("-c:a") + 1] == "aac"
     assert command[command.index("-t") + 1] == "6335.027"
     assert effective_duration == FULL_LENGTH_SECONDS

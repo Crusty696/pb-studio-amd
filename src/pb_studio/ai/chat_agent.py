@@ -55,6 +55,10 @@ _status_publisher: Callable[[str, dict[str, Any]], None] | None = None
 _PINNED_CHAT_MODELS: dict[str, tuple[str, str]] = {}
 
 
+def reset_pinned_chat_models() -> None:
+    _PINNED_CHAT_MODELS.clear()
+
+
 def set_status_publisher(fn: Callable[[str, dict[str, Any]], None] | None) -> None:
     global _status_publisher
     _status_publisher = fn
@@ -331,6 +335,9 @@ class ChatAgent:
                 mode,
                 (None, None),
             )
+            if (pinned_provider, pinned_model) in excluded:
+                _PINNED_CHAT_MODELS.pop(mode, None)
+                pinned_provider = pinned_model = None
 
         for task in ("chat_tool_use", "chat_general", "chat"):
             try:
@@ -368,6 +375,37 @@ class ChatAgent:
                     f"{receipt.reason} provider={receipt.provider} source={receipt.source}",
                 )
             except (NoSuitableModelError, ModelRegistryError):
+                if (
+                    pinned_model is not None
+                    and requested_model == pinned_model
+                    and requested_provider == pinned_provider
+                ):
+                    _PINNED_CHAT_MODELS.pop(mode, None)
+                    pinned_provider = pinned_model = None
+                    try:
+                        receipt = self._model_registry.select_receipt_for_task(
+                            snapshot,
+                            task,
+                            mode,
+                            exclude=excluded,
+                        )
+                        if self._active_client_provider != receipt.provider:
+                            if self._llm is not None and self._owned_llm:
+                                await self._llm.aclose()
+                            self._llm = get_llm_client(
+                                provider=receipt.provider,
+                                timeout_seconds=DEFAULT_GENERATION_TIMEOUT,
+                            )
+                            self._owned_llm = True
+                            self._active_client_provider = receipt.provider
+                        self._active_selection_receipt = receipt
+                        logger.info("ModelSelectionReceipt: %s", receipt.to_dict())
+                        return (
+                            receipt.model_id,
+                            f"{receipt.reason} provider={receipt.provider} source={receipt.source}",
+                        )
+                    except (NoSuitableModelError, ModelRegistryError):
+                        pass
                 continue
         raise NoSuitableModelError(
             "Kein chat-fähiges Modell mit verifizierter Provider-Capability verfügbar."
