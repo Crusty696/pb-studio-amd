@@ -31,7 +31,7 @@
 | 25 | Queue overflow drops event without gap signal | T010 / FR-436 | VERIFIED EXISTING IMPLEMENTATION + LIVE-QUEUE REGRESSION: bounded queue records dropped sequence range and emits `replay_gap` before next accepted progress event |
 | 26 | FPS normalization and frame validation differ | T008 / FR-435 | VERIFIED RATIONAL COMMAND+VALIDATOR REGRESSION: 30000/1001 cadence at 60,000 s yields identical 1,798,202 frames; live fractional-FPS AMF export remains pending |
 | 27 | Render source/output identity collision possible | T008 / FR-435 | FIXED + ROUTER REGRESSION: exact source path and distinct hardlink alias rejected before queue enqueue; canonical path plus inode identity checked |
-| 28 | Validation progress is not visible | T008 / FR-435 | OPEN |
+| 28 | Validation progress is not visible | T008 / FR-435 | FIXED + SERVICE→SSE→VIEWMODEL REGRESSION: named validation phases emitted and bypass 100-ms progress throttle; visible `ValidationText` receives phase/percent; interactive GUI observation pending |
 | 29 | Render-status poll has no UI caller | T010 / FR-436 | OPEN |
 | 30 | Drums-derived features can stand in for mix features | T003 / FR-432 | MOCKED ROUTER REGRESSION; real stem/media acceptance pending |
 | 31 | Key may use incomplete streaming chroma | T003 / FR-432 | FIXED + ROUTER REGRESSION; real-media key accuracy pending |

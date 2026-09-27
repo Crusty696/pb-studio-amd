@@ -39,6 +39,7 @@
 - Bounded SSE client queue overflow verified to retain dropped-ID range and emit `replay_gap` before next accepted progress event; live-queue regression included in 9/9 passing event suite.
 - Fractional `30000/1001` FPS command and artifact validation agree on exact frame count over 60,000 seconds; render-integrity tests 5/5. Live fractional-rate AMF render remains pending.
 - Render start rejects source/output collisions by canonical path and physical hardlink identity before queueing; route regression covers video path, master-audio path, and hardlink alias.
+- SSEClient now exempts render-validation status/phase events from the 100-ms progress throttle; named validation phases reach ProductionViewModel and visible XAML binding. Verified: C# 80/80, Python render/UI contracts 9/9 (6 dependency warnings), WPF Release 0/0; interactive display remains pending.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

@@ -237,6 +237,56 @@ def test_rational_non_integer_fps_frame_count_matches_artifact_validator(
     assert validation["expected_frames"] == expected_frames
 
 
+def test_artifact_validation_emits_named_phase_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
+    monkeypatch.setattr(
+        service,
+        "_run_capture_process",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({
+                "format": {"duration": "1.0"},
+                "streams": [{
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1920,
+                    "height": 1080,
+                }],
+            }),
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_decode_artifact_stream",
+        lambda *_args, **_kwargs: {
+            "frame": "30",
+            "out_time_us": "1000000",
+            "progress": "end",
+        },
+    )
+    emitted: list[dict[str, object]] = []
+
+    service._validate_render_artifact(
+        tmp_path / "validated.mp4",
+        expected_duration=1.0,
+        target_fps=30.0,
+        target_width=1920,
+        target_height=1080,
+        include_audio=False,
+        progress_callback=lambda _message, _percent, details: emitted.append(details),
+    )
+
+    assert [event["validation_phase"] for event in emitted] == [
+        "container_probe",
+        "video_decode",
+    ]
+    assert all(event["validation_status"] == "running" for event in emitted)
+
+
 @pytest.mark.parametrize("same_as", ["video", "audio", "video-hardlink"])
 def test_start_render_rejects_input_output_identity_before_enqueue(
     tmp_path: Path,

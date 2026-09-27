@@ -24,6 +24,12 @@ public sealed class ProductionRenderRecoveryTests
         StaTest.Run(() => RunSupersededTaskOnStaDispatcherAsync().GetAwaiter().GetResult());
     }
 
+    [TestMethod]
+    public void ValidationPhaseEvent_BypassesProgressThrottleAndReachesVisibleViewModelState()
+    {
+        StaTest.Run(() => RunValidationProgressOnStaDispatcherAsync().GetAwaiter().GetResult());
+    }
+
     private static async Task RunOnStaDispatcherAsync()
     {
         Assert.IsNull(Application.Current, "Test must exercise dispatcher fallback without global WPF Application.");
@@ -157,6 +163,35 @@ public sealed class ProductionRenderRecoveryTests
         SynchronizationContext.SetSynchronizationContext(null);
     }
 
+    private static async Task RunValidationProgressOnStaDispatcherAsync()
+    {
+        Assert.IsNull(Application.Current, "Test must exercise dispatcher fallback without global WPF Application.");
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+        var api = ApiClientHarness.Create();
+        using var projects = new ProjectService(api.Client, NullLogger<ProjectService>.Instance);
+        using var sse = new SSEClient(NullLogger<SSEClient>.Instance, new TerminalLogBuffer());
+        using var viewModel = new ProductionViewModel(
+            api.Client,
+            sse,
+            new TimelineStateService(api.Client, NullLogger<TimelineStateService>.Instance, projects),
+            projects,
+            new DialogServiceStub());
+
+        Assert.IsTrue(ProcessSseProgress(sse,
+            "{\"task_id\":\"validation-job\",\"status\":\"running\",\"percent\":10,\"progress_percent\":10,\"message\":\"Render läuft\"}"));
+        Assert.IsTrue(ProcessSseProgress(sse,
+            "{\"task_id\":\"validation-job\",\"status\":\"running\",\"percent\":98,\"progress_percent\":98,\"message\":\"Dekodiere Video\",\"validation_status\":\"running\",\"validation_phase\":\"container_probe\",\"validation_progress\":40}"));
+
+        await PumpUntilAsync(
+            dispatcher,
+            () => viewModel.ValidationText == "Validierung: container probe (40%)");
+
+        Assert.AreEqual(98.0, viewModel.RenderProgress);
+        Assert.IsTrue(viewModel.IsRendering);
+        SynchronizationContext.SetSynchronizationContext(null);
+    }
+
     private static void InvokeRenderProgress(ProductionViewModel viewModel, ProgressEventArgs args)
     {
         var handler = typeof(ProductionViewModel).GetMethod("OnRenderProgress", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -174,15 +209,24 @@ public sealed class ProductionRenderRecoveryTests
         Assert.IsTrue(accepted);
     }
 
+    private static bool ProcessSseProgress(SSEClient sse, string json)
+    {
+        var streamKind = typeof(SSEClient).GetNestedType("StreamKind", BindingFlags.NonPublic)!;
+        var progressStream = Enum.Parse(streamKind, "Progress");
+        var processEvent = typeof(SSEClient).GetMethod("TryProcessEvent", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        return (bool)processEvent.Invoke(sse, [progressStream, "render_progress", json])!;
+    }
+
     private static async Task PumpUntilAsync(Dispatcher dispatcher, Func<bool> condition)
     {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         var frame = new DispatcherFrame();
         var timer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(5),
             DispatcherPriority.Background,
             (_, _) =>
             {
-                if (condition())
+                if (condition() || DateTime.UtcNow >= deadline)
                     frame.Continue = false;
             },
             dispatcher);
