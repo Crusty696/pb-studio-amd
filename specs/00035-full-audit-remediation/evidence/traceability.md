@@ -4,7 +4,7 @@
 
 | # | Finding | Task / requirement | Status |
 |---:|---|---|---|
-| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | OPEN |
+| 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT EXPORT; original long-media incident pending |
 | 2 | 437.861-second evidence-record gap | T008 / FR-435 | OPEN |
 | 3 | Preview path/audio contract failure | T007 / FR-434 | OPEN |
 | 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | OPEN |

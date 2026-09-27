@@ -875,8 +875,8 @@ class RenderService:
             "-vf",
             (
                 "select=concatdec_select,"
-                "settb=AVTB,setpts=N*TB*"
-                f"{render_rate.denominator}/{render_rate.numerator}"
+                "settb=AVTB,setpts=N*"
+                f"{render_rate.denominator}/{render_rate.numerator}/TB"
             ),
         ])
         # Concat inputs may retain source cadence (or VFR timestamps). Set the

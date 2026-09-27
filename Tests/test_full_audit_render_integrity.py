@@ -167,6 +167,7 @@ def test_render_command_and_validator_share_rational_frame_rate(
         target_rate=__import__("fractions").Fraction(30, 1),
     )
     assert cmd[cmd.index("-r") + 1] == "30/1"
+    assert "settb=AVTB,setpts=N*1/30/TB" in cmd[cmd.index("-vf") + 1]
     assert cmd[cmd.index("-frames:v") + 1] == "98984"
     assert cmd[cmd.index("-t") + 1] == "3299.457"
 
