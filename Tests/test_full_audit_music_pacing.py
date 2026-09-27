@@ -49,16 +49,57 @@ def test_theme_bonus_cannot_overwhelm_music_and_motion_score():
     selector._record_selection_details = ClipSelector._record_selection_details.__get__(selector)
     selector._update_continuity = lambda *args, **kwargs: None
     selector._update_recently_used = lambda *args, **kwargs: None
-    selector._select_by_motion(
+    selected = selector._select_by_motion(
         [
             {"id": "theme", "file_path": "theme.mp4", "motion_score": 0.0,
              "tags": ["neon"]},
             {"id": "music", "file_path": "music.mp4", "motion_score": 1.0,
              "tags": []},
         ],
-        1.0, "beat", semantic_scores={"theme.mp4": 0.0, "music.mp4": 1.0},
+        1.0, "beat", semantic_scores={
+            ClipSelector._normalized_path_key("theme.mp4"): 0.0,
+            ClipSelector._normalized_path_key("music.mp4"): 1.0,
+        },
     )
-    assert selector._selection_details["score_components"]["total_score"] < 2.0
+    assert selected.clip_id == "music"
+    assert selector._selection_details["score_components"]["semantic_similarity_score"] == 1.0
+    assert selector._selection_details["score_components"]["theme_bonus"] == 0.0
+
+
+def test_theme_bonus_only_breaks_a_near_tie_for_narrative_continuity():
+    selector = ClipSelector.__new__(ClipSelector)
+    selector.motion_tolerance = 0.35
+    selector.use_key_matching = False
+    selector.audio_key = None
+    selector._last_clip_path = None
+    selector._last_clip_motion_score = 0.5
+    selector._continuity_weight = 0.0
+    selector.use_motion_matching = True
+    selector.active_theme = "neon_cyber_rave"
+    selector.bridging_in_to = None
+    selector.bridging_out_of = None
+    selector._selection_details = {}
+    selector._record_selection_details = ClipSelector._record_selection_details.__get__(selector)
+    selector._update_continuity = lambda *args, **kwargs: None
+    selector._update_recently_used = lambda *args, **kwargs: None
+
+    selected = selector._select_by_motion(
+        [
+            {"id": "theme", "file_path": "theme.mp4", "motion_score": 30.0,
+             "tags": ["neon"]},
+            {"id": "music", "file_path": "music.mp4", "motion_score": 30.0,
+             "tags": []},
+        ],
+        1.0, "beat", semantic_scores={
+            ClipSelector._normalized_path_key("theme.mp4"): 0.48,
+            ClipSelector._normalized_path_key("music.mp4"): 0.50,
+        },
+    )
+
+    assert selected.clip_id == "theme"
+    components = selector._selection_details["score_components"]
+    assert components["semantic_similarity_score"] == pytest.approx(0.48)
+    assert components["theme_bonus"] == pytest.approx(0.05)
 
 
 def test_short_export_chapter_energy_uses_full_track_timebase(monkeypatch):

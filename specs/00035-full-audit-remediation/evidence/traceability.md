@@ -40,7 +40,7 @@
 | 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | PARTIAL FIX + REGRESSION; full-run transition features not yet wired |
 | 35 | Motion normalization discontinuity | T006 / FR-433 | OPEN |
 | 36 | BPM correction does not remap beat strengths | T006 / FR-433 | OPEN |
-| 37 | Theme bonus can dominate music/motion ranking | T006 / FR-433 | OPEN |
+| 37 | Theme bonus can dominate music/motion ranking | T006 / FR-433 | STRONG-MATCH + NEAR-TIE REGRESSIONS; real-media ranking pending |
 | 38 | Short render uses wrong energy-curve timebase | T006 / FR-433 | OPEN |
 | 39 | Repeated short clip inherits false beat provenance | T006 / FR-433 | OPEN |
 | 40 | Stale project response can overwrite new project UI | T009 / FR-437 | OPEN |
