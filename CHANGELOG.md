@@ -37,6 +37,7 @@
 - Render SSE replay-gap now has native recovery coverage through authoritative status reconciliation, including stale-task response protection; ProductionViewModel captures a dispatcher fallback for headless/test hosts. Verified: C# 79 passed, focused Python recovery contracts 10 passed (6 dependency warnings), WPF Release build 0/0.
 - SSE cursor restart behavior verified across separate Python processes: a fresh backend instance returns a replayable event ID greater than previous process cursor. No runtime implementation change needed; live server reconnect remains to verify.
 - Bounded SSE client queue overflow verified to retain dropped-ID range and emit `replay_gap` before next accepted progress event; live-queue regression included in 9/9 passing event suite.
+- Fractional `30000/1001` FPS command and artifact validation agree on exact frame count over 60,000 seconds; render-integrity tests 5/5. Live fractional-rate AMF render remains pending.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

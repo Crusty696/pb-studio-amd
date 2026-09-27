@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import json
 import subprocess
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -170,6 +171,69 @@ def test_render_command_and_validator_share_rational_frame_rate(
     assert "settb=AVTB,setpts=N*1/30/TB" in cmd[cmd.index("-vf") + 1]
     assert cmd[cmd.index("-frames:v") + 1] == "98984"
     assert cmd[cmd.index("-t") + 1] == "3299.457"
+
+
+def test_rational_non_integer_fps_frame_count_matches_artifact_validator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rate = Fraction(30_000, 1_001)
+    duration = 60_000.0
+    expected_frames = 1_798_202
+    service = RenderService(output_dir=str(tmp_path), encoder_override="h264_amf")
+    service._render_rate = rate
+    command, _ = service._build_render_cmd(
+        tmp_path / "concat.txt",
+        str(tmp_path / "mix.wav"),
+        tmp_path / "out.mp4",
+        "12M",
+        "quality",
+        0.0,
+        duration,
+        "h264_amf",
+        include_audio=False,
+        target_rate=rate,
+    )
+    assert command[command.index("-r") + 1] == "30000/1001"
+    assert command[command.index("-frames:v") + 1] == str(expected_frames)
+
+    monkeypatch.setattr(
+        service,
+        "_run_capture_process",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({
+                "format": {"duration": str(duration)},
+                "streams": [{
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1920,
+                    "height": 1080,
+                }],
+            }),
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_decode_artifact_stream",
+        lambda *_args, **_kwargs: {
+            "frame": str(expected_frames),
+            "out_time_us": str(int(duration * 1_000_000)),
+            "progress": "end",
+        },
+    )
+
+    validation = service._validate_render_artifact(
+        tmp_path / "out.mp4",
+        expected_duration=duration,
+        target_fps=30_000 / 1_001,
+        target_width=1920,
+        target_height=1080,
+        include_audio=False,
+    )
+    assert validation["decoded_frames"] == expected_frames
+    assert validation["expected_frames"] == expected_frames
 
 
 @pytest.mark.parametrize("same_as", ["video", "audio"])

@@ -29,7 +29,7 @@
 | 23 | Replay-gap message does not reconcile state | T010 / FR-436 | FIXED + NATIVE SSE→VIEWMODEL REGRESSION: lost-event marker fetches authoritative render status, applies completion/output evidence, and ignores late response after task switch; backend replay-gap tests pass |
 | 24 | SSE cursor can be stale after backend restart | T010 / FR-436 | VERIFIED EXISTING SEQUENCE BOOTSTRAP + FRESH-PROCESS ROUTER REGRESSION: new backend process emits and replays event with ID greater than previous process cursor |
 | 25 | Queue overflow drops event without gap signal | T010 / FR-436 | VERIFIED EXISTING IMPLEMENTATION + LIVE-QUEUE REGRESSION: bounded queue records dropped sequence range and emits `replay_gap` before next accepted progress event |
-| 26 | FPS normalization and frame validation differ | T008 / FR-435 | OPEN |
+| 26 | FPS normalization and frame validation differ | T008 / FR-435 | VERIFIED RATIONAL COMMAND+VALIDATOR REGRESSION: 30000/1001 cadence at 60,000 s yields identical 1,798,202 frames; live fractional-FPS AMF export remains pending |
 | 27 | Render source/output identity collision possible | T008 / FR-435 | OPEN |
 | 28 | Validation progress is not visible | T008 / FR-435 | OPEN |
 | 29 | Render-status poll has no UI caller | T010 / FR-436 | OPEN |
