@@ -284,6 +284,7 @@ def test_key_matching_ranks_fitting_clip_first_on_negative_scores(monkeypatch) -
 
     selector = ClipSelector(strategy="motion")
     selector.use_key_matching = True
+    selector.use_motion_matching = True
     selector.audio_key = "C major"
     selector.video_keys = {"fitting": "C major", "clashing": "F# major"}
     monkeypatch.setattr(
@@ -297,8 +298,8 @@ def test_key_matching_ranks_fitting_clip_first_on_negative_scores(monkeypatch) -
     # weak trigger score 0.0 on the motion match, and "break" subtracts 0.50.
     selected = selector._select_by_motion(
         [
-            {"id": "fitting", "file_path": "fitting.mp4", "motion_score": 0.9},
-            {"id": "clashing", "file_path": "clashing.mp4", "motion_score": 0.9},
+            {"id": "fitting", "file_path": "fitting.mp4", "motion_score": 27.0},
+            {"id": "clashing", "file_path": "clashing.mp4", "motion_score": 27.0},
         ],
         0.1,
         "beat",
