@@ -2873,6 +2873,11 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Beat Grid"
+          },
+          "feature_provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Feature Provenance"
           }
         },
         "type": "object",
@@ -4455,6 +4460,11 @@
             "type": "string",
             "title": "Resolution",
             "default": "640x360"
+          },
+          "audio_included": {
+            "type": "boolean",
+            "title": "Audio Included",
+            "default": false
           }
         },
         "type": "object",
@@ -4800,6 +4810,16 @@
             "type": "string",
             "nullable": true,
             "title": "Validation Status"
+          },
+          "validation_phase": {
+            "type": "string",
+            "nullable": true,
+            "title": "Validation Phase"
+          },
+          "validation_progress": {
+            "type": "number",
+            "nullable": true,
+            "title": "Validation Progress"
           }
         },
         "type": "object",
