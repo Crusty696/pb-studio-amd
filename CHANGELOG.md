@@ -25,6 +25,7 @@
 - Video embedding resume now requires exact matching media content hash plus active linked FAISS metadata; negative IDs, missing links, out-of-range IDs, and tombstones cannot reuse stale embedding status.
 - Model smoke endpoint has direct empty-provider-response coverage: reports failure with explicit reason and preserves the existing empty-string response schema, never fabricated “OK”.
 - Model inventory capability-probe failure is explicitly verified as installed-but-unverified/unusable, with failure detail surfaced in status reason instead of a silent DEBUG-only diagnosis.
+- Tool-use activation is covered through the API for both capability-negative and capability-positive models; rejected activation leaves configuration and inventory unchanged.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

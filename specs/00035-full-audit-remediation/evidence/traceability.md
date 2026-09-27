@@ -18,7 +18,7 @@
 | 12 | Old batch error can override later valid stage response | T002 / FR-430 | FIXED + NATIVE MULTI-PASS RECOVERY REGRESSION: lost scene response followed by complete server response clears stale request failure; GUI/network-loss live acceptance pending |
 | 13 | Empty model smoke output fabricated as success | T005 / FR-431 | FIXED + ROUTE-LEVEL REGRESSION: empty provider response returns `success=false`, empty response field, and explicit error; no synthetic success text |
 | 14 | Capability probe failure misstates model usability | T005 / FR-431 | FIXED + REGRESSION: installed remains true, unverified capability keeps usable=false, and user-facing status reason includes probe failure/cause |
-| 15 | Tool-use activation lacks tool-capability proof | T005 / FR-431 | OPEN |
+| 15 | Tool-use activation lacks tool-capability proof | T005 / FR-431 | FIXED + ACTIVATION API REGRESSION: chat-only model rejected without config mutation; tool_calls-capable model accepted and persisted only for chat_tool_use |
 | 16 | Positive caption counts do not prove semantic correctness | T014 / TR-393 | OPEN |
 | 17 | Relative preview path rejected by WPF | T007 / FR-434 | OPEN |
 | 18 | Preview omits master audio | T007 / FR-434 | OPEN |
