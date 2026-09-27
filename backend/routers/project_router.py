@@ -758,13 +758,11 @@ async def open_project(
     meta = _read_project_meta(project_path)
     has_timeline = _load_timeline_into_state(project_path, candidate_state)
 
-    # Fallback: lokale Projektordner zählen, falls keine Metadaten vorhanden.
-    audio_count = int(meta.get("audio_count") or 0)
-    video_count = int(meta.get("video_count") or 0)
-    if audio_count == 0 and (project_path / "audio").exists():
-        audio_count = sum(1 for f in (project_path / "audio").glob("*") if f.is_file())
-    if video_count == 0 and (project_path / "video").exists():
-        video_count = sum(1 for f in (project_path / "video").glob("*") if f.is_file())
+    # ProjectInfo counters follow the catalog that was validated and installed
+    # into AppState. Metadata may be stale; folders may contain exports,
+    # sidecars, or unrelated files rather than imported media records.
+    audio_count = len(candidate_state.audio_clips)
+    video_count = len(candidate_state.video_clips)
 
     db_project_id = (
         existing_project_id

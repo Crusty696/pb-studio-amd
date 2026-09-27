@@ -434,7 +434,7 @@ public class SSEClient : IDisposable
                             TryGetString(root, "error"),
                             TryGetString(root, "detail"));
 
-                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
+                        bool isFinal = status == "completed" || status == "failed" || status == "interrupted" || status == "cancelled" || status == "canceled" || status == "timed_out" || pct >= 100.0 || !string.IsNullOrEmpty(TryGetString(root, "error"));
                         bool shouldEmit = true;
 
                         if (!isFinal && !string.IsNullOrEmpty(taskId))

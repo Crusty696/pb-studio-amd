@@ -84,6 +84,42 @@ class TestProjectLifecyclePersistence:
         monkeypatch.setattr(ProjectRepository, "update_project", fake_update)
         return records
 
+    def test_open_counts_match_loaded_catalog_not_project_folder_files(
+        self, client, tmp_path, fresh_state, monkeypatch
+    ):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        project_path = tmp_path / "Counts"
+        audio_folder = project_path / "audio"
+        audio_folder.mkdir(parents=True)
+        (audio_folder / "cached-copy.wav").write_bytes(b"RIFF")
+        (audio_folder / "unrelated.txt").write_text("not a catalog clip")
+        (project_path / "project.json").write_text(
+            json.dumps({"name": "Counts", "audio_count": 0, "video_count": 0}),
+            encoding="utf-8",
+        )
+        registered_audio = tmp_path / "registered.wav"
+        registered_audio.write_bytes(b"RIFF")
+
+        def load_catalog(self, project_id=None):
+            self.audio_clips[11] = {
+                "id": 11,
+                "path": str(registered_audio),
+                "name": "registered",
+            }
+            return True
+
+        monkeypatch.setattr(AppState, "load_from_db", load_catalog)
+
+        opened = client.post("/project/open", json={"path": str(project_path)})
+
+        assert opened.status_code == 200, opened.text
+        assert opened.json()["audio_count"] == len(fresh_state.audio_clips) == 1
+        info = client.get("/project/info")
+        assert info.status_code == 200
+        assert info.json()["audio_count"] == opened.json()["audio_count"]
+
     def test_create_save_open_roundtrip_persists_timeline_metadata(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
 

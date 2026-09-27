@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import logging
 from pathlib import Path
+import stat
 import sqlite3
 from typing import Callable, Iterable
 
@@ -16,6 +18,8 @@ from .recovery_generation import (
     load_current_generation,
     validate_generation,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RecoveryOwnerAdapterError(RuntimeError):
@@ -148,7 +152,24 @@ def _catalog_inventory(snapshot: RecoveryOwnerSnapshot) -> tuple[
                     path = Path(str(raw_path))
                     if not path.is_absolute():
                         raise RecoveryOwnerAdapterError("Catalog project path is relative")
-                    projects.append((project_uuid, path.resolve()))
+                    resolved_path = path.resolve()
+                    try:
+                        root_stat = resolved_path.stat()
+                    except FileNotFoundError:
+                        logger.warning(
+                            "Recovery: manuell gelöschtes Projekt übersprungen: %s",
+                            resolved_path,
+                        )
+                        continue
+                    except OSError as exc:
+                        raise RecoveryOwnerAdapterError(
+                            f"Catalog project root is inaccessible: {resolved_path}"
+                        ) from exc
+                    if not stat.S_ISDIR(root_stat.st_mode):
+                        raise RecoveryOwnerAdapterError(
+                            f"Catalog project root is not a directory: {resolved_path}"
+                        )
+                    projects.append((project_uuid, resolved_path))
 
         media: list[Path] = []
         stems: set[Path] = set()

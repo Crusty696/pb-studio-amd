@@ -1,6 +1,6 @@
 # 54-Point Traceability — OBJ-1
 
-Status `OPEN` means fix and acceptance evidence are pending. A code-review or unit test alone does not satisfy real-media criteria.
+`OPEN` means fix and acceptance evidence are pending. `FIXED + REGRESSION` means a focused automated regression now proves the reported defect is corrected; broader live workflow acceptance remains separate.
 
 | # | Finding | Task / requirement | Status |
 |---:|---|---|---|
@@ -25,7 +25,7 @@ Status `OPEN` means fix and acceptance evidence are pending. A code-review or un
 | 19 | Preview reports target, not artifact duration | T007 / FR-434 | OPEN |
 | 20 | Timeline selection can interrupt rendered preview | T007 / FR-434 | OPEN |
 | 21 | Scrubbing ignores timeline-to-source offset | T007 / FR-434 | OPEN |
-| 22 | Render cancel SSE can be throttled/lost | T010 / FR-436 | OPEN |
+| 22 | Render cancel SSE can be throttled/lost | T010 / FR-436 | FIXED + REGRESSION; live SSE pending |
 | 23 | Replay-gap message does not reconcile state | T010 / FR-436 | OPEN |
 | 24 | SSE cursor can be stale after backend restart | T010 / FR-436 | OPEN |
 | 25 | Queue overflow drops event without gap signal | T010 / FR-436 | OPEN |
@@ -45,8 +45,8 @@ Status `OPEN` means fix and acceptance evidence are pending. A code-review or un
 | 39 | Repeated short clip inherits false beat provenance | T006 / FR-433 | OPEN |
 | 40 | Stale project response can overwrite new project UI | T009 / FR-437 | OPEN |
 | 41 | Changed media at same path can reuse stale metadata | T009 / FR-437 | OPEN |
-| 42 | Project counters read different sources | T009 / FR-437 | OPEN |
-| 43 | Recovery discovery may skip temporarily inaccessible root | T009 / FR-437 | OPEN |
+| 42 | Project counters read different sources | T009 / FR-437 | FIXED + REGRESSION; GUI pending |
+| 43 | Recovery discovery may skip temporarily inaccessible root | T009 / FR-437 | FIXED + REGRESSION; live ACL pending |
 | 44 | Valid `error:null` chat response presented as error | T005 / FR-431 | OPEN |
 | 45 | Chat render rejects valid video-only request | T005 / FR-431 | OPEN |
 | 46 | Stale clear-history response can clear other project view | T005 / FR-437 | OPEN |

@@ -226,6 +226,42 @@ public sealed class AnalysisResumeContractTests
     }
 
     [TestMethod]
+    public void SseCancelled_IsTerminalAndCannotBeThrottled()
+    {
+        using var sse = new SSEClient(
+            NullLogger<SSEClient>.Instance,
+            new TerminalLogBuffer());
+        var statuses = new List<string>();
+        sse.ProgressReceived += (_, args) => statuses.Add(args.Status);
+
+        var streamKindType = typeof(SSEClient).GetNestedType(
+            "StreamKind",
+            BindingFlags.NonPublic)!;
+        var progressKind = Enum.Parse(streamKindType, "Progress");
+        var processEvent = typeof(SSEClient).GetMethod(
+            "ProcessEvent",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        processEvent.Invoke(
+            sse,
+            [
+                progressKind,
+                "render_progress",
+                """{"task_id":"cancel-22","status":"running","percent":92}""",
+            ]);
+        processEvent.Invoke(
+            sse,
+            [
+                progressKind,
+                "render_progress",
+                """{"task_id":"cancel-22","status":"cancelled","percent":92}""",
+            ]);
+
+        Assert.AreEqual(2, statuses.Count);
+        CollectionAssert.AreEqual(new[] { "running", "cancelled" }, statuses);
+    }
+
+    [TestMethod]
     public void SseEventId_IsCommittedOnlyAfterSuccessfulDispatch()
     {
         using var sse = new SSEClient(
