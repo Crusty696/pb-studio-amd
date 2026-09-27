@@ -3,6 +3,15 @@
 
 ---
 
+## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
+
+### Fixed & Verified (partial scope only)
+- Render concat PTS now uses the rational frame timebase correctly; real AMF RenderService exports validated at 30 s (900 frames) and 60 s (1800 frames), with synchronized AAC audio, 30 fps, progress to 100%.
+- Long-mix streaming structure now uses detected energy-change boundaries rather than a fixed 60-second grid. Neutral `section` labels replace unsupported semantic labels; Intro/Outro require measured edge transitions. Transition/harmonic evidence is not yet wired for full-run semantics.
+- Caption provider cooldown recovery is covered through failure, suppression during cooldown, and successful mocked recovery after expiry; live provider recovery remains unverified.
+- Music/theme ranking regressions now use normalized semantic-score paths and prove strong music/motion match outranks theme; bounded theme bonus may choose a near-tie for continuity.
+- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed. Full audit remediation and GUI/E2E acceptance remain open.
+
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 
 ### Fixed & Verified
