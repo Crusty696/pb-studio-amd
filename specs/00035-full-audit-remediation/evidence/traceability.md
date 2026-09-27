@@ -34,7 +34,7 @@
 | 28 | Validation progress is not visible | T008 / FR-435 | OPEN |
 | 29 | Render-status poll has no UI caller | T010 / FR-436 | OPEN |
 | 30 | Drums-derived features can stand in for mix features | T003 / FR-432 | OPEN |
-| 31 | Key may use incomplete streaming chroma | T003 / FR-432 | OPEN |
+| 31 | Key may use incomplete streaming chroma | T003 / FR-432 | FIXED + ROUTER REGRESSION; real-media key accuracy pending |
 | 32 | Beat-grid suspect status may be dropped | T003 / FR-432 | OPEN |
 | 33 | Long-file beat-grid may omit tail/capped coverage | T003 / FR-432 | OPEN |
 | 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | PARTIAL FIX + REGRESSION; full-run transition features not yet wired |

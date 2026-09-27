@@ -310,6 +310,7 @@ def test_long_mix_uses_full_duration_streaming_representations(
 
     from backend.routers.audio_router import _run_audio_analysis
     from backend.schemas.audio_schemas import AudioAnalyzeRequest
+    from pb_studio.audio.key_detector import KeyDetector
     from pb_studio.audio.streaming_analyzer import (
         StreamingAnalysisResult,
         StreamingAudioAnalyzer,
@@ -342,6 +343,24 @@ def test_long_mix_uses_full_duration_streaming_representations(
         "analyze",
         lambda *_args, **_kwargs: streamed,
     )
+    seen_chroma: list[float] = []
+
+    def detect_from_full_mix_chroma(
+        _detector: KeyDetector, chroma: list[float]
+    ) -> str:
+        seen_chroma.extend(chroma)
+        return "D major"
+
+    monkeypatch.setattr(
+        KeyDetector, "detect_key_from_chroma", detect_from_full_mix_chroma
+    )
+    monkeypatch.setattr(
+        KeyDetector,
+        "detect_key",
+        lambda *_args, **_kwargs: pytest.fail(
+            "long-mix key must not be inferred from the 600-second waveform snapshot"
+        ),
+    )
 
     result = _run_audio_analysis(
         str(audio),
@@ -356,7 +375,10 @@ def test_long_mix_uses_full_duration_streaming_representations(
 
     assert result["structure_segments"][-1]["end_time"] == pytest.approx(1200.0)
     assert result["spectral_data"]["times"][-1] == pytest.approx(1199.0)
-    assert result["key"] == "C major"
+    assert result["key"] == "D major"
+    assert seen_chroma == streamed.chroma_mean
+    assert result["feature_provenance"]["key_source_role"] == "original_mix"
+    assert result["feature_provenance"]["key_coverage"] == pytest.approx(1.0)
 
 
 def test_stage_failure_marks_analysis_partial(monkeypatch, tmp_path):
