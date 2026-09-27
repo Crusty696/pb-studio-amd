@@ -153,6 +153,7 @@ def _chat_model(
     name: str,
     *,
     loaded: bool = False,
+    capabilities: tuple[str, ...] = ("chat",),
 ) -> ModelInventoryEntry:
     return ModelInventoryEntry(
         provider=provider,
@@ -161,7 +162,7 @@ def _chat_model(
         loaded=loaded,
         downloadable=False,
         usable=True,
-        capabilities=("chat",),
+        capabilities=capabilities,
         inventory_sources=(f"{provider}:frozen",),
         verified_at="2026-07-30T06:00:00+00:00",
         status_reason="frozen chat model",
@@ -635,8 +636,17 @@ def test_agent_auto_fallback_on_lmstudio_error(monkeypatch):
 
     _install_chat_inventory(
         monkeypatch,
-        _chat_model("lmstudio", "failed-model", loaded=True),
+        _chat_model(
+            "lmstudio", "failed-model", loaded=True,
+            capabilities=("chat", "tool_calls"),
+        ),
         _chat_model("lmstudio", "gemma-4-e4b"),
+    )
+    import pb_studio.ai.chat_agent as chat_agent_module
+    monkeypatch.setitem(
+        chat_agent_module._PINNED_CHAT_MODELS,
+        "balance",
+        ("lmstudio", "failed-model"),
     )
 
     import pb_studio.ai.llm_provider as llm_provider
