@@ -5,6 +5,7 @@
 
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
+- #40–43/#52 project lifecycle: stale DB media reuse now refreshes from current import hash/probe and invalidates old analysis on changed content; project-switch stale save response, catalog counters, inaccessible recovery root and empty-timeline explicit Save path verified. Close still preserves timeline when RAM emptiness may be unsaved; GUI interaction remains pending.
 - #47–49 Brain: per-stage failures no longer expose stale values to learned axes or context; fit prefilter shares projector validation and actual fit count gates publish/acknowledgement; source-media annotation time verified. Regression suite evidence is in Spec 00035 QC report.
 - #30 real-media verification: existing 30-second WAV analyzed through the audio router; spectral/key provenance reports original mix with complete coverage. Real separated-stem comparison remains pending (no stem fixture available).
 

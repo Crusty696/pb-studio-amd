@@ -360,6 +360,29 @@ class MediaRepository:
             raise
 
     @_retry_on_database_lock
+    def invalidate_analysis(self, media_id: int) -> None:
+        """Clear derived AI data when the current file identity is unverified."""
+        try:
+            with self.db.transaction(immediate=True) as conn:
+                cursor = conn.execute(
+                    "UPDATE media SET status = 'pending', ai_data_json = NULL "
+                    "WHERE id = ?",
+                    (int(media_id),),
+                )
+                if cursor.rowcount != 1:
+                    raise LookupError(f"Media {media_id} existiert nicht mehr")
+        except sqlite3.OperationalError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "Analysis invalidation failed for media %s: %s",
+                media_id,
+                exc,
+                exc_info=True,
+            )
+            raise
+
+    @_retry_on_database_lock
     def update_metadata(self, media_id: int, metadata: Dict):
         """Update technical metadata for a media file."""
         try:

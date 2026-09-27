@@ -183,6 +183,44 @@ class TestProjectLifecyclePersistence:
         assert len(fresh_state.current_timeline) == 1
         assert fresh_state.current_timeline[0]["metadata"]["file_path"] == str(video_file)
 
+    def test_explicit_save_after_removing_all_cuts_deletes_stale_timeline(
+        self, client, tmp_path, fresh_state, monkeypatch,
+    ):
+        from backend.config import config
+
+        monkeypatch.setattr(config, "project_dir", tmp_path)
+        created = client.post(
+            "/project/create",
+            json={"name": "Cleared", "path": str(tmp_path)},
+        )
+        assert created.status_code == 200, created.text
+        project_path = tmp_path / "Cleared"
+        video_file = project_path / "video" / "clip.mp4"
+        video_file.parent.mkdir(parents=True, exist_ok=True)
+        video_file.write_bytes(b"video")
+        fresh_state.video_clips[1] = {
+            "id": 1, "path": str(video_file), "name": "clip",
+        }
+        fresh_state.set_timeline([{
+            "clip_id": "clip_1", "file_path": str(video_file),
+            "start_time": 0.0, "end_time": 2.0,
+        }])
+
+        first_save = client.post("/project/save")
+        assert first_save.status_code == 200, first_save.text
+        timeline_path = project_path / "timeline.json"
+        assert timeline_path.is_file()
+
+        fresh_state.set_timeline([])
+        cleared_save = client.post("/project/save")
+
+        assert cleared_save.status_code == 200, cleared_save.text
+        assert not timeline_path.exists()
+        project_meta = json.loads(
+            (project_path / "project.json").read_text(encoding="utf-8")
+        )
+        assert project_meta["has_timeline"] is False
+
     def test_roundtrip_timeline_endpoint_restores_flat_fields_after_reopen(self, client, tmp_path, fresh_state, monkeypatch):
         from backend.config import config
 

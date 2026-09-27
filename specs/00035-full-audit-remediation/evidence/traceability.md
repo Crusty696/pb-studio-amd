@@ -43,10 +43,10 @@
 | 37 | Theme bonus can dominate music/motion ranking | T006 / FR-433 | STRONG-MATCH + NEAR-TIE REGRESSIONS; real-media ranking pending |
 | 38 | Short render uses wrong energy-curve timebase | T006 / FR-433 | FIXED + 32s OUTPUT / 64s SOURCE REGRESSION; real pacing acceptance pending |
 | 39 | Repeated short clip inherits false beat provenance | T006 / FR-433 | FIXED + 3s SOURCE / 8s INTERVAL REGRESSION; real timeline acceptance pending |
-| 40 | Stale project response can overwrite new project UI | T009 / FR-437 | OPEN |
-| 41 | Changed media at same path can reuse stale metadata | T009 / FR-437 | OPEN |
-| 42 | Project counters read different sources | T009 / FR-437 | FIXED + REGRESSION; GUI pending |
-| 43 | Recovery discovery may skip temporarily inaccessible root | T009 / FR-437 | FIXED + REGRESSION; live ACL pending |
+| 40 | Stale project response can overwrite new project UI | T009 / FR-437 | VERIFIED + NATIVE DELAYED-SAVE/PROJECT-SWITCH TEST: late project-A info response rejected after project B opens; current service state stays B |
+| 41 | Changed media at same path can reuse stale metadata | T009 / FR-437 | FIXED + RESTARTED-STATE AUDIO/VIDEO REGRESSIONS: fresh hash/probe fields overwrite persisted path row; changed content clears analysis payload/status and in-memory analysis cache; same-hash audio retains stems |
+| 42 | Project counters read different sources | T009 / FR-437 | FIXED + REGRESSION: open/info counters match loaded media catalog, not folder files; GUI pending |
+| 43 | Recovery discovery may skip temporarily inaccessible root | T009 / FR-437 | FIXED + PERMISSION-ERROR REGRESSION: inaccessible registered root is reported as inaccessible, not deleted; live ACL pending |
 | 44 | Valid `error:null` chat response presented as error | T005 / FR-431 | FIXED + CHAT-AGENT REGRESSION: successful tool result retains `error:null` without emitting tool-dispatch error event |
 | 45 | Chat render rejects valid video-only request | T005 / FR-431 | FIXED + TOOL-ROUTE REGRESSION: `include_audio=false` with omitted audio path reaches render endpoint with empty audio path and unchanged video-only flag |
 | 46 | Stale clear-history response can clear other project view | T005 / FR-437 | FIXED + NATIVE WPF VIEWMODEL RACE TEST: delayed clear response after switching projects preserves newly loaded project history |
@@ -55,7 +55,7 @@
 | 49 | Brain annotation uses timeline time instead of source time | T004 / FR-438 | VERIFIED + SOURCE-MEDIA-TIME REGRESSION: scene scoring and persisted provenance use `clip_start` (12 s) rather than timeline position (2 s) |
 | 50 | GPU-lock wait may exceed job deadline | T010 / FR-436 | OPEN |
 | 51 | VRAM reserve can evict before safe lock acquisition | T010 / FR-436 | OPEN |
-| 52 | Empty timeline may leave old file; productive UI path uncertain | T009 / FR-437 | OPEN |
+| 52 | Empty timeline may leave old file; productive UI path uncertain | T009 / FR-437 | VERIFIED SAFE DISPOSITION: close preserves prior timeline on uncertain empty RAM; explicit WPF Save command reaches `/project/save`, whose live API test deletes stale `timeline.json` and writes `has_timeline=false`; interactive click pending GUI handover |
 | 53 | Pacing preflight string/integer ID inconsistency | T006 / FR-433 | FIXED + INTEGER REQUEST / STRING CACHE-KEY PREFLIGHT REGRESSION; worker-path acceptance pending |
 | 54 | Semantic-bypass report was withdrawn | No product fix; retain disposition/test evidence | WITHDRAWN |
 

@@ -832,27 +832,39 @@ class AppState:
                 meta = json.loads(row.get("metadata_json") or "{}")
                 if meta.get("clip_type") == "audio" and meta.get("clip_id") is not None:
                     clip_id = int(meta["clip_id"])
+                    current_hash = clip_data.get("audio_hash")
+                    stored_hash = meta.get("audio_hash") or row.get("file_hash")
+                    same_content = bool(
+                        current_hash and stored_hash and current_hash == stored_hash
+                    )
                     clip = {
+                        **clip_data,
                         "id": clip_id,
-                        "name": meta.get("name", clip_data.get("name", "")),
                         "path": row.get("file_path") or clip_data["path"],
-                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
-                        "sample_rate": meta.get("sample_rate", clip_data.get("sample_rate", 44100)),
-                        "channels": meta.get("channels", clip_data.get("channels", 2)),
-                        "format": meta.get("format", clip_data.get("format", "")),
-                        # L-N2: audio_hash mit-uebernehmen — wenn schon persisted dann nutzen,
-                        # sonst Wert aus Import (frisches hashing) behalten.
-                        "audio_hash": (
-                            meta.get("audio_hash")
-                            or row.get("file_hash")
-                            or clip_data.get("audio_hash")
-                        ),
-                        # L-AUDIO-8 (CD-1): stems_paths mit-uebernehmen
-                        "stems_paths": (
-                            meta.get("stems_paths")
-                            or clip_data.get("stems_paths")
-                        ),
                     }
+                    if same_content:
+                        clip["stems_paths"] = (
+                            meta.get("stems_paths") or clip_data.get("stems_paths")
+                        )
+                    else:
+                        # Same path is not same media. Keep derived state only
+                        # when the fresh import hash proves content identity.
+                        for key in (
+                            "bpm", "key", "beat_count", "beats", "energy_curve",
+                            "structure_segments", "spectral_data", "subtrack_segments",
+                            "tempo_curve", "onset_times", "kick_times", "snare_times",
+                            "hihat_times", "chunk_evidence", "downbeats", "beat_grid",
+                            "downbeat_provenance", "beat_grid_provenance",
+                            "analysis_status", "stage_status", "stage_errors",
+                        ):
+                            clip.pop(key, None)
+                        clip["is_analyzed"] = False
+                        clip["has_audio_embedding"] = False
+                        with self._state_lock:
+                            self.audio_analysis_cache.pop(clip_id, None)
+                    self.persist_audio_clip(clip, project_id=project_id)
+                    if not same_content:
+                        repo.invalidate_analysis(int(row["id"]))
                     self.set_audio_clip(clip_id, clip)
                     with self._lock:
                         self._audio_next_id = max(self._audio_next_id, clip_id + 1)
@@ -907,24 +919,35 @@ class AppState:
                     # BUG-058 FIX: Update next_id strictly via max() to avoid collisions
                     with self._lock:
                         self._video_next_id = max(self._video_next_id, clip_id + 1)
+                    current_hash = clip_data.get("video_hash")
+                    stored_hash = meta.get("video_hash") or row.get("file_hash")
+                    same_content = bool(
+                        current_hash and stored_hash and current_hash == stored_hash
+                    )
                     clip = {
+                        **clip_data,
                         "id": clip_id,
-                        "name": meta.get("name", clip_data.get("name", "")),
                         "path": row.get("file_path") or clip_data["path"],
-                        "duration_seconds": row.get("duration_sec") or clip_data.get("duration_seconds", 0.0),
-                        "width": meta.get("width", clip_data.get("width", 1920)),
-                        "height": meta.get("height", clip_data.get("height", 1080)),
-                        "fps": meta.get("fps", clip_data.get("fps", 30.0)),
-                        "codec": meta.get("codec", clip_data.get("codec", "")),
-                        "thumbnail_available": False,
-                        "tags": [],
-                        # L-VIDEO-3: video_hash aus DB-Meta + frischem clip_data fallback.
-                        "video_hash": (
-                            meta.get("video_hash")
-                            or row.get("file_hash")
-                            or clip_data.get("video_hash")
-                        ),
                     }
+                    if not same_content:
+                        # Do not restore analysis, captions or embeddings from
+                        # a prior file merely because its path stayed stable.
+                        for key in (
+                            "is_analyzed", "analysis_status", "stage_status",
+                            "stage_errors", "avg_motion", "peak_motion",
+                            "motion_category", "embedding_dim", "embedding_samples",
+                            "has_embedding", "tag_source",
+                        ):
+                            clip.pop(key, None)
+                        clip["is_analyzed"] = False
+                        clip["has_video_embedding"] = False
+                        clip["tags"] = []
+                        clip["thumbnail_available"] = False
+                        with self._state_lock:
+                            self.video_analysis_cache.pop(clip_id, None)
+                    self.persist_video_clip(clip, project_id=project_id)
+                    if not same_content:
+                        repo.invalidate_analysis(int(row["id"]))
                     self.set_video_clip(clip_id, clip)
                     with self._lock:
                         self._video_next_id = max(self._video_next_id, clip_id + 1)
