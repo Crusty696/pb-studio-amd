@@ -16,7 +16,7 @@
 | 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | FIXED + RED/GREEN RESUME REGRESSION: metadata alone cannot reuse embedding; requires live vector_map link, non-tombstoned in-range nonnegative FAISS ID, exact media path and content hash. Full user-project vector recovery remains pending |
 | 11 | UI can hide successful scenes on aggregate failure | T002 / FR-430 | FIXED + NATIVE VIEWMODEL REGRESSION: scene stage remains visible after later motion failure; GUI visual acceptance pending |
 | 12 | Old batch error can override later valid stage response | T002 / FR-430 | FIXED + NATIVE MULTI-PASS RECOVERY REGRESSION: lost scene response followed by complete server response clears stale request failure; GUI/network-loss live acceptance pending |
-| 13 | Empty model smoke output fabricated as success | T005 / FR-431 | OPEN |
+| 13 | Empty model smoke output fabricated as success | T005 / FR-431 | FIXED + ROUTE-LEVEL REGRESSION: empty provider response returns `success=false`, empty response field, and explicit error; no synthetic success text |
 | 14 | Capability probe failure misstates model usability | T005 / FR-431 | OPEN |
 | 15 | Tool-use activation lacks tool-capability proof | T005 / FR-431 | OPEN |
 | 16 | Positive caption counts do not prove semantic correctness | T014 / TR-393 | OPEN |
