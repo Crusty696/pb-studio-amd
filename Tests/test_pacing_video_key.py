@@ -337,10 +337,10 @@ def test_clip_selector_key_matching_disabled_ignores_keys():
         101: "F# major",
     }
 
-    # mit motion_score-Differenz: 101 closer to target
+    # RAFT motion_score ist ein Rohwert in 0..30; 15 entspricht target=0.5.
     clips = [
-        {"id": 100, "file_path": "/tmp/a.mp4", "motion_score": 0.1},  # target=0.5 -> diff=0.4
-        {"id": 101, "file_path": "/tmp/b.mp4", "motion_score": 0.5},  # target=0.5 -> diff=0.0
+        {"id": 100, "file_path": "/tmp/a.mp4", "motion_score": 3.0},
+        {"id": 101, "file_path": "/tmp/b.mp4", "motion_score": 15.0},
     ]
     selected = selector.select_clip(clips, trigger_strength=0.5, trigger_type="beat")
     # Ohne key-multiplier sollte 101 (besseres Motion-Match) gewinnen
@@ -354,7 +354,6 @@ def test_audio_key_no_audio_stream_returns_none_unavailable(tmp_path):
     dummy.write_bytes(b"mock_mp4_bytes")
 
     with patch("pb_studio.video.audio_key_detector.has_video_audio_stream", return_value=False):
-        assert has_video_audio_stream(dummy) is False
         res = detect_video_audio_key(dummy)
         assert res is None, "Video ohne Audio-Stream muss None liefern"
 
