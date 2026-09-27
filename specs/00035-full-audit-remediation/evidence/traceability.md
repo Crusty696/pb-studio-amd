@@ -14,8 +14,8 @@
 | 8 | Unavailable model stage can report completed and block retry | T002 / FR-430 | FIXED + PERSISTED-RESUME REGRESSION: unavailable remains non-success and ordinary requested retry runs; live model recovery pending |
 | 9 | Probe failure conflated with missing audio track | T002 / FR-430 | FIXED + NO-STREAM/PROBE-ERROR/SUCCESS STAGE REGRESSION; real encoded-media probe pending |
 | 10 | Resume may skip vector-link/tombstone validation | T002 / FR-430 | OPEN |
-| 11 | UI can hide successful scenes on aggregate failure | T002 / FR-430 | OPEN |
-| 12 | Old batch error can override later valid stage response | T002 / FR-430 | OPEN |
+| 11 | UI can hide successful scenes on aggregate failure | T002 / FR-430 | FIXED + NATIVE VIEWMODEL REGRESSION: scene stage remains visible after later motion failure; GUI visual acceptance pending |
+| 12 | Old batch error can override later valid stage response | T002 / FR-430 | FIXED + NATIVE MULTI-PASS RECOVERY REGRESSION: lost scene response followed by complete server response clears stale request failure; GUI/network-loss live acceptance pending |
 | 13 | Empty model smoke output fabricated as success | T005 / FR-431 | OPEN |
 | 14 | Capability probe failure misstates model usability | T005 / FR-431 | OPEN |
 | 15 | Tool-use activation lacks tool-capability proof | T005 / FR-431 | OPEN |

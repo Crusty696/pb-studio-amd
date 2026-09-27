@@ -20,6 +20,8 @@
 - Repeated short-source clips now retain explicit non-musical `source_repeat` trigger identity, zero trigger strength, and no false copied beat provenance.
 - Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed; refreshed audio/provenance suite 21 passed; WPF suspect-grid DTO/ViewModel tests 2 passed. Full audit remediation and GUI/E2E acceptance remain open.
 - Native verification: PBStudio.UI.Tests Release 74/74; WPF Release build 0 warnings, 0 errors.
+- Reverification: complete Python suite 1,918 passed / 12 skipped / 0 failed; native C# suite 75/75; WPF Release build 0/0. Live RX 7800 XT DirectML selection and matching LibreHardwareMonitor identity/status verified.
+- Video library ViewModel now falls back to its current dispatcher when tests or nonstandard hosts have no global WPF `Application`; avoids abandoned STA/Dispatcher operations while preserving production application's dispatcher.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

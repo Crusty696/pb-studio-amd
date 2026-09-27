@@ -276,13 +276,38 @@ def test_physical_directml_and_lhm_identity_is_rx7800xt(monkeypatch):
         contract["active"]["library_sha256"],
     )
 
+    adapters = directml_adapter.enumerate_dxgi_adapters()
     adapter = directml_adapter.get_directml_adapter(refresh=True)
-    assert adapter.device_id == EXPECTED_ADAPTER_INDEX
-    assert adapter.luid == EXPECTED_ADAPTER_LUID
+    enumerated = next(
+        candidate
+        for candidate in adapters
+        if candidate.device_id == adapter.device_id
+    )
+    assert enumerated.luid == adapter.luid
+    assert enumerated.name == adapter.name
     assert "RX 7800 XT" in adapter.name
+    assert adapter.vendor_id == 0x1002
+    assert adapter.is_discrete
+    assert adapter.selection_policy == "highest_vram_amd"
+    highest_vram_adapter = max(
+        (
+            candidate
+            for candidate in adapters
+            if candidate.vendor_id == 0x1002
+            and candidate.is_discrete
+            and not candidate.is_software
+        ),
+        key=lambda candidate: (
+            candidate.dedicated_vram_bytes,
+            -candidate.device_id,
+        ),
+    )
+    assert adapter.device_id == highest_vram_adapter.device_id
+    assert adapter.luid == highest_vram_adapter.luid
+    assert adapter.dedicated_vram_bytes == highest_vram_adapter.dedicated_vram_bytes
     assert directml_adapter.get_directml_provider() == (
         "DmlExecutionProvider",
-        {"device_id": EXPECTED_ADAPTER_INDEX},
+        {"device_id": adapter.device_id},
     )
 
     previous = system_monitor.SystemMonitor._instance
@@ -291,9 +316,9 @@ def test_physical_directml_and_lhm_identity_is_rx7800xt(monkeypatch):
         system_monitor.SystemMonitor._instance = None
         monitor = system_monitor.SystemMonitor()
         stats = monitor.get_stats()
-        assert monitor.selected_adapter_luid == EXPECTED_ADAPTER_LUID
-        assert stats["adapter_index"] == EXPECTED_ADAPTER_INDEX
-        assert stats["adapter_luid"] == EXPECTED_ADAPTER_LUID
+        assert monitor.selected_adapter_luid == adapter.luid
+        assert stats["adapter_index"] == adapter.device_id
+        assert stats["adapter_luid"] == adapter.luid
         assert stats["monitoring_status"] == "ready"
     finally:
         if monitor is not None:

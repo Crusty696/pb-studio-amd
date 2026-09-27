@@ -173,7 +173,9 @@ public partial class VideoLibraryViewModel : ObservableObject, IDisposable
                 && _projectService.IsCurrent(projectContext)
                 && SelectedClip?.Id == clipId)
             {
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                var dispatcher = Application.Current?.Dispatcher
+                    ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
+                await dispatcher.InvokeAsync(() =>
                 {
                     if (sequence != Volatile.Read(ref _sceneLoadSequence)
                         || !_projectService.IsCurrent(projectContext)
