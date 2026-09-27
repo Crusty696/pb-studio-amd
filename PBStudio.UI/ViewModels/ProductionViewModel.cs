@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -17,6 +18,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
     private readonly TimelineStateService _timelineState;
     private readonly ProjectService _projects;
     private readonly IDialogService _dialogService;
+    private readonly Dispatcher _dispatcher;
     private string? _currentTaskId;
     private DateTime _lastGpuLogUtc = DateTime.MinValue;
     private bool _disposed;
@@ -51,6 +53,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         _timelineState = timelineState;
         _projects = projects;
         _dialogService = dialogService;
+        _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         HasProject = _projects.HasProject;
         _sse.ProgressReceived += OnRenderProgress;
         _sse.LogReceived += OnLogReceived;
@@ -61,7 +64,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         {
             // Send() kann von Background-Thread kommen (ProjectService.OpenProjectAsync).
             // NotifyCanExecuteChanged + Observable-Property-Sets brauchen UI-Thread.
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 HasProject = true;
                 StatusText = "Bereit für Rendering";
@@ -73,7 +76,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             });
         });
         WeakReferenceMessenger.Default.Register<ProjectClosedMessage>(this, (_, _) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
                 _timelineState.Clear();
                 ResetProjectState();
@@ -297,7 +300,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnTimelineChanged(object? sender, TimelineResponse? timeline)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             AudioPath = timeline?.AudioPath ?? string.Empty;
         });
@@ -315,7 +318,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrEmpty(_currentTaskId) && !string.IsNullOrEmpty(e.TaskId) && e.TaskId != _currentTaskId)
             return;
 
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.TaskId))
                 _currentTaskId = e.TaskId;
@@ -354,7 +357,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
             var status = await _api.GetRenderStatusAsync(taskId).ConfigureAwait(false);
             if (status == null || !string.Equals(status.TaskId, _currentTaskId, StringComparison.Ordinal))
                 return;
-            await App.Current.Dispatcher.InvokeAsync(() =>
+            await _dispatcher.InvokeAsync(() =>
             {
                 ApplyProgressUpdate(
                     status.TaskId,
@@ -381,7 +384,7 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            await App.Current.Dispatcher.InvokeAsync(() => AppendLog(
+            await _dispatcher.InvokeAsync(() => AppendLog(
                 "warn",
                 $"Render-Statusabgleich für {taskId} fehlgeschlagen: {ex.Message}"));
         }
@@ -503,12 +506,12 @@ public partial class ProductionViewModel : ObservableObject, IDisposable
 
     private void OnLogReceived(object? sender, LogEventArgs e)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
+        _ = _dispatcher.InvokeAsync(() => AppendLog(e.Level, e.Message));
     }
 
     private void OnGpuStatusReceived(object? sender, GpuEventArgs e)
     {
-        _ = App.Current.Dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(() =>
         {
             if (!string.IsNullOrWhiteSpace(e.Error))
             {
