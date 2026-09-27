@@ -131,12 +131,16 @@ def test_select_first_installed_pref():
 
 def test_select_falls_back_when_first_missing():
     async def go():
-        # chat_tool_use speed: ["qwen3.5-9b-...", "google/gemma-4-e4b"]
-        # nur gemma installiert — fallback nimmt es
+        # Generischer Chat-Fallback: erster Kandidat fehlt, zweiter ist installiert.
         async with _client_with_models(["google/gemma-4-e4b"]) as client:
-            reg = ModelRegistry(client=client)
+            reg = ModelRegistry(
+                {"task_preferences": {"chat_general": {"speed": [
+                    "missing-model", "google/gemma-4-e4b",
+                ]}}},
+                client=client,
+            )
             await reg.refresh()
-            return reg.select_best_for_task("chat_tool_use", "speed")
+            return reg.select_best_for_task("chat_general", "speed")
 
     assert _run(go()) == "google/gemma-4-e4b"
 
