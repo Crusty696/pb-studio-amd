@@ -8,6 +8,7 @@ import json
 import random
 import types
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -100,15 +101,20 @@ def _prepare_preview(monkeypatch: pytest.MonkeyPatch, lock: _TrackingAsyncLock) 
     )
 
 
-def test_preview_uses_project_context_and_reports_actual_interval(monkeypatch) -> None:
+def test_preview_uses_project_context_and_reports_actual_interval(
+    monkeypatch,
+    tmp_path,
+) -> None:
     state = _PreviewState(timeline_end=3.0)
     lock = _TrackingAsyncLock()
     _prepare_preview(monkeypatch, lock)
+    monkeypatch.chdir(tmp_path)
     captured: dict[str, float] = {}
 
     async def fake_to_thread(_func, _timeline, start: float, duration: float, *_args):
         captured["start"] = start
         captured["duration"] = duration
+        (tmp_path / "preview.mp4").write_bytes(b"preview artifact")
         return "preview.mp4"
 
     monkeypatch.setattr(pacing_router.asyncio, "to_thread", fake_to_thread)
@@ -124,6 +130,9 @@ def test_preview_uses_project_context_and_reports_actual_interval(monkeypatch) -
     assert state.context_checks >= 1
     assert captured == {"start": 2.0, "duration": 1.0}
     assert response.duration == pytest.approx(1.0)
+    assert Path(response.preview_path).is_absolute()
+    assert Path(response.preview_path).resolve() == (tmp_path / "preview.mp4").resolve()
+    assert Path(response.preview_path).read_bytes() == b"preview artifact"
 
 
 def test_preview_rejects_start_outside_timeline_before_render(monkeypatch) -> None:

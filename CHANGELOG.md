@@ -29,6 +29,7 @@
 - ChatAgent now has a regression proving successful tool responses containing `error: null` do not emit a failure event.
 - Chat render’s video-only path is verified end-to-end at the tool/API boundary without requiring an audio path when audio is disabled.
 - Chat history clear is protected by a native delayed-response/project-switch regression; stale success cannot erase the newly opened project's visible history.
+- Preview route regression proves relative renderer output is normalized to an absolute path for the actual generated local artifact; live WPF playback remains pending.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 
