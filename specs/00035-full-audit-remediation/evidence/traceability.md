@@ -6,7 +6,7 @@
 |---:|---|---|---|
 | 1 | 98,982/98,984-frame export failure; staging removed | T008 / FR-435 | FIXED + REGRESSION + LIVE SHORT/60-s EXPORTS + LIVE RATIONAL-FPS AMF EXPORT (180/180); original 54:59 media unavailable |
 | 2 | 437.861-second evidence-record gap | T008 / FR-435 | OPEN |
-| 3 | Preview path/audio contract failure | T007 / FR-434 | OPEN |
+| 3 | Preview path/audio contract failure | T007 / FR-434 | FIXED + ROUTE REGRESSION + LIVE 3-s H.264/AAC PREVIEW; GUI audition pending |
 | 4 | Provider timeout/cooldown produces empty batch results | T005,T002 / FR-430,FR-431 | FIXED + RED/GREEN ROUTER REGRESSION: stop repeated provider probes after exhausted receipt, mark captions unavailable when no fallback exists; live recovery/batch acceptance pending |
 | 5 | Mocked render tests are not full-workflow proof | QC,T014 / TR-392,TR-393 | OPEN |
 | 6 | Incomplete frame captions can report completed | T002 / FR-430 | FIXED + SEEK/READ + STAGE-MERGE REGRESSIONS; semantic accuracy pending |
