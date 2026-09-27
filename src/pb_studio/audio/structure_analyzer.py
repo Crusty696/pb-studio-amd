@@ -300,48 +300,104 @@ class StructureAnalyzer:
         total_duration: float,
         segment_seconds: float = 60.0,
     ) -> dict:
-        """Build bounded structure segments spanning an entire streamed mix."""
-        if total_duration <= 0:
-            raise ValueError("total_duration must be positive")
-        energy = np.asarray(energy_curve, dtype=np.float64)
-        if energy.size == 0:
-            raise ValueError("streaming energy curve is empty")
+        """Infer energy-change sections without inventing minute or song labels.
 
-        segment_count = max(1, int(np.ceil(total_duration / segment_seconds)))
-        global_mean = float(np.mean(energy))
-        global_std = float(np.std(energy))
+        The streaming payload has energy only, not the chroma/MFCC/transition
+        evidence needed to claim verse/chorus semantics. ``segment_seconds`` is
+        retained for API compatibility and bounds the local comparison window;
+        it is not used as a fixed section grid.
+        """
+        if not np.isfinite(total_duration) or total_duration <= 0:
+            raise ValueError("total_duration must be positive")
+        if not np.isfinite(segment_seconds) or segment_seconds <= 0:
+            raise ValueError("segment_seconds must be positive")
+        energy = np.asarray(energy_curve, dtype=np.float64)
+        if energy.ndim != 1 or energy.size == 0:
+            raise ValueError("streaming energy curve must be a non-empty vector")
+        if not np.all(np.isfinite(energy)):
+            raise ValueError("streaming energy curve contains non-finite values")
+
+        seconds_per_sample = total_duration / energy.size
+        smooth_samples = max(1, int(round(2.0 / seconds_per_sample)))
+        smoothed = uniform_filter1d(energy, size=smooth_samples, mode="nearest")
+        context_seconds = min(8.0, segment_seconds / 4.0)
+        context_samples = max(1, int(round(context_seconds / seconds_per_sample)))
+        minimum_gap = max(1, int(round(15.0 / seconds_per_sample)))
+        energy_range = float(np.ptp(smoothed))
+        threshold = max(energy_range * 0.15, float(np.std(smoothed)) * 0.35, 1e-8)
+
+        candidate_indices = np.arange(context_samples, energy.size - context_samples)
+        if candidate_indices.size:
+            prefix = np.concatenate(([0.0], np.cumsum(smoothed, dtype=np.float64)))
+            left_means = (
+                prefix[candidate_indices] - prefix[candidate_indices - context_samples]
+            ) / context_samples
+            right_means = (
+                prefix[candidate_indices + context_samples]
+                - prefix[candidate_indices]
+            ) / context_samples
+            magnitudes = np.abs(right_means - left_means)
+            local_maximum = np.ones(magnitudes.size, dtype=bool)
+            if magnitudes.size > 1:
+                local_maximum[1:] &= magnitudes[1:] >= magnitudes[:-1]
+                local_maximum[:-1] &= magnitudes[:-1] >= magnitudes[1:]
+            candidate_positions = np.flatnonzero(
+                local_maximum & (magnitudes >= threshold)
+            )
+            # Bound downstream peak sorting and section count on very long files.
+            if candidate_positions.size > 512:
+                strongest = np.argpartition(
+                    magnitudes[candidate_positions], -512
+                )[-512:]
+                candidate_positions = candidate_positions[strongest]
+            candidates = [
+                (
+                    float(magnitudes[position]),
+                    int(candidate_indices[position]),
+                    float(left_means[position]),
+                    float(right_means[position]),
+                )
+                for position in candidate_positions
+            ]
+        else:
+            candidates = []
+
+        # Strongest change wins within each minimum-spacing neighborhood.
+        selected: list[tuple[float, int, float, float]] = []
+        for candidate in sorted(candidates, reverse=True):
+            if all(abs(candidate[1] - item[1]) >= minimum_gap for item in selected):
+                selected.append(candidate)
+        selected.sort(key=lambda item: item[1])
+        boundaries = [item[1] for item in selected]
+        edge_means = {item[1]: (item[2], item[3]) for item in selected}
+        change_confidence = {
+            item[1]: min(1.0, item[0] / max(energy_range, 1e-8))
+            for item in selected
+        }
+
+        global_mean = float(np.mean(smoothed))
+        quiet_limit = max(0.08 * max(float(np.max(smoothed)), 1e-8), global_mean * 0.25)
+        boundary_samples = [0, *boundaries, energy.size]
         segments = []
-        previous_mean = global_mean
-        for index in range(segment_count):
-            start_time = index * segment_seconds
-            end_time = min(total_duration, (index + 1) * segment_seconds)
-            start_index = int(start_time / total_duration * energy.size)
-            end_index = max(
-                start_index + 1,
-                int(end_time / total_duration * energy.size),
-            )
-            local_mean = float(np.mean(energy[start_index:end_index]))
-            local_values = energy[start_index:end_index]
-            local_std = float(np.std(local_values)) if local_values.size else 0.0
-            evidence = min(
-                1.0,
-                (abs(local_mean - global_mean) + local_std)
-                / max(2.0 * global_std, 1e-8),
-            )
-            if index == 0:
-                label = "intro"
-            elif index == segment_count - 1:
-                label = "outro"
-            elif local_mean > global_mean * 1.25:
-                label = "chorus"
-            elif local_mean < global_mean * 0.70:
-                label = "verse"
-            elif local_mean > previous_mean * 1.15:
-                label = "buildup"
-            elif local_mean < previous_mean * 0.85:
-                label = "breakdown"
-            else:
-                label = "bridge"
+        for index, (start_index, end_index) in enumerate(zip(boundary_samples, boundary_samples[1:])):
+            start_time = start_index * seconds_per_sample
+            end_time = min(total_duration, end_index * seconds_per_sample)
+            local_values = smoothed[start_index:end_index]
+            local_mean = float(np.mean(local_values)) if local_values.size else 0.0
+            label = "section"
+            if index == 0 and boundaries:
+                left_mean, right_mean = edge_means[boundaries[0]]
+                if left_mean <= quiet_limit and right_mean >= left_mean + threshold:
+                    label = "intro"
+            if index == len(boundaries) and boundaries and segments:
+                previous_mean = float(segments[-1]["energy_score"])
+                if local_mean <= quiet_limit and previous_mean >= local_mean + threshold:
+                    label = "outro"
+            adjacent_confidence = []
+            if index > 0:
+                adjacent_confidence.append(change_confidence[boundaries[index - 1]])
+            if index < len(boundaries):
+                adjacent_confidence.append(change_confidence[boundaries[index]])
             segments.append(
                 {
                     "segment_id": index + 1,
@@ -350,11 +406,10 @@ class StructureAnalyzer:
                     "duration": float(end_time - start_time),
                     "label": label,
                     "cluster": 0,
-                    "confidence": float(evidence),
+                    "confidence": float(max(adjacent_confidence, default=0.0)),
                     "energy_score": local_mean,
                 }
             )
-            previous_mean = local_mean
         return {"total_segments": len(segments), "segments": segments}
 
     def analyze_song_structure(

@@ -37,7 +37,7 @@
 | 31 | Key may use incomplete streaming chroma | T003 / FR-432 | OPEN |
 | 32 | Beat-grid suspect status may be dropped | T003 / FR-432 | OPEN |
 | 33 | Long-file beat-grid may omit tail/capped coverage | T003 / FR-432 | OPEN |
-| 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | OPEN |
+| 34 | Long-mix structure uses coarse fixed-minute heuristic | T003 / FR-432 | PARTIAL FIX + REGRESSION; full-run transition features not yet wired |
 | 35 | Motion normalization discontinuity | T006 / FR-433 | OPEN |
 | 36 | BPM correction does not remap beat strengths | T006 / FR-433 | OPEN |
 | 37 | Theme bonus can dominate music/motion ranking | T006 / FR-433 | OPEN |
