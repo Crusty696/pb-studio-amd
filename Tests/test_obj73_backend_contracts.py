@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -176,7 +177,8 @@ def test_preview_generation_runs_under_shared_gpu_lock(monkeypatch):
         pacing_router.generate_preview(PreviewRequest(), _PreviewState())
     )
 
-    assert response.preview_path == "preview.mp4"
+    assert Path(response.preview_path).is_absolute()
+    assert Path(response.preview_path).name == "preview.mp4"
     assert lock.active is False
 
 
