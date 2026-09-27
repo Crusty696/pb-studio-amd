@@ -36,6 +36,7 @@
 - Rendered timeline preview now remains active only when new selection falls inside its rendered time window; outside selection reloads selected source clip instead of leaving stale rendered footage active.
 - Render SSE replay-gap now has native recovery coverage through authoritative status reconciliation, including stale-task response protection; ProductionViewModel captures a dispatcher fallback for headless/test hosts. Verified: C# 79 passed, focused Python recovery contracts 10 passed (6 dependency warnings), WPF Release build 0/0.
 - SSE cursor restart behavior verified across separate Python processes: a fresh backend instance returns a replayable event ID greater than previous process cursor. No runtime implementation change needed; live server reconnect remains to verify.
+- Bounded SSE client queue overflow verified to retain dropped-ID range and emit `replay_gap` before next accepted progress event; live-queue regression included in 9/9 passing event suite.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 
