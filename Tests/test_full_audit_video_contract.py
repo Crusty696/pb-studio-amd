@@ -72,6 +72,63 @@ def test_partial_frame_caption_coverage_cannot_be_completed(monkeypatch):
     assert result["stage_status"]["captions"] == "partial"
 
 
+@pytest.mark.parametrize("failed_operation", ["seek", "read"])
+def test_unread_sampled_frame_is_in_caption_coverage_denominator(
+    monkeypatch,
+    failed_operation,
+):
+    router = _router()
+
+    class OneUnreadSample:
+        def get(self, prop):
+            import cv2
+
+            return 12 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+        def set(self, _prop, frame_index):
+            self.frame_index = int(frame_index)
+            return not (failed_operation == "seek" and self.frame_index == 6)
+
+        def read(self):
+            if failed_operation == "read" and self.frame_index == 6:
+                return False, None
+            return True, np.zeros((16, 16, 3), dtype=np.uint8)
+
+        def release(self):
+            pass
+
+    async def tags_for_every_decoded_frame(_frame, mode):
+        return ["stage"], "test-model"
+
+    async def no_event(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("cv2.VideoCapture", lambda _path: OneUnreadSample())
+    monkeypatch.setattr(
+        "pb_studio.video.lmstudio_vision_wrapper.extract_tags_and_model_via_lmstudio_async",
+        tags_for_every_decoded_frame,
+    )
+    monkeypatch.setattr("pb_studio.video.moondream.onnx_models_available", lambda: False)
+    monkeypatch.setattr(router, "publish_event", no_event)
+    monkeypatch.setattr(router, "CAPTION_HEARTBEAT_INTERVAL_SECONDS", 0.01)
+
+    result = asyncio.run(router._run_color_and_caption_analysis(
+        "clip.mp4", 2, generate_captions=True, analyze_colors=False
+    ))
+
+    assert result["stage_status"]["captions"] == "partial"
+    assert "2/3" in result["stage_errors"]["captions"]
+    assert "6" in result["stage_errors"]["captions"]
+    assert result["tags"] == ["stage"]
+
+    aggregate = router._empty_video_analysis_result(2)
+    aggregate["stage_status"]["scenes"] = "completed"
+    router._merge_video_stage_outcome(aggregate, result, "captions")
+    assert aggregate["stage_status"]["captions"] == "partial"
+    assert aggregate["tags"] == ["stage"]
+    assert router._derive_video_analysis_status(aggregate["stage_status"]) == "partial"
+
+
 def test_ffprobe_failure_is_not_reported_as_missing_audio(monkeypatch, tmp_path):
     from pb_studio.video import audio_key_detector
 
@@ -85,6 +142,29 @@ def test_ffprobe_failure_is_not_reported_as_missing_audio(monkeypatch, tmp_path)
 
     with pytest.raises(RuntimeError, match="ffprobe"):
         audio_key_detector.has_video_audio_stream(media)
+
+
+def test_audio_key_outcomes_distinguish_no_stream_from_probe_error():
+    router = _router()
+
+    no_stream = router._empty_video_analysis_result(3)
+    router._set_video_audio_key_outcome(no_stream, None)
+    assert no_stream["stage_status"]["audio_key"] == "unavailable"
+    assert "audio_key" not in no_stream["stage_errors"]
+
+    probe_failed = router._empty_video_analysis_result(4)
+    router._set_video_audio_key_outcome(
+        probe_failed,
+        None,
+        error=RuntimeError("ffprobe timed out"),
+    )
+    assert probe_failed["stage_status"]["audio_key"] == "failed"
+    assert probe_failed["stage_errors"]["audio_key"] == "ffprobe timed out"
+
+    detected = router._empty_video_analysis_result(5)
+    router._set_video_audio_key_outcome(detected, "C major")
+    assert detected["stage_status"]["audio_key"] == "completed"
+    assert detected["audio_key"] == "C major"
 
 
 def test_embedding_resume_checks_vector_link_and_tombstone(monkeypatch):

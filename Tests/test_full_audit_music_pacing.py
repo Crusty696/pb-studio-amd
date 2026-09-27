@@ -16,10 +16,13 @@ from pb_studio.services.pacing_service import PacingService
 pacing_router = importlib.import_module("backend.routers.pacing_router")
 
 
-def test_motion_normalization_is_continuous_at_unit_boundary():
-    below = ClipSelector._normalize_motion_score(1.0)
-    above = ClipSelector._normalize_motion_score(1.01)
-    assert abs(above - below) < 0.02
+def test_raft_motion_normalization_is_linear_bounded_and_continuous():
+    raw_scores = [0.0, 0.5, 1.0, 1.01, 15.0, 30.0, 45.0]
+    normalized = [ClipSelector._normalize_motion_score(value) for value in raw_scores]
+
+    assert normalized == pytest.approx([0.0, 0.5 / 30, 1 / 30, 1.01 / 30, 0.5, 1.0, 1.0])
+    assert normalized == sorted(normalized)
+    assert all(0.0 <= value <= 1.0 for value in normalized)
 
 
 def test_expected_bpm_grid_remaps_strength_to_nearest_measured_beat():
@@ -30,7 +33,8 @@ def test_expected_bpm_grid_remaps_strength_to_nearest_measured_beat():
         detected_bpm=100.0, duration=1.1,
     )
     assert len(engine._pre_cached_beat_strengths) == len(corrected)
-    assert engine._pre_cached_beat_strengths[1] == pytest.approx(0.9)
+    assert corrected == pytest.approx([0.0, 0.5, 1.0])
+    assert engine._pre_cached_beat_strengths == pytest.approx([0.1, 0.9, 0.2])
 
 
 def test_theme_bonus_cannot_overwhelm_music_and_motion_score():
@@ -104,15 +108,20 @@ def test_theme_bonus_only_breaks_a_near_tie_for_narrative_continuity():
 
 def test_short_export_chapter_energy_uses_full_track_timebase(monkeypatch):
     service = PacingService.__new__(PacingService)
-    beats = [float(i) / 2.0 for i in range(128)]
-    curve = np.concatenate((np.zeros(32), np.ones(96)))
+    beats = [float(i) / 2.0 for i in range(64)]
+    # Output uses first 32 s of a 64-s analyzed track. Energy transition
+    # occurs at source time 8 s (first 16 of 128 curve bins).
+    curve = np.concatenate((np.zeros(16), np.ones(112)))
     service._chapter_energy_duration = 64.0
     monkeypatch.setattr(
         "pb_studio.services.pacing_service.select_theme_for_chapter",
         lambda energy, _previous: "low" if energy <= 0.58 else "high",
     )
-    chapters = service.segment_timeline_into_chapters(curve, beats, 120.0, 64.0)
-    assert len(chapters) == 4
+    chapters = service.segment_timeline_into_chapters(curve, beats, 120.0, 32.0)
+    assert len(chapters) == 2
+    assert chapters[0]["start"] == 0.0
+    assert chapters[1]["start"] == pytest.approx(16.0)
+    assert chapters[-1]["end"] == 32.0
     assert chapters[0]["theme"] == "low"
     assert chapters[1]["theme"] == "high"
 
@@ -133,7 +142,7 @@ def test_repeated_source_reset_is_not_reported_as_music_trigger(monkeypatch):
         assert "trigger_provenance" not in entry.metadata
 
 
-def test_preflight_normalizes_integer_and_string_video_ids():
+def test_preflight_resolves_string_cache_key_for_integer_clip_id():
     config = PacingConfigSchema(audio_clip_id=1, video_clip_ids=[10], use_motion_matching=True)
     video = {"10": {"motion": {"motion_curve": [0.2]}, "stage_status": {"motion": "completed"}}}
     report = pacing_router._validate_pacing_analysis_preflight(

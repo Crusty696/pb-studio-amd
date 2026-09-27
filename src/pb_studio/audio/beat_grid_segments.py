@@ -619,6 +619,7 @@ def segment_beat_grids_from_file(
     windows: list[tuple[float, float, BeatGrid]] = []
     attempted_windows = 0
     successful_windows = 0
+    stop_reason: str | None = None
     # Huellkurven je Fenster aufheben - gebraucht, falls nach dem
     # Vielfach-Konsens die Phase neu bestimmt werden muss. Billig genug,
     # um ein zweites Laden der Datei zu ersparen.
@@ -628,6 +629,7 @@ def segment_beat_grids_from_file(
     while offset < duration - 1e-9 and attempted_windows < max_windows:
         window_duration = min(segment_seconds, duration - offset)
         if window_duration < 5.0:
+            stop_reason = "tail_below_minimum_window"
             break
         attempted_windows += 1
         try:
@@ -640,6 +642,7 @@ def segment_beat_grids_from_file(
             offset += segment_seconds
             continue
         if chunk.size < actual_sr * 5:
+            stop_reason = "decoded_window_below_minimum"
             break
         window_end = offset + float(chunk.size) / actual_sr
 
@@ -675,15 +678,27 @@ def segment_beat_grids_from_file(
         del chunk
         offset += window_duration
 
+    covered_until = max((end for _, end, _ in windows), default=0.0)
+    uncovered_tail = max(0.0, duration - covered_until)
+    capped = attempted_windows >= max_windows and offset < duration - 1e-6
+    if stop_reason is None:
+        if capped:
+            stop_reason = "window_cap"
+        elif attempted_windows > successful_windows:
+            stop_reason = "complete_with_window_failures"
+        else:
+            stop_reason = "complete"
     coverage = {
         "duration_seconds": duration,
-        "examined_until_seconds": min(offset, duration),
+        "examined_until_seconds": min(max(offset, covered_until), duration),
         "attempted_windows": attempted_windows,
         "successful_windows": successful_windows,
         "failed_or_skipped_windows": attempted_windows - successful_windows,
         "window_cap": max_windows,
-        "capped": offset < duration - 1e-6,
-        "covered_until_seconds": max((end for _, end, _ in windows), default=0.0),
+        "capped": capped,
+        "stop_reason": stop_reason,
+        "covered_until_seconds": covered_until,
+        "uncovered_tail_seconds": round(uncovered_tail, 6),
     }
 
     if not windows:

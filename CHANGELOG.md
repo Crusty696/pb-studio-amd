@@ -6,14 +6,20 @@
 ## 2026-09-27 - Full-Audit Remediation (Spec 00035, ongoing)
 
 ### Fixed & Verified (partial scope only)
+- Caption coverage counts each planned sample even when frame seek/decode fails; partial tags stay available with `partial` truth and exact unread frame indices instead of falsely reporting completed.
+- Video audio-key stage now uses a single tested mapping: confirmed missing or unusable audio is `unavailable`, measured key is `completed`, probe/extraction failure is retryable `failed` with error.
 - Render concat PTS now uses the rational frame timebase correctly; real AMF RenderService exports validated at 30 s (900 frames) and 60 s (1800 frames), with synchronized AAC audio, 30 fps, progress to 100%.
 - Long-mix streaming structure now uses detected energy-change boundaries rather than a fixed 60-second grid. Neutral `section` labels replace unsupported semantic labels; Intro/Outro require measured edge transitions. Transition/harmonic evidence is not yet wired for full-run semantics.
 - Caption provider cooldown recovery is covered through failure, suppression during cooldown, and successful mocked recovery after expiry; live provider recovery remains unverified.
 - Music/theme ranking regressions now use normalized semantic-score paths and prove strong music/motion match outranks theme; bounded theme bonus may choose a near-tie for continuity.
 - Long-mix key regression proves the router uses full-run aggregate chroma, not its 600-second waveform snapshot, and reports original-mix source with complete coverage.
 - Long-mix source-role regression distinguishes beat-stem timing from original-mix energy, spectrum, and key provenance at the API boundary.
-- Suspect segmented beat-grid status is now tested through long-mix router output and retained by the generated WPF transport DTO; visible GUI presentation remains pending.
-- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed; refreshed audio/provenance suite 19 passed; WPF suspect-grid DTO test 1 passed. Full audit remediation and GUI/E2E acceptance remain open.
+- Suspect segmented beat-grid status is tested through long-mix router, generated WPF transport, and `AudioLibraryViewModel` display mapping (`unsicher`); live GUI rendering remains pending.
+- Segmented beat-grid coverage now reports exact uncovered tail duration and why scanning stopped; sub-5-second or truncated decoder tails remain suspect, while cap status reflects the actual window limit.
+- Pacing regressions now cover linear bounded RAFT normalization, full expected-BPM beat-strength remapping, and short-output chapter energy sampled against original-track duration.
+- Repeated short-source clips now retain explicit non-musical `source_repeat` trigger identity, zero trigger strength, and no false copied beat provenance.
+- Validation: focused render tests 4 passed; audio structure/provenance/long-mix suites 20 passed; caption wrapper suite 35 passed; music pacing suite 8 passed; refreshed audio/provenance suite 21 passed; WPF suspect-grid DTO/ViewModel tests 2 passed. Full audit remediation and GUI/E2E acceptance remain open.
+- Native verification: PBStudio.UI.Tests Release 74/74; WPF Release build 0 warnings, 0 errors.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

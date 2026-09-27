@@ -315,6 +315,27 @@ def _merge_video_stage_outcome(
             result[field] = deepcopy(stage_result[field])
 
 
+def _set_video_audio_key_outcome(
+    result: dict[str, Any],
+    audio_key: Optional[str],
+    *,
+    error: Optional[Exception] = None,
+) -> None:
+    """Keep absent audio capability distinct from a failed stream probe."""
+    if error is not None:
+        result["audio_key"] = None
+        result["stage_status"]["audio_key"] = "failed"
+        result["stage_errors"]["audio_key"] = str(error)
+    elif audio_key:
+        result["audio_key"] = audio_key
+        result["stage_status"]["audio_key"] = "completed"
+        result["stage_errors"].pop("audio_key", None)
+    else:
+        result["audio_key"] = None
+        result["stage_status"]["audio_key"] = "unavailable"
+        result["stage_errors"].pop("audio_key", None)
+
+
 def _derive_video_analysis_status(stage_status: dict[str, str]) -> str:
     failed = any(
         status in {"partial", "failed", "interrupted", "unavailable"}
@@ -1343,18 +1364,14 @@ async def _analyze_video_in_project(
             try:
                 from pb_studio.video.audio_key_detector import detect_video_audio_key
                 audio_key_val = await asyncio.to_thread(detect_video_audio_key, clip["path"])
-                result["audio_key"] = audio_key_val
+                _set_video_audio_key_outcome(result, audio_key_val)
                 if audio_key_val:
-                    result["stage_status"]["audio_key"] = "completed"
-                    result["stage_errors"].pop("audio_key", None)
                     logger.info(f"L-K4: Video-Audio-Key fuer clip {request.clip_id}: {audio_key_val}")
                 else:
                     # Truthful capability result: the file carries no usable audio
                     # track, so no key exists to detect. Distinct from the except
                     # branch below, and logged — an unlogged terminal state left
                     # 498 clips silently unscored until Pacing surfaced it.
-                    result["stage_status"]["audio_key"] = "unavailable"
-                    result["stage_errors"].pop("audio_key", None)
                     logger.info(
                         "L-K4: clip %s hat keine auswertbare Tonspur — audio_key "
                         "bleibt unavailable (kein Fehler)",
@@ -1364,8 +1381,7 @@ async def _analyze_video_in_project(
                 # A detector/ffmpeg fault is a defect, not a missing capability.
                 # "failed" keeps it retryable and keeps the Pacing gate blocking.
                 logger.warning(f"L-K4 audio_key extract failed (post-gpu-task): {e}")
-                result["stage_status"]["audio_key"] = "failed"
-                result["stage_errors"]["audio_key"] = str(e)
+                _set_video_audio_key_outcome(result, None, error=e)
             active_stages = ()
 
         stage_status = dict(result["stage_status"])
@@ -2430,16 +2446,23 @@ async def _run_color_and_caption_analysis(
         # Frames sammeln (CPU)
         cap = cv2.VideoCapture(video_path)
         frames_rgb = []
+        sampled_frame_indices: list[int] = []
+        unread_frame_indices: list[int] = []
         try:
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             if total > 0:
                 indices = [max(0, total // 4), max(0, total // 2), max(0, total * 3 // 4)]
                 indices = sorted(list(set(indices)))
+                sampled_frame_indices = indices
                 for idx in indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    if not cap.set(cv2.CAP_PROP_POS_FRAMES, idx):
+                        unread_frame_indices.append(idx)
+                        continue
                     ret, frame = cap.read()
                     if ret and frame is not None:
                         frames_rgb.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    else:
+                        unread_frame_indices.append(idx)
         finally:
             cap.release()
 
@@ -2713,24 +2736,51 @@ async def _run_color_and_caption_analysis(
 
             result["tags"] = all_tags[:10]
             result["tag_source"] = "+".join(tag_sources) if tag_sources else "none"
+            expected_caption_frames = len(sampled_frame_indices)
+            if expected_caption_frames == 0:
+                expected_caption_frames = len(frames_rgb)
+            caption_coverage_error = None
+            if (
+                caption_frames_with_tags != expected_caption_frames
+                or unread_frame_indices
+            ):
+                caption_coverage_error = (
+                    "Caption-Abdeckung unvollstaendig: "
+                    f"{caption_frames_with_tags}/{expected_caption_frames} "
+                    "geplante Stichproben mit Tags"
+                )
+                if unread_frame_indices:
+                    caption_coverage_error += (
+                        "; nicht lesbare Frame-Indizes: "
+                        + ", ".join(str(index) for index in unread_frame_indices)
+                    )
             if (
                 result["tags"]
                 and caption_timeout_error is None
-                and caption_frames_with_tags == len(frames_rgb)
+                and caption_frames_with_tags == expected_caption_frames
+                and not unread_frame_indices
             ):
                 result["stage_status"]["captions"] = "completed"
                 result["stage_errors"].pop("captions", None)
             elif result["tags"]:
                 result["stage_status"]["captions"] = "partial"
-                result["stage_errors"]["captions"] = (
-                    caption_timeout_error
-                    or f"Caption-Abdeckung unvollstaendig: {caption_frames_with_tags}/{len(frames_rgb)} Frames"
-                )
+                partial_details = [
+                    detail
+                    for detail in (caption_timeout_error, caption_coverage_error)
+                    if detail
+                ]
+                result["stage_errors"]["captions"] = "; ".join(partial_details)
             else:
-                result["stage_errors"]["captions"] = (
-                    caption_timeout_error
-                    or "Keine Tags von verfuegbarem Vision-Provider erzeugt"
-                )
+                failed_details = [
+                    detail
+                    for detail in (
+                        caption_timeout_error,
+                        caption_coverage_error,
+                        "Keine Tags von verfuegbarem Vision-Provider erzeugt",
+                    )
+                    if detail
+                ]
+                result["stage_errors"]["captions"] = "; ".join(failed_details)
 
             caption_status = result["stage_status"]["captions"]
             if caption_status == "completed":
@@ -2779,9 +2829,12 @@ async def _run_color_and_caption_analysis(
                     "Keine lesbaren Frames fuer Farbanalyse"
                 )
             if generate_captions:
-                result["stage_errors"]["captions"] = (
-                    "Keine lesbaren Frames fuer Captioning"
-                )
+                result["stage_errors"]["captions"] = "Keine lesbaren Frames fuer Captioning"
+                if unread_frame_indices:
+                    result["stage_errors"]["captions"] += (
+                        "; nicht lesbare Frame-Indizes: "
+                        + ", ".join(str(index) for index in unread_frame_indices)
+                    )
                 await _publish_caption_progress(
                     clip_id,
                     step="captions_error",

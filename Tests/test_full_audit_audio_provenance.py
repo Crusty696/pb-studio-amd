@@ -43,12 +43,49 @@ def test_long_grid_covers_tail_and_reports_window_cap(monkeypatch):
     coverage = module.segments_as_payload(rows)["coverage"]
     assert coverage["successful_windows"] == 3
     assert coverage["covered_until_seconds"] == 65.0
+    assert coverage["uncovered_tail_seconds"] == 0.0
+    assert coverage["stop_reason"] == "complete"
     assert module.segments_as_payload(rows)["status"] == "plausible"
 
     capped = module.segment_beat_grids_from_file("fixture", max_windows=1)
     payload = module.segments_as_payload(capped)
     assert payload["coverage"]["capped"] is True
+    assert payload["coverage"]["stop_reason"] == "window_cap"
     assert payload["status"] == "suspect"
+
+
+@pytest.mark.parametrize("duration", [65.0, 68.0])
+def test_long_grid_marks_unanalysable_tail_as_suspect(monkeypatch, duration):
+    from pb_studio.audio import beat_grid_segments as module
+
+    def load_window(*_, offset, duration: float, **__):
+        # Final tail fixture simulates decoder returning <5s of usable audio.
+        actual = duration if offset < 60 else min(duration, 4.0)
+        return np.ones(int(22050 * actual)), 22050
+
+    fake_librosa = SimpleNamespace(
+        get_duration=lambda **_: duration,
+        load=load_window,
+        onset=SimpleNamespace(onset_strength=lambda **__: np.ones(5)),
+        times_like=lambda values, **__: np.arange(len(values), dtype=float),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setattr(
+        module, "estimate_beat_grid",
+        lambda chunk, sr, kick_times=None: module.BeatGrid(
+            120.0, 0.0, 4.0, "test", "plausible"
+        ),
+    )
+
+    payload = module.segments_as_payload(
+        module.segment_beat_grids_from_file("fixture")
+    )
+
+    assert payload["status"] == "suspect"
+    assert payload["coverage"]["duration_seconds"] == duration
+    assert payload["coverage"]["covered_until_seconds"] < duration
+    assert payload["coverage"]["uncovered_tail_seconds"] > 0
+    assert payload["coverage"]["stop_reason"] == "decoded_window_below_minimum"
 
 
 def test_streaming_key_feature_coverage_is_explicit_after_chunk_errors():
