@@ -231,8 +231,8 @@ def test_post_processor_uses_projector_for_clap_siglip_dim_mismatch(
         out = annotate_cuts_with_brain(
             cuts,
             weight_store=brain_svc.weights,
-            audio_analysis={"duration_seconds": 1.0},
-            video_analysis_by_clip={"clip_1": {}},
+            audio_analysis={"analysis_status": "completed", "duration_seconds": 1.0},
+            video_analysis_by_clip={"clip_1": {"analysis_status": "completed"}},
             audio_clip_id=1,
             persist_to_state_conn=state,
             embedding_cache=cache,
@@ -279,8 +279,8 @@ def test_auto_projector_resolved_when_cache_provided(
         out = annotate_cuts_with_brain(
             cuts,
             weight_store=brain_svc.weights,
-            audio_analysis={"duration_seconds": 1.0},
-            video_analysis_by_clip={"clip_1": {}},
+            audio_analysis={"analysis_status": "completed", "duration_seconds": 1.0},
+            video_analysis_by_clip={"clip_1": {"analysis_status": "completed"}},
             audio_clip_id=1,
             persist_to_state_conn=state,
             embedding_cache=cache,
