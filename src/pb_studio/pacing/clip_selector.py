@@ -563,13 +563,47 @@ class ClipSelector:
         # L-TI-1: Expliziter Caller-Prompt aktiviert semantic Pfad auch ohne
         # globalen use_semantic-Switch (z.B. pacing_service uebergibt song_mood).
         if self._current_prompt_override or self.use_semantic or self.strategy == "semantic":
-            return self._select_semantic(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+            return self._select_semantic(
+                candidates, trigger_strength, trigger_type,
+                current_time=current_time, audio_state=audio_state,
+            )
         elif self.strategy == "random":
             return self._select_random(candidates)
         elif self.strategy == "round_robin":
             return self._select_round_robin(candidates)
         else:
             return self._select_by_motion(candidates, trigger_strength, trigger_type, current_time=current_time, audio_state=audio_state)
+
+    def _semantic_theme_tie_break(
+        self, candidates: List[dict], semantic_scores: Dict[str, float]
+    ) -> Optional[dict]:
+        """Return a themed candidate only when its semantic score is a near tie."""
+        if not self.active_theme or len(candidates) < 2:
+            return None
+        ranked = sorted(
+            (
+                (float(semantic_scores[key]), clip)
+                for clip in candidates
+                if (key := self._normalized_path_key(self._metadata_path(clip)))
+                in semantic_scores
+            ),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        if len(ranked) < 2:
+            return None
+        top_score = ranked[0][0]
+        theme_rank = next(
+            (index for index, (score, clip) in enumerate(ranked)
+             if belongs_to_theme(clip, self.active_theme)
+             and top_score - score <= 0.05),
+            None,
+        )
+        if theme_rank is None:
+            return None
+        # Re-rank only the near-tie set with the normal music/motion scorer;
+        # theme cannot displace a candidate outside that semantic window.
+        return ranked[theme_rank][1]
 
     def _select_via_brain(
         self,
@@ -1162,8 +1196,19 @@ class ClipSelector:
                     in faiss_paths
                 ]
                 if semantic_candidates:
+                    has_theme_tie = self._semantic_theme_tie_break(
+                        semantic_candidates, faiss_scores
+                    ) is not None
+                    ranking_candidates = semantic_candidates
+                    if has_theme_tie:
+                        top_score = max(faiss_scores.values())
+                        ranking_candidates = [
+                            clip for clip in semantic_candidates
+                            if faiss_scores.get(self._normalized_path_key(self._metadata_path(clip)), -1.0)
+                            >= top_score - 0.05
+                        ]
                     selected = self._select_by_motion(
-                        semantic_candidates,
+                        ranking_candidates,
                         trigger_strength,
                         trigger_type,
                         current_time=current_time,
@@ -1228,8 +1273,19 @@ class ClipSelector:
                 self._normalized_path_key(self._metadata_path(clip)): float(score)
                 for clip, score in scored_candidates[:10]
             }
+            has_theme_tie = self._semantic_theme_tie_break(
+                semantic_candidates, direct_scores
+            ) is not None
+            ranking_candidates = semantic_candidates
+            if has_theme_tie:
+                top_score = max(direct_scores.values())
+                ranking_candidates = [
+                    clip for clip in semantic_candidates
+                    if direct_scores.get(self._normalized_path_key(self._metadata_path(clip)), -1.0)
+                    >= top_score - 0.05
+                ]
             selected = self._select_by_motion(
-                semantic_candidates,
+                ranking_candidates,
                 trigger_strength,
                 trigger_type,
                 current_time=current_time,

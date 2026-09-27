@@ -106,6 +106,49 @@ def test_theme_bonus_only_breaks_a_near_tie_for_narrative_continuity():
     assert components["theme_bonus"] == pytest.approx(0.05)
 
 
+def test_semantic_request_keeps_music_fit_primary_and_uses_theme_only_for_near_tie(monkeypatch):
+    selector = ClipSelector(strategy="semantic")
+    selector.active_theme = "neon_cyber_rave"
+    selector._get_text_embedding = lambda _prompt: np.asarray([1.0, 0.0], dtype=np.float32)
+    selector._vector_store_has_embeddings = lambda: False
+    clips = [
+        {"id": "theme", "file_path": "theme.mp4", "motion_score": 0.0,
+         "tags": ["neon"], "video_embedding": [0.999, 0.045]},
+        {"id": "music", "file_path": "music.mp4", "motion_score": 30.0,
+         "tags": [], "video_embedding": [1.0, 0.0]},
+    ]
+    music_wins = selector.select_clip(clips, 1.0, "beat")
+    assert music_wins.clip_id == "music"
+
+    clips[0]["video_embedding"] = [0.9998, 0.02]
+    clips[1]["video_embedding"] = [1.0, 0.0]
+    themed_near_tie = selector.select_clip(clips, 0.01, "beat")
+    assert themed_near_tie.clip_id == "theme"
+
+
+def test_worker_normalizes_string_analysis_ids_before_motion_clip_build(monkeypatch):
+    captured = {}
+
+    class FakeService:
+        def generate_cut_list(self, **kwargs):
+            captured.update(kwargs)
+            return [CutListEntry(clip_id="clip_10", start_time=0.0, end_time=1.0)]
+
+    monkeypatch.setattr(PacingService, "__new__", lambda cls: FakeService())
+    config = PacingConfigSchema(
+        audio_clip_id=1, video_clip_ids=[10], use_motion_matching=True
+    )
+    result = pacing_router._run_pacing_generation(
+        config,
+        {1: {"path": "audio.wav", "duration_seconds": 5.0}},
+        {10: {"id": 10, "name": "clip", "path": "clip.mp4", "duration_seconds": 3.0}},
+        cached_analysis={"beats": [0.0, 0.5], "bpm": 120.0},
+        video_analysis_cache={"10": {"avg_motion": 12.0}},
+    )
+    assert result
+    assert captured["clips"][0]["motion_score"] == 12.0
+
+
 def test_short_export_chapter_energy_uses_full_track_timebase(monkeypatch):
     service = PacingService.__new__(PacingService)
     beats = [float(i) / 2.0 for i in range(64)]
