@@ -1406,7 +1406,8 @@ public record AudioAnalysisResult(
     // folgt - getrennt von der Zeitmarkenliste in Beats, die aus
     // librosa.beat_track stammt und den Anschlaegen folgt statt eine Regel
     // zu sein.
-    Dictionary<string, JsonElement>? BeatGrid = null)
+    Dictionary<string, JsonElement>? BeatGrid = null,
+    Dictionary<string, JsonElement>? FeatureProvenance = null)
 {
     public static AudioAnalysisResult FromTransport(
         PBStudio.UI.Generated.AudioAnalysisResult value)
@@ -1455,7 +1456,8 @@ public record AudioAnalysisResult(
             value.Downbeats?.ToList(),
             ToJsonDictionary(value.Downbeat_provenance),
             ToJsonDictionary(value.Beat_grid_provenance),
-            ToJsonDictionary(value.Beat_grid));
+            ToJsonDictionary(value.Beat_grid),
+            ToJsonDictionary(value.Feature_provenance));
     }
 
     private static Dictionary<string, JsonElement>? ToJsonDictionary(object? value)
