@@ -240,7 +240,23 @@ public partial class TimelineView : UserControl
                 return;
             }
             if (e.PropertyName == nameof(TimelineViewModel.SelectedEntry))
+            {
+                // SelectedEntry notifies before its VM callback updates the playhead.
+                // Defer until both values have settled before deciding whether the
+                // rendered slice still covers the new selection.
+                Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(() =>
+                {
+                    if (_isRenderedPreview && _viewModel != null
+                        && TimelineSeekCalculator.ToRenderedPreviewPosition(
+                            _viewModel.SelectedTimelinePosition,
+                            _renderedPreviewTimelineStart,
+                            _loadedClipEnd) is null)
+                    {
+                        SyncPreviewToSelection(forceReload: true);
+                    }
+                }));
                 return;
+            }
         }
 
         if (e.PropertyName is nameof(TimelineViewModel.SelectedEntry)

@@ -59,6 +59,11 @@ public sealed class TimelineViewModelTests
                 selectedTimelinePosition: 15.0,
                 previewTimelineStart: 10.0,
                 previewDuration: 4.0));
+        Assert.IsNotNull(
+            TimelineSeekCalculator.ToRenderedPreviewPosition(
+                selectedTimelinePosition: 14.0,
+                previewTimelineStart: 10.0,
+                previewDuration: 4.0));
     }
 
     [TestMethod]

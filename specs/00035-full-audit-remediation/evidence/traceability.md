@@ -23,7 +23,7 @@
 | 17 | Relative preview path rejected by WPF | T007 / FR-434 | FIXED + ROUTE ARTIFACT REGRESSION: relative renderer result resolves to absolute existing local file path; live WPF playback remains pending |
 | 18 | Preview omits master audio | T007 / FR-434 | ROUTER REGRESSION + LIVE AMF ARTIFACT: registered master path reaches preview mux; real 3-s preview contains decodable AAC stereo aligned to 3.000-s H.264 video. GUI listening/playback acceptance pending |
 | 19 | Preview reports target, not artifact duration | T007 / FR-434 | FIXED + ROUTE/ARTIFACT REGRESSION: renderer-measured 2.4 s is returned even when request target is 2.75 s; live preview ffprobe reports actual stream durations |
-| 20 | Timeline selection can interrupt rendered preview | T007 / FR-434 | OPEN |
+| 20 | Timeline selection can interrupt rendered preview | T007 / FR-434 | FIXED + RANGE REGRESSION: retain rendered preview for selections within its timeline window; selections outside switch to selected source clip; GUI playback acceptance pending |
 | 21 | Scrubbing ignores timeline-to-source offset | T007 / FR-434 | FIXED + NATIVE REGRESSION: timeline delta maps to source offset and rendered-preview time; WPF GUI playback/scrub acceptance pending |
 | 22 | Render cancel SSE can be throttled/lost | T010 / FR-436 | FIXED + REGRESSION; live SSE pending |
 | 23 | Replay-gap message does not reconcile state | T010 / FR-436 | OPEN |

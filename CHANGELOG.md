@@ -33,6 +33,7 @@
 - Real PreviewGenerator AMF smoke with existing test media produced synchronized H.264/AAC preview and non-silent decoded master audio; route coverage proves registered project audio path reaches worker.
 - Preview duration route contract proves measured artifact duration wins over differing requested target.
 - Timeline seeking now maps timeline position to selected-clip source offset and rendered-preview-relative time through a shared tested calculator; native regression passed, live GUI scrub remains pending.
+- Rendered timeline preview now remains active only when new selection falls inside its rendered time window; outside selection reloads selected source clip instead of leaving stale rendered footage active.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 
