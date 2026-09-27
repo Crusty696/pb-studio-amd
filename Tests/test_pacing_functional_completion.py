@@ -135,7 +135,7 @@ def test_preview_uses_project_context_and_reports_actual_interval(
     assert Path(response.preview_path).read_bytes() == b"preview artifact"
 
 
-def test_preview_route_passes_registered_master_audio_to_renderer(
+def test_preview_route_passes_registered_audio_and_artifact_duration(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -160,7 +160,7 @@ def test_preview_route_passes_registered_master_audio_to_renderer(
         artifact.write_bytes(b"rendered video and audio")
         return {
             "preview_path": str(artifact),
-            "duration": min(duration, 2.75),
+            "duration": 2.4,
             "audio_included": audio_path is not None,
         }
 
@@ -184,7 +184,8 @@ def test_preview_route_passes_registered_master_audio_to_renderer(
         "renderer_audio_path": str(audio),
     }
     assert response.audio_included is True
-    assert response.duration == pytest.approx(2.75)
+    assert response.duration == pytest.approx(2.4)
+    assert response.duration != pytest.approx(2.75)
     assert Path(response.preview_path).read_bytes() == b"rendered video and audio"
 
 

@@ -31,6 +31,7 @@
 - Chat history clear is protected by a native delayed-response/project-switch regression; stale success cannot erase the newly opened project's visible history.
 - Preview route regression proves relative renderer output is normalized to an absolute path for the actual generated local artifact; live WPF playback remains pending.
 - Real PreviewGenerator AMF smoke with existing test media produced synchronized H.264/AAC preview and non-silent decoded master audio; route coverage proves registered project audio path reaches worker.
+- Preview duration route contract proves measured artifact duration wins over differing requested target.
 
 ## 2026-09-20 - Functional Completion & Testsuite Release Verification (Specs 00030–00034)
 

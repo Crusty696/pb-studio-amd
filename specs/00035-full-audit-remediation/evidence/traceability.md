@@ -22,7 +22,7 @@
 | 16 | Positive caption counts do not prove semantic correctness | T014 / TR-393 | OPEN |
 | 17 | Relative preview path rejected by WPF | T007 / FR-434 | FIXED + ROUTE ARTIFACT REGRESSION: relative renderer result resolves to absolute existing local file path; live WPF playback remains pending |
 | 18 | Preview omits master audio | T007 / FR-434 | ROUTER REGRESSION + LIVE AMF ARTIFACT: registered master path reaches preview mux; real 3-s preview contains decodable AAC stereo aligned to 3.000-s H.264 video. GUI listening/playback acceptance pending |
-| 19 | Preview reports target, not artifact duration | T007 / FR-434 | OPEN |
+| 19 | Preview reports target, not artifact duration | T007 / FR-434 | FIXED + ROUTE/ARTIFACT REGRESSION: renderer-measured 2.4 s is returned even when request target is 2.75 s; live preview ffprobe reports actual stream durations |
 | 20 | Timeline selection can interrupt rendered preview | T007 / FR-434 | OPEN |
 | 21 | Scrubbing ignores timeline-to-source offset | T007 / FR-434 | OPEN |
 | 22 | Render cancel SSE can be throttled/lost | T010 / FR-436 | FIXED + REGRESSION; live SSE pending |
